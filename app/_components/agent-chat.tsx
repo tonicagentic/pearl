@@ -881,7 +881,20 @@ export function AgentChatSession({
   const hasLocalPendingUserMessage = Boolean(localPendingUserMessage);
   const pendingAuthorizations = getPendingAuthorizations(displayEvents);
   const isWaitingForAuthorization = pendingAuthorizations.length > 0;
-  const hasOpenTurn = useMemo(() => hasOpenChatTurn(displayEvents), [displayEvents]);
+  const hasOpenTurn = useMemo(() => {
+    if (!hasOpenChatTurn(displayEvents)) {
+      return false;
+    }
+
+    // A turn that never settled is only recoverable while the agent is still
+    // active or a session exists to resume. Without one the turn is dead;
+    // treating it as open would leave the thinking indicator stuck forever.
+    return (
+      agent.status !== "ready" ||
+      Boolean(activeChat?.session?.sessionId) ||
+      Boolean(persistedSessionRef.current?.state?.sessionId)
+    );
+  }, [activeChat?.session, agent.status, displayEvents]);
   const isBusy =
     isResuming ||
     hasLocalPendingUserMessage ||
