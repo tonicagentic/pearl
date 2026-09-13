@@ -12,7 +12,7 @@ import type {
   SendTurnOptions,
 } from "eve/client";
 import type { EveMessage } from "eve/react";
-import { defaultMessageReducer, useEveAgent } from "eve/react";
+import { useEveAgent } from "eve/react";
 import {
   AlertCircleIcon,
   ChevronDownIcon,
@@ -38,6 +38,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { isChatTurnSettledEvent } from "@/lib/chat/events";
 import { getChatMessageLengthError } from "@/lib/chat/limits";
+import { createChatMessageReducer } from "@/lib/chat/message-reducer";
 import {
   appendClientChatEvent,
   checkClientSendLimit,
@@ -503,7 +504,7 @@ function findBoundaryEvent(events: readonly MessageStreamEvent[]) {
 function reduceEventsToMessageData(
   events: readonly MessageStreamEvent[],
 ): EveMessageData {
-  const reducer = defaultMessageReducer();
+  const reducer = createChatMessageReducer();
   let data = reducer.initial();
 
   for (const event of events) {
@@ -849,7 +850,9 @@ export function AgentChatSession({
 
   onSessionStartedRef.current = persistSessionState;
 
+  const messageReducer = useMemo(() => createChatMessageReducer(), []);
   const agent = useEveAgent({
+    reducer: messageReducer,
     initialEvents: activeChat?.events ?? [],
     session: persistedSessionRef.current as unknown as ClientSession,
     onEvent: persistStreamEvent,
