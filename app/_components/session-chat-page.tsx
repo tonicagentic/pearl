@@ -2,19 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  AgentChatSession,
-  ComposerFooterControls,
-  ErrorToast,
-  type AgentChatController,
-  type AgentChatControllerStatus,
-} from "@/app/_components/agent-chat";
+import { AssistantChatSurface } from "@/app/_components/assistant-chat";
+import { ErrorToast } from "@/app/_components/error-toast";
 import {
   CHAT_ROUTE_SYNC_EVENT,
   type ChatRouteSyncDetail,
 } from "@/app/_components/agent-chat-events";
 import { useChatShell } from "@/app/_components/chat-shell-context";
-import { ChatComposer } from "@/components/chat/composer";
 import {
   clearPendingChatMessage,
   isProvisionalChatId,
@@ -25,13 +19,7 @@ import {
   createClientChat,
   getClientChat,
 } from "@/lib/chat/persistence-client";
-import type { ActiveChat, SetupStatus } from "@/lib/chat/types";
-
-const IDLE_CONTROLLER_STATUS: AgentChatControllerStatus = {
-  isBusy: false,
-  isDisabled: false,
-  isEmpty: true,
-};
+import type { ActiveChat } from "@/lib/chat/types";
 
 export function SessionChatPage({
   chatId,
@@ -42,34 +30,24 @@ export function SessionChatPage({
 }) {
   const { setActiveChatId, setupStatus, touchChat, viewer } = useChatShell();
   const [activeChat, setActiveChat] = useState<ActiveChat | null>(null);
-  const [draft, setDraft] = useState("");
-  const [controllerReady, setControllerReady] = useState(false);
-  const [controllerStatus, setControllerStatus] = useState(IDLE_CONTROLLER_STATUS);
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
   const [dismissedError, setDismissedError] = useState<string | null>(null);
-  const controllerRef = useRef<AgentChatController | null>(null);
   const currentChatIdRef = useRef(chatId);
-  const pendingConsumedRef = useRef(false);
   const provisionalCreateStartedRef = useRef(new Set<string>());
   const settledPendingMessagesRef = useRef(new Set<string>());
   const isProvisionalChat = isProvisionalChatId(chatId);
   const router = useRouter();
   const toastError = clientError && dismissedError !== clientError ? clientError : null;
-  const isLoadingChat = !activeChat;
+  const isLoadingChat = !activeChat && !isProvisionalChat;
 
   useEffect(() => {
     currentChatIdRef.current = chatId;
   }, [chatId]);
 
   useEffect(() => {
-    controllerRef.current = null;
-    setControllerReady(false);
-    setControllerStatus(IDLE_CONTROLLER_STATUS);
     setActiveChat(null);
-    setDraft("");
     setPendingUserMessage(null);
-    pendingConsumedRef.current = false;
     settledPendingMessagesRef.current = new Set();
   }, [chatId]);
 
@@ -248,98 +226,8 @@ export function SessionChatPage({
   ]);
 
   useEffect(() => {
-    if (!viewer) {
-      return;
-    }
-
-    const restoredDraft = window.sessionStorage.getItem("eve-chat-draft");
-
-    if (restoredDraft) {
-      setDraft(restoredDraft);
-      window.sessionStorage.removeItem("eve-chat-draft");
-    }
-  }, [viewer]);
-
-  useEffect(() => {
-    if (
-      pendingConsumedRef.current ||
-      isLoadingChat ||
-      !controllerReady ||
-      controllerStatus.isBusy ||
-      controllerStatus.isDisabled
-    ) {
-      return;
-    }
-
-    if (!pendingUserMessage) {
-      return;
-    }
-
-    const controller = controllerRef.current;
-
-    if (!controller) {
-      return;
-    }
-
-    pendingConsumedRef.current = true;
-
-    void controller.sendMessage(pendingUserMessage, {
-      clearDraft: () => setDraft(""),
-      restoreDraft: (value) => {
-        setPendingUserMessage(null);
-        setDraft(value);
-      },
-    });
-  }, [
-    chatId,
-    controllerReady,
-    controllerStatus.isBusy,
-    controllerStatus.isDisabled,
-    isLoadingChat,
-    pendingUserMessage,
-  ]);
-
-  useEffect(() => {
     setDismissedError(null);
   }, [clientError]);
-
-  const handleControllerChange = useCallback(
-    (controller: AgentChatController | null, status: AgentChatControllerStatus) => {
-      controllerRef.current = controller;
-      setControllerReady(Boolean(controller));
-      setControllerStatus((current) =>
-        current.isBusy === status.isBusy &&
-        current.isDisabled === status.isDisabled &&
-        current.isEmpty === status.isEmpty
-          ? current
-          : status,
-      );
-    },
-    [],
-  );
-
-  const handleComposerSubmit = useCallback(async (text: string) => {
-    if (isLoadingChat) {
-      setClientError("Chat history is still loading.");
-      return;
-    }
-
-    const controller = controllerRef.current;
-
-    if (!controller) {
-      setClientError("Chat is still getting ready.");
-      return;
-    }
-
-    await controller.sendMessage(text, {
-      clearDraft: () => setDraft(""),
-      restoreDraft: setDraft,
-    });
-  }, [isLoadingChat]);
-
-  const handleComposerStop = useCallback(() => {
-    controllerRef.current?.stop();
-  }, []);
 
   const handlePendingUserMessageSettled = useCallback((message?: string) => {
     clearPendingChatMessage(chatId);
@@ -363,18 +251,13 @@ export function SessionChatPage({
     );
   }, []);
 
-  const composerDisabled =
-    !setupStatus.appReady ||
-    isLoadingChat ||
-    Boolean(pendingUserMessage) ||
-    controllerStatus.isDisabled;
-  const sessionInstanceKey = activeChat ? `${chatId}:loaded` : `${chatId}:loading`;
-  const composerDisabledReason = getSessionComposerDisabledReason({
-    controllerStatus,
-    isLoadingChat,
-    pendingUserMessage,
-    setupStatus,
-  });
+  // The runtime seeds its store on mount, so remount once the chat has loaded
+  // (or failed) rather than replaying an empty event list.
+  const surfaceKey = isProvisionalChat
+    ? `${chatId}:provisional`
+    : activeChat
+      ? `${chatId}:loaded`
+      : `${chatId}:unresolved`;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -385,31 +268,14 @@ export function SessionChatPage({
         />
       ) : null}
 
-      <AgentChatSession
+      <AssistantChatSurface
         activeChat={activeChat}
-        chatId={chatId}
-        key={sessionInstanceKey}
+        chatId={isProvisionalChat ? null : chatId}
+        key={surfaceKey}
+        pendingUserMessage={pendingUserMessage}
         onActiveChatUpdated={handleActiveChatUpdated}
         onPendingUserMessageSettled={handlePendingUserMessageSettled}
-        onControllerChange={handleControllerChange}
-        pendingUserMessage={pendingUserMessage}
       />
-
-      <div className="shrink-0 pb-4 sm:pb-6">
-        <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
-          <ChatComposer
-            disabled={composerDisabled}
-            disabledReason={composerDisabledReason}
-            footerStart={<ComposerFooterControls setupStatus={setupStatus} />}
-            isBusy={controllerStatus.isBusy}
-            onChange={setDraft}
-            onStop={handleComposerStop}
-            onSubmit={handleComposerSubmit}
-            placeholder="Ask anything..."
-            value={draft}
-          />
-        </div>
-      </div>
 
       <div className="hidden" aria-hidden>
         {children}
@@ -427,46 +293,4 @@ function getRestorablePendingUserMessage(
   }
 
   return pendingUserMessage;
-}
-
-function getSessionComposerDisabledReason({
-  controllerStatus,
-  isLoadingChat,
-  pendingUserMessage,
-  setupStatus,
-}: {
-  readonly controllerStatus: AgentChatControllerStatus;
-  readonly isLoadingChat: boolean;
-  readonly pendingUserMessage: string | null;
-  readonly setupStatus: SetupStatus;
-}) {
-  if (controllerStatus.disabledReason) {
-    return controllerStatus.disabledReason;
-  }
-
-  if (pendingUserMessage) {
-    return "Sending message.";
-  }
-
-  if (isLoadingChat) {
-    return "Chat history is still loading.";
-  }
-
-  if (!setupStatus.authReady) {
-    const missing = setupStatus.missing.length
-      ? ` Missing: ${setupStatus.missing.join(", ")}.`
-      : "";
-
-    return `Finish auth setup before chatting.${missing}`;
-  }
-
-  if (controllerStatus.isDisabled) {
-    return "Chat is unavailable.";
-  }
-
-  if (controllerStatus.isBusy) {
-    return "eve is responding.";
-  }
-
-  return undefined;
 }

@@ -28,6 +28,10 @@
     "check:migrations": "node scripts/check-migrations.mjs"
   },
   "dependencies": {
+    "@assistant-ui/eve": "^0.0.17",
+    "@assistant-ui/next": "^0.0.20",
+    "@assistant-ui/react": "^0.15.19",
+    "@assistant-ui/react-markdown": "^0.14.15",
     "@neondatabase/serverless": "1.1.0",
     "@shikijs/core": "4.3.1",
     "@shikijs/engine-javascript": "4.3.1",
@@ -54,13 +58,16 @@
     "radix-ui": "1.6.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "remark-gfm": "^4.0.1",
     "shiki": "4.3.1",
     "streamdown": "2.5.0",
     "tailwind-merge": "3.6.0",
     "tailwindcss": "4.3.3",
+    "tw-shimmer": "^0.4.13",
     "use-stick-to-bottom": "1.1.6",
     "vercel": "^59.16.0",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@types/node": "^25.9.5",
@@ -71,5 +78,8 @@
     "drizzle-kit": "0.31.10",
     "microsandbox": "^0.5.10",
     "typescript": "7.0.2"
+  },
+  "registries": {
+    "@assistant-ui": "https://r.assistant-ui.com/{name}.json"
   }
 }
