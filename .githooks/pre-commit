@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Pre-commit hook: blocks commits when lib/db/schema.ts changed without a
+# generated migration. Activate with: git config core.hooksPath .githooks
+exec node scripts/check-migrations.mjs
