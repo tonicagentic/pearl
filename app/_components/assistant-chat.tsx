@@ -59,6 +59,7 @@ export function AssistantChatSurface({
   const [isRunning, setIsRunning] = useState(false);
   const activeChatIdRef = useRef<string | null>(chatId);
   const eventIndexRef = useRef(activeChat?.events.length ?? 0);
+  const savedEventCountRef = useRef(activeChat?.events.length ?? 0);
   const currentTitleRef = useRef(activeChat?.title ?? "New chat");
 
   const isDisabled = !viewer || !setupStatus.appReady;
@@ -102,12 +103,21 @@ export function AssistantChatSurface({
           const events = snapshot.events;
           const session = snapshot.session;
 
+          // eve fires onFinish even when a mount/resume found nothing new.
+          // Only treat the snapshot as an update when the event stream
+          // actually changed, so idle opens do not reorder the sidebar.
+          if (events.length === savedEventCountRef.current) {
+            onPendingUserMessageSettled?.();
+            return;
+          }
+
           await saveClientChatSnapshot(storageMode, {
             chatId: id,
             events,
             session,
           });
           eventIndexRef.current = events.length;
+          savedEventCountRef.current = events.length;
           touchChat({
             id,
             title: currentTitleRef.current,
