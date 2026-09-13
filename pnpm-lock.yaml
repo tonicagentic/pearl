@@ -43,7 +43,7 @@ importers:
         version: 2.0.1(next@16.3.1(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
       '@vercel/connect':
         specifier: 0.8.0
-        version: 0.8.0(ai@7.0.84(zod@4.4.3))(better-auth@1.7.1(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0))(mongodb@7.3.0)(next@16.3.1(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(eve@0.52.4(ai@7.0.84(zod@4.4.3))(microsandbox@0.5.10))
+        version: 0.8.0(ai@7.0.84(zod@4.4.3))(better-auth@1.7.1(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0))(mongodb@7.3.0)(next@16.3.1(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(eve@0.54.3(ai@7.0.84(zod@4.4.3))(microsandbox@0.5.10))
       '@vercel/speed-insights':
         specifier: 2.0.0
         version: 2.0.0(next@16.3.1(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
@@ -66,8 +66,8 @@ importers:
         specifier: 0.45.2
         version: 0.45.2(@neondatabase/serverless@1.1.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0)
       eve:
-        specifier: ^0.52.4
-        version: 0.52.4(ai@7.0.84(zod@4.4.3))(microsandbox@0.5.10)
+        specifier: ^0.54.3
+        version: 0.54.3(ai@7.0.84(zod@4.4.3))(microsandbox@0.5.10)
       lucide-react:
         specifier: 1.33.0
         version: 1.33.0(react@19.2.8)
@@ -4002,13 +4002,13 @@ packages:
     resolution: {integrity: sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg==}
     engines: {node: '>= 0.6'}
 
-  eve@0.52.4:
-    resolution: {integrity: sha512-B/+gCaNRlAfc+mZB61B1Ljxp5M/4N60M1/Jjk+n2OQ1VLBdAX0WthULP1lWZO/yMsf2PDZXCRe5kxFDqk5a1Jg==}
+  eve@0.54.3:
+    resolution: {integrity: sha512-OOKmnmcyal5N+qaQcdpNbho+SpXBCZw11q9dSnqtN5f9ccIdcps53do4h49ZyefA/2xYSR8IOVnUB6vqUFtV4w==}
     engines: {node: '>=24'}
     hasBin: true
     peerDependencies:
       '@opentelemetry/api': ^1.0.0
-      ai: ^7.0.82
+      ai: ^7.0.93
       braintrust: ^3.0.0
       dd-trace: ^6.13.0
       just-bash: ^3.1.0
@@ -8033,13 +8033,13 @@ snapshots:
     dependencies:
       execa: 5.1.1
 
-  '@vercel/connect@0.8.0(ai@7.0.84(zod@4.4.3))(better-auth@1.7.1(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0))(mongodb@7.3.0)(next@16.3.1(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(eve@0.52.4(ai@7.0.84(zod@4.4.3))(microsandbox@0.5.10))':
+  '@vercel/connect@0.8.0(ai@7.0.84(zod@4.4.3))(better-auth@1.7.1(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0))(mongodb@7.3.0)(next@16.3.1(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(eve@0.54.3(ai@7.0.84(zod@4.4.3))(microsandbox@0.5.10))':
     dependencies:
       '@vercel/oidc': 3.8.4
     optionalDependencies:
       ai: 7.0.84(zod@4.4.3)
       better-auth: 1.7.1(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0))(mongodb@7.3.0)(next@16.3.1(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      eve: 0.52.4(ai@7.0.84(zod@4.4.3))(microsandbox@0.5.10)
+      eve: 0.54.3(ai@7.0.84(zod@4.4.3))(microsandbox@0.5.10)
 
   '@vercel/container@8.0.0(@vercel/build-utils@14.10.0)':
     dependencies:
@@ -8977,7 +8977,7 @@ snapshots:
 
   etag@1.8.1: {}
 
-  eve@0.52.4(ai@7.0.84(zod@4.4.3))(microsandbox@0.5.10):
+  eve@0.54.3(ai@7.0.84(zod@4.4.3))(microsandbox@0.5.10):
     dependencies:
       ai: 7.0.84(zod@4.4.3)
       nitro: 3.0.260903-beta
