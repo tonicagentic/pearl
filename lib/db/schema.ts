@@ -103,4 +103,28 @@ export const chatEvent = pgTable(
 
 export type Chat = typeof chat.$inferSelect;
 export type ChatEvent = typeof chatEvent.$inferSelect;
+
+// Durable copy of files the agent writes into its session sandbox. Keyed by
+// chat + sandbox path so later turns, new sessions, and the web UI can read
+// them after the ephemeral sandbox is gone.
+export const agentFile = pgTable(
+  "agent_file",
+  {
+    id: text("id").primaryKey(),
+    chatId: text("chat_id")
+      .notNull()
+      .references(() => chat.id, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    content: text("content").notNull(),
+    byteLength: integer("byte_length").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_agent_file_chat").on(table.chatId),
+    uniqueIndex("idx_agent_file_chat_path").on(table.chatId, table.path),
+  ],
+);
+
+export type AgentFile = typeof agentFile.$inferSelect;
 export type User = typeof user.$inferSelect;

@@ -4,7 +4,7 @@ import type { ClientSessionState, MessageStreamEvent } from "eve/client";
 import { isChatTurnSettledEvent } from "@/lib/chat/events";
 import type { ActiveChat, ChatListItem, ChatListPage } from "@/lib/chat/types";
 import { createFallbackTitle, DEFAULT_CHAT_TITLE } from "@/lib/chat/title";
-import { chat, chatEvent } from "@/lib/db/schema";
+import { chat, chatEvent, agentFile } from "@/lib/db/schema";
 import { db } from "@/lib/db/client";
 
 const CHAT_HISTORY_PAGE_SIZE = 20;
@@ -406,4 +406,130 @@ export async function saveChatSnapshot({
 
 export async function deleteChatForUser(chatId: string, userId: string) {
   await db.delete(chat).where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
+}
+
+// ============================================================================
+// Agent files
+// ============================================================================
+
+/**
+ * Resolves the app chat id that owns an eve durable session. Returns null
+ * when no chat row points at the session yet (for example while the very
+ * first turn is still starting up).
+ */
+export async function getChatIdByEveSessionId(
+  sessionId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ id: chat.id })
+    .from(chat)
+    .where(sql`${chat.eveSession} ->> 'sessionId' = ${sessionId}`)
+    .limit(1);
+
+  return row?.id ?? null;
+}
+
+export type UpsertAgentFileInput = {
+  readonly chatId: string;
+  readonly path: string;
+  readonly content: string;
+};
+
+/**
+ * Durable mirror of a sandbox write. Idempotent per chat + path so retried
+ * tool steps cannot duplicate rows.
+ */
+export async function upsertAgentFile({
+  chatId,
+  path,
+  content,
+}: UpsertAgentFileInput): Promise<void> {
+  const byteLength = Buffer.byteLength(content, "utf8");
+
+  await db
+    .insert(agentFile)
+    .values({ id: randomUUID(), chatId, path, content, byteLength })
+    .onConflictDoUpdate({
+      target: [agentFile.chatId, agentFile.path],
+      set: { content, byteLength, updatedAt: new Date() },
+    });
+}
+
+export type AgentFileMeta = {
+  readonly id: string;
+  readonly path: string;
+  readonly byteLength: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+};
+
+export async function listAgentFiles(
+  chatId: string,
+): Promise<readonly AgentFileMeta[]> {
+  const rows = await db
+    .select({
+      id: agentFile.id,
+      path: agentFile.path,
+      byteLength: agentFile.byteLength,
+      createdAt: agentFile.createdAt,
+      updatedAt: agentFile.updatedAt,
+    })
+    .from(agentFile)
+    .where(eq(agentFile.chatId, chatId))
+    .orderBy(desc(agentFile.updatedAt));
+
+  return rows.map((row) => ({
+    id: row.id,
+    path: row.path,
+    byteLength: row.byteLength,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  }));
+}
+
+export type AgentFileContent = {
+  readonly path: string;
+  readonly content: string;
+  readonly byteLength: number;
+  readonly updatedAt: string;
+};
+
+export async function getAgentFile(
+  chatId: string,
+  fileId: string,
+): Promise<AgentFileContent | null> {
+  const [row] = await db
+    .select({
+      path: agentFile.path,
+      content: agentFile.content,
+      byteLength: agentFile.byteLength,
+      updatedAt: agentFile.updatedAt,
+    })
+    .from(agentFile)
+    .where(and(eq(agentFile.chatId, chatId), eq(agentFile.id, fileId)))
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    path: row.path,
+    content: row.content,
+    byteLength: row.byteLength,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** Files to seed into a fresh sandbox for this session's chat. */
+export async function listAgentFileSeeds(
+  chatId: string,
+): Promise<readonly { path: string; content: string }[]> {
+  const rows = await db
+    .select({ path: agentFile.path, content: agentFile.content })
+    .from(agentFile)
+    .where(eq(agentFile.chatId, chatId))
+    .orderBy(asc(agentFile.createdAt));
+
+  return rows;
 }

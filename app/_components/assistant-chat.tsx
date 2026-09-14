@@ -16,6 +16,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatShell } from "@/app/_components/chat-shell-context";
 import { ErrorToast } from "@/app/_components/error-toast";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import {
+  ReadFileToolUI,
+  WriteFileToolUI,
+} from "@/components/assistant-ui/elements/file-tool.aui";
 import { EveAuthorization } from "@/components/eve-authorization";
 import {
   appendClientChatEvent,
@@ -232,6 +236,8 @@ export function AssistantChatSurface({
         ) : null}
 
         <div className="flex min-h-0 flex-1 flex-col">
+          <WriteFileToolUI />
+          <ReadFileToolUI />
           <Thread />
         </div>
 
