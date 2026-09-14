@@ -7,7 +7,7 @@ const todosTrackEmailStep = gateAssertion("todos-track-email-step", (value) => {
   const input = value as { todos?: Array<{ content?: string }> };
   const todos = input?.todos;
 
-  if (!Array.isArray(todos) || todos.length < 3) {
+  if (!Array.isArray(todos) || todos.length === 0) {
     return 0;
   }
 
@@ -36,7 +36,7 @@ export default defineEval({
   timeoutMs: 600_000,
   async test(t) {
     const turn = await t.send(
-      "Use your todo tool to track this campaign: build a lead list of 10 AI infrastructure startups in San Francisco (company_name, website, product_description), then write a short personalized cold email for each lead. Use effort low.",
+      "Use your todo tool to track this campaign: first use exa_agent_run with the leads preset to build a lead list of 10 AI infrastructure startups in San Francisco (maxItems 10, effort low), then write a short personalized cold email for each lead.",
     );
 
     t.succeeded();

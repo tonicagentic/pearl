@@ -6,7 +6,7 @@ description: Use when generating leads, building prospect lists, finding compani
 
 Generate enriched lead lists with the Exa Agent API via `exa_agent_run`. An
 Agent run is an asynchronous, multi-step web research task: you describe the
-list you want plus an output schema, and Exa handles query decomposition,
+list you want plus the per-company fields, and Exa handles query decomposition,
 searching, verification, enrichment, and structured output internally. You do
 NOT need to orchestrate parallel searches, subagents, or manual deduplication.
 
@@ -19,9 +19,9 @@ for building the list.
 
 ```
 1. Confirm the ICP with the user (one small low-effort run if research is needed)
-2. Call exa_agent_run with an outputSchema
+2. Call exa_agent_run with preset "leads" and maxItems
 3. If the run is still in progress, call exa_agent_run again with the same runId
-4. Read output.structured from the result
+4. Read output.structured.companies from the result
 5. Present the list (sorted by icp_fit_score descending)
 6. Optional: expand with follow-up runs (previousRunId + exclusions)
 ```
@@ -36,16 +36,12 @@ ICP, confirm it. If not, run one small low-effort run to research it:
 exa_agent_run {
   "query": "Research {company_name}: what they sell, who their existing customers are, and what their ideal customer profile is.",
   "effort": "low",
-  "outputSchema": {
-    "type": "object",
-    "properties": {
-      "company_description": { "type": "string", "description": "What the company does in 2 sentences or less" },
-      "icp_description": { "type": "string", "description": "Concise ICP description that clearly defines target companies" },
-      "sub_verticals": { "type": "array", "maxItems": 10, "items": { "type": "string" }, "description": "Sub-verticals breaking down the ICP" },
-      "useful_enrichments": { "type": "array", "maxItems": 8, "items": { "type": "string" }, "description": "Enrichment columns useful for filtering high-signal companies" }
-    },
-    "required": ["company_description", "icp_description", "sub_verticals", "useful_enrichments"]
-  }
+  "listItemFields": [
+    { "name": "company_description", "description": "What the company does in 2 sentences or less" },
+    { "name": "icp_description", "description": "Concise ICP description that clearly defines target companies" },
+    { "name": "sub_verticals", "description": "Sub-verticals breaking down the ICP" },
+    { "name": "useful_enrichments", "description": "Enrichment columns useful for filtering high-signal companies" }
+  ]
 }
 ```
 
@@ -58,60 +54,44 @@ Present the ICP to the user and confirm:
 
 ## Step 2: Create the Lead-Gen Run
 
-Design an `outputSchema` with a bounded `companies` array. Keep schemas small,
-flat, and explicit; always bound arrays with `maxItems`.
+Use the `leads` preset — it applies the standard scored fields and the tool
+builds the JSON schema internally. Set `maxItems` to the list size and `effort`
+for depth (`low` by default; higher for large or hard lists).
 
-**Core fields to always include:**
+**Fields the preset returns per company:**
 
-- `company_name` (string)
-- `website` (string)
-- `product_description` (string, "in 12 words or less")
+- `company_name`
+- `website`
+- `product_description` ("in 12 words or less")
 - `icp_fit_score` (integer, 1-10)
-- `icp_fit_reasoning` (string, "compelling one-liner in 20 words or less")
-
-Add enrichment fields tailored to the campaign (funding stage, headcount
-range, headquarters, hiring signals, etc.). Give string fields a length hint
-in their description to keep output clean.
+- `icp_fit_reasoning` ("compelling one-liner in 20 words or less")
 
 Example:
 
 ```
 exa_agent_run {
   "query": "Find 100 companies matching this ICP: {icp_description}. Prioritize {sub_verticals}. For each company, score ICP fit 1-10 for {user_company}.",
+  "preset": "leads",
+  "maxItems": 100,
   "effort": "low",
   "systemPrompt": "Prefer official company sites and recent funding announcements. Do not include duplicates or subsidiaries of the same parent company.",
   "exclusions": [
     { "company_name": "{competitor_1}" },
     { "company_name": "{existing_customer_1}" }
-  ],
-  "outputSchema": {
-    "type": "object",
-    "properties": {
-      "companies": {
-        "type": "array",
-        "maxItems": 100,
-        "items": {
-          "type": "object",
-          "properties": {
-            "company_name": { "type": "string" },
-            "website": { "type": "string", "format": "uri" },
-            "product_description": { "type": "string", "description": "in 12 words or less" },
-            "icp_fit_score": { "type": "integer", "description": "1-10" },
-            "icp_fit_reasoning": { "type": "string", "description": "one-liner in 20 words or less" }
-          },
-          "required": ["company_name", "website", "product_description", "icp_fit_score", "icp_fit_reasoning"]
-        }
-      },
-      "required": ["companies"]
-    }
-  }
+  ]
 }
 ```
 
+The scored list arrives in `output.structured.companies`.
+
+For advanced cases needing custom or nested structures, `listItemFields`
+(flat per-item fields) and `outputSchema` (a JSON schema) are supported as
+escape hatches.
+
 ## Step 3: Read Output
 
-Read `output.structured` from the result. Do not paste full raw output into
-the conversation — summarize the list for the user.
+Read `output.structured.items` from the result. Do not paste full raw output
+into the conversation — summarize the list for the user.
 
 ## Step 4: Expanding the List
 
@@ -129,6 +109,6 @@ than one giant run, and confirm scope with the user first: "This will require
 ## Handling Failures
 
 - If a run ends `failed`, read the error from the result, adjust the query or
-  schema, and retry once with different wording
+  fields, and retry once with different wording
 - If results are consistently below the requested count, narrow the ICP into
   2-3 sub-vertical runs instead of one broad run

@@ -17,6 +17,42 @@ const AGENT_RUNS_URL = "https://api.exa.ai/agent/runs";
 const POLL_INTERVAL_MS = 5_000;
 const MAX_WAIT_MS = 240_000;
 
+// Standard scored lead-list schema for the "leads" preset. The root key is
+// "companies" so consumers can find the list deterministically.
+const LEAD_LIST_SCHEMA = (maxItems: number) => ({
+  type: "object",
+  properties: {
+    companies: {
+      type: "array",
+      maxItems,
+      items: {
+        type: "object",
+        properties: {
+          company_name: { type: "string" },
+          website: { type: "string", format: "uri" },
+          product_description: {
+            type: "string",
+            description: "in 12 words or less",
+          },
+          icp_fit_score: { type: "integer", description: "1-10" },
+          icp_fit_reasoning: {
+            type: "string",
+            description: "compelling one-liner in 20 words or less",
+          },
+        },
+        required: [
+          "company_name",
+          "website",
+          "product_description",
+          "icp_fit_score",
+          "icp_fit_reasoning",
+        ],
+      },
+    },
+  },
+  required: ["companies"],
+});
+
 const inputSchema = z.object({
   query: z
     .string()
@@ -46,6 +82,33 @@ const inputSchema = z.object({
     .describe(
       "Companies to avoid: competitors, existing customers, or results from earlier runs.",
     )
+    .nullish(),
+  listItemFields: z
+    .array(
+      z.object({
+        name: z.string(),
+        type: z
+          .enum(["string", "number", "integer", "boolean"])
+          .nullish()
+          .describe("Defaults to string."),
+        description: z.string().nullish(),
+      }),
+    )
+    .describe(
+      "Recommended for list building: flat per-item fields (name, type, description). The tool builds the JSON schema internally, which is more reliable than hand-writing outputSchema.",
+    )
+    .nullish(),
+  preset: z
+    .enum(["leads"])
+    .describe(
+      "Convenience preset for lead lists: applies the standard scored fields (company_name, website, product_description, icp_fit_score, icp_fit_reasoning) with maxItems defaulting to 10. Prefer this over listItemFields for lead generation.",
+    )
+    .nullish(),
+  maxItems: z
+    .number()
+    .int()
+    .positive()
+    .describe("Maximum number of items in the built list. Defaults to 10.")
     .nullish(),
   effort: z
     .enum(["minimal", "low", "medium", "auto", "high", "xhigh", "max"])
@@ -194,12 +257,47 @@ export default defineTool({
     }
 
     // Starting a new run. Non-streaming runs hold their result for ~10
-    // minutes of polling, so start, then poll by id.
+    // minutes of polling, so start, then poll by id. Preset/listItemFields
+    // are the model-friendly ways to get structured output; explicit
+    // outputSchema wins when provided.
+    let outputSchema = input.outputSchema;
+
+    if (!outputSchema && input.preset === "leads") {
+      outputSchema = LEAD_LIST_SCHEMA(input.maxItems ?? 10);
+    } else if (!outputSchema && input.listItemFields?.length) {
+      const maxItems = input.maxItems ?? 10;
+      const properties = Object.fromEntries(
+        input.listItemFields.map((field) => [
+          field.name,
+          {
+            type: field.type ?? "string",
+            ...(field.description ? { description: field.description } : {}),
+          },
+        ]),
+      );
+
+      outputSchema = {
+        type: "object",
+        properties: {
+          items: {
+            type: "array",
+            maxItems,
+            items: {
+              type: "object",
+              properties,
+              required: input.listItemFields.map((field) => field.name),
+            },
+          },
+        },
+        required: ["items"],
+      };
+    }
+
     const created = await startAgentRun(
       {
         query,
         ...(input.effort ? { effort: input.effort } : {}),
-        ...(input.outputSchema ? { outputSchema: input.outputSchema } : {}),
+        ...(outputSchema ? { outputSchema } : {}),
         ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
         ...(input.exclusions?.length
           ? { input: { exclusion: input.exclusions } }
