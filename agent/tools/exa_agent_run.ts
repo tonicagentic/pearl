@@ -17,11 +17,17 @@ const AGENT_RUNS_URL = "https://api.exa.ai/agent/runs";
 const POLL_INTERVAL_MS = 5_000;
 const MAX_WAIT_MS = 240_000;
 
-// Standard scored lead-list schema for the "leads" preset. The root key is
-// "companies" so consumers can find the list deterministically.
-const LEAD_LIST_SCHEMA = (maxItems: number) => ({
+// Default structured-output schema covering both primary use cases (lead
+// lists via `companies`, deep dives via overview/funding/competitors/people).
+// Everything is optional so Exa fills what the task actually produces; the
+// model under test cannot be relied on to emit nested output schemas itself.
+const DEFAULT_RESEARCH_SCHEMA = (maxItems: number) => ({
   type: "object",
   properties: {
+    overview: {
+      type: "string",
+      description: "2-3 sentence overview of the researched subject",
+    },
     companies: {
       type: "array",
       maxItems,
@@ -34,23 +40,47 @@ const LEAD_LIST_SCHEMA = (maxItems: number) => ({
             type: "string",
             description: "in 12 words or less",
           },
-          icp_fit_score: { type: "integer", description: "1-10" },
+          icp_fit_score: {
+            type: "integer",
+            description: "1-10, when scoring against an ICP",
+          },
           icp_fit_reasoning: {
             type: "string",
-            description: "compelling one-liner in 20 words or less",
+            description: "one-liner in 20 words or less",
           },
         },
-        required: [
-          "company_name",
-          "website",
-          "product_description",
-          "icp_fit_score",
-          "icp_fit_reasoning",
-        ],
+        required: ["company_name", "website"],
+      },
+    },
+    funding: {
+      type: "array",
+      maxItems: 10,
+      items: {
+        type: "object",
+        properties: {
+          round: { type: "string" },
+          amount: { type: "string" },
+          date: { type: "string" },
+        },
+      },
+    },
+    competitors: {
+      type: "array",
+      maxItems: 10,
+      items: { type: "string" },
+    },
+    key_people: {
+      type: "array",
+      maxItems: 10,
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          title: { type: "string" },
+        },
       },
     },
   },
-  required: ["companies"],
 });
 
 const inputSchema = z.object({
@@ -96,12 +126,6 @@ const inputSchema = z.object({
     )
     .describe(
       "Recommended for list building: flat per-item fields (name, type, description). The tool builds the JSON schema internally, which is more reliable than hand-writing outputSchema.",
-    )
-    .nullish(),
-  preset: z
-    .enum(["leads"])
-    .describe(
-      "Convenience preset for lead lists: applies the standard scored fields (company_name, website, product_description, icp_fit_score, icp_fit_reasoning) with maxItems defaulting to 10. Prefer this over listItemFields for lead generation.",
     )
     .nullish(),
   maxItems: z
@@ -233,8 +257,8 @@ export default defineTool({
     if (runId) {
       for (;;) {
         const result = await getAgentRun(runId, apiKey);
-        const status = typeof result.status === "string" ? result.status : "";
         const summary = toAgentRunResult(result);
+        const status = summary.status;
 
         if (
           status === "completed" ||
@@ -257,14 +281,16 @@ export default defineTool({
     }
 
     // Starting a new run. Non-streaming runs hold their result for ~10
-    // minutes of polling, so start, then poll by id. Preset/listItemFields
-    // are the model-friendly ways to get structured output; explicit
-    // outputSchema wins when provided.
+    // minutes of polling, so start, then poll by id.
+    //
+    // GLM-class models frequently drop optional/nested tool params, so
+    // structured output is the DEFAULT: a combined research schema covering
+    // both lead lists (companies) and deep dives (overview, funding,
+    // competitors, people). Explicit outputSchema/listItemFields win when
+    // provided.
     let outputSchema = input.outputSchema;
 
-    if (!outputSchema && input.preset === "leads") {
-      outputSchema = LEAD_LIST_SCHEMA(input.maxItems ?? 10);
-    } else if (!outputSchema && input.listItemFields?.length) {
+    if (!outputSchema && input.listItemFields?.length) {
       const maxItems = input.maxItems ?? 10;
       const properties = Object.fromEntries(
         input.listItemFields.map((field) => [
@@ -291,6 +317,8 @@ export default defineTool({
         },
         required: ["items"],
       };
+    } else if (!outputSchema) {
+      outputSchema = DEFAULT_RESEARCH_SCHEMA(input.maxItems ?? 10);
     }
 
     const created = await startAgentRun(
@@ -329,8 +357,8 @@ export default defineTool({
 
     for (;;) {
       const result = await getAgentRun(createdRunId, apiKey);
-      const status = typeof result.status === "string" ? result.status : "";
       const summary = toAgentRunResult(result);
+      const status = summary.status;
 
       if (
         status === "completed" ||

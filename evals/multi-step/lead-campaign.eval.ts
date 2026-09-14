@@ -29,6 +29,11 @@ const leadListStructured = gateAssertion("exa-lead-list-structured", (value) => 
   return Array.isArray(companies) && companies.length > 0 ? 1 : 0;
 });
 
+// Boolean gates for the precomputed checks (the input/output-scoring
+// assertions above are used to compute these, not applied to them).
+const booleanGate = (name: string) =>
+  gateAssertion(name, (value) => (value === true ? 1 : 0));
+
 export default defineEval({
   description:
     "Full multistep campaign: build 10 leads with exa_agent_run, tracked via the todo tool, then write a personalized cold email per lead.",
@@ -36,7 +41,7 @@ export default defineEval({
   timeoutMs: 600_000,
   async test(t) {
     const turn = await t.send(
-      "Use your todo tool to track this campaign: first use exa_agent_run with the leads preset to build a lead list of 10 AI infrastructure startups in San Francisco (maxItems 10, effort low), then write a short personalized cold email for each lead.",
+      "Use your todo tool to track this campaign: first use exa_agent_run with the leads preset to build a lead list of 10 AI infrastructure startups in San Francisco (maxItems 10, effort low), then write a short personalized cold email for each lead directly in your reply.",
     );
 
     t.succeeded();
@@ -49,7 +54,7 @@ export default defineEval({
     const tracked = todoCalls.some(
       (call) => todosTrackEmailStep.score(call.input) === 1,
     );
-    t.check(tracked, todosTrackEmailStep);
+    t.check(tracked, booleanGate("todos-track-email-step"));
 
     const runCalls = turn.toolCalls.filter(
       (call) => call.name === "exa_agent_run",
@@ -57,7 +62,7 @@ export default defineEval({
     const saved = runCalls.some(
       (call) => leadListStructured.score(call.output) === 1,
     );
-    t.check(saved, leadListStructured);
+    t.check(saved, booleanGate("exa-lead-list-structured"));
 
     t.judge.autoevals.closedQA(
       "The answer contains a personalized cold email for each lead, each mentioning the company or its product by name, roughly matching the number of leads requested.",
