@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { makeAssistantToolUI } from "@assistant-ui/react";
 import {
   CheckIcon,
@@ -16,11 +16,9 @@ import {
 } from "@/components/ui/collapsible";
 import { ArtifactCard } from "@/components/assistant-ui/elements/artifact-card";
 import {
-  CanvasSplit,
-  CanvasSplitBody,
-  CanvasSplitHeader,
-  CanvasSplitLine,
-} from "@/components/assistant-ui/elements/canvas-split";
+  useCanvas,
+  type CanvasDocument,
+} from "@/components/assistant-ui/elements/canvas-context";
 import { cn } from "@/lib/utils";
 
 const PREVIEW_CHAR_LIMIT = 5_000;
@@ -43,12 +41,6 @@ type ReadFileArgs = {
 
 type ReadFileResult = {
   readonly content?: string;
-};
-
-type FileToolUIProps = {
-  readonly args: WriteFileArgs;
-  readonly result?: WriteFileResult | string;
-  readonly status: { readonly type: string };
 };
 
 function formatBytes(bytes: number) {
@@ -181,6 +173,9 @@ export const ReadFileToolUI = makeAssistantToolUI<
   ReadFileResult | string
 >({
   toolName: "read_file",
+  // Standalone: render outside the collapsed tool group so the preview is
+  // reachable (and mounted) without expanding anything.
+  display: "standalone",
   render: ({ args, result, status }) => {
     const path = args?.filePath ?? "file";
     const running = status.type === "running";
@@ -199,79 +194,113 @@ export const ReadFileToolUI = makeAssistantToolUI<
   },
 });
 
-// write_file renders as an assistant-ui ArtifactCard in the thread; clicking
-// it toggles a CanvasSplit document panel with the file's live content.
+// write_file renders as an assistant-ui ArtifactCard. While the call streams
+// it claims the page-level canvas (thread narrows to a rail, document takes
+// the room); clicking the card toggles the canvas for that file.
+function WriteFileRender({
+  toolCallId,
+  args,
+  result,
+  status,
+}: {
+  readonly toolCallId?: string;
+  readonly args?: WriteFileArgs;
+  readonly result?: WriteFileResult | string;
+  readonly status: { readonly type: string };
+}) {
+  const { document: canvasDoc, openDocument, updateDocument, closeDocument } =
+    useCanvas();
+  const closedByUserRef = useRef(false);
+  const fileResult = typeof result === "object" ? result : undefined;
+  const id = toolCallId ?? "write_file";
+  const path = fileResult?.path ?? args?.filePath ?? "file";
+  const content = args?.content ?? "";
+  const running = status.type === "running";
+  const note = resultMessage(result);
+  const isOpen = canvasDoc?.id === id;
+  const byteLength = new TextEncoder().encode(content).length;
+  const badge =
+    fileResult?.existed === false
+      ? "created"
+      : fileResult?.existed === true
+        ? "updated"
+        : "saved";
+  const meta = running ? "Writing…" : `${formatBytes(byteLength)} · ${badge}`;
+
+  // Claim the canvas while the call streams and keep its content current.
+  // A user close wins until a new streaming call starts (fresh component).
+  useEffect(() => {
+    if (running) {
+      if (!closedByUserRef.current) {
+        openDocument({ id, path, content, running: true, note: null });
+      }
+    } else if (isOpen) {
+      updateDocument(id, {
+        path,
+        content,
+        running: false,
+        note: resultMessage(result),
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync the live document when the streamed args change
+  }, [id, path, content, running, isOpen]);
+
+  const toggleCanvas = () => {
+    if (isOpen) {
+      closedByUserRef.current = true;
+      closeDocument();
+    } else {
+      closedByUserRef.current = false;
+      openDocument({
+        id,
+        path,
+        content,
+        running,
+        note: resultMessage(result),
+      } satisfies CanvasDocument);
+    }
+  };
+
+  return (
+    <div className="flex w-full flex-col gap-1.5" data-slot="write-file-tool">
+      <ArtifactCard
+        title={path}
+        meta={meta}
+        generating={running}
+        words={countWords(content)}
+        aria-expanded={isOpen}
+        onClick={toggleCanvas}
+      />
+      {note ? (
+        <div
+          data-slot="write-file-note"
+          className="text-muted-foreground flex items-center gap-2 text-xs"
+        >
+          <span>{note}</span>
+          {!running && content ? (
+            <button
+              type="button"
+              aria-label={`Download ${path.split("/").pop() || "file"}`}
+              className="hover:text-foreground inline-flex shrink-0 items-center gap-1 transition-colors"
+              onClick={() => downloadTextFile(path, content)}
+            >
+              <DownloadIcon className="size-3" aria-hidden="true" />
+              Download
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export const WriteFileToolUI = makeAssistantToolUI<
   WriteFileArgs,
   WriteFileResult | string
 >({
   toolName: "write_file",
-  render: ({ args, result, status }) => {
-    const fileResult = typeof result === "object" ? result : undefined;
-    const path = fileResult?.path ?? args?.filePath ?? "file";
-    const content = args?.content ?? "";
-    const running = status.type === "running";
-    const [open, setOpen] = useState(true);
-    const note = resultMessage(result);
-    const byteLength = new TextEncoder().encode(content).length;
-    const badge =
-      fileResult?.existed === false
-        ? "created"
-        : fileResult?.existed === true
-          ? "updated"
-          : "saved";
-    const meta = running
-      ? "Writing…"
-      : `${formatBytes(byteLength)} · ${badge}`;
-
-    return (
-      <div className="flex w-full flex-col gap-2" data-slot="write-file-tool">
-        <ArtifactCard
-          title={path}
-          meta={meta}
-          generating={running}
-          words={countWords(content)}
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
-        />
-        {open ? (
-          <CanvasSplit className="max-w-full">
-            <CanvasSplitHeader
-              title={path}
-              version={1}
-              saved={!running}
-              onCopy={content ? () => navigator.clipboard.writeText(content) : undefined}
-              onClose={() => setOpen(false)}
-            />
-            <CanvasSplitBody writing={running}>
-              {content ? (
-                <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
-                  {content}
-                </CanvasSplitLine>
-              ) : null}
-            </CanvasSplitBody>
-          </CanvasSplit>
-        ) : null}
-        {note ? (
-          <div
-            data-slot="write-file-note"
-            className="text-muted-foreground flex items-center gap-2 text-xs"
-          >
-            <span>{note}</span>
-            {!running && content ? (
-              <button
-                type="button"
-                aria-label={`Download ${path.split("/").pop() || "file"}`}
-                className="hover:text-foreground inline-flex shrink-0 items-center gap-1 transition-colors"
-                onClick={() => downloadTextFile(path, content)}
-              >
-                <DownloadIcon className="size-3" aria-hidden="true" />
-                Download
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    );
-  },
+  // Standalone: render outside the collapsed tool group so the renderer
+  // mounts as soon as the call starts, which is what claims the canvas.
+  display: "standalone",
+  render: WriteFileRender,
 });

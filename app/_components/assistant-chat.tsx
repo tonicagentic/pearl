@@ -21,6 +21,15 @@ import {
   ReadFileToolUI,
   WriteFileToolUI,
 } from "@/components/assistant-ui/elements/file-tool.aui";
+import {
+  CanvasProvider,
+  useCanvas,
+} from "@/components/assistant-ui/elements/canvas-context";
+import {
+  CanvasSplitBody,
+  CanvasSplitHeader,
+  CanvasSplitLine,
+} from "@/components/assistant-ui/elements/canvas-split";
 import { EveAuthorization } from "@/components/eve-authorization";
 import {
   appendClientChatEvent,
@@ -247,26 +256,71 @@ export function AssistantChatSurface({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <div className="flex min-h-0 flex-1 flex-col">
-        {toastError ? (
-          <ErrorToast
-            message={toastError}
-            onDismiss={() => setDismissedError(clientError)}
-          />
-        ) : null}
-
+      <CanvasProvider>
         <div className="flex min-h-0 flex-1 flex-col">
+          {toastError ? (
+            <ErrorToast
+              message={toastError}
+              onDismiss={() => setDismissedError(clientError)}
+            />
+          ) : null}
+
           <WriteFileToolUI />
           <ReadFileToolUI />
-          <Thread />
+          <CanvasLayout />
+
+          <EveAuthorization />
         </div>
 
-        <EveAuthorization />
-      </div>
-
-      <SessionCursorPersistence chatId={chatId} storageMode={storageMode} />
-      <EveErrorToast />
+        <SessionCursorPersistence chatId={chatId} storageMode={storageMode} />
+        <EveErrorToast />
+      </CanvasProvider>
     </AssistantRuntimeProvider>
+  );
+}
+
+// When an agent-written document is open, the thread narrows to a rail and
+// the document takes the room (assistant-ui Canvas pattern). Otherwise the
+// thread renders full width.
+function CanvasLayout() {
+  const { document: doc, closeDocument } = useCanvas();
+
+  if (!doc) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <Thread />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <div className="border-border/60 flex min-h-0 min-w-0 flex-col max-md:flex-1 md:w-[26rem] md:shrink-0 md:border-r">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <Thread />
+        </div>
+      </div>
+      <div className="border-border/60 bg-background flex min-h-0 flex-1 flex-col max-md:h-80 max-md:shrink-0 max-md:border-t md:border-l">
+        <CanvasSplitHeader
+          title={doc.path}
+          version={1}
+          saved={!doc.running}
+          onCopy={
+            doc.content
+              ? () => navigator.clipboard.writeText(doc.content)
+              : undefined
+          }
+          onClose={closeDocument}
+        />
+        <CanvasSplitBody writing={doc.running} className="min-h-0 flex-1">
+          {doc.content ? (
+            <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
+              {doc.content}
+            </CanvasSplitLine>
+          ) : null}
+        </CanvasSplitBody>
+      </div>
+    </div>
   );
 }
 
