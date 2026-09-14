@@ -3,8 +3,8 @@ import { z } from "zod";
 
 // Deep research and lead-list generation via the Exa Agent API
 // (https://api.exa.ai/agent/runs). Exa runs the multi-step search,
-// verification, and enrichment internally; this tool starts a run or polls an
-// existing one and returns the structured result.
+// verification, and enrichment internally; this tool starts a run and polls
+// it until a terminal status, returning the structured result.
 //
 // Requires EXA_API_KEY in the environment.
 //
@@ -14,16 +14,15 @@ import { z } from "zod";
 // hence .nullish() plus null-coercion inside execute.
 
 const AGENT_RUNS_URL = "https://api.exa.ai/agent/runs";
-const POLL_INTERVAL_MS = 4_000;
+const POLL_INTERVAL_MS = 5_000;
 const MAX_WAIT_MS = 240_000;
 
 const inputSchema = z.object({
   query: z
     .string()
     .describe(
-      "Natural-language research task: the company to research, or the lead list to build (ICP, geography, stage, count).",
-    )
-    .nullish(),
+      "Natural-language research task: the company to research, or the lead list to build (ICP, geography, stage, count). Always include this, even when polling an in-progress run with runId.",
+    ),
   runId: z
     .string()
     .describe(
@@ -49,8 +48,10 @@ const inputSchema = z.object({
     )
     .nullish(),
   effort: z
-    .enum(["low", "auto", "high", "xhigh"])
-    .describe("low by default; higher effort for large or hard lists.")
+    .enum(["minimal", "low", "medium", "auto", "high", "xhigh", "max"])
+    .describe(
+      "Research depth. low by default; medium/auto for standard research; high/xhigh/max for large or hard lists.",
+    )
     .nullish(),
 });
 
@@ -67,7 +68,7 @@ type AgentRunResult = {
   error?: string;
 };
 
-async function callAgentRun(
+async function startAgentRun(
   body: Record<string, unknown>,
   apiKey: string,
 ): Promise<Record<string, unknown>> {
@@ -90,6 +91,52 @@ async function callAgentRun(
   return (await response.json()) as Record<string, unknown>;
 }
 
+async function getAgentRun(
+  runId: string,
+  apiKey: string,
+): Promise<Record<string, unknown>> {
+  const response = await fetch(
+    `${AGENT_RUNS_URL}/${encodeURIComponent(runId)}`,
+    {
+      headers: { authorization: `Bearer ${apiKey}` },
+      method: "GET",
+    },
+  );
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(
+      `Exa Agent API error (${response.status}): ${detail.slice(0, 300)}`,
+    );
+  }
+
+  return (await response.json()) as Record<string, unknown>;
+}
+
+function toAgentRunResult(result: Record<string, unknown>): AgentRunResult {
+  const output = result.output as
+    | { text?: string; structured?: unknown; grounding?: unknown }
+    | undefined;
+
+  return {
+    status: typeof result.status === "string" ? result.status : "unknown",
+    runId: typeof result.id === "string" ? result.id : undefined,
+    output: output
+      ? {
+          structured: output.structured,
+          text: output.text,
+          grounding: output.grounding,
+        }
+      : undefined,
+    costDollars:
+      typeof result.costDollars === "number" ? result.costDollars : undefined,
+    error:
+      result.error !== undefined && typeof result.error !== "object"
+        ? String(result.error)
+        : undefined,
+  };
+}
+
 export default defineTool({
   description:
     "Deep company research and lead-list generation backed by the Exa Agent API. Exa decomposes the query, searches, verifies, enriches, and returns structured output with citations. Use for company deep dives, competitor analysis, ICP-based lead lists, and market research. For quick single lookups prefer web_search instead.",
@@ -99,11 +146,11 @@ export default defineTool({
     const query = input.query ?? undefined;
     const runId = input.runId ?? undefined;
 
-    if (!query && !runId) {
+    if (!query) {
       return {
         status: "error",
         error:
-          "Provide either query (to start a run) or runId (to poll an existing run).",
+          "query is required. Describe the research task or lead list to build.",
       } satisfies AgentRunResult;
     }
 
@@ -118,12 +165,38 @@ export default defineTool({
     }
 
     const startedAt = Date.now();
-    let lastBody: Record<string, unknown>;
 
+    // Polling an in-progress run when a runId is present; otherwise start.
     if (runId) {
-      lastBody = { runId };
-    } else {
-      lastBody = {
+      for (;;) {
+        const result = await getAgentRun(runId, apiKey);
+        const status = typeof result.status === "string" ? result.status : "";
+        const summary = toAgentRunResult(result);
+
+        if (
+          status === "completed" ||
+          status === "failed" ||
+          status === "cancelled"
+        ) {
+          return summary;
+        }
+
+        if (Date.now() - startedAt >= MAX_WAIT_MS) {
+          return {
+            ...summary,
+            status: status || "running",
+            note: "The run is still in progress. Call this tool again with the same runId to fetch the result.",
+          };
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      }
+    }
+
+    // Starting a new run. Non-streaming runs hold their result for ~10
+    // minutes of polling, so start, then poll by id.
+    const created = await startAgentRun(
+      {
         query,
         ...(input.effort ? { effort: input.effort } : {}),
         ...(input.outputSchema ? { outputSchema: input.outputSchema } : {}),
@@ -131,55 +204,51 @@ export default defineTool({
         ...(input.exclusions?.length
           ? { input: { exclusion: input.exclusions } }
           : {}),
-      };
+      },
+      apiKey,
+    );
+
+    const createdRunId =
+      typeof created.id === "string" ? created.id : undefined;
+
+    if (!createdRunId) {
+      return {
+        status: "error",
+        error: "The Exa Agent API did not return a run id.",
+      } satisfies AgentRunResult;
     }
 
-    let currentRunId = runId;
+    const createdStatus =
+      typeof created.status === "string" ? created.status : "queued";
+
+    if (
+      createdStatus === "completed" ||
+      createdStatus === "failed" ||
+      createdStatus === "cancelled"
+    ) {
+      return toAgentRunResult(created);
+    }
 
     for (;;) {
-      const result = await callAgentRun(lastBody, apiKey);
-      currentRunId = typeof result.id === "string" ? result.id : currentRunId;
+      const result = await getAgentRun(createdRunId, apiKey);
       const status = typeof result.status === "string" ? result.status : "";
+      const summary = toAgentRunResult(result);
 
-      if (status === "complete") {
-        const output = result.output as
-          | { text?: string; structured?: unknown; grounding?: unknown }
-          | undefined;
-
-        return {
-          status,
-          runId: currentRunId,
-          output: output
-            ? {
-                structured: output.structured,
-                text: output.text,
-                grounding: output.grounding,
-              }
-            : undefined,
-          costDollars:
-            typeof result.costDollars === "number"
-              ? result.costDollars
-              : undefined,
-        } satisfies AgentRunResult;
-      }
-
-      if (status === "failed" || status === "cancelled") {
-        return {
-          status,
-          runId: currentRunId,
-          error:
-            typeof result.error === "string"
-              ? result.error
-              : "The Exa run ended unsuccessfully.",
-        } satisfies AgentRunResult;
+      if (
+        status === "completed" ||
+        status === "failed" ||
+        status === "cancelled"
+      ) {
+        return summary;
       }
 
       if (Date.now() - startedAt >= MAX_WAIT_MS) {
         return {
+          ...summary,
           status: status || "running",
-          runId: currentRunId,
+          runId: summary.runId ?? createdRunId,
           note: "The run is still in progress. Call this tool again with the same runId to fetch the result.",
-        } satisfies AgentRunResult;
+        };
       }
 
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
