@@ -14,6 +14,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { ArtifactCard } from "@/components/assistant-ui/elements/artifact-card";
+import {
+  CanvasSplit,
+  CanvasSplitBody,
+  CanvasSplitHeader,
+  CanvasSplitLine,
+} from "@/components/assistant-ui/elements/canvas-split";
 import { cn } from "@/lib/utils";
 
 const PREVIEW_CHAR_LIMIT = 5_000;
@@ -30,6 +37,14 @@ type WriteFileResult = {
   readonly note?: string;
 };
 
+type ReadFileArgs = {
+  readonly filePath?: string;
+};
+
+type ReadFileResult = {
+  readonly content?: string;
+};
+
 type FileToolUIProps = {
   readonly args: WriteFileArgs;
   readonly result?: WriteFileResult | string;
@@ -40,6 +55,11 @@ function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function countWords(text: string) {
+  const trimmed = text.trim();
+  return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
 function resultMessage(result: WriteFileResult | string | undefined) {
@@ -58,19 +78,15 @@ function downloadTextFile(path: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-const FileCardImpl = ({
-  label,
+// Inline preview for read_file results: content is already in the event
+// stream, so the card renders without any server fetch.
+const ReadPreviewCardImpl = ({
   path,
   content,
-  badge,
-  note,
   running,
 }: {
-  readonly label: string;
   readonly path: string;
   readonly content: string | null;
-  readonly badge: string | null;
-  readonly note: string | null;
   readonly running: boolean;
 }) => {
   const [open, setOpen] = useState(false);
@@ -95,7 +111,7 @@ const FileCardImpl = ({
           data-slot="file-card-label"
           className="text-muted-foreground shrink-0 text-xs"
         >
-          {label}
+          Read
         </span>
         <span
           data-slot="file-card-path"
@@ -107,7 +123,7 @@ const FileCardImpl = ({
         {running ? (
           <LoaderIcon
             className="text-muted-foreground size-3.5 shrink-0 animate-spin"
-            aria-label="Writing file"
+            aria-label="Reading file"
           />
         ) : (
           <CheckIcon
@@ -115,23 +131,13 @@ const FileCardImpl = ({
             aria-hidden="true"
           />
         )}
-        {badge ? (
+        {hasContent ? (
           <span
             data-slot="file-card-badge"
             className="text-muted-foreground shrink-0 text-xs tabular-nums"
           >
-            {badge}
+            {formatBytes(byteLength)}
           </span>
-        ) : null}
-        {hasContent ? (
-          <button
-            type="button"
-            aria-label={`Download ${path.split("/").pop() || "file"}`}
-            className="text-muted-foreground hover:text-foreground shrink-0 transition-colors"
-            onClick={() => downloadTextFile(path, content)}
-          >
-            <DownloadIcon className="size-3.5" aria-hidden="true" />
-          </button>
         ) : null}
         {hasContent ? (
           <CollapsibleTrigger
@@ -148,14 +154,6 @@ const FileCardImpl = ({
           </CollapsibleTrigger>
         ) : null}
       </div>
-      {note ? (
-        <div
-          data-slot="file-card-note"
-          className="text-muted-foreground border-t px-3 py-1.5 text-xs"
-        >
-          {note}
-        </div>
-      ) : null}
       {hasContent ? (
         <CollapsibleContent>
           <pre
@@ -176,40 +174,7 @@ const FileCardImpl = ({
   );
 };
 
-export const FileCard = memo(FileCardImpl);
-
-export const WriteFileToolUI = makeAssistantToolUI<
-  WriteFileArgs,
-  WriteFileResult | string
->({
-  toolName: "write_file",
-  render: ({ args, result, status }) => {
-    const fileResult = typeof result === "object" ? result : undefined;
-    const path = fileResult?.path ?? args?.filePath ?? "file";
-    const running = status.type === "running";
-    const badge = fileResult?.existed === false ? "created" : fileResult?.existed === true ? "updated" : null;
-    const note = resultMessage(result);
-
-    return (
-      <FileCard
-        label="Saved"
-        path={path}
-        content={args?.content ?? null}
-        badge={badge}
-        note={note}
-        running={running}
-      />
-    );
-  },
-});
-
-type ReadFileArgs = {
-  readonly filePath?: string;
-};
-
-type ReadFileResult = {
-  readonly content?: string;
-};
+const ReadPreviewCard = memo(ReadPreviewCardImpl);
 
 export const ReadFileToolUI = makeAssistantToolUI<
   ReadFileArgs,
@@ -225,14 +190,88 @@ export const ReadFileToolUI = makeAssistantToolUI<
         : null;
 
     return (
-      <FileCard
-        label="Read"
+      <ReadPreviewCard
         path={path}
         content={content}
-        badge={null}
-        note={null}
         running={running}
       />
+    );
+  },
+});
+
+// write_file renders as an assistant-ui ArtifactCard in the thread; clicking
+// it toggles a CanvasSplit document panel with the file's live content.
+export const WriteFileToolUI = makeAssistantToolUI<
+  WriteFileArgs,
+  WriteFileResult | string
+>({
+  toolName: "write_file",
+  render: ({ args, result, status }) => {
+    const fileResult = typeof result === "object" ? result : undefined;
+    const path = fileResult?.path ?? args?.filePath ?? "file";
+    const content = args?.content ?? "";
+    const running = status.type === "running";
+    const [open, setOpen] = useState(true);
+    const note = resultMessage(result);
+    const byteLength = new TextEncoder().encode(content).length;
+    const badge =
+      fileResult?.existed === false
+        ? "created"
+        : fileResult?.existed === true
+          ? "updated"
+          : "saved";
+    const meta = running
+      ? "Writing…"
+      : `${formatBytes(byteLength)} · ${badge}`;
+
+    return (
+      <div className="flex w-full flex-col gap-2" data-slot="write-file-tool">
+        <ArtifactCard
+          title={path}
+          meta={meta}
+          generating={running}
+          words={countWords(content)}
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        />
+        {open ? (
+          <CanvasSplit className="max-w-full">
+            <CanvasSplitHeader
+              title={path}
+              version={1}
+              saved={!running}
+              onCopy={content ? () => navigator.clipboard.writeText(content) : undefined}
+              onClose={() => setOpen(false)}
+            />
+            <CanvasSplitBody writing={running}>
+              {content ? (
+                <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
+                  {content}
+                </CanvasSplitLine>
+              ) : null}
+            </CanvasSplitBody>
+          </CanvasSplit>
+        ) : null}
+        {note ? (
+          <div
+            data-slot="write-file-note"
+            className="text-muted-foreground flex items-center gap-2 text-xs"
+          >
+            <span>{note}</span>
+            {!running && content ? (
+              <button
+                type="button"
+                aria-label={`Download ${path.split("/").pop() || "file"}`}
+                className="hover:text-foreground inline-flex shrink-0 items-center gap-1 transition-colors"
+                onClick={() => downloadTextFile(path, content)}
+              >
+                <DownloadIcon className="size-3" aria-hidden="true" />
+                Download
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     );
   },
 });

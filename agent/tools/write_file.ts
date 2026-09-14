@@ -7,21 +7,25 @@ import {
 
 type WriteOutcome = { existed: boolean; path: string };
 
-const CHAT_LINK_POLL_MS = 1_000;
-const CHAT_LINK_MAX_POLLS = 6;
+// On a brand-new chat the browser client persists the eve session id to the
+// chat row from a React effect that can lag tens of seconds behind the turn
+// while reasoning events stream. Poll front-loaded so the first turn's files
+// still persist: 10x250ms, then 10x500ms, then 13x1s (~20s total).
+const CHAT_LINK_POLL_SCHEDULE_MS = [
+  ...Array<number>(10).fill(250),
+  ...Array<number>(10).fill(500),
+  ...Array<number>(13).fill(1_000),
+];
 
-// On a brand-new chat the eve session id is saved to the chat row shortly
-// after the first POST /eve/v1/session returns, and an early tool call can
-// race it. Poll briefly so the first turn's files still persist.
 async function waitForChatLink(sessionId: string): Promise<string | null> {
-  for (let attempt = 0; attempt < CHAT_LINK_MAX_POLLS; attempt++) {
+  for (const delayMs of CHAT_LINK_POLL_SCHEDULE_MS) {
     const chatId = await getChatIdByEveSessionId(sessionId);
 
     if (chatId) {
       return chatId;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, CHAT_LINK_POLL_MS));
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 
   return null;

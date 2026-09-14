@@ -9,6 +9,7 @@ import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import type {
   EveAgentStoreSnapshot,
   EveMessageData,
+  ClientSessionState,
   MessageStreamEvent,
   PrepareSend,
 } from "eve/client";
@@ -67,6 +68,21 @@ export function AssistantChatSurface({
   const currentTitleRef = useRef(activeChat?.title ?? "New chat");
 
   const isDisabled = !viewer || !setupStatus.appReady;
+
+  const persistSessionChange = useCallback(
+    (session: ClientSessionState | undefined) => {
+      const id = activeChatIdRef.current;
+
+      if (!id || !session) {
+        return;
+      }
+
+      void saveClientChatSession(storageMode, { chatId: id, session }).catch(
+        () => {},
+      );
+    },
+    [storageMode],
+  );
 
   const persistStreamEvent = useCallback(
     (event: MessageStreamEvent) => {
@@ -195,6 +211,10 @@ export function AssistantChatSurface({
     initialSession: activeChat?.session,
     onEvent: persistStreamEvent,
     onFinish: persistSnapshot,
+    // Persist the session cursor the moment eve returns it — waiting for the
+    // settle snapshot leaves the chat row unlinked for the whole first turn,
+    // which breaks features keyed on the eve session id (agent files).
+    onSessionChange: persistSessionChange,
     prepareSend,
     isDisabled,
   });
