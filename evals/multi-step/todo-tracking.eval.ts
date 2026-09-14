@@ -17,6 +17,11 @@ const todosTrackBothCities = gateAssertion("todos-track-both-cities", (value) =>
   return joined.includes("Tokyo") && joined.includes("Paris") ? 1 : 0;
 });
 
+// Gate for the precomputed boolean.
+const trackedGate = gateAssertion("todos-tracked", (value) =>
+  value === true ? 1 : 0,
+);
+
 export default defineEval({
   description:
     "Cheap multistep: the agent uses the todo tool to track a two-step task and answers using both results.",
@@ -38,7 +43,7 @@ export default defineEval({
       todosTrackBothCities.score(call.input) === 1,
     );
 
-    t.check(tracked, todosTrackBothCities);
+    t.check(tracked, trackedGate);
 
     t.judge.autoevals.closedQA(
       "The recommendation references the actual weather results for both Tokyo and Paris before recommending one.",
