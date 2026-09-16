@@ -17,6 +17,72 @@ const AGENT_RUNS_URL = "https://api.exa.ai/agent/runs";
 const POLL_INTERVAL_MS = 5_000;
 const MAX_WAIT_MS = 240_000;
 
+// Default structured-output schema covering both primary use cases (lead
+// lists via `companies`, deep dives via overview/funding/competitors/people).
+// Everything is optional so Exa fills what the task actually produces; the
+// model under test cannot be relied on to emit nested output schemas itself.
+const DEFAULT_RESEARCH_SCHEMA = (maxItems: number) => ({
+  type: "object",
+  properties: {
+    overview: {
+      type: "string",
+      description: "2-3 sentence overview of the researched subject",
+    },
+    companies: {
+      type: "array",
+      maxItems,
+      items: {
+        type: "object",
+        properties: {
+          company_name: { type: "string" },
+          website: { type: "string", format: "uri" },
+          product_description: {
+            type: "string",
+            description: "in 12 words or less",
+          },
+          icp_fit_score: {
+            type: "integer",
+            description: "1-10, when scoring against an ICP",
+          },
+          icp_fit_reasoning: {
+            type: "string",
+            description: "one-liner in 20 words or less",
+          },
+        },
+        required: ["company_name", "website"],
+      },
+    },
+    funding: {
+      type: "array",
+      maxItems: 10,
+      items: {
+        type: "object",
+        properties: {
+          round: { type: "string" },
+          amount: { type: "string" },
+          date: { type: "string" },
+        },
+      },
+    },
+    competitors: {
+      type: "array",
+      maxItems: 10,
+      items: { type: "string" },
+    },
+    key_people: {
+      type: "array",
+      maxItems: 10,
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          title: { type: "string" },
+        },
+      },
+    },
+  },
+});
+
 const inputSchema = z.object({
   query: z
     .string()
@@ -46,6 +112,27 @@ const inputSchema = z.object({
     .describe(
       "Companies to avoid: competitors, existing customers, or results from earlier runs.",
     )
+    .nullish(),
+  listItemFields: z
+    .array(
+      z.object({
+        name: z.string(),
+        type: z
+          .enum(["string", "number", "integer", "boolean"])
+          .nullish()
+          .describe("Defaults to string."),
+        description: z.string().nullish(),
+      }),
+    )
+    .describe(
+      "Recommended for list building: flat per-item fields (name, type, description). The tool builds the JSON schema internally, which is more reliable than hand-writing outputSchema.",
+    )
+    .nullish(),
+  maxItems: z
+    .number()
+    .int()
+    .positive()
+    .describe("Maximum number of items in the built list. Defaults to 10.")
     .nullish(),
   effort: z
     .enum(["minimal", "low", "medium", "auto", "high", "xhigh", "max"])
@@ -170,8 +257,8 @@ export default defineTool({
     if (runId) {
       for (;;) {
         const result = await getAgentRun(runId, apiKey);
-        const status = typeof result.status === "string" ? result.status : "";
         const summary = toAgentRunResult(result);
+        const status = summary.status;
 
         if (
           status === "completed" ||
@@ -195,11 +282,50 @@ export default defineTool({
 
     // Starting a new run. Non-streaming runs hold their result for ~10
     // minutes of polling, so start, then poll by id.
+    //
+    // GLM-class models frequently drop optional/nested tool params, so
+    // structured output is the DEFAULT: a combined research schema covering
+    // both lead lists (companies) and deep dives (overview, funding,
+    // competitors, people). Explicit outputSchema/listItemFields win when
+    // provided.
+    let outputSchema = input.outputSchema;
+
+    if (!outputSchema && input.listItemFields?.length) {
+      const maxItems = input.maxItems ?? 10;
+      const properties = Object.fromEntries(
+        input.listItemFields.map((field) => [
+          field.name,
+          {
+            type: field.type ?? "string",
+            ...(field.description ? { description: field.description } : {}),
+          },
+        ]),
+      );
+
+      outputSchema = {
+        type: "object",
+        properties: {
+          items: {
+            type: "array",
+            maxItems,
+            items: {
+              type: "object",
+              properties,
+              required: input.listItemFields.map((field) => field.name),
+            },
+          },
+        },
+        required: ["items"],
+      };
+    } else if (!outputSchema) {
+      outputSchema = DEFAULT_RESEARCH_SCHEMA(input.maxItems ?? 10);
+    }
+
     const created = await startAgentRun(
       {
         query,
         ...(input.effort ? { effort: input.effort } : {}),
-        ...(input.outputSchema ? { outputSchema: input.outputSchema } : {}),
+        ...(outputSchema ? { outputSchema } : {}),
         ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
         ...(input.exclusions?.length
           ? { input: { exclusion: input.exclusions } }
@@ -231,8 +357,8 @@ export default defineTool({
 
     for (;;) {
       const result = await getAgentRun(createdRunId, apiKey);
-      const status = typeof result.status === "string" ? result.status : "";
       const summary = toAgentRunResult(result);
+      const status = summary.status;
 
       if (
         status === "completed" ||
