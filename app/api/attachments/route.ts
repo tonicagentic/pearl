@@ -3,21 +3,6 @@ import { put } from "@vercel/blob";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
-// Imported lazily inside the handler: @firecrawl/pdf-inspector ships a native
-// .node binding that Turbopack cannot load at build time (collecting page
-// data), and serverExternalPackages only externalizes the runtime import.
-// If the binding is still missing at runtime, the route degrades gracefully
-// (extractionNote) instead of failing the deploy.
-let pdfMod: typeof import("@firecrawl/pdf-inspector") | null = null;
-
-async function loadPdfInspector() {
-  if (!pdfMod) {
-    pdfMod = await import("@firecrawl/pdf-inspector");
-  }
-
-  return pdfMod;
-}
-
 // Attachment uploads: archive the original in Vercel Blob (when the project's
 // Blob store is available) and, for PDFs, extract text with
 // @firecrawl/pdf-inspector so the model can read the document without
@@ -117,53 +102,51 @@ export async function POST(request: Request) {
     blobError = "No Blob store configured in this environment.";
   }
 
-  // PDFs: extract position-aware Markdown. The pdfType routes scanned
-  // documents (no text layer) to a graceful answer instead of a guess.
+  // PDFs: classify first (routes scanned/image-based documents away), then
+  // extract per-page Markdown. Parse failures resolve to a graceful note
+  // instead of a 500 — the attachment is still archived when possible.
   let pdfType: string | null = null;
   let pages: number | null = null;
   let extractedText: string | null = null;
   let extractionNote: string | null = null;
+  let parsedPages: ReadonlyArray<{ page: number; markdown: string }> | null =
+    null;
 
   if (mediaType === "application/pdf") {
-    try {
-      // Cheap classification first: routes scanned/image-based documents
-      // away before paying for the full extraction.
-      const { classifyPdfAsync, extractPagesMarkdownAsync } =
-        await loadPdfInspector();
-      const classified = await classifyPdfAsync(bytes);
-      pdfType = String(classified.pdfType);
-      pages = classified.pageCount;
+    const { parsePdfAttachment } = await import("@/lib/attachments/pdf");
+    const parsed = await parsePdfAttachment(bytes);
 
-      if (
-        classified.pdfType === "Scanned" ||
-        classified.pdfType === "ImageBased"
-      ) {
-        extractionNote =
-          "This PDF has no extractable text layer (it is scanned or image-based), so its contents cannot be read yet.";
-      } else {
-        // Per-page extraction: one parse, markdown per page, plus layout
-        // signals (tables/columns/OCR-needing pages) for downstream routing.
-        const extracted = await extractPagesMarkdownAsync(bytes);
-        pages = extracted.pages.length || classified.pageCount;
-        const joined = extracted.pages
-          .map((page) => page.markdown)
-          .join("\n\n");
-        extractedText =
-          joined.length > EXTRACTED_TEXT_LIMIT
-            ? `${joined.slice(0, EXTRACTED_TEXT_LIMIT)}\n\n[Document truncated at ${EXTRACTED_TEXT_LIMIT} characters — it continues.]`
-            : joined;
-      }
-    } catch (error) {
-      extractionNote = `PDF parsing failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`;
+    pdfType = parsed.ok ? parsed.pdfType : null;
+    pages = parsed.ok ? parsed.pageCount : null;
+    parsedPages = parsed.ok ? parsed.pages : null;
+
+    if (parsed.ok) {
+      extractedText = parsed.bounded;
+    } else {
+      extractionNote = parsed.message;
     }
   }
+
+  // Register the attachment so the agent can page through it with
+  // read_attachment (PDF text) — keyed to the signed-in user.
+  const { saveAgentAttachment } = await import("@/lib/db/queries");
+  const attachmentId = await saveAgentAttachment({
+    userId: viewer.id,
+    name: file.name,
+    mediaType,
+    byteLength: bytes.byteLength,
+    blobUrl,
+    pdfType,
+    pageCount: pages,
+    pages: parsedPages,
+    extractionNote,
+  });
 
   return NextResponse.json({
     name: file.name,
     mediaType,
     byteLength: bytes.byteLength,
+    attachmentId,
     blobUrl,
     blobError,
     pdfType,

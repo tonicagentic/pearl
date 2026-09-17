@@ -1,35 +1,46 @@
 import { readFile } from "node:fs/promises";
 import { defineEval } from "eve/evals";
-import { processPdf } from "@firecrawl/pdf-inspector";
+import { gateAssertion } from "#evals/assertions.js";
+import { seedPdfAttachment } from "./helpers.ts";
 
-// Long-PDF analysis. The deployed model rejects PDF file parts (probed — see
-// evals/README.md), so the user flow extracts text at upload time via
-// @firecrawl/pdf-inspector and delivers the Markdown to the model. This eval
-// mirrors that contract on a digest small enough to deliver whole: two facts
-// sit pages apart (≈page 3 and ≈page 8) and the reply must find both.
-const EXTRACTED_TEXT_LIMIT = 50_000;
+const booleanGate = (name: string) =>
+  gateAssertion(name, (value) => (value === true ? 1 : 0));
 
+// Long-PDF analysis through the paged read_attachment flow: the fixture is
+// extracted and stored at seed time (the same contract as the composer's
+// upload route), and the agent must use read_attachment to find two facts
+// that sit pages apart (≈page 3 and ≈page 8).
 export default defineEval({
   description:
-    "Long PDF analysis: answer two questions whose answers sit pages apart in an attached, extracted digest.",
+    "Long PDF analysis: answer two questions whose answers sit pages apart in an attached digest, via the paged read_attachment tool.",
   tags: ["smoke", "multimodal"],
-  timeoutMs: 240_000,
+  timeoutMs: 300_000,
   async test(t) {
-    const bytes = await readFile(
+    await t.send("Hello! One moment please.");
+
+    const sessionId = t.sessionId;
+    if (!sessionId) throw new Error("Eval session did not start.");
+
+    const seeded = await seedPdfAttachment(
       "evals/attachments/fixtures/short-digest.pdf",
+      sessionId,
     );
-    const parsed = processPdf(bytes);
-    const markdown = parsed.markdown ?? "";
-    const bounded =
-      markdown.length > EXTRACTED_TEXT_LIMIT
-        ? `${markdown.slice(0, EXTRACTED_TEXT_LIMIT)}\n\n[Document truncated at ${EXTRACTED_TEXT_LIMIT} characters — it continues.]`
-        : markdown;
+    const pageHint = seeded.pageCount
+      ? `It has ${seeded.pageCount} pages.`
+      : "";
 
     const turn = await t.send(
-      `I attached our weekly engineering digest (${parsed.pageCount ?? "many"} pages). Its full extracted text is included below between the markers — treat that text as the document's contents; do not search the workspace for the file. Two questions: (1) What is the integration token for the staging ledger? (2) What is the confirmed date and window for the storage migration cutover?\n\n=== BEGIN EXTRACTED TEXT ===\n${bounded}\n=== END EXTRACTED TEXT ===`,
+      `I attached our weekly engineering digest (attachment ${seeded.attachmentId}). ${pageHint} Two questions: (1) What is the integration token for the staging ledger? (2) What is the confirmed date and window for the storage migration cutover? Read the relevant pages before answering.`,
     );
 
     turn.expectOk();
+
+    // The agent should page through the stored attachment (any number of
+    // read_attachment calls ≥ 1).
+    const usedReader = turn.toolCalls.some(
+      (call) => call.name === "read_attachment",
+    );
+    t.check(usedReader, booleanGate("used-read-attachment"));
 
     t.judge.autoevals
       .closedQA(

@@ -4,7 +4,7 @@ import type { ClientSessionState, MessageStreamEvent } from "eve/client";
 import { isChatTurnSettledEvent } from "@/lib/chat/events";
 import type { ActiveChat, ChatListItem, ChatListPage } from "@/lib/chat/types";
 import { createFallbackTitle, DEFAULT_CHAT_TITLE } from "@/lib/chat/title";
-import { chat, chatEvent, agentFile } from "@/lib/db/schema";
+import { chat, chatEvent, agentFile, agentAttachment } from "@/lib/db/schema";
 import { db } from "@/lib/db/client";
 
 const CHAT_HISTORY_PAGE_SIZE = 20;
@@ -532,4 +532,100 @@ export async function listAgentFileSeeds(
     .orderBy(asc(agentFile.createdAt));
 
   return rows;
+}
+
+// ============================================================================
+// Agent attachments (uploaded PDFs/images; extracted text read via tool)
+// ============================================================================
+
+export type SaveAgentAttachmentInput = {
+  readonly userId: string;
+  readonly name: string;
+  readonly mediaType: string;
+  readonly byteLength: number;
+  readonly blobUrl: string | null;
+  readonly pdfType: string | null;
+  readonly pageCount: number | null;
+  readonly pages: ReadonlyArray<{ page: number; markdown: string }> | null;
+  readonly extractionNote: string | null;
+};
+
+/** Registers an uploaded attachment and returns its stable id. */
+export async function saveAgentAttachment({
+  userId,
+  name,
+  mediaType,
+  byteLength,
+  blobUrl,
+  pdfType,
+  pageCount,
+  pages,
+  extractionNote,
+}: SaveAgentAttachmentInput): Promise<string> {
+  const id = randomUUID();
+
+  await db.insert(agentAttachment).values({
+    id,
+    userId,
+    name,
+    mediaType,
+    byteLength,
+    blobUrl,
+    pdfType,
+    pageCount,
+    pages: pages ? pages.map((page) => ({ ...page })) : null,
+    extractionNote,
+  });
+
+  return id;
+}
+
+/**
+ * Attachment ownership runs through the chat: the eve session maps to a chat
+ * row whose user must match the attachment's uploader.
+ */
+export async function getAgentAttachmentPage(
+  attachmentId: string,
+  sessionId: string,
+  page: number,
+): Promise<{ name: string; pageCount: number; markdown: string } | null> {
+  const [chatRow] = await db
+    .select({ userId: chat.userId })
+    .from(chat)
+    .where(sql`${chat.eveSession} ->> 'sessionId' = ${sessionId}`)
+    .limit(1);
+
+  if (!chatRow) {
+    return null;
+  }
+
+  const [row] = await db
+    .select({
+      name: agentAttachment.name,
+      pageCount: agentAttachment.pageCount,
+      pages: agentAttachment.pages,
+    })
+    .from(agentAttachment)
+    .where(
+      and(
+        eq(agentAttachment.id, attachmentId),
+        eq(agentAttachment.userId, chatRow.userId),
+      ),
+    )
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  const pages = row.pages ?? [];
+
+  if (page > 0) {
+    const found = pages.find((entry) => entry.page === page);
+    return found
+      ? { name: row.name, pageCount: row.pageCount ?? 0, markdown: found.markdown }
+      : null;
+  }
+
+  return { name: row.name, pageCount: row.pageCount ?? 0, markdown: "" };
 }

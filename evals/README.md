@@ -283,6 +283,30 @@ upload time and let the agent read it with `read_file`.
 the composer's post-upload contract). Once the sandbox-file delivery lands,
 they should attach via the real upload path instead.
 
+## Follow-up landed: paged attachment reads (2026-09-17, this branch)
+
+The long-document design is implemented:
+
+1. **`agent_attachment` table** — per-page extracted Markdown stored in
+   Postgres (migration `0004`), keyed to the uploading user.
+2. **`read_attachment` tool** (`agent/tools/read_attachment.ts`) — paged
+   reader: one page per call (or the page index with no `page`), ownership
+   resolved through the session → chat → user link. A 59-page document now
+   costs a few KB per turn instead of a 218k-char inline payload.
+3. **Composer PDF adapter** uploads via `/api/attachments`, then references
+   the attachment id and inlines page 1 only; the agent pages the rest.
+4. **Unit tests** (`tests/pdf-extract.test.ts`, `node --test`, 7 tests):
+   valid TextBased PDF (classification, per-page extraction, deep facts),
+   50k-char bounded delivery with a continuation marker, scanned PDF →
+   graceful `no_extractable_text`, corrupted bytes / empty buffer / random
+   binary / image-mislabeled-as-PDF → `parse_failed` without throwing.
+
+**End-to-end verification (composer + real UI):** attaching the 59-page
+`long-digest.pdf` and asking both questions — the agent paged through the
+stored pages ("Found the token on page 15... reading the remaining pages")
+and answered with the exact values (OTTER-7391-DELTA; November 3, 2026,
+02:00-04:00 UTC). `attachments/` suite: 4/4 passing. Unit tests: 7/7.
+
 ## Phase 4 — attachments and URLs end to end (2026-09-16)
 
 Added `thinking-partner/screenshot-understanding` and

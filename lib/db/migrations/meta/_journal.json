@@ -29,6 +29,13 @@
       "when": 1789407571013,
       "tag": "0003_swift_glorian",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789652083826,
+      "tag": "0004_left_arclight",
+      "breakpoints": true
     }
   ]
 }

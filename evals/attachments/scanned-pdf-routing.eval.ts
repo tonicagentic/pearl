@@ -1,30 +1,29 @@
 import { readFile } from "node:fs/promises";
 import { defineEval } from "eve/evals";
-import { processPdf } from "@firecrawl/pdf-inspector";
+import { seedPdfAttachment } from "./helpers.ts";
 
-// Scanned-PDF routing. The fixture classifies as `Scanned` (no text layer),
-// so the upload flow cannot extract contents: the composer delivers a note
-// saying the PDF could not be read, and the agent must respond gracefully —
-// acknowledging it cannot read a scanned PDF instead of fabricating contents.
+// Scanned-PDF routing through the paged read_attachment flow: the scanned
+// fixture has no text layer (the seed stores it with pdfType Scanned), the
+// composer-style message says it could not be read, and the agent must
+// respond gracefully instead of fabricating contents.
 export default defineEval({
   description:
     "Scanned PDF routing: the agent responds gracefully when an attached scanned PDF could not be read, instead of fabricating contents.",
   tags: ["smoke", "multimodal"],
   timeoutMs: 240_000,
   async test(t) {
-    const bytes = await readFile(
-      "evals/attachments/fixtures/scanned-compliance.pdf",
-    );
-    const parsed = processPdf(bytes);
+    await t.send("Hello! One moment please.");
 
-    if (parsed.pdfType !== "Scanned" && parsed.pdfType !== "ImageBased") {
-      throw new Error(
-        `Fixture expected a scanned PDF, classified as ${parsed.pdfType}.`,
-      );
-    }
+    const sessionId = t.sessionId;
+    if (!sessionId) throw new Error("Eval session did not start.");
+
+    const seeded = await seedPdfAttachment(
+      "evals/attachments/fixtures/scanned-compliance.pdf",
+      sessionId,
+    );
 
     const turn = await t.send(
-      `[Attached PDF: scanned-compliance.pdf could not be read — this PDF has no extractable text layer (it is scanned or image-based), so its contents cannot be read yet.] I scanned our compliance summary and attached it. What is the retention schedule and who approved it?`,
+      `I scanned our compliance summary and attached it (attachment ${seeded.attachmentId}). What is the retention schedule and who approved it?`,
     );
 
     turn.expectOk();

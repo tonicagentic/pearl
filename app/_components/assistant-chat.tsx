@@ -186,31 +186,53 @@ class PdfAttachmentAdapter implements AttachmentAdapter {
       const res = await fetch("/api/attachments", { method: "POST", body: form });
       const data = (await res.json().catch(() => null)) as
         | {
+            attachmentId?: string;
+            pages?: number | null;
+            pdfType?: string | null;
             extractedText?: string | null;
             extractionNote?: string | null;
-            blobError?: string | null;
             error?: string;
           }
         | null;
 
-      if (!res.ok || !data) {
+      if (!res.ok || !data?.attachmentId) {
         throw new Error(data?.error ?? `Upload failed (${res.status}).`);
       }
 
-      const extracted =
-        typeof data.extractedText === "string" && data.extractedText.length > 0
-          ? data.extractedText
-          : null;
+      const attachmentId = data.attachmentId;
+      const extractedText = data.extractedText ?? "";
+      const pageCount = data.pages ?? null;
+      const scanned =
+        data.pdfType === "Scanned" || data.pdfType === "ImageBased";
 
-      const note =
-        data.extractionNote ??
-        (data.blobError ? `Original archived upload skipped: ${data.blobError}` : null);
+      if (scanned) {
+        return {
+          ...base,
+          content: [
+            {
+              type: "text",
+              text: `[Attached PDF: ${label} (${pageCount ?? "?"} pages, attachment ${attachmentId}) — this PDF is scanned/image-based with no extractable text layer, so read_attachment cannot serve its contents.]`,
+            },
+          ],
+        };
+      }
 
-      const text = extracted
-        ? `[The user attached the PDF "${label}". Its full extracted text is included below between the markers — treat that text as the document's contents; do not search the workspace for the file.]\n\n=== BEGIN EXTRACTED TEXT ===\n${extracted}\n=== END EXTRACTED TEXT ===`
-        : `[The user attached the PDF "${label}", but its contents could not be extracted.${note ? ` ${note}` : ""}]`;
+      // First page inline for immediate context; the agent reads the rest
+      // with the paged read_attachment tool.
+      const firstPageMatch = extractedText.match(
+        /\[page 1\]\n([\s\S]*?)(?:\n\n\[page 2\]|$)/,
+      );
+      const firstPage = firstPageMatch?.[1]?.trim() ?? "";
 
-      return { ...base, content: [{ type: "text", text }] };
+      return {
+        ...base,
+        content: [
+          {
+            type: "text",
+            text: `[Attached PDF: ${label} — ${pageCount ?? "?"} pages, stored as attachment ${attachmentId}. Read any page with read_attachment({ attachmentId: "${attachmentId}", page: N }). Page 1:\n\n${firstPage}]`,
+          },
+        ],
+      };
     } catch (error) {
       return {
         ...base,

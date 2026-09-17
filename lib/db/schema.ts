@@ -127,4 +127,30 @@ export const agentFile = pgTable(
 );
 
 export type AgentFile = typeof agentFile.$inferSelect;
+
+// Uploaded attachment archive: the original goes to Vercel Blob (private
+// store); extracted PDF text is stored per page so the agent can read large
+// documents through paged tool calls instead of one giant inline payload.
+export const agentAttachment = pgTable(
+  "agent_attachment",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    mediaType: text("media_type").notNull(),
+    byteLength: integer("byte_length").notNull(),
+    blobUrl: text("blob_url"),
+    pdfType: text("pdf_type"),
+    pageCount: integer("page_count"),
+    /** Per-page extracted markdown: [{ page, markdown }]. */
+    pages: jsonb("pages").$type<Array<{ page: number; markdown: string }>>(),
+    extractionNote: text("extraction_note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("idx_agent_attachment_user").on(table.userId)],
+);
+
+export type AgentAttachment = typeof agentAttachment.$inferSelect;
 export type User = typeof user.$inferSelect;
