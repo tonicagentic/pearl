@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -29,16 +28,6 @@ function resolveMetadataBase() {
 
   return new URL(configuredUrl.startsWith("http") ? configuredUrl : `https://${configuredUrl}`);
 }
-
-const geistSans = Geist({
-  subsets: ["latin"],
-  variable: "--font-geist-sans",
-});
-
-const geistMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-geist-mono",
-});
 
 export const metadata: Metadata = {
   metadataBase: resolveMetadataBase(),
@@ -85,16 +74,12 @@ const themeScript = `
 
 export default function RootLayout({ children }: { readonly children: ReactNode }) {
   return (
-    <html
-      className={`${geistSans.variable} ${geistMono.variable}`}
-      lang="en"
-      suppressHydrationWarning
-    >
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} id="theme-init" />
         <AuthDisplayPreHydrationHead />
       </head>
-      <body className={`${geistSans.className} antialiased`}>
+      <body className="antialiased">
         <ThemeProvider>
           <TooltipProvider>{children}</TooltipProvider>
         </ThemeProvider>
