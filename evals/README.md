@@ -260,6 +260,17 @@ exposed:
 
 Full `thinking-partner/` suite: 4/4 passing. 17 evals total across 6 suites.
 
+**Composer verification (same day):** the full UI path was verified in the
+browser — attach the fixture PNG via the composer's file input, send, and the
+agent reads the image's exact contents. Two automation lessons recorded:
+`agent-browser upload` needs an absolute path (a relative path silently stages
+a 0-byte file, which fails at send with a FileReader error), and the
+composer's file input is created dynamically by
+`ComposerPrimitive.AddAttachment` on click — capture it by intercepting
+`HTMLInputElement.prototype.click`, not by querying the static DOM.
+PDFs flow through a template-local `PdfAttachmentAdapter` (data URL) in
+`assistant-chat.tsx`; the built-in Simple adapters cover images and text.
+
 No regressions elsewhere: research/ and the smoke tier stayed green through
 both passes.
 

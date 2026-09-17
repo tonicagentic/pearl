@@ -5,6 +5,14 @@ import {
   useEveError,
   useEveSession,
 } from "@assistant-ui/eve";
+import {
+  CompositeAttachmentAdapter,
+  SimpleImageAttachmentAdapter,
+  SimpleTextAttachmentAdapter,
+  type AttachmentAdapter,
+  type CompleteAttachment,
+  type PendingAttachment,
+} from "@assistant-ui/react";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import type {
   EveAgentStoreSnapshot,
@@ -42,6 +50,52 @@ import { createFallbackTitle } from "@/lib/chat/title";
 import type { ActiveChat, StorageMode } from "@/lib/chat/types";
 
 const EMPTY_EVENTS: readonly MessageStreamEvent[] = [];
+
+// PDFs: the built-in Simple adapters cover images and text only. This minimal
+// adapter stages a PDF as a data-URL file part, which the eve channel and the
+// model both accept.
+class PdfAttachmentAdapter implements AttachmentAdapter {
+  accept = "application/pdf";
+
+  async add({ file }: { file: File }): Promise<PendingAttachment> {
+    return {
+      id: crypto.randomUUID(),
+      type: "document",
+      name: file.name,
+      contentType: file.type || "application/pdf",
+      file,
+      status: { type: "requires-action", reason: "composer-send" },
+    };
+  }
+
+  async send(attachment: PendingAttachment): Promise<CompleteAttachment> {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () =>
+        reject(new Error(`Failed to read ${attachment.name}.`));
+      reader.readAsDataURL(attachment.file);
+    });
+
+    return {
+      id: attachment.id,
+      type: "document",
+      name: attachment.name,
+      contentType: "application/pdf",
+      content: [
+        {
+          type: "file",
+          data: dataUrl,
+          mimeType: "application/pdf",
+          filename: attachment.name,
+        },
+      ],
+      status: { type: "complete" },
+    };
+  }
+
+  async remove(): Promise<void> {}
+}
 
 type AssistantChatSurfaceProps = {
   /**
@@ -215,6 +269,16 @@ export function AssistantChatSurface({
   );
 
   const runtime = useEveAgentRuntime({
+    adapters: {
+      // Composer attachments: images and text via the built-in adapters, PDFs
+      // via a minimal data-URL adapter. Media types match the eve channel's
+      // upload policy (agent/channels/eve.ts).
+      attachments: new CompositeAttachmentAdapter([
+        new SimpleImageAttachmentAdapter(),
+        new SimpleTextAttachmentAdapter(),
+        new PdfAttachmentAdapter(),
+      ]),
+    },
     resume: Boolean(activeChat?.session),
     initialEvents: activeChat?.events ?? EMPTY_EVENTS,
     initialSession: activeChat?.session,
@@ -229,7 +293,6 @@ export function AssistantChatSurface({
   });
 
   const thread = runtime.thread;
-
   useEffect(() => {
     const update = () => setIsRunning(thread.getState().isRunning);
     update();
