@@ -50,10 +50,15 @@ function lastEventTimestamp(events: readonly unknown[]): number | null {
 export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean }) {
   const events = useEveEvents();
   const aui = useAui();
-  const [now, setNow] = useState(() => Date.now());
+  // Cache Components: the prerendered shell must be deterministic, so wall
+  // clock reads are deferred to an effect (docs: blocking-prerender-current-
+  // time-client). `now === null` on the server and before hydration; the
+  // elapsed ticker and stall watchdog start once the client clock exists.
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isRunning) return;
+    setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [isRunning]);
@@ -111,9 +116,11 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
   const working = isRunning && !pendingInput;
   const startedAt = workingStartedAt ?? (working ? now : null);
   const elapsedS =
-    startedAt === null ? 0 : Math.max(0, Math.floor((now - startedAt) / 1000));
+    startedAt === null || now === null
+      ? 0
+      : Math.max(0, Math.floor((now - startedAt) / 1000));
   const stalled =
-    startedAt !== null && lastAt !== null && now - lastAt > STALL_WARNING_MS;
+    startedAt !== null && lastAt !== null && now !== null && now - lastAt > STALL_WARNING_MS;
 
   if (pendingInput) {
     return (
