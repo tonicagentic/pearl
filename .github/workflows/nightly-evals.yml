@@ -1,0 +1,33 @@
+name: Nightly behavior evals
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # daily 08:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  behavior-evals:
+    # Tier 2: seeded scenario evals with the pinned judge. pass@k semantics:
+    # any failing variant fails the run; failing transcripts are attached as
+    # run artifacts under .eve/evals/<timestamp>/.
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec eve eval behavior
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Upload eval artifacts (transcripts, event streams)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: behavior-eval-artifacts
+          path: .eve/evals/
+          retention-days: 30

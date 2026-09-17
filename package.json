@@ -25,7 +25,11 @@
     "build:eve": "eve build",
     "dev:eve": "eve dev",
     "start:eve": "eve start",
-    "check:migrations": "node scripts/check-migrations.mjs"
+    "check:migrations": "node scripts/check-migrations.mjs",
+    "test": "node --test --env-file-if-exists=.env.development.local tests/",
+    "test:unit": "node --test --env-file-if-exists=.env.development.local tests/",
+    "evals:behavior": "pnpm exec eve eval behavior",
+    "evals:smoke": "pnpm exec eve eval behavior --grep smoke"
   },
   "dependencies": {
     "@assistant-ui/eve": "^0.0.17",
