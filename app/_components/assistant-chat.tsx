@@ -23,6 +23,7 @@ import type {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatShell } from "@/app/_components/chat-shell-context";
 import { ErrorToast } from "@/app/_components/error-toast";
+import { SessionStatusBanner } from "@/app/_components/session-status";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import {
   ReadFileToolUI,
@@ -487,6 +488,7 @@ export function AssistantChatSurface({
 
           <WriteFileToolUI />
           <ReadFileToolUI />
+          <SessionStatusBanner isRunning={isRunning} />
           <CanvasLayout />
 
           <EveAuthorization />
