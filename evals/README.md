@@ -234,6 +234,29 @@ Notes:
 - Cross-session recall worked with no instruction changes — the fileMemory
   recall-before-each-turn design carries it.
 
+## Attachments suite, first run (2026-09-16, branch `feat/attachment-uploads`)
+
+New suite per `docs/attachment-uploads-plan.md`, with fixtures (two deploy
+dashboards, two contrasting landing-page designs, a 59-page TextBased PDF, a
+1-page Scanned PDF). Plan doc: `docs/attachment-uploads-plan.md`.
+
+| Suite | Eval | Result | Notes |
+| --- | --- | --- | --- |
+| attachments | aesthetics-vibes | ✓ pass | both judges 100% — the agent characterized palette/mood/typography and answered the comparative trust question honestly (Aurora light/serif = trustworthy; NEONX neon/hype = risky for a bank) |
+| attachments | multi-image-compare | ✓ pass (after gate fix) | judge 100% — attribution across two images was correct on the first run; the case-sensitive `messageIncludes("GREEN")` gate was over-strict (agent wrote "green") and is now case-insensitive |
+| attachments | long-pdf-analysis | ✗ turn failed | **probe result: the model rejects PDF file parts** (`MODEL_CALL_FAILED: Invalid JSON data … MessageContent`) — GLM 5.3-fast via the gateway cannot ingest a PDF file part, so server-side extraction is required, exactly as the plan's tier 2 anticipated |
+| attachments | scanned-pdf-routing | ✗ turn failed | same root cause as above; also pins the scanned-PDF graceful routing (pdf-inspector classifies the fixture as `Scanned` with OCR-needing pages — verified) |
+
+**Probe conclusion:** `@firecrawl/pdf-inspector` is confirmed working on the
+fixtures (`long-digest.pdf` → TextBased/59 pages in 48 ms; `scanned-compliance.pdf`
+→ Scanned with pages needing OCR) and the tier-2 extraction path is now
+*required*, not optional. The two failing PDF evals are the spec for it.
+
+Known eval-gap to revisit when the tier-2 extraction lands: PDF evals attach
+the fixture inline as a base64 file part; once extraction exists, attachments
+should instead flow through the Blob upload route so payload size does not
+scale with document size.
+
 ## Phase 4 — attachments and URLs end to end (2026-09-16)
 
 Added `thinking-partner/screenshot-understanding` and

@@ -64,12 +64,18 @@ Do not paste large PDFs into model context. Two-stage flow:
    Blob and returns `{url, mediaType, byteLength, name}`. The composer's PDF
    adapter `add()` uploads here and stages a **URL-based** file part (the
    composer shows a chip immediately; upload progress is part of `add()`).
-2. **Interpretation**: server-side text extraction (`unpdf`) at upload time
-   produces `text + pageCount` metadata. The extracted text is written into
-   the sandbox as `/workspace/attachments/<name>.txt` (bounded — e.g. first
-   50k characters with a continuation marker), so the agent reads it with
-   `read_file` like any document and answers from it. Images inside PDFs are
-   out of scope for tier 2.
+2. **Interpretation**: parse server-side with
+   [`@firecrawl/pdf-inspector`](https://github.com/firecrawl/pdf-inspector)
+   (`processPdf(bytes)` → `{pdfType, markdown, pages…}`, Rust/WASM, MIT,
+   ~0.5 s runs). Its document classification routes the flow:
+   - `TextBased`/`Mixed` → the position-aware **Markdown** (headings, tables,
+     reading order, page markers) is written into the sandbox as
+     `/workspace/attachments/<name>.md` (bounded — e.g. first 50k characters
+     with a continuation marker), so the agent reads it with `read_file` like
+     any document and answers from it.
+   - `Scanned`/`ImageBased` → no text layer; the agent gets the graceful
+     "this PDF is scanned, OCR is not supported yet" message instead of
+     silence.
 3. The message payload carries only the Blob URL + extracted-text summary —
    a few KB regardless of PDF size.
 
@@ -78,11 +84,32 @@ Evals first:
 - `attachments/long-pdf-analysis` — fixture: a generated 24-page PDF with the
   answer to a specific question buried on page 19 (and a different fact on
   page 6). The reply must answer both (proves deep reading, not first-pages
-  skimming).
+  skimming). Extraction goes through `@firecrawl/pdf-inspector`; the eval
+  also pins the scanned-PDF routing (a scanned fixture yields the graceful
+  message).
 - `attachments/pdf-graceful-limit` — a PDF over the byte budget produces a
   clear, actionable message (not a crash, not silence).
 - `attachments/pdf-numbers-exact` — a page contains specific numbers; the
   reply quotes them exactly (no hallucinated figures).
+
+### Aesthetics and vibes (images)
+
+Reading the *look and feel* of an image, not just its facts. The agent should
+be able to describe palette, mood, typography, and composition, and answer
+comparative questions like "which of these feels more trustworthy for a
+fintech landing page?" — the kind of design-feedback loop a thinking partner
+needs.
+
+Evals:
+
+- `attachments/aesthetics-vibes` — two deliberately contrasting fixture
+  images (a minimal light fintech screen vs a dark neon crypto screen); the
+  reply must characterize each one's palette/mood and answer the comparative
+  trust question with a reason. Judge criteria separate "aesthetic vocabulary"
+  (colors, mood, typography, density) from mere content reading.
+- `attachments/vibe-feedback` — one mood-board-style image; the agent gives
+  concrete aesthetic feedback (what works, what clashes) rather than a
+  content inventory.
 
 ### Tier 3 — multiple large images (Blob-backed vision)
 
