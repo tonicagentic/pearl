@@ -1,0 +1,20 @@
+[
+  {
+    "id": "passive-to-active",
+    "draft": "It was decided by the platform team that the logging pipeline should be migrated to OpenTelemetry. Errors are now able to be correlated across services by a shared trace id. Alerts were previously configured by hand, which was done inconsistently, and now they are generated from a shared config that is versioned in git. A dashboard was also built for on-call.",
+    "instruction": "This is full of passive voice. Rewrite it in active voice — that's the only change.",
+    "criteria": "Every sentence is converted to active voice with named actors (the platform team decided, migrated, correlated, versioned, built) while preserving the same facts: OpenTelemetry migration, shared trace id correlation, previously hand-configured inconsistent alerts, git-versioned shared config, on-call dashboard."
+  },
+  {
+    "id": "trim-hedging",
+    "draft": "I think we could maybe consider potentially shipping the dark mode toggle in the next release? It seems like users might possibly want it — there were, I believe, around 30 or so requests. We should probably look at it. It might not be that hard to build, I guess.",
+    "instruction": "Cut the hedging. Make this decisive and clear without changing what it claims.",
+    "criteria": "The rewrite removes stacked hedges (maybe, possibly, I think, might, I guess, or so, probably) and states the claims plainly: ship the dark mode toggle next release, ~30 user requests, needs scoping/estimate. It does not invent certainty about the estimate beyond what the draft supports, and it stays about dark mode."
+  },
+  {
+    "id": "one-idea-per-paragraph",
+    "draft": "The search latency fix shipped Tuesday and p95 dropped from 900ms to 210ms, which by the way is why the weekly report looked different, and we also onboarded two new engineers, Priya and Marcus, who are pairing with the payments squad initially, and the search index rebuild finished overnight so results are fresher now, and Priya previously worked on distributed tracing which is lucky, plus we're hiring one more search engineer.",
+    "instruction": "This crams three unrelated updates into one paragraph. Reorganize it into clear paragraphs, one topic each — same facts, no additions.",
+    "criteria": "The rewrite separates the updates into distinct paragraphs by topic (search latency fix + p95 numbers + fresher results from the index rebuild; new engineers Priya and Marcus + payments pairing + Priya's tracing background; hiring one more search engineer), preserving every fact without adding new ones."
+  }
+]

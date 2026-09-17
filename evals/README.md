@@ -80,11 +80,22 @@ feature: build the smallest capability that flips it.
 - **Tier 0 — smoke** (tags `smoke`, no external tools): identity, small-talk,
   tone, no-invented-memory. Every agent/instruction change. Target < 2 min.
 - **Tier 1 — domain suites**: full `thinking-partner/`, `writing/`,
-  `research/` minus expensive tags. Before every merge to `main`.
+  `research/` minus expensive tags. Before every merge to `main`. Run with
+  `--strict` so judge thresholds are fatal.
 - **Tier 2 — expensive** (`costs-exa`, long multi-turn, dataset fan-outs):
   nightly or pre-release.
 - **Regression protocol**: bugs found in daily use become evals first, then
   the fix. The eval names the bug.
+
+### Judge severity policy
+
+- `.gate(0.8)` for quality bars that define the behavior — use once a suite
+  has stabilized (during first authoring, prefer `.atLeast` so one flaky judge
+  score does not mask the rest of the run).
+- `.atLeast(...)` marks the eval `scored` (fatal only under `--strict`).
+- No threshold = watch-only signal.
+- Phase 1 suites ship with `.atLeast` everywhere; promote to `.gate` as the
+  agent's behavior stabilizes.
 
 ## Conventions
 
@@ -135,4 +146,36 @@ failed its `exa-run-landed` gate because the assertion expected
 `"completed"`. Eval defect, not agent behavior — the judge graded the actual
 output at 100%. Assertion corrected; noted here as the first example of the
 regression protocol (a failing eval was diagnosed before anything was tuned).
+
+## Phase 1 — writing/ and research/ suites (2026-09-16)
+
+Added 10 evals: `writing/` (5 single-behavior + 1 dataset fan-out of 3 cases)
+and `research/` (4). First-run results:
+
+| Suite | Eval | Result | Notes |
+| --- | --- | --- | --- |
+| writing | structure-edit | ✓ pass | judges 100% |
+| writing | logic-edit | ✓ pass | judges 100% |
+| writing | preserve-voice | ✓ pass | judges 100% |
+| writing | audience-fit | ✓ pass | 3 judges, all 100% (multi-turn) |
+| writing | dimension-discipline | ○ scored | casualness judge 100%; scope judge 0% — the agent padded the rewrite with a "what changed and why" explanation section |
+| writing | targeted-edits/0000 (passive→active) | ○ scored | criteria judge 100%; scope judge 0% (same padding pattern) |
+| writing | targeted-edits/0001 (trim-hedging) | ○ scored | both judges 0% — **real findings**: the agent firmed up a hedged claim ("might not be that hard, I guess" → "shouldn't be hard") changing what it claims, and dropped the scoping note |
+| writing | targeted-edits/0002 (one-idea-per-paragraph) | ○ scored | both judges 0% — same explanation-padding pattern |
+| research | search-when-fresh | ✓ pass | unprompted search + per-item citations |
+| research | known-vs-found | ✓ pass | labels Canberra as known, BTC price as looked up |
+| research | source-quality | ✓ (after fix) | agent went straight to react.dev with `web_fetch` — better than searching; eval's `web_search` gate was over-constrained, now gates on citing `react.dev` |
+| research | no-fabrication | ✓ pass | star count retrieved and attributed |
+
+**Phase 1 findings (the eval-driven backlog):**
+
+1. **Rewrite padding**: when asked to edit text, the agent wraps the rewrite
+   in meta-commentary ("what changed and why it's faithful" sections). For
+   "just fix this" flows that is scope violation. → Phase 2 instruction
+   tuning: return the edit cleanly; explain only when asked.
+2. **Claim drift while de-hedging**: tightening language subtly strengthened
+   claims (estimate certainty). → instructions must pin "never change what is
+   claimed, only how".
+3. Both findings are agent-side, so these evals now *define done* for the
+   instruction tuning; nothing else needs building.
 
