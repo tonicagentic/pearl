@@ -67,6 +67,14 @@ export function UserMenu({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
+            router.push("/settings");
+          }}
+        >
+          Usage
+        </DropdownMenuItem>
+        <DropdownMenuItem
           aria-busy={signingOut}
           disabled={signingOut}
           onSelect={(event) => {
