@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
 import {
   ArrowDownToLineIcon,
@@ -9,7 +8,7 @@ import {
   Loader2Icon,
 } from "lucide-react";
 
-import { getUserUsageRows, listChatsByUser } from "@/lib/db/queries";
+import { getUserUsageRows } from "@/lib/db/queries";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 import {
@@ -54,17 +53,9 @@ async function ResolvedUsage() {
     );
   }
 
-  const [rows, chats] = await Promise.all([
-    getUserUsageRows(viewer.id),
-    listChatsByUser(viewer.id),
-  ]);
+  const rows = await getUserUsageRows(viewer.id);
 
-  const titles: Record<string, string> = {};
-  for (const chat of chats) {
-    titles[chat.id] = chat.title;
-  }
-
-  const summary = aggregateUsage(rows, titles);
+  const summary = aggregateUsage(rows);
 
   return (
     <>
@@ -106,13 +97,6 @@ async function ResolvedUsage() {
         title="By day"
         rows={summary.byDay.map((entry) => ({ ...entry, label: entry.day }))}
         emptyMessage="No usage yet."
-      />
-
-      <UsageTable
-        title="By chat"
-        rows={summary.byChat.slice(0, 10)}
-        emptyMessage="No usage yet."
-        linkChats
       />
 
       <UsageTable title="By model" rows={summary.byModel} emptyMessage="No usage yet." />
@@ -178,21 +162,16 @@ function StatTile({
   );
 }
 
-type UsageRowView = UsageBreakdownEntry & {
-  readonly day?: string;
-  readonly chatId?: string;
-};
+type UsageRowView = UsageBreakdownEntry;
 
 function UsageTable({
   title,
   rows,
   emptyMessage,
-  linkChats,
 }: {
   readonly title: string;
   readonly rows: readonly UsageRowView[];
   readonly emptyMessage: string;
-  readonly linkChats?: boolean;
 }) {
   return (
     <section>
@@ -216,19 +195,8 @@ function UsageTable({
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={`${row.day ?? ""}-${row.chatId ?? ""}-${row.label}`} className="border-b last:border-b-0">
-                  <td className="max-w-56 truncate px-3 py-2">
-                    {linkChats && row.chatId ? (
-                      <Link
-                        className="underline-offset-2 hover:underline"
-                        href={`/chat/${row.chatId}`}
-                      >
-                        {row.label}
-                      </Link>
-                    ) : (
-                      row.label
-                    )}
-                  </td>
+                <tr key={row.label} className="border-b last:border-b-0">
+                  <td className="max-w-56 truncate px-3 py-2">{row.label}</td>
                   <NumCell value={row.modelCalls} />
                   <NumCell value={formatTokens(row.inputTokens)} />
                   <NumCell value={formatTokens(row.outputTokens)} />

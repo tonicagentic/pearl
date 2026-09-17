@@ -46,9 +46,6 @@ export type UserUsageSummary = {
   readonly turns: number;
   /** UTC calendar-day buckets; `day` is the label. */
   readonly byDay: readonly (UsageTotals & { readonly day: string })[];
-  readonly byChat: readonly (UsageBreakdownEntry & {
-    readonly chatId: string;
-  })[];
   readonly byModel: readonly UsageBreakdownEntry[];
 };
 
@@ -103,17 +100,13 @@ export function emptyUsageTotals(): UsageTotals {
 }
 
 /**
- * Aggregates usage rows into totals plus per-day / per-chat / per-model
- * breakdowns. Days are UTC calendar days (the event `createdAt` is UTC);
- * per-chat and per-model breakdowns are sorted by cost then tokens.
+ * Aggregates usage rows into totals plus per-day and per-model breakdowns.
+ * Days are UTC calendar days (the event `createdAt` is UTC); the per-model
+ * breakdown is sorted by cost then tokens.
  */
-export function aggregateUsage(
-  rows: readonly UsageRow[],
-  chatTitles: Readonly<Record<string, string>>,
-): UserUsageSummary {
+export function aggregateUsage(rows: readonly UsageRow[]): UserUsageSummary {
   let totals = ZERO;
   const byDay = new Map<string, UsageTotals>();
-  const byChat = new Map<string, UsageTotals>();
   const byModel = new Map<string, UsageTotals>();
 
   for (const row of rows) {
@@ -121,8 +114,6 @@ export function aggregateUsage(
 
     const day = row.createdAt.toISOString().slice(0, 10);
     byDay.set(day, addUsage(byDay.get(day) ?? ZERO, row));
-
-    byChat.set(row.chatId, addUsage(byChat.get(row.chatId) ?? ZERO, row));
 
     const model = row.modelId ?? "unknown";
     byModel.set(model, addUsage(byModel.get(model) ?? ZERO, row));
@@ -144,13 +135,6 @@ export function aggregateUsage(
   });
 
   return {
-    byChat: [...byChat.entries()]
-      .map(([chatId, usage]) => ({
-        chatId,
-        label: chatTitles[chatId] ?? chatId,
-        ...usage,
-      }))
-      .sort((a, b) => compare(a, b)),
     byDay: [...byDay.entries()]
       .map(([day, usage]) => ({ day, ...usage }))
       .sort((a, b) => (a.day < b.day ? -1 : 1)),
