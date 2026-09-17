@@ -12,8 +12,7 @@ import {
   type AttachmentAdapter,
   type CompleteAttachment,
   type PendingAttachment,
-} from "@assistant-ui/react";
-import { AssistantRuntimeProvider } from "@assistant-ui/react";
+} from "@assistant-ui/react";import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import type {
   EveAgentStoreSnapshot,
   EveMessageData,
@@ -50,6 +49,105 @@ import { createFallbackTitle } from "@/lib/chat/title";
 import type { ActiveChat, StorageMode } from "@/lib/chat/types";
 
 const EMPTY_EVENTS: readonly MessageStreamEvent[] = [];
+
+// Screenshots and photos are downscaled before staging: a 3000px screenshot
+// is ~3 MB while a 1600px JPEG is ~250 KB, and vision interpretation does not
+// need the original resolution. Keeps several images per message under the
+// server-action body limit and out of Postgres bloat.
+const MAX_IMAGE_EDGE = 1600;
+const DOWNSCALED_JPEG_QUALITY = 0.85;
+
+async function readAsDataUrl(file: File): Promise<string> {
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error(`Failed to read ${file.name}.`));
+    reader.readAsDataURL(file);
+  });
+}
+
+// Raster images larger than MAX_IMAGE_EDGE are downscaled to a JPEG. Returns
+// null when the image is small enough to stage as-is (or cannot be decoded —
+// the caller then stages the original file).
+async function downscaleForStaging(file: File): Promise<File | null> {
+  if (!file.type.startsWith("image/") || file.type === "image/gif") {
+    return null;
+  }
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const longestEdge = Math.max(bitmap.width, bitmap.height);
+
+    if (longestEdge <= MAX_IMAGE_EDGE && file.size < 512 * 1024) {
+      bitmap.close();
+      return null;
+    }
+
+    const scale = MAX_IMAGE_EDGE / longestEdge;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      bitmap.close();
+      return null;
+    }
+
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", DOWNSCALED_JPEG_QUALITY),
+    );
+
+    if (!blob) return null;
+
+    const baseName = file.name.replace(/\.[^.]+$/, "");
+    return new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
+  } catch {
+    return null;
+  }
+}
+
+// Image adapter: downscales oversized images at stage time, then sends the
+// staged file as an inline image part (the eve channel and the model both
+// accept data-URL images; verified end to end).
+class DownscalingImageAttachmentAdapter implements AttachmentAdapter {
+  accept = "image/png,image/jpeg,image/webp";
+
+  async add({ file }: { file: File }): Promise<PendingAttachment> {
+    const staged = (await downscaleForStaging(file)) ?? file;
+
+    return {
+      id: crypto.randomUUID(),
+      type: "image",
+      name: staged.name,
+      contentType: staged.type || "image/png",
+      file: staged,
+      status: { type: "requires-action", reason: "composer-send" },
+    };
+  }
+
+  async send(attachment: PendingAttachment): Promise<CompleteAttachment> {
+    return {
+      id: attachment.id,
+      type: "image",
+      name: attachment.name,
+      contentType: attachment.contentType ?? "image/png",
+      content: [
+        {
+          type: "image",
+          image: await readAsDataUrl(attachment.file),
+        },
+      ],
+      status: { type: "complete" },
+    };
+  }
+
+  async remove(): Promise<void> {}
+}
+
 
 // PDFs: the built-in Simple adapters cover images and text only. This minimal
 // adapter stages a PDF as a data-URL file part, which the eve channel and the
@@ -308,6 +406,9 @@ export function AssistantChatSurface({
       // via a minimal data-URL adapter. Media types match the eve channel's
       // upload policy (agent/channels/eve.ts).
       attachments: new CompositeAttachmentAdapter([
+        // Downscaling first (png/jpeg/webp); SimpleImage stays as the
+        // fallback for other image types (e.g. gif).
+        new DownscalingImageAttachmentAdapter(),
         new SimpleImageAttachmentAdapter(),
         new SimpleTextAttachmentAdapter(),
         new PdfAttachmentAdapter(),
