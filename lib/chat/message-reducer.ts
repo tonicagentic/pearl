@@ -22,7 +22,15 @@ export function createChatMessageReducer(): ChatMessageReducer {
       const next = reducer.reduce(data, event);
 
       if (event.type === "turn.completed" || event.type === "turn.failed") {
-        return finalizeStreamingParts(next, event.data.turnId);
+        const finalized = finalizeStreamingParts(next, event.data.turnId);
+
+        // A failed turn must never look like a finished response: mark the
+        // message status so the UI presents it as failed, not streaming.
+        if (event.type === "turn.failed") {
+          return markTurnFailed(finalized, event.data.turnId);
+        }
+
+        return finalized;
       }
 
       return next;
@@ -39,6 +47,20 @@ function finalizeStreamingParts(
     messages: data.messages.map((message) =>
       message.role === "assistant" && message.metadata?.turnId === turnId
         ? { ...message, parts: message.parts.map(finalizeStreamingPart) }
+        : message,
+    ),
+  };
+}
+
+function markTurnFailed(
+  data: EveMessageData,
+  turnId: string,
+): EveMessageData {
+  return {
+    ...data,
+    messages: data.messages.map((message) =>
+      message.role === "assistant" && message.metadata?.turnId === turnId
+        ? { ...message, metadata: { ...message.metadata, status: "failed" } }
         : message,
     ),
   };

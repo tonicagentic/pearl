@@ -36,6 +36,13 @@
       "when": 1789652083826,
       "tag": "0004_left_arclight",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789653658059,
+      "tag": "0005_great_vindicator",
+      "breakpoints": true
     }
   ]
 }

@@ -153,4 +153,20 @@ export const agentAttachment = pgTable(
 );
 
 export type AgentAttachment = typeof agentAttachment.$inferSelect;
+
+// Idempotency ledger for destructive tools: the execution key is stable for
+// (tool, logical operation) — either an explicit idempotency key or a hash of
+// the operation's identity. A replayed call finds its key here and must not
+// re-fire the side effect; `pending` rows are how a crash between "side
+// effect sent" and "result recorded" is detected instead of hidden.
+export const agentToolExecution = pgTable("agent_tool_execution", {
+  executionKey: text("execution_key").primaryKey(),
+  toolName: text("tool_name").notNull(),
+  status: text("status").notNull(), // pending | succeeded | failed
+  detail: text("detail"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type AgentToolExecution = typeof agentToolExecution.$inferSelect;
 export type User = typeof user.$inferSelect;

@@ -2,7 +2,7 @@ import { neon } from "@neondatabase/serverless";
 import { drizzle as drizzleNeonHttp, type NeonHttpDatabase } from "drizzle-orm/neon-http";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import * as schema from "@/lib/db/schema";
+import * as schema from "./schema.ts";
 
 let database: NeonHttpDatabase<typeof schema> | null = null;
 
