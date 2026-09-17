@@ -8,16 +8,14 @@ import { getSetupStatus } from "@/lib/setup";
 // data), and serverExternalPackages only externalizes the runtime import.
 // If the binding is still missing at runtime, the route degrades gracefully
 // (extractionNote) instead of failing the deploy.
-let processPdfFn: typeof import("@firecrawl/pdf-inspector").processPdf | null =
-  null;
+let pdfMod: typeof import("@firecrawl/pdf-inspector") | null = null;
 
-async function loadProcessPdf() {
-  if (!processPdfFn) {
-    const mod = await import("@firecrawl/pdf-inspector");
-    processPdfFn = mod.processPdf;
+async function loadPdfInspector() {
+  if (!pdfMod) {
+    pdfMod = await import("@firecrawl/pdf-inspector");
   }
 
-  return processPdfFn;
+  return pdfMod;
 }
 
 // Attachment uploads: archive the original in Vercel Blob (when the project's
@@ -128,21 +126,32 @@ export async function POST(request: Request) {
 
   if (mediaType === "application/pdf") {
     try {
-      const processPdf = await loadProcessPdf();
-      const parsed = processPdf(bytes);
-      pdfType = String(parsed.pdfType ?? "unknown");
-      pages = typeof parsed.pageCount === "number" ? parsed.pageCount : null;
+      // Cheap classification first: routes scanned/image-based documents
+      // away before paying for the full extraction.
+      const { classifyPdfAsync, extractPagesMarkdownAsync } =
+        await loadPdfInspector();
+      const classified = await classifyPdfAsync(bytes);
+      pdfType = String(classified.pdfType);
+      pages = classified.pageCount;
 
-      if (parsed.markdown && parsed.markdown.trim().length > 0) {
-        extractedText =
-          parsed.markdown.length > EXTRACTED_TEXT_LIMIT
-            ? `${parsed.markdown.slice(0, EXTRACTED_TEXT_LIMIT)}\n\n[Document truncated at ${EXTRACTED_TEXT_LIMIT} characters — it continues.]`
-            : parsed.markdown;
-      } else {
+      if (
+        classified.pdfType === "Scanned" ||
+        classified.pdfType === "ImageBased"
+      ) {
         extractionNote =
-          pdfType === "Scanned" || pdfType === "ImageBased"
-            ? "This PDF has no extractable text layer (it is scanned or image-based), so its contents cannot be read yet."
-            : "No extractable text was found in this PDF.";
+          "This PDF has no extractable text layer (it is scanned or image-based), so its contents cannot be read yet.";
+      } else {
+        // Per-page extraction: one parse, markdown per page, plus layout
+        // signals (tables/columns/OCR-needing pages) for downstream routing.
+        const extracted = await extractPagesMarkdownAsync(bytes);
+        pages = extracted.pages.length || classified.pageCount;
+        const joined = extracted.pages
+          .map((page) => page.markdown)
+          .join("\n\n");
+        extractedText =
+          joined.length > EXTRACTED_TEXT_LIMIT
+            ? `${joined.slice(0, EXTRACTED_TEXT_LIMIT)}\n\n[Document truncated at ${EXTRACTED_TEXT_LIMIT} characters — it continues.]`
+            : joined;
       }
     } catch (error) {
       extractionNote = `PDF parsing failed: ${
