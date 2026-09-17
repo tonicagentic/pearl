@@ -112,5 +112,27 @@ feature: build the smallest capability that flips it.
 
 ## Baseline
 
-_(Phase 0: record the current pass/fail of every suite here after the first
-full run, then update whenever suites change.)_
+First full run, 2026-09-16 (branch `feat/eval-strategy`, judge `openai/gpt-5.5`
+via gateway, local dev target). **13/13 evals pass, 39 gates green.**
+
+| Suite | Eval | Gates | Judge |
+| --- | --- | --- | --- |
+| general-chat | identity | 3/3 | closedQA 100% |
+| general-chat | small-talk | 3/3 | closedQA 100% |
+| general-chat | weather-tool | 2/2 | closedQA 100% |
+| web-lookup | current-facts | 3/3 | closedQA 100% |
+| web-lookup | no-search-for-opinion | 4/4 | closedQA 100% |
+| lead-generation | list-build | 5/5 | closedQA 100% |
+| lead-generation | skill-flow | 3/3 | closedQA 100% |
+| lead-generation | self-correction | 3/3 (after fix) | closedQA 100% |
+| company-research | deep-dive | 5/5 | closedQA 100% |
+| multi-step | todo-tracking | 6/6 | closedQA 100% |
+| multi-step | lead-campaign | 7/7 | closedQA 100% |
+
+**Baseline incident (fixed with the run):** `lead-generation/self-correction`
+failed its `exa-run-landed` gate because the assertion expected
+`status === "complete"` while the tool (mirroring Exa's API) returns
+`"completed"`. Eval defect, not agent behavior — the judge graded the actual
+output at 100%. Assertion corrected; noted here as the first example of the
+regression protocol (a failing eval was diagnosed before anything was tuned).
+

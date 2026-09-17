@@ -2,13 +2,14 @@ import { defineEval } from "eve/evals";
 import { gateAssertion } from "#evals/assertions.js";
 
 // Gate: the exa_agent_run result carries a completed run with structured output.
+// Exa's terminal status is "completed"; accept both spellings to be lenient.
 const completedExaRun = gateAssertion("exa-run-completed", (value) => {
   const out = value as {
     status?: string;
     runId?: string;
     output?: { structured?: unknown };
   };
-  return out?.status === "complete" && typeof out.runId === "string" ? 1 : 0;
+  return out?.status === "completed" && typeof out.runId === "string" ? 1 : 0;
 });
 
 export default defineEval({
