@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import {
   ArrowDownToLineIcon,
   ArrowUpFromLineIcon,
   CoinsIcon,
   GaugeIcon,
+  Loader2Icon,
 } from "lucide-react";
 
 import { getUserUsageRows, listChatsByUser } from "@/lib/db/queries";
@@ -22,21 +23,34 @@ export const metadata: Metadata = {
   title: "Usage",
 };
 
-export default async function SettingsPage() {
+/**
+ * Static shell: with cacheComponents, every uncached read (headers via auth,
+ * database queries) must live inside a Suspense boundary so the route can
+ * prerender its frame — same pattern as the shell's hidden ResolvedChatBootstrap.
+ */
+export default function SettingsPage() {
+  return (
+    <SettingsPageFrame>
+      <Suspense fallback={<UsageFallback />}>
+        <ResolvedUsage />
+      </Suspense>
+    </SettingsPageFrame>
+  );
+}
+
+async function ResolvedUsage() {
   const setupStatus = await getSetupStatus();
   const viewer = await getServerViewer(setupStatus);
 
   if (!viewer || setupStatus.storageMode !== "database") {
     return (
-      <SettingsPageFrame>
-        <SignedOutCard
-          message={
-            setupStatus.storageMode === "database"
-              ? "Sign in to see your usage."
-              : "Usage tracking needs database persistence."
-          }
-        />
-      </SettingsPageFrame>
+      <SignedOutCard
+        message={
+          setupStatus.storageMode === "database"
+            ? "Sign in to see your usage."
+            : "Usage tracking needs database persistence."
+        }
+      />
     );
   }
 
@@ -53,7 +67,7 @@ export default async function SettingsPage() {
   const summary = aggregateUsage(rows, titles);
 
   return (
-    <SettingsPageFrame>
+    <>
       <header>
         <h1 className="text-lg font-semibold">Usage</h1>
         <p className="text-sm text-muted-foreground">
@@ -109,7 +123,16 @@ export default async function SettingsPage() {
         be incomplete, and tokens eve uses for internal compaction are not
         reported per call.
       </p>
-    </SettingsPageFrame>
+    </>
+  );
+}
+
+function UsageFallback() {
+  return (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <Loader2Icon className="size-3.5 animate-spin" aria-hidden />
+      Loading your usage…
+    </div>
   );
 }
 
