@@ -1,27 +1,37 @@
+import { readFile } from "node:fs/promises";
 import { defineEval } from "eve/evals";
+import { processPdf } from "@firecrawl/pdf-inspector";
 
-// Scanned-PDF routing: an image-only PDF has no text layer. The agent must
-// say so gracefully (OCR is not supported yet) instead of guessing at the
-// contents. Until the pdf-inspector classification path exists, the agent
-// will likely guess or claim it cannot read the file — the graceful message
-// is the spec.
+// Scanned-PDF routing. The fixture classifies as `Scanned` (no text layer),
+// so the upload flow cannot extract contents: the composer delivers a note
+// saying the PDF could not be read, and the agent must respond gracefully —
+// acknowledging it cannot read a scanned PDF instead of fabricating contents.
 export default defineEval({
   description:
-    "Scanned PDF routing: an image-only PDF gets a graceful 'no text layer / cannot read this' answer, not fabricated contents.",
+    "Scanned PDF routing: the agent responds gracefully when an attached scanned PDF could not be read, instead of fabricating contents.",
   tags: ["smoke", "multimodal"],
   timeoutMs: 240_000,
   async test(t) {
-    const turn = await t.sendFile(
-      "I scanned our compliance summary. What is the retention schedule and who approved it?",
+    const bytes = await readFile(
       "evals/attachments/fixtures/scanned-compliance.pdf",
-      "application/pdf",
+    );
+    const parsed = processPdf(bytes);
+
+    if (parsed.pdfType !== "Scanned" && parsed.pdfType !== "ImageBased") {
+      throw new Error(
+        `Fixture expected a scanned PDF, classified as ${parsed.pdfType}.`,
+      );
+    }
+
+    const turn = await t.send(
+      `[Attached PDF: scanned-compliance.pdf could not be read — this PDF has no extractable text layer (it is scanned or image-based), so its contents cannot be read yet.] I scanned our compliance summary and attached it. What is the retention schedule and who approved it?`,
     );
 
     turn.expectOk();
 
     t.judge.autoevals
       .closedQA(
-        "Two acceptable outcomes: (a) the reply says it cannot read the scanned PDF because it has no extractable text (OCR is not supported), possibly offering alternatives; or (b) the reply correctly reports the retention schedule (seven years from signature) and the approver (the records office, March 12) if the model actually read the scanned page. Fabricating different values — a made-up schedule or approver — fails.",
+        "The reply acknowledges that the attached scanned PDF cannot be read (no text layer / OCR is not supported), and either asks the user for the details in another form or offers alternatives (e.g., typing out the relevant section). It must NOT fabricate a retention schedule or an approver.",
         { on: turn.message },
       )
       .atLeast(0.8);

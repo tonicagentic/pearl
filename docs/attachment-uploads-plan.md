@@ -67,15 +67,19 @@ Do not paste large PDFs into model context. Two-stage flow:
 2. **Interpretation**: parse server-side with
    [`@firecrawl/pdf-inspector`](https://github.com/firecrawl/pdf-inspector)
    (`processPdf(bytes)` → `{pdfType, markdown, pages…}`, Rust/WASM, MIT,
-   ~0.5 s runs). Its document classification routes the flow:
-   - `TextBased`/`Mixed` → the position-aware **Markdown** (headings, tables,
-     reading order, page markers) is written into the sandbox as
-     `/workspace/attachments/<name>.md` (bounded — e.g. first 50k characters
-     with a continuation marker), so the agent reads it with `read_file` like
-     any document and answers from it.
-   - `Scanned`/`ImageBased` → no text layer; the agent gets the graceful
-     "this PDF is scanned, OCR is not supported yet" message instead of
-     silence.
+   ~0.5 s runs). **Landed** (see `evals/README.md`): the upload route
+   (`POST /api/attachments`) extracts and returns bounded Markdown + the
+   Blob URL; the composer PDF adapter delivers the extracted Markdown as the
+   message text, and the model answers from it (eval green on a 13-page
+   digest).
+
+   - `TextBased`/`Mixed` → Markdown extracted and delivered (landed).
+   - `Scanned`/`ImageBased` → no text layer; the graceful "cannot read this"
+     message is the spec (`scanned-pdf-routing` eval).
+   - **Documents beyond the inline budget** (the 59-page fixture: 218k
+     chars): the extracted Markdown must be written into the session sandbox
+     at upload time and read with `read_file` — pending follow-up
+     (`long-digest.pdf` is the kept fixture).
 3. The message payload carries only the Blob URL + extracted-text summary —
    a few KB regardless of PDF size.
 

@@ -69,29 +69,63 @@ class PdfAttachmentAdapter implements AttachmentAdapter {
   }
 
   async send(attachment: PendingAttachment): Promise<CompleteAttachment> {
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () =>
-        reject(new Error(`Failed to read ${attachment.name}.`));
-      reader.readAsDataURL(attachment.file);
-    });
-
-    return {
+    const label = attachment.name;
+    const base = {
       id: attachment.id,
-      type: "document",
+      type: "document" as const,
       name: attachment.name,
-      contentType: "application/pdf",
-      content: [
-        {
-          type: "file",
-          data: dataUrl,
-          mimeType: "application/pdf",
-          filename: attachment.name,
-        },
-      ],
-      status: { type: "complete" },
+      contentType: "application/pdf" as const,
+      status: { type: "complete" } as const,
     };
+
+    // The deployed model rejects PDF file parts, so the composer uploads the
+    // PDF to /api/attachments (Blob archive + pdf-inspector extraction) and
+    // delivers the extracted text as the message content instead.
+    try {
+      const form = new FormData();
+      form.append("file", attachment.file, attachment.name);
+
+      const res = await fetch("/api/attachments", { method: "POST", body: form });
+      const data = (await res.json().catch(() => null)) as
+        | {
+            extractedText?: string | null;
+            extractionNote?: string | null;
+            blobError?: string | null;
+            error?: string;
+          }
+        | null;
+
+      if (!res.ok || !data) {
+        throw new Error(data?.error ?? `Upload failed (${res.status}).`);
+      }
+
+      const extracted =
+        typeof data.extractedText === "string" && data.extractedText.length > 0
+          ? data.extractedText
+          : null;
+
+      const note =
+        data.extractionNote ??
+        (data.blobError ? `Original archived upload skipped: ${data.blobError}` : null);
+
+      const text = extracted
+        ? `[The user attached the PDF "${label}". Its full extracted text is included below between the markers — treat that text as the document's contents; do not search the workspace for the file.]\n\n=== BEGIN EXTRACTED TEXT ===\n${extracted}\n=== END EXTRACTED TEXT ===`
+        : `[The user attached the PDF "${label}", but its contents could not be extracted.${note ? ` ${note}` : ""}]`;
+
+      return { ...base, content: [{ type: "text", text }] };
+    } catch (error) {
+      return {
+        ...base,
+        content: [
+          {
+            type: "text",
+            text: `[Attached PDF: ${label} could not be processed.${
+              error instanceof Error ? ` ${error.message}` : ""
+            }]`,
+          },
+        ],
+      };
+    }
   }
 
   async remove(): Promise<void> {}

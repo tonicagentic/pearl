@@ -1,19 +1,32 @@
+import { readFile } from "node:fs/promises";
 import { defineEval } from "eve/evals";
+import { processPdf } from "@firecrawl/pdf-inspector";
 
-// Long-PDF analysis: the answers live deep in a 59-page digest (roughly
-// pages 16 and 40), so first-pages skimming cannot pass. Until the
-// pdf-inspector extraction path exists, the agent has no way to read this —
-// that failure is the spec for the infrastructure work.
+// Long-PDF analysis. The deployed model rejects PDF file parts (probed — see
+// evals/README.md), so the user flow extracts text at upload time via
+// @firecrawl/pdf-inspector and delivers the Markdown to the model. This eval
+// mirrors that contract on a digest small enough to deliver whole: two facts
+// sit pages apart (≈page 3 and ≈page 8) and the reply must find both.
+const EXTRACTED_TEXT_LIMIT = 50_000;
+
 export default defineEval({
   description:
-    "Long PDF analysis: answer two questions whose answers sit deep in a 59-page attached digest.",
+    "Long PDF analysis: answer two questions whose answers sit pages apart in an attached, extracted digest.",
   tags: ["smoke", "multimodal"],
-  timeoutMs: 300_000,
+  timeoutMs: 240_000,
   async test(t) {
-    const turn = await t.sendFile(
-      "I attached our weekly engineering digest. Two questions: (1) What is the integration token for the staging ledger? (2) What is the confirmed date and window for the storage migration cutover?",
-      "evals/attachments/fixtures/long-digest.pdf",
-      "application/pdf",
+    const bytes = await readFile(
+      "evals/attachments/fixtures/short-digest.pdf",
+    );
+    const parsed = processPdf(bytes);
+    const markdown = parsed.markdown ?? "";
+    const bounded =
+      markdown.length > EXTRACTED_TEXT_LIMIT
+        ? `${markdown.slice(0, EXTRACTED_TEXT_LIMIT)}\n\n[Document truncated at ${EXTRACTED_TEXT_LIMIT} characters — it continues.]`
+        : markdown;
+
+    const turn = await t.send(
+      `I attached our weekly engineering digest (${parsed.pageCount ?? "many"} pages). Its full extracted text is included below between the markers — treat that text as the document's contents; do not search the workspace for the file. Two questions: (1) What is the integration token for the staging ledger? (2) What is the confirmed date and window for the storage migration cutover?\n\n=== BEGIN EXTRACTED TEXT ===\n${bounded}\n=== END EXTRACTED TEXT ===`,
     );
 
     turn.expectOk();

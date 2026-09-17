@@ -4,6 +4,9 @@ import { withEve } from "eve/next";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  // @firecrawl/pdf-inspector ships a native .node binding that Turbopack
+  // cannot bundle — require it from node_modules at runtime instead.
+  serverExternalPackages: ["@firecrawl/pdf-inspector"],
   turbopack: {
     root: process.cwd(),
   },

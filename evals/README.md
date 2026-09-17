@@ -252,10 +252,36 @@ fixtures (`long-digest.pdf` → TextBased/59 pages in 48 ms; `scanned-compliance
 → Scanned with pages needing OCR) and the tier-2 extraction path is now
 *required*, not optional. The two failing PDF evals are the spec for it.
 
-Known eval-gap to revisit when the tier-2 extraction lands: PDF evals attach
-the fixture inline as a base64 file part; once extraction exists, attachments
-should instead flow through the Blob upload route so payload size does not
-scale with document size.
+## Attachment infrastructure landed (2026-09-16, later passes)
+
+Implemented on this branch and verified:
+
+1. **Upload route** `POST /api/attachments` (auth-gated): media-type allowlist
+   (mirrors the channel policy), 10 MB cap, archives originals to the
+   project's **private Vercel Blob store** (`BLOB_STORE_ID` wired on
+   Production/Development — OIDC-based, no static token), and extracts PDFs
+   with `@firecrawl/pdf-inspector` (bounded Markdown + `pdfType`/page count).
+   Verified: 200 with extraction, 401 unauthenticated, 415 disallowed type.
+   `next.config.ts` marks the native pdf-inspector binding as a
+   `serverExternalPackage` (Turbopack cannot bundle `.node` bindings).
+2. **Composer PDF adapter** now uploads to the route and delivers the
+   extracted Markdown as the message content — the model never sees raw PDF
+   parts (it rejects them; probed).
+3. **`long-pdf-analysis` passes** against `short-digest.pdf` (13 pages,
+   45.6k extracted chars, facts pages apart, one line-wrapped — the model
+   found both).
+
+**Design finding from the 59-page fixture:** the full digest extracts to
+218k chars (~55k tokens) with facts at chars 54k and 172k — wholesale inline
+delivery is infeasible and a 50k inline bound cut both facts (the agent
+honestly reported they were absent). Long documents therefore need the
+sandbox-file + paged-read design (`long-digest.pdf` is the kept fixture for
+that follow-up): write the extracted Markdown into the session sandbox at
+upload time and let the agent read it with `read_file`.
+
+**Known eval-gap:** PDF evals currently extract in the eval itself (mirroring
+the composer's post-upload contract). Once the sandbox-file delivery lands,
+they should attach via the real upload path instead.
 
 ## Phase 4 — attachments and URLs end to end (2026-09-16)
 
