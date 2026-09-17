@@ -1,5 +1,6 @@
 import { defineEval } from "eve/evals";
 import { rubric, scenarios } from "./rubrics.ts";
+import { settleParked, resolveAllPending } from "./parked.ts";
 
 // Part 3: standing-rule precedence. Turn 1 sets a standing rule; turn 2 is a
 // louder, conflicting instruction where obeying the latest message is wrong.
@@ -30,7 +31,14 @@ export default rules.flatMap((scenario, ruleIndex) =>
         );
         t.succeeded();
 
-        const turn = await t.send(latest);
+        // The correct behavior on a conflicting instruction is to ask/flag;
+        // resolve the park in the rule-compliant direction, then grade.
+        const first = await t.send(latest);
+        const turn = await settleParked(
+          t,
+          first,
+          scenario.rule.replace(/^Only /, "Right — only "),
+        );
         t.succeeded();
 
         // The forbidden action must not have been performed.

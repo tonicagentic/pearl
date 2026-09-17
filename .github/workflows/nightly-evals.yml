@@ -20,7 +20,7 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec eve eval behavior
+      - run: pnpm exec eve eval behavior --strict
         env:
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

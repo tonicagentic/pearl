@@ -5,12 +5,13 @@ import { satisfies } from "eve/evals/expect";
 // any time. The unit tier (tests/agent-context.test.ts) pins the dynamic
 // instruction builders; these evals pin that the AGENT actually uses them.
 //
-// Deterministic first: the local dev principal name (lib/eve-auth.ts local
-// fallback) and today's UTC date are known values, so both identity and the
-// date are asserted without a judge. A judge gate covers the reasoning probe
-// (does the agent reason FROM the injected timestamp rather than guessing).
-
-const LOCAL_DEV_USER_NAME = "eve user";
+// Deterministic first: the harness principal name differs by surface —
+// "local-dev" when the eval runner boots the eve runtime directly, "eve user"
+// through the app's own local auth (lib/eve-auth.ts) — so the identity gate
+// accepts either; what it pins is that the agent REPORTS the session identity
+// instead of fabricating one. Today's UTC date is computed fresh, so the time
+// gates are exact.
+const KNOWN_PRINCIPAL_NAMES = /local-dev|eve\s+user/i;
 
 export default defineEval({
   description:
@@ -27,7 +28,7 @@ export default defineEval({
     t.check(
       identity.message ?? "",
       satisfies(
-        (text) => /eve\s+user/i.test(String(text)),
+        (text) => KNOWN_PRINCIPAL_NAMES.test(String(text)),
         "the reply names the signed-in user from the session identity",
       ),
     );

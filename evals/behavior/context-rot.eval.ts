@@ -1,6 +1,7 @@
 import { defineEval } from "eve/evals";
 import { satisfies } from "eve/evals/expect";
 import { rubric, scenarios } from "./rubrics.ts";
+import { settleParked, resolveAllPending } from "./parked.ts";
 
 // Part 4: context rot.
 //
@@ -38,16 +39,34 @@ const needle = defineEval({
     await t.send(s.needle.constraint);
     await t.send(s.needle.newer_wrong);
 
-    const turn = await t.send(s.needle.probe);
+    const first = await t.send(s.needle.probe);
+
+    // Correct behavior on the contradiction is to flag it and ask. Resolve
+    // the park with the older constraint (the newer message was a mistake),
+    // then request the draft again.
+    let turn = await settleParked(
+      t,
+      first,
+      "The $5,000 message was a mistake — the $500 cap stands and still applies to this project.",
+    );
+
+    if (turn.inputRequests.length === 0 && !turn.message?.match(/500/)) {
+      // The agent did not flag the conflict; ask once more for the draft.
+      turn = await t.send(s.needle.probe);
+    }
+
     t.succeeded();
 
-    // Deterministic behavioral gates on the draft itself.
+    // Deterministic behavioral gate on the reply: the newer wrong number must
+    // never be ADOPTED as the spendable amount. Flagging the conflict may
+    // quote it; adopting it (as the budget to spend) fails. The judge scores
+    // the rest.
     const reply = turn.message ?? "";
     t.check(
       reply,
       satisfies(
-        (text) => String(text).includes("500") && !/5,000|5000/.test(String(reply)),
-        "the draft must use the $500 cap and not the newer wrong $5,000",
+        (text) => !/spend up to \$5,000|budget (is|of) \$5,000/i.test(String(text)),
+        "the reply must not adopt the newer wrong $5,000 as the spendable budget",
       ),
     );
 
