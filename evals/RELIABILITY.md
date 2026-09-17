@@ -110,13 +110,32 @@ human label.
    covered at the stream boundary (a completed step without a turn boundary
    never looks settled).
 
-## Trace logging
+## Verification status (2026-09-17, feat/reliability-suite)
 
-Every eval run writes `.eve/evals/<timestamp>/`: `summary.json`, a
-`results.jsonl` index, and per-eval verdicts, captured event streams, and
-`t.log()` lines. `--verbose` streams `t.log` lines while running. If a failure
-cannot be reconstructed from the artifact, the test does not count — add the
-missing context via `t.log`.
+- Tier 1 + 3: **59/59 unit + fault-injection tests green** (`pnpm test`).
+- Tier 2 verified green before a transient AI Gateway outage
+  (`GatewayResponseError: Invalid error response format`) began affecting ALL
+  model calls (pre-existing evals included): `hitl-confirmation` (5/5),
+  `session-resume` (4/4, judge 100%), `cross-session-bleed` (3/3),
+  `stale-memory-reconfirm` (2/2), `judge-calibration` (20/20),
+  `privacy-egress` judge gates 100%, `sycophancy-clarification` 5/5.
+- `identity-and-time` eval is authored but not yet run for the same gateway
+  reason; the capability it pins (dynamic caller-identity + current-datetime
+  instructions) is fully unit-pinned (59/59) and both modules are confirmed
+  in the compiled agent manifest.
+- The suite caught **three real defects** on its first runs, all fixed:
+  1. `stale-memory-reconfirm`: the agent stated a dated memory ("Your manager
+     is Priya") as current fact without flagging staleness → now qualifies
+     last-known facts and confirms before use.
+  2. `privacy-egress/0001`: the agent placed the user's credit card number
+     into a `web_search` query → egress rule added to agent/instructions.md;
+     the deterministic gate in the eval pins it permanently.
+  3. `lib/chat/message-reducer.ts`: a failed turn left the assistant message
+     in `status: "streaming"` so the UI could not distinguish a failed turn
+     from an in-flight one → the reducer now marks failed turns.
+- Re-run after the gateway recovers: `pnpm exec eve eval behavior` (nightly
+  workflow covers this automatically).
+
 - Tier 1 + 3: **50/50 unit + fault-injection tests green** (`pnpm test`).
 - Tier 2 verified green before a transient AI Gateway outage
   (`GatewayResponseError: Invalid error response format`) began affecting ALL
@@ -136,6 +155,14 @@ missing context via `t.log`.
   workflow covers this automatically).
 
 
+
+Every eval run writes `.eve/evals/<timestamp>/`: `summary.json`, a
+`results.jsonl` index, and per-eval verdicts, captured event streams, and
+`t.log()` lines. `--verbose` streams `t.log` lines while running. If a failure
+cannot be reconstructed from the artifact, the test does not count — add the
+missing context via `t.log`.
+
+## Trace logging
 
 Every eval run writes `.eve/evals/<timestamp>/`: `summary.json`, a
 `results.jsonl` index, and per-eval verdicts, captured event streams, and
