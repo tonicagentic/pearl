@@ -167,8 +167,10 @@ and `research/` (4). First-run results:
 | research | source-quality | ✓ (after fix) | agent went straight to react.dev with `web_fetch` — better than searching; eval's `web_search` gate was over-constrained, now gates on citing `react.dev` |
 | research | no-fabrication | ✓ pass | star count retrieved and attributed |
 
-**Phase 1 findings (the eval-driven backlog):**
+No regressions elsewhere: research/ and the smoke tier stayed green through
+both passes.
 
+**Phase 1 findings (the eval-driven backlog):**
 1. **Rewrite padding**: when asked to edit text, the agent wraps the rewrite
    in meta-commentary ("what changed and why it's faithful" sections). For
    "just fix this" flows that is scope violation. → Phase 2 instruction
@@ -209,6 +211,28 @@ What remains open (the live Phase 2 backlog):
    (0002 passed then failed with similar outputs). Trend over multiple runs
    matters more than any single verdict; consider multi-sample or `.gate`
    promotion only after stabilization.
+
+## Phase 3 — memory recall (2026-09-16)
+
+Added `thinking-partner/remembers-context` and
+`thinking-partner/no-invented-memory`. Both passed on the first run:
+
+| Suite | Eval | Result | Notes |
+| --- | --- | --- | --- |
+| thinking-partner | remembers-context | ✓ pass | `memory-saved` gate + cross-session judge 100%: dinner suggestions for a vegan Berlin-Marathon runner in session B, using session-A facts |
+| thinking-partner | no-invented-memory | ✓ pass | both judges 100% — the agent says it does not know the user's favorite color instead of inventing one |
+
+Notes:
+
+- Memory is the built-in `fileMemory()` provider (`agent/memory/profile.ts`),
+  scoped by principal. In the eval target the principal is the shared test
+  user, so the memory document persists across eval runs — suites that save
+  facts should clean up after themselves, and the store is bounded (4,000
+  characters) so accumulation self-limits.
+- `remembers-context` re-saves its facts on every run; if duplicate entries
+  start triggering the bound, add a cleanup turn (remove tool) to the eval.
+- Cross-session recall worked with no instruction changes — the fileMemory
+  recall-before-each-turn design carries it.
 
 No regressions elsewhere: research/ and the smoke tier stayed green through
 both passes.
