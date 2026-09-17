@@ -179,3 +179,37 @@ and `research/` (4). First-run results:
 3. Both findings are agent-side, so these evals now *define done* for the
    instruction tuning; nothing else needs building.
 
+## Phase 2, tuning pass 1-2 (2026-09-16)
+
+Added an "Editing and rewriting" section to `agent/instructions.md` and ran
+two tuning iterations against the failing writing evals:
+
+| Eval | Before | After pass 1 | After pass 2 |
+| --- | --- | --- | --- |
+| dimension-discipline | scope judge 0% | ✓ 100%×2 | ✓ 100%×2 |
+| targeted-edits/0000 (passive→active) | both 0% | criteria 100%, scope 0% | criteria 0%, scope 100% |
+| targeted-edits/0001 (trim-hedging) | both 0% | criteria 0%, scope 100% | ✓ 100%×2 |
+| targeted-edits/0002 (one-idea-per-paragraph) | both 0% | ✓ 100%×2 | criteria 0% (variance) |
+| audience-fit | engineer judge 0% | — | ✓ 100%×3 |
+| preserve-voice | ✓ | ✓ | length judge 0% |
+
+What the tuning fixed: **rewrite padding is gone** (scope judges green
+everywhere), **audience commitment** is fixed (no more dual-purpose
+exec+engineering sections), and **de-hedging claim drift** is fixed.
+
+What remains open (the live Phase 2 backlog):
+
+1. `targeted-edits/0000` — the model persistently leaves one embedded passive
+   ("a shared config that *is versioned* in git") despite an explicit
+   every-clause rule. Looks like a GLM 5.3-fast limitation; judge is also
+   run-to-run variable on this case.
+2. `preserve-voice` — the model undershoots requested cut magnitudes
+   (~15% when asked ~33%).
+3. Judge variance: single-sample closedQA judges flip on borderline outputs
+   (0002 passed then failed with similar outputs). Trend over multiple runs
+   matters more than any single verdict; consider multi-sample or `.gate`
+   promotion only after stabilization.
+
+No regressions elsewhere: research/ and the smoke tier stayed green through
+both passes.
+

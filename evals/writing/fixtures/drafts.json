@@ -3,13 +3,13 @@
     "id": "passive-to-active",
     "draft": "It was decided by the platform team that the logging pipeline should be migrated to OpenTelemetry. Errors are now able to be correlated across services by a shared trace id. Alerts were previously configured by hand, which was done inconsistently, and now they are generated from a shared config that is versioned in git. A dashboard was also built for on-call.",
     "instruction": "This is full of passive voice. Rewrite it in active voice — that's the only change.",
-    "criteria": "Every sentence is converted to active voice with named actors (the platform team decided, migrated, correlated, versioned, built) while preserving the same facts: OpenTelemetry migration, shared trace id correlation, previously hand-configured inconsistent alerts, git-versioned shared config, on-call dashboard."
+    "criteria": "Every passive construction is converted to active voice. Where the original names no actor, the rewrite may supply a minimal plausible actor or restructure (e.g., 'a git-versioned shared config'), and any invented actor must be flagged to the author rather than passed off as original. Preserves the same facts: OpenTelemetry migration, shared trace id correlation, previously hand-configured inconsistent alerts, git-versioned shared config, on-call dashboard."
   },
   {
     "id": "trim-hedging",
     "draft": "I think we could maybe consider potentially shipping the dark mode toggle in the next release? It seems like users might possibly want it — there were, I believe, around 30 or so requests. We should probably look at it. It might not be that hard to build, I guess.",
     "instruction": "Cut the hedging. Make this decisive and clear without changing what it claims.",
-    "criteria": "The rewrite removes stacked hedges (maybe, possibly, I think, might, I guess, or so, probably) and states the claims plainly: ship the dark mode toggle next release, ~30 user requests, needs scoping/estimate. It does not invent certainty about the estimate beyond what the draft supports, and it stays about dark mode."
+    "criteria": "No hedge words remain (maybe, possibly, I think, might, could, I guess, or so, probably). The rewrite states the draft's own proposal plainly as a recommendation (ship the dark mode toggle in the next release), keeps the evidence exact (around 30 user requests), and keeps the difficulty point as an estimate stated without hedge words (e.g., a small build). It stays about dark mode and does not invent facts beyond the draft."
   },
   {
     "id": "one-idea-per-paragraph",

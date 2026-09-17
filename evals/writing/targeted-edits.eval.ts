@@ -33,7 +33,7 @@ export default cases.map((draft) =>
 
       t.judge.autoevals
         .closedQA(
-          "The rewrite is scoped to the requested change: it does not add new content, restructure sections that were not asked about, or turn the passage into a formatted document with headers and bullets unless the instruction asked for that.",
+          "The rewrite is scoped to the requested change: it does not add new content to the passage itself, restructure sections that were not asked about, or turn the passage into a formatted document with headers and bullets unless the instruction asked for that. A brief note outside the passage flagging a judgment call or ambiguity in the edit is acceptable and does not count as added content.",
           { on: turn.message },
         )
         .atLeast(0.7);
