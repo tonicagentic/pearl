@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { AssistantChatSurface } from "@/app/_components/assistant-chat";
 import { ErrorToast } from "@/app/_components/error-toast";
 import { useChatShell } from "@/app/_components/chat-shell-context";
-import { TemplateFooterLinks } from "@/components/chat/template-footer-links";
 
 export function HomeChatPage() {
   const { setActiveChatId, setupStatus } = useChatShell();
@@ -37,10 +36,6 @@ export function HomeChatPage() {
           chatId={null}
           onChatCreated={handleChatCreated}
         />
-      </div>
-
-      <div className="shrink-0 pb-4 sm:pb-6">
-        <TemplateFooterLinks />
       </div>
     </div>
   );
