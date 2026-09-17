@@ -234,6 +234,32 @@ Notes:
 - Cross-session recall worked with no instruction changes — the fileMemory
   recall-before-each-turn design carries it.
 
+## Phase 4 — attachments and URLs end to end (2026-09-16)
+
+Added `thinking-partner/screenshot-understanding` and
+`thinking-partner/url-in-message`, plus the infrastructure fix the first run
+exposed:
+
+- **`url-in-message` passed immediately**: a pasted URL is fetched with
+  `web_fetch` and the page's actual content is summarized (100%).
+- **`screenshot-understanding` failed first — real infrastructure gap**: the
+  eve channel had `uploadPolicy: "disabled"` (template default), so every
+  attachment was rejected before reaching the model. Enabled uploads on the
+  eve channel for `image/*`, `text/*`, and `application/pdf` with a 10 MB cap
+  (`agent/channels/eve.ts`); Slack channel intentionally left disabled.
+- After enabling: **screenshot-understanding passes** — the agent read the
+  fixture screenshot's exact contents (GREEN deploy status, eu-central-1,
+  3 warnings, v2.14.0 at 80% rollout). The deployed model accepts image
+  input, so the full path works: `t.sendFile` → data URL → channel → vision.
+- Also fixed `evals/assertions.ts`: `soft()` on the gate helper silently
+  returned gate severity, so a soft-marked assertion still failed runs.
+- Memory-eval flakiness fixed the same way: `remembers-context`'s save gate
+  is now soft — on repeat runs the memory already holds the facts, and
+  skipping the save is correct behavior. The spec that gates is session B
+  using the facts (judge, 100%).
+
+Full `thinking-partner/` suite: 4/4 passing. 17 evals total across 6 suites.
+
 No regressions elsewhere: research/ and the smoke tier stayed green through
 both passes.
 

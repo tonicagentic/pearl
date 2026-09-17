@@ -17,7 +17,10 @@ export default defineEval({
     first.expectOk();
 
     const saved = first.toolCalls.some((call) => /memory/.test(call.name));
-    t.check(saved, booleanGate("memory-saved"));
+    // Saving is correct only when the fact is new; if the memory already
+    // holds it (as it does on repeated runs), skipping the save is right.
+    // The real spec is judged below: session B uses the facts.
+    t.check(saved, booleanGate("memory-saved").soft());
 
     // A second, independent session must still know the context.
     const second = t.newSession();

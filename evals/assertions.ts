@@ -7,13 +7,15 @@ export function gateAssertion(
   name: string,
   score: (value: unknown) => number,
 ): Assertion {
-  const self: Assertion = {
+  const make = (severity: "gate" | "soft"): Assertion => ({
     name,
-    severity: "gate",
+    severity,
     score,
-    gate: () => self,
-    soft: () => self,
-    atLeast: () => self,
-  };
-  return self;
+    gate: () => make("gate"),
+    soft: () => make("soft"),
+    atLeast: () => make("gate"),
+  });
+
+  return make("gate");
 }
+

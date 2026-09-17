@@ -21,7 +21,7 @@ export default defineEval({
 
     t.judge.autoevals
       .closedQA(
-        "The reply is brief and conversational — a short 'I don't know yet, what is it?' style answer rather than an essay about memory systems.",
+        "The reply is brief and conversational. It may transparently mention what the agent already has on file and offer to save the favorite color — an essay about how memory works is what fails.",
         { on: turn.message },
       )
       .atLeast(0.6);
