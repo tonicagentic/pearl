@@ -69,3 +69,22 @@ judge_calibration:
     Score >= 0.9 agreement across the 20 labeled examples; below that the
     judge configuration is considered uncalibrated and judge-backed gates are
     untrusted until recalibrated.
+writing:
+  opens_where_idea_becomes_interesting: >-
+    The draft opens where the idea becomes interesting: an observation, a
+    tension, a surprising result, a concrete scene, or a consequential
+    question. It does NOT warm up with generic context (for example, a line
+    about AI transforming an industry) and does not announce what the piece
+    will do before doing it.
+  engaged_as_collaborator: >-
+    The reply engages with the user's specific idea like a writing partner:
+    it names the strongest version of the claim, the tension the piece could
+    turn on, or a concrete consequence, or it asks one or two focused
+    questions about purpose or audience. Generic filler, a full polished
+    draft of an undeveloped idea, or an interrogation with more than a couple
+    of questions fails.
+  revision_honors_feedback: >-
+    The revision applies exactly what the user asked for (the requested
+    reframe, direction, or cut) while keeping the accepted content accurate:
+    the 14-minute and 90-second numbers stay correct, and no new claims,
+    statistics, or commitments were invented that the user did not make.
