@@ -29,7 +29,7 @@
     "test": "node --test --env-file-if-exists=.env.development.local tests/",
     "test:unit": "node --test --env-file-if-exists=.env.development.local tests/",
     "evals:behavior": "pnpm exec eve eval behavior",
-    "evals:smoke": "pnpm exec eve eval behavior --grep smoke"
+    "evals:smoke": "pnpm exec eve eval behavior --tag smoke"
   },
   "dependencies": {
     "@assistant-ui/eve": "^0.0.17",
