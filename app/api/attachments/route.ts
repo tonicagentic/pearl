@@ -1,8 +1,24 @@
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
-import { processPdf } from "@firecrawl/pdf-inspector";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
+
+// Imported lazily inside the handler: @firecrawl/pdf-inspector ships a native
+// .node binding that Turbopack cannot load at build time (collecting page
+// data), and serverExternalPackages only externalizes the runtime import.
+// If the binding is still missing at runtime, the route degrades gracefully
+// (extractionNote) instead of failing the deploy.
+let processPdfFn: typeof import("@firecrawl/pdf-inspector").processPdf | null =
+  null;
+
+async function loadProcessPdf() {
+  if (!processPdfFn) {
+    const mod = await import("@firecrawl/pdf-inspector");
+    processPdfFn = mod.processPdf;
+  }
+
+  return processPdfFn;
+}
 
 // Attachment uploads: archive the original in Vercel Blob (when the project's
 // Blob store is available) and, for PDFs, extract text with
@@ -112,6 +128,7 @@ export async function POST(request: Request) {
 
   if (mediaType === "application/pdf") {
     try {
+      const processPdf = await loadProcessPdf();
       const parsed = processPdf(bytes);
       pdfType = String(parsed.pdfType ?? "unknown");
       pages = typeof parsed.pageCount === "number" ? parsed.pageCount : null;
