@@ -25,6 +25,10 @@ const EVE_BUILTIN_TOOLS: ReadonlySet<string> = new Set([
   "task_cancel",
   "load_skill",
   "connection_search",
+  // eve's fileMemory provider tools (agent/memory/profile.ts) — framework-
+  // managed, namespaced by the memory slot name "file".
+  "file__save_memory",
+  "file__remove_memory",
 ]);
 
 async function productionTools(): Promise<Set<string>> {

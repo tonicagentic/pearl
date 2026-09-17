@@ -31,6 +31,10 @@ const policy = (
 ): RetryPolicy => ({ idempotent, retryOn, maxAttempts, rationale });
 
 export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
+  // eve framework-managed tools (fileMemory provider): reads/writes on the
+  // memory document, replay-safe via optimistic versioning and no-op dedupe.
+  file__save_memory: policy(true, ["network", "timeout"], 2, "Framework memory write; identical saves are a documented no-op."),
+  file__remove_memory: policy(true, ["network", "timeout"], 2, "Framework memory removal by stable index; idempotent."),
   // Reads and idempotency-keyed operations: safe to retry.
   get_weather: policy(true, ["network", "timeout"], 2, "Static read, no side effect."),
   read_attachment: policy(true, ["network", "timeout"], 2, "DB read, no side effect."),
