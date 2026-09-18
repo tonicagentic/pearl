@@ -23,6 +23,7 @@ import type {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatShell } from "@/app/_components/chat-shell-context";
 import { ErrorToast } from "@/app/_components/error-toast";
+import { LargePasteProvider, useLargePaste } from "@/app/_components/large-paste";
 import { SessionStatusBanner } from "@/app/_components/session-status";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import {
@@ -266,7 +267,18 @@ type AssistantChatSurfaceProps = {
   readonly onActiveChatUpdated?: (chat: ActiveChat) => void;
 };
 
-export function AssistantChatSurface({
+// The provider must wrap the body: the composer paste handler and the send
+// path both read held pastes. It needs no runtime context itself, so it can
+// sit above AssistantRuntimeProvider.
+export function AssistantChatSurface(props: AssistantChatSurfaceProps) {
+  return (
+    <LargePasteProvider>
+      <AssistantChatSurfaceBody {...props} />
+    </LargePasteProvider>
+  );
+}
+
+function AssistantChatSurfaceBody({
   chatId,
   activeChat,
   pendingUserMessage = null,
@@ -274,6 +286,7 @@ export function AssistantChatSurface({
   onPendingUserMessageSettled,
   onActiveChatUpdated,
 }: AssistantChatSurfaceProps) {
+  const { expandForSend } = useLargePaste();
   const { requestSignIn, setActiveChatId, setupStatus, touchChat, viewer } =
     useChatShell();
   const storageMode = setupStatus.storageMode;
@@ -411,9 +424,19 @@ export function AssistantChatSurface({
         currentTitleRef.current = createFallbackTitle(messageText);
       }
 
+      // Large pastes travel attachment-style: limits, title, and the pending
+      // restore message see the composer's collapsed placeholders, while the
+      // outgoing turn message carries the full inline blocks.
+      if (typeof input.message === "string" && input.message) {
+        const expanded = expandForSend(input.message);
+
+        return { ...input, message: expanded.text };
+      }
+
       return input;
     },
     [
+      expandForSend,
       onChatCreated,
       requestSignIn,
       setActiveChatId,
@@ -476,28 +499,30 @@ export function AssistantChatSurface({
     clientError !== null && dismissedError !== clientError ? clientError : null;
 
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <CanvasProvider>
-        <div className="flex min-h-0 flex-1 flex-col">
-          {toastError ? (
-            <ErrorToast
-              message={toastError}
-              onDismiss={() => setDismissedError(clientError)}
-            />
-          ) : null}
+    <LargePasteProvider>
+      <AssistantRuntimeProvider runtime={runtime}>
+        <CanvasProvider>
+          <div className="flex min-h-0 flex-1 flex-col">
+            {toastError ? (
+              <ErrorToast
+                message={toastError}
+                onDismiss={() => setDismissedError(clientError)}
+              />
+            ) : null}
 
-          <WriteFileToolUI />
-          <ReadFileToolUI />
-          <SessionStatusBanner isRunning={isRunning} />
-          <CanvasLayout />
+            <WriteFileToolUI />
+            <ReadFileToolUI />
+            <SessionStatusBanner isRunning={isRunning} />
+            <CanvasLayout />
 
-          <EveAuthorization />
-        </div>
+            <EveAuthorization />
+          </div>
 
-        <SessionCursorPersistence chatId={chatId} storageMode={storageMode} />
-        <EveErrorToast />
-      </CanvasProvider>
-    </AssistantRuntimeProvider>
+          <SessionCursorPersistence chatId={chatId} storageMode={storageMode} />
+          <EveErrorToast />
+        </CanvasProvider>
+      </AssistantRuntimeProvider>
+    </LargePasteProvider>
   );
 }
 

@@ -6,6 +6,7 @@ import {
   UserMessageAttachments,
 } from "@/components/assistant-ui/elements/attachment.aui";
 import { File } from "@/components/assistant-ui/elements/file";
+import { useLargePaste } from "@/app/_components/large-paste";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
 import { Image } from "@/components/assistant-ui/elements/image";
 import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
@@ -267,6 +268,8 @@ const ThreadSuggestionItem: FC = () => {
 };
 
 const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
+  const { onComposerPaste } = useLargePaste();
+
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
       <ComposerPrimitive.AttachmentDropzone asChild>
@@ -282,6 +285,7 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
             autoFocus={autoFocus}
             enterKeyHint="send"
             aria-label="Message input"
+            onPaste={onComposerPaste}
           />
           <ComposerAction />
         </div>
