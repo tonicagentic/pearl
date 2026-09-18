@@ -7,6 +7,7 @@ import {
 } from "@/components/assistant-ui/elements/attachment.aui";
 import { File } from "@/components/assistant-ui/elements/file";
 import { useLargePaste } from "@/app/_components/large-paste";
+import { splitPasteBlocks } from "@/lib/chat/large-paste";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
 import { Image } from "@/components/assistant-ui/elements/image";
 import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
@@ -41,6 +42,7 @@ import {
   ThreadPrimitive,
   type FileMessagePartComponent,
   type ImageMessagePartComponent,
+  type TextMessagePartComponent,
   type ToolCallMessagePartComponent,
   useAuiState,
 } from "@assistant-ui/react";
@@ -539,6 +541,43 @@ const UserFilePart: FileMessagePartComponent = (part) => (
   </div>
 );
 
+/**
+ * User-message text renderer: paste blocks (the delimited inline blocks the
+ * large-paste flow produces) render collapsed with a character-count summary
+ * the reader can expand; every other segment renders like the default Text
+ * part (pre-line paragraph). The message text itself is unchanged, so the
+ * agent still receives the full content.
+ */
+const UserTextPart: TextMessagePartComponent = ({ text }) => {
+  const segments = splitPasteBlocks(text);
+
+  return (
+    <>
+      {segments.map((segment, index) =>
+        segment.kind === "text" && segment.text.trim().length === 0 ? null : segment.kind ===
+          "paste" ? (
+          <details
+            key={`paste-${segment.id}-${index}`}
+            className="group border-border/70 bg-background/60 my-1 rounded-lg border"
+          >
+            <summary className="text-muted-foreground flex cursor-pointer list-none items-center gap-1.5 px-2 py-1 text-xs select-none">
+              <ChevronRightIcon className="size-3 transition-transform group-open:rotate-90 [[open]>&]:rotate-90" />
+              Pasted text · {segment.charCount.toLocaleString("en-US")} characters
+            </summary>
+            <pre className="max-h-64 overflow-auto px-3 pb-2 font-mono text-xs whitespace-pre-wrap">
+              {segment.content}
+            </pre>
+          </details>
+        ) : (
+          <p key={`text-${index}`} style={{ whiteSpace: "pre-line" }}>
+            {segment.text}
+          </p>
+        ),
+      )}
+    </>
+  );
+};
+
 const UserImagePart: ImageMessagePartComponent = (part) => (
   <div data-slot="aui_user-message-image" className="py-1">
     <Image {...part} />
@@ -559,7 +598,7 @@ const UserMessage: FC = () => {
       <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
         <div className="aui-user-message-content peer bg-muted text-foreground rounded-xl px-4 py-2 wrap-break-word empty:hidden">
           <MessagePrimitive.Parts
-            components={{ File: UserFilePart, Image: UserImagePart }}
+            components={{ File: UserFilePart, Image: UserImagePart, Text: UserTextPart }}
           />
         </div>
       </div>

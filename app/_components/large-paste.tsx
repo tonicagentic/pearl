@@ -13,6 +13,8 @@ import type { ClipboardEvent, ReactNode } from "react";
 import {
   createAttachedPaste,
   expandLargePastes,
+  formatCount,
+  LARGE_PASTE_MAX_CHARS,
   LARGE_PASTE_MAX_ENTRIES,
   type LargePaste,
   type LargePasteRegistry,
@@ -45,7 +47,13 @@ function setTextareaValue(element: HTMLTextAreaElement, value: string) {
   element.setSelectionRange(value.length, value.length);
 }
 
-export function LargePasteProvider({ children }: { readonly children: ReactNode }) {
+export function LargePasteProvider({
+  children,
+  onError,
+}: {
+  readonly children: ReactNode;
+  readonly onError?: (message: string) => void;
+}) {
   // Registry outside React state: held paste content must not re-render the
   // composer tree, and the composer value itself lives in the runtime.
   const registryRef = useRef(new Map<string, LargePaste>());
@@ -77,6 +85,15 @@ export function LargePasteProvider({ children }: { readonly children: ReactNode 
 
       event.preventDefault();
 
+      if (pastedText.length > LARGE_PASTE_MAX_CHARS) {
+        // Fail early with an explanation rather than late at the model call:
+        // the outgoing message would exceed the context window.
+        onError?.(
+          `Pasted text is too large (${formatCount(pastedText.length)} characters). Split it into parts or attach it as a file.`,
+        );
+        return;
+      }
+
       if (registryRef.current.size >= LARGE_PASTE_MAX_ENTRIES) {
         const oldest = registryRef.current.keys().next().value;
 
@@ -94,7 +111,7 @@ export function LargePasteProvider({ children }: { readonly children: ReactNode 
       setVersion((v) => v + 1);
       setTextareaValue(element, attached.composerText);
     },
-    [],
+    [onError],
   );
 
   const expandForSend = useCallback((text: string) => {
@@ -119,7 +136,6 @@ export function LargePasteProvider({ children }: { readonly children: ReactNode 
 
   return <LargePasteContext.Provider value={value}>{children}</LargePasteContext.Provider>;
 }
-
 export function useLargePaste(): LargePasteContextValue {
   const context = useContext(LargePasteContext);
 

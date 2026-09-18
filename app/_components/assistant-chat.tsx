@@ -499,7 +499,7 @@ function AssistantChatSurfaceBody({
     clientError !== null && dismissedError !== clientError ? clientError : null;
 
   return (
-    <LargePasteProvider>
+    <LargePasteProvider onError={setClientError}>
       <AssistantRuntimeProvider runtime={runtime}>
         <CanvasProvider>
           <div className="flex min-h-0 flex-1 flex-col">

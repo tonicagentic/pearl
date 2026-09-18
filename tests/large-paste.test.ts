@@ -7,7 +7,10 @@ import {
   findPlaceholderIds,
   formatCount,
   LARGE_PASTE_CHARS,
+  LARGE_PASTE_MAX_CHARS,
   makePastePlaceholder,
+  pasteBlockStart,
+  splitPasteBlocks,
 } from "../lib/chat/large-paste.ts";
 
 function longText(chars: number, suffix = ""): string {
@@ -136,4 +139,83 @@ test("expandLargePastes handles repeated placeholders in one text", () => {
 test("formatCount groups digits", () => {
   assert.equal(formatCount(4321), "4,321");
   assert.equal(formatCount(999), "999");
+});
+
+test("splitPasteBlocks separates paste blocks from literal text", () => {
+  const registry = new Map([
+    [
+      "paste-1",
+      {
+        id: "paste-1",
+        placeholder: makePastePlaceholder("paste-1", 4200),
+        content: "line one\nline two",
+        charCount: 4200,
+      },
+    ],
+  ]);
+  const { text } = expandLargePastes(
+    `Before.\n${makePastePlaceholder("paste-1", 4200)}\nAfter.`,
+    registry,
+  );
+
+  const segments = splitPasteBlocks(text);
+
+  assert.equal(segments.length, 3);
+  assert.equal(segments[0].kind, "text");
+  assert.equal(segments[2].kind, "text");
+  assert.ok(segments[2].kind === "text" && segments[2].text.includes("After."));
+
+  const paste = segments[1];
+  assert.equal(paste.kind, "paste");
+  if (paste.kind === "paste") {
+    assert.equal(paste.id, "paste-1");
+    assert.equal(paste.charCount, 4200);
+    assert.equal(paste.content, "line one\nline two");
+  }
+});
+
+test("splitPasteBlocks round-trips multiple blocks and preserves text exactly", () => {
+  const placeholder = makePastePlaceholder("paste-7", 1300);
+  const registry = new Map([
+    ["paste-7", { id: "paste-7", placeholder, content: "PASTE\nCONTENT", charCount: 1300 }],
+  ]);
+  const { text } = expandLargePastes(
+    `a${placeholder}b${placeholder}c`,
+    registry,
+  );
+
+  const segments = splitPasteBlocks(text);
+  const pastes = segments.filter((s) => s.kind === "paste");
+  assert.equal(pastes.length, 2);
+
+  // Rejoining text + paste content reconstructs the expanded message.
+  const rejoined = segments
+    .map((s) => (s.kind === "paste" ? pasteBlockStart(s.id, s.charCount) + "\n" + s.content + "\n[end " + s.id + "]" : s.text))
+    .join("");
+  assert.equal(rejoined, text);
+});
+
+test("splitPasteBlocks leaves malformed or partial markers as literal text", () => {
+  const segments = splitPasteBlocks("here [pasted text paste-9 · 1,000 characters] with no end marker");
+
+  // the prefix before the malformed header is its own text segment
+  assert.equal(segments.length, 2);
+  if (segments[0].kind === "text") {
+    assert.equal(segments[0].text, "here ");
+  }
+  if (segments[1].kind === "text") {
+    assert.ok(segments[1].text.startsWith("[pasted text"));
+  }
+});
+
+test("splitPasteBlocks returns one text segment for paste-free messages", () => {
+  const segments = splitPasteBlocks("just a normal message");
+
+  assert.deepEqual(segments, [{ kind: "text", text: "just a normal message" }]);
+});
+
+test("LARGE_PASTE_MAX_CHARS keeps pastes inside the model context budget", () => {
+  // ~4 chars/token -> 400k chars is ~100k tokens, well under 1M.
+  assert.ok(LARGE_PASTE_MAX_CHARS <= 500_000);
+  assert.ok(LARGE_PASTE_MAX_CHARS > LARGE_PASTE_CHARS);
 });
