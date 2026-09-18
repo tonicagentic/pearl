@@ -425,9 +425,9 @@ function AssistantChatSurfaceBody({
       }
 
       // Large pastes travel attachment-style: limits, title, and the pending
-      // restore message see the composer's collapsed placeholders, while the
-      // outgoing turn message carries the full inline blocks.
-      if (typeof input.message === "string" && input.message) {
+      // restore message see the composer text (with held pastes as chips),
+      // while the outgoing turn message carries the full inline blocks.
+      if (typeof input.message === "string") {
         const expanded = expandForSend(input.message);
 
         return { ...input, message: expanded.text };

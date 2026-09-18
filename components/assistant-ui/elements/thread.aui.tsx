@@ -37,6 +37,7 @@ import {
   ComposerPrimitive,
   ErrorPrimitive,
   groupPartByType,
+  INTERNAL,
   MessagePrimitive,
   SuggestionPrimitive,
   ThreadPrimitive,
@@ -44,6 +45,7 @@ import {
   type ImageMessagePartComponent,
   type TextMessagePartComponent,
   type ToolCallMessagePartComponent,
+  useAui,
   useAuiState,
 } from "@assistant-ui/react";
 import {
@@ -54,10 +56,12 @@ import {
   ChevronRightIcon,
   CopyIcon,
   DownloadIcon,
+  FileTextIcon,
   MicIcon,
   MoreHorizontalIcon,
   RefreshCwIcon,
   SquareIcon,
+  XIcon,
 } from "lucide-react";
 import {
   createContext,
@@ -65,6 +69,8 @@ import {
   type ComponentType,
   type FC,
   type PropsWithChildren,
+  useEffect,
+  useRef,
 } from "react";
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
@@ -280,6 +286,7 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
           className="border-border/60 data-[dragging=true]:border-ring focus-within:border-border dark:border-muted-foreground/15 dark:focus-within:border-muted-foreground/30 flex w-full cursor-text flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) transition-[border-color] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-accent)_50%,var(--color-background))]"
         >
           <ComposerAttachments />
+          <PasteAttachments />
           <ComposerPrimitive.Input
             placeholder="Send a message..."
             className="aui-composer-input caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
@@ -540,6 +547,84 @@ const UserFilePart: FileMessagePartComponent = (part) => (
     <File {...part} />
   </div>
 );
+
+/**
+ * Composer chips for held large pastes (the large-paste flow's rich element):
+ * styled like attachment chips but as text snippets, with remove buttons.
+ * Also registers a composer input plugin so Backspace on an empty composer
+ * removes the most recent paste, Slack-style.
+ */
+const PasteAttachments: FC = () => {
+  const { heldPastes, removePaste } = useLargePaste();
+  const aui = useAui();
+  const pluginRegistry = INTERNAL.useComposerInputPluginRegistryOptional();
+  const heldRef = useRef(heldPastes);
+  heldRef.current = heldPastes;
+
+  useEffect(() => {
+    if (!pluginRegistry) {
+      return;
+    }
+
+    return pluginRegistry.register({
+      handleKeyDown(e) {
+        if (e.key !== "Backspace") {
+          return false;
+        }
+
+        if ((aui.composer.getState().text ?? "").length > 0) {
+          return false;
+        }
+
+        const last = heldRef.current.at(-1);
+
+        if (!last) {
+          return false;
+        }
+
+        removePaste(last.id);
+        return true;
+      },
+      setCursorPosition() {},
+    });
+  }, [aui, pluginRegistry, removePaste]);
+
+  if (heldPastes.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      data-slot="aui_composer-pastes"
+      className="flex w-full flex-row flex-wrap items-center gap-2"
+    >
+      {heldPastes.map((paste) => (
+        <div
+          key={paste.id}
+          data-slot="aui_composer-paste"
+          className="border-border/60 bg-background flex items-center gap-1.5 rounded-md border px-2 py-1"
+        >
+          <FileTextIcon className="text-muted-foreground size-3.5" />
+          <span className="text-xs">
+            Pasted text
+            <span className="text-muted-foreground">
+              {" · "}
+              {paste.charCount.toLocaleString("en-US")} chars
+            </span>
+          </span>
+          <button
+            type="button"
+            aria-label={`Remove pasted text (${paste.charCount.toLocaleString("en-US")} characters)`}
+            className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
+            onClick={() => removePaste(paste.id)}
+          >
+            <XIcon className="size-3" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 /**
  * User-message text renderer: paste blocks (the delimited inline blocks the

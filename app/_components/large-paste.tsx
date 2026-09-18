@@ -11,41 +11,38 @@ import {
 import type { ClipboardEvent, ReactNode } from "react";
 
 import {
-  createAttachedPaste,
-  expandLargePastes,
+  createPasteEntry,
+  expandPastesForSend,
   formatCount,
+  LARGE_PASTE_CHARS,
   LARGE_PASTE_MAX_CHARS,
   LARGE_PASTE_MAX_ENTRIES,
-  type LargePaste,
-  type LargePasteRegistry,
+  type PendingPaste,
 } from "@/lib/chat/large-paste";
+
+type HeldPaste = {
+  readonly id: string;
+  readonly charCount: number;
+};
 
 type LargePasteContextValue = {
   /** Pass to `ComposerPrimitive.Input`'s onPaste on the main composer. */
   readonly onComposerPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
-  /** Expands placeholders for send; returns entries the user deleted. */
+  /** Held pastes, in registration order (for composer chips). */
+  readonly heldPastes: readonly HeldPaste[];
+  /** Removes a held paste (chip X / Backspace). */
+  readonly removePaste: (id: string) => void;
+  /**
+   * Appends held pastes as inline blocks to the outgoing message text and
+   * consumes them; pass the expanded text to the runtime.
+   */
   readonly expandForSend: (text: string) => {
     readonly text: string;
-    readonly removedIds: readonly string[];
+    readonly consumedIds: readonly string[];
   };
 };
 
 const LargePasteContext = createContext<LargePasteContextValue | null>(null);
-
-// The provider sits above the assistant-ui runtime (the send path needs the
-// expansion before the runtime exists in the tree), so the paste handler
-// updates the controlled textarea through the native value setter — the same
-// route React's onChange then takes into aui.composer.setText.
-function setTextareaValue(element: HTMLTextAreaElement, value: string) {
-  const nativeSetter = Object.getOwnPropertyDescriptor(
-    HTMLTextAreaElement.prototype,
-    "value",
-  )?.set;
-
-  nativeSetter?.call(element, value);
-  element.dispatchEvent(new Event("input", { bubbles: true }));
-  element.setSelectionRange(value.length, value.length);
-}
 
 export function LargePasteProvider({
   children,
@@ -54,11 +51,14 @@ export function LargePasteProvider({
   readonly children: ReactNode;
   readonly onError?: (message: string) => void;
 }) {
-  // Registry outside React state: held paste content must not re-render the
-  // composer tree, and the composer value itself lives in the runtime.
-  const registryRef = useRef(new Map<string, LargePaste>());
+  // Held content lives in refs, not state: the runtime captures prepareSend
+  // (and therefore expandForSend) once, so expansion must read current data
+  // through refs instead of a render-scoped closure. State mirrors only the
+  // chip metadata the composer UI renders.
+  const contentRef = useRef(new Map<string, string>());
+  const heldRef = useRef<readonly HeldPaste[]>([]);
   const counterRef = useRef(0);
-  const [, setVersion] = useState(0);
+  const [heldPastes, setHeldPastes] = useState<readonly HeldPaste[]>([]);
 
   const onComposerPaste = useCallback(
     (event: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -69,17 +69,7 @@ export function LargePasteProvider({
         return;
       }
 
-      const element = event.currentTarget;
-      const nextIndex = (counterRef.current += 1);
-      const attached = createAttachedPaste({
-        composerText: element.value,
-        selectionStart: element.selectionStart ?? element.value.length,
-        selectionEnd: element.selectionEnd ?? element.value.length,
-        pastedText,
-        nextIndex,
-      });
-
-      if (!attached) {
+      if (pastedText.length < LARGE_PASTE_CHARS) {
         return;
       }
 
@@ -94,48 +84,56 @@ export function LargePasteProvider({
         return;
       }
 
-      if (registryRef.current.size >= LARGE_PASTE_MAX_ENTRIES) {
-        const oldest = registryRef.current.keys().next().value;
-
-        if (oldest !== undefined) {
-          registryRef.current.delete(oldest);
-        }
+      if (heldRef.current.length >= LARGE_PASTE_MAX_ENTRIES) {
+        onError?.(
+          `Too many held pastes (${String(LARGE_PASTE_MAX_ENTRIES)}). Send or remove one first.`,
+        );
+        return;
       }
 
-      registryRef.current.set(attached.id, {
-        id: attached.id,
-        placeholder: attached.placeholder,
-        content: attached.content,
-        charCount: attached.content.length,
-      });
-      setVersion((v) => v + 1);
-      setTextareaValue(element, attached.composerText);
+      const entry = createPasteEntry((counterRef.current += 1), pastedText);
+      contentRef.current.set(entry.id, pastedText);
+      heldRef.current = [...heldRef.current, entry];
+      setHeldPastes(heldRef.current);
     },
     [onError],
   );
 
-  const expandForSend = useCallback((text: string) => {
-    const expanded = expandLargePastes(
-      text,
-      registryRef.current as LargePasteRegistry,
-    );
+  const removePaste = useCallback((id: string) => {
+    contentRef.current.delete(id);
+    heldRef.current = heldRef.current.filter((paste) => paste.id !== id);
+    setHeldPastes(heldRef.current);
+  }, []);
 
-    // Placeholders the user deleted before sending drop their held content.
-    for (const id of expanded.removedIds) {
-      registryRef.current.delete(id);
-      setVersion((v) => v + 1);
+  const expandForSend = useCallback((text: string) => {
+    const pastes: PendingPaste[] = heldRef.current.map((held) => ({
+      charCount: held.charCount,
+      content: contentRef.current.get(held.id) ?? "",
+      id: held.id,
+    }));
+
+    const expanded = expandPastesForSend(text, pastes);
+
+    if (expanded.consumedIds.length > 0) {
+      for (const id of expanded.consumedIds) {
+        contentRef.current.delete(id);
+      }
+
+      heldRef.current = [];
+      setHeldPastes([]);
     }
 
     return expanded;
   }, []);
 
   const value = useMemo<LargePasteContextValue>(
-    () => ({ onComposerPaste, expandForSend }),
-    [expandForSend, onComposerPaste],
+    () => ({ onComposerPaste, expandForSend, removePaste, heldPastes }),
+    [expandForSend, heldPastes, onComposerPaste, removePaste],
   );
 
   return <LargePasteContext.Provider value={value}>{children}</LargePasteContext.Provider>;
 }
+
 export function useLargePaste(): LargePasteContextValue {
   const context = useContext(LargePasteContext);
 
