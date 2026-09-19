@@ -23,8 +23,8 @@ import type {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatShell } from "@/app/_components/chat-shell-context";
 import { ErrorToast } from "@/app/_components/error-toast";
-import { LargePasteProvider, useLargePaste } from "@/app/_components/large-paste";
 import { SessionStatusBanner } from "@/app/_components/session-status";
+import { expandHeldPastes, setLargePasteErrorHandler } from "@/lib/chat/large-paste";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import {
   ReadFileToolUI,
@@ -267,18 +267,7 @@ type AssistantChatSurfaceProps = {
   readonly onActiveChatUpdated?: (chat: ActiveChat) => void;
 };
 
-// The provider must wrap the body: the composer paste handler and the send
-// path both read held pastes. It needs no runtime context itself, so it can
-// sit above AssistantRuntimeProvider.
-export function AssistantChatSurface(props: AssistantChatSurfaceProps) {
-  return (
-    <LargePasteProvider>
-      <AssistantChatSurfaceBody {...props} />
-    </LargePasteProvider>
-  );
-}
-
-function AssistantChatSurfaceBody({
+export function AssistantChatSurface({
   chatId,
   activeChat,
   pendingUserMessage = null,
@@ -286,7 +275,6 @@ function AssistantChatSurfaceBody({
   onPendingUserMessageSettled,
   onActiveChatUpdated,
 }: AssistantChatSurfaceProps) {
-  const { expandForSend } = useLargePaste();
   const { requestSignIn, setActiveChatId, setupStatus, touchChat, viewer } =
     useChatShell();
   const storageMode = setupStatus.storageMode;
@@ -425,18 +413,15 @@ function AssistantChatSurfaceBody({
       }
 
       // Large pastes travel attachment-style: limits, title, and the pending
-      // restore message see the composer text (with held pastes as chips),
-      // while the outgoing turn message carries the full inline blocks.
+      // restore message see the composer text (held pastes are chips), while
+      // the outgoing turn message carries the full inline blocks.
       if (typeof input.message === "string") {
-        const expanded = expandForSend(input.message);
-
-        return { ...input, message: expanded.text };
+        return { ...input, message: expandHeldPastes(input.message).text };
       }
 
       return input;
     },
     [
-      expandForSend,
       onChatCreated,
       requestSignIn,
       setActiveChatId,
@@ -498,31 +483,34 @@ function AssistantChatSurfaceBody({
   const toastError =
     clientError !== null && dismissedError !== clientError ? clientError : null;
 
+  // Paste-flow errors (size cap, chip cap) surface through the same toast.
+  useEffect(() => {
+    setLargePasteErrorHandler(setClientError);
+  }, [setClientError]);
+
   return (
-    <LargePasteProvider onError={setClientError}>
-      <AssistantRuntimeProvider runtime={runtime}>
-        <CanvasProvider>
-          <div className="flex min-h-0 flex-1 flex-col">
-            {toastError ? (
-              <ErrorToast
-                message={toastError}
-                onDismiss={() => setDismissedError(clientError)}
-              />
-            ) : null}
+    <AssistantRuntimeProvider runtime={runtime}>
+      <CanvasProvider>
+        <div className="flex min-h-0 flex-1 flex-col">
+          {toastError ? (
+            <ErrorToast
+              message={toastError}
+              onDismiss={() => setDismissedError(clientError)}
+            />
+          ) : null}
 
-            <WriteFileToolUI />
-            <ReadFileToolUI />
-            <SessionStatusBanner isRunning={isRunning} />
-            <CanvasLayout />
+          <WriteFileToolUI />
+          <ReadFileToolUI />
+          <SessionStatusBanner isRunning={isRunning} />
+          <CanvasLayout />
 
-            <EveAuthorization />
-          </div>
+          <EveAuthorization />
+        </div>
 
-          <SessionCursorPersistence chatId={chatId} storageMode={storageMode} />
-          <EveErrorToast />
-        </CanvasProvider>
-      </AssistantRuntimeProvider>
-    </LargePasteProvider>
+        <SessionCursorPersistence chatId={chatId} storageMode={storageMode} />
+        <EveErrorToast />
+      </CanvasProvider>
+    </AssistantRuntimeProvider>
   );
 }
 

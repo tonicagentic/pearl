@@ -27,14 +27,141 @@ export function formatCount(n: number): string {
   return n.toLocaleString("en-US");
 }
 
-export type PasteEntry = {
-  /** Stable id; block delimiters reference it. */
+// ---------------------------------------------------------------------------
+// Module-scoped registry for held pastes.
+//
+// A module singleton (not React state/context) is deliberate: the composer's
+// paste handler, the composer chips, and the send-path expansion may run
+// under different component instances (the surface can mount more than once,
+// e.g. across route transitions), and React context values are scoped to one
+// instance's subtree. A module registry is shared by every instance, so the
+// paste registered by the composer handler is always the paste the send path
+// expands, and chip removal works regardless of which instance renders.
+
+export type HeldPaste = {
   readonly id: string;
   readonly charCount: number;
 };
 
-export function createPasteEntry(index: number, pastedText: string): PasteEntry {
-  return { id: `paste-${index}`, charCount: pastedText.length };
+const contentById = new Map<string, string>();
+const heldOrder: string[] = [];
+let nextPasteIndex = 0;
+
+const storeListeners = new Set<() => void>();
+let storeVersion = 0;
+let heldSnapshot: readonly HeldPaste[] = [];
+
+function emitChange() {
+  storeVersion += 1;
+  heldSnapshot = heldOrder.map((id) => ({
+    charCount: contentById.get(id)?.length ?? 0,
+    id,
+  }));
+  for (const listener of storeListeners) {
+    listener();
+  }
+}
+
+/** Snapshot for `useSyncExternalStore` — stable identity between changes. */
+export function getHeldPastes(): readonly HeldPaste[] {
+  return heldSnapshot;
+}
+
+export function subscribeToHeldPastes(listener: () => void): () => void {
+  storeListeners.add(listener);
+  return () => storeListeners.delete(listener);
+}
+
+// Errors from the paste flow (size cap, chip cap) surface through the chat
+// surface's error toast; the surface registers its setter here once.
+let pasteErrorHandler: ((message: string) => void) | undefined;
+
+export function setLargePasteErrorHandler(
+  handler: (message: string) => void,
+): void {
+  pasteErrorHandler = handler;
+}
+
+function reportPasteError(message: string): void {
+  pasteErrorHandler?.(message);
+}
+
+/**
+ * Attaches a large paste. Returns null (with an error reported through the
+ * registered handler) when the paste exceeds the size cap or too many are
+ * held.
+ */
+export function addHeldPaste(pastedText: string): HeldPaste | null {
+  if (pastedText.length > LARGE_PASTE_MAX_CHARS) {
+    reportPasteError(
+      `Pasted text is too large (${formatCount(pastedText.length)} characters). Split it into parts or attach it as a file.`,
+    );
+    return null;
+  }
+
+  if (heldOrder.length >= LARGE_PASTE_MAX_ENTRIES) {
+    reportPasteError(
+      `Too many held pastes (${formatCount(LARGE_PASTE_MAX_ENTRIES)}). Send or remove one first.`,
+    );
+    return null;
+  }
+
+  const id = `paste-${(nextPasteIndex += 1)}`;
+  contentById.set(id, pastedText);
+  heldOrder.push(id);
+  emitChange();
+
+  return { id, charCount: pastedText.length };
+}
+
+export function removeHeldPaste(id: string): void {
+  if (!contentById.delete(id)) {
+    return;
+  }
+
+  const index = heldOrder.indexOf(id);
+  if (index !== -1) {
+    heldOrder.splice(index, 1);
+  }
+  emitChange();
+}
+
+export type PendingPaste = {
+  readonly id: string;
+  readonly content: string;
+  readonly charCount: number;
+};
+
+function pendingPastes(): PendingPaste[] {
+  return heldOrder.map((id) => ({
+    charCount: contentById.get(id)?.length ?? 0,
+    content: contentById.get(id) ?? "",
+    id,
+  }));
+}
+
+/**
+ * Send-time expansion: appends held pastes as inline blocks after the
+ * composer text and consumes them. A no-op when nothing is held.
+ */
+export function expandHeldPastes(text: string): {
+  text: string;
+  consumedIds: readonly string[];
+} {
+  const expanded = expandPastesForSend(text, pendingPastes());
+
+  if (expanded.consumedIds.length > 0) {
+    for (const id of expanded.consumedIds) {
+      contentById.delete(id);
+      const index = heldOrder.indexOf(id);
+      if (index !== -1) {
+        heldOrder.splice(index, 1);
+      }
+    }
+    emitChange();
+  }
+
+  return expanded;
 }
 
 /** The exact inline block delimiter expandPastesForSend produces. */
@@ -120,12 +247,6 @@ export function splitPasteBlocks(text: string): readonly MessageSegment[] {
 
   return segments;
 }
-
-export type PendingPaste = {
-  readonly id: string;
-  readonly content: string;
-  readonly charCount: number;
-};
 
 /**
  * Expands held pastes into the outgoing turn message: blocks are appended

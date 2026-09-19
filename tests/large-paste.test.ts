@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  createPasteEntry,
   expandPastesForSend,
   formatCount,
   LARGE_PASTE_CHARS,
@@ -14,14 +13,6 @@ import {
 function longText(chars: number, suffix = ""): string {
   return "x".repeat(chars) + suffix;
 }
-
-test("createPasteEntry names pastes in registration order", () => {
-  const first = createPasteEntry(1, longText(LARGE_PASTE_CHARS));
-  const second = createPasteEntry(2, longText(LARGE_PASTE_CHARS));
-
-  assert.deepEqual(first, { id: "paste-1", charCount: LARGE_PASTE_CHARS });
-  assert.equal(second.id, "paste-2");
-});
 
 test("expandPastesForSend appends paste blocks after the composer text", () => {
   const { text, consumedIds } = expandPastesForSend(

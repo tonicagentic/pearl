@@ -6,7 +6,7 @@ import {
   UserMessageAttachments,
 } from "@/components/assistant-ui/elements/attachment.aui";
 import { File } from "@/components/assistant-ui/elements/file";
-import { useLargePaste } from "@/app/_components/large-paste";
+import { useLargePasteComposer, useHeldLargePastes } from "@/app/_components/large-paste";
 import { splitPasteBlocks } from "@/lib/chat/large-paste";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
 import { Image } from "@/components/assistant-ui/elements/image";
@@ -276,7 +276,7 @@ const ThreadSuggestionItem: FC = () => {
 };
 
 const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
-  const { onComposerPaste } = useLargePaste();
+  const { onComposerPaste } = useLargePasteComposer();
 
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
@@ -555,7 +555,7 @@ const UserFilePart: FileMessagePartComponent = (part) => (
  * removes the most recent paste, Slack-style.
  */
 const PasteAttachments: FC = () => {
-  const { heldPastes, removePaste } = useLargePaste();
+  const { heldPastes, removePaste } = useLargePasteComposer();
   const aui = useAui();
   const pluginRegistry = INTERNAL.useComposerInputPluginRegistryOptional();
   const heldRef = useRef(heldPastes);
