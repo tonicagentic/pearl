@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAui } from "@assistant-ui/react";
+import { useAui, useAuiState } from "@assistant-ui/react";
 import { useEveEvents } from "@assistant-ui/eve";
 import { Loader2, X } from "lucide-react";
 
@@ -112,8 +112,17 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
   pendingInput = pendingCalls.size > 0;
 
   // In-flight = the thread reports running (submitted/streaming) and the
-  // durable state is not paused on the user.
-  const working = isRunning && !pendingInput;
+  // durable state is not paused on the user. While an assistant message is
+  // actually streaming, the in-thread ThinkingIndicator owns the status line
+  // (assistant-ui thinking-indicator recipe) and this banner stays out of the
+  // way; the banner only covers what the thread cannot show: the gap between
+  // submit and the first message (a dead worker shows up here), resuming, and
+  // the waiting-for-confirmation state.
+  const assistantStreaming = useAuiState((s) => {
+    const last = s.thread.messages.at(-1);
+    return last?.role === "assistant" && last.status?.type === "running";
+  });
+  const working = isRunning && !pendingInput && !assistantStreaming;
   const startedAt = workingStartedAt ?? (working ? now : null);
   const elapsedS =
     startedAt === null || now === null
@@ -134,7 +143,7 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
     );
   }
 
-  if (!isRunning) {
+  if (!isRunning || assistantStreaming) {
     return null;
   }
 

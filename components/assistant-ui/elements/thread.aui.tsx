@@ -6,6 +6,7 @@ import {
   UserMessageAttachments,
 } from "@/components/assistant-ui/elements/attachment.aui";
 import { File } from "@/components/assistant-ui/elements/file";
+import { AssistantThinking } from "@/components/assistant-ui/elements/assistant-thinking";
 import { useLargePasteComposer, useHeldLargePastes } from "@/app/_components/large-paste";
 import { splitPasteBlocks } from "@/lib/chat/large-paste";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
@@ -404,6 +405,7 @@ const AssistantMessage: FC = () => {
         data-slot="aui_assistant-message-content"
         className="text-foreground px-2 leading-relaxed wrap-break-word"
       >
+        <AssistantThinking />
         <MessagePrimitive.GroupedParts
           groupBy={groupPartByType({
             reasoning: ["group-chainOfThought", "group-reasoning"],
@@ -465,15 +467,9 @@ const AssistantMessage: FC = () => {
                   </div>
                 );
               case "indicator":
-                return (
-                  <span
-                    data-slot="aui_assistant-message-indicator"
-                    className="animate-pulse font-sans"
-                    aria-label="Assistant is working"
-                  >
-                    {"●"}
-                  </span>
-                );
+                // The live status line (AssistantThinking above the parts)
+                // covers this state with a label and elapsed time.
+                return null;
               default:
                 return null;
             }
