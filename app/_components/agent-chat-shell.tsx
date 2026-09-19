@@ -1,9 +1,8 @@
 "use client";
 
-import { CheckIcon, MenuIcon, PanelLeftIcon, UploadIcon } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { MenuIcon, PanelLeftIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
-  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -25,7 +24,6 @@ import { AuthDisplayLoggedOut } from "@/components/auth/auth-display";
 import { SignInModal } from "@/components/auth/sign-in-modal";
 import { ChatSidebar } from "@/components/chat/sidebar";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   parseSidebarOpen,
   serializeSidebarOpen,
@@ -313,9 +311,6 @@ export function AgentChatShell({
   );
   const topRightActions = (
     <div className="pointer-events-auto mt-1 flex min-w-0 items-center justify-end gap-1.5">
-      <Suspense fallback={null}>
-        <ChatRouteShareButton />
-      </Suspense>
       {viewerState ? null : loggedOutAuthActions}
     </div>
   );
@@ -436,72 +431,6 @@ function setSidebarDocumentHint(open: boolean) {
   } else {
     document.documentElement.dataset.eveChatSidebar = "closed";
   }
-}
-
-function ChatRouteShareButton() {
-  const pathname = usePathname();
-  const { setupStatus } = useChatShell();
-
-  if (
-    !pathname.startsWith("/chat/") ||
-    setupStatus.storageMode === "browser"
-  ) {
-    return null;
-  }
-
-  return <ShareChatButton />;
-}
-
-function ShareChatButton() {
-  const [copied, setCopied] = useState(false);
-  const copyResetTimerRef = useRef<number | null>(null);
-
-  const clearCopyResetTimer = useCallback(() => {
-    if (copyResetTimerRef.current === null) {
-      return;
-    }
-
-    window.clearTimeout(copyResetTimerRef.current);
-    copyResetTimerRef.current = null;
-  }, []);
-
-  const handleCopyLink = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      clearCopyResetTimer();
-      setCopied(true);
-      copyResetTimerRef.current = window.setTimeout(() => {
-        copyResetTimerRef.current = null;
-        setCopied(false);
-      }, 1600);
-    } catch {
-      setCopied(false);
-    }
-  }, [clearCopyResetTimer]);
-
-  useEffect(() => clearCopyResetTimer, [clearCopyResetTimer]);
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          aria-label={copied ? "Copied chat link" : "Copy chat link"}
-          className="text-muted-foreground hover:text-foreground"
-          onClick={handleCopyLink}
-          size="icon-sm"
-          type="button"
-          variant="ghost"
-        >
-          {copied ? (
-            <CheckIcon className="size-4" />
-          ) : (
-            <UploadIcon className="size-4" />
-          )}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">{copied ? "Copied" : "Copy link"}</TooltipContent>
-    </Tooltip>
-  );
 }
 
 function AuthTopActions({
