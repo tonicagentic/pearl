@@ -556,7 +556,10 @@ function CanvasLayout() {
         <CanvasSplitBody writing={doc.running} className="min-h-0 flex-1">
           {doc.content ? (
             isMarkdownPath(doc.path) ? (
-              <MarkdownContent text={doc.content} className="text-[13px]" />
+              <MarkdownContent
+                text={doc.content}
+                className="max-w-[65ch] text-[13px]"
+              />
             ) : (
               <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
                 {doc.content}
