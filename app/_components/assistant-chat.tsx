@@ -39,6 +39,7 @@ import {
   CanvasSplitHeader,
   CanvasSplitLine,
 } from "@/components/assistant-ui/elements/canvas-split";
+import { MarkdownContent } from "@/components/assistant-ui/elements/markdown-content";
 import { EveAuthorization } from "@/components/eve-authorization";
 import {
   appendClientChatEvent,
@@ -516,7 +517,12 @@ export function AssistantChatSurface({
 
 // When an agent-written document is open, the thread narrows to a rail and
 // the document takes the room (assistant-ui Canvas pattern). Otherwise the
-// thread renders full width.
+// thread renders full width. Markdown files render formatted through the
+// standalone markdown renderer; anything else stays raw monospace.
+function isMarkdownPath(path: string): boolean {
+  return /\.mdx?$/i.test(path);
+}
+
 function CanvasLayout() {
   const { document: doc, closeDocument } = useCanvas();
 
@@ -549,9 +555,13 @@ function CanvasLayout() {
         />
         <CanvasSplitBody writing={doc.running} className="min-h-0 flex-1">
           {doc.content ? (
-            <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
-              {doc.content}
-            </CanvasSplitLine>
+            isMarkdownPath(doc.path) ? (
+              <MarkdownContent text={doc.content} className="text-[13px]" />
+            ) : (
+              <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
+                {doc.content}
+              </CanvasSplitLine>
+            )
           ) : null}
         </CanvasSplitBody>
       </div>

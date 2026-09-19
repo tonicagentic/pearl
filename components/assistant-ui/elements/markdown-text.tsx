@@ -266,3 +266,8 @@ const defaultComponents = memoizeMarkdownComponents({
   },
   CodeHeader,
 });
+
+// The default element renderers, exported for standalone markdown rendering
+// (the docs: outside a message part, render react-markdown directly with the
+// same components so surfaces stay visually identical).
+export const markdownTextComponents = defaultComponents;
