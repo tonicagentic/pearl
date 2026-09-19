@@ -69,6 +69,14 @@ export function UserMenu({
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
+            router.push("/profile");
+          }}
+        >
+          Profile
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
             router.push("/settings");
           }}
         >
