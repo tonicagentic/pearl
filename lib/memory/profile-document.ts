@@ -23,8 +23,20 @@ import type { MemoryDocument } from "eve/memory/file";
 //   lengthPrefix(digest("memscope1_", encodeScope(scopeValue))))).
 
 const MEMORY_PREFIX = "eve/memory/file";
-const MEMORY_NODE_CANDIDATES = ["memory/profile.ts", "memory/profile"] as const;
 const MEMORY_SLOT = "profile";
+// The memory lifecycle derives its namespace from the owning node's id. The
+// compiled manifest registers the memory as a framework wrapper node
+// ("eve:memory-wrapper:tools/profile.ts:from:memory/profile.ts") wrapping the
+// authored definition at logical paths "memory/profile.ts" / "tools/profile.ts",
+// so try each plausible node id — the store listing proves which one is real.
+const MEMORY_NODE_CANDIDATES = [
+  "eve:memory-wrapper:tools/profile.ts:from:memory/profile.ts",
+  "tools/profile.ts",
+  "tools/profile",
+  "memory/profile.ts",
+  "memory/profile",
+  "__root__",
+] as const;
 
 function uint32(value: number): Buffer {
   const buf = Buffer.allocUnsafe(4);
@@ -132,6 +144,13 @@ export async function readProfileMemory(
     pathnames.includes(
       `${MEMORY_PREFIX}/${encodeURIComponent(candidate.key)}/MEMORY.md`,
     ),
+  );
+
+  // Observability for the derivation: if a memory document exists but no
+  // candidate matches, these counts (visible in Vercel logs) show whether the
+  // listing or the key computation is the failing side.
+  console.log(
+    `[profile-memory] listed=${pathnames.length} candidates=${candidates.length} matched=${matching ? matching.node : "none"}`,
   );
 
   if (!matching) {
