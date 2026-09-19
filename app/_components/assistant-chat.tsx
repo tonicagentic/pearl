@@ -558,7 +558,7 @@ function CanvasLayout() {
             isMarkdownPath(doc.path) ? (
               <MarkdownContent
                 text={doc.content}
-                className="max-w-[65ch] text-[13px]"
+                className="mx-auto max-w-[65ch] text-[13px]"
               />
             ) : (
               <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
