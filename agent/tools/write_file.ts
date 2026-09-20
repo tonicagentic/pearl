@@ -7,6 +7,42 @@ import {
 
 type WriteOutcome = { existed: boolean; path: string };
 
+// Shared by write_file and edit_file: mirror a sandbox write into Postgres so
+// the chat UI can render the file and future sessions can re-seed it.
+// Persistence is best-effort: a database outage must not fail the model's
+// file write, so errors are reported in the result instead of thrown.
+export async function persistAgentFile(
+  ctx: { session: { id: string } },
+  path: string,
+  content: string,
+): Promise<{ persisted: boolean; note?: string }> {
+  try {
+    const chatId = await waitForChatLink(ctx.session.id);
+
+    if (!chatId) {
+      return {
+        persisted: false,
+        note: "File written to the sandbox, but no chat is linked to this session yet, so it was not saved for later use.",
+      };
+    }
+
+    await upsertAgentFile({
+      chatId,
+      path,
+      content,
+    });
+
+    return { persisted: true };
+  } catch (error) {
+    return {
+      persisted: false,
+      note: `File written to the sandbox, but saving a durable copy failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    };
+  }
+}
+
 // On a brand-new chat the browser client persists the eve session id to the
 // chat row from a React effect that can lag tens of seconds behind the turn
 // while reasoning events stream. Poll front-loaded so the first turn's files
@@ -78,32 +114,8 @@ export default defineTool({
       await writeFile.execute(input, ctx as never),
     );
 
-    try {
-      const chatId = await waitForChatLink(ctx.session.id);
+    const persistence = await persistAgentFile(ctx, outcome.path, input.content);
 
-      if (!chatId) {
-        return {
-          ...outcome,
-          persisted: false,
-          note: "File written to the sandbox, but no chat is linked to this session yet, so it was not saved for later use.",
-        };
-      }
-
-      await upsertAgentFile({
-        chatId,
-        path: outcome.path,
-        content: input.content,
-      });
-
-      return { ...outcome, persisted: true };
-    } catch (error) {
-      return {
-        ...outcome,
-        persisted: false,
-        note: `File written to the sandbox, but saving a durable copy failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      };
-    }
+    return { ...outcome, ...persistence };
   },
 });

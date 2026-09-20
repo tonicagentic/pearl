@@ -43,6 +43,13 @@
       "when": 1789653658059,
       "tag": "0005_great_vindicator",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789873270602,
+      "tag": "0006_high_khan",
+      "breakpoints": true
     }
   ]
 }

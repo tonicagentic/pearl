@@ -128,6 +128,35 @@ export const agentFile = pgTable(
 
 export type AgentFile = typeof agentFile.$inferSelect;
 
+// Append-only history for agent files: every write_file/edit_file save
+// records the new content as the next revision for its (chat, path). The
+// agent_file row stays the "current" lookup; revisions are the audit trail
+// that lets the UI show a real version number and, later, time-travel.
+export const agentFileRevision = pgTable(
+  "agent_file_revision",
+  {
+    id: text("id").primaryKey(),
+    chatId: text("chat_id")
+      .notNull()
+      .references(() => chat.id, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    revision: integer("revision").notNull(),
+    content: text("content").notNull(),
+    byteLength: integer("byte_length").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_agent_file_revision_chat_path").on(table.chatId, table.path),
+    uniqueIndex("idx_agent_file_revision_version").on(
+      table.chatId,
+      table.path,
+      table.revision,
+    ),
+  ],
+);
+
+export type AgentFileRevision = typeof agentFileRevision.$inferSelect;
+
 // Uploaded attachment archive: the original goes to Vercel Blob (private
 // store); extracted PDF text is stored per page so the agent can read large
 // documents through paged tool calls instead of one giant inline payload.

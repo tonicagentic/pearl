@@ -1,6 +1,6 @@
 import { defineEval } from "eve/evals";
 import { satisfies } from "eve/evals/expect";
-import { threadDoesNotRepeatArtifact, writtenFileContent } from "./file-assertions.ts";
+import { artifactMaterial, threadDoesNotRepeatArtifact } from "./file-assertions.ts";
 
 // One technical draft, retargeted twice: executives care about cost, risk,
 // and timeline; engineers care about mechanics and tradeoffs.
@@ -31,7 +31,7 @@ export default defineEval({
     t.succeeded();
     t.calledTool("write_file");
 
-    const execFileContent = writtenFileContent(execTurn);
+    const execFileContent = artifactMaterial(execTurn);
     t.check(
       execFileContent.length,
       satisfies((length: number) => length > 100, "the executive version was written to a file artifact"),
@@ -55,7 +55,7 @@ export default defineEval({
     t.succeeded();
     t.calledTool("write_file");
 
-    const engFileContent = writtenFileContent(engTurn);
+    const engFileContent = artifactMaterial(engTurn);
     t.check(
       engFileContent.length,
       satisfies((length: number) => length > 100, "the engineer version was written to a file artifact"),

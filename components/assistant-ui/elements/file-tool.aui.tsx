@@ -16,7 +16,9 @@ import {
 } from "@/components/ui/collapsible";
 import { ArtifactCard } from "@/components/assistant-ui/elements/artifact-card";
 import {
+  pathVersion,
   useCanvas,
+  versionForCall,
   type CanvasDocument,
 } from "@/components/assistant-ui/elements/canvas-context";
 import { cn } from "@/lib/utils";
@@ -226,13 +228,25 @@ function WriteFileRender({
         ? "updated"
         : "saved";
   const meta = running ? "Writing…" : `${formatBytes(byteLength)} · ${badge}`;
+  const version = versionForCall(
+    id,
+    path,
+    !running && fileResult !== undefined,
+  );
 
   // Claim the canvas while the call streams and keep its content current.
   // A user close wins until a new streaming call starts (fresh component).
   useEffect(() => {
     if (running) {
       if (!closedByUserRef.current) {
-        openDocument({ id, path, content, running: true, note: null });
+        openDocument({
+          id,
+          path,
+          content,
+          running: true,
+          note: null,
+          version: pathVersion(path),
+        });
       }
     } else if (isOpen) {
       updateDocument(id, {
@@ -240,10 +254,11 @@ function WriteFileRender({
         content,
         running: false,
         note: resultMessage(result),
+        version,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync the live document when the streamed args change
-  }, [id, path, content, running, isOpen]);
+  }, [id, path, content, running, isOpen, version]);
 
   const toggleCanvas = () => {
     if (isOpen) {
@@ -257,6 +272,7 @@ function WriteFileRender({
         content,
         running,
         note: resultMessage(result),
+        version: pathVersion(path),
       } satisfies CanvasDocument);
     }
   };
@@ -303,4 +319,85 @@ export const WriteFileToolUI = makeAssistantToolUI<
   // mounts as soon as the call starts, which is what claims the canvas.
   display: "standalone",
   render: WriteFileRender,
+});
+
+// edit_file applies a targeted span replacement to an existing artifact. When
+// the file is open on the canvas, the same replacement is applied client-side
+// so the document updates in place; otherwise a compact card records the
+// edit. Version bumps keep the canvas header's revision number honest.
+type EditFileArgs = { filePath?: string; oldText?: string; newText?: string };
+
+function EditFileRender({
+  toolCallId,
+  args,
+  status,
+}: {
+  readonly toolCallId?: string;
+  readonly args?: EditFileArgs;
+  readonly status: { readonly type: string };
+}) {
+  const { document: canvasDoc, updateDocument } = useCanvas();
+  const id = toolCallId ?? "edit_file";
+  const path = args?.filePath ?? "file";
+  const running = status.type === "running";
+  const completed = !running && args?.oldText !== undefined;
+  const version = versionForCall(id, path, completed);
+
+  // Mirror the span replacement onto the open canvas document so the viewer
+  // updates in place. Only when the edited file is the one on the canvas —
+  // an edit to a closed file stays a card.
+  useEffect(() => {
+    if (
+      !completed ||
+      !canvasDoc ||
+      canvasDoc.path !== path ||
+      !args?.oldText ||
+      args.newText === undefined
+    ) {
+      return;
+    }
+
+    if (canvasDoc.content.includes(args.oldText)) {
+      updateDocument(id, {
+        content: canvasDoc.content.replace(args.oldText, args.newText),
+        running: false,
+        version,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply the replacement once per completed call
+  }, [completed, id, path, version]);
+
+  if (running) {
+    return (
+      <div
+        className="text-muted-foreground flex w-full items-center gap-1.5 text-xs"
+        data-slot="edit-file-tool"
+      >
+        Editing {path}…
+      </div>
+    );
+  }
+
+  const removed = args?.oldText?.length ?? 0;
+  const added = args?.newText?.length ?? 0;
+
+  return (
+    <div
+      className="text-muted-foreground flex w-full items-center gap-1.5 text-xs"
+      data-slot="edit-file-tool"
+    >
+      <span className="truncate">
+        Edited {path.split("/").pop() || path} · targeted update
+      </span>
+      <span className="shrink-0 tabular-nums">
+        −{removed} +{added}
+      </span>
+    </div>
+  );
+}
+
+export const EditFileToolUI = makeAssistantToolUI<EditFileArgs, unknown>({
+  toolName: "edit_file",
+  display: "standalone",
+  render: EditFileRender,
 });

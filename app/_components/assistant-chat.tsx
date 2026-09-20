@@ -27,6 +27,7 @@ import { SessionStatusBanner } from "@/app/_components/session-status";
 import { expandHeldPastes, setLargePasteErrorHandler } from "@/lib/chat/large-paste";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import {
+  EditFileToolUI,
   ReadFileToolUI,
   WriteFileToolUI,
 } from "@/components/assistant-ui/elements/file-tool.aui";
@@ -501,6 +502,7 @@ export function AssistantChatSurface({
           ) : null}
 
           <WriteFileToolUI />
+          <EditFileToolUI />
           <ReadFileToolUI />
           <SessionStatusBanner isRunning={isRunning} />
           <CanvasLayout />
@@ -544,7 +546,7 @@ function CanvasLayout() {
       <div className="border-border/60 bg-background flex min-h-0 flex-1 flex-col max-md:h-80 max-md:shrink-0 max-md:border-t md:border-l">
         <CanvasSplitHeader
           title={doc.path}
-          version={1}
+          version={doc.version}
           saved={!doc.running}
           onCopy={
             doc.content

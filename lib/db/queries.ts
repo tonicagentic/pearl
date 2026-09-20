@@ -4,7 +4,13 @@ import type { ClientSessionState, MessageStreamEvent } from "eve/client";
 import { isChatTurnSettledEvent } from "@/lib/chat/events";
 import type { ActiveChat, ChatListItem, ChatListPage } from "@/lib/chat/types";
 import { createFallbackTitle, DEFAULT_CHAT_TITLE } from "@/lib/chat/title";
-import { chat, chatEvent, agentFile, agentAttachment } from "@/lib/db/schema";
+import {
+  chat,
+  chatEvent,
+  agentFile,
+  agentFileRevision,
+  agentAttachment,
+} from "@/lib/db/schema";
 import { db } from "@/lib/db/client";
 
 const CHAT_HISTORY_PAGE_SIZE = 20;
@@ -446,19 +452,44 @@ export async function upsertAgentFile({
 }: UpsertAgentFileInput): Promise<void> {
   const byteLength = Buffer.byteLength(content, "utf8");
 
-  await db
-    .insert(agentFile)
-    .values({ id: randomUUID(), chatId, path, content, byteLength })
-    .onConflictDoUpdate({
-      target: [agentFile.chatId, agentFile.path],
-      set: { content, byteLength, updatedAt: new Date() },
+  await db.transaction(async (tx) => {
+    // Append-only revision history: every save records the next revision for
+    // this (chat, path). The unique (chat, path, revision) index makes the
+    // counter safe under concurrent writes — a conflict fails the save
+    // rather than skipping a version.
+    const [revisionRow] = await tx
+      .select({
+        next: sql<number>`COALESCE(MAX(${agentFileRevision.revision}), 0) + 1`,
+      })
+      .from(agentFileRevision)
+      .where(
+        and(eq(agentFileRevision.chatId, chatId), eq(agentFileRevision.path, path)),
+      );
+
+    await tx.insert(agentFileRevision).values({
+      id: randomUUID(),
+      chatId,
+      path,
+      revision: revisionRow.next,
+      content,
+      byteLength,
     });
+
+    await tx
+      .insert(agentFile)
+      .values({ id: randomUUID(), chatId, path, content, byteLength })
+      .onConflictDoUpdate({
+        target: [agentFile.chatId, agentFile.path],
+        set: { content, byteLength, updatedAt: new Date() },
+      });
+  });
 }
 
 export type AgentFileMeta = {
   readonly id: string;
   readonly path: string;
   readonly byteLength: number;
+  readonly version: number;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
@@ -478,13 +509,33 @@ export async function listAgentFiles(
     .where(eq(agentFile.chatId, chatId))
     .orderBy(desc(agentFile.updatedAt));
 
+  const versions = await agentFileVersionCounts(chatId);
+
   return rows.map((row) => ({
     id: row.id,
     path: row.path,
     byteLength: row.byteLength,
+    version: versions.get(row.path) ?? 1,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }));
+}
+
+// Current version number per path: MAX(revision) from the append-only
+// history. Files without revisions (pre-history) read as version 1.
+async function agentFileVersionCounts(
+  chatId: string,
+): Promise<ReadonlyMap<string, number>> {
+  const rows = await db
+    .select({
+      path: agentFileRevision.path,
+      version: sql<number>`MAX(${agentFileRevision.revision})`,
+    })
+    .from(agentFileRevision)
+    .where(eq(agentFileRevision.chatId, chatId))
+    .groupBy(agentFileRevision.path);
+
+  return new Map(rows.map((row) => [row.path, Number(row.version) || 1]));
 }
 
 export type AgentFileContent = {

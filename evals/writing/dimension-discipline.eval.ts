@@ -1,6 +1,6 @@
 import { defineEval } from "eve/evals";
 import { satisfies } from "eve/evals/expect";
-import { threadDoesNotRepeatArtifact, writtenFileContent } from "./file-assertions.ts";
+import { artifactMaterial, threadDoesNotRepeatArtifact } from "./file-assertions.ts";
 
 // A draft that is already well structured and correct — the only requested
 // change is register. Generic polish (adding headers, bulleting everything,
@@ -25,13 +25,13 @@ export default defineEval({
     t.succeeded();
     t.calledTool("write_file");
 
-    const fileContent = writtenFileContent(turn);
+    const fileContent = artifactMaterial(turn);
     t.check(
       fileContent.length,
       satisfies((length: number) => length > 150, "the edited draft was written to a file artifact"),
     );
     t.check(
-      threadDoesNotRepeatArtifact(turn, fileContent),
+      threadDoesNotRepeatArtifact(turn, artifactMaterial(turn)),
       satisfies(Boolean, "the thread reply stays shorter than the artifact"),
     );
 

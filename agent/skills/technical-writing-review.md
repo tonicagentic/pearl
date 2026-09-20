@@ -365,6 +365,15 @@ Why does the technical argument matter beyond itself?
 
 If any of these cannot be identified, flag the gap.
 
+Fact-check the load-bearing claims. Identify the few claims the argument
+actually depends on — numbers, benchmarks, citations, described behavior of
+tools or APIs — and verify each with `web_search` or `web_fetch` before the
+review calls it unsupported. Report what was checked and what was not: a
+claim the author measured stays qualified as measured, and a claim that could
+not be verified is flagged as unverified rather than wrong. Do not
+fact-check decorative details; do not substitute search results for the
+author's first-hand experience.
+
 ## Revision priorities
 
 Prioritize revisions in this order:

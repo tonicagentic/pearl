@@ -1,7 +1,7 @@
 import { defineEval } from "eve/evals";
 import { loadJson } from "eve/evals/loaders";
 import { satisfies } from "eve/evals/expect";
-import { threadDoesNotRepeatArtifact, writtenFileContent } from "./file-assertions.ts";
+import { artifactMaterial, threadDoesNotRepeatArtifact } from "./file-assertions.ts";
 
 // Dataset fan-out: one editing behavior (make exactly the requested change)
 // fanned over drafts with different problems. Each case grades on its own
@@ -29,13 +29,13 @@ export default cases.map((draft) =>
       t.succeeded();
       t.calledTool("write_file");
 
-      const fileContent = writtenFileContent(turn);
+      const fileContent = artifactMaterial(turn);
       t.check(
         fileContent.length,
         satisfies((length: number) => length > 0, "the edited draft was written to a file artifact"),
       );
       t.check(
-        threadDoesNotRepeatArtifact(turn, fileContent),
+        threadDoesNotRepeatArtifact(turn, artifactMaterial(turn)),
         satisfies(Boolean, "the thread reply stays shorter than the artifact"),
       );
 

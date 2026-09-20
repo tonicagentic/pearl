@@ -20,7 +20,43 @@ export type CanvasDocument = {
   readonly content: string;
   readonly running: boolean;
   readonly note: string | null;
+  /** Session-scoped revision count for this path (write_file + edit_file). */
+  readonly version: number;
 };
+
+// Session-scoped revision counters per file path. Each completed write_file
+// or edit_file call bumps the count, so the canvas header shows a real
+// revision number as the draft iterates. Resets on reload — the durable
+// history lives in the agent_file_revision table.
+const pathVersions = new Map<string, number>();
+const callVersions = new Map<string, number>();
+
+// Idempotent per tool call: a streaming call renders many times before it
+// completes, and StrictMode renders twice — the first completed render for a
+// call id claims the next version, later renders reuse it.
+export function versionForCall(
+  callId: string,
+  path: string,
+  completed: boolean,
+): number {
+  if (!completed) {
+    return pathVersions.get(path) ?? 1;
+  }
+
+  const assigned = callVersions.get(callId);
+  if (assigned !== undefined) {
+    return assigned;
+  }
+
+  const next = (pathVersions.get(path) ?? 0) + 1;
+  pathVersions.set(path, next);
+  callVersions.set(callId, next);
+  return next;
+}
+
+export function pathVersion(path: string): number {
+  return pathVersions.get(path) ?? 1;
+}
 
 type CanvasContextValue = {
   readonly document: CanvasDocument | null;
