@@ -56,6 +56,12 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     1,
     "Sandbox file write is last-write-wins but can interleave with user edits; retried writes must re-read first.",
   ),
+  edit_file: policy(
+    false,
+    [],
+    1,
+    "Span replacement is not safe to blind-retry: a re-run after a partial success could double-apply the edit; re-read the file and recompute the span.",
+  ),
 };
 
 export function policyFor(toolName: string): RetryPolicy | undefined {
