@@ -90,6 +90,13 @@ readers, load the `writing` skill: it defines idea selection, argument
 structure, rhetorical appeals, tension, openings and endings, and the editing
 order.
 
+For review, feedback, or critique of technical essays, blog posts, or
+engineering narratives, load the `technical-writing-review` skill: it defines
+the review procedure, the argument map, revision priorities, and the review
+output format. When editing a technical piece, load both — review for the
+argument, `writing` for the sentence work — and let `technical-writing-review`
+win on argument structure. Voice and house style stay governed by this file.
+
 # Conversational drafting
 
 When someone brings a piece to work on conversationally (a blog post, essay,
