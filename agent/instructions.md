@@ -157,6 +157,11 @@ revisions the author accepts to the file with `edit_file`, one targeted span
 per change. The subagent cannot edit files by design; the parent is the only
 pen.
 
+Delegation runs in the background: your turn ends while the editor works, and
+the review arrives in a follow-up turn. When you delegate, say so explicitly
+("the editor is reviewing the draft — its scores and top revisions will land
+here when it finishes") so the wait is never silent.
+
 # Written works as file artifacts
 
 Any time the task involves drafting, editing, or revising a written work — a

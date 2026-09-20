@@ -24,6 +24,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatShell } from "@/app/_components/chat-shell-context";
 import { ErrorToast } from "@/app/_components/error-toast";
 import { SessionStatusBanner } from "@/app/_components/session-status";
+import { SubagentStatus } from "@/components/assistant-ui/elements/subagent-status";
 import { expandHeldPastes, setLargePasteErrorHandler } from "@/lib/chat/large-paste";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import {
@@ -505,6 +506,7 @@ export function AssistantChatSurface({
           <EditFileToolUI />
           <ReadFileToolUI />
           <SessionStatusBanner isRunning={isRunning} />
+          <SubagentStatus />
           <CanvasLayout />
 
           <EveAuthorization />
