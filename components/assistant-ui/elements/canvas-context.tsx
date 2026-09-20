@@ -65,6 +65,10 @@ type CanvasContextValue = {
     id: string,
     patch: Partial<Omit<CanvasDocument, "id">>,
   ) => void;
+  updateDocumentByPath: (
+    path: string,
+    update: (doc: CanvasDocument) => CanvasDocument,
+  ) => void;
   closeDocument: () => void;
 };
 
@@ -86,13 +90,33 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // Path-matched update with a functional form: targeted edits arrive from a
+  // different tool call than the one that claimed the canvas (edit_file vs
+  // write_file), and consecutive edits must chain off the latest content even
+  // when their results settle in the same render batch.
+  const updateDocumentByPath = useCallback(
+    (
+      path: string,
+      update: (doc: CanvasDocument) => CanvasDocument,
+    ): void => {
+      setDocument((prev) => (prev && prev.path === path ? update(prev) : prev));
+    },
+    [],
+  );
+
   const closeDocument = useCallback(() => {
     setDocument(null);
   }, []);
 
   const value = useMemo(
-    () => ({ document, openDocument, updateDocument, closeDocument }),
-    [document, openDocument, updateDocument, closeDocument],
+    () => ({
+      document,
+      openDocument,
+      updateDocument,
+      updateDocumentByPath,
+      closeDocument,
+    }),
+    [document, openDocument, updateDocument, updateDocumentByPath, closeDocument],
   );
 
   return (

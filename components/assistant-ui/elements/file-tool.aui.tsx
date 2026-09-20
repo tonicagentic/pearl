@@ -336,7 +336,7 @@ function EditFileRender({
   readonly args?: EditFileArgs;
   readonly status: { readonly type: string };
 }) {
-  const { document: canvasDoc, updateDocument } = useCanvas();
+  const { document: canvasDoc, updateDocumentByPath } = useCanvas();
   const id = toolCallId ?? "edit_file";
   const path = args?.filePath ?? "file";
   const running = status.type === "running";
@@ -344,28 +344,34 @@ function EditFileRender({
   const version = versionForCall(id, path, completed);
 
   // Mirror the span replacement onto the open canvas document so the viewer
-  // updates in place. Only when the edited file is the one on the canvas —
-  // an edit to a closed file stays a card.
+  // updates in place. The canvas is owned by the write_file call that created
+  // it, so the update matches by path (not call id — that mismatch is what
+  // dropped edits before) and applies functionally off the latest content, so
+  // consecutive edits chain correctly. Only when the edited file is the one
+  // on the canvas; an edit to a closed file stays a compact card.
   useEffect(() => {
     if (
       !completed ||
       !canvasDoc ||
-      canvasDoc.path !== path ||
       !args?.oldText ||
       args.newText === undefined
     ) {
       return;
     }
 
-    if (canvasDoc.content.includes(args.oldText)) {
-      updateDocument(id, {
-        content: canvasDoc.content.replace(args.oldText, args.newText),
+    updateDocumentByPath(path, (doc) => {
+      if (!doc.content.includes(args.oldText!)) {
+        return doc;
+      }
+      return {
+        ...doc,
+        content: doc.content.replace(args.oldText!, args.newText!),
         running: false,
         version,
-      });
-    }
+      };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- apply the replacement once per completed call
-  }, [completed, id, path, version]);
+  }, [completed, path, version]);
 
   if (running) {
     return (
