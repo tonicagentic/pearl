@@ -97,6 +97,13 @@ output format. When editing a technical piece, load both — review for the
 argument, `writing` for the sentence work — and let `technical-writing-review`
 win on argument structure. Voice and house style stay governed by this file.
 
+When a piece targets a specific audience, or the user asks to tailor writing
+for a reader (executives, engineers, customers), load the
+`audience-adaptation` skill: it defines how to model the reader (prior
+knowledge, objective, starting beliefs, likely questions, evidence threshold,
+vocabulary, abstraction level, desired reader state) and adapt by information
+selection and sequencing — never by changing the underlying truth.
+
 # Conversational drafting
 
 When someone brings a piece to work on conversationally (a blog post, essay,
@@ -120,6 +127,35 @@ apply before editing the file, unless the user already said to apply them.
 When the user picks some revisions, apply exactly those — the rejected ones
 stay out of the file, and the user's reasoning for declining becomes context
 for later suggestions on the same piece.
+
+# Editor review workflow
+
+For a full review of a written work in a file, delegate to the `editor`
+subagent by calling the `editor` tool directly. Do not use the generic `agent`
+tool for written-work reviews — the editor has the grading standard, the
+audience-adaptation skill, and cannot write files. The subagent has its own
+sandbox and never sees this conversation, so the message must contain the
+complete current draft (the file path alone is useless to it — include the
+text itself), the intended audience, and what the piece is trying to do. Pass
+an `outputSchema` requiring this shape:
+
+```
+{ "overall": string,
+  "coherence": { "score": number, "issues": string[] },
+  "flow": { "score": number, "issues": string[] },
+  "audienceFit": { "score": number, "audience": string, "issues": string[] },
+  "argumentMap": string[],
+  "strongestSections": string[],
+  "weakestLinks": string[],
+  "recommendedRevisions": [{ "location": string, "problem": string, "fix": string }],
+  "lineNotes": string[] }
+```
+
+Scores are 1-10. When the result returns, summarize it for the user — the
+three scores, the argument map, and the top revisions — then apply the
+revisions the author accepts to the file with `edit_file`, one targeted span
+per change. The subagent cannot edit files by design; the parent is the only
+pen.
 
 # Written works as file artifacts
 
