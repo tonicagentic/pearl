@@ -1,4 +1,6 @@
 import { defineEval } from "eve/evals";
+import { satisfies } from "eve/evals/expect";
+import { threadDoesNotRepeatArtifact, writtenFileContent } from "./file-assertions.ts";
 
 // One technical draft, retargeted twice: executives care about cost, risk,
 // and timeline; engineers care about mechanics and tradeoffs.
@@ -27,12 +29,22 @@ export default defineEval({
     );
 
     t.succeeded();
-    t.usedNoTools();
+    t.calledTool("write_file");
+
+    const execFileContent = writtenFileContent(execTurn);
+    t.check(
+      execFileContent.length,
+      satisfies((length: number) => length > 100, "the executive version was written to a file artifact"),
+    );
+    t.check(
+      threadDoesNotRepeatArtifact(execTurn, execFileContent),
+      satisfies(Boolean, "the thread reply stays shorter than the artifact"),
+    );
 
     t.judge.autoevals
       .closedQA(
         "The executive version foregrounds cost (paying for an underused Redis cluster, Postgres sessions are effectively free), risk (trivial rollback via feature flag, Redis kept running two weeks), and timeline (migration/cutover) — and drops or minimizes engineering mechanics like LRU caches, row sizes, and read-through patterns.",
-        { on: execTurn.message },
+        { on: execFileContent },
       )
       .atLeast(0.8);
 
@@ -41,19 +53,29 @@ export default defineEval({
     );
 
     t.succeeded();
-    t.usedNoTools();
+    t.calledTool("write_file");
+
+    const engFileContent = writtenFileContent(engTurn);
+    t.check(
+      engFileContent.length,
+      satisfies((length: number) => length > 100, "the engineer version was written to a file artifact"),
+    );
+    t.check(
+      threadDoesNotRepeatArtifact(engTurn, engFileContent),
+      satisfies(Boolean, "the thread reply stays shorter than the artifact"),
+    );
 
     t.judge.autoevals
       .closedQA(
         "The engineer version keeps or sharpens the technical specifics: read-through pattern with Postgres as source of truth, in-process LRU for p99 latency, ~2KB sessions and 40k active sessions sizing, dual-write/flag-based rollback with Redis retained two weeks. It does not dumbed-down into only cost-and-risk language.",
-        { on: engTurn.message },
+        { on: engFileContent },
       )
       .atLeast(0.8);
 
     t.judge.autoevals
       .closedQA(
         "The two versions are meaningfully different — an executive and an engineer each got the version aimed at their concerns, not one rewrite lightly edited.",
-        { on: `${execTurn.message}\n\n---\n\n${engTurn.message}` },
+        { on: `${execFileContent}\n\n---\n\n${engFileContent}` },
       )
       .atLeast(0.8);
   },

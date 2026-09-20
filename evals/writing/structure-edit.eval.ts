@@ -1,4 +1,6 @@
 import { defineEval } from "eve/evals";
+import { satisfies } from "eve/evals/expect";
+import { threadDoesNotRepeatArtifact, writtenFileContent } from "./file-assertions.ts";
 
 // A deliberately messy draft: the headline news is buried in the middle,
 // there is no clear opening, and a tangent interrupts the flow.
@@ -23,7 +25,7 @@ while but was the right call.
 
 export default defineEval({
   description:
-    "Structure edit: reorganize a scattered draft so the important news leads, without changing meaning.",
+    "Structure edit: reorganize a scattered draft so the important news leads, without changing meaning. Written works are file artifacts — the edited draft goes to a file, not the chat.",
   tags: ["smoke"],
   async test(t) {
     const turn = await t.send(
@@ -31,19 +33,29 @@ export default defineEval({
     );
 
     t.succeeded();
-    t.usedNoTools();
+    t.calledTool("write_file");
+
+    const fileContent = writtenFileContent(turn);
+    t.check(
+      fileContent.length,
+      satisfies((length: number) => length > 200, "the edited draft was written to a file artifact"),
+    );
+    t.check(
+      threadDoesNotRepeatArtifact(turn, fileContent),
+      satisfies(Boolean, "the thread reply stays shorter than the artifact"),
+    );
 
     t.judge.autoevals
       .closedQA(
         "The reorganized draft leads with the export feature being shipped (the key news), groups related points together (permissions detail with the feature, coffee machine aside separated or dropped), and preserves every factual claim from the original (csv/json support, pdf not started, three accounts asking since January, two blocking renewal, ~5 hours weekly support savings, ping sam for bugs).",
-        { on: turn.message },
+        { on: fileContent },
       )
       .atLeast(0.8);
 
     t.judge.autoevals
       .closedQA(
         "The reorganization did not invent new facts, feature details, or claims that were not in the original draft.",
-        { on: turn.message },
+        { on: fileContent },
       )
       .atLeast(0.8);
   },

@@ -1,4 +1,6 @@
 import { defineEval } from "eve/evals";
+import { satisfies } from "eve/evals/expect";
+import { threadDoesNotRepeatArtifact, writtenFileContent } from "./file-assertions.ts";
 
 // A draft whose argument chain is broken: the conclusion does not follow from
 // the evidence, and one claim is asserted without support.
@@ -22,19 +24,29 @@ export default defineEval({
     );
 
     t.succeeded();
-    t.usedNoTools();
+    t.calledTool("write_file");
+
+    const fileContent = writtenFileContent(turn);
+    t.check(
+      fileContent.length,
+      satisfies((length: number) => length > 100, "the edited draft was written to a file artifact"),
+    );
+    t.check(
+      threadDoesNotRepeatArtifact(turn, fileContent),
+      satisfies(Boolean, "the thread reply stays shorter than the artifact"),
+    );
 
     t.judge.autoevals
       .closedQA(
         "The edit identifies or repairs the logical gaps: an ugly dashboard does not by itself imply cost savings, there is no evidence switching saves money or improves customer happiness, the March auto-renewal is a deadline/leverage point rather than a reason itself, and promising a customer before a decision is made is a risk. The revised draft's conclusion is now supported by its premises or clearly marked as needing evidence.",
-        { on: turn.message },
+        { on: fileContent },
       )
       .atLeast(0.8);
 
     t.judge.autoevals
       .closedQA(
         "The response is honest about weaknesses in the original argument rather than diplomatically rewording them — it tells the author what does not follow and why.",
-        { on: turn.message },
+        { on: fileContent },
       )
       .atLeast(0.7);
   },
