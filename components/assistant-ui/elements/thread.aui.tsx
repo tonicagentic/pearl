@@ -7,6 +7,10 @@ import {
 } from "@/components/assistant-ui/elements/attachment.aui";
 import { File } from "@/components/assistant-ui/elements/file";
 import { AssistantThinking } from "@/components/assistant-ui/elements/assistant-thinking";
+import {
+  SessionTimeline,
+  TIMELINE_TOOLS,
+} from "@/components/assistant-ui/elements/session-timeline";
 import { useLargePasteComposer, useHeldLargePastes } from "@/app/_components/large-paste";
 import { splitPasteBlocks } from "@/lib/chat/large-paste";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
@@ -391,6 +395,12 @@ const AssistantMessage: FC = () => {
     ReasoningGroup,
   } = useContext(ThreadComponentsContext);
 
+  const messageParts = useAuiState((s) => s.message.parts);
+  const isTimelineCovered = (index: number) => {
+    const part = messageParts[index] as { toolName?: string } | undefined;
+    return TIMELINE_TOOLS.has(part?.toolName ?? "");
+  };
+
   const ACTION_BAR_PT = "pt-1.5";
   // Keep the action bar inside the contained root's paint box, then cancel its reserved space in flow.
   const ACTION_BAR_HEIGHT = `min-h-7.5 ${ACTION_BAR_PT}`;
@@ -406,6 +416,7 @@ const AssistantMessage: FC = () => {
         className="text-foreground px-2 leading-relaxed wrap-break-word"
       >
         <AssistantThinking />
+        <SessionTimeline />
         <MessagePrimitive.GroupedParts
           groupBy={groupPartByType({
             reasoning: ["group-chainOfThought", "group-reasoning"],
@@ -415,9 +426,21 @@ const AssistantMessage: FC = () => {
         >
           {({ part, children }) => {
             switch (part.type) {
+              case "group-standalone-tool-call":
+                // Adjacent standalone tool parts (write_file + edit_file)
+                // coalesce into this group; render them inline in order.
+                return <>{children}</>;
               case "group-chainOfThought":
+                if (part.indices.every(isTimelineCovered)) {
+                  // Every tool in the chain is summarized by the timeline.
+                  return null;
+                }
                 return <div data-slot="aui_chain-of-thought">{children}</div>;
               case "group-tool":
+                if (part.indices.every(isTimelineCovered)) {
+                  // Every tool in the group is summarized by the timeline.
+                  return null;
+                }
                 if (ToolGroup) {
                   return <ToolGroup group={part}>{children}</ToolGroup>;
                 }
@@ -451,6 +474,11 @@ const AssistantMessage: FC = () => {
               case "reasoning":
                 return <Reasoning {...part} />;
               case "tool-call":
+                if (TIMELINE_TOOLS.has(part.toolName)) {
+                  // Summarized by the timeline above; edit_file's renderer
+                  // still mounts through its tool UI for the canvas mirror.
+                  return part.toolName === "edit_file" ? part.toolUI : null;
+                }
                 return part.toolUI ?? <ToolFallbackComponent {...part} />;
               case "data":
                 return part.dataRendererUI;
