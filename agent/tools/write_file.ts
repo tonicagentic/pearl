@@ -1,5 +1,6 @@
 import { defineTool } from "eve/tools";
 import { writeFile } from "eve/tools/write_file";
+import { withFileLock } from "@/lib/agent/file-mutex";
 import {
   getChatIdByEveSessionId,
   upsertAgentFile,
@@ -107,15 +108,23 @@ async function resolveOutcome(
 export default defineTool({
   ...writeFile,
   async execute(input, ctx) {
-    // eve passes the enriched session context (ctx.getSandbox, ctx.session)
-    // as the second execute argument at runtime; the framework type widens
-    // it to the AI SDK execute options.
-    const outcome = await resolveOutcome(
-      await writeFile.execute(input, ctx as never),
-    );
+    // Same-file mutations are serialized with edit_file (shared per-path
+    // lock): a write racing a targeted edit is the same lost-update shape.
+    return withFileLock(input.filePath, async () => {
+      // eve passes the enriched session context (ctx.getSandbox, ctx.session)
+      // as the second execute argument at runtime; the framework type widens
+      // it to the AI SDK execute options.
+      const outcome = await resolveOutcome(
+        await writeFile.execute(input, ctx as never),
+      );
 
-    const persistence = await persistAgentFile(ctx, outcome.path, input.content);
+      const persistence = await persistAgentFile(
+        ctx,
+        outcome.path,
+        input.content,
+      );
 
-    return { ...outcome, ...persistence };
+      return { ...outcome, ...persistence };
+    });
   },
 });

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineTool } from "eve/tools";
 import { writeFile } from "eve/tools/write_file";
 
+import { withFileLock } from "@/lib/agent/file-mutex";
 import { persistAgentFile } from "@/agent/tools/write_file";
 
 type WriteOutcome = { existed: boolean; path: string };
@@ -96,61 +97,65 @@ export default defineTool({
     newText: z.string().describe("The replacement text."),
   }),
   async execute(input, ctx) {
-    const sandbox = (await (ctx as { getSandbox: () => Promise<unknown> })
-      .getSandbox()) as SandboxLike;
+    // Same-file mutations are serialized: parallel edit_file calls each read
+    // the same base content and last-write-wins, silently dropping one edit.
+    return withFileLock(input.filePath, async () => {
+      const sandbox = (await (ctx as { getSandbox: () => Promise<unknown> })
+        .getSandbox()) as SandboxLike;
 
-    let current: string | null;
-    try {
-      current = await sandbox.readTextFile({ path: input.filePath });
-    } catch (error) {
+      let current: string | null;
+      try {
+        current = await sandbox.readTextFile({ path: input.filePath });
+      } catch (error) {
+        return {
+          updated: false,
+          note: `Could not read ${input.filePath}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        };
+      }
+
+      if (current === null) {
+        return {
+          updated: false,
+          note: `File not found: ${input.filePath}. Read the file first or create it with write_file.`,
+        };
+      }
+
+      const occurrences = countOccurrences(current, input.oldText);
+      if (occurrences === 0) {
+        return {
+          updated: false,
+          note: "oldText was not found in the file. Read the file and copy the exact text to replace, including whitespace and line breaks.",
+        };
+      }
+      if (occurrences > 1) {
+        return {
+          updated: false,
+          note: `oldText appears ${occurrences} times — include more surrounding text so the edit target is unique.`,
+        };
+      }
+
+      const updated = current.replace(input.oldText, input.newText);
+
+      const outcome = await resolveOutcome(
+        await writeFile.execute(
+          { filePath: input.filePath, content: updated },
+          ctx as never,
+        ),
+      );
+
+      const persistence = await persistAgentFile(
+        ctx as { session: { id: string } },
+        outcome.path,
+        updated,
+      );
+
       return {
-        updated: false,
-        note: `Could not read ${input.filePath}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        path: outcome.path,
+        updated: true,
+        ...persistence,
       };
-    }
-
-    if (current === null) {
-      return {
-        updated: false,
-        note: `File not found: ${input.filePath}. Read the file first or create it with write_file.`,
-      };
-    }
-
-    const occurrences = countOccurrences(current, input.oldText);
-    if (occurrences === 0) {
-      return {
-        updated: false,
-        note: "oldText was not found in the file. Read the file and copy the exact text to replace, including whitespace and line breaks.",
-      };
-    }
-    if (occurrences > 1) {
-      return {
-        updated: false,
-        note: `oldText appears ${occurrences} times — include more surrounding text so the edit target is unique.`,
-      };
-    }
-
-    const updated = current.replace(input.oldText, input.newText);
-
-    const outcome = await resolveOutcome(
-      await writeFile.execute(
-        { filePath: input.filePath, content: updated },
-        ctx as never,
-      ),
-    );
-
-    const persistence = await persistAgentFile(
-      ctx as { session: { id: string } },
-      outcome.path,
-      updated,
-    );
-
-    return {
-      path: outcome.path,
-      updated: true,
-      ...persistence,
-    };
+    });
   },
 });
