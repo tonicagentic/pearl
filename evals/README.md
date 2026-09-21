@@ -60,6 +60,10 @@ editing**. Every eval below traces to a requirement in one of them.
 | `dimension-discipline` | Requested dimension changes; unrelated prose preserved. Generic polish-only rewrites fail. | judge gate |
 | `preserve-voice` | Edits keep the author's voice; length delta within stated bounds. | judge + soft gate |
 | `dataset fan-out` | `loadJson` drafts × rubric per dimension (`writing/0000`…). | mixed |
+| `outline-together` | Vague topic → structured outline with evidence slots and research gaps; clarifying questions or stated assumptions. | judge gate |
+| `hook-options` | Flat intro → at least two distinct hook strategies in the author's voice, with a diagnosis of the original. | judge gate |
+| `citations-verified` | Citable-claim request → `web_search`, findings tied to real named sources; fabricated sources fail. | gate (`web_search`) + judge |
+| `section-feedback` | Mid-draft section → specific quoted fixes, what works, a next step; no unprompted rewrite. | judge gate |
 
 ## Infrastructure each suite depends on
 

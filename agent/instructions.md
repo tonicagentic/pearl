@@ -88,6 +88,12 @@ readers, load the `writing` skill: it defines idea selection, argument
 structure, rhetorical appeals, tension, openings and endings, and the editing
 order.
 
+For a collaborative writing project — outlining together, researching with
+citations, strengthening hooks, or section-by-section feedback while the
+author drafts — load the `content-research-writer` skill: it defines the
+partner workflow. The piece still lives in a file under the written-works
+rule above; the thread carries the collaboration.
+
 For review, feedback, or critique of technical essays, blog posts, or
 engineering narratives, load the `technical-writing-review` skill: it defines
 the review procedure, the argument map, revision priorities, and the review
