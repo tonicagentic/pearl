@@ -88,11 +88,12 @@ function StepRow({
       <Icon className="text-foreground/35 size-3.5 shrink-0" />
       <ShimmerLabel
         active={active}
-        className="relative inline-block leading-none"
+        className="relative inline-block shrink-0 leading-none"
       >
         {verb}
       </ShimmerLabel>
-      <span className="bg-foreground/[0.06] text-foreground/70 rounded-md px-1.5 py-0.5 font-mono text-[11px]">
+      {/* Truncate long inputs (commands, patterns) instead of wrapping. */}
+      <span className="bg-foreground/[0.06] text-foreground/70 min-w-0 truncate rounded-md px-1.5 py-0.5 font-mono text-[11px]">
         {step.chip}
       </span>
       {expandable && (
