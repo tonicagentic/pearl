@@ -373,33 +373,35 @@ function EditFileRender({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- apply the replacement once per completed call
   }, [completed, path, version]);
 
-  if (running) {
-    return (
-      <div
-        className="text-muted-foreground flex w-full items-center gap-1.5 text-xs"
-        data-slot="edit-file-tool"
-      >
-        Editing {path}…
-      </div>
-    );
-  }
+  // Visually silent: the tool-timeline already renders this step ("Edited
+  // <file>", shimmering while running). This renderer stays mounted only for
+  // its side effect — mirroring the span replacement onto the open canvas
+  // document and bumping the revision — never for its pixels.
+  useEffect(() => {
+    if (
+      !completed ||
+      !canvasDoc ||
+      !args?.oldText ||
+      args.newText === undefined
+    ) {
+      return;
+    }
 
-  const removed = args?.oldText?.length ?? 0;
-  const added = args?.newText?.length ?? 0;
+    updateDocumentByPath(path, (doc) => {
+      if (!doc.content.includes(args.oldText!)) {
+        return doc;
+      }
+      return {
+        ...doc,
+        content: doc.content.replace(args.oldText!, args.newText!),
+        running: false,
+        version,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply the replacement once per completed call
+  }, [completed, path, version]);
 
-  return (
-    <div
-      className="text-muted-foreground flex w-full items-center gap-1.5 text-xs"
-      data-slot="edit-file-tool"
-    >
-      <span className="truncate">
-        Edited {path.split("/").pop() || path} · targeted update
-      </span>
-      <span className="shrink-0 tabular-nums">
-        −{removed} +{added}
-      </span>
-    </div>
-  );
+  return null;
 }
 
 export const EditFileToolUI = makeAssistantToolUI<EditFileArgs, unknown>({
