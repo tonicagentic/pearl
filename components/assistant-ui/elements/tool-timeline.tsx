@@ -8,7 +8,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { collapsePanel, ShimmerLabel, SwapLabel } from "./surfaces";
+import { collapsePanel, mono, ShimmerLabel, SwapLabel } from "./surfaces";
 
 export interface TimelineStep {
   verb: string;
@@ -33,6 +33,8 @@ export interface ToolTimelineProps {
   restingLabel: string;
   activeLabel: string;
   stats: TimelineStat[];
+  /** Live elapsed badge shown next to the active label while streaming. */
+  elapsed?: string;
   className?: string;
 }
 
@@ -151,6 +153,7 @@ export function ToolTimeline({
   restingLabel,
   activeLabel,
   stats,
+  elapsed,
   className,
 }: ToolTimelineProps) {
   const [expandedSteps, setExpandedSteps] = useState<ReadonlySet<number>>(
@@ -209,6 +212,11 @@ export function ToolTimeline({
           </ShimmerLabel>
           <>{restingLabel}</>
         </SwapLabel>
+        {streaming && elapsed !== undefined && (
+          <span className={cn(mono, "text-foreground/30 tabular-nums")}>
+            {elapsed}
+          </span>
+        )}
       </CollapsibleTrigger>
       <CollapsibleContent className={cn(collapsePanel, "outline-none")}>
         <div className="flex flex-col gap-2.5 ps-4 pt-2.5">

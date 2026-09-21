@@ -27,6 +27,7 @@ import {
   type TimelineStat,
   type TimelineStep,
 } from "@/components/assistant-ui/elements/tool-timeline";
+import { useElapsedLabel } from "@/components/assistant-ui/elements/use-elapsed-label";
 
 // The runtime part state for a tool call or reasoning (shape per docs:
 // elements/tool-timeline).
@@ -173,6 +174,10 @@ export function SessionTimeline() {
           TIMELINE_TOOLS.has((part as { toolName?: string }).toolName ?? ""))),
   );
   const streaming = useAuiState((s) => s.message.status?.type === "running");
+  // The elapsed badge lives on the timeline's active label for the whole run —
+  // the indicator's clock hands off here, so the turn shows one continuous
+  // count instead of restarting per tool call.
+  const elapsed = useElapsedLabel(streaming);
   const steps = toolCalls.map(toStep);
   const stats = toStats(toolCalls);
 
@@ -189,6 +194,7 @@ export function SessionTimeline() {
         stats.length > 0 ? ` · ${stats.length} file change${stats.length === 1 ? "" : "s"}` : ""
       }`}
       activeLabel="Working"
+      elapsed={elapsed}
       stats={stats}
     />
   );

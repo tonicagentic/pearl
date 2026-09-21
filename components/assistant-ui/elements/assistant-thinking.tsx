@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useAuiState } from "@assistant-ui/react";
 import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
+import { useElapsedLabel } from "@/components/assistant-ui/elements/use-elapsed-label";
 
 import { TIMELINE_TOOLS } from "./session-timeline";
 
@@ -32,23 +32,6 @@ import { TIMELINE_TOOLS } from "./session-timeline";
 
 const STALL_WARNING_S = 45;
 const STALL_LABEL = "Still working — the model may be slow or unreachable.";
-
-function useElapsedLabel(active: boolean) {
-  const [label, setLabel] = useState<string | undefined>(undefined);
-  useEffect(() => {
-    if (!active) {
-      setLabel(undefined);
-      return;
-    }
-    const start = Date.now();
-    setLabel("0s");
-    const id = window.setInterval(() => {
-      setLabel(`${Math.round((Date.now() - start) / 1000)}s`);
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [active]);
-  return label;
-}
 
 export function AssistantThinking() {
   const label = useAuiState((s) => {
