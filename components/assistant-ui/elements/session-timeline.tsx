@@ -108,8 +108,7 @@ function chipFor(part: ToolCallState): string {
   if (typeof args.attachmentId === "string") return args.attachmentId;
   if (typeof args.taskId === "string") return args.taskId;
   if (typeof args.message === "string") {
-    const firstLine = args.message.split("\n")[0];
-    return firstLine.length > 42 ? `${firstLine.slice(0, 40)}…` : firstLine;
+    return args.message.split("\n")[0].slice(0, 200);
   }
   return part.toolName;
 }
@@ -119,17 +118,16 @@ function toStep(part: TimelinePart): TimelineStep {
     const head = (part.text ?? "").replace(/\s+/g, " ").trim();
     return {
       verb: "Thought",
-      chip: head.length > 42 ? `${head.slice(0, 40)}…` : head || "…",
+      chip: head.slice(0, 200) || "…",
       icon: BrainIcon,
       // The full reasoning prose, revealed by expanding the step.
       detail: part.text,
     };
   }
   const meta = TOOL_META[part.toolName];
-  const chip = chipFor(part);
   return {
     verb: meta?.verb ?? part.toolName,
-    chip: chip.length > 42 ? `${chip.slice(0, 40)}…` : chip,
+    chip: chipFor(part).slice(0, 200),
     icon: meta?.icon ?? WrenchIcon,
   };
 }

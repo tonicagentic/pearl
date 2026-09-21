@@ -127,7 +127,7 @@ function StatChips({ stats }: { stats: TimelineStat[] }) {
     <div className="flex flex-wrap gap-1.5 pt-1">
       {stats.map((stat, index) => (
         <span
-          key={`stat-${index}-${stat.file}`}
+          key={`stat-${index}`}
           className="bg-foreground/[0.06] text-foreground/70 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px]"
         >
           <span>{stat.file}</span>
