@@ -391,54 +391,6 @@ const MessageError: FC = () => {
   );
 };
 
-// One collapsible per reasoning chain: the model emits reasoning in several
-// runs interleaved with tool calls (reads, edits, bash), and rendering each
-// run as its own collapsible stacked them into adjacent duplicate-looking
-// blocks once the tool parts were silenced into the timeline. The chain-of-
-// thought grouping hands us every part of one interleaved run under a single
-// group node — so the accordion wraps all of it: "Thinking…" shimmering while
-// the chain streams, "Thought process" collapsed when settled. Tool steps
-// inside the chain stay in the timeline above; only the reasoning prose lives
-// here.
-const ChainOfThought: FC<{ running: boolean; children: FC["propTypes"] extends never ? never : React.ReactNode }> = ({
-  running,
-  children,
-}) => {
-  return (
-    <ReasoningRoot streaming={running} variant="ghost">
-      <CollapsibleTrigger
-        data-slot="chain-of-thought-trigger"
-        className="aui-reasoning-trigger group/trigger text-muted-foreground hover:text-foreground flex origin-left items-center gap-2 py-1.5 text-sm transition-[color,scale] active:scale-[0.98]"
-      >
-        <BrainIcon
-          data-slot="reasoning-trigger-icon"
-          className="aui-reasoning-trigger-icon size-4 shrink-0"
-        />
-        <span
-          data-slot="reasoning-trigger-label"
-          className={cn(
-            "aui-reasoning-trigger-label-wrapper inline-block leading-none tabular-nums",
-            running && "shimmer motion-reduce:animate-none",
-          )}
-        >
-          {running ? "Thinking…" : "Thought process"}
-        </span>
-        <ChevronDownIcon
-          data-slot="reasoning-trigger-chevron"
-          className={cn(
-            "aui-reasoning-trigger-chevron mt-0.5 size-4 shrink-0",
-            "transition-transform duration-(--animation-duration) ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
-            "-rotate-90",
-            "group-data-open/trigger:rotate-0",
-            "group-data-panel-open/trigger:rotate-0",
-          )}
-        />
-      </CollapsibleTrigger>
-      <ReasoningContent aria-busy={running}>{children}</ReasoningContent>
-    </ReasoningRoot>
-  );
-};
-
 const AssistantMessage: FC = () => {
   const {
     ToolFallback: ToolFallbackComponent = ToolFallback,
@@ -448,8 +400,12 @@ const AssistantMessage: FC = () => {
 
   const messageParts = useAuiState((s) => s.message.parts);
   const isTimelineCovered = (index: number) => {
-    const part = messageParts[index] as { toolName?: string } | undefined;
-    return TIMELINE_TOOLS.has(part?.toolName ?? "");
+    const part = messageParts[index] as
+      | { toolName?: string; type?: string }
+      | undefined;
+    return (
+      part?.type === "reasoning" || TIMELINE_TOOLS.has(part?.toolName ?? "")
+    );
   };
 
   const ACTION_BAR_PT = "pt-1.5";
@@ -482,16 +438,9 @@ const AssistantMessage: FC = () => {
                 // coalesce into this group; render them inline in order.
                 return <>{children}</>;
               case "group-chainOfThought":
-                if (part.indices.every(isTimelineCovered)) {
-                  // Every tool in the chain is summarized by the timeline.
-                  return null;
-                }
-                const chainRunning = part.status.type === "running";
-                return (
-                  <ChainOfThought running={chainRunning}>
-                    {children}
-                  </ChainOfThought>
-                );
+                // Reasoning and tool steps are both summarized by the
+                // timeline; nothing in a chain renders separately.
+                return null;
               case "group-tool":
                 if (part.indices.every(isTimelineCovered)) {
                   // Every tool in the group is summarized by the timeline.
@@ -509,26 +458,14 @@ const AssistantMessage: FC = () => {
                     <ToolGroupContent>{children}</ToolGroupContent>
                   </ToolGroupRoot>
                 );
-              case "group-reasoning": {
-                if (ReasoningGroup) {
-                  return (
-                    <ReasoningGroup group={part}>{children}</ReasoningGroup>
-                  );
-                }
-                const running = part.status.type === "running";
-                return (
-                  <ReasoningRoot streaming={running} variant="ghost">
-                    <ReasoningTrigger active={running} />
-                    <ReasoningContent aria-busy={running}>
-                      <ReasoningText>{children}</ReasoningText>
-                    </ReasoningContent>
-                  </ReasoningRoot>
-                );
-              }
+              case "group-reasoning":
+                // Reasoning is summarized by the timeline.
+                return null;
               case "text":
                 return <MarkdownText />;
               case "reasoning":
-                return <Reasoning {...part} />;
+                // Summarized by the timeline.
+                return null;
               case "tool-call":
                 if (TIMELINE_TOOLS.has(part.toolName)) {
                   // Summarized by the timeline above; edit_file's renderer

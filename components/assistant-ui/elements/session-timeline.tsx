@@ -28,7 +28,8 @@ import {
   type TimelineStep,
 } from "@/components/assistant-ui/elements/tool-timeline";
 
-// The runtime part state for a tool call (shape per docs: elements/tool-timeline).
+// The runtime part state for a tool call or reasoning (shape per docs:
+// elements/tool-timeline).
 type ToolCallState = {
   readonly type: "tool-call";
   readonly toolName: string;
@@ -36,6 +37,13 @@ type ToolCallState = {
   readonly result?: unknown;
   readonly toolCallId?: string;
 };
+
+type ReasoningState = {
+  readonly type: "reasoning";
+  readonly text?: string;
+};
+
+type TimelinePart = ToolCallState | ReasoningState;
 
 // Tools summarized by the timeline (docs: elements/tool-timeline — with a
 // runtime you derive the steps from the message's own tool-call parts).
@@ -105,7 +113,15 @@ function chipFor(part: ToolCallState): string {
   return part.toolName;
 }
 
-function toStep(part: ToolCallState): TimelineStep {
+function toStep(part: TimelinePart): TimelineStep {
+  if (part.type === "reasoning") {
+    const head = (part.text ?? "").replace(/\s+/g, " ").trim();
+    return {
+      verb: "Thought",
+      chip: head.length > 42 ? `${head.slice(0, 40)}…` : head || "…",
+      icon: BrainIcon,
+    };
+  }
   const meta = TOOL_META[part.toolName];
   const chip = chipFor(part);
   return {
@@ -115,9 +131,12 @@ function toStep(part: ToolCallState): TimelineStep {
   };
 }
 
-function toStats(parts: readonly ToolCallState[]): TimelineStat[] {
+function toStats(parts: readonly TimelinePart[]): TimelineStat[] {
   return parts
-    .filter((part) => part.toolName === "edit_file")
+    .filter(
+      (part): part is ToolCallState =>
+        part.type === "tool-call" && part.toolName === "edit_file",
+    )
     .map((part) => {
       const args = (part.args ?? {}) as {
         filePath?: string;
@@ -141,11 +160,12 @@ export function SessionTimeline() {
   const toolCalls = (
     useAuiState((s) => s.message.parts) as readonly unknown[]
   ).filter(
-    (part): part is ToolCallState =>
+    (part): part is TimelinePart =>
       typeof part === "object" &&
       part !== null &&
-      (part as { type?: string }).type === "tool-call" &&
-      TIMELINE_TOOLS.has((part as { toolName?: string }).toolName ?? ""),
+      ((part as { type?: string }).type === "reasoning" ||
+        ((part as { type?: string }).type === "tool-call" &&
+          TIMELINE_TOOLS.has((part as { toolName?: string }).toolName ?? ""))),
   );
   const streaming = useAuiState((s) => s.message.status?.type === "running");
   const steps = toolCalls.map(toStep);
