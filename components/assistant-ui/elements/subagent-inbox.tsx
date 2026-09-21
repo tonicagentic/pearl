@@ -17,6 +17,12 @@ import {
 // output. Rows survive reloads because the events persist in the chat log.
 
 const SLOW_REVIEW_S = 180;
+// A running row older than this is treated as interrupted: eve dev cancels
+// live subagent tasks when the parent session finalizes (e.g. the dev server
+// restarting), and the event log then has a receipt with no completion. If the
+// child does eventually complete, its completion event flips the row back to
+// ready — the staleness bound only covers the dead case.
+const STALE_REVIEW_S = 1800;
 
 type StreamEvent = {
   readonly type?: string;
@@ -132,17 +138,24 @@ export function SubagentInbox() {
       const elapsedMs = (now ?? delegation.at) - delegation.at;
       const running = !delegation.delivered;
       const slow = running && elapsedMs > SLOW_REVIEW_S * 1000;
+      const stale = running && elapsedMs > STALE_REVIEW_S * 1000;
       const label = delegation.name === "editor" ? "Editor review" : `${delegation.name} run`;
       return {
         id: delegation.callId,
         title: label,
-        state: delegation.delivered ? ("ready" as const) : ("running" as const),
+        state: stale
+          ? ("failed" as const)
+          : delegation.delivered
+            ? ("ready" as const)
+            : ("running" as const),
         elapsed: formatElapsed(elapsedMs),
-        summary: running
-          ? slow
-            ? "long drafts can take a few minutes"
-            : "grades coherence, flow, and audience fit"
-          : reviewSummary(delegation.result),
+        summary: stale
+          ? "no result arrived — the run was likely interrupted by a restart; ask for the review again"
+          : running
+            ? slow
+              ? "long drafts can take a few minutes"
+              : "grades coherence, flow, and audience fit"
+            : reviewSummary(delegation.result),
       };
     });
 
