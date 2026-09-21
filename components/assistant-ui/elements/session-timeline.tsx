@@ -2,15 +2,22 @@
 
 import { useState } from "react";
 import {
+  BanIcon,
+  BotIcon,
   BrainIcon,
   EyeIcon,
-  FileTextIcon,
+  FileSearchIcon,
+  FolderSearchIcon,
   GlobeIcon,
   GraduationCapIcon,
   HeartIcon,
+  ListTodoIcon,
+  PaperclipIcon,
   PenLineIcon,
   SearchIcon,
-  UserRoundCheckIcon,
+  SendIcon,
+  TerminalIcon,
+  WrenchIcon,
   type LucideIcon,
 } from "lucide-react";
 import { useAuiState } from "@assistant-ui/react";
@@ -45,6 +52,15 @@ export const TIMELINE_TOOLS = new Set([
   "file__remove_memory",
   "load_skill",
   "get_weather",
+  "bash",
+  "glob",
+  "grep",
+  "todo",
+  "task_cancel",
+  "send_notification",
+  "read_attachment",
+  "agent",
+  "editor",
 ]);
 
 const TOOL_META: Record<string, { verb: string; icon: LucideIcon }> = {
@@ -57,27 +73,45 @@ const TOOL_META: Record<string, { verb: string; icon: LucideIcon }> = {
   file__remove_memory: { verb: "Forgot", icon: HeartIcon },
   load_skill: { verb: "Loaded", icon: GraduationCapIcon },
   get_weather: { verb: "Checked", icon: GlobeIcon },
+  bash: { verb: "Ran", icon: TerminalIcon },
+  glob: { verb: "Listed", icon: FolderSearchIcon },
+  grep: { verb: "Searched", icon: FileSearchIcon },
+  todo: { verb: "Planned", icon: ListTodoIcon },
+  task_cancel: { verb: "Cancelled", icon: BanIcon },
+  send_notification: { verb: "Notified", icon: SendIcon },
+  read_attachment: { verb: "Read attachment", icon: PaperclipIcon },
+  editor: { verb: "Reviewed", icon: PenLineIcon },
+  agent: { verb: "Delegated", icon: BotIcon },
 };
 
 function basename(path: string): string {
   return path.split("/").pop() || path;
 }
 
+function chipFor(part: ToolCallState): string {
+  const args = (part.args ?? {}) as Record<string, unknown>;
+  if (typeof args.filePath === "string") return basename(args.filePath);
+  if (typeof args.command === "string") return args.command;
+  if (typeof args.pattern === "string") return args.pattern;
+  if (typeof args.query === "string") return args.query;
+  if (typeof args.skill === "string") return args.skill;
+  if (typeof args.recipient === "string") return args.recipient;
+  if (typeof args.attachmentId === "string") return args.attachmentId;
+  if (typeof args.taskId === "string") return args.taskId;
+  if (typeof args.message === "string") {
+    const firstLine = args.message.split("\n")[0];
+    return firstLine.length > 42 ? `${firstLine.slice(0, 40)}…` : firstLine;
+  }
+  return part.toolName;
+}
+
 function toStep(part: ToolCallState): TimelineStep {
   const meta = TOOL_META[part.toolName];
-  const args = (part.args ?? {}) as Record<string, unknown>;
-  const chip =
-    typeof args.filePath === "string"
-      ? basename(args.filePath)
-      : typeof args.query === "string"
-        ? args.query
-        : typeof args.skill === "string"
-          ? args.skill
-          : part.toolName;
+  const chip = chipFor(part);
   return {
     verb: meta?.verb ?? part.toolName,
     chip: chip.length > 42 ? `${chip.slice(0, 40)}…` : chip,
-    icon: meta?.icon ?? FileTextIcon,
+    icon: meta?.icon ?? WrenchIcon,
   };
 }
 
