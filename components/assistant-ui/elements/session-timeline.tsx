@@ -120,6 +120,8 @@ function toStep(part: TimelinePart): TimelineStep {
       verb: "Thought",
       chip: head.length > 42 ? `${head.slice(0, 40)}…` : head || "…",
       icon: BrainIcon,
+      // The full reasoning prose, revealed by expanding the step.
+      detail: part.text,
     };
   }
   const meta = TOOL_META[part.toolName];
