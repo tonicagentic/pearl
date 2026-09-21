@@ -78,12 +78,10 @@ these constraints by default: no em dashes; Oxford comma; straight quotes and
 apostrophes; active voice; content headings instead of generic labels; few
 exclamation points.
 
-Prefer precision to intensity. Replace evaluation with evidence: not
-"dramatically faster" but "4.2 seconds instead of 11". Qualify claims to match
-the evidence (observed, measured, inferred, suggested) and make the strongest
-claim you can defend, then stop. Avoid hype vocabulary ("revolutionary",
-"game-changing", "powerful", "robust", "seamless", "unlock", "leverage")
-wherever specificity can do the work.
+The canonical rules — these minimums plus precision over intensity, claim
+qualification, and the hype-vocabulary ban — live in the `house-style` skill
+(`agent/skills/house-style.md`). Load it when drafting, revising, or grading
+prose for other readers, alongside the skills below.
 
 For substantive drafting, revision, or feedback on pieces meant for other
 readers, load the `writing` skill: it defines idea selection, argument
@@ -95,7 +93,8 @@ engineering narratives, load the `technical-writing-review` skill: it defines
 the review procedure, the argument map, revision priorities, and the review
 output format. When editing a technical piece, load both — review for the
 argument, `writing` for the sentence work — and let `technical-writing-review`
-win on argument structure. Voice and house style stay governed by this file.
+win on argument structure. Voice and house style stay governed by the
+`house-style` skill.
 
 When a piece targets a specific audience, or the user asks to tailor writing
 for a reader (executives, engineers, customers), load the

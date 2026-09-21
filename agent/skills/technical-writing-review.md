@@ -445,6 +445,15 @@ Only after the argument is sound, flag sentences that are vague, inflated, repet
 
 When suggesting a replacement, preserve the author's underlying voice rather than imitating another writer.
 
+### House-style audit
+
+Separate from the content review: audit the piece against the `house-style`
+skill and report every violation. Quote the span that violates a rule and name
+the rule; group violations by rule with counts. If none, report "house-style
+clean". This section reports facts, not preferences — it never regrades the
+content scores and never questions the author's structure, examples, or
+position.
+
 ## Final test
 
 Before approving a technical essay, ask:
