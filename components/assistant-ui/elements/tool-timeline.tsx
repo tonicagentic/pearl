@@ -16,12 +16,16 @@ export interface TimelineStep {
   icon: LucideIcon;
   /** Optional body shown when the step is expanded (e.g. reasoning text). */
   detail?: string;
+  /** The file this step touched; set when the chip opens the canvas. */
+  filePath?: string;
 }
 
 export interface TimelineStat {
   file: string;
   added?: number;
   removed?: number;
+  /** The touched path; set when the chip opens the canvas. */
+  filePath?: string;
 }
 
 export interface ToolTimelineProps {
@@ -33,6 +37,8 @@ export interface ToolTimelineProps {
   restingLabel: string;
   activeLabel: string;
   stats: TimelineStat[];
+  /** Opens a referenced file on the canvas; set when the chat can resolve it. */
+  onOpenFile?: (path: string) => void;
   /** Live elapsed badge shown next to the active label while streaming. */
   elapsed?: string;
   className?: string;
@@ -48,6 +54,7 @@ function StepRow({
   active,
   expanded,
   onToggle,
+  onOpenFile,
 }: {
   step: TimelineStep;
   index: number;
@@ -55,6 +62,7 @@ function StepRow({
   active: boolean;
   expanded: boolean;
   onToggle: () => void;
+  onOpenFile?: (path: string) => void;
 }) {
   const Icon = step.icon;
   const expandable = typeof step.detail === "string" && step.detail.length > 0;
@@ -92,10 +100,25 @@ function StepRow({
       >
         {verb}
       </ShimmerLabel>
-      {/* Truncate long inputs (commands, patterns) instead of wrapping. */}
-      <span className="bg-foreground/[0.06] text-foreground/70 min-w-0 truncate rounded-md px-1.5 py-0.5 font-mono text-[11px]">
-        {step.chip}
-      </span>
+      {/* Truncate long inputs (commands, patterns) instead of wrapping. File
+          chips open the file on the canvas, like the artifact card. */}
+      {step.filePath && onOpenFile ? (
+        <button
+          type="button"
+          title={`Open ${step.filePath}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenFile(step.filePath!);
+          }}
+          className="bg-foreground/[0.06] text-foreground/70 hover:text-foreground min-w-0 max-w-full cursor-pointer truncate rounded-md px-1.5 py-0.5 font-mono text-[11px] transition-colors outline-none"
+        >
+          {step.chip}
+        </button>
+      ) : (
+        <span className="bg-foreground/[0.06] text-foreground/70 min-w-0 truncate rounded-md px-1.5 py-0.5 font-mono text-[11px]">
+          {step.chip}
+        </span>
+      )}
       {expandable && (
         <ChevronDownIcon
           className={cn(
@@ -121,26 +144,50 @@ function StepRow({
   );
 }
 
-function StatChips({ stats }: { stats: TimelineStat[] }) {
+function StatChips({
+  stats,
+  onOpenFile,
+}: {
+  stats: TimelineStat[];
+  onOpenFile?: (path: string) => void;
+}) {
   if (stats.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-1.5 pt-1">
-      {stats.map((stat, index) => (
-        <span
-          key={`stat-${index}`}
-          className="bg-foreground/[0.06] text-foreground/70 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px]"
-        >
-          <span>{stat.file}</span>
-          {stat.added !== undefined && (
-            <span className="text-emerald-600 dark:text-emerald-400">
-              +{stat.added}
-            </span>
-          )}
-          {stat.removed !== undefined && (
-            <span className="text-red-600 dark:text-red-400">−{stat.removed}</span>
-          )}
-        </span>
-      ))}
+      {stats.map((stat, index) => {
+        const counts = (
+          <>
+            <span>{stat.file}</span>
+            {stat.added !== undefined && (
+              <span className="text-emerald-600 dark:text-emerald-400">
+                +{stat.added}
+              </span>
+            )}
+            {stat.removed !== undefined && (
+              <span className="text-red-600 dark:text-red-400">
+                −{stat.removed}
+              </span>
+            )}
+          </>
+        );
+        const classes =
+          "bg-foreground/[0.06] text-foreground/70 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px]";
+        return stat.filePath && onOpenFile ? (
+          <button
+            key={`stat-${index}`}
+            type="button"
+            title={`Open ${stat.filePath}`}
+            onClick={() => onOpenFile(stat.filePath!)}
+            className={cn(classes, "hover:text-foreground cursor-pointer transition-colors outline-none")}
+          >
+            {counts}
+          </button>
+        ) : (
+          <span key={`stat-${index}`} className={classes}>
+            {counts}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -154,6 +201,7 @@ export function ToolTimeline({
   restingLabel,
   activeLabel,
   stats,
+  onOpenFile,
   elapsed,
   className,
 }: ToolTimelineProps) {
@@ -186,8 +234,9 @@ export function ToolTimeline({
           active={streaming}
           expanded={expandedSteps.has(0)}
           onToggle={() => toggleStep(0)}
+          onOpenFile={onOpenFile}
         />
-        <StatChips stats={stats} />
+        <StatChips stats={stats} onOpenFile={onOpenFile} />
       </div>
     );
   }
@@ -230,9 +279,10 @@ export function ToolTimeline({
               active={streaming && index === shown.length - 1}
               expanded={expandedSteps.has(index)}
               onToggle={() => toggleStep(index)}
+              onOpenFile={onOpenFile}
             />
           ))}
-          <StatChips stats={stats} />
+          <StatChips stats={stats} onOpenFile={onOpenFile} />
         </div>
       </CollapsibleContent>
     </Collapsible>

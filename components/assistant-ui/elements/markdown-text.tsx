@@ -9,12 +9,13 @@ import {
   useIsMarkdownCodeBlock,
 } from "@assistant-ui/react-markdown";
 import remarkGfm from "remark-gfm";
-import { type FC, memo, useMemo, useRef } from "react";
+import { type FC, memo, useMemo, useRef, type ReactNode } from "react";
 import type { TextMessagePartProps } from "@assistant-ui/react";
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, FileIcon } from "lucide-react";
 
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
+import { useCanvas } from "@/components/assistant-ui/elements/canvas-context";
 import { cn } from "@/lib/utils";
 
 type MarkdownTextProps = Partial<TextMessagePartProps> & {
@@ -58,6 +59,29 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
 };
 
 export const MarkdownText = memo(MarkdownTextImpl);
+
+// Wraps a referenced file path so clicking opens it on the canvas (the
+// content resolves from the chat's saved files; canvas-context openPath).
+const FilePathLink: FC<{ path: string; children: ReactNode }> = ({
+  path,
+  children,
+}) => {
+  const { openPath } = useCanvas();
+  return (
+    <button
+      type="button"
+      title={`Open ${path}`}
+      onClick={() => openPath(path)}
+      className="group/path relative inline-flex max-w-full items-baseline align-baseline"
+    >
+      {children}
+      <FileIcon
+        aria-hidden
+        className="text-muted-foreground/0 group-hover/path:text-muted-foreground/70 ms-1 inline-block size-3 shrink-0 self-center transition-colors"
+      />
+    </button>
+  );
+};
 
 const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   const { isCopied, copyToClipboard } = useCopyToClipboard();
@@ -253,6 +277,29 @@ const defaultComponents = memoizeMarkdownComponents({
   ),
   code: function Code({ className, ...props }) {
     const isCodeBlock = useIsMarkdownCodeBlock();
+    // A referenced file path in backticks opens on the canvas, like the
+    // artifact card. Conservative heuristic: segments joined by slashes with
+    // a short extension, or a bare markdown/text file — other inline code
+    // (commands, values) stays plain.
+    const text =
+      typeof props.children === "string" ? props.children : undefined;
+    const isFilePath =
+      !isCodeBlock &&
+      text !== undefined &&
+      /^[\w@.-]+(\/[\w@.-]+)*\.(mdx?|txt|tsx?|jsx?|json|csv)$/i.test(text);
+    if (isFilePath && text) {
+      return (
+        <FilePathLink path={text}>
+          <code
+            className={cn(
+              "aui-md-inline-code bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]",
+              className,
+            )}
+            {...props}
+          />
+        </FilePathLink>
+      );
+    }
     return (
       <code
         className={cn(

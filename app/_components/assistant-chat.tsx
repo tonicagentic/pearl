@@ -493,7 +493,7 @@ export function AssistantChatSurface({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <CanvasProvider>
+      <CanvasProvider chatId={chatId}>
         <div className="flex min-h-0 flex-1 flex-col">
           {toastError ? (
             <ErrorToast

@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { useAuiState } from "@assistant-ui/react";
 
+import { useCanvas } from "@/components/assistant-ui/elements/canvas-context";
+
 import {
   ToolTimeline,
   type TimelineStat,
@@ -110,6 +112,11 @@ function chipFor(part: ToolCallState): string {
 }
 
 function toStep(part: TimelinePart): TimelineStep {
+  const args = (part.type === "tool-call" ? (part.args ?? {}) : {}) as {
+    filePath?: unknown;
+  };
+  const filePath =
+    typeof args.filePath === "string" ? args.filePath : undefined;
   if (part.type === "reasoning") {
     const head = (part.text ?? "").replace(/\s+/g, " ").trim();
     return {
@@ -118,6 +125,7 @@ function toStep(part: TimelinePart): TimelineStep {
       icon: BrainIcon,
       // The full reasoning prose, revealed by expanding the step.
       detail: part.text,
+      filePath,
     };
   }
   const meta = TOOL_META[part.toolName];
@@ -125,6 +133,7 @@ function toStep(part: TimelinePart): TimelineStep {
     verb: meta?.verb ?? part.toolName,
     chip: chipFor(part).slice(0, 200),
     icon: meta?.icon ?? WrenchIcon,
+    filePath,
   };
 }
 
@@ -144,6 +153,7 @@ function toStats(parts: readonly TimelinePart[]): TimelineStat[] {
         file: basename(args.filePath ?? "file"),
         added: args.newText?.length,
         removed: args.oldText?.length,
+        filePath: args.filePath,
       };
     });
 }
@@ -153,6 +163,7 @@ function toStats(parts: readonly TimelinePart[]): TimelineStat[] {
 // elements/tool-timeline). Rendered beside the message parts; the covered
 // tool parts render null so nothing shows twice.
 export function SessionTimeline() {
+  const { openPath } = useCanvas();
   // Open-state contract from the docs' step-panel design: the timeline follows
   // streaming (open while the turn runs, folded into the resting label after)
   // until the reader toggles it once, after which their choice sticks.
@@ -190,6 +201,7 @@ export function SessionTimeline() {
       activeLabel="Working"
       elapsed={elapsed}
       stats={stats}
+      onOpenFile={openPath}
     />
   );
 }

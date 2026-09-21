@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useRef,
   useMemo,
   useState,
   type ReactNode,
@@ -61,6 +62,9 @@ export function pathVersion(path: string): number {
 type CanvasContextValue = {
   readonly document: CanvasDocument | null;
   openDocument: (doc: CanvasDocument) => void;
+  /** Open a file by path on the canvas, resolving content from the chat's
+   * saved files when not provided (timeline chips, referenced paths). */
+  openPath: (path: string, content?: string) => void;
   updateDocument: (
     id: string,
     patch: Partial<Omit<CanvasDocument, "id">>,
@@ -74,8 +78,64 @@ type CanvasContextValue = {
 
 const CanvasContext = createContext<CanvasContextValue | null>(null);
 
-export function CanvasProvider({ children }: { children: ReactNode }) {
+export function CanvasProvider({
+  children,
+  chatId,
+}: {
+  children: ReactNode;
+  /** Chat used to resolve file content for openPath (null before a chat exists). */
+  chatId?: string | null;
+}) {
   const [document, setDocument] = useState<CanvasDocument | null>(null);
+  const documentRef = useRef(document);
+  documentRef.current = document;
+
+  const openPath = useCallback(
+    (path: string, content?: string) => {
+      if (documentRef.current?.path === path) return;
+      if (content !== undefined) {
+        setDocument({
+          id: `ref:${path}`,
+          path,
+          content,
+          running: false,
+          note: null,
+          version: pathVersion(path),
+        });
+        return;
+      }
+      if (!chatId) return;
+      void (async () => {
+        try {
+          const list = (await (
+            await fetch(`/api/chats/${chatId}/files`)
+          ).json()) as {
+            files?: readonly { id: string; path: string }[];
+          };
+          const file = list.files?.find(
+            (f) => f.path === path || f.path.endsWith(`/${path}`),
+          );
+          if (!file) return;
+          const text = await (
+            await fetch(`/api/chats/${chatId}/files?fileId=${file.id}`)
+          ).text();
+          if (documentRef.current?.path === file.path) return;
+          setDocument({
+            id: `file:${file.id}`,
+            path: file.path,
+            content: text,
+            running: false,
+            note: null,
+            version: pathVersion(file.path),
+          });
+        } catch {
+          // No content available (storage mode, network) — leave the canvas
+          // as it is rather than opening an empty document.
+        }
+      })();
+    },
+    [chatId],
+  );
 
   const openDocument = useCallback((doc: CanvasDocument) => {
     setDocument(doc);
@@ -112,11 +172,12 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     () => ({
       document,
       openDocument,
+      openPath,
       updateDocument,
       updateDocumentByPath,
       closeDocument,
     }),
-    [document, openDocument, updateDocument, updateDocumentByPath, closeDocument],
+    [document, openDocument, openPath, updateDocument, updateDocumentByPath, closeDocument],
   );
 
   return (
