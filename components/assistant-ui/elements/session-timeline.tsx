@@ -158,7 +158,10 @@ function toStats(parts: readonly TimelinePart[]): TimelineStat[] {
 // elements/tool-timeline). Rendered beside the message parts; the covered
 // tool parts render null so nothing shows twice.
 export function SessionTimeline() {
-  const [open, setOpen] = useState(false);
+  // Open-state contract from the docs' step-panel design: the timeline follows
+  // streaming (open while the turn runs, folded into the resting label after)
+  // until the reader toggles it once, after which their choice sticks.
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const toolCalls = (
     useAuiState((s) => s.message.parts) as readonly unknown[]
   ).filter(
@@ -180,8 +183,8 @@ export function SessionTimeline() {
       steps={steps}
       visibleSteps={steps.length}
       streaming={streaming}
-      open={open}
-      onOpenChange={setOpen}
+      open={userOpen ?? streaming}
+      onOpenChange={setUserOpen}
       restingLabel={`${steps.length} step${steps.length === 1 ? "" : "s"}${
         stats.length > 0 ? ` · ${stats.length} file change${stats.length === 1 ? "" : "s"}` : ""
       }`}
