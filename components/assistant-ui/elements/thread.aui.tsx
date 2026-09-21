@@ -30,11 +30,11 @@ import { cn } from "@/lib/utils";
 import {
   ActionBarMorePrimitive,
   ActionBarPrimitive,
+  ErrorPrimitive,
   AuiIf,
   type AssistantState,
   BranchPickerPrimitive,
   ComposerPrimitive,
-  ErrorPrimitive,
   groupPartByType,
   INTERNAL,
   MessagePrimitive,
@@ -55,6 +55,7 @@ import {
   ChevronRightIcon,
   BrainIcon,
   ChevronDownIcon,
+  CircleAlertIcon,
   CopyIcon,
   DownloadIcon,
   FileTextIcon,
@@ -376,11 +377,30 @@ const ComposerAction: FC = () => {
 };
 
 const MessageError: FC = () => {
+  const retrying = useAuiState((s) => s.thread.isRunning);
   return (
     <MessagePrimitive.Error>
-      <ErrorPrimitive.Root className="aui-message-error-root border-destructive bg-destructive/10 text-destructive dark:bg-destructive/5 mt-2 rounded-md border p-3 text-sm dark:text-red-200">
-        <ErrorPrimitive.Message className="aui-message-error-message line-clamp-2" />
-      </ErrorPrimitive.Root>
+      {retrying ? (
+        <div
+          role="status"
+          data-slot="message-error-retrying"
+          className="text-muted-foreground flex items-center gap-2 py-1 text-[13.5px]"
+        >
+          <RefreshCwIcon className="size-3.5 shrink-0 animate-spin" />
+          <span className="shimmer motion-reduce:animate-none">Retrying</span>
+        </div>
+      ) : (
+        <ErrorPrimitive.Root className="border-red-500/20 bg-red-500/[0.06] flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-sm dark:bg-red-500/10">
+          <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-red-500/80" />
+          <ErrorPrimitive.Message className="text-red-600 dark:text-red-400" />
+          <ActionBarPrimitive.Reload
+            className="text-red-600 hover:bg-red-500/10 dark:text-red-400 ms-auto flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors"
+          >
+            <RefreshCwIcon className="size-3" />
+            Retry
+          </ActionBarPrimitive.Reload>
+        </ErrorPrimitive.Root>
+      )}
     </MessagePrimitive.Error>
   );
 };
@@ -418,6 +438,7 @@ const AssistantMessage: FC = () => {
       >
         <AssistantThinking />
         <SessionTimeline />
+        <MessageError />
         <MessagePrimitive.GroupedParts
           groupBy={groupPartByType({
             reasoning: ["group-chainOfThought", "group-reasoning"],
