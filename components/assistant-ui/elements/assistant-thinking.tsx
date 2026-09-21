@@ -4,12 +4,24 @@ import { useEffect, useState } from "react";
 import { useAuiState } from "@assistant-ui/react";
 import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
 
+import { TIMELINE_TOOLS } from "./session-timeline";
+
 // In-thread agent status, following the assistant-ui thinking-indicator
 // runtime recipe (assistant-ui.com/elements/thinking-indicator): the label is
 // the pending tool call's name, falling back to "Thinking" while the run is
 // active and nothing visible has arrived yet. Once the assistant streams real
 // content the selector returns undefined and the indicator yields to it —
 // inside the same assistant message row, so there is no remount.
+//
+// Coexistence with the SessionTimeline (which renders right below this and
+// names every reasoning/tool step live): once the timeline has signal for the
+// turn, it owns the live view and this indicator steps back — otherwise every
+// covered tool call would read twice ("Running edit_file" above a shimmering
+// "Edited" step). The indicator keeps two jobs: the pre-content phase (before
+// any part exists) and uncovered tools like write_file, whose streaming the
+// timeline does not summarize. The stall watchdog still wins over the
+// timeline: after 45s without progress the escalation must surface even
+// though the timeline is showing live steps.
 //
 // The elapsed badge needs its own timer (docs: metadata.timing only finalizes
 // once the message stops streaming). The clock starts in an effect, which also
@@ -58,13 +70,27 @@ export function AssistantThinking() {
     return hasContent ? undefined : "Thinking";
   });
 
+  // Whether the timeline below is already carrying a live view of this turn.
+  const timelineLive = useAuiState((s) => {
+    if (s.message.status?.type !== "running") return false;
+    return s.message.parts.some(
+      (part) =>
+        part.type === "reasoning" ||
+        (part.type === "tool-call" && TIMELINE_TOOLS.has(part.toolName)),
+    );
+  });
+
   const elapsed = useElapsedLabel(label !== undefined);
   if (label === undefined) return null;
 
   const seconds = Number.parseInt(elapsed ?? "0", 10);
+  const stalled = Number.isFinite(seconds) && seconds > STALL_WARNING_S;
+  // The timeline owns the live steps; only the stall escalation overrides it.
+  if (timelineLive && !stalled) return null;
+
   return (
     <ThinkingIndicator
-      label={Number.isFinite(seconds) && seconds > STALL_WARNING_S ? STALL_LABEL : label}
+      label={stalled ? STALL_LABEL : label}
       elapsed={elapsed}
       data-testid="assistant-thinking"
     />
