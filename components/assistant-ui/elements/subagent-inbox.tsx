@@ -7,47 +7,16 @@ import {
   BackgroundInbox,
   type BackgroundRun,
 } from "@/components/assistant-ui/elements/background-inbox";
+import {
+  deriveSubagentRuns,
+  SLOW_REVIEW_S,
+} from "@/lib/agent/subagent-runs";
 
 // The runtime wiring for the background inbox (docs:
 // elements/background-inbox — standalone mode: we hold the run list ourselves).
-// eve subagent delegations run as durable background tasks, and the event log
-// carries the whole lifecycle: `subagent.called` starts a run (with the child
-// session id), `subagent.completed` with a backgroundTask is the tool call's
-// working receipt, and the final completion carries the child's structured
-// output. Rows survive reloads because the events persist in the chat log.
-
-const SLOW_REVIEW_S = 180;
-// A running row older than this is treated as interrupted: eve dev cancels
-// live subagent tasks when the parent session finalizes (e.g. the dev server
-// restarting), and the event log then has a receipt with no completion. If the
-// child does eventually complete, its completion event flips the row back to
-// ready — the staleness bound only covers the dead case.
-const STALE_REVIEW_S = 1800;
-
-type StreamEvent = {
-  readonly type?: string;
-  readonly meta?: { readonly at?: string };
-  readonly data?: {
-    readonly subagentName?: string;
-    readonly name?: string;
-    readonly callId?: string;
-    readonly output?: unknown;
-    readonly backgroundTask?: { readonly status?: string };
-  };
-};
-
-type Delegation = {
-  callId: string;
-  name: string;
-  at: number;
-  delivered: boolean;
-  result?: unknown;
-};
-
-function eventTime(event: StreamEvent): number {
-  const at = event.meta?.at ? Date.parse(event.meta.at) : NaN;
-  return Number.isFinite(at) ? at : 0;
-}
+// The run list derives from the persisted subagent event stream
+// (lib/agent/subagent-runs.ts): delegations are durable background tasks whose
+// receipts live in the chat event log, so rows survive reloads.
 
 function formatElapsed(ms: number): string {
   const seconds = Math.max(0, Math.round(ms / 1000));
@@ -57,8 +26,17 @@ function formatElapsed(ms: number): string {
   return `${Math.round(minutes / 60)}h`;
 }
 
-function reviewSummary(result: unknown): string | undefined {
-  const review = result as
+function runSummary(run: {
+  readonly state: string;
+  readonly result?: unknown;
+}): string | undefined {
+  if (run.state === "failed") {
+    return "no result arrived — the run was likely interrupted by a restart; ask for the review again";
+  }
+  if (run.state === "running") {
+    return "grades coherence, flow, and audience fit";
+  }
+  const review = run.result as
     | {
         coherence?: { score?: number };
         flow?: { score?: number };
@@ -68,10 +46,18 @@ function reviewSummary(result: unknown): string | undefined {
   const coherence = review?.coherence?.score;
   const flow = review?.flow?.score;
   const audience = review?.audienceFit?.score;
-  if (typeof coherence !== "number" || typeof flow !== "number" || typeof audience !== "number") {
+  if (
+    typeof coherence !== "number" ||
+    typeof flow !== "number" ||
+    typeof audience !== "number"
+  ) {
     return "review ready — see the reply below";
   }
   return `coherence ${coherence}/10 · flow ${flow}/10 · audience ${audience}/10`;
+}
+
+function runTitle(name: string): string {
+  return name === "editor" ? "Editor review" : `${name} run`;
 }
 
 export function SubagentInbox() {
@@ -79,51 +65,27 @@ export function SubagentInbox() {
   const [now, setNow] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
 
-  const delegations = useMemo<readonly Delegation[]>(() => {
-    const list: Delegation[] = [];
-
-    for (const raw of events) {
-      const event = raw as StreamEvent;
-
-      // subagent.called: the delegation — a run starts. Carries the child
-      // session id and the tool name.
-      if (event.type === "subagent.called") {
-        const callId = event.data?.callId ?? String(list.length);
-        const at = eventTime(event);
-        if (at >= (list[list.length - 1]?.at ?? 0)) {
-          list.push({
-            callId,
-            name: event.data?.name ?? "subagent",
-            at,
-            delivered: false,
-          });
-        }
-        continue;
-      }
-
-      // subagent.completed comes in two shapes: the background-task receipt
-      // (the tool call returning "working" — carries backgroundTask) and the
-      // final completion (carries the child's output, no backgroundTask).
-      if (event.type === "subagent.completed") {
-        if (event.data?.backgroundTask !== undefined) {
-          continue;
-        }
-        const name = event.data?.name ?? "subagent";
-        const run = [...list].reverse().find((r) => !r.delivered);
-        if (run && run.name === name) {
-          run.delivered = true;
-          run.result = event.data?.output;
-        }
-        continue;
-      }
-    }
-
-    return list;
-  }, [events]);
-
-  const anyRunning = delegations.some(
-    (delegation) => !delegation.delivered && !dismissed.has(delegation.callId),
+  const runs = useMemo(
+    () => deriveSubagentRuns(events, now ?? Number.MAX_SAFE_INTEGER),
+    [events, now],
   );
+
+  const visible = runs
+    .filter((run) => !dismissed.has(run.callId))
+    .map((run) => ({
+      id: run.callId,
+      title: runTitle(run.name),
+      state: run.state,
+      // Elapsed ticks while a run is in flight; settled runs freeze at the
+      // last tick (the derivation's `now` only advances while anything runs).
+      elapsed:
+        run.state === "running" && now !== null
+          ? formatElapsed(now - run.at)
+          : formatElapsed((now ?? run.at) - run.at),
+      summary: runSummary(run),
+    }));
+
+  const anyRunning = runs.some((run) => run.state === "running");
 
   useEffect(() => {
     if (!anyRunning) return;
@@ -132,48 +94,23 @@ export function SubagentInbox() {
     return () => window.clearInterval(timer);
   }, [anyRunning]);
 
-  const runs: BackgroundRun[] = delegations
-    .filter((delegation) => !dismissed.has(delegation.callId))
-    .map((delegation) => {
-      const elapsedMs = (now ?? delegation.at) - delegation.at;
-      const running = !delegation.delivered;
-      const slow = running && elapsedMs > SLOW_REVIEW_S * 1000;
-      const stale = running && elapsedMs > STALE_REVIEW_S * 1000;
-      const label = delegation.name === "editor" ? "Editor review" : `${delegation.name} run`;
-      return {
-        id: delegation.callId,
-        title: label,
-        state: stale
-          ? ("failed" as const)
-          : delegation.delivered
-            ? ("ready" as const)
-            : ("running" as const),
-        elapsed: formatElapsed(elapsedMs),
-        summary: stale
-          ? "no result arrived — the run was likely interrupted by a restart; ask for the review again"
-          : running
-            ? slow
-              ? "long drafts can take a few minutes"
-              : "grades coherence, flow, and audience fit"
-            : reviewSummary(delegation.result),
-      };
-    });
-
-  if (runs.length === 0) {
+  if (visible.length === 0) {
     return null;
   }
 
   const collect = (id: string) => {
     // The results land in this same thread as the follow-up turn; collecting a
     // run scrolls to the reply and clears the row.
-    const thread = document.querySelector("[data-slot=aui_assistant-message-content]");
+    const thread = document.querySelector(
+      "[data-slot=aui_assistant-message-content]",
+    );
     thread?.scrollIntoView({ behavior: "smooth", block: "end" });
     setDismissed((prev) => new Set(prev).add(id));
   };
 
   return (
     <BackgroundInbox
-      runs={runs}
+      runs={visible}
       onCollect={collect}
       data-testid="subagent-inbox"
       className="w-full max-w-none"
