@@ -175,25 +175,12 @@ export const ReadFileToolUI = makeAssistantToolUI<
   ReadFileResult | string
 >({
   toolName: "read_file",
-  // Standalone: render outside the collapsed tool group so the preview is
-  // reachable (and mounted) without expanding anything.
+  // Standalone: render outside the collapsed tool group so the renderer mounts
+  // with the part.
   display: "standalone",
-  render: ({ args, result, status }) => {
-    const path = args?.filePath ?? "file";
-    const running = status.type === "running";
-    const content =
-      typeof result === "object" && result !== null
-        ? (result as ReadFileResult).content ?? null
-        : null;
-
-    return (
-      <ReadPreviewCard
-        path={path}
-        content={content}
-        running={running}
-      />
-    );
-  },
+  // Visually silent: the tool-timeline already renders this step ("Read
+  // <file>"). The preview card duplicated it for every read.
+  render: () => null,
 });
 
 // write_file renders as an assistant-ui ArtifactCard. While the call streams
