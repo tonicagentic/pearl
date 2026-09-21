@@ -171,15 +171,39 @@ const defaultComponents = memoizeMarkdownComponents({
       {...props}
     />
   ),
-  a: ({ className, ...props }) => (
-    <a
-      className={cn(
-        "aui-md-a text-primary hover:text-primary/80 underline underline-offset-2",
-        className,
-      )}
-      {...props}
-    />
-  ),
+  a: function MarkdownLink({ className, ...props }) {
+    const { openPath } = useCanvas();
+    // The agent links referenced files with the file:// scheme (see
+    // agent/instructions.md) so the reader can open them on the canvas,
+    // like the artifact card. Other links stay ordinary hyperlinks.
+    const href = typeof props.href === "string" ? props.href : undefined;
+    if (href?.startsWith("file://")) {
+      const path = decodeURIComponent(href.slice("file://".length));
+      return (
+        <a
+          className={cn(
+            "aui-md-a text-primary hover:text-primary/80 cursor-pointer underline underline-offset-2",
+            className,
+          )}
+          title={`Open ${path}`}
+          onClick={(event) => {
+            event.preventDefault();
+            openPath(path);
+          }}
+          {...props}
+        />
+      );
+    }
+    return (
+      <a
+        className={cn(
+          "aui-md-a text-primary hover:text-primary/80 underline underline-offset-2",
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
   blockquote: ({ className, ...props }) => (
     <blockquote
       className={cn(

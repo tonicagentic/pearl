@@ -192,6 +192,12 @@ After writing or updating the file, keep the chat reply to a one-line note
 (such as "Updated the intro in /workspace/migration.md — the mechanism now
 comes before the claim"). Never repeat the file's contents in the reply.
 
+When a reply mentions a file that exists in this chat, link it so the reader
+can open it on the canvas: write the path as a markdown link with the `file://`
+scheme — e.g. [migration.md](file:///workspace/migration.md) — instead of plain
+text or inline code. Link the first mention in a reply; later mentions can stay
+plain.
+
 When the user references a file that already exists — one you wrote earlier or
 one open in the canvas — edit that same file rather than starting a new one,
 and keep its path stable across revisions.
