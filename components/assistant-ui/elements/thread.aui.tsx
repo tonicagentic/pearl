@@ -17,6 +17,7 @@ import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/fo
 import { Image } from "@/components/assistant-ui/elements/image";
 import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback.aui";
+import { DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
 import {
   ToolGroupContent,
   ToolGroupRoot,
@@ -89,6 +90,9 @@ export type ThreadComponents = {
   ToolFallback?: ToolCallMessagePartComponent | undefined;
   ToolGroup?:
     | ComponentType<PropsWithChildren<{ group: ThreadGroupPart }>>
+    | undefined;
+  TaskGroup?:
+    | ComponentType<{ group: ThreadGroupPart }>
     | undefined;
 };
 
@@ -385,6 +389,7 @@ const AssistantMessage: FC = () => {
   const {
     ToolFallback: ToolFallbackComponent = ToolFallback,
     ToolGroup,
+    TaskGroup,
   } = useContext(ThreadComponentsContext);
 
   const messageParts = useAuiState((s) => s.message.parts);
@@ -427,12 +432,30 @@ const AssistantMessage: FC = () => {
                 // coalesce into this group; render them inline in order.
                 return <>{children}</>;
               case "group-chainOfThought":
-                // Reasoning and tool steps are both summarized by the
-                // timeline; nothing in a chain renders separately.
-                return null;
-              case "group-tool":
+                // Reasoning and timeline-covered tool steps render nothing
+                // here; a chain only shows children when it holds something
+                // the timeline does not summarize (a delegated task card).
+                if (part.indices.every(isTimelineCovered)) return null;
+                return <>{children}</>;
+              case "group-tool": {
                 if (part.indices.every(isTimelineCovered)) {
                   // Every tool in the group is summarized by the timeline.
+                  return null;
+                }
+                const groupParts = part.indices.map(
+                  (index) => messageParts[index],
+                );
+                const isDelegationGroup =
+                  groupParts.length > 0 &&
+                  groupParts.every(
+                    (groupPart) =>
+                      groupPart?.type === "tool-call" &&
+                      DELEGATION_TOOLS.has(groupPart.toolName),
+                  );
+                if (isDelegationGroup) {
+                  // Delegated tasks render as task cards (docs:
+                  // elements/task-card) instead of the tool group.
+                  if (TaskGroup) return <TaskGroup group={part} />;
                   return null;
                 }
                 if (ToolGroup) {
@@ -447,6 +470,7 @@ const AssistantMessage: FC = () => {
                     <ToolGroupContent>{children}</ToolGroupContent>
                   </ToolGroupRoot>
                 );
+              }
               case "group-reasoning":
                 // Reasoning is summarized by the timeline.
                 return null;
@@ -675,7 +699,28 @@ const UserImagePart: ImageMessagePartComponent = (part) => (
   </div>
 );
 
+// eve delivers background-task notifications as user messages with stable
+// prefixes (tasks/steps.js formatTaskNotification): completed/failed/cancelled
+// summaries, progress updates, input requests, and authorization prompts.
+const TASK_NOTIFICATION_PATTERN =
+  /^Background task task_[a-z0-9]+( \([^)]*\))?( is completed| failed| is cancelled| needs input| update:| needs authorization)?/i;
+
 const UserMessage: FC = () => {
+  // Background subagent runs report back through the model-facing channel: eve
+  // delivers the task notification as a user message ("Background task … is
+  // completed. Result: …") so the conversation history carries the result.
+  // That message is runtime plumbing, not something the human said — hide it
+  // from the thread; the assistant's reply to it is the user-facing summary.
+  const isTaskNotification = useAuiState((s) => {
+    if (s.message.role !== "user") return false;
+    return s.message.parts.some(
+      (part) =>
+        part.type === "text" &&
+        TASK_NOTIFICATION_PATTERN.test(part.text ?? ""),
+    );
+  });
+  if (isTaskNotification) return null;
+
   return (
     <MessagePrimitive.Root
       data-slot="aui_user-message-root"

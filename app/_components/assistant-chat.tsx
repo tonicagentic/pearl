@@ -24,7 +24,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatShell } from "@/app/_components/chat-shell-context";
 import { ErrorToast } from "@/app/_components/error-toast";
 import { SessionStatusBanner } from "@/app/_components/session-status";
-import { SubagentInbox } from "@/components/assistant-ui/elements/subagent-inbox";
+import { SubagentRunsProvider, TaskGroup } from "@/components/assistant-ui/elements/task-card.aui";
 import { expandHeldPastes, setLargePasteErrorHandler } from "@/lib/chat/large-paste";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import {
@@ -506,7 +506,6 @@ export function AssistantChatSurface({
           <EditFileToolUI />
           <ReadFileToolUI />
           <SessionStatusBanner isRunning={isRunning} />
-          <SubagentInbox />
           <CanvasLayout />
 
           <EveAuthorization />
@@ -530,19 +529,18 @@ function isMarkdownPath(path: string): boolean {
 function CanvasLayout() {
   const { document: doc, closeDocument } = useCanvas();
 
-  if (!doc) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <Thread />
-      </div>
-    );
-  }
-
+  // The runs feed the delegated-task cards inside the thread (both branches).
   return (
+    <SubagentRunsProvider>
+      {!doc ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <Thread components={{ TaskGroup }} />
+        </div>
+      ) : (
     <div className="flex min-h-0 flex-1 flex-col md:flex-row">
       <div className="border-border/60 flex min-h-0 min-w-0 flex-col max-md:flex-1 md:w-[26rem] md:shrink-0 md:border-r">
         <div className="flex min-h-0 flex-1 flex-col">
-          <Thread />
+          <Thread components={{ TaskGroup }} />
         </div>
       </div>
       <div className="border-border/60 bg-background flex min-h-0 flex-1 flex-col max-md:h-80 max-md:shrink-0 max-md:border-t md:border-l">
@@ -573,6 +571,8 @@ function CanvasLayout() {
         </CanvasSplitBody>
       </div>
     </div>
+      )}
+    </SubagentRunsProvider>
   );
 }
 

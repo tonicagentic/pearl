@@ -3,7 +3,6 @@
 import { useState } from "react";
 import {
   BanIcon,
-  BotIcon,
   BrainIcon,
   EyeIcon,
   FileSearchIcon,
@@ -48,8 +47,9 @@ type TimelinePart = ToolCallState | ReasoningState;
 
 // Tools summarized by the timeline (docs: elements/tool-timeline — with a
 // runtime you derive the steps from the message's own tool-call parts).
-// write_file stays an artifact card (it owns the canvas entry point) and
-// ask_question stays an interactive card (human input); everything else
+// write_file stays an artifact card (it owns the canvas entry point),
+// ask_question stays an interactive card (human input), and delegated
+// subagent tasks render as task cards (elements/task-card); everything else
 // collapses into verbs, targets, and file stats.
 export const TIMELINE_TOOLS = new Set([
   "edit_file",
@@ -68,8 +68,6 @@ export const TIMELINE_TOOLS = new Set([
   "task_cancel",
   "send_notification",
   "read_attachment",
-  "agent",
-  "editor",
 ]);
 
 const TOOL_META: Record<string, { verb: string; icon: LucideIcon }> = {
@@ -89,8 +87,6 @@ const TOOL_META: Record<string, { verb: string; icon: LucideIcon }> = {
   task_cancel: { verb: "Cancelled", icon: BanIcon },
   send_notification: { verb: "Notified", icon: SendIcon },
   read_attachment: { verb: "Read attachment", icon: PaperclipIcon },
-  editor: { verb: "Reviewed", icon: PenLineIcon },
-  agent: { verb: "Delegated", icon: BotIcon },
 };
 
 function basename(path: string): string {
