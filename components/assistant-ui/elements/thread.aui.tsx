@@ -59,6 +59,8 @@ import {
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  BrainIcon,
+  ChevronDownIcon,
   CopyIcon,
   DownloadIcon,
   FileTextIcon,
@@ -68,6 +70,7 @@ import {
   SquareIcon,
   XIcon,
 } from "lucide-react";
+import { CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   createContext,
   useContext,
@@ -388,6 +391,54 @@ const MessageError: FC = () => {
   );
 };
 
+// One collapsible per reasoning chain: the model emits reasoning in several
+// runs interleaved with tool calls (reads, edits, bash), and rendering each
+// run as its own collapsible stacked them into adjacent duplicate-looking
+// blocks once the tool parts were silenced into the timeline. The chain-of-
+// thought grouping hands us every part of one interleaved run under a single
+// group node — so the accordion wraps all of it: "Thinking…" shimmering while
+// the chain streams, "Thought process" collapsed when settled. Tool steps
+// inside the chain stay in the timeline above; only the reasoning prose lives
+// here.
+const ChainOfThought: FC<{ running: boolean; children: FC["propTypes"] extends never ? never : React.ReactNode }> = ({
+  running,
+  children,
+}) => {
+  return (
+    <ReasoningRoot streaming={running} variant="ghost">
+      <CollapsibleTrigger
+        data-slot="chain-of-thought-trigger"
+        className="aui-reasoning-trigger group/trigger text-muted-foreground hover:text-foreground flex origin-left items-center gap-2 py-1.5 text-sm transition-[color,scale] active:scale-[0.98]"
+      >
+        <BrainIcon
+          data-slot="reasoning-trigger-icon"
+          className="aui-reasoning-trigger-icon size-4 shrink-0"
+        />
+        <span
+          data-slot="reasoning-trigger-label"
+          className={cn(
+            "aui-reasoning-trigger-label-wrapper inline-block leading-none tabular-nums",
+            running && "shimmer motion-reduce:animate-none",
+          )}
+        >
+          {running ? "Thinking…" : "Thought process"}
+        </span>
+        <ChevronDownIcon
+          data-slot="reasoning-trigger-chevron"
+          className={cn(
+            "aui-reasoning-trigger-chevron mt-0.5 size-4 shrink-0",
+            "transition-transform duration-(--animation-duration) ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
+            "-rotate-90",
+            "group-data-open/trigger:rotate-0",
+            "group-data-panel-open/trigger:rotate-0",
+          )}
+        />
+      </CollapsibleTrigger>
+      <ReasoningContent aria-busy={running}>{children}</ReasoningContent>
+    </ReasoningRoot>
+  );
+};
+
 const AssistantMessage: FC = () => {
   const {
     ToolFallback: ToolFallbackComponent = ToolFallback,
@@ -435,7 +486,12 @@ const AssistantMessage: FC = () => {
                   // Every tool in the chain is summarized by the timeline.
                   return null;
                 }
-                return <div data-slot="aui_chain-of-thought">{children}</div>;
+                const chainRunning = part.status.type === "running";
+                return (
+                  <ChainOfThought running={chainRunning}>
+                    {children}
+                  </ChainOfThought>
+                );
               case "group-tool":
                 if (part.indices.every(isTimelineCovered)) {
                   // Every tool in the group is summarized by the timeline.
