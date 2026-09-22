@@ -38,7 +38,7 @@ export interface ToolTimelineProps {
   stats: TimelineStat[];
   /** Opens a referenced file on the canvas; set when the chat can resolve it. */
   onOpenFile?: (path: string) => void;
-  /** Live elapsed badge shown next to the active label while streaming. */
+  /** Elapsed badge: live while streaming, the settled duration after. */
   elapsed?: string;
   className?: string;
 }
@@ -259,7 +259,7 @@ export function ToolTimeline({
           </ShimmerLabel>
           <>{restingLabel}</>
         </SwapLabel>
-        {streaming && elapsed !== undefined && (
+        {elapsed !== undefined && (
           <span className={cn(mono, "text-foreground/30 tabular-nums")}>
             {elapsed}
           </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   BanIcon,
   BrainIcon,
@@ -20,6 +20,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useAuiState } from "@assistant-ui/react";
+import { useEveEvents } from "@assistant-ui/eve";
 
 import { useCanvas } from "@/components/assistant-ui/elements/canvas-context";
 
@@ -156,8 +157,8 @@ function toStats(parts: readonly TimelinePart[]): TimelineStat[] {
     });
 }
 
-// A whole working turn summarized as one collapsed line: a verb, an icon, and
-// a chip per tool step, ending in file-change stats (docs:
+// A whole working turn summarized as one collapsed line: a verb and a chip
+// per tool step, ending in file-change stats (docs:
 // elements/tool-timeline). Rendered beside the message parts; the covered
 // tool parts render null so nothing shows twice.
 export function SessionTimeline() {
@@ -166,6 +167,11 @@ export function SessionTimeline() {
   // streaming (open while the turn runs, folded into the resting label after)
   // until the reader toggles it once, after which their choice sticks.
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const streaming = useAuiState((s) => s.message.status?.type === "running");
+  const turnId = useAuiState(
+    (s) =>
+      (s.message.metadata as { turnId?: string } | undefined)?.turnId,
+  );
   const toolCalls = (
     useAuiState((s) => s.message.parts) as readonly unknown[]
   ).filter(
@@ -176,11 +182,36 @@ export function SessionTimeline() {
         ((part as { type?: string }).type === "tool-call" &&
           TIMELINE_TOOLS.has((part as { toolName?: string }).toolName ?? ""))),
   );
-  const streaming = useAuiState((s) => s.message.status?.type === "running");
-  // The elapsed badge lives on the timeline's active label for the whole run —
-  // the indicator's clock hands off here, so the turn shows one continuous
-  // count instead of restarting per tool call.
-  const elapsed = useElapsedLabel(streaming);
+
+  // Durable turn duration, derived from the persisted event log: first to
+  // last assistant-role event timestamp for this turn (each event carries
+  // meta.at and data.turnId). Survives reloads — no wall clock at render.
+  const events = useEveEvents();
+  const settledDuration = useMemo(() => {
+    if (streaming || !turnId) return undefined;
+    let start: number | undefined;
+    let end: number | undefined;
+    for (const event of events) {
+      const raw = event as {
+        type?: string;
+        data?: { turnId?: unknown };
+        meta?: { at?: unknown };
+      };
+      if (raw?.type === "message.received") continue; // user-side marker
+      if (raw.data?.turnId !== turnId) continue;
+      const at = raw.meta?.at;
+      const ts = typeof at === "string" ? Date.parse(at) : NaN;
+      if (!Number.isFinite(ts)) continue;
+      start ??= ts;
+      end = ts;
+    }
+    if (start === undefined || end === undefined) return undefined;
+    return formatDuration(end - start);
+  }, [events, streaming, turnId]);
+
+  // Live tick while streaming; the settled badge comes from the event log.
+  const liveElapsed = useElapsedLabel(streaming);
+
   const steps = toolCalls.map(toStep);
   const stats = toStats(toolCalls);
 
@@ -197,9 +228,20 @@ export function SessionTimeline() {
         stats.length > 0 ? ` · ${stats.length} file change${stats.length === 1 ? "" : "s"}` : ""
       }`}
       activeLabel="Working"
-      elapsed={elapsed}
+      elapsed={streaming ? liveElapsed : settledDuration}
       stats={stats}
       onOpenFile={openPath}
     />
   );
 }
+
+function formatDuration(ms: number): string {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  if (minutes < 60) return `${minutes}m ${rest}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${Math.round(hours)}h ${minutes % 60}m`;
+}
+
