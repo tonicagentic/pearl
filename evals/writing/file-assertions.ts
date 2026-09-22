@@ -32,28 +32,51 @@ function completedCalls(turn: TurnLike, name: string): ToolCallLike[] {
 // full artifact). Returns the joined reconstruction — the material the judge
 // grades and the anti-flooding check compares against.
 export function artifactMaterial(turn: TurnLike, base = ""): string {
-  let content = base;
+  // File semantics, not append semantics: a write_file REPLACES the content
+  // at its path (the authored tool keeps the path stable across revisions),
+  // and an edit_file patches the file it names. Multiple files in one turn
+  // are tracked separately and joined for grading.
+  type WriteFileInputWithPath = WriteFileInput & { filePath?: string };
+  type EditFileInputWithPath = EditFileInput & { filePath?: string };
+
+  const files = new Map<string, string>();
+  if (base.length > 0) files.set("__seed__", base);
+  let lastKey = base.length > 0 ? "__seed__" : undefined;
 
   for (const call of completedCalls(turn, "write_file")) {
-    const input = call.input as WriteFileInput | undefined;
+    const input = call.input as WriteFileInputWithPath | undefined;
     if (typeof input?.content === "string" && input.content.length > 0) {
-      content =
-        content.length > 0 ? `${content}\n\n${input.content}` : input.content;
+      const path =
+        typeof input.filePath === "string" && input.filePath.length > 0
+          ? input.filePath
+          : "__unpathed__";
+      files.set(path, input.content);
+      lastKey = path;
     }
   }
 
   for (const call of completedCalls(turn, "edit_file")) {
-    const input = call.input as EditFileInput | undefined;
+    const input = call.input as EditFileInputWithPath | undefined;
     const oldText = typeof input?.oldText === "string" ? input.oldText : "";
     const newText = typeof input?.newText === "string" ? input.newText : "";
-    if (oldText.length > 0 && content.includes(oldText)) {
-      content = content.replace(oldText, () => newText);
+    if (oldText.length === 0 && newText.length === 0) continue;
+    const path =
+      typeof input?.filePath === "string" ? input.filePath : undefined;
+    // Patch the named file when tracked; otherwise patch the most recent
+    // material (the seeded base, or the last write).
+    const key = path !== undefined && files.has(path) ? path : lastKey;
+    if (key === undefined) continue;
+    const current = files.get(key) ?? "";
+    if (oldText.length > 0 && current.includes(oldText)) {
+      files.set(key, current.replace(oldText, () => newText));
     } else if (newText.length > 0) {
-      content = content.length > 0 ? `${content}\n\n${newText}` : newText;
+      files.set(key, current.length > 0 ? `${current}\n\n${newText}` : newText);
     }
   }
 
-  return content;
+  return [...files.values()]
+    .filter((content) => content.length > 0)
+    .join("\n\n");
 }
 
 // The thread must not carry the artifact: the reply does not re-paste the

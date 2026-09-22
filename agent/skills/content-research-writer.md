@@ -91,7 +91,12 @@ its contract:
   ordering, placeholders, open questions welcome. No polish sweep; the point
   is something to push against, not something to ship.
 - **finish** — the polished, publication-ready pass. House style, flow, and
-  the surface's specs all apply here.
+  the surface's specs all apply here. In the file, finishing replaces the
+  sketch: remove the scaffolding (thesis candidates, beat outlines, open
+  questions, labels like "rough") so the artifact reads as the finished
+  section — the planning material belongs in the thread, not the artifact.
+  Numbers or facts the author has not supplied become explicit `[TK]`
+  placeholders for them to fill — never invented, never silently dropped.
 
 When the request is ambiguous ("write this section"), infer the mode from the
 project stage — outlining done and notes settled means sketch or finish; ask

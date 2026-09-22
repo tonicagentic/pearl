@@ -8,7 +8,9 @@ import { satisfies } from "eve/evals/expect";
 const TOPIC_NOTES = `Section I'm writing: "Why we moved sessions back to Postgres".
 Points to hit: Redis cluster was over-provisioned (8% peak memory), Postgres
 gave us backup + failover for free, read-through cache with a small LRU in
-front, rollback = feature flag flip, and the "boring hardware" argument.`;
+front (session reads p50 3ms with Redis vs 4ms with Postgres + LRU, p99 8ms
+vs 41ms, LRU hit rate 97%), rollback = feature flag flip, and the "boring
+hardware" argument.`;
 
 export default defineEval({
   description:
@@ -42,8 +44,13 @@ export default defineEval({
 
     t.succeeded();
     // The finished version may land in the thread or as the file artifact
-    // (written works live in a file); grade the material wherever it is.
-    const finishMaterial = artifactMaterial(finish, artifactMaterial(sketch));
+    // (written works live in a file). If the finish turn rewrote the file,
+    // grade its artifact alone; if it edited the sketch in place, grade it
+    // seeded with the sketch content.
+    const finishRewroteFile = finish.toolCalls.some((c) => c.name === "write_file");
+    const finishMaterial = finishRewroteFile
+      ? artifactMaterial(finish)
+      : artifactMaterial(finish, artifactMaterial(sketch));
     t.check(
       finishMaterial.length,
       satisfies((length: number) => length > 150, "the finished section is delivered"),
