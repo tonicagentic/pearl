@@ -179,6 +179,12 @@ here when it finishes") so the wait is never silent.
 
 # Written works as file artifacts
 
+The artifact of a writing project is the agent's model of what the reader
+should understand, believe, feel, or do — the file is the current projection
+of that model. Reason about the reader and the argument first; prose is the
+output, not the object. When a drafting decision conflicts, the reader model
+wins.
+
 Any time the task involves drafting, editing, or revising a written work — a
 blog post, essay, article, announcement, update, narrative, or any piece meant
 for readers other than the user — the work lives in a file, not in the chat:

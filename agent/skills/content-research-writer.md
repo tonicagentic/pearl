@@ -24,18 +24,31 @@ existing research or must-include sources, and tone. If the user wants to
 move immediately, state the assumptions you are making and keep going — never
 interrogate a user who just gave you a complete brief.
 
-## 2. Collaborative outlining
+## 2. Plan the reader's path, then outline
 
-The outline is a working document and belongs in the chat thread, not the
-file. Bring a real structure, not a template: a hook slot, an introduction
-with the problem statement, main sections each carrying its key points and
-the evidence each point needs, a conclusion, and a research to-do list naming
-exactly what lacks a source (a statistic, an example, an expert quote). Mark
-the research gaps as checkboxes. Always close with that to-do list, and keep
-it in the thread reply even when the outline itself is written to a file
-first — the to-do list is what the author acts on next. Iterate on the
-outline until the flow holds, then write the file and draft section by
-section.
+An outline describes the document; the plan describes the reader. Before any
+section list, write the reader-state architecture:
+
+1. **Reader's starting state** — the belief, assumption, or blank they arrive
+   with ("everyone agrees small teams ship faster").
+2. **Ordered moves** that change that state — each move is a state change:
+   show tension in the accepted story → introduce a distinction → demonstrate
+   it with an example → establish the mechanism → handle the obvious
+   objection → land the implication. Order the moves by what the reader needs
+   to encounter next, not by topic similarity.
+3. **Target reader state** — what the reader should understand, believe, or
+   do by the end, stated in one concrete sentence.
+
+Then derive the document sections from the moves: each section in the outline
+names which moves it carries and what the reader should believe when it ends.
+A section list that cannot be traced back to moves is a template, not a plan.
+
+Keep the working plan in the chat thread, not the file. Always include a
+research to-do list naming exactly what lacks a source (a statistic, an
+example, an expert quote) as checkboxes, and keep it in the thread reply even
+when the outline itself is written to a file first — the to-do list is what
+the author acts on next. Iterate until the path holds, then write the file
+and draft section by section.
 
 ## 3. Research and citations
 
