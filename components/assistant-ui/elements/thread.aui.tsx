@@ -378,6 +378,21 @@ const ComposerAction: FC = () => {
 
 const MessageError: FC = () => {
   const retrying = useAuiState((s) => s.thread.isRunning);
+  // The retryable content: the parent user message's text, re-sent as a new
+  // turn on the parked session.
+  const parentText = useAuiState((s) => {
+    const parentId = s.message.parentId;
+    if (!parentId) return undefined;
+    const parent = s.thread.messages?.find((m) => m.id === parentId);
+    const text = parent?.parts
+      ?.filter((p) => p.type === "text")
+      .map((p) => ("text" in p ? p.text : ""))
+      .join("\n")
+      .trim();
+    return text || undefined;
+  });
+  const aui = useAui();
+
   return (
     <MessagePrimitive.Error>
       {retrying ? (
@@ -393,12 +408,18 @@ const MessageError: FC = () => {
         <ErrorPrimitive.Root className="border-red-500/20 bg-red-500/[0.06] flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-sm dark:bg-red-500/10">
           <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-red-500/80" />
           <ErrorPrimitive.Message className="text-red-600 dark:text-red-400" />
-          <ActionBarPrimitive.Reload
-            className="text-red-600 hover:bg-red-500/10 dark:text-red-400 ms-auto flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors"
-          >
-            <RefreshCwIcon className="size-3" />
-            Retry
-          </ActionBarPrimitive.Reload>
+          {parentText && (
+            <button
+              type="button"
+              data-slot="message-error-retry"
+              title="Resend the last message"
+              onClick={() => aui.thread.append(parentText)}
+              className="text-red-600 hover:bg-red-500/10 dark:text-red-400 ms-auto flex shrink-0 items-center gap-1.5 self-start rounded-full px-2.5 py-1 text-xs font-medium transition-colors"
+            >
+              <RefreshCwIcon className="size-3" />
+              Retry
+            </button>
+          )}
         </ErrorPrimitive.Root>
       )}
     </MessagePrimitive.Error>
