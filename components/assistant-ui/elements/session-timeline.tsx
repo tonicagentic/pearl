@@ -72,23 +72,23 @@ export const TIMELINE_TOOLS = new Set([
   "read_attachment",
 ]);
 
-const TOOL_META: Record<string, { verb: string; icon: LucideIcon }> = {
-  edit_file: { verb: "Edited", icon: PenLineIcon },
-  read_file: { verb: "Read", icon: EyeIcon },
-  web_search: { verb: "Searched", icon: SearchIcon },
-  web_fetch: { verb: "Fetched", icon: GlobeIcon },
-  exa_agent_run: { verb: "Researched", icon: GlobeIcon },
-  file__save_memory: { verb: "Remembered", icon: BrainIcon },
-  file__remove_memory: { verb: "Forgot", icon: HeartIcon },
-  load_skill: { verb: "Loaded", icon: GraduationCapIcon },
-  get_weather: { verb: "Checked", icon: GlobeIcon },
-  bash: { verb: "Ran", icon: TerminalIcon },
-  glob: { verb: "Listed", icon: FolderSearchIcon },
-  grep: { verb: "Searched", icon: FileSearchIcon },
-  todo: { verb: "Planned", icon: ListTodoIcon },
-  task_cancel: { verb: "Cancelled", icon: BanIcon },
-  send_notification: { verb: "Notified", icon: SendIcon },
-  read_attachment: { verb: "Read attachment", icon: PaperclipIcon },
+const TOOL_META: Record<string, { verb: string }> = {
+  edit_file: { verb: "Edited" },
+  read_file: { verb: "Read" },
+  web_search: { verb: "Searched" },
+  web_fetch: { verb: "Fetched" },
+  exa_agent_run: { verb: "Researched" },
+  file__save_memory: { verb: "Remembered" },
+  file__remove_memory: { verb: "Forgot" },
+  load_skill: { verb: "Loaded" },
+  get_weather: { verb: "Checked" },
+  bash: { verb: "Ran" },
+  glob: { verb: "Listed" },
+  grep: { verb: "Searched" },
+  todo: { verb: "Planned" },
+  task_cancel: { verb: "Cancelled" },
+  send_notification: { verb: "Notified" },
+  read_attachment: { verb: "Read attachment" },
 };
 
 function basename(path: string): string {
@@ -122,7 +122,6 @@ function toStep(part: TimelinePart): TimelineStep {
     return {
       verb: "Thought",
       chip: head.slice(0, 200) || "…",
-      icon: BrainIcon,
       // The full reasoning prose, revealed by expanding the step.
       detail: part.text,
       filePath,
@@ -132,7 +131,6 @@ function toStep(part: TimelinePart): TimelineStep {
   return {
     verb: meta?.verb ?? part.toolName,
     chip: chipFor(part).slice(0, 200),
-    icon: meta?.icon ?? WrenchIcon,
     filePath,
   };
 }

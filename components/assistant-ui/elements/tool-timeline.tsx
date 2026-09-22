@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDownIcon, ChevronRightIcon, type LucideIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -13,7 +13,6 @@ import { collapsePanel, mono, ShimmerLabel, SwapLabel } from "./surfaces";
 export interface TimelineStep {
   verb: string;
   chip: string;
-  icon: LucideIcon;
   /** Optional body shown when the step is expanded (e.g. reasoning text). */
   detail?: string;
   /** The file this step touched; set when the chip opens the canvas. */
@@ -64,7 +63,6 @@ function StepRow({
   onToggle: () => void;
   onOpenFile?: (path: string) => void;
 }) {
-  const Icon = step.icon;
   const expandable = typeof step.detail === "string" && step.detail.length > 0;
   // Streaming steps read progressive ("Thinking"); settled ones past tense.
   const verb =
@@ -93,7 +91,6 @@ function StepRow({
           }
         : {})}
     >
-      <Icon className="text-foreground/35 size-3.5 shrink-0" />
       <ShimmerLabel
         active={active}
         className="relative inline-block shrink-0 leading-none"
