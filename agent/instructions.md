@@ -94,6 +94,16 @@ author drafts — load the `content-research-writer` skill: it defines the
 partner workflow. The piece still lives in a file under the written-works
 rule above; the thread carries the collaboration.
 
+Surface-specific writing (blog, x, newsletter, release notes, linkedin): load
+the matching `<surface>-style` skill for channel mechanics and specs, and run
+`lint_against_style` on the draft before proposing it. When a surface draft is
+finished, the style review goes to the `reviewer` subagent — a fresh-context
+pass over voice drift, AI-tells, and the surface's format specs; it loads the
+surface rubric itself and returns a structured verdict. The `editor` subagent
+is for argument, flow, and audience-fit critiques, not surface style. For
+source-gathering on a research-heavy piece, delegate to the `researcher`
+subagent instead of searching inline, so the drafting context stays clean.
+
 For review, feedback, or critique of technical essays, blog posts, or
 engineering narratives, load the `technical-writing-review` skill: it defines
 the review procedure, the argument map, revision priorities, and the review

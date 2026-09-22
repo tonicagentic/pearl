@@ -33,9 +33,18 @@ const EVE_BUILTIN_TOOLS: ReadonlySet<string> = new Set([
 
 async function productionTools(): Promise<Set<string>> {
   const files = await readdir(AGENT_TOOLS_DIR);
-  return new Set(
+  const tools = new Set(
     files.filter((f) => f.endsWith(".ts")).map((f) => f.replace(/\.ts$/, "")),
   );
+  // Declared subagents are callable as tools named after their folder
+  // (agent/subagents/<name>/) — the editor, reviewer, and researcher surface
+  // as tool calls the same way authored tools do.
+  for (const entry of await readdir("agent/subagents", {
+    withFileTypes: true,
+  })) {
+    if (entry.isDirectory()) tools.add(entry.name);
+  }
+  return tools;
 }
 
 async function evalToolReferences(): Promise<Map<string, string[]>> {

@@ -62,6 +62,75 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     1,
     "Span replacement is not safe to blind-retry: a re-run after a partial success could double-apply the edit; re-read the file and recompute the span.",
   ),
+  // Content-agent tools (ported from eve-content-agent-template).
+  lint_against_style: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Pure read: skill reference file plus in-memory regex scan, no side effect.",
+  ),
+  get_writer_preferences: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Blob read of the caller's own preferences, no side effect.",
+  ),
+  save_writer_preferences: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Principal-scoped write is last-write-wins; an identical retry stores identical content.",
+  ),
+  clear_writer_preferences: policy(
+    false,
+    [],
+    1,
+    "Destructive (approval-gated): a retried clear must do a status check that the preferences are already gone, never blind-delete again.",
+  ),
+  upload_asset: policy(
+    false,
+    [],
+    1,
+    "Blob upload with a random suffix: a blind retry would double the object; retry only after checking whether the first upload landed.",
+  ),
+  list_assets: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Blob listing read, no side effect.",
+  ),
+  get_asset_info: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Blob metadata read, no side effect.",
+  ),
+  download_asset: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Blob content read (URL-restricted), no side effect.",
+  ),
+  delete_asset: policy(
+    false,
+    [],
+    1,
+    "Deletion is approval-gated: a retried delete must status check existence first; deleting twice would also hit the second asset if ids shifted.",
+  ),
+  // Declared subagents (agent/subagents/<name>/): the delegation call itself
+  // is a background task spawn.
+  reviewer: policy(
+    false,
+    [],
+    1,
+    "Subagent delegation spawns a durable child run; a replay would double the run — resume via status check instead.",
+  ),
+  researcher: policy(
+    false,
+    [],
+    1,
+    "Subagent delegation spawns a durable child run; a replay would double the run and the research spend — resume via status check instead.",
+  ),
 };
 
 export function policyFor(toolName: string): RetryPolicy | undefined {
