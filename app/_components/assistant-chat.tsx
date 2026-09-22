@@ -5,6 +5,7 @@ import {
   useEveError,
   useEveSession,
 } from "@assistant-ui/eve";
+import { createChatMessageReducer } from "@/lib/chat/message-reducer";
 import {
   CompositeAttachmentAdapter,
   SimpleImageAttachmentAdapter,
@@ -434,7 +435,14 @@ export function AssistantChatSurface({
     ],
   );
 
-  const runtime = useEveAgentRuntime({
+  // eve's default reducer leaves a failed turn's assistant message with
+  // metadata.status "streaming", which the message converter maps to
+  // cancelled-with-empty-text: the failure renders as a blank bubble. Our
+  // reducer marks turn.failed as status "failed" so the error-state banner
+  // renders. useEveAgentRuntime's options type omits `reducer`, but it
+  // forwards unknown options to useEveAgent, which accepts it — hence the
+  // cast.
+  const runtimeOptions = {
     adapters: {
       // Composer attachments: images and text via the built-in adapters, PDFs
       // via a minimal data-URL adapter. Media types match the eve channel's
@@ -459,7 +467,11 @@ export function AssistantChatSurface({
     onSessionChange: persistSessionChange,
     prepareSend,
     isDisabled,
-  });
+    reducer: createChatMessageReducer(),
+  };
+  const runtime = useEveAgentRuntime(
+    runtimeOptions as Parameters<typeof useEveAgentRuntime>[0],
+  );
 
   const thread = runtime.thread;
   useEffect(() => {
