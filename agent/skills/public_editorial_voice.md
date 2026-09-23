@@ -558,6 +558,31 @@ Natural vocabulary may include forms such as:
 Do not exaggerate regional vocabulary. The goal is natural American speech,
 not a performed California identity.
 
+## Arrows and state changes
+
+Arrow notation is working notation for planning: "reader before → reader
+after" is how to think about the piece, not how to write it.
+
+In polished prose, express state changes as transformations:
+
+* "from X to Y": The state change is from a plausible claim to a calibrated
+  one.
+* "X becomes Y": A plausible claim becomes a calibrated one.
+* a precise transformation verb: Research turns raw evidence into calibrated
+  claims. Revision moves a draft from technically complete to
+  publication-ready.
+
+Prefer the verb form. It says something about the nature of the transformation
+rather than displaying two nouns with an arrow between them.
+
+In tables, use separate Initial state and Desired state columns, and let a
+third column say what changes.
+
+Reserve → for diagrams, equations, compact process models, and intentionally
+schematic passages. Used there, the arrow is a deliberate visual abstraction:
+a compact model of the system. Used as default punctuation, it makes the
+essay look more schematic than editorial.
+
 ## Rhetoric
 
 Use rhetorical devices because they clarify or make an idea memorable, not

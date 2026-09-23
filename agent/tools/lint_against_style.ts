@@ -1,5 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
+import { arrowLineCount, MAX_ARROW_LINES } from "../lib/arrow-notation.js";
 import { SURFACES } from "../lib/surfaces.generated.js";
 
 /**
@@ -111,11 +112,19 @@ export default defineTool({
     }
 
     const hits = banned.filter((w) => bannedWordMatcher(w).test(text));
+    const arrowLines = arrowLineCount(text);
     return {
-      ok: hits.length === 0,
-      violations: hits.map(
-        (w) => `Avoid "${w}" per the ${surface} style guide.`
-      ),
+      ok: hits.length === 0 && arrowLines <= MAX_ARROW_LINES,
+      violations: [
+        ...hits.map(
+          (w) => `Avoid "${w}" per the ${surface} style guide.`
+        ),
+        ...(arrowLines > MAX_ARROW_LINES
+          ? [
+              `Arrow notation (→) appears on ${arrowLines} lines. In prose, express state changes as transformations ("from X to Y", "X becomes Y", or a precise transformation verb); in tables, use separate Initial state and Desired state columns. Reserve → for diagrams, equations, and one deliberately schematic passage.`,
+            ]
+          : []),
+      ],
     };
   },
   inputSchema: z.object({

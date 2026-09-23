@@ -171,6 +171,20 @@ These words often add nothing to meaning. Remove them or find specific alternati
  
 ---
  
+## Arrows as Default Punctuation
+
+The arrow (→) is working notation for planning, not prose punctuation. Used
+repeatedly in essays and posts, it makes the writing look like a product spec
+or systems diagram rather than editorial prose.
+
+* In prose, express state changes as transformations: "from X to Y", "X
+  becomes Y", or a precise transformation verb ("Research turns raw evidence
+  into calibrated claims").
+* In tables, use separate Initial state and Desired state columns instead of
+  arrow columns.
+* Reserve → for diagrams, equations, compact process models, and intentionally
+  schematic passages — used there, it is a deliberate visual abstraction.
+
 ## How to Self-Check
  
 1. Read your text aloud—if phrases sound unnatural in speech, revise them
