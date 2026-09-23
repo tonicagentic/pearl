@@ -25,12 +25,13 @@ import { DEFAULT_MODEL } from "../../agent.ts";
  */
 export default defineAgent({
   description:
-    "The standard pre-publication style pass for a finished draft of a specific content " +
-    "surface (blog, x, newsletter, release notes, linkedin): a fresh-context review against " +
-    "that surface's style rubric covering voice drift, AI-tells, plain English, structure, " +
-    "and format specs. When a surface draft is finished and about to go to the writer, " +
-    "delegate here. The caller passes the surface and the draft in the message; the reviewer " +
-    "loads the matching rubric itself and returns a structured verdict.",
+    "Full editorial review of a finished draft for a specific content surface (blog, x, " +
+    "newsletter, release notes, linkedin): a fresh-context pass that diagnoses the idea, the " +
+    "reader-state change, the argument and its structure, and prose — in that order — plus the " +
+    "surface's style rubric (voice drift, AI-tells, plain English, format specs). When a draft " +
+    "is finished and about to go to the writer, delegate here. The caller passes the surface " +
+    "and the draft in the message; the reviewer loads the editorial-review skill and the " +
+    "matching rubric itself and returns a structured verdict.",
   // Our OSS default (agent.ts DEFAULT_MODEL): the ZDR/US gateway routing policy in
   // agent/agent.ts applies to subagents too, and compliance for other providers is an
   // explicit decision, not a port default.
