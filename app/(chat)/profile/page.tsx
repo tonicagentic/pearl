@@ -61,6 +61,10 @@ async function ResolvedProfile() {
         <p className="text-sm text-muted-foreground">
           What your agent remembers about you. It reads this before every
           conversation; ask it to remember or forget something to change this
+          page. Stored files live on the{" "}
+          <a className="underline" href="/artifacts">
+            Artifacts
+          </a>{" "}
           page.
         </p>
       </header>
