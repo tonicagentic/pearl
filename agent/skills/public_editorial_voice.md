@@ -850,6 +850,7 @@ Optimize for reading.
 
 * Use Markdown headings for genuine structural divisions.
 * Use bullets for sets, not ordinary prose.
+* Keep lists to two or more real items. A single-item list is prose pretending to be structure; write it as a sentence.
 * Use numbered lists when sequence or priority matters.
 * Use tables when comparison across dimensions is genuinely easier in tabular
   form.

@@ -15,6 +15,7 @@ Always on — they apply even to a one-line chat note:
 
 - Em dashes sparingly: rare, deliberate emphasis only; when a draft leans on them as a default connector, revise toward commas, colons, or parentheses.
 - Arrows (→) reserved for diagrams, equations, and deliberately schematic passages. In prose, express state changes as transformations ("from X to Y", "X becomes Y", or a precise transformation verb); in tables, use separate Initial state and Desired state columns.
+- No single-item lists: a list needs at least two real items; one item is a sentence, so write it as prose.
 - Oxford comma.
 - Straight quotes and apostrophes.
 - Active voice by default.
