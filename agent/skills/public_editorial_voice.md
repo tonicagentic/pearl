@@ -676,6 +676,63 @@ evidence.
 A reader should come away understanding not only what was built, but why
 it has that shape.
 
+## Agent evals
+
+Present evals primarily as behavioral specifications rather than raw test
+code. Dropping a TypeScript eval into the middle of an essay forces the reader
+to reverse-engineer the behavioral contract from syntax. State the intended
+behavior, the assertions used to evaluate it, representative traces, and the
+resulting pass or failure.
+
+The preferred narrative sequence is:
+
+specification → trace → result → failure → revision
+
+**Specification first.** Render the contract as a requirement/assertion table:
+
+| Requirement | Assertion |
+| --- | --- |
+| Explore rather than conclude | Offers candidate interpretations rather than presenting one as settled |
+| Keep the interaction conversational | Produces no artifact or file |
+| Return the floor | Ends with one or two genuine questions |
+
+Then say which requirements are behavioral (LLM-judged) and which are
+deterministic. That split is more technically informative than the source
+file: the reader sees what good behavior means and which parts are willing to
+be measured mechanically.
+
+**Traces as evidence.** After the specification, show what happened when it
+ran: compact run cards or a table (prompt, behavior, result). Let the reader
+experience a failure before explaining the design lesson. A run that passes
+the assertions but violates the intent is often the most interesting evidence.
+
+**Must / Must not.** Specify agent behavior through boundaries as well as
+positive requirements. Agent behavior is often easier to define by what it
+must not do (present speculation as fact, create artifacts, force a
+conclusion) than by exact expected outputs.
+
+**Show the delta when the eval changes.** When an eval evolves, state the
+behavioral requirements that were added or removed rather than reproducing the
+entire implementation.
+
+**Code only when the code contains an idea that prose would hide.** A tiny
+fragment earns its place when it makes a point no paraphrase could, such as
+the boundary between deterministic assertions and model-judged behavior. Do
+not show code merely to prove that the idea was implemented.
+
+**Separate the essay from reproducibility.** For rigorous technical work, make
+the complete evaluator, judge prompt, fixtures, model and version, and run
+configuration available separately, in an appendix, details section, or linked
+source. The editorial layer lets an intelligent reader understand the
+experiment; the reproducibility layer lets a technical reader inspect exactly
+what was run. Removing the full implementation from the argument does not
+sacrifice rigor; it separates explanation from implementation.
+
+An eval should help the reader understand what good behavior means before
+showing them how it is tested. Presented this way, the eval becomes part of
+the argument: here is what I wanted, here is what happened, here is how my
+model of good behavior changed.
+
 ## Economic writing
 
 Focus on mechanisms.
