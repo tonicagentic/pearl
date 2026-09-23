@@ -1,6 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { arrowLineCount, MAX_ARROW_LINES } from "../lib/arrow-notation.js";
+import { houseLint } from "../lib/house-lint.js";
 import { SURFACES } from "../lib/surfaces.generated.js";
 
 /**
@@ -85,50 +85,59 @@ const OUTPUT_SCHEMA = z.object({
  */
 export default defineTool({
   description:
-    "Check a draft against the active surface's style rules and return any violations. " +
-    "Run before proposing a draft to the writer.",
+    "Check a draft against the house mechanical rules and, when a surface is " +
+    "named, that surface's banned-words list. Run before proposing a draft to " +
+    "the writer; omit `surface` to check just the house rules.",
   /**
-   * Scan `text` for any banned word defined by the surface's style skill.
+   * Scan `text` for house-rule and surface banned-word violations.
    *
    * @param input - Validated tool input.
-   * @param input.surface - Content surface whose style skill supplies the banned-words list.
+   * @param input.surface - Optional content surface whose style skill supplies
+   * the banned-words list.
    * @param input.text - Draft text to scan.
    * @param ctx - Tool runtime context, used to read the skill's reference files.
-   * @returns `ok` (true when no banned words are present) and human-readable `violations`.
+   * @returns `ok` (true when no violations) and human-readable `violations`.
    */
   async execute({ surface, text }, ctx) {
     let banned: string[] = [];
-    try {
-      const raw = await ctx
-        .getSkill(`${surface}-style`)
-        .file("references/banned-words.json")
-        .text();
-      const parsed = BANNED_WORDS_SCHEMA.safeParse(JSON.parse(raw));
-      if (parsed.success) {
-        banned = [...new Set(parsed.data.map((w) => w.trim()).filter(Boolean))];
+
+    if (surface) {
+      try {
+        const raw = await ctx
+          .getSkill(`${surface}-style`)
+          .file("references/banned-words.json")
+          .text();
+        const parsed = BANNED_WORDS_SCHEMA.safeParse(JSON.parse(raw));
+        if (parsed.success) {
+          banned = [...new Set(parsed.data.map((w) => w.trim()).filter(Boolean))];
+        }
+      } catch {
+        banned = [];
       }
-    } catch {
-      banned = [];
     }
 
     const hits = banned.filter((w) => bannedWordMatcher(w).test(text));
-    const arrowLines = arrowLineCount(text);
+    // House-level mechanical rules always apply; the surface's banned-words
+    // list applies only when a surface is named (docs:
+    // checkpoint-optimization-plan.md, house-lint).
+    const houseViolations = houseLint(text);
     return {
-      ok: hits.length === 0 && arrowLines <= MAX_ARROW_LINES,
+      ok: hits.length === 0 && houseViolations.length === 0,
       violations: [
         ...hits.map(
           (w) => `Avoid "${w}" per the ${surface} style guide.`
         ),
-        ...(arrowLines > MAX_ARROW_LINES
-          ? [
-              `Arrow notation (→) appears on ${arrowLines} lines. In prose, express state changes as transformations ("from X to Y", "X becomes Y", or a precise transformation verb); in tables, use separate Initial state and Desired state columns. Reserve → for diagrams, equations, and one deliberately schematic passage.`,
-            ]
-          : []),
+        ...houseViolations,
       ],
     };
   },
   inputSchema: z.object({
-    surface: z.enum(SURFACES),
+    surface: z
+      .enum(SURFACES)
+      .optional()
+      .describe(
+        "The content surface whose banned-words list to apply. Omit to check only the house-level mechanical rules."
+      ),
     text: z.string().min(1).max(MAX_TEXT_LENGTH),
   }),
   outputSchema: OUTPUT_SCHEMA,

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineTool } from "eve/tools";
 import { writeFile } from "eve/tools/write_file";
 
+import { houseLint } from "../lib/house-lint.js";
 import { withFileLock } from "@/lib/agent/file-mutex";
 import { persistAgentFile } from "@/agent/tools/write_file";
 
@@ -151,10 +152,13 @@ export default defineTool({
         updated,
       );
 
+      // House mechanical rules on the post-edit content, surfaced in the
+      // result so the model fixes them with a follow-up targeted edit.
       return {
         path: outcome.path,
         updated: true,
         ...persistence,
+        lint: houseLint(updated),
       };
     });
   },

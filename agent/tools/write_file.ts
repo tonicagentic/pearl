@@ -1,5 +1,6 @@
 import { defineTool } from "eve/tools";
 import { writeFile } from "eve/tools/write_file";
+import { houseLint } from "../lib/house-lint.js";
 import { withFileLock } from "@/lib/agent/file-mutex";
 import {
   getChatIdByEveSessionId,
@@ -123,7 +124,10 @@ export default defineTool({
         input.content,
       );
 
-      return { ...outcome, ...persistence };
+      // House mechanical rules, checked on the final content: the model sees
+      // violations right in the write result and can fix them with a targeted
+      // edit instead of shipping prose that breaks the house rules.
+      return { ...outcome, ...persistence, lint: houseLint(input.content) };
     });
   },
 });
