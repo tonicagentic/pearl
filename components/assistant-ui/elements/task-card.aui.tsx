@@ -40,14 +40,17 @@ export function SubagentRunsProvider({ children }: { children: ReactNode }) {
     [events, now],
   );
 
-  const anyRunning = runs.some((run) => run.state === "running");
+  // Tick while any run is undelivered. Keying on the post-derivation state
+  // deadlocks: with now null the staleness check marks undelivered runs as
+  // failed before the first tick, so no run is ever "running" to trigger it.
+  const anyUndelivered = runs.some((run) => run.delivered === false);
 
   useEffect(() => {
-    if (!anyRunning) return;
+    if (!anyUndelivered) return;
     setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [anyRunning]);
+  }, [anyUndelivered]);
 
   return (
     <TaskRunsContext.Provider value={runs}>{children}</TaskRunsContext.Provider>

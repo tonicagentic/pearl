@@ -70,6 +70,9 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
   let pendingInput = false;
   let workingStartedAt: number | null = null;
   let lastAt: number | null = null;
+  let receivedCount = 0;
+  let startedCount = 0;
+  let lastReceivedAt: number | null = null;
 
   for (const raw of events) {
     const event = raw as StreamEvent;
@@ -93,7 +96,15 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
       continue;
     }
 
+    if (event.type === "message.received") {
+      receivedCount += 1;
+      const parsed = Date.parse(event.meta?.at ?? "");
+      if (Number.isFinite(parsed)) lastReceivedAt = parsed;
+      continue;
+    }
+
     if (event.type === "turn.started") {
+      startedCount += 1;
       const parsed = Date.parse(event.meta?.at ?? "");
       if (Number.isFinite(parsed)) workingStartedAt = parsed;
       continue;
@@ -122,6 +133,8 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
     const last = s.thread.messages.at(-1);
     return last?.role === "assistant" && last.status?.type === "running";
   });
+  const queued =
+    isRunning && !pendingInput && !assistantStreaming && receivedCount > startedCount;
   const working = isRunning && !pendingInput && !assistantStreaming;
   const startedAt = workingStartedAt ?? (working ? now : null);
   const elapsedS =
@@ -139,6 +152,23 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
       >
         <span className="font-medium">Waiting for your confirmation.</span> The
         agent is paused on a question or approval above — reply to continue.
+      </div>
+    );
+  }
+
+  if (queued) {
+    const queuedElapsed =
+      lastReceivedAt === null || now === null
+        ? 0
+        : Math.max(0, Math.floor((now - lastReceivedAt) / 1000));
+    return (
+      <div
+        data-testid="session-status"
+        className="border-border/60 bg-muted/50 px-4 py-2 text-sm text-muted-foreground"
+      >
+        <span className="font-medium">Queued.</span> Your message runs after
+        the current one finishes ({queuedElapsed}s in line) — it is saved and
+        will not be lost.
       </div>
     );
   }

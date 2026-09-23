@@ -22,6 +22,8 @@ export type SubagentRun = {
   readonly name: string;
   readonly at: number;
   readonly state: SubagentRunState;
+  /** False while the child run has not delivered its final output. */
+  readonly delivered: boolean;
   readonly result?: unknown;
 };
 
@@ -101,6 +103,7 @@ export function deriveSubagentRuns(
       callId: run.callId,
       name: run.name,
       at: run.at,
+      delivered: run.delivered,
       result: run.result,
       state: run.delivered ? ("ready" as const) : stale ? ("failed" as const) : ("running" as const),
     };
