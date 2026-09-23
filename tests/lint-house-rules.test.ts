@@ -174,6 +174,41 @@ describe("house lint", () => {
     assert.ok(houseLint(long).some((v) => v.includes("45 words")));
   });
 
+    it("flags smell-word clusters but passes single legitimate uses", () => {
+    const cluster =
+      "This important solution leverages various key aspects to unlock meaningful things.";
+    assert.ok(houseLint(cluster).some((v) =>
+      v.includes("Smell-test cluster"),
+    ));
+    const clean =
+      "The important question is whether the eval measures the behavior you actually care about.";
+    assert.deepEqual(
+      houseLint(clean).filter((v) => v.includes("Smell-test cluster")),
+      [],
+    );
+  });
+
+  it("flags cheap contrast, fake revelation, coercion, and claim laundering", () => {
+    const cheap = "Agents aren't just tools; they're collaborators.";
+    assert.ok(houseLint(cheap).some((v) => v.includes("Cheap contrast")));
+
+    const revelation = "But here's where things get interesting.";
+    assert.ok(houseLint(revelation).some((v) =>
+      v.includes("Fake revelation"),
+    ));
+
+    const coerced = "Obviously the eval should have caught that.";
+    assert.ok(houseLint(coerced).some((v) => v.includes("Reader coercion")));
+
+    const laundered = "Research shows that evals improve agent reliability.";
+    assert.ok(houseLint(laundered).some((v) =>
+      v.includes("Claim laundering"),
+    ));
+
+    const real = "An outline describes the document; a rhetorical architecture describes the reader's change.";
+    assert.deepEqual(houseLint(real), []);
+  });
+
   it("flags excessive one-sentence paragraphs", () => {
     const text = [
       "First major turn stands alone.",

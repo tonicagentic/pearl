@@ -1035,6 +1035,185 @@ Avoid AI-generated-writing mannerisms such as:
 No phrase is forbidden when it is genuinely the right phrase. The problem is
 unconscious template language.
 
+## Antipatterns
+
+An agent can satisfy every positive voice guideline and still produce generic
+"good writing" mannerisms that do not sound like the author. These are the
+recurring failure modes, by category. The question for each flagged word or
+pattern is always the same: is it doing intellectual work?
+
+### Language
+
+**Performative sophistication.** Never increase lexical complexity without
+increasing precision. "This necessitates the development of…" → "This
+requires…". "The system facilitates the articulation of…" → "The system helps
+articulate…". The rule is not "use simple words."
+
+**Nominalization.** Watch for verbs turned into abstract nouns (-tion, -ment,
+-ance, -ity): "the evaluation of behavior" → "evaluating behavior"; "the
+creation of requirements" → "deriving requirements". Nominalizations are not
+forbidden — sometimes the noun really is the object. Flag clusters of them.
+
+**Corporate abstraction.** Avoid leverage, utilize, facilitate, enablement,
+optimize for, unlock, drive, robust, holistic, scalable, best-in-class,
+strategic, seamless, empower, solution, framework — unless the word has a
+specific technical meaning in context. "Framework" is especially dangerous:
+almost any collection of thoughts can be called one.
+
+**AI vocabulary.** Delve, nuanced, multifaceted, landscape, realm, tapestry,
+pivotal, underscore, foster, navigate, interplay, testament, ever-evolving,
+crucial, key, comprehensive, powerful. None needs an absolute ban; each should
+trigger suspicion because it is frequently a substitute for saying exactly
+what happened.
+
+**Inflated significance.** "This represents a fundamental shift…", "The
+implications are profound…", "We're entering a new paradigm…". Make the
+implication visible and let the reader decide whether it is profound.
+
+### Rhetoric
+
+**Manufactured binaries.** Avoid "X isn't about A. It's about B." when A and B
+are not actually mutually exclusive. Keep it when correcting a real conceptual
+confusion ("An outline describes the document; a rhetorical architecture
+describes how the reader's state changes through it"). Ask: does the
+distinction partition concepts readers could reasonably confuse, or is the
+contrast there because contrast sounds persuasive?
+
+**"Not just" inflation.** "Agents aren't just tools; they're collaborators."
+Usually cheapens both claims. State the actual relationship.
+
+**Fake revelation.** "Here's the surprising part." "But here's where things
+get interesting." If it is interesting, the next sentence should demonstrate
+that.
+
+**Reader coercion.** "Clearly…", "Obviously…", "Of course…", "It goes without
+saying…" — often attempts to make agreement socially easier than
+disagreement. Delete them unless the proposition genuinely is obvious and the
+word serves rhythm.
+
+**Unnecessary rhetorical questions.** One can create a useful transition; five
+in succession reads like a keynote. Use questions when the question itself
+structures the investigation.
+
+### Reasoning
+
+**Claim laundering through abstraction.** "Research shows…", "Experts
+agree…", "It's well understood…". Which research? Which experts? Under what
+conditions? Either support the claim or make a narrower claim you can defend.
+
+**False causality.** Watch so, therefore, because, leads to, results in, and
+means closely — those words make causal or logical commitments. An editing
+pass that literally searches for them and asks "does B actually follow from
+A?" is worth running.
+
+**Overclaiming from examples.** One trace → "agents tend to…"; three runs →
+"the system reliably…". Examples can establish possibility or illustrate
+mechanisms without establishing frequency. Make the quantifier match the
+evidence.
+
+**Unmarked level changes.** Do not slide silently between observation →
+interpretation → hypothesis → empirical claim → design preference → normative
+claim. "Users find this confusing" might actually mean "I found this
+confusing" or "I expect users to find this confusing" — different claims.
+
+**Abstraction before evidence.** Do not introduce a grand concept and then
+search for an example to justify it. The better pattern is phenomenon →
+problem → distinction → name — which is why a term introduced after a false
+pass works and one dropped in as an ornament does not.
+
+### Structure
+
+**Throat-clearing.** "Before we dive in, it's worth taking a moment to
+understand…", "To fully appreciate this, we first need to…". Start where the
+intellectual action begins.
+
+**Previewing everything.** "First I'll discuss X, then Y, before turning to
+Z…" is usually unnecessary in a blog post — good headings already do this.
+Signpost only when the reader genuinely needs orientation.
+
+**Repeating the argument as transition.** Section explains X; final paragraph
+summarizes X; next section begins by summarizing X again. Trust the reader. A
+new section should usually begin with the next implication, not a recap.
+
+**Premature summary.** Do not convert every three paragraphs into "In other
+words…". Sometimes the second explanation is clearer — in which case delete
+the first one.
+
+**Symmetry for symmetry's sake.** Not every section needs definition → three
+bullets → example → takeaway, and not every list needs three items. Real
+thought is uneven. Editorial structure should reveal the actual hierarchy
+rather than impose visual regularity on it.
+
+### Voice
+
+**Sounding more certain in writing than the evidence supports.** Editing
+should not transform "I think this is probably happening because…" into "This
+happens because…" unless the evidence earns the upgrade.
+
+**Editing out discovery.** Do not turn "I expected X. Run 3 showed Y. That
+made me realize the requirement was incomplete." into "A complete agent
+specification must include epistemic permissions." The latter sounds
+authoritative but destroys the interesting part: how the conclusion was
+learned.
+
+**Over-systematizing.** Naming everything ("State Change Framework",
+"Behavioral Contract Layer") is a temptation for systems thinkers. Name a
+concept only when naming it lets you reuse it productively; otherwise describe
+it in ordinary language.
+
+**Excessive qualification.** The opposite failure: preserving too much spoken
+exploration. "I think maybe one way of thinking about this is that it could
+potentially…" compresses to "One possibility is…". Keep uncertainty; remove
+hesitation.
+
+**Overusing "I think."** First person earns its place when it communicates
+provenance, judgment, uncertainty, or experience — "I think of these as
+epistemic permissions" does; "I think evals can be useful for testing agents"
+probably does not.
+
+### Punctuation and formatting
+
+**Em-dash addiction.** Agents love them. If a paragraph has three, inspect
+whether periods, commas, parentheses, or colons would create cleaner
+relationships.
+
+**Colon-as-drama.** "The lesson is simple:", "The key insight:" —
+occasionally effective; repeated use sounds like internet business writing.
+
+**Bold-as-argument.** Do not bold half a paragraph because the hierarchy is
+not clear in the prose.
+
+**Fragment-as-emphasis.** "The result? Better agents." "Not ideal." This
+cadence becomes extremely marketing-coded when repeated.
+
+**Parenthetical qualification overload.** If a parenthetical contains an
+important condition, it probably belongs in the sentence.
+
+## The smell test
+
+Flag — do not automatically delete — language matching these families. The
+question is whether the word is doing intellectual work:
+
+* Hype: revolutionary, transformative, groundbreaking, powerful, profound,
+  paradigm, unlock
+* Vagueness: things, aspects, various, numerous, significant, meaningful,
+  important, key
+* Corporate: leverage, utilize, facilitate, empower, solution, stakeholder,
+  optimize
+* AI-ish: delve, nuanced, landscape, multifaceted, tapestry, interplay,
+  underscore, foster, navigate
+* Fake signposting: importantly, notably, interestingly, crucially,
+  fundamentally
+* Cheap contrast: not just, isn't merely, isn't about X but Y
+* Unsupported consensus: clearly, obviously, everyone knows, experts agree,
+  research shows
+* Hedging clusters: perhaps, maybe, might, could, arguably, somewhat,
+  relatively, generally
+
+The final antipattern rule: whenever prose sounds impressive, ask what made it
+impressive. If the answer is the idea, keep it. If the answer is the wording,
+inspect it.
+
 ## Do not imitate reference writers
 
 Reference publications and writers provide principles, not a costume.

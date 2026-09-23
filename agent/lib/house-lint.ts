@@ -64,6 +64,85 @@ const HYPE_PATTERN = new RegExp(
   "i",
 );
 
+/**
+ * Smell-test vocabulary (public-editorial-voice, The smell test): words that
+ * frequently substitute for saying exactly what happened. Flagged on density,
+ * never banned — a single occurrence is usually legitimate.
+ */
+const SMELL_WORDS = [
+  // vague
+  "things",
+  "aspects",
+  "various",
+  "numerous",
+  "significant",
+  "meaningful",
+  "important",
+  "key",
+  // corporate
+  "empower",
+  "solution",
+  "stakeholder",
+  "optimize",
+  "holistic",
+  "scalable",
+  "best-in-class",
+  "strategic",
+  // ai-ish
+  "nuanced",
+  "multifaceted",
+  "landscape",
+  "realm",
+  "tapestry",
+  "pivotal",
+  "underscore",
+  "foster",
+  "navigate",
+  "interplay",
+  "testament",
+  "ever-evolving",
+  "crucial",
+  "comprehensive",
+  "powerful",
+  // fake signposting
+  "importantly",
+  "notably",
+  "interestingly",
+  "crucially",
+  "fundamentally",
+  // hedging
+  "perhaps",
+  "maybe",
+  "arguably",
+  "somewhat",
+  "relatively",
+  "generally",
+];
+
+/** Smell words allowed in one paragraph before the cluster flags. */
+const MAX_SMELL_WORDS_PER_BLOCK = 3;
+
+/** "Not just X" inflation constructions, flagged per occurrence. */
+const CHEAP_CONTRAST =
+  /\b(?:is|are|was|were|am)n't\s+(?:just|merely)\b|\bnot\s+(?:just|merely)\b/i;
+
+/** Fake-revelation openers: if it is interesting, the next sentence should show it. */
+const FAKE_REVELATION =
+  /here'?s (?:the surprising part|where things get (?:interesting|powerful))|the answer (?:might )?surprise/i;
+
+/** Reader coercion: sentence-starting pressure toward agreement. */
+const READER_COERCION =
+  /^\s*(?:clearly|obviously|of course,|it goes without saying)\b/i;
+
+/** Claim laundering: consensus attributions that name no source. */
+const CLAIM_LAUNDERING =
+  /\b(?:research shows|studies suggest|experts agree|it'?s well understood|everyone knows)\b/i;
+
+const SMELL_PATTERN = new RegExp(
+  `\\b(?:${SMELL_WORDS.join("|")})\\b`,
+  "gi",
+);
+
 /** Consecutive markdown list-item lines, kept as groups. */
 const LIST_ITEM = /^\s*(?:[-*+]|\d+\.)\s+\S/;
 
@@ -198,8 +277,14 @@ export function genericTableHeaders(text: string): string[] {
  */
 export function paragraphBlocks(
   text: string,
-): { words: number; sentenceCount: number; longestSentenceWords: number }[] {
+): {
+  text: string;
+  words: number;
+  sentenceCount: number;
+  longestSentenceWords: number;
+}[] {
   const blocks: {
+    text: string;
     words: number;
     sentenceCount: number;
     longestSentenceWords: number;
@@ -223,6 +308,7 @@ export function paragraphBlocks(
     const sentences = prose.split(/(?<=[.!?])\s+/).filter(Boolean);
     const words = prose.split(/\s+/).filter(Boolean).length;
     blocks.push({
+      text: prose,
       words,
       sentenceCount: sentences.length,
       longestSentenceWords: Math.max(
@@ -323,12 +409,6 @@ export function houseLint(text: string): string[] {
     );
   }
 
-  if (hypeMatch) {
-    violations.push(
-      `Hype vocabulary found ("${hypeMatch}") — replace evaluation with evidence (precision over intensity).`,
-    );
-  }
-
   const tableHeaders = genericTableHeaders(text);
   if (tableHeaders.length > 0) {
     violations.push(
@@ -413,6 +493,44 @@ export function houseLint(text: string): string[] {
       `${oneSentenceParagraphs} one-sentence paragraphs — use them sparingly, where a genuine turn in the argument warrants the visual weight.`,
     );
   }
+
+  // The smell test (public-editorial-voice): flag, never ban — the question is
+  // whether each word is doing intellectual work.
+  for (const block of blocks) {
+    const smellHits = (block.text.match(SMELL_PATTERN) ?? []).length;
+
+    if (smellHits >= MAX_SMELL_WORDS_PER_BLOCK) {
+      violations.push(
+        `Smell-test cluster: ${smellHits} suspect words in one paragraph (hype, vagueness, AI-ish vocabulary, fake signposting, or hedging) — inspect whether each is doing intellectual work.`,
+      );
+    }
+
+    if (CHEAP_CONTRAST.test(block.text)) {
+      violations.push(
+        "Cheap contrast (\"not just\" / \"isn't merely\") — keep contrast when it corrects a real confusion; otherwise state the actual relationship.",
+      );
+    }
+
+    if (FAKE_REVELATION.test(block.text)) {
+      violations.push(
+        "Fake revelation — if it is interesting, the next sentence should demonstrate it; do not announce it.",
+      );
+    }
+
+    if (CLAIM_LAUNDERING.test(block.text)) {
+      violations.push(
+        "Claim laundering (\"research shows\" / \"experts agree\") — name the source and conditions, or make the narrower claim you can defend.",
+      );
+    }
+  }
+
+  scanOutsideFences(text, (line) => {
+    if (READER_COERCION.test(line)) {
+      violations.push(
+        "Reader coercion (\"Clearly…\" / \"Obviously…\") — delete it unless the proposition genuinely is obvious and the word serves rhythm.",
+      );
+    }
+  });
 
   return violations;
 }
