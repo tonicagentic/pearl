@@ -447,35 +447,26 @@ After a good example, trust the reader.
 
 Do not explain the same insight three more times.
 
-## Paragraphs are units of thought
-
-A paragraph should usually perform one rhetorical job.
-
-Good paragraph movement often looks like:
-
-claim → explanation → example → implication
-
-or:
-
-observation → complication → distinction
-
-or:
-
-expectation → surprising result → explanation
-
-Paragraph lengths should vary naturally.
-
-Very long paragraphs should earn their length through sustained reasoning.
-Single-sentence paragraphs should earn their emphasis and remain uncommon.
-
 ## Sentence style
 
 Prefer sentences that are direct, concrete, and rhythmically natural.
 
-Use mostly short and medium sentences, with longer sentences when the logic
-requires them.
+Let syntax follow the idea. Most explanatory sentences fall naturally around
+10–30 words — not a rule, the normal cruising speed. A sentence can run long
+when its clauses develop one coherent relationship; split it when the reader
+has to track multiple independent claims before the sentence resolves. The
+metric is not word count; it is how many relationships the reader holds before
+the sentence resolves.
 
-Vary sentence length deliberately.
+Short sentences gain force through scarcity:
+
+The eval passed. The behavior was still wrong. The problem was the
+specification.
+
+That works because it contrasts with the surrounding prose. Vary length
+deliberately — something like medium → medium → long → short → medium, not
+mechanically. Do not adopt an editorial rule like "sentences should be under
+25 words"; it produces choppy, artificially simplified writing.
 
 Favor active constructions when the actor matters.
 
@@ -495,6 +486,55 @@ Prefer concrete verbs:
 
 Do not optimize mechanically for short sentences. The goal is cognitive ease,
 not choppiness.
+
+## Paragraphs are units of thought
+
+A paragraph is a unit of reasoning, not a unit of arbitrary length. It should
+usually perform one intellectual job:
+
+claim → explanation → evidence/example → implication
+
+Once the job changes, start another paragraph. For web writing, most
+paragraphs contain roughly 2–5 sentences or 40–120 words. Inspect paragraphs
+above ~150 words for multiple moves — explaining → qualifying, example →
+implication, diagnosis → solution — rather than splitting them mechanically.
+If the second half performs the same job as the first, keep it together.
+
+Use one-sentence paragraphs sparingly, where a genuine turn in the argument
+warrants the visual weight. A one-sentence paragraph tells the reader "pay
+attention to this"; if everything gets that signal, none of it does.
+
+Two paragraph shapes fit this voice well:
+
+* claim → why → qualification/distinction → the more precise version
+* observation → question → candidate explanation → the broader idea
+
+rather than the rigid school-essay topic-sentence-and-three-facts shape.
+
+Paragraph lengths should vary naturally.
+
+Very long paragraphs should earn their length through sustained reasoning.
+Single-sentence paragraphs should earn their emphasis and remain uncommon.
+
+## Density
+
+Adjust syntax to conceptual difficulty. Abstract material — state,
+representation, agency, mechanism — usually benefits from simpler sentences,
+concrete examples, and more visual breathing room.
+
+As abstraction increases, syntactic complexity should decrease. Do not make
+the reader decode a difficult idea and difficult syntax at the same time.
+
+Compensate for high conceptual density with plain syntax and concrete examples
+nearby.
+
+## The deep rule
+
+A sentence should be as long as the relationship it expresses. A paragraph
+should be as long as the thought it develops.
+
+The numerical ranges are useful for noticing when something might be wrong.
+They should not determine the prose.
 
 ## Vocabulary
 
@@ -1067,6 +1107,58 @@ Do not apologize for seriousness.
 
 Also do not imply that thinking about serious questions makes the author
 exceptional.
+
+### Reasoning cadence
+
+These patterns are how the author naturally constructs thoughts — more
+fundamental to voice than any vocabulary choice. Preserve them when editing;
+they are what make the prose sound like the author.
+
+**Precision through contrast.** The author reaches precise claims by narrowing
+approximate ones: "It's not that X. It's more that Y." When two concepts are
+easily conflated, state the tempting interpretation and distinguish the
+intended one. Prefer distinctions that clarify a real ambiguity over
+manufactured "X vs. Y" rhetoric.
+
+**Earn abstractions from concrete observations.** Ideas move from concrete
+observation → decomposition → mechanism → general principle, then back to a
+concrete case to show what the principle changes. When possible, let the
+reader encounter the phenomenon before naming the general principle.
+
+**Prefer explicit causal syntax.** Use ordinary connectors — because, but, so,
+if, when, then, which means — to expose how one claim leads to another. Do not
+nominalize a causal relationship ("necessitates the development of") merely to
+sound formal. The sophistication lives in the relationship between ideas, not
+in elevated syntax.
+
+**Keep the syntax ordinary around technical nouns.** Let words like
+representation, constraint, and mechanism carry the precision; keep the
+surrounding verbs plain — is, does, gets, changes, makes, works. Do not
+replace simple verbs with formal alternatives unless the alternative is more
+precise.
+
+**Calibrate, don't hedge.** Distinguish verbal filler from epistemic
+calibration. Remove "I guess" and "kind of" when they only reflect the
+speaking process. Preserve or sharpen qualifiers that encode real uncertainty,
+scope, or confidence — often "I kind of think X" should become "I suspect X",
+not simply "X".
+
+**Preserve productive model updates.** When evidence genuinely changed the
+author's model, let the reader see the previous assumption, the evidence that
+challenged it, and the revised view. Do not polish every argument into the
+appearance that the conclusion was obvious from the start.
+
+**Compress after explaining.** Short formulations and aphoristic sentences
+should crystallize reasoning the reader has already seen —
+"An outline describes the document; a rhetorical architecture describes how
+the reader's state changes through it" — never lead with a clever line and
+reverse-engineer an argument around it.
+
+**Keep the exploratory movement, edited.** Published prose compresses the
+author's proposition → qualification → implication → revised-proposition loop,
+but the reader should still sometimes watch the model updating. Fillers like
+"like", "kinda", "I mean" disappear; the rhetorical movement underneath —
+initial claim → distinction → more precise claim — stays.
 
 ## Revision hierarchy
 

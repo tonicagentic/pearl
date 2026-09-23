@@ -21,7 +21,10 @@ Always on — they apply even to a one-line chat note:
   - No forced heading parallelism — three or more headings sharing the same first word ("Understanding X" ×3) read as tidiness over information.
   - No transition openers after headings — the first sentence of a section advances the argument; never "Now that we've discussed X, let's turn to Y."
   - No bold overuse — four or more bold spans in one paragraph means the hierarchy should be rewritten, not decorated.
-- No single-item lists: a list needs at least two real items; one item is a sentence, so write it as prose.
+- Length checks are advisory "inspect" flags, not targets — the ranges notice when something might be wrong; they never determine the prose:
+  - A paragraph above ~180 words: inspect it for multiple moves; split only if the second half performs a different intellectual job.
+  - A sentence above ~45 words: inspect whether multiple independent claims ride one structure; long sentences are legitimate when their clauses develop one relationship.
+  - More than two one-sentence paragraphs in one piece: they are expensive signals; reserve them for genuine turns in the argument.
 - Oxford comma.
 - Straight quotes and apostrophes.
 - Active voice by default.

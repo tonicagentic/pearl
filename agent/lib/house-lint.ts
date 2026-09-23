@@ -80,6 +80,27 @@ const HEADING_FIRST_WORD = /^#{2,3}\s+(\w[\w'-]*)/;
 /** Bold spans in one paragraph block; beyond this the hierarchy is decoration. */
 const MAX_BOLD_PER_BLOCK = 3;
 
+/**
+ * Paragraphs beyond this many words get flagged for inspection (docs:
+ * public-editorial-voice, Paragraphs). Advisory: the question is whether the
+ * second half performs a different intellectual job, not word count itself.
+ */
+export const MAX_PARAGRAPH_WORDS = 180;
+
+/**
+ * More than this many one-sentence paragraphs in one text dilutes the "pay
+ * attention" signal (public-editorial-voice: one-sentence paragraphs are
+ * expensive).
+ */
+export const MAX_ONE_SENTENCE_PARAGRAPHS = 2;
+
+/**
+ * Sentences beyond this many words get flagged for inspection — not a
+ * "sentences should be short" rule; a long sentence is legitimate when its
+ * clauses develop one relationship.
+ */
+export const MAX_SENTENCE_WORDS = 45;
+
 /** Lines inside fenced code blocks are excluded from every check. */
 function scanOutsideFences(
   text: string,
@@ -161,6 +182,80 @@ export function genericTableHeaders(text: string): string[] {
   });
 
   return [...found];
+}
+
+/**
+ * Split draft text into prose blocks (paragraphs) outside fenced code blocks.
+ *
+ * @remarks
+ * Blocks are separated by blank lines; heading and list-item lines are
+ * excluded so sentence splitting works on wrapped prose. Each block reports
+ * its word count, sentence count, and longest sentence in words — the raw
+ * numbers behind the advisory length checks.
+ *
+ * @param text - Draft text to scan.
+ * @returns One entry per prose block, in order.
+ */
+export function paragraphBlocks(
+  text: string,
+): { words: number; sentenceCount: number; longestSentenceWords: number }[] {
+  const blocks: {
+    words: number;
+    sentenceCount: number;
+    longestSentenceWords: number;
+  }[] = [];
+
+  let current: string[] = [];
+  let inFence = false;
+
+  const flush = () => {
+    const prose = current
+      .filter((line) => !/^\s*#{1,6}\s/.test(line))
+      .join(" ")
+      .trim();
+
+    current = [];
+
+    if (!prose) {
+      return;
+    }
+
+    const sentences = prose.split(/(?<=[.!?])\s+/).filter(Boolean);
+    const words = prose.split(/\s+/).filter(Boolean).length;
+    blocks.push({
+      words,
+      sentenceCount: sentences.length,
+      longestSentenceWords: Math.max(
+        0,
+        ...sentences.map((sentence) =>
+          sentence.split(/\s+/).filter(Boolean).length,
+        ),
+      ),
+    });
+  };
+
+  for (const line of text.split("\n")) {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      flush();
+      continue;
+    }
+
+    if (inFence) {
+      continue;
+    }
+
+    if (line.trim() === "") {
+      flush();
+      continue;
+    }
+
+    current.push(line);
+  }
+
+  flush();
+
+  return blocks;
 }
 
 /**
@@ -289,6 +384,35 @@ export function houseLint(text: string): string[] {
       afterHeading = false;
     }
   });
+
+  // Length checks (public-editorial-voice: Paragraphs / Sentence style /
+  // Density): advisory "inspect" flags — the numeric ranges notice when
+  // something might be wrong; they must not determine the prose.
+  const blocks = paragraphBlocks(text);
+
+  for (const block of blocks) {
+    if (block.words > MAX_PARAGRAPH_WORDS) {
+      violations.push(
+        `Paragraph runs ${block.words} words — inspect it for multiple moves (explaining → qualifying, example → implication); split it only if the second half performs a different intellectual job.`,
+      );
+    }
+
+    if (block.longestSentenceWords > MAX_SENTENCE_WORDS) {
+      violations.push(
+        "A sentence carries more than 45 words — inspect whether multiple independent claims are riding one structure; long sentences are legitimate when their clauses develop one relationship.",
+      );
+    }
+  }
+
+  const oneSentenceParagraphs = blocks.filter(
+    (block) => block.sentenceCount === 1,
+  ).length;
+
+  if (oneSentenceParagraphs > MAX_ONE_SENTENCE_PARAGRAPHS) {
+    violations.push(
+      `${oneSentenceParagraphs} one-sentence paragraphs — use them sparingly, where a genuine turn in the argument warrants the visual weight.`,
+    );
+  }
 
   return violations;
 }

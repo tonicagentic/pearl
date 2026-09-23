@@ -156,4 +156,47 @@ describe("house lint", () => {
       [],
     );
   });
+
+  it("flags very long paragraphs for inspection", () => {
+    const long = Array.from({ length: 40 }, () =>
+      "The mechanism explains how the system recovers after a tool fails.",
+    ).join(" ");
+    assert.ok(houseLint(long).some((v) => v.includes("Paragraph runs")));
+    const short = "One clean paragraph.";
+    assert.deepEqual(
+      houseLint(short).filter((v) => v.includes("Paragraph runs")),
+      [],
+    );
+  });
+
+  it("flags overlong sentences but keeps legitimate development", () => {
+    const long = `${"The method identifies the underlying object and ".repeat(8)}then it stops.`;
+    assert.ok(houseLint(long).some((v) => v.includes("45 words")));
+  });
+
+  it("flags excessive one-sentence paragraphs", () => {
+    const text = [
+      "First major turn stands alone.",
+      "",
+      "Second major turn stands alone.",
+      "",
+      "Third major turn stands alone.",
+      "",
+      "A normal paragraph with several sentences that develops its reasoning properly before arriving at its point.",
+    ].join("\n");
+    assert.ok(houseLint(text).some((v) =>
+      v.includes("one-sentence paragraphs"),
+    ));
+    const fine = [
+      "First major turn stands alone.",
+      "",
+      "Second major turn stands alone.",
+      "",
+      "A normal paragraph with several sentences. It develops its reasoning and arrives somewhere.",
+    ].join("\n");
+    assert.deepEqual(
+      houseLint(fine).filter((v) => v.includes("one-sentence paragraphs")),
+      [],
+    );
+  });
 });
