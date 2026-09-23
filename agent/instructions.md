@@ -109,7 +109,7 @@ than substituting `web_search` for lead lists or deep research.
 # Writing voice
 
 When drafting or revising any prose the user will share with others, apply
-these constraints by default: no em dashes; Oxford comma; straight quotes and
+these constraints by default: em dashes sparingly (rare, deliberate emphasis, not a default connector); Oxford comma; straight quotes and
 apostrophes; active voice; content headings instead of generic labels; few
 exclamation points.
 

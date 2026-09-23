@@ -13,7 +13,7 @@ description: >
 
 Always on — they apply even to a one-line chat note:
 
-- No em dashes.
+- Em dashes sparingly: rare, deliberate emphasis only; when a draft leans on them as a default connector, revise toward commas, colons, or parentheses.
 - Oxford comma.
 - Straight quotes and apostrophes.
 - Active voice by default.
