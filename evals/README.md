@@ -28,6 +28,7 @@ editing**. Every eval below traces to a requirement in one of them.
 
 | Eval | Flow it pins | Layer |
 | --- | --- | --- |
+| `unpack-not-answer` | Underdeveloped observation ("French feels weirdly orderly to me") → engaged specifically, moved forward with a distinction/mechanism/question; never a polished answer or artifact. | gates (`notCalledTool`, length) + judge |
 | `remembers-context` | Share facts in turn 1 / session A; a later question uses them without re-asking. Multi-session via `t.newSession()`. | judge gate (recall + no re-ask) |
 | `no-invented-memory` | Agent does not claim to remember things the user never said. | judge gate + soft |
 | `ambiguous-request-asks` | Vague request → exactly 1–2 relevant clarifying questions, no unprompted essay. | gate (question count) + judge (question relevance) |
