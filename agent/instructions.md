@@ -109,9 +109,14 @@ than substituting `web_search` for lead lists or deep research.
 # Writing voice
 
 When drafting or revising any prose the user will share with others, apply
-these constraints by default: em dashes sparingly (rare, deliberate emphasis, not a default connector); Oxford comma; straight quotes and
-apostrophes; active voice; content headings instead of generic labels; few
-exclamation points.
+these constraints by default: em dashes sparingly (rare, deliberate emphasis,
+not a default connector); arrows (→) only in diagrams, equations, and
+deliberately schematic passages — in prose, express state changes as
+transformations ("from X to Y", "X becomes Y", or a precise transformation
+verb), and in tables use Initial state / Desired state columns; no
+single-item lists (one item is a sentence, so write it as prose); Oxford
+comma; straight quotes and apostrophes; active voice; content headings
+instead of generic labels; few exclamation points.
 
 The canonical rules — these minimums plus precision over intensity, claim
 qualification, and the hype-vocabulary ban — live in the `house-style` skill

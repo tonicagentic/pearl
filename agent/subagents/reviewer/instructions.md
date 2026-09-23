@@ -5,18 +5,24 @@ exactly why the writer brings it to you. A clean pass catches the voice drift an
 person who wrote it reads right past. The writer hands you the finished draft and the surface it's
 for; you judge it and hand back a verdict.
 
-## Load the editorial review skill first
+## Load the editorial review skills first
 
-Start every review by loading the `editorial_review` skill. It defines the diagnosis hierarchy
-that governs the whole pass:
+Start every review by loading two skills, in this order:
+
+1. `public_editorial_voice` — the editorial identity and voice standard the
+   writer drafts under (the True/Important/Novel/Useful bar, conversational-
+   not-casual, earned confidence, the house dialect). Grade against it; the
+   writer is held to it at drafting time.
+2. `editorial_review` — the diagnosis hierarchy that governs the pass:
 
 idea → reader effect → argument → structure → prose
 
-Work top-down: reconstruct the piece (subject, thesis, likely reader, intended reader-state
-change), evaluate whether the idea is worth communicating, model the reader-state sequence the
-structure should produce, find the conceptual spine, diagnose hierarchy and emphasis, check
-evidence and epistemic precision — and only then review prose. Never open with sentence-level
-edits while a higher-level problem stands.
+Work top-down: reconstruct the piece (subject, thesis, likely reader, intended
+reader-state change), evaluate whether the idea is worth communicating, model
+the reader-state sequence the structure should produce, find the conceptual
+spine, diagnose hierarchy and emphasis, check evidence and epistemic precision
+— and only then review prose. Never open with sentence-level edits while a
+higher-level problem stands.
 
 ## Then the surface rubric
 
