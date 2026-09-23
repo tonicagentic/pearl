@@ -46,7 +46,7 @@ import {
 import { MarkdownContent } from "@/components/assistant-ui/elements/markdown-content";
 import { EveAuthorization } from "@/components/eve-authorization";
 import {
-  appendClientChatEvent,
+  appendClientChatEvents,
   checkClientSendLimit,
   createClientChat,
   saveClientChatSession,
@@ -56,6 +56,11 @@ import { createFallbackTitle } from "@/lib/chat/title";
 import type { ActiveChat, StorageMode } from "@/lib/chat/types";
 
 const EMPTY_EVENTS: readonly MessageStreamEvent[] = [];
+
+// Stream-event persistence flush cadence in database mode: events buffer
+// client-side and land in one batched server action per interval instead of
+// one invocation per event (docs: checkpoint-optimization-plan.md).
+const EVENT_FLUSH_INTERVAL_MS = 500;
 
 // Screenshots and photos are downscaled before staging: a 3000px screenshot
 // is ~3 MB while a 1600px JPEG is ~250 KB, and vision interpretation does not
@@ -290,6 +295,10 @@ export function AssistantChatSurface({
   const eventIndexRef = useRef(activeChat?.events.length ?? 0);
   const savedEventCountRef = useRef(activeChat?.events.length ?? 0);
   const currentTitleRef = useRef(activeChat?.title ?? "New chat");
+  const eventBufferRef = useRef<
+    { event: MessageStreamEvent; eventIndex: number }[]
+  >([]);
+  const eventFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isDisabled = !viewer || !setupStatus.appReady;
 
@@ -319,17 +328,51 @@ export function AssistantChatSurface({
       const eventIndex = eventIndexRef.current;
       eventIndexRef.current += 1;
 
-      void appendClientChatEvent(storageMode, {
-        chatId: id,
-        event,
-        eventIndex,
-      }).catch((error) => {
-        setClientError(
-          error instanceof Error
-            ? error.message
-            : "Failed to save stream progress.",
-        );
-      });
+      if (storageMode === "browser") {
+        void appendClientChatEvents(storageMode, {
+          chatId: id,
+          events: [{ event, eventIndex }],
+        }).catch((error) => {
+          setClientError(
+            error instanceof Error
+              ? error.message
+              : "Failed to save stream progress.",
+          );
+        });
+        return;
+      }
+
+      // Database mode: buffer events and flush on a timer — one server action
+      // per streamed event produced ~6 invocations/second in production logs
+      // (docs: checkpoint-optimization-plan.md). A crash between flushes loses
+      // at most the buffer; persistSnapshot still saves the full event set at
+      // turn end.
+      eventBufferRef.current.push({ event, eventIndex });
+
+      if (eventFlushTimerRef.current !== null) {
+        return;
+      }
+
+      eventFlushTimerRef.current = setTimeout(() => {
+        eventFlushTimerRef.current = null;
+        const batch = eventBufferRef.current;
+        eventBufferRef.current = [];
+
+        if (batch.length === 0) {
+          return;
+        }
+
+        void appendClientChatEvents(storageMode, {
+          chatId: id,
+          events: batch,
+        }).catch((error) => {
+          setClientError(
+            error instanceof Error
+              ? error.message
+              : "Failed to save stream progress.",
+          );
+        });
+      }, EVENT_FLUSH_INTERVAL_MS);
     },
     [storageMode],
   );

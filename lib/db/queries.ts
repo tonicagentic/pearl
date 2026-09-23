@@ -357,6 +357,52 @@ export async function appendChatEvent({
     });
 }
 
+export async function appendChatEvents({
+  chatId,
+  events,
+  userId,
+}: {
+  readonly chatId: string;
+  readonly events: readonly {
+    readonly event: MessageStreamEvent;
+    readonly eventIndex: number;
+  }[];
+  readonly userId: string;
+}) {
+  if (events.length === 0) {
+    return;
+  }
+
+  const [ownedChat] = await db
+    .select({ id: chat.id })
+    .from(chat)
+    .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
+    .limit(1);
+
+  if (!ownedChat) {
+    throw new Error("Chat not found.");
+  }
+
+  // One multi-row insert per flush instead of one roundtrip per streamed
+  // event (docs: checkpoint-optimization-plan.md). The conflict target keeps
+  // the same upsert semantics as the single-event append, so a flush that
+  // races a retry stays idempotent per (chat, eventIndex).
+  await db
+    .insert(chatEvent)
+    .values(
+      events.map((entry) => ({
+        chatId,
+        event: entry.event,
+        eventIndex: entry.eventIndex,
+        id: randomUUID(),
+      })),
+    )
+    .onConflictDoUpdate({
+      set: { event: sql`excluded.event` },
+      target: [chatEvent.chatId, chatEvent.eventIndex],
+    });
+}
+
 export async function saveChatSnapshot({
   chatId,
   events,

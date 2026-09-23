@@ -3,6 +3,7 @@
 import type { ClientSessionState, MessageStreamEvent } from "eve/client";
 import {
   appendChatEvent,
+  appendChatEvents,
   clearChatPendingMessage,
   createChat,
   deleteChatForUser,
@@ -137,6 +138,24 @@ export async function appendChatEventAction(input: {
     chatId: input.chatId,
     event: input.event,
     eventIndex: input.eventIndex,
+    userId: viewer.id,
+  });
+
+  return { ok: true };
+}
+
+export async function appendChatEventsAction(input: {
+  readonly chatId: string;
+  readonly events: readonly {
+    readonly event: MessageStreamEvent;
+    readonly eventIndex: number;
+  }[];
+}) {
+  const viewer = await requireViewer();
+
+  await appendChatEvents({
+    chatId: input.chatId,
+    events: input.events,
     userId: viewer.id,
   });
 

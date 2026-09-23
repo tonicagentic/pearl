@@ -3,6 +3,7 @@
 import type { ClientSessionState, MessageStreamEvent } from "eve/client";
 import {
   appendChatEventAction,
+  appendChatEventsAction,
   checkSendLimitAction,
   clearChatPendingMessageAction,
   createChatAction,
@@ -110,6 +111,30 @@ export async function appendClientChatEvent(
   }
 
   await appendChatEventAction(input);
+}
+
+export async function appendClientChatEvents(
+  storageMode: StorageMode,
+  input: {
+    readonly chatId: string;
+    readonly events: readonly {
+      readonly event: MessageStreamEvent;
+      readonly eventIndex: number;
+    }[];
+  },
+) {
+  if (storageMode === "browser") {
+    for (const entry of input.events) {
+      appendLocalChatEvent({
+        chatId: input.chatId,
+        event: entry.event,
+        eventIndex: entry.eventIndex,
+      });
+    }
+    return;
+  }
+
+  await appendChatEventsAction(input);
 }
 
 export async function saveClientChatSession(

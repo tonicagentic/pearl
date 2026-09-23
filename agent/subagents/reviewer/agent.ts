@@ -1,6 +1,6 @@
 import { defineAgent } from "eve";
 
-import { DEFAULT_MODEL } from "../../agent.ts";
+import { DEFAULT_MODEL, WORKFLOW_BATCHING } from "../../agent.ts";
 
 /**
  * Fresh-context reviewer subagent.
@@ -24,6 +24,8 @@ import { DEFAULT_MODEL } from "../../agent.ts";
  * @see The review rubric and verdict contract in this folder's `instructions.md`.
  */
 export default defineAgent({
+  // Same checkpoint batching as the root (docs: checkpoint-optimization-plan.md).
+  experimental: WORKFLOW_BATCHING,
   description:
     "Full editorial review of a finished draft for a specific content surface (blog, x, " +
     "newsletter, release notes, linkedin): a fresh-context pass that diagnoses the idea, the " +

@@ -24,8 +24,21 @@ export const GATEWAY_PROVIDER_OPTIONS = {
   disallowPromptTraining: true,
 } as const;
 
+// Checkpoint batching (docs: agent-config#workflow-checkpoint-batching): the
+// default of 1 checkpoints after every model call, which on Vercel Workflow
+// costs a state serialization + queue dispatch per call. Batching 4 calls per
+// step cuts that overhead ~4x on long tool-loop turns. Tradeoff: an
+// interrupted step re-runs earlier calls in its batch — acceptable because our
+// tools are replay-safe (file writes idempotent by path, lint reads,
+// overwrite-by-slug blob saves, ledger-protected notifications, and
+// approval-gated deletes that force a checkpoint anyway).
+export const WORKFLOW_BATCHING = {
+  workflow: { modelCallsPerStep: 4 },
+} as const;
+
 export default defineAgent({
   model: process.env.AGENT_MODEL_OVERRIDE?.trim() || DEFAULT_MODEL,
+  experimental: WORKFLOW_BATCHING,
   // Forwarded to every model call (agent turns and compaction). Applies to
   // experiment overrides too, so comparisons run under the same policy.
   modelOptions: {

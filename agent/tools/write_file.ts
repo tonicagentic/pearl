@@ -44,15 +44,14 @@ export async function persistAgentFile(
   }
 }
 
-// On a brand-new chat the browser client persists the eve session id to the
-// chat row from a React effect that can lag tens of seconds behind the turn
-// while reasoning events stream. Poll front-loaded so the first turn's files
-// still persist: 10x250ms, then 10x500ms, then 13x1s (~20s total).
-const CHAT_LINK_POLL_SCHEDULE_MS = [
-  ...Array<number>(10).fill(250),
-  ...Array<number>(10).fill(500),
-  ...Array<number>(13).fill(1_000),
-];
+// On a brand-new chat the browser client links the eve session id to the chat
+// row via onSessionChange, which fires when the runtime creates the session at
+// the start of the first turn. The poll is only a fallback for slow links.
+// Keep it short: this runs inside the durable turn step, so every poll second
+// is dead air in the turn (docs: checkpoint-optimization-plan.md). A write
+// that misses the link loses only its chat-scoped DB mirror — durable copies
+// go through save_artifact, and the note tells the model.
+const CHAT_LINK_POLL_SCHEDULE_MS = [...Array<number>(10).fill(250)];
 
 async function waitForChatLink(sessionId: string): Promise<string | null> {
   for (const delayMs of CHAT_LINK_POLL_SCHEDULE_MS) {

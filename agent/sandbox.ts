@@ -31,10 +31,15 @@ export default defineSandbox({
             continue;
           }
 
-          const response = await fetch(blob.url);
+          // Bounded fetch: a hung storage read must not stall the first turn
+          // of a fresh session (docs: checkpoint-optimization-plan.md). On any
+          // failure, stop restoring — the agent can still use restore_artifact.
+          const response = await fetch(blob.url, {
+            signal: AbortSignal.timeout(10_000),
+          });
 
           if (!response.ok) {
-            continue;
+            break;
           }
 
           await session.writeTextFile({

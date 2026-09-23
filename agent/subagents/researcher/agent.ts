@@ -1,6 +1,6 @@
 import { defineAgent } from "eve";
 
-import { DEFAULT_MODEL } from "../../agent.ts";
+import { DEFAULT_MODEL, WORKFLOW_BATCHING } from "../../agent.ts";
 
 /**
  * Fresh-context web-research subagent.
@@ -26,6 +26,8 @@ import { DEFAULT_MODEL } from "../../agent.ts";
  * @see The research methodology and output contract in this folder's `instructions.md`.
  */
 export default defineAgent({
+  // Same checkpoint batching as the root (docs: checkpoint-optimization-plan.md).
+  experimental: WORKFLOW_BATCHING,
   description:
     "Research a topic on the open web for facts, statistics, primary sources, and links the " +
     "writer needs but Notion doesn't cover. Runs refined searches against reliable sources and " +
