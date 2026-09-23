@@ -776,23 +776,66 @@ Treat readers who disagree as potential participants in the inquiry.
 
 ## Titles
 
-Prefer titles that name the idea plainly.
+Prefer titles that state the central idea, claim, or useful distinction in
+ordinary language.
 
-Good titles often:
+Good title patterns:
 
-* identify the object: "Designing my personal agent"
-* state the claim: "The development environment is the product"
-* name a useful distinction
-* pose a real question
-* introduce a memorable concept
+* Claim: "Agent design starts from state changes"
+* Distinction: "Evals are specifications, not benchmarks"
+* Question: "What should an agent remember?"
+* Object + consequence: "The hidden cost of shared context"
+* Method: "Designing agents from desired outcomes"
 
-Avoid clickbait, inflated stakes, and vague abstraction.
+Avoid titles that merely announce a topic ("Thoughts on agent design"),
+manufacture drama ("Everything you know about agents is wrong"), or become so
+clever the reader cannot predict the subject.
 
-The title should become more meaningful after reading the piece.
+The test: could an intelligent reader roughly describe what intellectual
+territory this piece occupies from the title alone? The title need not
+summarize the conclusion; it should establish the question space and the
+angle.
+
+## Subtitles
+
+Use a subtitle only when the title benefits from being short but leaves out
+important scope.
+
+Agent design starts from state changes
+A method for deriving agent behavior, implementation, and evals from desired
+outcomes.
+
+A subtitle should resolve ambiguity, not repeat the title.
 
 ## Headings
 
-Headings should help readers navigate the argument.
+Headings should name the intellectual move the section makes, not merely its
+subject.
+
+Compare "Evals" with "From requirements to evals". The second says what is
+happening in the argument. Likewise "Implementation" versus "Requirements
+constrain implementation" — the latter contains an idea.
+
+Prefer headings that are conceptual claims or transitions:
+
+* Start with the state change
+* Requirements constrain implementation
+* From requirements to evals
+* The method generalizes
+
+The editing test: read only the title and headings. They should form a
+coherent miniature version of the argument.
+
+Keep hierarchy shallow. For an essay or technical blog post, default to
+Title → H2 sections → occasional H3 within genuinely large sections. If a
+section needs four nested heading levels, the conceptual architecture probably
+needs reconsideration.
+
+Headings need conceptual parallelism, not grammatical parallelism. Mixing
+"Thinking" with "Requirements constrain implementation" and "From requirements
+to evals" is fine when each names its rhetorical function. Do not force
+everything into "Understanding X" just for visual consistency — tidy but
+informationally weaker.
 
 Prefer descriptive conceptual headings over clever labels.
 
@@ -846,24 +889,82 @@ When the ending appears, take it.
 
 ## Formatting
 
-Optimize for reading.
+Optimize for reading. Formatting is part of the argument's information
+architecture: its job is to help a reader perceive the shape of the piece
+before they have absorbed every sentence.
+
+The governing rule: editorial structure should expose the structure of the
+idea. Formatting should not make the writing look thoughtful; it should make
+the structure of the thought easier to perceive.
 
 * Use Markdown headings for genuine structural divisions.
 * Use bullets for sets, not ordinary prose.
 * Keep lists to two or more real items. A single-item list is prose pretending to be structure; write it as a sentence.
 * Use numbered lists when sequence or priority matters.
-* Use tables when comparison across dimensions is genuinely easier in tabular
-  form.
-* Use block quotes only when the source's exact language matters.
-* Use bold sparingly for navigation or a particularly important distinction.
-* Avoid excessive italics.
-* Do not bold random phrases throughout prose.
-* Keep code blocks focused on the relevant implementation.
-* Caption diagrams and images when their relevance is not immediately obvious.
+* Use lists when the items are genuinely coordinate — examples, requirements,
+  failure modes, criteria. Use prose when one idea causes or develops into the
+  next. Turning a causal argument into seven bullets destroys exactly what is
+  interesting about it.
+* Use tables when the relationship between the columns is itself something the
+  reader should notice: Initial state / Desired state / What changes, or
+  Requirement / Assertion. Do not use tables merely to compress prose. Column
+  names should be conceptual, short, and specific — never generic headers
+  like "Details", "Notes", or "Information" when the column's real meaning
+  can be said.
+* Use callouts and blockquotes for compression, not emphasis. Reserve visual
+  interruption for objects the reader should carry forward: a model,
+  heuristic, definition, rule, or compact derivation. A callout that just
+  pulls out a sentence because it sounds profound dilutes the ones that
+  matter.
+* Use diagrams for relationships prose makes cumbersome: loops, branching
+  processes, architectures, state transitions, hierarchies, data flows,
+  causal chains. Do not illustrate a concept just because diagrams make a
+  technical article look technical.
+* Keep code blocks focused on the relevant implementation; trim imports,
+  setup, boilerplate, and scaffolding unless one of them is the point. Code
+  comments in published snippets should orient the reader toward the idea,
+  not narrate syntax: "// Deterministic: counting is cheaper than judging."
+  beats "// Count the number of questions."
+* Caption figures, diagrams, and images by telling the reader what to notice —
+  "All three runs satisfy the original contract; Run 3 reveals a missing
+  epistemic constraint", not "Figure 2. Eval results". A reader scanning
+  captions should learn something, not merely identify objects.
+* Introduce examples by what they establish: "Run 3 shows what happens when
+  the behavioral contract is incomplete", not "Here's an example." Then stop
+  explaining once the example has established the point.
+* Use parentheticals only for genuinely secondary information that would
+  interrupt the sentence. If the information matters to the argument, give it
+  a sentence. A paragraph accumulating qualifying parentheses usually needs
+  restructuring. The same holds for footnotes: good for provenance and
+  method, bad as a basement where necessary reasoning hides.
+* Use bold sparingly — labels, important distinctions, things the reader needs
+  to locate. Italics for mild conceptual emphasis or introducing a term.
+  Neither should compensate for weak sentence construction: if a paragraph
+  needs five bold phrases to communicate hierarchy, rewrite the paragraph.
+* Use citations for provenance and links for paths. Put citations close enough
+  to the claim that the relationship is obvious; prefer primary sources for
+  factual claims; do not turn prose into a field of links. Link when the
+  destination is genuinely useful for inspecting, verifying, or continuing —
+  without making the body depend on the click.
 
 The default form of an essay is prose.
 
 Do not turn an essay into a slide deck made of bullets.
+
+Section openings should advance the argument immediately. The heading
+establishes location; the first sentence establishes the new intellectual
+move. Avoid "Now that we've discussed requirements, let's turn to evals."
+
+A section does not always need a conclusion. Often the best ending creates the
+necessity for the next section: "Requirements tell us what behavior we want."
+naturally creates the question "But how do we know whether we're getting it?"
+which the next section answers. That makes the piece read like one argument
+unfolding rather than a collection of well-written sections.
+
+The opening should establish a problem or unresolved tension, not preview
+every section. The conclusion should resolve that tension at a higher level of
+understanding, not summarize the table of contents. The reader should return
+to the original problem with a better model.
 
 ## Things that should almost never appear
 
@@ -1054,6 +1155,21 @@ Ask:
 * What remains if all generic explanation is removed?
 
 If the answer is "very little," the piece needs more thinking, not more polish.
+
+## The scaffolding pass
+
+After the substantive draft is done, temporarily ignore the prose and read
+only the scaffolding:
+
+title → subtitle → headings → callouts → tables → captions → code comments →
+conclusion
+
+Ask whether that skeleton communicates the intellectual architecture of the
+piece. A reader scanning only it should reconstruct the reasoning.
+
+Then the reverse: read only the prose and ask whether the editorial scaffolding
+is actually necessary. The two layers should complement each other — the prose
+develops the reasoning; the editorial structure makes the reasoning visible.
 
 ## Publication test
 

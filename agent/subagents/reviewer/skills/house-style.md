@@ -16,6 +16,12 @@ Always on — they apply even to a one-line chat note:
 - Em dashes sparingly: rare, deliberate emphasis only; when a draft leans on them as a default connector, revise toward commas, colons, or parentheses.
 - Arrows (→) reserved for diagrams, equations, and deliberately schematic passages. In prose, express state changes as transformations ("from X to Y", "X becomes Y", or a precise transformation verb); in tables, use separate Initial state and Desired state columns.
 - No single-item lists: a list needs at least two real items; one item is a sentence, so write it as prose.
+- Structural scaffolding (from the public-editorial-voice skill's Formatting rules, the mechanically checkable parts):
+  - No generic table headers ("Details", "Notes", "Information") — column names should say what the column represents.
+  - No forced heading parallelism — three or more headings sharing the same first word ("Understanding X" ×3) read as tidiness over information.
+  - No transition openers after headings — the first sentence of a section advances the argument; never "Now that we've discussed X, let's turn to Y."
+  - No bold overuse — four or more bold spans in one paragraph means the hierarchy should be rewritten, not decorated.
+- No single-item lists: a list needs at least two real items; one item is a sentence, so write it as prose.
 - Oxford comma.
 - Straight quotes and apostrophes.
 - Active voice by default.

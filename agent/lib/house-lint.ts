@@ -64,6 +64,22 @@ const HYPE_PATTERN = new RegExp(
   "i",
 );
 
+/** Consecutive markdown list-item lines, kept as groups. */
+const LIST_ITEM = /^\s*(?:[-*+]|\d+\.)\s+\S/;
+
+/** Generic table header cells the Formatting rule bans: name what the column represents. */
+const GENERIC_TABLE_CELL = /^(details|notes|information|misc)$/i;
+
+/** First sentence after a heading must advance the argument, not navigate. */
+const TRANSITION_OPENER =
+  /^(?:now that|having (?:discussed|covered|established)|let'?s (?:now )?turn|in this section|as we'?ve (?:seen|discussed))\b/i;
+
+/** Heading first word, for forced-parallelism detection. */
+const HEADING_FIRST_WORD = /^#{2,3}\s+(\w[\w'-]*)/;
+
+/** Bold spans in one paragraph block; beyond this the hierarchy is decoration. */
+const MAX_BOLD_PER_BLOCK = 3;
+
 /** Lines inside fenced code blocks are excluded from every check. */
 function scanOutsideFences(
   text: string,
@@ -82,9 +98,6 @@ function scanOutsideFences(
     }
   }
 }
-
-/** Consecutive markdown list-item lines, kept as groups. */
-const LIST_ITEM = /^\s*(?:[-*+]|\d+\.)\s+\S/;
 
 /**
  * Find markdown lists with exactly one item.
@@ -118,6 +131,36 @@ export function singleItemListCount(text: string): number {
   }
 
   return count;
+}
+
+/**
+ * Find generic table header cells ("Details", "Notes", "Information").
+ *
+ * @remarks
+ * The Formatting rule: column names should say what the column represents, not
+ * use a structural placeholder. Applies to markdown table header rows outside
+ * fenced code blocks.
+ *
+ * @param text - Draft text to scan.
+ * @returns The offending header labels, lowercased and deduplicated.
+ */
+export function genericTableHeaders(text: string): string[] {
+  const found = new Set<string>();
+
+  scanOutsideFences(text, (line) => {
+    if (!line.includes("|")) {
+      return;
+    }
+
+    for (const cell of line.split("|")) {
+      const label = cell.trim().replace(/^[`*_]/, "").replace(/[`*_]$/, "");
+      if (GENERIC_TABLE_CELL.test(label)) {
+        found.add(label.toLowerCase());
+      }
+    }
+  });
+
+  return [...found];
 }
 
 /**
@@ -184,6 +227,68 @@ export function houseLint(text: string): string[] {
       `Hype vocabulary found ("${hypeMatch}") — replace evaluation with evidence (precision over intensity).`,
     );
   }
+
+  if (hypeMatch) {
+    violations.push(
+      `Hype vocabulary found ("${hypeMatch}") — replace evaluation with evidence (precision over intensity).`,
+    );
+  }
+
+  const tableHeaders = genericTableHeaders(text);
+  if (tableHeaders.length > 0) {
+    violations.push(
+      `Generic table header (${[...new Set(tableHeaders)].join(", ")}) — name what the column represents ("Requirement", "Initial state"), not a placeholder.`,
+    );
+  }
+
+  const firstWords = new Map<string, number>();
+  scanOutsideFences(text, (line) => {
+    const match = HEADING_FIRST_WORD.exec(line);
+    if (match) {
+      const word = match[1].toLowerCase();
+      firstWords.set(word, (firstWords.get(word) ?? 0) + 1);
+    }
+  });
+  const forced = [...firstWords.entries()].filter(([, n]) => n >= 3);
+  if (forced.length > 0) {
+    violations.push(
+      `Forced heading parallelism: "${forced.map(([w]) => w).join('", "')}" starts ${forced.map(([, n]) => n).join("/")} headings — headings need conceptual, not grammatical, parallelism; name each section's intellectual move.`,
+    );
+  }
+
+  let afterHeading = false;
+  let boldInBlock = 0;
+  scanOutsideFences(text, (line) => {
+    if (/^#{1,6}\s/.test(line)) {
+      afterHeading = true;
+      return;
+    }
+
+    if (line.trim() === "") {
+      boldInBlock = 0;
+      return;
+    }
+
+    boldInBlock += (line.match(/\*\*[^*]+\*\*/g) ?? []).length;
+    if (boldInBlock > MAX_BOLD_PER_BLOCK) {
+      violations.push(
+        "Bold overuse — if a paragraph needs this many bold phrases to communicate hierarchy, rewrite the paragraph.",
+      );
+      boldInBlock = -1000;
+    }
+
+    if (afterHeading && TRANSITION_OPENER.test(line.trim())) {
+      violations.push(
+        "Transition opener after a heading — the heading establishes location; the first sentence should advance the argument, not navigate (\"Now that we've discussed X, let's turn to Y\").",
+      );
+      afterHeading = false;
+      return;
+    }
+
+    if (line.trim() !== "") {
+      afterHeading = false;
+    }
+  });
 
   return violations;
 }

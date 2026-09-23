@@ -80,4 +80,80 @@ describe("house lint", () => {
     ].join("\n");
     assert.deepEqual(houseLint(text), []);
   });
+
+  it("flags generic table headers", () => {
+    const table = [
+      "| Thing | Details |",
+      "| --- | --- |",
+      "| state change | becomes an eval |",
+    ].join("\n");
+    assert.ok(houseLint(table).some((v) => v.includes("Generic table header")));
+    const good = [
+      "| Initial state | Desired state |",
+      "| --- | --- |",
+      "| felt sense | articulated thought |",
+    ].join("\n");
+    assert.deepEqual(
+      houseLint(good).filter((v) => v.includes("table header")),
+      [],
+    );
+  });
+
+  it("flags forced heading parallelism", () => {
+    const text = [
+      "## Understanding thinking",
+      "body",
+      "## Understanding implementation",
+      "body",
+      "## Understanding evals",
+      "body",
+    ].join("\n");
+    assert.ok(houseLint(text).some((v) =>
+      v.includes("parallelism"),
+    ));
+    const mixed = [
+      "## Thinking",
+      "body",
+      "## Requirements constrain implementation",
+      "body",
+      "## From requirements to evals",
+      "body",
+    ].join("\n");
+    assert.deepEqual(
+      houseLint(mixed).filter((v) => v.includes("parallelism")),
+      [],
+    );
+  });
+
+  it("flags transition openers after headings", () => {
+    const text = [
+      "## From requirements to evals",
+      "",
+      "Now that we've discussed requirements, let's turn to evals.",
+      "",
+      "The rest of the section.",
+    ].join("\n");
+    assert.ok(houseLint(text).some((v) => v.includes("Transition opener")));
+    const strong = [
+      "## From requirements to evals",
+      "",
+      "Behavioral evals answer the second question: how do we know whether we're getting it?",
+    ].join("\n");
+    assert.deepEqual(
+      houseLint(strong).filter((v) => v.includes("Transition opener")),
+      [],
+    );
+  });
+
+  it("flags bold overuse in one paragraph", () => {
+    const text =
+      "The **claim** matters because **this** and **that** and **the other** all **interact**.";
+    assert.ok(houseLint(text).some((v) => v.includes("Bold overuse")));
+    const fine =
+      "The **claim** matters because **this** and **that** interact.";
+    assert.deepEqual(
+      houseLint(fine).filter((v) => v.includes("Bold overuse")),
+      [],
+    );
+  });
 });
