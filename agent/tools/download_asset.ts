@@ -1,6 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { isReservedWriterUrl } from "#lib/writer-preferences.js";
+import { isReservedArtifactPath, isReservedArtifactUrl } from "#lib/artifacts.js";
 
 /**
  * Host suffix that a downloadable URL must end with.
@@ -32,7 +33,7 @@ export default defineTool({
    * `success: false` with an `error` message.
    */
   async execute({ url }) {
-    if (isReservedWriterUrl(url)) {
+    if (isReservedWriterUrl(url) || isReservedArtifactUrl(url)) {
       return {
         error: "Writer preferences are private — use get_writer_preferences.",
         success: false,

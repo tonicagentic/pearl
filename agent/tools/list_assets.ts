@@ -2,6 +2,7 @@ import { list } from "@vercel/blob";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { isReservedWriterPath } from "#lib/writer-preferences.js";
+import { isReservedArtifactPath, isReservedArtifactUrl } from "#lib/artifacts.js";
 
 /**
  * Tool that lists assets in Vercel Blob storage, optionally filtered by path prefix.
@@ -25,7 +26,7 @@ export default defineTool({
     try {
       const { blobs, hasMore, cursor } = await list({ limit, prefix });
       const visible = blobs.filter(
-        (blob) => !isReservedWriterPath(blob.pathname)
+        (blob) => !isReservedWriterPath(blob.pathname) && !isReservedArtifactPath(blob.pathname)
       );
       return {
         assets: visible.map((blob) => ({

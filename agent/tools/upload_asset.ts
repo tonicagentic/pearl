@@ -5,6 +5,7 @@ import {
   isReservedWriterPath,
   WRITER_PREFERENCES_PREFIX,
 } from "#lib/writer-preferences.js";
+import { isReservedArtifactPath, isReservedArtifactUrl } from "#lib/artifacts.js";
 
 /**
  * Tool that uploads text or binary content to Vercel Blob storage.
@@ -35,7 +36,7 @@ export default defineTool({
     addRandomSuffix,
     allowOverwrite,
   }) {
-    if (isReservedWriterPath(pathname)) {
+    if (isReservedWriterPath(pathname) || isReservedArtifactPath(pathname)) {
       return {
         contentType: contentType ?? "unknown",
         downloadUrl: "",

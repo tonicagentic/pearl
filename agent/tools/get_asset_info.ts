@@ -2,6 +2,7 @@ import { head } from "@vercel/blob";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { isReservedWriterUrl } from "#lib/writer-preferences.js";
+import { isReservedArtifactPath, isReservedArtifactUrl } from "#lib/artifacts.js";
 
 /**
  * Tool that fetches metadata for a Vercel Blob asset without downloading its content.
@@ -22,7 +23,7 @@ export default defineTool({
    * @returns `exists: true` with the asset's metadata, or `exists: false` with an `error`.
    */
   async execute({ url }) {
-    if (isReservedWriterUrl(url)) {
+    if (isReservedWriterUrl(url) || isReservedArtifactUrl(url)) {
       return {
         error: "Writer preferences are private — use get_writer_preferences.",
         exists: false,

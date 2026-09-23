@@ -5,21 +5,23 @@ see the draft session 1 wrote.
 
 ## Diagnosis
 
-- Each chat session gets its own ephemeral sandbox (a microsandbox VM). The
-  written-works rule directs the agent to write pieces to
-  `/workspace/<slug>.md` in that sandbox — so the file dies with the session.
-- The Blob layer already exists and works: `upload_asset`, `list_assets`,
-  `get_asset_info`, `download_asset`, `delete_asset` against Vercel Blob (the
-  store is connected; `BLOB_READ_WRITE_TOKEN` is present; ambient OIDC also
-  works per the tool docs). Nothing routes the agent's work products into it,
-  and nothing in the UI shows what's stored.
-- The reference (`vercel-labs/eve-content-agent-template`, the project this
-  repo descends from) states the principle plainly: generated files and assets
-  live in Vercel Blob.
+Three storage layers were found, with one gap:
 
-Confirm before building (Phase 0): in one session write `/workspace/ping.md`;
-in a second session show it's absent while `list_assets` still returns
-earlier blobs. This pins the failure to sandbox ephemerality, not Blob.
+- Each chat session gets its own ephemeral sandbox. The written-works rule
+  directs the agent to write pieces to `/workspace/<slug>.md` in that sandbox.
+- A Postgres mirror already exists: `write_file`/`edit_file` (overridden
+  tools) copy every write into `agent_file` + `agent_file_revision` keyed by
+  **chat + path**, and `agent/sandbox.ts` re-seeds a new session **for the
+  same chat** from it. So same-chat sessions recover files; the mirror is
+  chat-scoped, so a new chat starts empty — the user-visible bug.
+- The Blob layer exists (`upload_asset`, `list_assets`, `get_asset_info`,
+  `download_asset`, `delete_asset`, store connected, `BLOB_READ_WRITE_TOKEN`
+  present) but nothing routes work products into it, and nothing in the UI
+  shows what's stored.
+
+Phase A therefore adds the missing layer rather than inventing storage: a
+principal-scoped Blob mirror (`artifacts/<scope>/…`) with a session-start
+restore, alongside the chat-scoped DB mirror, which stays untouched.
 
 ## Target behavior
 
@@ -70,8 +72,8 @@ editing.
 
 | Phase | Work | Size |
 | --- | --- | --- |
-| 0 | Reproduce the failure (two sessions, sandbox vs Blob) to confirm the diagnosis on the record | s |
-| A | `save_artifact` tool + `artifacts/` key scheme + reserved-path guard; instructions updated (the written-works rule gains "sync to Blob after each write"; new-session bootstrap: `list_assets` when the user references earlier work) | m |
+| 0 | Diagnosis (done on the record): chat-scoped DB seeding exists; the gap is cross-chat durability, Blob routing, and UI | ✓ |
+| A | `save_artifact` / `list_artifacts` / `restore_artifact` tools + the `artifacts/<scope>/` key scheme + reserved-path guards + the onSession Blob restore + instructions | ✓ |
 | B | `/artifacts` page + API routes: list (name, size, uploadedAt), markdown preview for text, download, delete with confirm; empty and error states | m |
 | C | Evals: a multi-session eval (write in session 1; session 2 lists, loads, and edits the persisted artifact) and a UI smoke eval | m |
 | D | Polish: artifact links in chat that survive the session (`/artifacts/...` alongside `file:///workspace/...`), upload-from-UI if wanted | s |
