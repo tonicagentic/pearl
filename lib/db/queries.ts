@@ -452,36 +452,37 @@ export async function upsertAgentFile({
 }: UpsertAgentFileInput): Promise<void> {
   const byteLength = Buffer.byteLength(content, "utf8");
 
-  await db.transaction(async (tx) => {
-    // Append-only revision history: every save records the next revision for
-    // this (chat, path). The unique (chat, path, revision) index makes the
-    // counter safe under concurrent writes — a conflict fails the save
-    // rather than skipping a version.
-    const [revisionRow] = await tx
-      .select({
-        next: sql<number>`COALESCE(MAX(${agentFileRevision.revision}), 0) + 1`,
-      })
-      .from(agentFileRevision)
-      .where(
-        and(eq(agentFileRevision.chatId, chatId), eq(agentFileRevision.path, path)),
-      );
+  // No transaction here: the neon-http driver (production) does not support
+  // them ("No transactions support in neon-http driver"), so these run as
+  // sequential statements. Order matters — update the current content first,
+  // then append the revision: a failure in between leaves the file content
+  // current with one missing history row (recoverable), instead of a history
+  // entry for content the file never held. Concurrent saves are already
+  // serialized per file by withFileLock in the tools.
+  const [revisionRow] = await db
+    .select({
+      next: sql<number>`COALESCE(MAX(${agentFileRevision.revision}), 0) + 1`,
+    })
+    .from(agentFileRevision)
+    .where(
+      and(eq(agentFileRevision.chatId, chatId), eq(agentFileRevision.path, path)),
+    );
 
-    await tx.insert(agentFileRevision).values({
-      id: randomUUID(),
-      chatId,
-      path,
-      revision: revisionRow.next,
-      content,
-      byteLength,
+  await db
+    .insert(agentFile)
+    .values({ id: randomUUID(), chatId, path, content, byteLength })
+    .onConflictDoUpdate({
+      target: [agentFile.chatId, agentFile.path],
+      set: { content, byteLength, updatedAt: new Date() },
     });
 
-    await tx
-      .insert(agentFile)
-      .values({ id: randomUUID(), chatId, path, content, byteLength })
-      .onConflictDoUpdate({
-        target: [agentFile.chatId, agentFile.path],
-        set: { content, byteLength, updatedAt: new Date() },
-      });
+  await db.insert(agentFileRevision).values({
+    id: randomUUID(),
+    chatId,
+    path,
+    revision: revisionRow.next,
+    content,
+    byteLength,
   });
 }
 

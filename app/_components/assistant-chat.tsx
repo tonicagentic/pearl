@@ -6,6 +6,7 @@ import {
   useEveSession,
 } from "@assistant-ui/eve";
 import { createChatMessageReducer } from "@/lib/chat/message-reducer";
+import { cn } from "@/lib/utils";
 import {
   CompositeAttachmentAdapter,
   SimpleImageAttachmentAdapter,
@@ -541,49 +542,58 @@ function isMarkdownPath(path: string): boolean {
 function CanvasLayout() {
   const { document: doc, closeDocument } = useCanvas();
 
-  // The runs feed the delegated-task cards inside the thread (both branches).
+  // One Thread instance whose container changes layout when a document is
+  // open. Rendering the two states as separate branches would remount the
+  // whole thread on every canvas open/close — which looked like a page
+  // refresh when clicking a file link.
   return (
     <SubagentRunsProvider>
-      {!doc ? (
-        <div className="flex min-h-0 flex-1 flex-col">
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col",
+          doc && "md:flex-row",
+        )}
+      >
+        <div
+          className={cn(
+            "flex min-h-0 min-w-0 flex-col",
+            doc
+              ? "max-md:flex-1 md:w-[26rem] md:shrink-0 md:border-r md:border-border/60"
+              : "flex-1",
+          )}
+        >
           <Thread components={{ TaskGroup }} />
         </div>
-      ) : (
-    <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-      <div className="border-border/60 flex min-h-0 min-w-0 flex-col max-md:flex-1 md:w-[26rem] md:shrink-0 md:border-r">
-        <div className="flex min-h-0 flex-1 flex-col">
-          <Thread components={{ TaskGroup }} />
-        </div>
+        {doc && (
+          <div className="border-border/60 bg-background flex min-h-0 flex-1 flex-col max-md:h-80 max-md:shrink-0 max-md:border-t md:border-l">
+            <CanvasSplitHeader
+              title={doc.path}
+              version={doc.version}
+              saved={!doc.running}
+              onCopy={
+                doc.content
+                  ? () => navigator.clipboard.writeText(doc.content)
+                  : undefined
+              }
+              onClose={closeDocument}
+            />
+            <CanvasSplitBody writing={doc.running} className="min-h-0 flex-1">
+              {doc.content ? (
+                isMarkdownPath(doc.path) ? (
+                  <MarkdownContent
+                    text={doc.content}
+                    className="mx-auto max-w-[65ch] text-[13px]"
+                  />
+                ) : (
+                  <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
+                    {doc.content}
+                  </CanvasSplitLine>
+                )
+              ) : null}
+            </CanvasSplitBody>
+          </div>
+        )}
       </div>
-      <div className="border-border/60 bg-background flex min-h-0 flex-1 flex-col max-md:h-80 max-md:shrink-0 max-md:border-t md:border-l">
-        <CanvasSplitHeader
-          title={doc.path}
-          version={doc.version}
-          saved={!doc.running}
-          onCopy={
-            doc.content
-              ? () => navigator.clipboard.writeText(doc.content)
-              : undefined
-          }
-          onClose={closeDocument}
-        />
-        <CanvasSplitBody writing={doc.running} className="min-h-0 flex-1">
-          {doc.content ? (
-            isMarkdownPath(doc.path) ? (
-              <MarkdownContent
-                text={doc.content}
-                className="mx-auto max-w-[65ch] text-[13px]"
-              />
-            ) : (
-              <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
-                {doc.content}
-              </CanvasSplitLine>
-            )
-          ) : null}
-        </CanvasSplitBody>
-      </div>
-    </div>
-      )}
     </SubagentRunsProvider>
   );
 }
