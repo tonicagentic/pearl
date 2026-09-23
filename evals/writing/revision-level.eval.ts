@@ -33,7 +33,7 @@ export default defineEval({
 
     t.judge.autoevals
       .closedQA(
-        "The feedback diagnoses the argument-level root problem: the section's support is circular ('teams that self-host are happier because owning infrastructure gives flexibility, and flexibility is what makes teams happy') and the conclusion is asserted rather than demonstrated ('which proves the point' proves nothing — one anecdote is not evidence). It presents this as the primary, higher-level finding and does not lead with or fixate on the sentence-level awkwardness. If it mentions the sentence at all, it is secondary, or used as the doorway into the deeper problem.",
+        "The feedback diagnoses an argument-level root problem as its primary, higher-level finding. The fixture plants two such roots, and either may lead: (a) the section's support is circular ('teams that self-host are happier because owning infrastructure gives flexibility, and flexibility is what makes teams happy') and the conclusion is asserted rather than demonstrated ('which proves the point' proves nothing — one anecdote is not evidence), or (b) the heading and the body argue opposite positions ('Why teams regret self-hosting' vs 'the correct one for any team'), so the section never commits to a claim it can defend. The primary finding must be one of these two — not the sentence-level awkwardness, the meta note-to-self, or the filler closer, which may appear only as secondary findings.",
         { on: reply },
       )
       .atLeast(0.8);

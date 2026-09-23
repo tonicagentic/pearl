@@ -12,7 +12,7 @@ description: >
 The piece lives in a file (`write_file`, `/workspace/<slug>.md`) and stays the
 single source of truth; this skill governs the collaboration around that file:
 outlining, research, citations, hooks, section feedback, and final polish. It
-pairs with `audience-adaptation` (model the reader first), `writing` (the
+pairs with `audience-adaptation` (model the reader first), `public_editorial_voice` (the
 sentence craft), and `house-style` (the voice rules) — those skills hold
 whenever they are loaded; this one holds the workflow.
 

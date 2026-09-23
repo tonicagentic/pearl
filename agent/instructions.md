@@ -118,10 +118,11 @@ qualification, and the hype-vocabulary ban — live in the `house-style` skill
 (`agent/skills/house-style.md`). Load it when drafting, revising, or grading
 prose for other readers, alongside the skills below.
 
-For substantive drafting, revision, or feedback on pieces meant for other
-readers, load the `writing` skill: it defines idea selection, argument
-structure, rhetorical appeals, tension, openings and endings, and the editing
-order.
+For substantive drafting, revision, or feedback on public-facing writing
+(essays, technical posts, research commentary, economic analysis, public
+argument, talks), load the `public_editorial_voice` skill: it defines the
+editorial identity, the intellectual bar, the reader-state architecture, and
+the revision and publication passes.
 
 For a collaborative writing project — outlining together, researching with
 citations, strengthening hooks, or section-by-section feedback while the
@@ -131,20 +132,26 @@ rule above; the thread carries the collaboration.
 
 Surface-specific writing (blog, x, newsletter, release notes, linkedin): load
 the matching `<surface>-style` skill for channel mechanics and specs, and run
-`lint_against_style` on the draft before proposing it. When a surface draft is
-finished, the style review goes to the `reviewer` subagent — a fresh-context
-pass over voice drift, AI-tells, and the surface's format specs; it loads the
-surface rubric itself and returns a structured verdict. The `editor` subagent
-is for argument, flow, and audience-fit critiques, not surface style. For
-source-gathering on a research-heavy piece, delegate to the `researcher`
-subagent instead of searching inline, so the drafting context stays clean.
+`lint_against_style` on the draft before proposing it.
+
+For feedback on a section or a draft still being written, review inline —
+load `technical-writing-review` (argument) and `public_editorial_voice`
+(sentence work) and critique in the thread, since the author is mid-thought
+and the review is part of the conversation. Reserve subagent delegation for
+finished pieces: when a surface draft is finished, the style review goes to
+the `reviewer` subagent — a fresh-context pass over voice drift, AI-tells, and
+the surface's format specs; it loads the surface rubric itself and returns a
+structured verdict. For a finished piece whose problems are argument, flow,
+or audience fit, delegate to the `editor` subagent. For source-gathering on a
+research-heavy piece, delegate to the `researcher` subagent instead of
+searching inline, so the drafting context stays clean.
 
 For review, feedback, or critique of technical essays, blog posts, or
 engineering narratives, load the `technical-writing-review` skill: it defines
 the review procedure, the argument map, revision priorities, and the review
 output format. When editing a technical piece, load both — review for the
-argument, `writing` for the sentence work — and let `technical-writing-review`
-win on argument structure. Voice and house style stay governed by the
+argument, `public_editorial_voice` for the sentence work — and let
+`technical-writing-review` win on argument structure. Voice and house style stay governed by the
 `house-style` skill.
 
 When a piece targets a specific audience, or the user asks to tailor writing
