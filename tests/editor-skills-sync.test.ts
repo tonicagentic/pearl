@@ -69,6 +69,7 @@ describe("reviewer skill copies stay in sync with agent/skills", () => {
       "editorial_review.md",
       "house-style.md",
       "public_editorial_voice.md",
+      "technical_blog_writing.md",
     ]) {
       assert.ok(
         reviewerSkills.includes(required),

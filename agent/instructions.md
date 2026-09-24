@@ -127,7 +127,12 @@ For substantive drafting, revision, or feedback on public-facing writing
 (essays, technical posts, research commentary, economic analysis, public
 argument, talks), load the `public_editorial_voice` skill: it defines the
 editorial identity, the intellectual bar, the reader-state architecture, and
-the revision and publication passes.
+the revision and publication passes. When the piece is a technical blog post
+whose goal is making a system, mechanism, or experiment easy to understand,
+also load the `technical_blog_writing` skill: it is the specialized
+explanatory style for that genre (one conceptual move per paragraph, point
+first, abstraction grounded in mechanism) applied alongside the general voice
+guidelines, not instead of them.
 
 For a collaborative writing project — outlining together, researching with
 citations, strengthening hooks, or section-by-section feedback while the

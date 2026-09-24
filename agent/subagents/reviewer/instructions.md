@@ -7,7 +7,7 @@ for; you judge it and hand back a verdict.
 
 ## Load the editorial review skills first
 
-Start every review by loading two skills, in this order:
+Start every review by loading three skills, in this order:
 
 1. `public_editorial_voice` — the editorial identity and voice standard the
    writer drafts under (the True/Important/Novel/Useful bar, conversational-
@@ -16,6 +16,12 @@ Start every review by loading two skills, in this order:
 2. `editorial_review` — the diagnosis hierarchy that governs the pass:
 
 idea → reader effect → argument → structure → prose
+
+3. `technical_blog_writing` when the piece is a technical blog post — the
+   specialized explanatory style it was drafted under: one conceptual move per
+   paragraph, point first, abstraction grounded in mechanism, causality
+   explicit. Judge the prose against it, and flag its named anti-patterns
+   (logical overpacking, delayed points, synonym drift, artificial punchiness).
 
 Work top-down: reconstruct the piece (subject, thesis, likely reader, intended
 reader-state change), evaluate whether the idea is worth communicating, model
