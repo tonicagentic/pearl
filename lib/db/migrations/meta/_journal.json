@@ -50,6 +50,13 @@
       "when": 1789873270602,
       "tag": "0006_high_khan",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790208845895,
+      "tag": "0007_heavy_alex_wilder",
+      "breakpoints": true
     }
   ]
 }

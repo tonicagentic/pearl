@@ -1,9 +1,11 @@
 import { defineTool } from "eve/tools";
 import { writeFile } from "eve/tools/write_file";
 import { houseLint } from "../lib/house-lint.js";
+import { artifactsPrefix, normalizeArtifactSlug } from "../lib/artifacts.js";
+import { put } from "@vercel/blob";
 import { withFileLock } from "@/lib/agent/file-mutex";
 import {
-  getChatIdByEveSessionId,
+  getChatLinkByEveSessionId,
   upsertAgentFile,
 } from "@/lib/db/queries";
 
@@ -19,19 +21,54 @@ export async function persistAgentFile(
   content: string,
 ): Promise<{ persisted: boolean; note?: string }> {
   try {
-    const chatId = await waitForChatLink(ctx.session.id);
+    const chatLink = await waitForChatLink(ctx.session.id);
 
-    if (!chatId) {
+    if (!chatLink) {
       return {
         persisted: false,
         note: "File written to the sandbox, but no chat is linked to this session yet, so it was not saved for later use.",
       };
     }
 
+    // Blob-primary: the current content lives once, principal-scoped, so the
+    // document is durable across chats and visible on the artifacts page
+    // without any agent action. Postgres holds the reference, metadata, and
+    // the revision history. If the Blob store is unreachable, fall back to
+    // storing content in Postgres (legacy mode) so the chat-scoped path
+    // still works.
+    let blobPathname: string | undefined;
+
+    try {
+      const prefix = artifactsPrefix({
+        principalId: chatLink.userId,
+        principalType: "user",
+      });
+
+      if (prefix) {
+        const slug = normalizeArtifactSlug(path);
+
+        if (slug) {
+          const blob = await put(`${prefix}${slug}`, content, {
+            access: "public",
+            addRandomSuffix: false,
+            allowOverwrite: true,
+            contentType: "text/markdown",
+          });
+
+          blobPathname = blob.pathname ?? `${prefix}${slug}`;
+        }
+      }
+    } catch {
+      // Blob unavailable: the Postgres fallback below keeps the write durable
+      // for this chat.
+      blobPathname = undefined;
+    }
+
     await upsertAgentFile({
-      chatId,
+      chatId: chatLink.id,
       path,
       content,
+      blobPathname,
     });
 
     return { persisted: true };
@@ -54,12 +91,12 @@ export async function persistAgentFile(
 // go through save_artifact, and the note tells the model.
 const CHAT_LINK_POLL_SCHEDULE_MS = [...Array<number>(10).fill(250)];
 
-async function waitForChatLink(sessionId: string): Promise<string | null> {
+async function waitForChatLink(sessionId: string): Promise<{ id: string; userId: string } | null> {
   for (const delayMs of CHAT_LINK_POLL_SCHEDULE_MS) {
-    const chatId = await getChatIdByEveSessionId(sessionId);
+    const link = await getChatLinkByEveSessionId(sessionId);
 
-    if (chatId) {
-      return chatId;
+    if (link) {
+      return link;
     }
 
     await new Promise((resolve) => setTimeout(resolve, delayMs));

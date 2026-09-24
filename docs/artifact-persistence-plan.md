@@ -83,6 +83,30 @@ store visible; C is the regression guard. The uni-reviews plan
 (`docs/unified-reviewer-plan.md`) is unaffected — this storage layer sits under
 both the writing flow and the eval suite.
 
+## Phase B+ decision: Blob is the source of truth (2026-09-23)
+
+Phase A shipped auto-restore plus a manual `save_artifact`, which split
+durability across two stores with a discipline-dependent bridge — the working
+document was invisible on the Artifacts page whenever the agent forgot to
+sync, and legacy seeds could clobber newer Blob state. Resolved on
+`feature/blob-primary-documents`:
+
+- **Blob holds the current content, once.** Every `write_file`/`edit_file`
+  syncs to `artifacts/<principal-scope>/<basename>` inside the shared persist
+  choke point. `/artifacts` always shows the working documents.
+- **Postgres holds references, metadata, and the revision history.**
+  `agent_file.blob_pathname` points at the Blob object; the `content` column
+  is null for blob-backed rows and stores content only as a fallback when a
+  Blob write fails (legacy rows keep working unchanged). The revision table
+  keeps full per-revision content — it is the audit trail.
+- **`save_artifact` is removed** — auto-sync supersedes it. `list_artifacts`
+  and `restore_artifact` remain for on-demand use.
+- **Newer-wins restore**: legacy Postgres-only seeds are skipped when a Blob
+  artifact of the same file is at least as recent, closing the
+  stale-overwrite conflict.
+- Migration `0007`: `agent_file.content` becomes nullable, adds
+  `blob_pathname`. Existing rows keep working (legacy read/seed path).
+
 ## Open questions (decide at Phase A start)
 
 1. Scope key: single-user (`artifacts/main/`) vs per-principal from day one?

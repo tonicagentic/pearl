@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, gte, lt, or, sql } from "drizzle-orm";
+import { get } from "@vercel/blob";
+import { and, asc, desc, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 import type { ClientSessionState, MessageStreamEvent } from "eve/client";
 import { isChatTurnSettledEvent } from "@/lib/chat/events";
 import type { ActiveChat, ChatListItem, ChatListPage } from "@/lib/chat/types";
@@ -481,10 +482,28 @@ export async function getChatIdByEveSessionId(
   return row?.id ?? null;
 }
 
+/**
+ * The chat row linked to an eve session, with its owner: persistAgentFile
+ * derives the principal-scoped Blob key from the owner, never model input.
+ */
+export async function getChatLinkByEveSessionId(
+  sessionId: string,
+): Promise<{ id: string; userId: string } | null> {
+  const [row] = await db
+    .select({ id: chat.id, userId: chat.userId })
+    .from(chat)
+    .where(sql`${chat.eveSession} ->> 'sessionId' = ${sessionId}`)
+    .limit(1);
+
+  return row ?? null;
+}
+
 export type UpsertAgentFileInput = {
   readonly chatId: string;
   readonly path: string;
   readonly content: string;
+  /** Set when the current content lives in Blob; then `content` is history-only. */
+  readonly blobPathname?: string;
 };
 
 /**
@@ -495,6 +514,7 @@ export async function upsertAgentFile({
   chatId,
   path,
   content,
+  blobPathname,
 }: UpsertAgentFileInput): Promise<void> {
   const byteLength = Buffer.byteLength(content, "utf8");
 
@@ -516,10 +536,24 @@ export async function upsertAgentFile({
 
   await db
     .insert(agentFile)
-    .values({ id: randomUUID(), chatId, path, content, byteLength })
+    .values({
+      id: randomUUID(),
+      chatId,
+      path,
+      // Blob-primary: when the content lives in Blob, the row holds the
+      // reference and no duplicate content.
+      content: blobPathname ? null : content,
+      blobPathname: blobPathname ?? null,
+      byteLength,
+    })
     .onConflictDoUpdate({
       target: [agentFile.chatId, agentFile.path],
-      set: { content, byteLength, updatedAt: new Date() },
+      set: {
+        content: blobPathname ? null : content,
+        blobPathname: blobPathname ?? null,
+        byteLength,
+        updatedAt: new Date(),
+      },
     });
 
   await db.insert(agentFileRevision).values({
@@ -600,6 +634,7 @@ export async function getAgentFile(
     .select({
       path: agentFile.path,
       content: agentFile.content,
+      blobPathname: agentFile.blobPathname,
       byteLength: agentFile.byteLength,
       updatedAt: agentFile.updatedAt,
     })
@@ -608,6 +643,33 @@ export async function getAgentFile(
     .limit(1);
 
   if (!row) {
+    return null;
+  }
+
+  // Blob-primary: resolve the reference server-side. If the Blob read fails,
+  // fall back to any stored legacy content rather than failing the download.
+  if (row.blobPathname) {
+    try {
+      const result = await get(row.blobPathname, { access: "public" });
+
+      if (result && result.statusCode === 200) {
+        const response = await fetch(result.blob.url);
+
+        if (response.ok) {
+          return {
+            path: row.path,
+            content: await response.text(),
+            byteLength: row.byteLength,
+            updatedAt: row.updatedAt.toISOString(),
+          };
+        }
+      }
+    } catch {
+      // Fall through to stored content below.
+    }
+  }
+
+  if (row.content === null) {
     return null;
   }
 
@@ -622,14 +684,27 @@ export async function getAgentFile(
 /** Files to seed into a fresh sandbox for this session's chat. */
 export async function listAgentFileSeeds(
   chatId: string,
-): Promise<readonly { path: string; content: string }[]> {
+): Promise<
+    readonly { path: string; content: string; updatedAt: Date }[]
+  > {
   const rows = await db
-    .select({ path: agentFile.path, content: agentFile.content })
+    .select({
+      path: agentFile.path,
+      content: agentFile.content,
+      updatedAt: agentFile.updatedAt,
+    })
     .from(agentFile)
-    .where(eq(agentFile.chatId, chatId))
+    .where(and(eq(agentFile.chatId, chatId), isNull(agentFile.blobPathname)))
     .orderBy(asc(agentFile.createdAt));
 
-  return rows;
+  // Rows with a blob_pathname reference are restored from Blob by the
+  // sandbox's artifact restore (principal-scoped, newer-wins); only legacy
+  // rows whose content lives here still seed from Postgres.
+  return rows.filter((row) => row.content !== null) as readonly {
+    path: string;
+    content: string;
+    updatedAt: Date;
+  }[];
 }
 
 // ============================================================================

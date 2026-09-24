@@ -105,12 +105,6 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     2,
     "Principal-scoped Blob listing read, no side effect.",
   ),
-  save_artifact: policy(
-    true,
-    ["network", "timeout"],
-    2,
-    "Overwrite-by-slug: a retried upload stores identical content at the same key.",
-  ),
   restore_artifact: policy(
     true,
     ["network", "timeout"],

@@ -115,7 +115,12 @@ export const agentFile = pgTable(
       .notNull()
       .references(() => chat.id, { onDelete: "cascade" }),
     path: text("path").notNull(),
-    content: text("content").notNull(),
+    // Reference to the durable Blob object holding the current content. Null
+    // only for legacy rows written before blob-primary sync (their content
+    // lives here) or writes that fell back when the Blob store was
+    // unreachable.
+    blobPathname: text("blob_pathname"),
+    content: text("content"),
     byteLength: integer("byte_length").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
