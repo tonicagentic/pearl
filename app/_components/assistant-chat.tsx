@@ -28,6 +28,11 @@ import { ErrorToast } from "@/app/_components/error-toast";
 import { SessionStatusBanner } from "@/app/_components/session-status";
 import { SubagentRunsProvider, TaskGroup } from "@/components/assistant-ui/elements/task-card.aui";
 import { expandHeldPastes, setLargePasteErrorHandler } from "@/lib/chat/large-paste";
+import {
+  COMPOSER_MODELS,
+  DEFAULT_MODEL_KEY,
+  getModelSelection,
+} from "@/app/_components/model-selection";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import {
   EditFileToolUI,
@@ -464,7 +469,21 @@ export function AssistantChatSurface({
       // restore message see the composer text (held pastes are chips), while
       // the outgoing turn message carries the full inline blocks.
       if (typeof input.message === "string") {
-        return { ...input, message: expandHeldPastes(input.message).text };
+        // Composer model picker: the selection rides the turn as ephemeral
+        // clientContext, which the agent's step.started model resolver parses
+        // (agent/model-selection.ts). The default needs no marker. The cast is
+        // safe: the eve client passes extra send fields through to the server
+        // (client createMessageBody includes clientContext).
+        const selected = COMPOSER_MODELS.find(
+          (model) => model.key === getModelSelection(),
+        );
+        return {
+          ...input,
+          message: expandHeldPastes(input.message).text,
+          ...(selected && selected.key !== DEFAULT_MODEL_KEY
+            ? { clientContext: { eveModelSelection: selected.key } }
+            : {}),
+        } as Parameters<PrepareSend>[0];
       }
 
       return input;
