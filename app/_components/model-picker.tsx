@@ -89,9 +89,6 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
                 <span className="text-foreground font-medium">
                   {model.label}
                 </span>
-                <span className="text-muted-foreground text-xs tabular-nums">
-                  {model.meta}
-                </span>
                 {isSelected ? (
                   <CheckIcon className="text-foreground size-3.5 shrink-0" />
                 ) : null}

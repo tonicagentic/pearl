@@ -14,12 +14,11 @@ export interface ComposerModel {
   /** Picker key sent to the agent; validated against agent-side allowlist. */
   key: string;
   label: string;
-  meta: string;
 }
 
 export const COMPOSER_MODELS: readonly ComposerModel[] = [
-  { key: "glm-5.3-flash", label: "GLM 5.3 Flash", meta: "Default" },
-  { key: "gpt-6-sol", label: "GPT 6 Sol", meta: "$2/$10 per 1M tokens" },
+  { key: "glm-5.3-flash", label: "GLM 5.3 Flash" },
+  { key: "gpt-6-sol", label: "GPT 6 Sol" },
 ];
 
 export const DEFAULT_MODEL_KEY = COMPOSER_MODELS[0].key;
