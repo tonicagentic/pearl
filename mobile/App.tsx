@@ -1,10 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSyncExternalStore } from 'react';
 import {
   AssistantRuntimeProvider,
+  AuiConfig,
   fromThreadMessageLike,
+  Suggestions,
   useExternalStoreRuntime,
   type ThreadMessageLike,
 } from '@assistant-ui/react-native';
@@ -103,6 +105,32 @@ export default function App() {
     },
   });
 
+  // Suggestions render as chips on the empty (new-chat) state, mirroring the
+  // with-expo sample's root config.
+  const config = useMemo(
+    () =>
+      AuiConfig({
+        suggestions: Suggestions([
+          {
+            title: "What's on my plate",
+            label: "right now?",
+            prompt: "What's on my plate right now?",
+          },
+          {
+            title: "Summarize my notes",
+            label: "from this week",
+            prompt: "Summarize what's in my notes from this week.",
+          },
+          {
+            title: "Draft a reply",
+            label: "I'm stuck on",
+            prompt: "Help me write a reply I've been putting off.",
+          },
+        ]),
+      }),
+    [],
+  );
+
   if (!signedIn) {
     return (
       <SafeAreaProvider>
@@ -158,10 +186,10 @@ export default function App() {
             <Text style={styles.skip}>Sign out</Text>
           </Pressable>
         </View>
-        <AssistantRuntimeProvider runtime={runtime}>
-          <Thread />
-        </AssistantRuntimeProvider>
-      </SafeAreaView>
+      <AssistantRuntimeProvider runtime={runtime} config={config}>
+        <Thread />
+      </AssistantRuntimeProvider>
+    </SafeAreaView>
     </SafeAreaProvider>
   );
 }
