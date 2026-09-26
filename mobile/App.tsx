@@ -53,7 +53,10 @@ export default function App() {
       const setCookie = res.headers.get('set-cookie') ?? '';
       const match = setCookie.match(/better-auth\.session_token=[^;]+/);
       if (!res.ok || !match) {
-        throw new Error(`Sign-in failed (${res.status})`);
+        const body = await res.text().catch(() => '');
+        throw new Error(
+          `Sign-in failed (${res.status}) ${body.slice(0, 160)}`,
+        );
       }
       setAuthCookie(match[0]);
       setSignedIn(true);
