@@ -72,16 +72,22 @@ export const auth = betterAuth({
   },
   secret: betterAuthSecret ?? "eve-chat-template-unconfigured-secret",
   trustedOrigins,
+  // Native clients (the iOS app's expo/fetch) send no Origin header, so
+  // better-auth's browser-oriented CSRF check rejects them with
+  // MISSING_OR_NULL_ORIGIN. Disabled outside production only: the check
+  // exists to protect browser sessions, the deployed app keeps it, and every
+  // chat request still requires a valid session either way.
+  advanced: {
+    disableCSRFCheck: process.env.NODE_ENV !== "production",
+    database: {
+      generateId: () => randomUUID(),
+    },
+  },
   emailAndPassword: {
     enabled: true,
     // Accounts are provisioned with scripts/create-user.mjs; public
     // registration stays closed.
     disableSignUp: true,
-  },
-  advanced: {
-    database: {
-      generateId: () => randomUUID(),
-    },
   },
   onAPIError: {
     errorURL: "/auth/error",
