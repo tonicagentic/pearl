@@ -12,7 +12,7 @@ import {
 import { useSyncExternalStore } from 'react';
 
 import {
-  PROD_URL,
+  AGENT_URL,
   getStore,
   setAuthCookie,
   type SpikeState,
@@ -42,7 +42,7 @@ export default function App() {
     setSignInState('signing-in');
     setSignInError(null);
     try {
-      const res = await fetch(`${PROD_URL}/api/auth/sign-in/email`, {
+      const res = await fetch(`${AGENT_URL}/api/auth/sign-in/email`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -75,7 +75,7 @@ export default function App() {
     return (
       <View style={styles.center}>
         <Text style={styles.title}>eve — RN transport spike</Text>
-        <Text style={styles.hint}>{PROD_URL}</Text>
+        <Text style={styles.hint}>{AGENT_URL}</Text>
         <TextInput
           style={styles.input}
           placeholder="email"

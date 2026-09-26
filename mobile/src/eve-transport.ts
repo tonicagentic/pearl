@@ -5,7 +5,11 @@
 // store adapter, with a text-only message projection.
 import { EveAgentStore } from 'eve/client';
 
-export const PROD_URL = 'https://my-agent-pi-eight.vercel.app';
+// Agent endpoint: defaults to the production alias. For local testing against
+// `pnpm dev` in the repo, set EXPO_PUBLIC_AGENT_URL=http://localhost:3000 in
+// mobile/.env and restart Metro (env is inlined at bundle time).
+export const AGENT_URL =
+  process.env.EXPO_PUBLIC_AGENT_URL ?? 'https://my-agent-pi-eight.vercel.app';
 
 // Session cookie captured at sign-in (memory only for the spike; SecureStore
 // in a real build).
@@ -82,7 +86,7 @@ let store: EveAgentStore<SpikeState> | null = null;
 export function getStore(): EveAgentStore<SpikeState> {
   if (!store) {
     store = new EveAgentStore<SpikeState>({
-      host: PROD_URL,
+      host: AGENT_URL,
       headers: () => {
         if (!authCookie) throw new Error('Not signed in');
         return { cookie: authCookie };
