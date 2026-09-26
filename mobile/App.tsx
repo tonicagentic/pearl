@@ -41,10 +41,14 @@ export default function App() {
     setSignInState('signing-in');
     setSignInError(null);
     try {
+      // First-request agent compile can take 1-2 minutes on a cold dev
+      // server; time out loudly instead of spinning forever.
+      const timeout = AbortSignal.timeout(45_000);
       const res = await fetch(`${AGENT_URL}/api/auth/sign-in/email`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, password }),
+        signal: timeout,
       });
       const setCookie = res.headers.get('set-cookie') ?? '';
       const match = setCookie.match(/better-auth\.session_token=[^;]+/);
@@ -55,7 +59,13 @@ export default function App() {
       setSignedIn(true);
     } catch (e) {
       setSignInState('error');
-      setSignInError(e instanceof Error ? e.message : String(e));
+      const message =
+        e instanceof Error ? e.message : String(e);
+      setSignInError(
+        message.includes('abort')
+          ? `Can't reach ${AGENT_URL} — is the dev server up? (first request compiles the agent, ~1-2 min)`
+          : message,
+      );
     }
   }, [email, password]);
 
