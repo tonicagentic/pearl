@@ -3,25 +3,25 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { useSyncExternalStore } from 'react';
-
 import {
-  AGENT_URL,
-  getStore,
-  setAuthCookie,
-  type SpikeState,
-} from './src/eve-transport';
+  AssistantRuntimeProvider,
+  fromThreadMessageLike,
+  useExternalStoreRuntime,
+  type ThreadMessageLike,
+} from '@assistant-ui/react-native';
+import { Thread } from '@/components/assistant-ui/elements/thread.aui';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-// Spike UI: plain RN components on purpose. This run proves the transport
-// (auth -> session create -> streamed turn on device); assistant-ui native
-// elements replace this screen only after the spike passes.
+import { AGENT_URL, getStore, setAuthCookie, toThreadMessages, type SpikeState } from './src/eve-transport';
 
+// Spike screen: sign-in gate, then the assistant-ui native Thread wired to
+// the eve session protocol through the external-store runtime bridge.
 export default function App() {
   const store = getStore();
   const state = useSyncExternalStore<SpikeState>(
@@ -29,14 +29,13 @@ export default function App() {
     () => store.snapshot.data,
   );
 
+  const [signedIn, setSignedIn] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [signInState, setSignInState] = useState<
-    'idle' | 'signing-in' | 'signed-in' | 'error'
+    'idle' | 'signing-in' | 'error'
   >('idle');
   const [signInError, setSignInError] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
-  const [sending, setSending] = useState(false);
 
   const signIn = useCallback(async () => {
     setSignInState('signing-in');
@@ -53,7 +52,7 @@ export default function App() {
         throw new Error(`Sign-in failed (${res.status})`);
       }
       setAuthCookie(match[0]);
-      setSignInState('signed-in');
+      setSignedIn(true);
     } catch (e) {
       setSignInState('error');
       setSignInError(e instanceof Error ? e.message : String(e));
@@ -64,24 +63,39 @@ export default function App() {
   // requests anonymously — no sign-in needed against localhost.
   const skipSignIn = useCallback(() => {
     setAuthCookie('');
-    setSignInState('signed-in');
+    setSignedIn(true);
   }, []);
 
-  const send = useCallback(async () => {
-    if (!draft.trim() || sending) return;
-    setSending(true);
-    try {
-      await store.send({ message: draft.trim() });
-      setDraft('');
-    } finally {
-      setSending(false);
-    }
-  }, [draft, sending, store]);
+  const runtime = useExternalStoreRuntime({
+    get messages(): ThreadMessageLike[] {
+      return toThreadMessages(state);
+    },
+    convertMessage: (message) =>
+      fromThreadMessageLike(
+        message,
+        message.id ?? 'spike-fallback',
+        message.role === 'assistant'
+          ? { type: 'running' }
+          : { type: 'complete', reason: 'stop' },
+      ),
+    isRunning: state.status === 'streaming',
+    isDisabled: false,
+    onNew: async (message) => {
+      const text = message.content
+        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+        .map((p) => p.text)
+        .join('\n');
+      await store.send({ message: text });
+    },
+    onCancel: async () => {
+      await store.cancel();
+    },
+  });
 
-  if (signInState !== 'signed-in') {
+  if (!signedIn) {
     return (
       <View style={styles.center}>
-        <Text style={styles.title}>eve — RN transport spike</Text>
+        <Text style={styles.title}>eve — native iOS</Text>
         <Text style={styles.hint}>{AGENT_URL}</Text>
         <TextInput
           style={styles.input}
@@ -114,65 +128,25 @@ export default function App() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <Text style={styles.header}>
-        signed in · {state.status}
-        {state.error ? ` · ${state.error}` : ''}
-      </Text>
-      <ScrollView style={styles.log}>
-        {state.messages.map((m) => (
-          <View key={m.id} style={styles.bubble}>
-            <Text style={styles.role}>{m.role}</Text>
-            <Text>{m.content}</Text>
-          </View>
-        ))}
-      </ScrollView>
-      <View style={styles.composer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Message"
-          value={draft}
-          onChangeText={setDraft}
-          onSubmitEditing={send}
-        />
-        <Pressable style={styles.button} onPress={send}>
-          <Text style={styles.buttonText}>{sending ? '…' : 'Send'}</Text>
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
+    <AssistantRuntimeProvider runtime={runtime}>
+      <SafeAreaProvider>
+        <KeyboardAvoidingView
+          style={styles.flexOne}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Thread />
+        </KeyboardAvoidingView>
+      </SafeAreaProvider>
+    </AssistantRuntimeProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  flexOne: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', padding: 24, gap: 12 },
-  container: { flex: 1, paddingTop: 60 },
   title: { fontSize: 18, fontWeight: '600', textAlign: 'center' },
   hint: { fontSize: 11, color: '#777', textAlign: 'center', marginBottom: 12 },
-  header: {
-    fontSize: 11,
-    color: '#777',
-    textAlign: 'center',
-    padding: 8,
-  },
-  log: { flex: 1, paddingHorizontal: 12 },
-  bubble: {
-    backgroundColor: '#f1f1f4',
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 8,
-  },
-  role: { fontSize: 10, color: '#888', marginBottom: 2 },
-  composer: {
-    flexDirection: 'row',
-    gap: 8,
-    padding: 12,
-    paddingBottom: 36,
-  },
   input: {
-    flex: 1,
     borderWidth: 1,
     borderColor: '#d4d4d8',
     borderRadius: 10,
@@ -182,8 +156,8 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: '#18181b',
     borderRadius: 10,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
+    paddingVertical: 10,
+    alignItems: 'center',
   },
   buttonText: { color: '#fff' },
   error: { color: '#b91c1c', textAlign: 'center' },

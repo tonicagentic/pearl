@@ -1,18 +1,25 @@
-// Spike transport: eve's framework-agnostic EveAgentStore driven from a
-// React Native app. The web template's useEveAgentRuntime is web-only
-// (imports @assistant-ui/react), so this file re-implements the thin
-// mapping: EveAgentStore snapshot -> @assistant-ui/react-native external
-// store adapter, with a text-only message projection.
+// Runtime bridge: eve's framework-agnostic EveAgentStore drives
+// @assistant-ui/react-native's external-store runtime. The web template's
+// useEveAgentRuntime is web-only (imports @assistant-ui/react), so this file
+// re-implements the thin mapping:
+//
+//   EveAgentStore snapshot -> ThreadMessageLike[] + isRunning -> adapter
+//
+// with a text-only message projection for now (tool calls, approvals,
+// reasoning and attachments are the remaining parity work).
+
 import { EveAgentStore } from 'eve/client';
+import type { ThreadMessageLike } from '@assistant-ui/react-native';
 
 // Agent endpoint: defaults to the production alias. For local testing against
-// `pnpm dev` in the repo, set EXPO_PUBLIC_AGENT_URL=http://localhost:3000 in
+// `pnpm dev` in the repo, set EXPO_PUBLIC_AGENT_URL=http://<mac-ip>:3000 in
 // mobile/.env and restart Metro (env is inlined at bundle time).
 export const AGENT_URL =
   process.env.EXPO_PUBLIC_AGENT_URL ?? 'https://my-agent-pi-eight.vercel.app';
 
 // Session cookie captured at sign-in (memory only for the spike; SecureStore
-// in a real build).
+// in a real build). Empty on the local-dev path: eve's localDev()
+// authenticator accepts cookie-less requests on a development server.
 let authCookie: string | null = null;
 
 export function setAuthCookie(cookie: string) {
@@ -50,8 +57,6 @@ function reduce(state: SpikeState, event: any): SpikeState {
         ],
       };
     case 'message.appended': {
-      // Assistant text delta: extend the trailing assistant message, creating
-      // it if this is the first chunk of the turn's answer.
       const messages = [...state.messages];
       const last = messages[messages.length - 1];
       if (last?.role === 'assistant') {
@@ -75,8 +80,12 @@ function reduce(state: SpikeState, event: any): SpikeState {
         status: 'error',
         error: event.data?.error?.message ?? 'Turn failed',
       };
+    case 'turn.started':
+      return { ...state, status: 'streaming' };
+    case 'turn.completed':
+    case 'session.waiting':
+      return { ...state, status: 'ready' };
     default:
-      // step.*, session.*, reasoning.*, tool events: ignored for the spike.
       return state;
   }
 }
@@ -87,12 +96,18 @@ export function getStore(): EveAgentStore<SpikeState> {
   if (!store) {
     store = new EveAgentStore<SpikeState>({
       host: AGENT_URL,
-      headers: () => {
-        if (!authCookie) throw new Error('Not signed in');
-        return { cookie: authCookie };
-      },
+      headers: () =>
+        authCookie ? { cookie: authCookie } : ({} as Record<string, string>),
       reducer: { initial: initialState, reduce },
     });
   }
   return store;
+}
+
+export function toThreadMessages(state: SpikeState): ThreadMessageLike[] {
+  return state.messages.map((m) => ({
+    role: m.role,
+    content: [{ type: 'text' as const, text: m.content }],
+    id: m.id,
+  }));
 }

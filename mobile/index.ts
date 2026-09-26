@@ -1,3 +1,5 @@
+import './global.css';
+
 // Spike: stream-capable fetch must be global BEFORE any module that calls
 // fetch at import time (eve's client builds fetch calls lazily, but the patch
 // is cheapest first). RN/Hermes' global fetch buffers responses; expo/fetch
