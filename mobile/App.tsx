@@ -24,7 +24,10 @@ export default function App() {
     () => store.snapshot.data,
   );
 
-  const [signedIn, setSignedIn] = useState(false);
+  // EXPO_PUBLIC_SKIP_SIGN_IN=1 bypasses the gate for local dev testing.
+  const [signedIn, setSignedIn] = useState(
+    process.env.EXPO_PUBLIC_SKIP_SIGN_IN === '1',
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [signInState, setSignInState] = useState<
@@ -186,9 +189,11 @@ export default function App() {
             <Text style={styles.skip}>Sign out</Text>
           </Pressable>
         </View>
-      <AssistantRuntimeProvider runtime={runtime} config={config}>
-        <Thread />
-      </AssistantRuntimeProvider>
+      <View style={styles.flexOne}>
+        <AssistantRuntimeProvider runtime={runtime} config={config}>
+          <Thread />
+        </AssistantRuntimeProvider>
+      </View>
     </SafeAreaView>
     </SafeAreaProvider>
   );
