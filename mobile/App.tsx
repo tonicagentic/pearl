@@ -60,6 +60,13 @@ export default function App() {
     }
   }, [email, password]);
 
+  // Local dev servers run eve's localDev() authenticator, which accepts
+  // requests anonymously — no sign-in needed against localhost.
+  const skipSignIn = useCallback(() => {
+    setAuthCookie('');
+    setSignInState('signed-in');
+  }, []);
+
   const send = useCallback(async () => {
     if (!draft.trim() || sending) return;
     setSending(true);
@@ -97,6 +104,11 @@ export default function App() {
           </Text>
         </Pressable>
         {signInError ? <Text style={styles.error}>{signInError}</Text> : null}
+        <Pressable onPress={skipSignIn}>
+          <Text style={styles.skip}>
+            Continue without sign-in (local dev)
+          </Text>
+        </Pressable>
       </View>
     );
   }
@@ -175,4 +187,5 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: '#fff' },
   error: { color: '#b91c1c', textAlign: 'center' },
+  skip: { color: '#777', textAlign: 'center', textDecorationLine: 'underline' },
 });
