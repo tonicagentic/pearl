@@ -1,13 +1,6 @@
 import { useCallback, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useSyncExternalStore } from 'react';
 import {
   AssistantRuntimeProvider,
@@ -16,7 +9,7 @@ import {
   type ThreadMessageLike,
 } from '@assistant-ui/react-native';
 import { Thread } from '@/components/assistant-ui/elements/thread.aui';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { AGENT_URL, getStore, setAuthCookie, toThreadMessages, type SpikeState } from './src/eve-transport';
 
@@ -79,6 +72,11 @@ export default function App() {
     setSignedIn(true);
   }, []);
 
+  const signOut = useCallback(() => {
+    setAuthCookie(null);
+    setSignedIn(false);
+  }, []);
+
   const runtime = useExternalStoreRuntime({
     get messages(): ThreadMessageLike[] {
       return toThreadMessages(state);
@@ -107,58 +105,89 @@ export default function App() {
 
   if (!signedIn) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.title}>eve — native iOS</Text>
-        <Text style={styles.hint}>{AGENT_URL}</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="email"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="password"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-        <Pressable style={styles.button} onPress={signIn}>
-          <Text style={styles.buttonText}>
-            {signInState === 'signing-in' ? 'Signing in…' : 'Sign in'}
-          </Text>
-        </Pressable>
-        {signInError ? <Text style={styles.error}>{signInError}</Text> : null}
-        <Pressable onPress={skipSignIn}>
-          <Text style={styles.skip}>
-            Continue without sign-in (local dev)
-          </Text>
-        </Pressable>
-      </View>
+      <SafeAreaProvider>
+        <StatusBar style="auto" />
+        <SafeAreaView style={styles.flexOne}>
+          <View style={styles.center}>
+            <Text style={styles.title}>eve — native iOS</Text>
+            <Text style={styles.hint}>{AGENT_URL}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="email"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="password"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+            />
+            <Pressable style={styles.button} onPress={signIn}>
+              <Text style={styles.buttonText}>
+                {signInState === 'signing-in' ? 'Signing in…' : 'Sign in'}
+              </Text>
+            </Pressable>
+            {signInError ? <Text style={styles.error}>{signInError}</Text> : null}
+            <Pressable onPress={skipSignIn}>
+              <Text style={styles.skip}>
+                Continue without sign-in (local dev)
+              </Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </SafeAreaProvider>
     );
   }
 
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <SafeAreaProvider>
-        <KeyboardAvoidingView
-          style={styles.flexOne}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+    <SafeAreaProvider>
+      <StatusBar style="auto" />
+      <SafeAreaView style={styles.flexOne} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>my-agent</Text>
+            <Text style={styles.headerUrl} numberOfLines={1}>
+              {state.status === 'streaming' ? 'streaming…' : AGENT_URL}
+            </Text>
+          </View>
+          <Pressable onPress={signOut}>
+            <Text style={styles.skip}>Sign out</Text>
+          </Pressable>
+        </View>
+        <AssistantRuntimeProvider runtime={runtime}>
           <Thread />
-        </KeyboardAvoidingView>
-      </SafeAreaProvider>
-    </AssistantRuntimeProvider>
+        </AssistantRuntimeProvider>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   flexOne: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', padding: 24, gap: 12 },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    gap: 12,
+  },
   title: { fontSize: 18, fontWeight: '600', textAlign: 'center' },
   hint: { fontSize: 11, color: '#777', textAlign: 'center', marginBottom: 12 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e4e4e7',
+  },
+  headerText: { flex: 1, marginRight: 12 },
+  headerTitle: { fontSize: 15, fontWeight: '600' },
+  headerUrl: { fontSize: 10, color: '#777' },
   input: {
     borderWidth: 1,
     borderColor: '#d4d4d8',

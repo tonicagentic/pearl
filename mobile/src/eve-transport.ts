@@ -22,7 +22,7 @@ export const AGENT_URL =
 // authenticator accepts cookie-less requests on a development server.
 let authCookie: string | null = null;
 
-export function setAuthCookie(cookie: string) {
+export function setAuthCookie(cookie: string | null) {
   authCookie = cookie;
 }
 
