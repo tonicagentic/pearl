@@ -5,10 +5,14 @@
 //
 //   EveAgentStore snapshot -> ThreadMessageLike[] + isRunning -> adapter
 //
-// with a text-only message projection for now (tool calls, approvals,
-// reasoning and attachments are the remaining parity work).
+// The projection uses eve's own defaultMessageReducer (the same UIMessage-
+// shaped projection the web template renders): it keeps the optimistic user
+// message alive across the handoff to the authoritative server stream
+// (message.received) and tracks per-message streaming status. A hand-rolled
+// reducer that ignores message.received drops the user message the moment the
+// server events arrive, leaving the response as a dangling generation.
 
-import { EveAgentStore } from 'eve/client';
+import { EveAgentStore, defaultMessageReducer, type EveMessageData } from 'eve/client';
 import type { ThreadMessageLike } from '@assistant-ui/react-native';
 
 // Agent endpoint: defaults to the production alias. For local testing against
@@ -26,69 +30,7 @@ export function setAuthCookie(cookie: string | null) {
   authCookie = cookie;
 }
 
-export type SpikeMessage = {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-};
-
-export type SpikeState = {
-  messages: SpikeMessage[];
-  status: string;
-  error: string | null;
-};
-
-function initialState(): SpikeState {
-  return { messages: [], status: 'ready', error: null };
-}
-
-let nextId = 1;
-
-// Text-only projection for the spike. Tool calls, approvals, reasoning and
-// attachments are intentionally dropped — that is the parity work item.
-function reduce(state: SpikeState, event: any): SpikeState {
-  switch (event?.type) {
-    case 'client.message.submitted':
-      return {
-        ...state,
-        messages: [
-          ...state.messages,
-          { id: `u${nextId++}`, role: 'user', content: event.data.message },
-        ],
-      };
-    case 'message.appended': {
-      const messages = [...state.messages];
-      const last = messages[messages.length - 1];
-      if (last?.role === 'assistant') {
-        messages[messages.length - 1] = {
-          ...last,
-          content: last.content + event.data.messageDelta,
-        };
-      } else {
-        messages.push({
-          id: `a${nextId++}`,
-          role: 'assistant',
-          content: event.data.messageDelta,
-        });
-      }
-      return { ...state, messages };
-    }
-    case 'turn.failed':
-    case 'session.failed':
-      return {
-        ...state,
-        status: 'error',
-        error: event.data?.error?.message ?? 'Turn failed',
-      };
-    case 'turn.started':
-      return { ...state, status: 'streaming' };
-    case 'turn.completed':
-    case 'session.waiting':
-      return { ...state, status: 'ready' };
-    default:
-      return state;
-  }
-}
+export type SpikeState = EveMessageData;
 
 let store: EveAgentStore<SpikeState> | null = null;
 
@@ -98,16 +40,37 @@ export function getStore(): EveAgentStore<SpikeState> {
       host: AGENT_URL,
       headers: () =>
         authCookie ? { cookie: authCookie } : ({} as Record<string, string>),
-      reducer: { initial: initialState, reduce },
+      reducer: defaultMessageReducer(),
     });
   }
   return store;
 }
 
+// Text-only projection for the spike. Reasoning, tool calls, approvals and
+// attachments are intentionally dropped — that is the remaining parity work.
+//
+// The mapping deliberately omits `id`: eve renames the user message when the
+// authoritative server stream replaces the optimistic echo
+// (`optimistic:<submissionId>:user` -> `turn_0:user`), and the external-store
+// runtime never evicts vanished ids — a renamed message would linger as a
+// sibling branch, rendering a "2 / 2" branch picker around every turn.
+// Omitting the id lets the runtime assign its positional fallback ids, which
+// are stable across the handoff, so the swap updates the message in place.
 export function toThreadMessages(state: SpikeState): ThreadMessageLike[] {
-  return state.messages.map((m) => ({
-    role: m.role,
-    content: [{ type: 'text' as const, text: m.content }],
-    id: m.id,
+  return state.messages.map((message) => ({
+    role: message.role,
+    content: message.parts
+      .filter((part) => part.type === 'text')
+      .map((part) => ({ type: 'text' as const, text: part.text })),
+    // fromThreadMessageLike rejects status on user messages; only the
+    // streaming assistant message needs the explicit running status.
+    ...(message.role === 'assistant'
+      ? {
+          status:
+            message.metadata?.status === 'streaming'
+              ? ({ type: 'running' } as const)
+              : ({ type: 'complete', reason: 'stop' } as const),
+        }
+      : {}),
   }));
 }

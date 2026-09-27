@@ -13,7 +13,6 @@ import { useSyncExternalStore } from 'react';
 import {
   AssistantRuntimeProvider,
   AuiConfig,
-  fromThreadMessageLike,
   Suggestions,
   useExternalStoreRuntime,
   type ThreadMessageLike,
@@ -41,6 +40,10 @@ export default function App() {
   const state = useSyncExternalStore<SpikeState>(
     (cb) => store.subscribe(cb),
     () => store.snapshot.data,
+  );
+  const status = useSyncExternalStore<string>(
+    (cb) => store.subscribe(cb),
+    () => store.snapshot.status,
   );
 
   // EXPO_PUBLIC_SKIP_SIGN_IN=1 bypasses the gate for local dev testing.
@@ -105,15 +108,11 @@ export default function App() {
     get messages(): ThreadMessageLike[] {
       return toThreadMessages(state);
     },
-    convertMessage: (message) =>
-      fromThreadMessageLike(
-        message,
-        message.id ?? 'spike-fallback',
-        message.role === 'assistant'
-          ? { type: 'running' }
-          : { type: 'complete', reason: 'stop' },
-      ),
-    isRunning: state.status === 'streaming',
+    // Return the projection as-is: the runtime's converter assigns stable
+    // positional fallback ids (the projection omits ids on purpose) and
+    // honors the per-message status it carries.
+    convertMessage: (message) => message,
+    isRunning: status === 'streaming',
     isDisabled: false,
     onNew: async (message) => {
       const text = message.content
@@ -204,7 +203,7 @@ export default function App() {
           <View style={styles.headerText}>
             <Text style={styles.headerTitle}>my-agent</Text>
             <Text style={styles.headerUrl} numberOfLines={1}>
-              {state.status === 'streaming' ? 'streaming…' : AGENT_URL}
+              {status === 'streaming' ? 'streaming…' : AGENT_URL}
             </Text>
           </View>
           <Pressable onPress={signOut}>
