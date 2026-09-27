@@ -1,5 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSyncExternalStore } from 'react';
 import {
@@ -12,12 +20,23 @@ import {
 } from '@assistant-ui/react-native';
 import { Thread } from '@/components/assistant-ui/elements/thread.aui';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { useCSSVariable } from 'uniwind';
 
 import { AGENT_URL, getStore, setAuthCookie, toThreadMessages, type SpikeState } from './src/eve-transport';
 
 // Spike screen: sign-in gate, then the assistant-ui native Thread wired to
 // the eve session protocol through the external-store runtime bridge.
 export default function App() {
+  // The safe-area container is a native codegen view, so uniwind's className
+  // binding cannot reach it; paint the theme background through style instead
+  // so the color extends under the status bar and home indicator.
+  const backgroundColor = useCSSVariable('--color-background') as
+    | string
+    | undefined;
+  const screenStyle: StyleProp<ViewStyle> = [
+    styles.flexOne,
+    { backgroundColor },
+  ];
   const store = getStore();
   const state = useSyncExternalStore<SpikeState>(
     (cb) => store.subscribe(cb),
@@ -138,7 +157,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <StatusBar style="auto" />
-        <SafeAreaView style={styles.flexOne}>
+        <SafeAreaView style={screenStyle}>
           <View style={styles.center}>
             <Text style={styles.title}>eve — native iOS</Text>
             <Text style={styles.hint}>{AGENT_URL}</Text>
@@ -177,7 +196,10 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="auto" />
-      <SafeAreaView style={styles.flexOne} edges={['top', 'left', 'right']}>
+      <SafeAreaView
+        style={screenStyle}
+        edges={['top', 'left', 'right']}
+      >
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.headerTitle}>my-agent</Text>

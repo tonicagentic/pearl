@@ -4,6 +4,7 @@
   "main": "index.ts",
   "dependencies": {
     "@assistant-ui/core": "^0.3.21",
+    "@assistant-ui/metro": "^0.0.15",
     "@assistant-ui/react-native": "^0.1.44",
     "assistant-stream": "^0.3.45",
     "clsx": "^2.1.1",
