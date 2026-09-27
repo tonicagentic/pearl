@@ -1,23 +1,96 @@
-# eve Chat Template
+# Pearl
 
-A Next.js chat template for [eve](https://eve.dev) that starts with password access and browser-persisted chats, then upgrades to durable memory, Sign in with Vercel, Neon, and Upstash when you need a production multi-user application.
+An open-source personal agent for clear thinking.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?demo-description=A%20persisted%20Next.js%20chat%20template%20for%20eve%2C%20built%20with%20shadcn%2Fui%2C%20Tailwind%20CSS%2C%20Streamdown%2C%20Better%20Auth%2C%20Drizzle%2C%20and%20Neon.&demo-image=https%3A%2F%2Fimages.ctfassets.net%2Fe5382hct74si%2FYXYTquqpBmvVFbASdIvrC%2Fbb50d21ba7866882d90e25d842b6fc02%2Feve-chat-no-bg.png&demo-title=eve%20Chat%20Template&demo-url=https%3A%2F%2Fchat.eve.dev&env=EVE_CHAT_PASSWORD&envDescription=Choose%20a%20strong%20password%20to%20protect%20your%20agent%20%2816%2B%20characters%20recommended%29.&envLink=https%3A%2F%2Fgithub.com%2Fvercel%2Feve-examples%2Fblob%2Fmain%2Feve-chat-template%2Fdocs%2Fsetup-and-deploy.md&from=templates&project-name=eve%20Chat%20Template&repository-name=eve-chat-template&repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Feve-examples%2Ftree%2Fmain%2Feve-chat-template)
+Pearl is a web and iOS app for thinking, research, writing, and keeping track of what matters. It maintains context about you over time, allowing it to understand your preferences, projects, and other relevant information.
+
+## Features
+
+### Thinking partner
+
+* Turn unorganized thoughts into well-reasoned ideas.
+* Develop, challenge, and connect ideas through conversation.
+* Remember relevant facts and tailor responses to you.
+
+### Research assistant
+
+* Ask questions and get reliable, cited answers.
+* Research information across the web and other available sources.
+* Synthesize findings across multiple sources.
+
+### Writing assistant
+
+* Turn ideas into written communication.
+* Draft, critique, and revise writing collaboratively.
+* Create and edit Markdown files alongside the agent.
+
+### Responsibilities tracker
+
+* Track unresolved responsibilities and issues.
+* Bring responsibilities back to your attention when appropriate.
+* Keep track of deadlines and relevant context.
+* Visualize your responsibilities on a mind map.
 
 ## Quick Start
 
-Deploy the starter without provisioning a database or other Marketplace products:
+### Requirements
 
-1. Click **Deploy with Vercel**.
-2. Enter a strong `EVE_CHAT_PASSWORD` (16+ characters recommended).
-3. Open the deployed app and enter that password.
+* Node.js (see `packageManager` in `package.json` for the pinned pnpm version)
+* [pnpm](https://pnpm.io)
+* For the iOS app: Node.js and either [Expo Go](https://expo.dev/go) on a device or simulator, or Xcode for a development build
 
-Chats and eve session cursors are stored in that browser. They are not shared across browsers or users. The starter does not enable cross-session long-term memory on Vercel until you set up Blob storage; see [Long-Term Memory](docs/setup-and-deploy.md#long-term-memory).
+### Web app
 
-Starter mode is intended for one trusted operator: anyone with the password
-shares the same agent identity and connection grants.
+Install dependencies and start the development server:
 
-## Deployment Modes
+```bash
+pnpm install
+pnpm dev
+```
+
+By default, local development runs with a local development identity and keeps chats in browser storage — no services required. To require a password locally, add this to `.env.local`:
+
+```bash
+EVE_CHAT_PASSWORD=<at-least-16-characters>
+```
+
+### iOS app
+
+The iOS app lives in `mobile/` and talks to the web app's agent over your local network:
+
+```bash
+# Terminal 1 — the agent (from the repo root)
+pnpm dev
+
+# Terminal 2 — the iOS app
+cd mobile
+npm install
+npx expo start
+```
+
+Point the app at your machine's dev server by putting your LAN IP in `mobile/.env`:
+
+```bash
+EXPO_PUBLIC_AGENT_URL=http://<your-lan-ip>:3000
+
+# Optional: skip the sign-in gate for local development (local dev servers
+# accept requests anonymously).
+EXPO_PUBLIC_SKIP_SIGN_IN=1
+```
+
+Then open the printed URL in Expo Go, or press `i` to launch the iOS simulator. The first request can take a minute or two while the agent compiles.
+
+Useful checks inside `mobile/`:
+
+```bash
+npx tsc --noEmit   # typecheck
+npx expo lint      # lint
+npx expo-doctor    # dependency and config diagnostics
+```
+
+## Configuration
+
+Starter mode needs nothing beyond an optional password. Production mode (Neon-backed history, Upstash rate limiting, Sign in with Vercel, per-user long-term memory) takes precedence when its complete environment is present, and the app fails closed when neither mode is configured on a deployment.
 
 | Mode | Selected when | Authentication | Chat persistence | Long-term memory |
 | --- | --- | --- | --- | --- |
@@ -25,127 +98,41 @@ shares the same agent identity and connection grants.
 | Production | Neon, Upstash, and all Sign in with Vercel variables are configured | Sign in with Vercel | Neon | Per-user Vercel Blob document |
 | Local development | Neither mode is configured and `next dev` is running locally | Local development identity | Browser localStorage | Process-local |
 
-Production mode takes precedence when its complete environment is present. The app fails closed in a production deployment when neither mode is configured. See [Setup and Deployment](docs/setup-and-deploy.md) for the upgrade path.
+All variables are listed with comments in [.env.example](.env.example). For the full upgrade path — including `./scripts/setup.sh`, long-term memory, and Vercel Connect integrations — see [Setup and Deployment](docs/setup-and-deploy.md).
 
-## Getting Started
+## Project Structure
 
-For the starter and production setup flows, see [Setup and Deployment](docs/setup-and-deploy.md). For the runtime architecture, streaming model, persistence flow, and extension points, see [How the Chatbot Works](docs/how-the-chatbot-works.md).
+| Path | What it is |
+| --- | --- |
+| `agent/` | The agent: instructions, tools, and per-user long-term memory |
+| `app/`, `components/`, `lib/` | The Next.js web app |
+| `mobile/` | The iOS app (Expo + [assistant-ui](https://www.assistant-ui.com) native elements) |
+| `docs/` | Architecture, setup, and design notes |
+| `evals/`, `tests/` | Behavioral evals and tests |
 
-Install dependencies with pnpm:
+## Documentation
 
-```bash
-pnpm install
-```
+* [Setup and Deployment](docs/setup-and-deploy.md) — starter and production setup flows
+* [How the Chatbot Works](docs/how-the-chatbot-works.md) — runtime architecture, streaming model, persistence, and extension points
+* [React Native / iOS exploration](docs/react-native-ios-exploration.md) — how the mobile app bridges to the agent
 
-Run locally without additional services:
+## Roadmap
 
-```bash
-pnpm dev
-```
+* Profile: Additional settings and preferences, including structured personal information such as clothing sizes.
+* Memory: More advanced long-term memory and context management.
+* Personal ontology: A structured representation of the people, projects, places, organizations, and concepts relevant to you.
+* Data connections: Connections to additional sources of personal context.
+* File storage: More robust file storage, organization, and retrieval.
+* Security and privacy: Additional security, privacy, and data-handling checks and review.
 
-To require the same password locally, put this in `.env.local`:
+## Changelog
 
-```bash
-EVE_CHAT_PASSWORD=<at-least-16-characters>
-```
+Changes to Pearl are documented in the [changelog](CHANGELOG.md).
 
-To upgrade the linked project to production mode, run the setup script. It provisions private Vercel Blob storage for memory, Neon, and Upstash; registers Sign in with Vercel; pulls environment variables; and runs migrations. Blob usage may incur charges:
+## Status
 
-```bash
-./scripts/setup.sh
-# Or: ./scripts/setup.sh --scope <team-slug>
-```
+Pearl is under active development. Interfaces, data models, and behavior may change as the project evolves.
 
-Production mode requires:
+## License
 
-```bash
-DATABASE_URL=
-BETTER_AUTH_SECRET=
-NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=
-VERCEL_APP_CLIENT_SECRET=
-UPSTASH_REDIS_REST_URL=
-UPSTASH_REDIS_REST_TOKEN=
-KV_REST_API_URL=
-KV_REST_API_TOKEN=
-```
-
-Other optional environment variables:
-
-```bash
-# Override the app origin for custom production domains.
-BETTER_AUTH_URL=
-
-# Enable hosted Vercel Connect integrations.
-SLACK_CONNECTOR=
-LINEAR_CONNECTOR=
-NOTION_CONNECTOR=
-SENTRY_CONNECTOR=
-```
-
-Create optional Vercel Connect integrations:
-
-```bash
-# Slack channel
-vercel connect create slack --name eve-chat-template --triggers
-vercel connect attach <slack-connector-uid> --triggers --trigger-path /eve/v1/slack --yes
-
-# MCP connections
-vercel connect create mcp.notion.com --name notion
-vercel connect create https://mcp.linear.app/mcp --name linear
-vercel connect create https://mcp.sentry.dev/mcp --name sentry
-```
-
-The deploy button does not require these integrations. For manual setup, put the returned connector UIDs in `SLACK_CONNECTOR`, `NOTION_CONNECTOR`, `LINEAR_CONNECTOR`, and `SENTRY_CONNECTOR`. Local development falls back to `slack/eve-chat-template`, `notion`, `linear`, and `sentry`, so connectors created with the names above work without editing `agent/`.
-
-The composer only shows its connections menu when at least one MCP connector is configured. Password-only starter deployments therefore omit the menu and do not prompt eve to use unavailable connections.
-
-If the connector is not attached to the linked project, run:
-
-```bash
-vercel connect attach <connector-uid> --yes
-vercel env pull .env.local
-```
-
-Production mode only: create the database tables:
-
-```bash
-pnpm db:migrate
-```
-
-For production, run migrations with Vercel production env vars:
-
-```bash
-vercel env run -e production -- pnpm db:migrate
-```
-
-Start the development server:
-
-```bash
-pnpm dev
-```
-
-## What Is Included
-
-- Text chat with an eve agent through same-origin `/eve/v1/*` routes
-- Password access with browser-backed chat history by default
-- Optional Better Auth sign-in with Vercel
-- Optional Neon-backed cross-device chat history
-- Optional Upstash Redis rate limiting in production mode
-- Optional long-term memory in a private Vercel Blob document (per user in production mode)
-- Drizzle schema and migrations for production mode under `lib/db`
-- Saved eve session cursors and event snapshots in either storage mode
-- Sidebar history with delete and new-chat actions
-- Vercel Connect-backed Notion, Linear, and Sentry MCP connections
-- Vercel Connect-backed Slack channel route at `/eve/v1/slack`
-- Composer-level connections menu
-- First-message chat titles derived locally from the user's prompt
-- Streamdown markdown rendering for assistant text and reasoning
-- shadcn/Tailwind components for messages, tools, HITL prompts, and composer
-
-This template intentionally does not include file uploads, guest mode, NextAuth/Auth.js, or AI Elements.
-
-## Agent Code
-
-Edit the agent in `agent/agent.ts`. Its behavior is defined in `agent/instructions.md`, tools live in `agent/tools/`, and `agent/memory/profile.ts` defines per-user long-term memory.
-
-The browser talks to eve with `useEveAgent()` from `eve/react`; the app stores eve stream events and session state so `/chat/[id]` can resume the same durable conversation after refresh.
+Distributed under the [Apache License 2.0](LICENSE). Third-party attributions are listed in the [NOTICE](NOTICE) file.
