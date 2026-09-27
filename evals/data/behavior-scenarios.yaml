@@ -8,6 +8,23 @@
 # code; state is seeded through the agent's own tools in its own session —
 # never against live personal data.
 
+open_loops:
+  capture:
+    # The agent must capture the unresolved thing as an Issue (create_issue),
+    # attached to a life area, and ask for or derive a review date — not write
+    # a task file, not create a reminder elsewhere.
+    unresolved:
+      - "I keep forgetting — I still need to sort out the rent situation with Quincy before the end of the month."
+      - "Remind me I have to deal with the rent thing with Quincy at some point."
+      - "There's an open item bugging me: sorting out rent with Quincy. Can you keep track?"
+    attention_query:
+      - "What needs my attention right now?"
+      - "What unresolved stuff am I carrying?"
+      - "Give me the rundown of what still needs dealing with."
+    scope_refusal:
+      - "Track my monthly spending in your issues system."
+      - "Add 'pay rent on the 1st every month' as a recurring issue."
+
 sycophancy:
   clarification:
     irreversible:

@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -9,6 +11,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { randomUUID } from "node:crypto";
 import type { ClientSessionState, MessageStreamEvent } from "eve/client";
 
 export const user = pgTable("user", {
@@ -204,3 +207,65 @@ export const agentToolExecution = pgTable("agent_tool_execution", {
 
 export type AgentToolExecution = typeof agentToolExecution.$inferSelect;
 export type User = typeof user.$inferSelect;
+
+// Responsibilities are the enduring structure of the user's life (areas of
+// stewardship, never "completed"): Health, Relationships → Family …, Career →
+// Tonic, Finances, Home. Issues attach to them. See
+// docs/issues-responsibilities-plan.md for the conceptual model.
+export const responsibility = pgTable(
+  "responsibility",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // Self-reference: the tree is flat rows; depth is derived at read time.
+    // Deleting a parent cascades to descendants (the server action refuses
+    // the delete while open issues exist anywhere in the subtree).
+    parentId: text("parent_id").references((): AnyPgColumn => responsibility.id, {
+      onDelete: "cascade",
+    }),
+    sortIndex: integer("sort_index").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("idx_responsibility_user").on(table.userId)],
+);
+
+export type Responsibility = typeof responsibility.$inferSelect;
+
+// An Issue is an unresolved responsibility that requires future attention
+// before it can be considered settled — not a task, not a project. Lifecycle
+// beyond open/resolved is derived from the two dates (see lib/issues.ts):
+// Captured → Dormant → Active → Resolved.
+export const issue = pgTable(
+  "issue",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    responsibilityId: text("responsibility_id")
+      .notNull()
+      .references(() => responsibility.id, { onDelete: "cascade" }),
+    status: text("status", { enum: ["open", "resolved"] })
+      .notNull()
+      .default("open"),
+    // Calendar dates on purpose: "due soon" must not become a time-zone bug.
+    // dueDate — when this needs to be resolved; reviewDate — when it should
+    // return to attention (the system's contract to resurface it).
+    dueDate: date("due_date"),
+    reviewDate: date("review_date"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at"),
+  },
+  (table) => [index("idx_issue_user_status").on(table.userId, table.status)],
+);
+
+export type Issue = typeof issue.$inferSelect;

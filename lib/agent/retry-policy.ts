@@ -129,6 +129,25 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     1,
     "Deletion is approval-gated: a retried delete must status check existence first; deleting twice would also hit the second asset if ids shifted.",
   ),
+  // Issues (docs/issues-responsibilities-plan.md).
+  list_issues: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "DB read, no side effect.",
+  ),
+  create_issue: policy(
+    false,
+    [],
+    1,
+    "Capturing twice would duplicate the open loop; a retry must re-read the issue list first (status check) instead of blind-inserting.",
+  ),
+  resolve_issue: policy(
+    false,
+    [],
+    1,
+    "Resolution is approval-gated; a retried resolve must status check that the issue is still open first — never blind-settle again.",
+  ),
   // Declared subagents (agent/subagents/<name>/): the delegation call itself
   // is a background task spawn.
   reviewer: policy(

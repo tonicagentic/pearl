@@ -57,6 +57,13 @@
       "when": 1790208845895,
       "tag": "0007_heavy_alex_wilder",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790552581709,
+      "tag": "0008_spicy_stature",
+      "breakpoints": true
     }
   ]
 }
