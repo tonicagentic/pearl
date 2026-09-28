@@ -23,7 +23,7 @@ export default function RootLayout() {
               swipeEnabled: true,
               drawerType: "slide",
             }}
-            drawerContent={() => <AppDrawer />}
+            drawerContent={(props) => <AppDrawer {...props} />}
           >
             <Drawer.Screen name="index" options={{ title: "Chat" }} />
             <Drawer.Screen name="issues" options={{ title: "Issues" }} />

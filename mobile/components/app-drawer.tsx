@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from "react-native";
-import { Link, router, useNavigation, usePathname } from "expo-router";
+import { Link, router, usePathname } from "expo-router";
+import { type DrawerContentComponentProps } from "expo-router/drawer";
 import { InboxIcon, PlusIcon } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
@@ -11,8 +12,7 @@ import { cn } from "@/lib/utils";
  * The drawer content, mirroring the web app's sidebar: New session, the
  * Issues inbox, the list of chat threads, and the account at the bottom.
  */
-export function AppDrawer() {
-  const navigation = useNavigation<{ openDrawer: () => void; closeDrawer: () => void }>();
+export function AppDrawer({ navigation }: DrawerContentComponentProps) {
   const pathname = usePathname() ?? "/";
   const { signedIn, viewerEmail, signOut } = useAuth();
   // SafeAreaView is a native codegen view: uniwind's className binding can't
@@ -24,6 +24,9 @@ export function AppDrawer() {
     | string
     | undefined;
 
+  // The drawer-typed navigation arrives as drawerContent props; the ambient
+  // useNavigation() inside the content resolves the parent navigator instead,
+  // whose object has no drawer methods (closeDrawer was undefined).
   const close = () => navigation.closeDrawer();
 
   return (
