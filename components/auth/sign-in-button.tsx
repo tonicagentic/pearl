@@ -3,7 +3,7 @@
 import type { ComponentProps, ReactNode } from "react";
 import { useState } from "react";
 import { Loader2Icon } from "lucide-react";
-import { VercelIcon } from "@/components/icons";
+import { PearlIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
@@ -54,7 +54,7 @@ export function SignInButton({
       {pending ? (
         <Loader2Icon className="size-3.5 animate-spin" />
       ) : (
-        <VercelIcon className="size-3.5" />
+        <PearlIcon className="size-3.5" />
       )}
       {pending ? "Opening..." : (children ?? "Sign in with Vercel")}
     </Button>

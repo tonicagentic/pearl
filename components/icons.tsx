@@ -37,3 +37,12 @@ export function VercelIcon({ className }: { readonly className?: string }) {
     </svg>
   );
 }
+
+/** Pearl's mark: a simple filled circle. */
+export function PearlIcon({ className }: { readonly className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" />
+    </svg>
+  );
+}

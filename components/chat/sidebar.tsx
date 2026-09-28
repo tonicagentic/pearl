@@ -17,7 +17,7 @@ import {
   AuthDisplayLoggedOut,
 } from "@/components/auth/auth-display";
 import { UserMenu } from "@/components/auth/user-menu";
-import { VercelIcon } from "@/components/icons";
+import { PearlIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -108,7 +108,7 @@ export function ChatSidebar({
             }}
             type="button"
           >
-            <VercelIcon className="size-3.5 text-foreground" />
+            <PearlIcon className="size-3.5 text-foreground" />
           </button>
           {onToggleSidebar ? (
             <Button

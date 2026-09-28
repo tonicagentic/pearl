@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ChevronsUpDownIcon, Loader2Icon, LogOutIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { VercelIcon } from "@/components/icons";
+import { PearlIcon } from "@/components/icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -154,7 +154,7 @@ function UserAvatar({ viewer }: { readonly viewer: Viewer }) {
 
   return (
     <span className="flex size-7 items-center justify-center rounded-md border border-border bg-background">
-      <VercelIcon className="size-3 text-muted-foreground" />
+      <PearlIcon className="size-3 text-muted-foreground" />
     </span>
   );
 }

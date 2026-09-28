@@ -4,7 +4,7 @@ import { LockKeyholeIcon, MailIcon } from "lucide-react";
 import { EmailSignInForm } from "@/components/auth/email-sign-in-form";
 import { PasswordSignInForm } from "@/components/auth/password-sign-in-form";
 import { SignInButton } from "@/components/auth/sign-in-button";
-import { VercelIcon } from "@/components/icons";
+import { PearlIcon } from "@/components/icons";
 import {
   Dialog,
   DialogContent,
@@ -42,7 +42,7 @@ export function SignInModal({
             ) : usesEmailPassword ? (
               <MailIcon className="size-4 text-foreground" />
             ) : (
-              <VercelIcon className="size-4 text-foreground" />
+              <PearlIcon className="size-4 text-foreground" />
             )}
           </div>
           <DialogTitle>
