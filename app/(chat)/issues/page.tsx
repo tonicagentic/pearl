@@ -3,17 +3,19 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import {
+  ensureDefaultResponsibilities,
+  flattenResponsibilityOptions,
   listOpenIssues,
   listRecentlyResolvedIssues,
   listResponsibilities,
 } from "@/lib/db/issues";
-import type { IssueWithResponsibility, ResponsibilityNode } from "@/lib/db/issues";
+import type { IssueWithResponsibility, ResponsibilityOption } from "@/lib/db/issues";
 import { issueState, isDueSoon } from "@/lib/issues";
 import { getSetupStatus } from "@/lib/setup";
 import { getServerViewer } from "@/lib/session";
 
 import { IssueRow } from "./issue-row";
-import { flattenOptions, NewIssueForm } from "./new-issue-form";
+import { NewIssueForm } from "./new-issue-form";
 
 export const metadata: Metadata = {
   title: "Issues",
@@ -62,6 +64,8 @@ async function ResolvedIssues() {
     );
   }
 
+  await ensureDefaultResponsibilities(viewer.id);
+
   const [openIssues, resolvedIssues, tree] = await Promise.all([
     listOpenIssues(viewer.id),
     listRecentlyResolvedIssues(
@@ -85,7 +89,7 @@ async function ResolvedIssues() {
     }
   }
 
-  const options = flattenOptions(tree);
+  const options: ResponsibilityOption[] = flattenResponsibilityOptions(tree);
 
   return (
     <>

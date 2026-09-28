@@ -8,6 +8,41 @@ export type ResponsibilityNode = Responsibility & {
   readonly children: ResponsibilityNode[];
 };
 
+export type ResponsibilityOption = {
+  readonly id: string;
+  readonly label: string;
+};
+
+/**
+ * Flatten the tree into indented select options for the issue forms. Runs on
+ * the server; the options array crosses to the client components as a plain
+ * serializable prop.
+ */
+export function flattenResponsibilityOptions(
+  tree: readonly ResponsibilityNode[],
+): ResponsibilityOption[] {
+  const options: ResponsibilityOption[] = [];
+
+  for (const node of tree) {
+    for (const [id, label] of walk(node, 0)) {
+      options.push({ id, label });
+    }
+  }
+
+  return options;
+}
+
+function* walk(
+  node: ResponsibilityNode,
+  depth: number,
+): Generator<readonly [string, string]> {
+  yield [node.id, `${" ".repeat(depth * 2)}${node.name}`] as const;
+
+  for (const child of node.children) {
+    yield* walk(child, depth + 1);
+  }
+}
+
 /**
  * Make sure a `user` row exists for this session principal, so issue and
  * responsibility rows can satisfy their foreign keys. Real better-auth

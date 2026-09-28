@@ -10,32 +10,6 @@ export type IssueFormOption = {
   readonly label: string;
 };
 
-/** Flatten the responsibility tree into indented select options. */
-export function flattenOptions(
-  tree: readonly import("@/lib/db/issues").ResponsibilityNode[],
-): IssueFormOption[] {
-  const options: IssueFormOption[] = [];
-
-  for (const node of tree) {
-    for (const [id, label] of walk(node, 0)) {
-      options.push({ id, label });
-    }
-  }
-
-  return options;
-}
-
-function* walk(
-  node: import("@/lib/db/issues").ResponsibilityNode,
-  depth: number,
-): Generator<readonly [string, string]> {
-  yield [node.id, `${" ".repeat(depth * 2)}${node.name}`] as const;
-
-  for (const child of node.children) {
-    yield* walk(child, depth + 1);
-  }
-}
-
 /**
  * Capture form for a new issue. Titles are required; everything else is
  * optional so capture stays frictionless — the whole point is getting the

@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 
-import { listResponsibilities } from "@/lib/db/issues";
+import {
+  ensureDefaultResponsibilities,
+  listResponsibilities,
+} from "@/lib/db/issues";
 import type { ResponsibilityNode } from "@/lib/db/issues";
 import { getSetupStatus } from "@/lib/setup";
 import { getServerViewer } from "@/lib/session";
@@ -41,7 +44,10 @@ async function ResolvedResponsibilities() {
     );
   }
 
-  const tree = await listResponsibilities(viewer.id);
+  const tree = await (async () => {
+    await ensureDefaultResponsibilities(viewer.id);
+    return listResponsibilities(viewer.id);
+  })();
 
   return (
     <>
