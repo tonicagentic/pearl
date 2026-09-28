@@ -126,6 +126,7 @@ export type ThreadHistory = {
 };
 
 export type ThreadProps = {
+  autoFocus?: boolean | undefined;
   components?: ThreadComponents | undefined;
   /** A windowed thread: the list asks for older messages when it reaches its start and shows the loading edge above them. */
   history?: ThreadHistory | undefined;
@@ -219,6 +220,7 @@ const copyToClipboard = async (text: string) => {
 };
 
 export const Thread: FC<ThreadProps> = ({
+  autoFocus = true,
   components = EMPTY_COMPONENTS,
   history,
 }) => {
@@ -437,7 +439,7 @@ export const Thread: FC<ThreadProps> = ({
                 className="aui-thread-viewport-footer gap-4 px-4"
                 style={{ paddingBottom: insets.bottom + 8 }}
               >
-                <Composer />
+                <Composer autoFocus={autoFocus} />
                 <AuiIf
                   condition={(s) => isNewChatView(s) && s.composer.isEmpty}
                 >
@@ -651,11 +653,14 @@ const ThreadSuggestionItem: FC = () => (
 );
 
 // The placeholder color is a class to prop mapping that reads the CSSOM, so it applies from the first render after hydration.
-const DefaultComposerInput: FC = () => {
+const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
+  autoFocus,
+}) => {
   const hydrated = useHydrated();
 
   return (
     <ComposerPrimitive.Input
+      autoFocus={autoFocus}
       placeholder="Send a message..."
       placeholderTextColorClassName={
         hydrated ? "accent-muted-foreground/60" : undefined
@@ -667,7 +672,7 @@ const DefaultComposerInput: FC = () => {
   );
 };
 
-const Composer: FC = () => {
+const Composer: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
   const { ComposerInput = DefaultComposerInput } = useContext(
     ThreadComponentsContext,
   );
@@ -676,7 +681,7 @@ const Composer: FC = () => {
     <ComposerPrimitive.Root className="aui-composer-root w-full">
       <View className="aui-composer-shell border-border/60 dark:border-muted-foreground/15 bg-card gap-2 rounded-3xl border p-2">
         <ComposerAttachments />
-        <ComposerInput />
+        <ComposerInput autoFocus={autoFocus} />
         <ComposerAction />
       </View>
     </ComposerPrimitive.Root>

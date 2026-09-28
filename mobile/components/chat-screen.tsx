@@ -4,8 +4,6 @@ import { useNavigation } from "expo-router";
 import { MenuIcon } from "lucide-react-native";
 import {
   AssistantRuntimeProvider,
-  AuiConfig,
-  Suggestions,
   useExternalStoreRuntime,
   type AppendMessage,
   type ThreadMessageLike,
@@ -84,31 +82,6 @@ export function ChatScreen() {
 
   const runtime = useExternalStoreRuntime(adapter);
 
-  // Suggestions render as chips on the empty (new-chat) state, mirroring the
-  // with-expo sample's root config.
-  const config = useMemo(
-    () =>
-      AuiConfig({
-        suggestions: Suggestions([
-          {
-            title: "What's on my plate",
-            label: "right now?",
-            prompt: "What's on my plate right now?",
-          },
-          {
-            title: "Summarize my notes",
-            label: "from this week",
-            prompt: "Summarize what's in my notes from this week.",
-          },
-          {
-            title: "Draft a reply",
-            label: "I'm stuck on",
-            prompt: "Help me write a reply I've been putting off.",
-          },
-        ]),
-      }),
-    [],
-  );
 
   const openDrawer = useCallback(() => {
     navigation.openDrawer();
@@ -128,8 +101,8 @@ export function ChatScreen() {
         </View>
       </View>
       <View style={{ flex: 1 }}>
-        <AssistantRuntimeProvider runtime={runtime} config={config}>
-          <Thread />
+        <AssistantRuntimeProvider runtime={runtime}>
+          <Thread autoFocus />
         </AssistantRuntimeProvider>
       </View>
     </SafeAreaView>
