@@ -231,7 +231,16 @@ export const responsibility = pgTable(
     sortIndex: integer("sort_index").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (table) => [index("idx_responsibility_user").on(table.userId)],
+  (table) => [
+    index("idx_responsibility_user").on(table.userId),
+    // Sibling names are unique (NULL parent = top level). This is what makes
+    // the default-tree seed race-safe: concurrent seeds conflict and no-op.
+    uniqueIndex("idx_responsibility_sibling_name").on(
+      table.userId,
+      sql`coalesce(${table.parentId}, '__root__')`,
+      table.name,
+    ),
+  ],
 );
 
 export type Responsibility = typeof responsibility.$inferSelect;

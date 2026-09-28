@@ -64,6 +64,13 @@
       "when": 1790552581709,
       "tag": "0008_spicy_stature",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790555371477,
+      "tag": "0009_strong_synch",
+      "breakpoints": true
     }
   ]
 }

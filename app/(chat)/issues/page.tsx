@@ -29,10 +29,16 @@ export const metadata: Metadata = {
  */
 export default function IssuesPage() {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
-      <Suspense fallback={<IssuesFallback />}>
-        <ResolvedIssues />
-      </Suspense>
+    // Page frame: the shell's main is overflow-hidden (the chat scrolls
+    // internally), so non-chat pages own their scroll here.
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="h-full overflow-y-auto px-4 pt-14 pb-8">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+          <Suspense fallback={<IssuesFallback />}>
+            <ResolvedIssues />
+          </Suspense>
+        </div>
+      </div>
     </div>
   );
 }

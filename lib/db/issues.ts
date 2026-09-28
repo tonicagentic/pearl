@@ -115,6 +115,8 @@ async function seedTree(
   startIndex: number,
 ) {
   for (const [index, node] of nodes.entries()) {
+    // Conflict-safe: concurrent seeds (or a retry after a crash) no-op on the
+    // sibling-name unique index instead of duplicating the tree.
     const [row] = await db
       .insert(responsibility)
       .values({
@@ -123,6 +125,7 @@ async function seedTree(
         parentId,
         sortIndex: startIndex + index,
       })
+      .onConflictDoNothing()
       .returning();
 
     if (!row) {
