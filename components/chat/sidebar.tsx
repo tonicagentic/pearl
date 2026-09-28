@@ -63,10 +63,15 @@ export function ChatSidebar({
   readonly viewer: Viewer | null;
 }) {
   const authDisabled = !setupStatus.appReady;
-  const newSessionActive = activeChatId === null;
-  const issuesActive = usePathname()?.startsWith("/issues") ?? false;
+  const pathname = usePathname();
+  // "New session" is only active while actually viewing an empty chat —
+  // activeChatId is also null on /issues and /settings/*, which shouldn't
+  // light it up.
+  const onChatRoute = pathname === "/" || pathname?.startsWith("/chat") || false;
+  const newSessionActive = activeChatId === null && onChatRoute;
+  const issuesActive = pathname?.startsWith("/issues") ?? false;
   const responsibilitiesActive =
-    usePathname()?.startsWith("/settings/responsibilities") ?? false;
+    pathname?.startsWith("/settings/responsibilities") ?? false;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
