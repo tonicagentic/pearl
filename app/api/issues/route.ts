@@ -65,7 +65,6 @@ export async function GET() {
   ]);
 
   return NextResponse.json({
-    v: 2,
     viewer: { id: viewer.id, name: viewer.name, email: viewer.email },
     issues: [...openIssues, ...resolvedIssues].map((row) => ({
       ...row,
@@ -73,6 +72,7 @@ export async function GET() {
       dueSoon: row.status === "open" && row.dueDate !== null && row.dueDate <= todayIso(),
     })),
     options: flattenResponsibilityOptions(tree),
+    tree,
   });
 }
 

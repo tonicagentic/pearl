@@ -31,6 +31,12 @@ export function IssuesScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
+  const placeholderColor = useCSSVariable("--color-muted-foreground") as
+    | string
+    | undefined;
+  const primaryForeground = useCSSVariable("--color-primary-foreground") as
+    | string
+    | undefined;
 
   const reload = useCallback(async () => {
     try {
@@ -129,7 +135,7 @@ export function IssuesScreen() {
       ) : null}
 
       {!payload && !error ? (
-        <ActivityIndicator />
+        <ActivityIndicator color={placeholderColor ?? undefined} />
       ) : (
         <>
           <IssueGroup
@@ -240,6 +246,9 @@ function IssueRow({
   readonly onResolve: (issue: IssueDto, resolved: boolean) => Promise<void>;
 }) {
   const resolved = issue.status === "resolved";
+  const placeholderColor = useCSSVariable("--color-muted-foreground") as
+    | string
+    | undefined;
 
   return (
     <View className="flex-row items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2.5">
@@ -267,7 +276,7 @@ function IssueRow({
         onPress={() => void onResolve(issue, !resolved)}
       >
         {busyId === issue.id ? (
-          <ActivityIndicator size="small" />
+          <ActivityIndicator size="small" color={placeholderColor ?? undefined} />
         ) : (
           <Text className={`text-xs ${resolved ? "text-muted-foreground" : "text-primary-foreground"}`}>
             {resolved ? "Reopen" : "Resolve"}
@@ -286,6 +295,12 @@ function NewIssueForm({
   readonly onDone: (created: boolean) => void;
 }) {
   const [title, setTitle] = useState("");
+  const placeholderColor = useCSSVariable("--color-muted-foreground") as
+    | string
+    | undefined;
+  const primaryForeground = useCSSVariable("--color-primary-foreground") as
+    | string
+    | undefined;
   const [responsibilityName, setResponsibilityName] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -298,14 +313,14 @@ function NewIssueForm({
       <TextInput
         className="rounded-md border px-3 py-2 text-sm text-foreground"
         placeholder="What needs resolving?"
-        placeholderTextColor="#9ca3af"
+        placeholderTextColor={placeholderColor ?? undefined}
         value={title}
         onChangeText={setTitle}
       />
       <TextInput
         className="rounded-md border px-3 py-2 text-sm text-foreground"
         placeholder="Area of responsibility (e.g. Home) — optional"
-        placeholderTextColor="#9ca3af"
+        placeholderTextColor={placeholderColor ?? undefined}
         value={responsibilityName}
         onChangeText={setResponsibilityName}
         autoCapitalize="none"
@@ -313,7 +328,7 @@ function NewIssueForm({
       <TextInput
         className="rounded-md border px-3 py-2 text-sm text-foreground"
         placeholder="Notes — what you're waiting on…"
-        placeholderTextColor="#9ca3af"
+        placeholderTextColor={placeholderColor ?? undefined}
         value={description}
         onChangeText={setDescription}
         multiline
@@ -322,7 +337,7 @@ function NewIssueForm({
         <TextInput
           className="flex-1 rounded-md border px-3 py-2 text-sm text-foreground"
           placeholder="Due (YYYY-MM-DD)"
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor={placeholderColor ?? undefined}
           value={dueDate}
           onChangeText={setDueDate}
           autoCapitalize="none"
@@ -330,7 +345,7 @@ function NewIssueForm({
         <TextInput
           className="flex-1 rounded-md border px-3 py-2 text-sm text-foreground"
           placeholder="Review (YYYY-MM-DD)"
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor={placeholderColor ?? undefined}
           value={reviewDate}
           onChangeText={setReviewDate}
           autoCapitalize="none"
@@ -366,7 +381,7 @@ function NewIssueForm({
           }}
         >
           {pending ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="small" color={primaryForeground ?? "#fff"} />
           ) : (
             <Text className="text-sm font-medium text-primary-foreground">Capture</Text>
           )}

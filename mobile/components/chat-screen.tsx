@@ -116,13 +116,13 @@ export function ChatScreen() {
 
   return (
     <SafeAreaView style={screenStyle} edges={["top", "left", "right"]}>
-      <View style={styles.header}>
+      <View style={styles.header} className="border-b border-border/60">
         <Pressable onPress={openDrawer} hitSlop={8} accessibilityLabel="Open menu">
           <MenuIcon className="size-5 text-muted-foreground" />
         </Pressable>
         <View style={styles.headerText}>
           <Text style={styles.headerTitle} numberOfLines={1}>{activeTitle}</Text>
-          <Text style={styles.headerUrl} numberOfLines={1}>
+          <Text style={styles.headerUrl} numberOfLines={1} className="text-muted-foreground">
             {status === "streaming" ? "streaming…" : AGENT_URL}
           </Text>
         </View>
@@ -143,10 +143,8 @@ const styles = {
     gap: 10,
     paddingHorizontal: 16,
     paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.06)",
   } as const,
   headerText: { flex: 1, marginRight: 8 } as const,
   headerTitle: { fontSize: 15, fontWeight: "600" } as const,
-  headerUrl: { fontSize: 10, color: "#777" } as const,
+  headerUrl: { fontSize: 10 } as const,
 };
