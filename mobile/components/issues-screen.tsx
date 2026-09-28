@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useNavigation } from "expo-router";
 import { MenuIcon } from "lucide-react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useCSSVariable } from "uniwind";
 
 import {
   createIssueRequest,
@@ -24,6 +26,11 @@ export function IssuesScreen() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // SafeAreaView is a native codegen view — the theme background goes through
+  // style, not className (uniwind can't reach it).
+  const backgroundColor = useCSSVariable("--color-background") as
+    | string
+    | undefined;
 
   const reload = useCallback(async () => {
     try {
@@ -93,8 +100,13 @@ export function IssuesScreen() {
   const resolved = (payload?.issues ?? []).filter((issue) => issue.status === "resolved");
 
   return (
-    <View className="flex-1">
-      <View className="flex-row items-center gap-2 px-4 pb-2 pt-2">
+    // Top/left/right insets: the header must clear the status bar and the
+    // dynamic island; the bottom edge is left to the content padding.
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor }}
+      edges={["top", "left", "right"]}
+    >
+      <View className="flex-row items-center gap-2 px-4 pb-2">
         <Pressable
           onPress={() => navigation.openDrawer()}
           accessibilityLabel="Open menu"
@@ -183,7 +195,7 @@ export function IssuesScreen() {
         </>
       )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
