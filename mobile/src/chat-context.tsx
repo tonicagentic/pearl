@@ -58,7 +58,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   // is only assigned on the first send of a fresh chat.
   const activeChatIdRef = useRef<string | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [activeTitle, setActiveTitle] = useState("New session");
+  const [activeTitle, setActiveTitle] = useState("New chat");
   const [chats, setChats] = useState<readonly ChatListItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [chatsLoading, setChatsLoading] = useState(false);
@@ -183,7 +183,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const newChat = useCallback(() => {
     activeChatIdRef.current = null;
     setActiveChatId(null);
-    setActiveTitle("New session");
+    setActiveTitle("New chat");
     setStore(buildStore(null));
   }, [buildStore]);
 

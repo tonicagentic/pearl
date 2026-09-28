@@ -10,7 +10,7 @@ import { ChatsProvider } from "@/src/chat-context";
 
 /**
  * Root layout: auth + chats context, then a drawer navigator whose content
- * mirrors the web app's sidebar (New session, Issues, chat threads, account).
+ * mirrors the web app's sidebar (New chat, Issues, chat threads, account).
  * Screens render their own headers, so the drawer's built-in header is off.
  */
 export default function RootLayout() {

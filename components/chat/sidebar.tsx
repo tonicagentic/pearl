@@ -64,7 +64,7 @@ export function ChatSidebar({
 }) {
   const authDisabled = !setupStatus.appReady;
   const pathname = usePathname();
-  // "New session" is only active while actually viewing an empty chat —
+  // "New chat" is only active while actually viewing an empty chat —
   // activeChatId is also null on /issues and /settings/*, which shouldn't
   // light it up.
   const onChatRoute = pathname === "/" || pathname?.startsWith("/chat") || false;
@@ -105,7 +105,7 @@ export function ChatSidebar({
       <div className="flex flex-col gap-1 px-2 pt-2 pb-2">
         <div className="flex items-center justify-between">
           <button
-            aria-label="New session"
+            aria-label="New chat"
             className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
             onClick={() => {
               onNewChat();
@@ -128,8 +128,23 @@ export function ChatSidebar({
             </Button>
           ) : null}
         </div>
-        {/* Issues inbox: above New session, styled like the chat rows but
-            anchored to its own route rather than the chat list. */}
+        {/* New chat: first item in the list, styled like the chat rows. */}
+        <button
+          className={cn(
+            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
+            newSessionActive ? activeRowClass : inactiveRowClass,
+          )}
+          onClick={() => {
+            onNewChat();
+            onNavigate?.(null);
+          }}
+          type="button"
+        >
+          <PlusIcon className="size-4" />
+          New chat
+        </button>
+        {/* Issues inbox: styled like the chat rows but anchored to its own
+            route rather than the chat list. */}
         <Link
           className={cn(
             "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
@@ -151,20 +166,6 @@ export function ChatSidebar({
           <NetworkIcon className="size-4" />
           Responsibilities
         </Link>
-        <button
-          className={cn(
-            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
-            newSessionActive ? activeRowClass : inactiveRowClass,
-          )}
-          onClick={() => {
-            onNewChat();
-            onNavigate?.(null);
-          }}
-          type="button"
-        >
-          <PlusIcon className="size-4" />
-          New session
-        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">

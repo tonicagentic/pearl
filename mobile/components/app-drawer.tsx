@@ -10,7 +10,7 @@ import { useChats } from "@/src/chat-context";
 import { cn } from "@/lib/utils";
 
 /**
- * The drawer content, mirroring the web app's sidebar: New session, the
+ * The drawer content, mirroring the web app's sidebar: New chat, the
  * Issues inbox, the durable chat threads, and the account at the bottom.
  */
 export function AppDrawer({ navigation }: DrawerContentComponentProps) {
@@ -37,7 +37,7 @@ export function AppDrawer({ navigation }: DrawerContentComponentProps) {
       <View className="flex-1 px-2 pt-2">
         <Text className="px-2 pb-2 text-sm font-semibold text-foreground">Pearl</Text>
 
-        {/* New session: drops the active chat and lands on the composer; the
+        {/* New chat: drops the active chat and lands on the composer; the
             row is created server-side on the first send. */}
         <Pressable
           className={cn(
@@ -51,7 +51,7 @@ export function AppDrawer({ navigation }: DrawerContentComponentProps) {
           }}
         >
           <PlusIcon className="size-4 text-foreground" />
-          <Text className="text-sm text-foreground">New session</Text>
+          <Text className="text-sm text-foreground">New chat</Text>
         </Pressable>
 
         {/* Issues inbox */}
