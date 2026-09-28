@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useNavigation } from "expo-router";
+import { MenuIcon } from "lucide-react-native";
 
 import {
   createIssueRequest,
@@ -23,7 +18,8 @@ import {
  * authenticated session; responsibilities are read-only here — the tree is
  * edited on the web.
  */
-export function IssuesScreen({ onClose }: { readonly onClose: () => void }) {
+export function IssuesScreen() {
+  const navigation = useNavigation<{ openDrawer: () => void; closeDrawer: () => void }>();
   const [payload, setPayload] = useState<IssuesPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -63,8 +59,7 @@ export function IssuesScreen({ onClose }: { readonly onClose: () => void }) {
     };
   }, []);
 
-  const setResolved = useCallback(
-    async (issue: IssueDto, resolved: boolean) => {
+  const setResolved = useCallback(    async (issue: IssueDto, resolved: boolean) => {
       setBusyId(issue.id);
 
       try {
@@ -98,14 +93,22 @@ export function IssuesScreen({ onClose }: { readonly onClose: () => void }) {
   const resolved = (payload?.issues ?? []).filter((issue) => issue.status === "resolved");
 
   return (
-    <ScrollView className="flex-1" contentContainerClassName="px-4 pb-24 pt-2">
-      <View className="mb-4 flex-row items-center justify-between">
-        <Pressable onPress={onClose} className="rounded-md px-2 py-1">
-          <Text className="text-sm text-muted-foreground">‹ Chat</Text>
+    <View className="flex-1">
+      <View className="flex-row items-center gap-2 px-4 pb-2 pt-2">
+        <Pressable
+          onPress={() => navigation.openDrawer()}
+          accessibilityLabel="Open menu"
+          className="p-1"
+        >
+          <MenuIcon className="size-5 text-muted-foreground" />
         </Pressable>
         <Text className="text-base font-semibold text-foreground">Issues</Text>
-        <View className="w-10" />
       </View>
+
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="px-4 pb-24"
+      >
 
       {error ? (
         <View className="mb-3 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2">
@@ -179,7 +182,8 @@ export function IssuesScreen({ onClose }: { readonly onClose: () => void }) {
           )}
         </>
       )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 

@@ -21,11 +21,6 @@ try {
   // Fast-refresh race: keep the previously installed streaming fetch.
 }
 
-import { registerRootComponent } from 'expo';
-
-import App from './App';
-
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
-registerRootComponent(App);
+// Expo Router entry: registered last so the side effects above are in place
+// before any route renders (docs: router/installation#custom-entry-point).
+import 'expo-router/entry';
