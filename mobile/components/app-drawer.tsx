@@ -6,15 +6,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { useAuth } from "@/src/auth";
+import { useChats } from "@/src/chat-context";
 import { cn } from "@/lib/utils";
 
 /**
  * The drawer content, mirroring the web app's sidebar: New session, the
- * Issues inbox, the list of chat threads, and the account at the bottom.
+ * Issues inbox, the durable chat threads, and the account at the bottom.
  */
 export function AppDrawer({ navigation }: DrawerContentComponentProps) {
   const pathname = usePathname() ?? "/";
   const { signedIn, viewerEmail, signOut } = useAuth();
+  const { chats, activeChatId, chatsLoading, hasMoreChats, loadMoreChats, selectChat, newChat } =
+    useChats();
   // SafeAreaView is a native codegen view: uniwind's className binding can't
   // reach it (same as the safe-area containers in the routes), so the drawer
   // panel's background must be painted through style — a className background
@@ -34,20 +37,22 @@ export function AppDrawer({ navigation }: DrawerContentComponentProps) {
       <View className="flex-1 px-2 pt-2">
         <Text className="px-2 pb-2 text-sm font-semibold text-foreground">Pearl</Text>
 
-        {/* New session: lands on the chat with a fresh composer. The session
-            itself is the running eve session for now — multi-chat is a later
-            parity item. */}
-        <Link
-          href="/"
-          onPress={close}
+        {/* New session: drops the active chat and lands on the composer; the
+            row is created server-side on the first send. */}
+        <Pressable
           className={cn(
             "h-8 flex-row items-center gap-2 rounded-md px-2",
-            pathname === "/" ? "bg-muted/50" : "opacity-80",
+            activeChatId === null ? "bg-muted/50" : "opacity-80",
           )}
+          onPress={() => {
+            newChat();
+            close();
+            router.navigate("/");
+          }}
         >
           <PlusIcon className="size-4 text-foreground" />
           <Text className="text-sm text-foreground">New session</Text>
-        </Link>
+        </Pressable>
 
         {/* Issues inbox */}
         <Link
@@ -66,18 +71,41 @@ export function AppDrawer({ navigation }: DrawerContentComponentProps) {
         <Text className="px-2 pb-1 pt-4 text-xs font-medium uppercase text-muted-foreground">
           Chats
         </Text>
-        <Link
-          href="/"
-          onPress={close}
-          className={cn(
-            "h-8 flex-row items-center rounded-md px-2",
-            pathname === "/" ? "bg-muted/50" : "opacity-80",
-          )}
-        >
-          <Text className="text-sm text-foreground" numberOfLines={1}>
-            Current session
+        {chats.length === 0 ? (
+          <Text className="px-2 py-1 text-xs text-muted-foreground">
+            {signedIn ? "No chats yet." : "Sign in to see your chats."}
           </Text>
-        </Link>
+        ) : (
+          chats.map((chat) => (
+            <Pressable
+              key={chat.id}
+              className={cn(
+                "h-8 flex-row items-center rounded-md px-2",
+                activeChatId === chat.id ? "bg-muted/50" : "opacity-80",
+              )}
+              onPress={() => {
+                void selectChat(chat.id);
+                close();
+                router.navigate("/");
+              }}
+            >
+              <Text className="text-sm text-foreground" numberOfLines={1}>
+                {chat.title}
+              </Text>
+            </Pressable>
+          ))
+        )}
+        {hasMoreChats ? (
+          <Pressable
+            className="h-8 items-start rounded-md px-2"
+            disabled={chatsLoading}
+            onPress={() => void loadMoreChats()}
+          >
+            <Text className="text-xs text-muted-foreground">
+              {chatsLoading ? "Loading…" : "Load more"}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Account */}

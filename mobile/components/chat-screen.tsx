@@ -7,12 +7,14 @@ import {
   AuiConfig,
   Suggestions,
   useExternalStoreRuntime,
+  type AppendMessage,
   type ThreadMessageLike,
 } from "@assistant-ui/react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import { useChats } from "@/src/chat-context";
 import { AGENT_URL, getStore, toThreadMessages, type SpikeState } from "@/src/eve-transport";
 
 /**
@@ -31,7 +33,7 @@ export function ChatScreen() {
     { flex: 1 },
     { backgroundColor },
   ];
-  const store = getStore();
+  const { store, activeTitle } = useChats();
   const state = useSyncExternalStore<SpikeState>(
     (cb) => store.subscribe(cb),
     () => store.snapshot.data,
@@ -42,27 +44,38 @@ export function ChatScreen() {
   );
   const navigation = useNavigation<{ openDrawer: () => void; closeDrawer: () => void }>();
 
-  const runtime = useExternalStoreRuntime({
-    get messages(): ThreadMessageLike[] {
-      return toThreadMessages(state);
-    },
-    // Return the projection as-is: the runtime's converter assigns stable
-    // positional fallback ids (the projection omits ids on purpose) and
-    // honors the per-message status it carries.
-    convertMessage: (message) => message,
-    isRunning: status === "streaming",
-    isDisabled: false,
-    onNew: async (message) => {
-      const text = message.content
-        .filter((p): p is { type: "text"; text: string } => p.type === "text")
-        .map((p) => p.text)
-        .join("\n");
-      await store.send({ message: text });
-    },
-    onCancel: async () => {
-      await store.cancel();
-    },
-  });
+  // Rebuilt when the store instance changes (chat selection): the adapter
+  // closes over the current store, and the runtime core re-syncs on the new
+  // adapter object.
+  const adapter = useMemo(
+    () => ({
+      get messages(): ThreadMessageLike[] {
+        return toThreadMessages(state);
+      },
+      // Return the projection as-is: the runtime's converter assigns stable
+      // positional fallback ids (the projection omits ids on purpose) and
+      // honors the per-message status it carries.
+      convertMessage: (message: ThreadMessageLike) => message,
+      isRunning: status === "streaming",
+      isDisabled: false,
+      onNew: async (message: AppendMessage) => {
+        const text = message.content
+          .filter((p): p is { type: "text"; text: string } => p.type === "text")
+          .map((p) => p.text)
+          .join("\n");
+        await store.send({ message: text });
+      },
+      onCancel: async () => {
+        await store.cancel();
+      },
+    }),
+    // state and status change with the store's own updates; the adapter is
+    // rebuilt whenever they change so the runtime re-syncs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- state/status are snapshots, store is the dependency
+    [store, state, status],
+  );
+
+  const runtime = useExternalStoreRuntime(adapter);
 
   // Suggestions render as chips on the empty (new-chat) state, mirroring the
   // with-expo sample's root config.
@@ -101,7 +114,7 @@ export function ChatScreen() {
           <MenuIcon className="size-5 text-muted-foreground" />
         </Pressable>
         <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>Pearl</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>{activeTitle}</Text>
           <Text style={styles.headerUrl} numberOfLines={1}>
             {status === "streaming" ? "streaming…" : AGENT_URL}
           </Text>
