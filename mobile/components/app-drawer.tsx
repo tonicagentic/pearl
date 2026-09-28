@@ -2,6 +2,7 @@ import { Pressable, Text, View } from "react-native";
 import { Link, router, useNavigation, usePathname } from "expo-router";
 import { InboxIcon, PlusIcon } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useCSSVariable } from "uniwind";
 
 import { useAuth } from "@/src/auth";
 import { cn } from "@/lib/utils";
@@ -14,11 +15,19 @@ export function AppDrawer() {
   const navigation = useNavigation<{ openDrawer: () => void; closeDrawer: () => void }>();
   const pathname = usePathname() ?? "/";
   const { signedIn, viewerEmail, signOut } = useAuth();
+  // SafeAreaView is a native codegen view: uniwind's className binding can't
+  // reach it (same as the safe-area containers in the routes), so the drawer
+  // panel's background must be painted through style — a className background
+  // is silently dropped and the drawer renders transparent, stacking its
+  // content over whatever is on screen.
+  const backgroundColor = useCSSVariable("--color-background") as
+    | string
+    | undefined;
 
   const close = () => navigation.closeDrawer();
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <SafeAreaView style={{ flex: 1, backgroundColor }} className="flex-1">
       <View className="flex-1 px-2 pt-2">
         <Text className="px-2 pb-2 text-sm font-semibold text-foreground">Pearl</Text>
 
