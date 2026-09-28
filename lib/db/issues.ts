@@ -70,24 +70,40 @@ export async function ensureUserForPrincipal(principal: {
 }
 
 // The default stewardship tree seeded for every new user: stable areas of
-// life, never completed. Issues attach to these.
+// life, never completed. Issues attach to these. Rendered as a mind map on
+// the responsibilities page (root((Responsibilities))).
 type DefaultResponsibility = {
   readonly name: string;
   readonly children?: readonly DefaultResponsibility[];
 };
 
 const DEFAULT_RESPONSIBILITIES: readonly DefaultResponsibility[] = [
+  { name: "Body", children: [{ name: "Aesthetics" }, { name: "Physical health" }] },
+  { name: "Mind", children: [{ name: "Learning" }, { name: "Reflection" }, { name: "Comfort" }] },
+  { name: "Career", children: [{ name: "Tonic Agentic" }, { name: "Personal brand" }] },
+  { name: "People", children: [{ name: "Family" }, { name: "Friends" }, { name: "Intimacy" }, { name: "Community" }] },
+  { name: "Home", children: [{ name: "San Francisco" }, { name: "Boulder" }] },
   {
-    name: "Life",
+    name: "Finances",
     children: [
-      { name: "Health" },
+      { name: "Taxes" },
+      { name: "Investments" },
+      { name: "Cash flow" },
+      { name: "Insurance" },
+    ],
+  },
+  {
+    name: "Activity",
+    children: [
+      { name: "Travel" },
       {
-        name: "Relationships",
-        children: [{ name: "Family" }, { name: "Friends" }, { name: "Intimacy" }],
+        name: "Creative",
+        children: [{ name: "Music" }, { name: "Design engineering" }, { name: "Architecture" }],
       },
-      { name: "Career", children: [{ name: "Tonic" }] },
-      { name: "Finances" },
-      { name: "Home" },
+      {
+        name: "Outdoors",
+        children: [{ name: "Surfing" }, { name: "Snowboarding" }, { name: "Hiking" }],
+      },
     ],
   },
 ];

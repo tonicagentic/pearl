@@ -151,10 +151,12 @@ a later parity item).
 2. **`app/(chat)/settings/responsibilities/page.tsx`** — the tree editor. The
    structure is just `parentId`, so v1 renders a nested list (indent + drag
    is out of scope): rename, add child, delete (blocked while open issues
-   exist), reorder within siblings. Default tree (Life → Health /
-   Relationships → Family, Friends, Intimacy / Career → Tonic / Finances /
-   Home) is seeded idempotently on first visit — `responsibilities` are never
-   empty, so issues always have a home.
+   exist), reorder within siblings. Default tree (root visualized as a mind
+   map: Responsibilities → Body / Mind / Career / People / Home / Finances /
+   Activity with their sub-areas — see `DEFAULT_RESPONSIBILITIES` in
+   `lib/db/issues.ts`) is seeded idempotently on first visit —
+   `responsibilities` are never empty, so issues always have a home. The
+   same tree renders above the editor as a Mermaid mind map.
 3. **Navigation** — an "Issues" entry in the `(chat)` sidebar next to
    Artifacts; responsibilities lives under the existing Settings page.
 

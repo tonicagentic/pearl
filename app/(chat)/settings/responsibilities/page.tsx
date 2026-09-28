@@ -10,6 +10,7 @@ import type { ResponsibilityNode } from "@/lib/db/issues";
 import { getSetupStatus } from "@/lib/setup";
 import { getServerViewer } from "@/lib/session";
 
+import { ResponsibilityMindmap } from "./responsibility-mindmap";
 import { ResponsibilityNodeEditor } from "./responsibility-node-editor";
 
 export const metadata: Metadata = {
@@ -62,6 +63,7 @@ async function ResolvedResponsibilities() {
           .
         </p>
       </header>
+      <ResponsibilityMindmap tree={tree} />
       <div className="flex flex-col gap-1">
         {tree.map((node) => (
           <ResponsibilityNodeEditor key={node.id} node={node} depth={0} />
