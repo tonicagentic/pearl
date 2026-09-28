@@ -3,11 +3,13 @@
 import {
   ArrowRightIcon,
   EllipsisIcon,
+  InboxIcon,
   PanelLeftIcon,
   PlusIcon,
   Trash2Icon,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import {
   AuthDisplayLoggedIn,
@@ -61,6 +63,7 @@ export function ChatSidebar({
 }) {
   const authDisabled = !setupStatus.appReady;
   const newSessionActive = activeChatId === null;
+  const issuesActive = usePathname()?.startsWith("/issues") ?? false;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -117,6 +120,18 @@ export function ChatSidebar({
             </Button>
           ) : null}
         </div>
+        {/* Issues inbox: above New session, styled like the chat rows but
+            anchored to its own route rather than the chat list. */}
+        <Link
+          className={cn(
+            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
+            issuesActive ? activeRowClass : inactiveRowClass,
+          )}
+          href="/issues"
+        >
+          <InboxIcon className="size-4" />
+          Issues
+        </Link>
         <button
           className={cn(
             "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",

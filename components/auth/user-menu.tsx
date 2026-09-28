@@ -77,14 +77,6 @@ export function UserMenu({
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
-            router.push("/issues");
-          }}
-        >
-          Issues
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={(event) => {
-            event.preventDefault();
             router.push("/settings/responsibilities");
           }}
         >
