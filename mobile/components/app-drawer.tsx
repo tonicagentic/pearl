@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import { Link, router, usePathname } from "expo-router";
 import { type DrawerContentComponentProps } from "expo-router/drawer";
-import { InboxIcon, PlusIcon } from "lucide-react-native";
+import { InboxIcon, NetworkIcon, PlusIcon } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
@@ -65,6 +65,19 @@ export function AppDrawer({ navigation }: DrawerContentComponentProps) {
         >
           <InboxIcon className="size-4 text-foreground" />
           <Text className="text-sm text-foreground">Issues</Text>
+        </Link>
+
+        {/* Responsibilities tree + mind map: nested under Issues. */}
+        <Link
+          href="/responsibilities"
+          onPress={close}
+          className={cn(
+            "h-8 flex-row items-center gap-2 rounded-md px-2",
+            pathname.startsWith("/responsibilities") ? "bg-muted/50" : "opacity-80",
+          )}
+        >
+          <NetworkIcon className="size-4 text-foreground" />
+          <Text className="text-sm text-foreground">Responsibilities</Text>
         </Link>
 
         {/* Chat threads */}

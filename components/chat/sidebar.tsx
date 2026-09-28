@@ -4,6 +4,7 @@ import {
   ArrowRightIcon,
   EllipsisIcon,
   InboxIcon,
+  NetworkIcon,
   PanelLeftIcon,
   PlusIcon,
   Trash2Icon,
@@ -64,6 +65,8 @@ export function ChatSidebar({
   const authDisabled = !setupStatus.appReady;
   const newSessionActive = activeChatId === null;
   const issuesActive = usePathname()?.startsWith("/issues") ?? false;
+  const responsibilitiesActive =
+    usePathname()?.startsWith("/settings/responsibilities") ?? false;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -131,6 +134,17 @@ export function ChatSidebar({
         >
           <InboxIcon className="size-4" />
           Issues
+        </Link>
+        {/* Responsibilities tree + mind map: nested under Issues. */}
+        <Link
+          className={cn(
+            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
+            responsibilitiesActive ? activeRowClass : inactiveRowClass,
+          )}
+          href="/settings/responsibilities"
+        >
+          <NetworkIcon className="size-4" />
+          Responsibilities
         </Link>
         <button
           className={cn(
