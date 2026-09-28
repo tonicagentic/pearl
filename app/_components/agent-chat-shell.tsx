@@ -9,6 +9,7 @@ import {
   useMemo,
   useRef,
   useState,
+  Suspense,
   type ReactNode,
 } from "react";
 import {
@@ -280,21 +281,27 @@ export function AgentChatShell({
   );
 
   const sidebar = (
-    <ChatSidebar
-      activeChatId={activeChatId}
-      chats={history}
-      hasMoreChats={Boolean(nextCursor)}
-      isLoadingChats={historyLoading}
-      isLoadingMore={loadingMore}
-      onDeleteChat={handleDeleteChat}
-      onLoadMoreChats={loadMoreChats}
-      onNavigate={handleSidebarNavigate}
-      onNewChat={startNewChat}
-      onSignIn={() => requestSignIn()}
-      onToggleSidebar={() => setDesktopSidebarOpenPersisted(false)}
-      setupStatus={setupStatusState}
-      viewer={viewerState}
-    />
+    // usePathname() inside ChatSidebar is a dynamic API: under
+    // cacheComponents it must sit behind a Suspense boundary or prerendering
+    // the static shell fails. The fallback keeps the desktop pane's width so
+    // the shell doesn't shift when the sidebar streams in.
+    <Suspense fallback={<SidebarShellFallback className="w-64" />}>
+      <ChatSidebar
+        activeChatId={activeChatId}
+        chats={history}
+        hasMoreChats={Boolean(nextCursor)}
+        isLoadingChats={historyLoading}
+        isLoadingMore={loadingMore}
+        onDeleteChat={handleDeleteChat}
+        onLoadMoreChats={loadMoreChats}
+        onNavigate={handleSidebarNavigate}
+        onNewChat={startNewChat}
+        onSignIn={() => requestSignIn()}
+        onToggleSidebar={() => setDesktopSidebarOpenPersisted(false)}
+        setupStatus={setupStatusState}
+        viewer={viewerState}
+      />
+    </Suspense>
   );
   const loggedOutAuthActions = historyLoading ? (
     <AuthDisplayLoggedOut>
@@ -372,6 +379,7 @@ export function AgentChatShell({
         />
         {mobileSidebarOpen ? (
           <div className="fixed inset-y-0 left-0 z-50 md:hidden">
+            <Suspense fallback={<SidebarShellFallback className="w-[84vw] max-w-80" />}>
             <ChatSidebar
               activeChatId={activeChatId}
               chats={history}
@@ -387,6 +395,7 @@ export function AgentChatShell({
               setupStatus={setupStatusState}
               viewer={viewerState}
             />
+            </Suspense>
           </div>
         ) : null}
 
@@ -404,6 +413,17 @@ export function AgentChatShell({
         />
       </div>
     </ChatShellProvider>
+  );
+}
+
+function SidebarShellFallback({ className }: { readonly className?: string }) {
+  return (
+    <aside
+      className={cn(
+        "flex h-full shrink-0 flex-col border-r border-border bg-background",
+        className,
+      )}
+    />
   );
 }
 
