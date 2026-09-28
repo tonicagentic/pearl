@@ -18,6 +18,7 @@ import {
   type ThreadMessageLike,
 } from '@assistant-ui/react-native';
 import { Thread } from '@/components/assistant-ui/elements/thread.aui';
+import { IssuesScreen } from '@/components/issues-screen';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useCSSVariable } from 'uniwind';
 
@@ -56,6 +57,7 @@ export default function App() {
     'idle' | 'signing-in' | 'error'
   >('idle');
   const [signInError, setSignInError] = useState<string | null>(null);
+  const [view, setView] = useState<'chat' | 'issues'>('chat');
 
   const signIn = useCallback(async () => {
     setSignInState('signing-in');
@@ -201,20 +203,41 @@ export default function App() {
       >
         <View style={styles.header}>
           <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>my-agent</Text>
+            <Text style={styles.headerTitle}>
+              {view === 'issues' ? 'Issues' : 'my-agent'}
+            </Text>
             <Text style={styles.headerUrl} numberOfLines={1}>
-              {status === 'streaming' ? 'streaming…' : AGENT_URL}
+              {view === 'issues'
+                ? 'Unresolved responsibilities'
+                : status === 'streaming'
+                  ? 'streaming…'
+                  : AGENT_URL}
             </Text>
           </View>
-          <Pressable onPress={signOut}>
-            <Text style={styles.skip}>Sign out</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            {view === 'chat' ? (
+              <Pressable onPress={() => setView('issues')}>
+                <Text style={styles.skip}>Issues</Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={() => setView('chat')}>
+                <Text style={styles.skip}>Chat</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={signOut}>
+              <Text style={styles.skip}>Sign out</Text>
+            </Pressable>
+          </View>
         </View>
-      <View style={styles.flexOne}>
-        <AssistantRuntimeProvider runtime={runtime} config={config}>
-          <Thread />
-        </AssistantRuntimeProvider>
-      </View>
+        {view === 'issues' ? (
+          <IssuesScreen onClose={() => setView('chat')} />
+        ) : (
+          <View style={styles.flexOne}>
+            <AssistantRuntimeProvider runtime={runtime} config={config}>
+              <Thread />
+            </AssistantRuntimeProvider>
+          </View>
+        )}
     </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -239,6 +262,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#e4e4e7',
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   headerText: { flex: 1, marginRight: 12 },
   headerTitle: { fontSize: 15, fontWeight: '600' },
   headerUrl: { fontSize: 10, color: '#777' },

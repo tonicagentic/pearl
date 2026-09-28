@@ -30,6 +30,10 @@ export function setAuthCookie(cookie: string | null) {
   authCookie = cookie;
 }
 
+export function getAuthCookie(): string | null {
+  return authCookie;
+}
+
 export type SpikeState = EveMessageData;
 
 let store: EveAgentStore<SpikeState> | null = null;
