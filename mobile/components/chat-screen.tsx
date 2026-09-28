@@ -14,6 +14,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import { ComposerModelPicker } from "@/components/model-picker";
+import { getModelSelection } from "@/src/model-selection";
 import { useChats } from "@/src/chat-context";
 import { AGENT_URL, getStore, toThreadMessages, type SpikeState } from "@/src/eve-transport";
 
@@ -63,7 +65,12 @@ export function ChatScreen() {
           .filter((p): p is { type: "text"; text: string } => p.type === "text")
           .map((p) => p.text)
           .join("\n");
-        await store.send({ message: text });
+        // The picker's selection rides each send as ephemeral clientContext;
+        // the agent's step.started resolver maps it to the gateway model.
+        await store.send({
+          message: text,
+          clientContext: { eveModelSelection: getModelSelection() },
+        });
       },
       onCancel: async () => {
         await store.cancel();

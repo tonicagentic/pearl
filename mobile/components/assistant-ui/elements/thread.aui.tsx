@@ -3,6 +3,7 @@ import {
   ComposerAttachments,
   UserMessageAttachments,
 } from "@/components/assistant-ui/elements/attachment.aui";
+import { ComposerModelPicker } from "@/components/model-picker";
 import {
   groupedIconButtonHitSlop,
   iconButtonClassName,
@@ -688,7 +689,10 @@ const ComposerAction: FC = () => {
 
   return (
     <View className="aui-composer-action-wrapper flex-row items-center justify-between">
-      <ComposerAddAttachment />
+      <View className="flex-row items-center gap-1">
+        <ComposerAddAttachment />
+        <ComposerModelPicker />
+      </View>
       <View className="flex-row items-center gap-1.5">
         <AuiIf
           condition={(s) =>
