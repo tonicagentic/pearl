@@ -5,6 +5,7 @@
 import type { ClientSessionState, MessageStreamEvent } from 'eve/client';
 
 import { AGENT_URL, getAuthCookie } from './eve-transport';
+import { sessionInvalid } from './session-store';
 
 export type ChatListItem = {
   readonly id: string;
@@ -38,6 +39,9 @@ export async function listChats(
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
     throw new Error(`Failed to load chats (${response.status}).`);
   }
 
@@ -58,6 +62,9 @@ export async function getChat(id: string): Promise<ActiveChat | null> {
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
     throw new Error(`Failed to load the chat (${response.status}).`);
   }
 
@@ -76,6 +83,9 @@ export async function createChat(
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
     throw new Error(`Failed to create the chat (${response.status}).`);
   }
 
@@ -99,6 +109,9 @@ export async function saveChatSnapshot(
   );
 
   if (!response.ok) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
     throw new Error(`Failed to save the chat (${response.status}).`);
   }
 }
@@ -117,6 +130,9 @@ export async function saveChatSession(
   );
 
   if (!response.ok) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
     throw new Error(`Failed to save the chat session (${response.status}).`);
   }
 }

@@ -3,6 +3,7 @@
 // both surfaces read and write the same principal-scoped data.
 
 import { AGENT_URL, getAuthCookie } from './eve-transport';
+import { sessionInvalid } from './session-store';
 
 export type IssueState = 'active' | 'dormant' | 'resolved';
 
@@ -42,6 +43,9 @@ export async function fetchIssues(): Promise<IssuesPayload> {
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
     const body = await response.text().catch(() => '');
     throw new Error(`Failed to load issues (${response.status}) ${body.slice(0, 120)}`);
   }
@@ -70,6 +74,9 @@ export async function createIssueRequest(input: CreateIssueInput): Promise<Issue
   };
 
   if (!response.ok || !body.issue) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
     throw new Error(body.error ?? `Failed to create the issue (${response.status}).`);
   }
 
@@ -89,6 +96,9 @@ export async function setIssueResolvedRequest(id: string, resolved: boolean): Pr
   };
 
   if (!response.ok || !body.issue) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
     throw new Error(body.error ?? `Failed to update the issue (${response.status}).`);
   }
 

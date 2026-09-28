@@ -2,12 +2,20 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
 import { AGENT_URL, setAuthCookie } from "./eve-transport";
+import {
+  clearSession,
+  loadSession,
+  onSessionInvalid,
+  saveSession,
+} from "./session-store";
 
 export type SignInState = "idle" | "signing-in" | "error";
 
@@ -15,6 +23,8 @@ type AuthContextValue = {
   readonly signedIn: boolean;
   /** Email of the signed-in account, or a dev marker when the gate is skipped. */
   readonly viewerEmail: string | null;
+  /** True while the Keychain session is being restored on cold start. */
+  readonly restoring: boolean;
   readonly signInState: SignInState;
   readonly signInError: string | null;
   readonly signIn: (email: string, password: string) => Promise<void>;
@@ -28,6 +38,10 @@ const AuthContext = createContext<AuthContextValue | null>(null);
  * Auth gate shared by every route: the sign-in screen, the chat, and the
  * issues screen all read the same state, and the session cookie set here is
  * what the eve transport and the /api/issues client send.
+ *
+ * The cookie is mirrored into the device Keychain (session-store.ts) so the
+ * session survives app restarts; a stored cookie that starts failing with 401
+ * (server-side expiry) clears both copies via the invalidation listener.
  */
 export function AuthProvider({ children }: { readonly children: ReactNode }) {
   // EXPO_PUBLIC_SKIP_SIGN_IN=1 bypasses the gate for local dev testing.
@@ -38,8 +52,50 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   const [viewerEmail, setViewerEmail] = useState<string | null>(
     skip ? "local dev (no session)" : null,
   );
+  const [restoring, setRestoring] = useState(!skip);
   const [signInState, setSignInState] = useState<SignInState>("idle");
   const [signInError, setSignInError] = useState<string | null>(null);
+
+  // Cold-start restore: pick the stored session back up before rendering the
+  // gate, so a signed-in user lands straight in the chat.
+  useEffect(() => {
+    if (skip) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void loadSession()
+      .then((session) => {
+        if (cancelled || !session) {
+          return;
+        }
+
+        setAuthCookie(session.cookie);
+        setViewerEmail(session.email || null);
+        setSignedIn(true);
+      })
+      .catch(() => {
+        // Corrupt or unreadable storage: fall through to the sign-in screen.
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setRestoring(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [skip]);
+
+  // Server-side expiry: a stored cookie that gets rejected clears the state
+  // and the Keychain copy. Ref-held so API clients can call sessionInvalid()
+  // without re-subscribing churn.
+  const signOutRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    return onSessionInvalid(() => signOutRef.current());
+  }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
     setSignInState("signing-in");
@@ -64,6 +120,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       }
 
       setAuthCookie(match[0]);
+      await saveSession(match[0], email);
       setViewerEmail(email);
       setSignedIn(true);
     } catch (cause) {
@@ -87,21 +144,33 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
 
   const signOut = useCallback(() => {
     setAuthCookie(null);
+    void clearSession();
     setViewerEmail(null);
     setSignedIn(false);
   }, []);
+  signOutRef.current = signOut;
 
   const value = useMemo(
     () => ({
       signedIn,
       viewerEmail,
+      restoring,
       signInState,
       signInError,
       signIn,
       skipSignIn,
       signOut,
     }),
-    [signedIn, viewerEmail, signInState, signInError, signIn, skipSignIn, signOut],
+    [
+      signedIn,
+      viewerEmail,
+      restoring,
+      signInState,
+      signInError,
+      signIn,
+      skipSignIn,
+      signOut,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
