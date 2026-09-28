@@ -12,6 +12,9 @@ import {
 import { File } from "@/components/assistant-ui/elements/file";
 import { Image } from "@/components/assistant-ui/elements/image";
 import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
+import { SessionTimeline, TIMELINE_TOOLS } from "@/components/assistant-ui/elements/session-timeline";
+import { TaskGroup, DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
+import { ToolGroup } from "@/components/assistant-ui/elements/tool-group";
 import {
   Reasoning,
   ReasoningContent,
@@ -86,6 +89,7 @@ import {
   View,
   type ViewProps,
 } from "react-native";
+import { ThreadFollowupSuggestions } from "./follow-up-suggestions.aui";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const isNewChatView = (s: AssistantState) =>
@@ -795,35 +799,73 @@ const taskAwareGroupBy = (
 };
 
 const AssistantMessage: FC = () => {
-  const { ToolFallback: CustomToolFallback, TaskGroup: TaskGroupComponent } =
-    useContext(ThreadComponentsContext);
+  const {
+    ToolFallback: CustomToolFallback,
+    TaskGroup: TaskGroupComponent = TaskGroup,
+  } = useContext(ThreadComponentsContext);
   const ToolFallbackComponent = CustomToolFallback ?? ToolFallback;
-  const groupBy = TaskGroupComponent ? taskAwareGroupBy : messageGroupBy;
+  // Delegations group into task cards; everything else falls through to the
+  // base grouping.
+  const groupBy = taskAwareGroupBy;
+
+  const messageParts = useAuiState((s) => s.message.parts);
+  const isTimelineCovered = (index: number) => {
+    const part = messageParts[index] as
+      | { toolName?: string; type?: string }
+      | undefined;
+    return (
+      part?.type === "reasoning" || TIMELINE_TOOLS.has(part?.toolName ?? "")
+    );
+  };
 
   return (
     <MessagePrimitive.Root className="aui-assistant-message-root">
       <View className="aui-assistant-message-content px-2">
+        <SessionTimeline />
+        <MessageError />
         <MessagePrimitive.GroupedParts groupBy={groupBy}>
           {({ part, children }) => {
             switch (part.type) {
               case "group-chainOfThought":
-              case "group-tool":
+                // Reasoning and timeline-covered tool steps render nothing
+                // here; a chain only shows children when it holds something
+                // the timeline does not summarize (a delegated task card).
+                if (part.indices.every(isTimelineCovered)) return null;
                 return children;
+              case "group-tool": {
+                if (part.indices.every(isTimelineCovered)) {
+                  // Every tool in the group is summarized by the timeline.
+                  return null;
+                }
+                const groupParts = part.indices.map(
+                  (index) => messageParts[index],
+                );
+                const isDelegationGroup =
+                  groupParts.length > 0 &&
+                  groupParts.every(
+                    (groupPart) =>
+                      groupPart?.type === "tool-call" &&
+                      DELEGATION_TOOLS.has(groupPart.toolName),
+                  );
+                if (isDelegationGroup) {
+                  // Delegated tasks render as task cards (docs:
+                  // elements/task-card) instead of the tool group.
+                  if (TaskGroupComponent) return <TaskGroupComponent group={part} />;
+                  return null;
+                }
+                return (
+                  <ToolGroup count={part.indices.length} active={part.status.type === "running"}>
+                    {children}
+                  </ToolGroup>
+                );
+              }
               case "group-task":
                 return TaskGroupComponent ? (
                   <TaskGroupComponent group={part} />
                 ) : null;
-              case "group-reasoning": {
-                const streaming = part.status.type === "running";
-                return (
-                  <ReasoningRoot streaming={streaming}>
-                    <ReasoningTrigger active={streaming} />
-                    <ReasoningContent>
-                      <ReasoningText>{children}</ReasoningText>
-                    </ReasoningContent>
-                  </ReasoningRoot>
-                );
-              }
+              case "group-reasoning":
+                // Reasoning is summarized by the timeline.
+                return null;
               case "text":
                 return <MarkdownText {...part} />;
               case "image":
@@ -831,8 +873,13 @@ const AssistantMessage: FC = () => {
               case "file":
                 return <File {...part} />;
               case "reasoning":
-                return <Reasoning {...part} />;
+                // Summarized by the timeline.
+                return null;
               case "tool-call":
+                if (TIMELINE_TOOLS.has(part.toolName)) {
+                  // Summarized by the timeline above.
+                  return null;
+                }
                 return part.toolUI ?? <ToolFallbackComponent {...part} />;
               case "data":
                 return part.dataRendererUI;

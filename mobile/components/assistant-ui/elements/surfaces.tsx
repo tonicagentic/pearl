@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import {
   type FC,
+  type ReactNode,
   useEffect,
   useRef,
   useState,
@@ -11,6 +12,7 @@ import {
   Animated,
   Platform,
   Text,
+  View,
   type TextProps,
   type TextStyle,
 } from "react-native";
@@ -147,3 +149,16 @@ export const ShimmerLabel: FC<TextProps & { active?: boolean }> = ({
     </Animated.View>
   );
 };
+
+export function SwapLabel({
+  active,
+  children,
+  className,
+}: {
+  active: 0 | 1;
+  children: [ReactNode, ReactNode];
+  className?: string;
+}) {
+  // Functional RN port of the web SwapLabel (which measures and crossfades DOM widths): render the active layer only.
+  return <View className={className}>{children[active]}</View>;
+}

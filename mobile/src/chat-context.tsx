@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import {
@@ -231,4 +232,19 @@ export function useChats(): ChatsContextValue {
   }
 
   return context;
+}
+
+/**
+ * The active chat's authoritative eve event stream (subagent runs, turn
+ * timings — the same events the web's session timeline and task cards
+ * consume). Reference-stable between publishes, so useSyncExternalStore-safe.
+ */
+export function useEveEvents(): readonly unknown[] {
+  const { store } = useChats();
+
+  return useSyncExternalStore(
+    (cb) => store.subscribe(cb),
+    () => store.snapshot.events,
+    () => store.snapshot.events,
+  );
 }

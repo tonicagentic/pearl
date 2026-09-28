@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AppDrawer } from "@/components/app-drawer";
+import { SubagentRunsProvider } from "@/components/assistant-ui/elements/task-card.aui";
 import { AuthProvider } from "@/src/auth";
 import { ChatsProvider } from "@/src/chat-context";
 
@@ -16,6 +17,7 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <ChatsProvider>
+        <SubagentRunsProvider>
         <GestureHandlerRootView className="flex-1">
           <SafeAreaProvider>
             <StatusBar style="auto" />
@@ -32,6 +34,7 @@ export default function RootLayout() {
             </Drawer>
           </SafeAreaProvider>
         </GestureHandlerRootView>
+        </SubagentRunsProvider>
       </ChatsProvider>
     </AuthProvider>
   );
