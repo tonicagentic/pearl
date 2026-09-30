@@ -1,6 +1,6 @@
 // Chat thread persistence for the mobile app: the same durable chats the web
 // app shows, over the web app's REST surface, with the better-auth session
-// cookie from the eve transport.
+// credential from the eve transport.
 
 import type { ClientSessionState, MessageStreamEvent } from 'eve/client';
 
@@ -22,11 +22,11 @@ export type ActiveChat = {
 };
 
 function authHeaders(): Record<string, string> {
-  const cookie = getAuthCookie();
+  const credential = getAuthCookie();
 
   return {
     'content-type': 'application/json',
-    ...(cookie ? { cookie } : {}),
+    ...(credential ? { authorization: `Bearer ${credential}` } : {}),
   };
 }
 

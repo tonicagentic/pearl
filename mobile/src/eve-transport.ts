@@ -21,9 +21,10 @@ import type { ThreadMessageLike } from '@assistant-ui/react-native';
 export const AGENT_URL =
   process.env.EXPO_PUBLIC_AGENT_URL ?? 'https://my-agent-pi-eight.vercel.app';
 
-// Session cookie captured at sign-in (memory only for the spike; SecureStore
-// in a real build). Empty on the local-dev path: eve's localDev()
-// authenticator accepts cookie-less requests on a development server.
+// Session credential captured at sign-in (mirrored to SecureStore by
+// session-store). A better-auth bearer token from the sign-in response body
+// (RN fetch cannot read Set-Cookie). Empty on the local-dev path: eve's
+// localDev() authenticator accepts cookie-less requests on a dev server.
 let authCookie: string | null = null;
 
 export function setAuthCookie(cookie: string | null) {
@@ -43,7 +44,9 @@ export function getStore(): EveAgentStore<SpikeState> {
     store = new EveAgentStore<SpikeState>({
       host: AGENT_URL,
       headers: () =>
-        authCookie ? { cookie: authCookie } : ({} as Record<string, string>),
+        authCookie
+          ? { authorization: `Bearer ${authCookie}` }
+          : ({} as Record<string, string>),
       reducer: defaultMessageReducer(),
     });
   }

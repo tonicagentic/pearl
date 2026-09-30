@@ -111,16 +111,23 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         body: JSON.stringify({ email, password }),
         signal: timeout,
       });
-      const setCookie = response.headers.get("set-cookie") ?? "";
-      const match = setCookie.match(/better-auth\.session_token=[^;]+/);
+      const body = (await response.json().catch(() => null)) as {
+        token?: string;
+      } | null;
+      // RN fetch cannot read Set-Cookie (iOS strips it from the header map),
+      // so the credential comes from the response body via better-auth's
+      // bearer plugin on the server.
+      const credential = body?.token;
 
-      if (!response.ok || !match) {
-        const body = await response.text().catch(() => "");
-        throw new Error(`Sign-in failed (${response.status}) ${body.slice(0, 160)}`);
+      if (!response.ok || !credential) {
+        const raw = await response.text().catch(() => "");
+        throw new Error(
+          `Sign-in failed (${response.status}) ${body ? JSON.stringify(body).slice(0, 160) : ""}`,
+        );
       }
 
-      setAuthCookie(match[0]);
-      await saveSession(match[0], email);
+      setAuthCookie(credential);
+      await saveSession(credential, email);
       setViewerEmail(email);
       setSignedIn(true);
     } catch (cause) {

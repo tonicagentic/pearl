@@ -1,9 +1,9 @@
-// Durable session storage: the better-auth session cookie (and viewer email)
+// Durable session storage: the better-auth bearer credential (and email)
 // live in the device Keychain via expo-secure-store, so a signed-in session
 // survives app restarts. The in-memory mirror in eve-transport stays the
 // request-time source; this module is the disk copy.
 //
-// Expiry is not tracked locally: a stale cookie simply starts failing with
+// Expiry is not tracked locally: a stale credential simply starts failing with
 // 401s, and callers report that through sessionInvalid() so the auth provider
 // clears both disk and memory state.
 

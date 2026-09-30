@@ -1,5 +1,5 @@
 // Issues data client for the mobile app: hits the web app's /api/issues
-// routes with the same better-auth session cookie the eve transport uses, so
+// routes with the same better-auth credential the eve transport uses, so
 // both surfaces read and write the same principal-scoped data.
 
 import { AGENT_URL, getAuthCookie } from './eve-transport';
@@ -29,11 +29,11 @@ export type IssuesPayload = {
 };
 
 function authHeaders(): Record<string, string> {
-  const cookie = getAuthCookie();
+  const credential = getAuthCookie();
 
   return {
     'content-type': 'application/json',
-    ...(cookie ? { cookie } : {}),
+    ...(credential ? { authorization: `Bearer ${credential}` } : {}),
   };
 }
 
