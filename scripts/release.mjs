@@ -73,10 +73,16 @@ const buildNumber = Number(appJson.expo.ios.buildNumber ?? 1) + 1;
 
 // Changelog: the Unreleased section must have content to ship.
 const changelog = readFileSync("CHANGELOG.md", "utf8");
-const unreleasedMatch = changelog.match(
-  /^## Unreleased\n\n([\s\S]*?)(?=\n## |$)/,
-);
-const notes = unreleasedMatch?.[1]?.trim();
+const unreleasedMatch = changelog.match(/^## Unreleased\n\n/m);
+if (!unreleasedMatch) {
+  fail('no "## Unreleased" section found in CHANGELOG.md.');
+}
+// Notes run from after the heading to the next "## " heading (or EOF).
+const notesStart = unreleasedMatch.index + unreleasedMatch[0].length;
+const nextHeading = changelog.slice(notesStart).search(/\n## /m);
+const notesEnd =
+  nextHeading === -1 ? changelog.length : notesStart + nextHeading;
+const notes = changelog.slice(notesStart, notesEnd).trim();
 if (!notes) {
   fail(
     'the "## Unreleased" changelog section is empty — write the release ' +
@@ -85,10 +91,10 @@ if (!notes) {
 }
 
 const today = new Date().toISOString().slice(0, 10);
-const updatedChangelog = changelog.replace(
-  /^## Unreleased\n/,
-  `## Unreleased\n\n## ${version} - ${today}\n`,
-);
+const updatedChangelog =
+  changelog.slice(0, unreleasedMatch.index) +
+  `## Unreleased\n\n## ${version} - ${today}\n` +
+  changelog.slice(unreleasedMatch.index + "## Unreleased\n".length);
 
 console.log(`release: ${version}${isPrerelease ? " (pre-release)" : ""}`);
 console.log(`  package.json + mobile/app.json -> ${version}`);
