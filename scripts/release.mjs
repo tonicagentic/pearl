@@ -79,6 +79,7 @@ if (!unreleasedMatch) {
 }
 // Notes run from after the heading to the next "## " heading (or EOF). If
 // another heading comes immediately, Unreleased is empty.
+const notesStart = unreleasedMatch.index + unreleasedMatch[0].length;
 const rest = changelog.slice(notesStart);
 if (rest.startsWith("## ")) {
   fail(
