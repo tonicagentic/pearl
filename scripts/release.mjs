@@ -77,12 +77,17 @@ const unreleasedMatch = changelog.match(/^## Unreleased\n\n/m);
 if (!unreleasedMatch) {
   fail('no "## Unreleased" section found in CHANGELOG.md.');
 }
-// Notes run from after the heading to the next "## " heading (or EOF).
-const notesStart = unreleasedMatch.index + unreleasedMatch[0].length;
-const nextHeading = changelog.slice(notesStart).search(/\n## /m);
-const notesEnd =
-  nextHeading === -1 ? changelog.length : notesStart + nextHeading;
-const notes = changelog.slice(notesStart, notesEnd).trim();
+// Notes run from after the heading to the next "## " heading (or EOF). If
+// another heading comes immediately, Unreleased is empty.
+const rest = changelog.slice(notesStart);
+if (rest.startsWith("## ")) {
+  fail(
+    'the "## Unreleased" changelog section is empty — write the release ' +
+      "notes there first.",
+  );
+}
+const nextHeading = rest.search(/\n## /m);
+const notes = (nextHeading === -1 ? rest : rest.slice(0, nextHeading)).trim();
 if (!notes) {
   fail(
     'the "## Unreleased" changelog section is empty — write the release ' +
