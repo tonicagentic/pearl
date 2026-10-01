@@ -1,113 +1,126 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { MindMap, type MindMapData, type MindMapRef } from "@xiangfa/mindmap";
+import "@xiangfa/mindmap/style.css";
+import { useRouter } from "next/navigation";
+import {
+  createAreaAction,
+  deleteAreaAction,
+  moveAreaAction,
+  renameAreaAction,
+} from "@/app/actions/issues";
 import type { AreaNode } from "@/lib/db/issues";
+import { diffAreaTrees, type MindmapChange } from "@/lib/areas-mindmap-sync";
 
 /**
- * Renders the area tree as a Mermaid mind map. The structure is
- * just parentId, so the visualization is a projection of the same data the
- * editor below it changes — nothing to keep in sync.
+ * The interactive areas mind map, backed by @xiangfa/mindmap (drag to
+ * reorganize, click to edit inline, keyboard shortcuts, pan/zoom), themed
+ * by the library's own light/dark tokens ("auto" follows uniwind).
  *
- * mermaid is loaded dynamically (it is a large dependency) and renders to an
- * SVG string we mount directly; `securityLevel: "strict"` keeps the generated
- * SVG inert. Labels are sanitized because Mermaid's mindmap parser treats
- * brackets/parens as node-shape syntax.
+ * The projection is ID-based: each mind-map node carries the area's DB id,
+ * so onDataChange diffs resolve to exact server actions — rename, create,
+ * move, delete — instead of name matching. A failed server call (e.g. the
+ * delete guard blocking an area with open issues) resets the map to the
+ * authoritative tree and surfaces the error.
  */
-export function AreaMindmap({
-  tree,
-}: {
-  readonly tree: readonly AreaNode[];
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [svg, setSvg] = useState<string | null>(null);
 
+export function AreaMindmap({ tree }: { readonly tree: readonly AreaNode[] }) {
+  const router = useRouter();
+  const mindmapRef = useRef<MindMapRef>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  // The authoritative projection: after every server refresh (or a failed
+  // sync) the map is reset to exactly this.
+  const projected = useRef<string>("");
+  const toMindMapData = useCallback(
+    (nodes: readonly AreaNode[]): MindMapData[] =>
+      nodes.map((node) => ({
+        id: node.id,
+        text: node.name,
+        children: toMindMapData(node.children),
+      })),
+    [],
+  );
+
+  const data = useRef<MindMapData[]>(toMindMapData(tree));
+  projected.current = JSON.stringify(data.current);
+
+  // Server refreshes (router.refresh() after any edit anywhere on the page)
+  // push the new authoritative tree into the map.
   useEffect(() => {
-    let cancelled = false;
+    const next = toMindMapData(tree);
+    if (JSON.stringify(next) !== projected.current) {
+      projected.current = JSON.stringify(next);
+      mindmapRef.current?.setData(next);
+    }
+  }, [tree, toMindMapData]);
 
-    const definition = buildMindmapDefinition(tree);
+  const applyChanges = useCallback(
+    async (changes: readonly MindmapChange[]) => {
+      if (changes.length === 0) {
+        return;
+      }
 
-    (async () => {
+      setSyncing(true);
+      setSyncError(null);
       try {
-        const mermaid = (await import("mermaid")).default;
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: "strict",
-          theme: "neutral",
-        });
-        const { svg: rendered } = await mermaid.render(
-          `areas-${Math.random().toString(36).slice(2)}`,
-          definition,
-        );
-
-        if (!cancelled) {
-          setSvg(rendered);
-          setError(null);
+        // Creates first so later changes can reference new parents.
+        for (const change of changes) {
+          if (change.kind === "rename") {
+            await renameAreaAction(change.id, { name: change.name });
+          } else if (change.kind === "create") {
+            await createAreaAction({
+              name: change.name,
+              parentId: change.parentId,
+            });
+          } else if (change.kind === "move") {
+            await moveAreaAction(change.id, {
+              parentId: change.parentId,
+              sortIndex: change.sortIndex,
+            });
+          } else {
+            await deleteAreaAction(change.id);
+          }
         }
       } catch (cause) {
-        if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : "Failed to render the mind map.");
-        }
+        setSyncError(
+          cause instanceof Error
+            ? cause.message
+            : "The change could not be saved.",
+        );
+      } finally {
+        setSyncing(false);
+        // Authoritative refresh: new data resets the map (also undoing any
+        // change the server refused).
+        router.refresh();
       }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [tree]);
-
-  if (error) {
-    return (
-      <p className="rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
-        The mind map could not be rendered: {error}
-      </p>
-    );
-  }
+    },
+    [router],
+  );
 
   return (
-    <div
-      ref={containerRef}
-      className="flex justify-center overflow-x-auto rounded-lg border bg-card px-4 py-4 [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-full"
-      {...(svg ? { dangerouslySetInnerHTML: { __html: svg } } : {})}
-    >
-      {!svg ? (
-        <p className="py-6 text-sm text-muted-foreground">Rendering the mind map…</p>
+    <div className="flex flex-col gap-2">
+      {syncing ? (
+        <p className="text-xs text-muted-foreground">Saving…</p>
       ) : null}
+      {syncError ? (
+        <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {syncError}
+        </p>
+      ) : null}
+      <div className="h-[560px] overflow-hidden rounded-lg border bg-card">
+        <MindMap
+          ref={mindmapRef}
+          data={data.current}
+          theme="auto"
+          toolbar
+          onDataChange={(next) => {
+            void applyChanges(diffAreaTrees(tree, next));
+          }}
+        />
+      </div>
     </div>
   );
-}
-
-/**
- * Mermaid mindmap syntax: one indented line per node. The root renders as a
- * circle. Labels are escaped so a area named "Calls (weekly)" does
- * not parse as a shape.
- */
-export function buildMindmapDefinition(
-  tree: readonly AreaNode[],
-): string {
-  const lines = ["mindmap", "  root((Areas))"];
-
-  for (const node of tree) {
-    appendNode(lines, node, 2);
-  }
-
-  return lines.join("\n");
-}
-
-function appendNode(
-  lines: string[],
-  node: AreaNode,
-  depth: number,
-) {
-  const indent = "  ".repeat(depth);
-
-  lines.push(`${indent}${sanitizeLabel(node.name)}`);
-
-  for (const child of node.children) {
-    appendNode(lines, child, depth + 1);
-  }
-}
-
-function sanitizeLabel(name: string): string {
-  return name.replace(/[[\](){}]/g, " ").replace(/\s+/g, " ").trim();
 }

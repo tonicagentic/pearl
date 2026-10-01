@@ -65,6 +65,9 @@ importers:
       '@vercel/speed-insights':
         specifier: 2.0.0
         version: 2.0.0(next@16.3.1(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+      '@xiangfa/mindmap':
+        specifier: ^0.7.1
+        version: 0.7.1(katex@0.16.47)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       ai:
         specifier: 7.0.84
         version: 7.0.84(zod@4.4.3)
@@ -3561,6 +3564,16 @@ packages:
 
   '@workflow/serde@4.1.0-beta.2':
     resolution: {integrity: sha512-8kkeoQKLDaKXefjV5dbhBj2aErfKp1Mc4pb6tj8144cF+Em5SPbyMbyLCHp+BVrFfFVCBluCtMx+jjvaFVZGww==}
+
+  '@xiangfa/mindmap@0.7.1':
+    resolution: {integrity: sha512-4/+k/3BkbrlLHUPipGmKQe9chejpzQ7QYbl2oUXm5U7p961mksYgM/V+vOBuiLKj4dwl0Ngz2pnE+GNpbzEddQ==}
+    peerDependencies:
+      katex: '>=0.16'
+      react: '>=18'
+      react-dom: '>=18'
+    peerDependenciesMeta:
+      katex:
+        optional: true
 
   abbrev@3.0.1:
     resolution: {integrity: sha512-AO2ac6pjRB3SJmGJo+v5/aK6Omggp6fsLrs6wN9bd35ulu4cCwaAU9+7ZhXjeqHVkaHThLuzH0nZr0YpCDhygg==}
@@ -8922,6 +8935,13 @@ snapshots:
   '@workflow/serde@4.1.0': {}
 
   '@workflow/serde@4.1.0-beta.2': {}
+
+  '@xiangfa/mindmap@0.7.1(katex@0.16.47)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+    optionalDependencies:
+      katex: 0.16.47
 
   abbrev@3.0.1: {}
 

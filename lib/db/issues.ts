@@ -244,6 +244,83 @@ export async function renameArea(
 }
 
 /**
+ * Move an area under a new parent (or to the top level) at a sibling
+ * position. Refuses to move a subtree under itself. Sorts the area to the
+ * end of its new siblings then renumbers both old and new sibling groups,
+ * so concurrent moves cannot interleave the ordering.
+ */
+export async function moveArea(
+  userId: string,
+  id: string,
+  parentId: string | null,
+  sortIndex: number,
+) {
+  if (parentId) {
+    const parent = await getArea(userId, parentId);
+    if (!parent) {
+      throw new Error("The parent area does not exist.");
+    }
+    // Walk up from the new parent; landing inside the moved subtree would
+    // create a cycle in the self-referencing tree.
+    let cursor = parent;
+    while (cursor.parentId) {
+      if (cursor.parentId === id) {
+        throw new Error("An area cannot be moved under its own subtree.");
+      }
+      const next = await getArea(userId, cursor.parentId);
+      if (!next) {
+        break;
+      }
+      cursor = next;
+    }
+  }
+
+  const moved = await getArea(userId, id);
+  if (!moved) {
+    throw new Error("The area does not exist.");
+  }
+
+  const maxIndex = await db
+    .select({ max: sql<number>`coalesce(max(${area.sortIndex}), -1)::int` })
+    .from(area)
+    .where(
+      parentId === null
+        ? and(eq(area.userId, userId), isNull(area.parentId))
+        : and(eq(area.userId, userId), eq(area.parentId, parentId)),
+    );
+  const targetIndex = Math.max(
+    0,
+    Math.min(sortIndex, (maxIndex[0]?.max ?? -1) + 1),
+  );
+
+  await db
+    .update(area)
+    .set({ parentId, sortIndex: targetIndex })
+    .where(and(eq(area.userId, userId), eq(area.id, id)));
+
+  // Renumber the siblings of both the old and new parent groups.
+  for (const parentIdValue of [moved.parentId, parentId]) {
+    const siblings = await db
+      .select({ id: area.id, sortIndex: area.sortIndex })
+      .from(area)
+      .where(
+        parentIdValue === null
+          ? and(eq(area.userId, userId), isNull(area.parentId))
+          : and(eq(area.userId, userId), eq(area.parentId, parentIdValue)),
+      )
+      .orderBy(asc(area.sortIndex), asc(area.createdAt));
+    for (const [index, sibling] of siblings.entries()) {
+      if (sibling.sortIndex !== index) {
+        await db
+          .update(area)
+          .set({ sortIndex: index })
+          .where(and(eq(area.userId, userId), eq(area.id, sibling.id)));
+      }
+    }
+  }
+}
+
+/**
  * Delete a area subtree. Refuses while any issue in the subtree is
  * open — resolve or re-parent them first — so a delete can never silently
  * discard unresolved open loops. Returns the number of blocked open issues.

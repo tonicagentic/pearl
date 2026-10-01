@@ -9,6 +9,7 @@ import {
   getIssue,
   getArea,
   findAreaByName,
+  moveArea,
   renameArea,
   reopenIssue,
   resolveIssue,
@@ -228,6 +229,21 @@ export async function deleteAreaAction(id: string) {
         : `This area still has ${result.openIssues} open issues. Resolve them or move them first.`,
     );
   }
+
+  revalidateIssues();
+}
+
+/** Drag-to-reparent from the areas mind map: new parent + sibling position. */
+export async function moveAreaAction(
+  id: string,
+  input: {
+    readonly parentId: string | null;
+    readonly sortIndex: number;
+  },
+) {
+  const viewer = await requireViewer();
+
+  await moveArea(viewer.id, id, input.parentId, input.sortIndex);
 
   revalidateIssues();
 }
