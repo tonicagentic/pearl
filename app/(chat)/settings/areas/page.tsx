@@ -3,27 +3,27 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import {
-  ensureDefaultResponsibilities,
-  listResponsibilities,
+  ensureDefaultAreas,
+  listAreas,
 } from "@/lib/db/issues";
-import type { ResponsibilityNode } from "@/lib/db/issues";
+import type { AreaNode } from "@/lib/db/issues";
 import { getSetupStatus } from "@/lib/setup";
 import { getServerViewer } from "@/lib/session";
 
-import { ResponsibilityMindmap } from "./responsibility-mindmap";
-import { ResponsibilityNodeEditor } from "./responsibility-node-editor";
+import { AreaMindmap } from "./areas-mindmap";
+import { AreaNodeEditor } from "./area-node-editor";
 
 export const metadata: Metadata = {
-  title: "Responsibilities",
+  title: "Areas",
 };
 
 /**
- * The responsibility tree: the enduring structure of the user's life. The
+ * The area tree: the enduring structure of the user's life. The
  * structure is just parentId; v1 renders a nested list (no canvas). The
- * default tree is seeded idempotently on first visit — responsibilities are
+ * default tree is seeded idempotently on first visit — areas are
  * never empty, so issues always have a home.
  */
-export default function ResponsibilitiesPage() {
+export default function AreasPage() {
   return (
     // Page frame: the shell's main is overflow-hidden (the chat scrolls
     // internally), so non-chat pages own their scroll here.
@@ -33,11 +33,11 @@ export default function ResponsibilitiesPage() {
           <Suspense
             fallback={
               <p className="rounded-lg border bg-card px-4 py-4 text-sm text-muted-foreground">
-                Loading responsibilities…
+                Loading areas…
               </p>
             }
           >
-            <ResolvedResponsibilities />
+            <ResolvedAreas />
           </Suspense>
         </div>
       </div>
@@ -45,27 +45,27 @@ export default function ResponsibilitiesPage() {
   );
 }
 
-async function ResolvedResponsibilities() {
+async function ResolvedAreas() {
   const setupStatus = await getSetupStatus();
   const viewer = await getServerViewer(setupStatus);
 
   if (!viewer || setupStatus.storageMode !== "database") {
     return (
       <p className="rounded-lg border bg-card px-4 py-4 text-sm text-muted-foreground">
-        Sign in with durable storage configured to manage responsibilities.
+        Sign in with durable storage configured to manage areas.
       </p>
     );
   }
 
   const tree = await (async () => {
-    await ensureDefaultResponsibilities(viewer.id);
-    return listResponsibilities(viewer.id);
+    await ensureDefaultAreas(viewer.id);
+    return listAreas(viewer.id);
   })();
 
   return (
     <>
       <header>
-        <h1 className="text-lg font-semibold">Responsibilities</h1>
+        <h1 className="text-lg font-semibold">Areas</h1>
         <p className="text-sm text-muted-foreground">
           The stable areas of your life. They are never “done” — issues come
           and go underneath them. See them on the{" "}
@@ -75,10 +75,10 @@ async function ResolvedResponsibilities() {
           .
         </p>
       </header>
-      <ResponsibilityMindmap tree={tree} />
+      <AreaMindmap tree={tree} />
       <div className="flex flex-col gap-1">
         {tree.map((node) => (
-          <ResponsibilityNodeEditor key={node.id} node={node} depth={0} />
+          <AreaNodeEditor key={node.id} node={node} depth={0} />
         ))}
       </div>
     </>

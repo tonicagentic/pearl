@@ -1,14 +1,14 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { issue, responsibility, user } from "@/lib/db/schema";
-import type { Responsibility } from "@/lib/db/schema";
+import { issue, area, user } from "@/lib/db/schema";
+import type { Area } from "@/lib/db/schema";
 
-export type ResponsibilityNode = Responsibility & {
-  readonly children: ResponsibilityNode[];
+export type AreaNode = Area & {
+  readonly children: AreaNode[];
 };
 
-export type ResponsibilityOption = {
+export type AreaOption = {
   readonly id: string;
   readonly label: string;
 };
@@ -18,10 +18,10 @@ export type ResponsibilityOption = {
  * the server; the options array crosses to the client components as a plain
  * serializable prop.
  */
-export function flattenResponsibilityOptions(
-  tree: readonly ResponsibilityNode[],
-): ResponsibilityOption[] {
-  const options: ResponsibilityOption[] = [];
+export function flattenAreaOptions(
+  tree: readonly AreaNode[],
+): AreaOption[] {
+  const options: AreaOption[] = [];
 
   for (const node of tree) {
     for (const [id, label] of walk(node, 0)) {
@@ -33,7 +33,7 @@ export function flattenResponsibilityOptions(
 }
 
 function* walk(
-  node: ResponsibilityNode,
+  node: AreaNode,
   depth: number,
 ): Generator<readonly [string, string]> {
   yield [node.id, `${" ".repeat(depth * 2)}${node.name}`] as const;
@@ -45,7 +45,7 @@ function* walk(
 
 /**
  * Make sure a `user` row exists for this session principal, so issue and
- * responsibility rows can satisfy their foreign keys. Real better-auth
+ * area rows can satisfy their foreign keys. Real better-auth
  * sessions already have one; the local-dev/password principal
  * (`eve-chat-user`) does not — insert it lazily, once, no-op on conflict.
  */
@@ -71,13 +71,13 @@ export async function ensureUserForPrincipal(principal: {
 
 // The default stewardship tree seeded for every new user: stable areas of
 // life, never completed. Issues attach to these. Rendered as a mind map on
-// the responsibilities page (root((Responsibilities))).
-type DefaultResponsibility = {
+// the areas page (root((Areas))).
+type DefaultArea = {
   readonly name: string;
-  readonly children?: readonly DefaultResponsibility[];
+  readonly children?: readonly DefaultArea[];
 };
 
-const DEFAULT_RESPONSIBILITIES: readonly DefaultResponsibility[] = [
+const DEFAULT_AREAS: readonly DefaultArea[] = [
   { name: "Body", children: [{ name: "Aesthetics" }, { name: "Physical health" }] },
   { name: "Mind", children: [{ name: "Learning" }, { name: "Reflection" }, { name: "Comfort" }] },
   { name: "Career", children: [{ name: "Tonic Agentic" }, { name: "Personal brand" }] },
@@ -110,7 +110,7 @@ const DEFAULT_RESPONSIBILITIES: readonly DefaultResponsibility[] = [
 
 async function seedTree(
   userId: string,
-  nodes: readonly DefaultResponsibility[],
+  nodes: readonly DefaultArea[],
   parentId: string | null,
   startIndex: number,
 ) {
@@ -118,7 +118,7 @@ async function seedTree(
     // Conflict-safe: concurrent seeds (or a retry after a crash) no-op on the
     // sibling-name unique index instead of duplicating the tree.
     const [row] = await db
-      .insert(responsibility)
+      .insert(area)
       .values({
         userId,
         name: node.name,
@@ -138,34 +138,34 @@ async function seedTree(
   }
 }
 
-/** Idempotently seed the default responsibility tree; runs once per user. */
-export async function ensureDefaultResponsibilities(userId: string) {
+/** Idempotently seed the default area tree; runs once per user. */
+export async function ensureDefaultAreas(userId: string) {
   const existing = await db
-    .select({ id: responsibility.id })
-    .from(responsibility)
-    .where(eq(responsibility.userId, userId))
+    .select({ id: area.id })
+    .from(area)
+    .where(eq(area.userId, userId))
     .limit(1);
 
   if (existing.length > 0) {
     return;
   }
 
-  await seedTree(userId, DEFAULT_RESPONSIBILITIES, null, 0);
+  await seedTree(userId, DEFAULT_AREAS, null, 0);
 }
 
-export async function listResponsibilities(
+export async function listAreas(
   userId: string,
-): Promise<ResponsibilityNode[]> {
+): Promise<AreaNode[]> {
   const rows = await db
     .select()
-    .from(responsibility)
-    .where(eq(responsibility.userId, userId))
-    .orderBy(asc(responsibility.sortIndex), asc(responsibility.createdAt));
+    .from(area)
+    .where(eq(area.userId, userId))
+    .orderBy(asc(area.sortIndex), asc(area.createdAt));
 
-  const byId = new Map<string, ResponsibilityNode>(
+  const byId = new Map<string, AreaNode>(
     rows.map((row) => [row.id, { ...row, children: [] }]),
   );
-  const roots: ResponsibilityNode[] = [];
+  const roots: AreaNode[] = [];
 
   for (const row of rows) {
     const node = byId.get(row.id);
@@ -183,30 +183,30 @@ export async function listResponsibilities(
   return roots;
 }
 
-export async function getResponsibility(
+export async function getArea(
   userId: string,
   id: string,
-): Promise<Responsibility | null> {
+): Promise<Area | null> {
   const [row] = await db
     .select()
-    .from(responsibility)
-    .where(and(eq(responsibility.userId, userId), eq(responsibility.id, id)))
+    .from(area)
+    .where(and(eq(area.userId, userId), eq(area.id, id)))
     .limit(1);
 
   return row ?? null;
 }
 
-export async function findResponsibilityByName(
+export async function findAreaByName(
   userId: string,
   name: string,
-): Promise<Responsibility | null> {
+): Promise<Area | null> {
   const [row] = await db
     .select()
-    .from(responsibility)
+    .from(area)
     .where(
       and(
-        eq(responsibility.userId, userId),
-        sql`lower(${responsibility.name}) = lower(${name})`,
+        eq(area.userId, userId),
+        sql`lower(${area.name}) = lower(${name})`,
       ),
     )
     .limit(1);
@@ -214,41 +214,41 @@ export async function findResponsibilityByName(
   return row ?? null;
 }
 
-export async function createResponsibility(
+export async function createArea(
   userId: string,
   name: string,
   parentId?: string | null,
   sortIndex?: number,
-): Promise<Responsibility> {
+): Promise<Area> {
   const [row] = await db
-    .insert(responsibility)
+    .insert(area)
     .values({ userId, name, parentId: parentId ?? null, sortIndex: sortIndex ?? 0 })
     .returning();
 
   if (!row) {
-    throw new Error("Failed to create responsibility.");
+    throw new Error("Failed to create area.");
   }
 
   return row;
 }
 
-export async function renameResponsibility(
+export async function renameArea(
   userId: string,
   id: string,
   name: string,
 ) {
   await db
-    .update(responsibility)
+    .update(area)
     .set({ name })
-    .where(and(eq(responsibility.userId, userId), eq(responsibility.id, id)));
+    .where(and(eq(area.userId, userId), eq(area.id, id)));
 }
 
 /**
- * Delete a responsibility subtree. Refuses while any issue in the subtree is
+ * Delete a area subtree. Refuses while any issue in the subtree is
  * open — resolve or re-parent them first — so a delete can never silently
  * discard unresolved open loops. Returns the number of blocked open issues.
  */
-export async function deleteResponsibilityIfSettled(
+export async function deleteAreaIfSettled(
   userId: string,
   id: string,
 ): Promise<{ deleted: true } | { deleted: false; openIssues: number }> {
@@ -261,7 +261,7 @@ export async function deleteResponsibilityIfSettled(
       and(
         eq(issue.userId, userId),
         eq(issue.status, "open"),
-        inArray(issue.responsibilityId, subtreeIds),
+        inArray(issue.areaId, subtreeIds),
       ),
     );
 
@@ -272,11 +272,11 @@ export async function deleteResponsibilityIfSettled(
   }
 
   await db
-    .delete(responsibility)
+    .delete(area)
     .where(
       and(
-        eq(responsibility.userId, userId),
-        inArray(responsibility.id, subtreeIds),
+        eq(area.userId, userId),
+        inArray(area.id, subtreeIds),
       ),
     );
 
@@ -285,9 +285,9 @@ export async function deleteResponsibilityIfSettled(
 
 async function collectSubtreeIds(userId: string, rootId: string) {
   const rows = await db
-    .select({ id: responsibility.id, parentId: responsibility.parentId })
-    .from(responsibility)
-    .where(eq(responsibility.userId, userId));
+    .select({ id: area.id, parentId: area.parentId })
+    .from(area)
+    .where(eq(area.userId, userId));
 
   const childrenByParent = new Map<string, string[]>();
 
@@ -313,7 +313,7 @@ async function collectSubtreeIds(userId: string, rootId: string) {
   return ids;
 }
 
-export type IssueWithResponsibility = {
+export type IssueWithArea = {
   readonly id: string;
   readonly title: string;
   readonly description: string | null;
@@ -322,8 +322,8 @@ export type IssueWithResponsibility = {
   readonly reviewDate: string | null;
   readonly createdAt: Date;
   readonly resolvedAt: Date | null;
-  readonly responsibilityId: string;
-  readonly responsibilityName: string;
+  readonly areaId: string;
+  readonly areaName: string;
 };
 
 const issueSelection = {
@@ -335,17 +335,17 @@ const issueSelection = {
   reviewDate: issue.reviewDate,
   createdAt: issue.createdAt,
   resolvedAt: issue.resolvedAt,
-  responsibilityId: issue.responsibilityId,
-  responsibilityName: responsibility.name,
+  areaId: issue.areaId,
+  areaName: area.name,
 };
 
 export async function listOpenIssues(
   userId: string,
-): Promise<IssueWithResponsibility[]> {
+): Promise<IssueWithArea[]> {
   return db
     .select(issueSelection)
     .from(issue)
-    .innerJoin(responsibility, eq(issue.responsibilityId, responsibility.id))
+    .innerJoin(area, eq(issue.areaId, area.id))
     .where(and(eq(issue.userId, userId), eq(issue.status, "open")))
     .orderBy(
       asc(sql`coalesce(${issue.reviewDate}, ${issue.dueDate})`),
@@ -357,11 +357,11 @@ export async function listOpenIssues(
 export async function listRecentlyResolvedIssues(
   userId: string,
   sinceIso: string,
-): Promise<IssueWithResponsibility[]> {
+): Promise<IssueWithArea[]> {
   return db
     .select(issueSelection)
     .from(issue)
-    .innerJoin(responsibility, eq(issue.responsibilityId, responsibility.id))
+    .innerJoin(area, eq(issue.areaId, area.id))
     .where(
       and(
         eq(issue.userId, userId),
@@ -376,11 +376,11 @@ export async function listRecentlyResolvedIssues(
 export async function getIssue(
   userId: string,
   id: string,
-): Promise<IssueWithResponsibility | null> {
+): Promise<IssueWithArea | null> {
   const [row] = await db
     .select(issueSelection)
     .from(issue)
-    .innerJoin(responsibility, eq(issue.responsibilityId, responsibility.id))
+    .innerJoin(area, eq(issue.areaId, area.id))
     .where(and(eq(issue.userId, userId), eq(issue.id, id)))
     .limit(1);
 
@@ -390,7 +390,7 @@ export async function getIssue(
 export type CreateIssueInput = {
   readonly title: string;
   readonly description?: string | null;
-  readonly responsibilityId: string;
+  readonly areaId: string;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;
 };
@@ -398,14 +398,14 @@ export type CreateIssueInput = {
 export async function createIssue(
   userId: string,
   input: CreateIssueInput,
-): Promise<IssueWithResponsibility> {
+): Promise<IssueWithArea> {
   const [row] = await db
     .insert(issue)
     .values({
       userId,
       title: input.title,
       description: input.description ?? null,
-      responsibilityId: input.responsibilityId,
+      areaId: input.areaId,
       dueDate: input.dueDate ?? null,
       reviewDate: input.reviewDate ?? null,
     })
@@ -427,7 +427,7 @@ export async function createIssue(
 export type UpdateIssueInput = {
   readonly title?: string;
   readonly description?: string | null;
-  readonly responsibilityId?: string;
+  readonly areaId?: string;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;
 };
@@ -444,8 +444,8 @@ export async function updateIssue(
       ...(input.description !== undefined
         ? { description: input.description }
         : {}),
-      ...(input.responsibilityId !== undefined
-        ? { responsibilityId: input.responsibilityId }
+      ...(input.areaId !== undefined
+        ? { areaId: input.areaId }
         : {}),
       ...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
       ...(input.reviewDate !== undefined

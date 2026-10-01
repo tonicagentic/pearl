@@ -4,12 +4,12 @@ import { revalidatePath } from "next/cache";
 
 import {
   createIssue,
-  createResponsibility,
-  deleteResponsibilityIfSettled,
+  createArea,
+  deleteAreaIfSettled,
   getIssue,
-  getResponsibility,
-  findResponsibilityByName,
-  renameResponsibility,
+  getArea,
+  findAreaByName,
+  renameArea,
   reopenIssue,
   resolveIssue,
   updateIssue,
@@ -49,19 +49,19 @@ async function requireViewer() {
 
 function revalidateIssues() {
   revalidatePath("/issues");
-  revalidatePath("/settings/responsibilities");
+  revalidatePath("/settings/areas");
 }
 
 export type IssueActionInput = {
   readonly title?: string;
   readonly description?: string | null;
-  readonly responsibilityId?: string;
-  readonly responsibilityName?: string;
+  readonly areaId?: string;
+  readonly areaName?: string;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;
 };
 
-/** Create an issue, resolving `responsibilityName` case-insensitively. */
+/** Create an issue, resolving `areaName` case-insensitively. */
 export async function createIssueAction(input: IssueActionInput) {
   const viewer = await requireViewer();
 
@@ -71,29 +71,29 @@ export async function createIssueAction(input: IssueActionInput) {
     throw new Error("An issue needs a title.");
   }
 
-  const responsibilityId = await (async () => {
-    if (input.responsibilityId) {
-      const known = await getResponsibility(viewer.id, input.responsibilityId);
+  const areaId = await (async () => {
+    if (input.areaId) {
+      const known = await getArea(viewer.id, input.areaId);
 
       if (!known) {
-        throw new Error("Unknown responsibility.");
+        throw new Error("Unknown area.");
       }
 
       return known.id;
     }
 
-    if (input.responsibilityName) {
-      const name = input.responsibilityName.trim();
-      const existing = await findResponsibilityByName(viewer.id, name);
+    if (input.areaName) {
+      const name = input.areaName.trim();
+      const existing = await findAreaByName(viewer.id, name);
 
-      return existing?.id ?? (await createResponsibility(viewer.id, name)).id;
+      return existing?.id ?? (await createArea(viewer.id, name)).id;
     }
 
     return undefined;
   })();
 
-  if (!responsibilityId) {
-    throw new Error("An issue needs a responsibility to attach to.");
+  if (!areaId) {
+    throw new Error("An issue needs a area to attach to.");
   }
 
   const dueDate = isoDateOrNull(input.dueDate);
@@ -106,7 +106,7 @@ export async function createIssueAction(input: IssueActionInput) {
   const issue = await createIssue(viewer.id, {
     title,
     description: input.description?.trim() || null,
-    responsibilityId,
+    areaId,
     dueDate,
     reviewDate,
   });
@@ -126,11 +126,11 @@ export async function updateIssueAction(id: string, input: IssueActionInput) {
     throw new Error("Dates must be YYYY-MM-DD.");
   }
 
-  if (input.responsibilityId) {
-    const responsibility = await getResponsibility(viewer.id, input.responsibilityId);
+  if (input.areaId) {
+    const area = await getArea(viewer.id, input.areaId);
 
-    if (!responsibility) {
-      throw new Error("Unknown responsibility.");
+    if (!area) {
+      throw new Error("Unknown area.");
     }
   }
 
@@ -139,8 +139,8 @@ export async function updateIssueAction(id: string, input: IssueActionInput) {
     ...(input.description !== undefined
       ? { description: (input.description ?? "").trim() || null }
       : {}),
-    ...(input.responsibilityId !== undefined
-      ? { responsibilityId: input.responsibilityId }
+    ...(input.areaId !== undefined
+      ? { areaId: input.areaId }
       : {}),
     ...(dueDate !== undefined ? { dueDate } : {}),
     ...(reviewDate !== undefined ? { reviewDate } : {}),
@@ -168,39 +168,39 @@ export async function reopenIssueAction(id: string) {
   revalidateIssues();
 }
 
-export type ResponsibilityActionInput = {
+export type AreaActionInput = {
   readonly name?: string;
   readonly parentId?: string | null;
 };
 
-export async function createResponsibilityAction(
-  input: ResponsibilityActionInput,
+export async function createAreaAction(
+  input: AreaActionInput,
 ) {
   const viewer = await requireViewer();
 
   const name = input.name?.trim();
 
   if (!name) {
-    throw new Error("A responsibility needs a name.");
+    throw new Error("A area needs a name.");
   }
 
   const parentId = input.parentId ?? null;
 
   if (parentId) {
-    const parent = await getResponsibility(viewer.id, parentId);
+    const parent = await getArea(viewer.id, parentId);
 
     if (!parent) {
-      throw new Error("Unknown parent responsibility.");
+      throw new Error("Unknown parent area.");
     }
   }
 
-  const row = await createResponsibility(viewer.id, name, parentId);
+  const row = await createArea(viewer.id, name, parentId);
   revalidateIssues();
 
   return row;
 }
 
-export async function renameResponsibilityAction(
+export async function renameAreaAction(
   id: string,
   input: { readonly name?: string },
 ) {
@@ -209,17 +209,17 @@ export async function renameResponsibilityAction(
   const name = input.name?.trim();
 
   if (!name) {
-    throw new Error("A responsibility needs a name.");
+    throw new Error("A area needs a name.");
   }
 
-  await renameResponsibility(viewer.id, id, name);
+  await renameArea(viewer.id, id, name);
   revalidateIssues();
 }
 
-export async function deleteResponsibilityAction(id: string) {
+export async function deleteAreaAction(id: string) {
   const viewer = await requireViewer();
 
-  const result = await deleteResponsibilityIfSettled(viewer.id, id);
+  const result = await deleteAreaIfSettled(viewer.id, id);
 
   if (!result.deleted) {
     throw new Error(

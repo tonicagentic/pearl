@@ -70,8 +70,8 @@ export function ChatSidebar({
   const onChatRoute = pathname === "/" || pathname?.startsWith("/chat") || false;
   const newSessionActive = activeChatId === null && onChatRoute;
   const issuesActive = pathname?.startsWith("/issues") ?? false;
-  const responsibilitiesActive =
-    pathname?.startsWith("/settings/responsibilities") ?? false;
+  const areasActive =
+    pathname?.startsWith("/settings/areas") ?? false;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -155,16 +155,16 @@ export function ChatSidebar({
           <InboxIcon className="size-4" />
           Issues
         </Link>
-        {/* Responsibilities tree + mind map: nested under Issues. */}
+        {/* Areas tree + mind map: nested under Issues. */}
         <Link
           className={cn(
             "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
-            responsibilitiesActive ? activeRowClass : inactiveRowClass,
+            areasActive ? activeRowClass : inactiveRowClass,
           )}
-          href="/settings/responsibilities"
+          href="/settings/areas"
         >
           <NetworkIcon className="size-4" />
-          Responsibilities
+          Areas
         </Link>
       </div>
 

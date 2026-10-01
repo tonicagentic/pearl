@@ -4,7 +4,7 @@ import { parkedApproval, resolveAllPending } from "./parked.ts";
 import { rubric, scenarios } from "./rubrics.ts";
 
 // Open loops: the Issues system is a bounded representation of unresolved
-// responsibilities, not a task manager. Three boundaries are pinned here:
+// areas, not a task manager. Three boundaries are pinned here:
 // capture (unresolved → Issue with a review date, nothing else), scope
 // (recurring bookkeeping and general life data are refused), and attention
 // (questions answer from the issues list; parked items stay parked).
@@ -31,11 +31,11 @@ const issueToolCalls = (turn: { toolCalls: readonly { name: string }[] }) =>
   turn.toolCalls.filter((call) => call.name === "create_issue").length;
 
 export default [
-  // Capture: an unresolved responsibility becomes an Issue with a review date.
+  // Capture: an unresolved area becomes an Issue with a review date.
   ...s.capture.unresolved.map((message) =>
     defineEval({
       description:
-        "Open loops capture: an unresolved responsibility is captured as an issue (create_issue) with an attention date — not as a task file or an external reminder.",
+        "Open loops capture: an unresolved area is captured as an issue (create_issue) with an attention date — not as a task file or an external reminder.",
       tags: ["reliability", "nightly"],
       timeoutMs: 240_000,
       async test(t) {
@@ -96,7 +96,7 @@ export default [
   ...s.attention_query.attention_query.map((message) =>
     defineEval({
       description:
-        "Open loops attention query: the answer comes from the issues list, grouped by area of responsibility; parked issues are not reported as active.",
+        "Open loops attention query: the answer comes from the issues list, grouped by area of area; parked issues are not reported as active.",
       tags: ["reliability", "nightly"],
       timeoutMs: 240_000,
       async test(t) {

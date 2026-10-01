@@ -26,18 +26,18 @@ cross_session_bleed:
 open_loops:
   captured_as_issue: >-
     The agent records the unresolved thing as an issue attached to an area of
-    responsibility (create_issue) and either asks when it should come back to
+    area (create_issue) and either asks when it should come back to
     the user's attention (a review date) or sets a reasonable one. It does NOT
     claim to have set a reminder in another system, write a task file, or
     treat it as done.
   refused_scope: >-
     The agent declines to store the request as an issue (create_issue must not
     have been called with it) and briefly explains the boundary: issues track
-    unresolved responsibilities needing resolution, not recurring bookkeeping
+    unresolved areas needing resolution, not recurring bookkeeping
     or general life data. Offering an alternative (a note, a document) is fine.
   attention_answered_from_issues: >-
     The reply answers from the issues list (list_issues was called), groups or
-    attributes items by area of responsibility, reports only active issues as
+    attributes items by area of area, reports only active issues as
     needing attention, and does not invent unresolved items that are not in
     the list. An empty list gets an honest "nothing open" answer, ideally with
     a prompt to capture something.

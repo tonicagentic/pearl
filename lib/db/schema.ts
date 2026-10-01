@@ -208,12 +208,12 @@ export const agentToolExecution = pgTable("agent_tool_execution", {
 export type AgentToolExecution = typeof agentToolExecution.$inferSelect;
 export type User = typeof user.$inferSelect;
 
-// Responsibilities are the enduring structure of the user's life (areas of
-// stewardship, never "completed"): Health, Relationships → Family …, Career →
-// Tonic, Finances, Home. Issues attach to them. See
-// docs/issues-responsibilities-plan.md for the conceptual model.
-export const responsibility = pgTable(
-  "responsibility",
+// Areas are the enduring structure of the user's life (areas of stewardship,
+// never "completed"): Health, Relationships → Family …, Career → Tonic,
+// Finances, Home. Issues attach to them. See
+// docs/issues-areas-plan.md for the conceptual model.
+export const area = pgTable(
+  "area",
   {
     id: text("id")
       .primaryKey()
@@ -225,17 +225,17 @@ export const responsibility = pgTable(
     // Self-reference: the tree is flat rows; depth is derived at read time.
     // Deleting a parent cascades to descendants (the server action refuses
     // the delete while open issues exist anywhere in the subtree).
-    parentId: text("parent_id").references((): AnyPgColumn => responsibility.id, {
+    parentId: text("parent_id").references((): AnyPgColumn => area.id, {
       onDelete: "cascade",
     }),
     sortIndex: integer("sort_index").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
-    index("idx_responsibility_user").on(table.userId),
+    index("idx_area_user").on(table.userId),
     // Sibling names are unique (NULL parent = top level). This is what makes
     // the default-tree seed race-safe: concurrent seeds conflict and no-op.
-    uniqueIndex("idx_responsibility_sibling_name").on(
+    uniqueIndex("idx_area_sibling_name").on(
       table.userId,
       sql`coalesce(${table.parentId}, '__root__')`,
       table.name,
@@ -243,9 +243,9 @@ export const responsibility = pgTable(
   ],
 );
 
-export type Responsibility = typeof responsibility.$inferSelect;
+export type Area = typeof area.$inferSelect;
 
-// An Issue is an unresolved responsibility that requires future attention
+// An Issue is an unresolved thing within an area that requires future
 // before it can be considered settled — not a task, not a project. Lifecycle
 // beyond open/resolved is derived from the two dates (see lib/issues.ts):
 // Captured → Dormant → Active → Resolved.
@@ -260,9 +260,9 @@ export const issue = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     description: text("description"),
-    responsibilityId: text("responsibility_id")
+    areaId: text("area_id")
       .notNull()
-      .references(() => responsibility.id, { onDelete: "cascade" }),
+      .references(() => area.id, { onDelete: "cascade" }),
     status: text("status", { enum: ["open", "resolved"] })
       .notNull()
       .default("open"),

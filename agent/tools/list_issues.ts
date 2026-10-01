@@ -3,13 +3,13 @@ import { z } from "zod";
 import {
   ensureUserForPrincipal,
   listOpenIssues,
-  listResponsibilities,
+  listAreas,
 } from "@/lib/db/issues";
-import type { ResponsibilityNode } from "@/lib/db/issues";
+import type { AreaNode } from "@/lib/db/issues";
 import { issueState, todayIso } from "@/lib/issues";
 
 /**
- * Tool that reports the user's unresolved responsibilities ("open loops").
+ * Tool that reports the user's unresolved areas ("open loops").
  *
  * @remarks
  * Rows are scoped to the framework-resolved principal (`ctx.session.auth.current`),
@@ -19,8 +19,8 @@ import { issueState, todayIso } from "@/lib/issues";
  */
 export default defineTool({
   description:
-    "List the user's issues: unresolved responsibilities that need attention, each attached " +
-    "to an area of responsibility. Defaults to active issues (past their review date, due " +
+    "List the user's issues: unresolved areas that need attention, each attached " +
+    "to an area of area. Defaults to active issues (past their review date, due " +
     "soon, overdue, or undated). Pass state \"dormant\" only to report deliberately parked " +
     "items (review date in the future). Use this to answer \"what needs my attention?\" — " +
     "not as a general to-do list.",
@@ -43,15 +43,15 @@ export default defineTool({
 
     const [rows, tree] = await Promise.all([
       listOpenIssues(userId),
-      listResponsibilities(userId),
+      listAreas(userId),
     ]);
 
-    // Name every issue's responsibility as a path ("Relationships › Family"),
+    // Name every issue's area as a path ("Relationships › Family"),
     // so the model can answer with the life area without a second lookup.
     const pathById = new Map<string, string>();
 
     for (const node of tree) {
-      for (const [id, path] of responsibilityPaths(node)) {
+      for (const [id, path] of areaPaths(node)) {
         pathById.set(id, path);
       }
     }
@@ -62,8 +62,8 @@ export default defineTool({
         id: row.id,
         title: row.title,
         description: row.description,
-        responsibility:
-          pathById.get(row.responsibilityId) ?? row.responsibilityName,
+        area:
+          pathById.get(row.areaId) ?? row.areaName,
         state: issueState(row),
         dueDate: row.dueDate,
         reviewDate: row.reviewDate,
@@ -97,7 +97,7 @@ export default defineTool({
         id: z.string(),
         title: z.string(),
         description: z.string().nullable(),
-        responsibility: z.string(),
+        area: z.string(),
         state: z.string(),
         dueDate: z.string().nullable(),
         reviewDate: z.string().nullable(),
@@ -107,8 +107,8 @@ export default defineTool({
   }),
 });
 
-function* responsibilityPaths(
-  node: ResponsibilityNode,
+function* areaPaths(
+  node: AreaNode,
   ancestors: readonly string[] = [],
 ): Generator<readonly [string, string]> {
   const path = [...ancestors, node.name].join(" › ");
@@ -116,6 +116,6 @@ function* responsibilityPaths(
   yield [node.id, path] as const;
 
   for (const child of node.children) {
-    yield* responsibilityPaths(child, [...ancestors, node.name]);
+    yield* areaPaths(child, [...ancestors, node.name]);
   }
 }

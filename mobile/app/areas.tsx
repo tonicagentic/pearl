@@ -8,11 +8,11 @@ import { useCSSVariable } from "uniwind";
 import { fetchIssues, type IssuesPayload } from "@/src/issues-client";
 
 /**
- * The responsibility tree on mobile: the mind map visualization stays on the
+ * The area tree on mobile: the mind map visualization stays on the
  * web (Mermaid renders SVG in a DOM); here the same tree renders as an
  * indented list. Editing happens on the web too — this screen is read-only.
  */
-export default function Responsibilities() {
+export default function Areas() {
   const navigation = useNavigation<{ openDrawer: () => void }>();
   const [payload, setPayload] = useState<IssuesPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +29,7 @@ export default function Responsibilities() {
       setPayload(await fetchIssues());
       setError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Failed to load responsibilities.");
+      setError(cause instanceof Error ? cause.message : "Failed to load areas.");
     }
   }, []);
 
@@ -46,7 +46,7 @@ export default function Responsibilities() {
         }
       } catch (cause) {
         if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : "Failed to load responsibilities.");
+          setError(cause instanceof Error ? cause.message : "Failed to load areas.");
         }
       }
     })();
@@ -69,7 +69,7 @@ export default function Responsibilities() {
         >
           <MenuIcon className="size-5 text-muted-foreground" />
         </Pressable>
-        <Text className="text-base font-semibold text-foreground">Responsibilities</Text>
+        <Text className="text-base font-semibold text-foreground">Areas</Text>
       </View>
 
       <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10">
@@ -97,7 +97,7 @@ export default function Responsibilities() {
             ))}
             {(payload.options ?? []).length === 0 ? (
               <Text className="py-1 text-sm text-muted-foreground">
-                No responsibilities yet.
+                No areas yet.
               </Text>
             ) : null}
           </View>

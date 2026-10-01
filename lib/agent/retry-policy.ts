@@ -129,7 +129,7 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     1,
     "Deletion is approval-gated: a retried delete must status check existence first; deleting twice would also hit the second asset if ids shifted.",
   ),
-  // Issues (docs/issues-responsibilities-plan.md).
+  // Issues (docs/issues-areas-plan.md).
   list_issues: policy(
     true,
     ["network", "timeout"],

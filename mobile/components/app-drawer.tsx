@@ -67,17 +67,17 @@ export function AppDrawer({ navigation }: DrawerContentComponentProps) {
           <Text className="text-sm text-foreground">Issues</Text>
         </Link>
 
-        {/* Responsibilities tree + mind map: nested under Issues. */}
+        {/* Areas tree + mind map: nested under Issues. */}
         <Link
-          href="/responsibilities"
+          href="/areas"
           onPress={close}
           className={cn(
             "h-8 flex-row items-center gap-2 rounded-md px-2",
-            pathname.startsWith("/responsibilities") ? "bg-muted/50" : "opacity-80",
+            pathname.startsWith("/areas") ? "bg-muted/50" : "opacity-80",
           )}
         >
           <NetworkIcon className="size-4 text-foreground" />
-          <Text className="text-sm text-foreground">Responsibilities</Text>
+          <Text className="text-sm text-foreground">Areas</Text>
         </Link>
 
         {/* Chat threads */}

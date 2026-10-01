@@ -4,22 +4,22 @@ import { useState, useTransition } from "react";
 import { Loader2Icon, PlusIcon } from "lucide-react";
 
 import {
-  createResponsibilityAction,
-  deleteResponsibilityAction,
-  renameResponsibilityAction,
+  createAreaAction,
+  deleteAreaAction,
+  renameAreaAction,
 } from "@/app/actions/issues";
-import type { ResponsibilityNode } from "@/lib/db/issues";
+import type { AreaNode } from "@/lib/db/issues";
 
 /**
- * One node of the responsibility tree with its inline editor. The structure
+ * One node of the area tree with its inline editor. The structure
  * is just parentId; no drag-and-drop — add child, rename, delete (blocked
  * while open issues exist anywhere in the subtree).
  */
-export function ResponsibilityNodeEditor({
+export function AreaNodeEditor({
   node,
   depth,
 }: {
-  readonly node: ResponsibilityNode;
+  readonly node: AreaNode;
   readonly depth: number;
 }) {
   const [open, setOpen] = useState(false);
@@ -46,7 +46,7 @@ export function ResponsibilityNodeEditor({
 
               startTransition(async () => {
                 try {
-                  await renameResponsibilityAction(node.id, { name });
+                  await renameAreaAction(node.id, { name });
                   setOpen(false);
                 } catch (cause) {
                   setError(cause instanceof Error ? cause.message : "Failed to rename.");
@@ -59,7 +59,7 @@ export function ResponsibilityNodeEditor({
               defaultValue={node.name}
               required
               className="flex-1 rounded-md border bg-background px-2 py-1 text-sm"
-              aria-label="Responsibility name"
+              aria-label="Area name"
             />
             <button
               type="submit"
@@ -106,7 +106,7 @@ export function ResponsibilityNodeEditor({
 
                   startTransition(async () => {
                     try {
-                      await deleteResponsibilityAction(node.id);
+                      await deleteAreaAction(node.id);
                     } catch (cause) {
                       setError(
                         cause instanceof Error
@@ -130,7 +130,7 @@ export function ResponsibilityNodeEditor({
 
       <div className="flex flex-col gap-1 pl-4 pt-1">
         {node.children.map((child) => (
-          <ResponsibilityNodeEditor key={child.id} node={child} depth={depth + 1} />
+          <AreaNodeEditor key={child.id} node={child} depth={depth + 1} />
         ))}
 
         {adding ? (
@@ -147,7 +147,7 @@ export function ResponsibilityNodeEditor({
 
               startTransition(async () => {
                 try {
-                  await createResponsibilityAction({
+                  await createAreaAction({
                     name,
                     parentId: node.id,
                   });
@@ -163,7 +163,7 @@ export function ResponsibilityNodeEditor({
               required
               placeholder={`Under ${node.name}…`}
               className="flex-1 rounded-md border bg-background px-2 py-1 text-sm"
-              aria-label={`New responsibility under ${node.name}`}
+              aria-label={`New area under ${node.name}`}
             />
             <button
               type="submit"

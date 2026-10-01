@@ -58,7 +58,7 @@ export function NewIssueForm({
             await createIssueAction({
               title,
               description: String(data.get("description") ?? ""),
-              responsibilityId: String(data.get("responsibilityId") ?? ""),
+              areaId: String(data.get("areaId") ?? ""),
               dueDate: String(data.get("dueDate") ?? "") || null,
               reviewDate: String(data.get("reviewDate") ?? "") || null,
             });
@@ -100,7 +100,7 @@ export function NewIssueForm({
   );
 }
 
-/** Shared fields: responsibility select + the two dates + notes. */
+/** Shared fields: area select + the two dates + notes. */
 export function IssueFields({
   options,
   issue,
@@ -108,7 +108,7 @@ export function IssueFields({
   readonly options: readonly IssueFormOption[];
   readonly issue?: {
     readonly description: string | null;
-    readonly responsibilityId: string;
+    readonly areaId: string;
     readonly dueDate: string | null;
     readonly reviewDate: string | null;
   };
@@ -116,11 +116,11 @@ export function IssueFields({
   return (
     <>
       <select
-        name="responsibilityId"
-        defaultValue={issue?.responsibilityId}
+        name="areaId"
+        defaultValue={issue?.areaId}
         required
         className="rounded-md border bg-background px-3 py-2 text-sm"
-        aria-label="Responsibility"
+        aria-label="Area"
       >
         {options.map((option) => (
           <option key={option.id} value={option.id}>

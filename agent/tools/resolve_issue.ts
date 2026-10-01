@@ -4,7 +4,7 @@ import { z } from "zod";
 import { ensureUserForPrincipal, listOpenIssues, resolveIssue } from "@/lib/db/issues";
 
 /**
- * Tool that settles an issue: the unresolved responsibility is resolved.
+ * Tool that settles an issue: the unresolved area is resolved.
  *
  * @remarks
  * Scoped to the framework-resolved principal (`ctx.session.auth.current`), never
@@ -14,7 +14,7 @@ import { ensureUserForPrincipal, listOpenIssues, resolveIssue } from "@/lib/db/i
  */
 export default defineTool({
   description:
-    "Mark one of the user's issues as resolved — the responsibility is settled. Confirm with " +
+    "Mark one of the user's issues as resolved — the area is settled. Confirm with " +
     "the user first when the resolution was only implied (for example by a third party or an " +
     "assumption). Find the id with list_issues.",
   /**
@@ -47,7 +47,7 @@ export default defineTool({
 
     return {
       resolved: issue.title,
-      responsibility: issue.responsibilityName,
+      area: issue.areaName,
     };
   },
   approval: always(),
@@ -57,6 +57,6 @@ export default defineTool({
   outputSchema: z.object({
     error: z.string().optional(),
     resolved: z.string().optional(),
-    responsibility: z.string().optional(),
+    area: z.string().optional(),
   }),
 });

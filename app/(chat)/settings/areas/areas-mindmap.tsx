@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ResponsibilityNode } from "@/lib/db/issues";
+import type { AreaNode } from "@/lib/db/issues";
 
 /**
- * Renders the responsibility tree as a Mermaid mind map. The structure is
+ * Renders the area tree as a Mermaid mind map. The structure is
  * just parentId, so the visualization is a projection of the same data the
  * editor below it changes — nothing to keep in sync.
  *
@@ -13,10 +13,10 @@ import type { ResponsibilityNode } from "@/lib/db/issues";
  * SVG inert. Labels are sanitized because Mermaid's mindmap parser treats
  * brackets/parens as node-shape syntax.
  */
-export function ResponsibilityMindmap({
+export function AreaMindmap({
   tree,
 }: {
-  readonly tree: readonly ResponsibilityNode[];
+  readonly tree: readonly AreaNode[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export function ResponsibilityMindmap({
           theme: "neutral",
         });
         const { svg: rendered } = await mermaid.render(
-          `responsibilities-${Math.random().toString(36).slice(2)}`,
+          `areas-${Math.random().toString(36).slice(2)}`,
           definition,
         );
 
@@ -79,13 +79,13 @@ export function ResponsibilityMindmap({
 
 /**
  * Mermaid mindmap syntax: one indented line per node. The root renders as a
- * circle. Labels are escaped so a responsibility named "Calls (weekly)" does
+ * circle. Labels are escaped so a area named "Calls (weekly)" does
  * not parse as a shape.
  */
 export function buildMindmapDefinition(
-  tree: readonly ResponsibilityNode[],
+  tree: readonly AreaNode[],
 ): string {
-  const lines = ["mindmap", "  root((Responsibilities))"];
+  const lines = ["mindmap", "  root((Areas))"];
 
   for (const node of tree) {
     appendNode(lines, node, 2);
@@ -96,7 +96,7 @@ export function buildMindmapDefinition(
 
 function appendNode(
   lines: string[],
-  node: ResponsibilityNode,
+  node: AreaNode,
   depth: number,
 ) {
   const indent = "  ".repeat(depth);

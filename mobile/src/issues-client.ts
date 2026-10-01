@@ -16,8 +16,8 @@ export type IssueDto = {
   reviewDate: string | null;
   createdAt: string;
   resolvedAt: string | null;
-  responsibilityId: string;
-  responsibilityName: string;
+  areaId: string;
+  areaName: string;
   state: IssueState;
   dueSoon?: boolean;
 };
@@ -55,7 +55,7 @@ export async function fetchIssues(): Promise<IssuesPayload> {
 
 export type CreateIssueInput = {
   readonly title: string;
-  readonly responsibilityName?: string;
+  readonly areaName?: string;
   readonly description?: string;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;

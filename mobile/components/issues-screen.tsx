@@ -14,10 +14,10 @@ import {
 } from "@/src/issues-client";
 
 /**
- * The issues inbox on mobile: unresolved responsibilities grouped by when
- * they need attention, mirroring the web inbox (docs/issues-responsibilities-
+ * The issues inbox on mobile: unresolved areas grouped by when
+ * they need attention, mirroring the web inbox (docs/issues-areas-
  * plan.md). Data comes from the web app's /api/issues route over the same
- * authenticated session; responsibilities are read-only here — the tree is
+ * authenticated session; areas are read-only here — the tree is
  * edited on the web.
  */
 export function IssuesScreen() {
@@ -261,7 +261,7 @@ function IssueRow({
         </Text>
         <Text className="mt-0.5 text-xs text-muted-foreground">
           {[
-            issue.responsibilityName,
+            issue.areaName,
             issue.dueDate ? `${issue.dueDate < new Date().toISOString().slice(0, 10) ? "overdue, due" : "due"} ${issue.dueDate}` : null,
             issue.reviewDate ? `review ${issue.reviewDate}` : null,
             issue.state === "dormant" ? "parked" : null,
@@ -301,7 +301,7 @@ function NewIssueForm({
   const primaryForeground = useCSSVariable("--color-primary-foreground") as
     | string
     | undefined;
-  const [responsibilityName, setResponsibilityName] = useState("");
+  const [areaName, setAreaName] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [reviewDate, setReviewDate] = useState("");
@@ -319,10 +319,10 @@ function NewIssueForm({
       />
       <TextInput
         className="rounded-md border px-3 py-2 text-sm text-foreground"
-        placeholder="Area of responsibility (e.g. Home) — optional"
+        placeholder="Area of area (e.g. Home) — optional"
         placeholderTextColor={placeholderColor ?? undefined}
-        value={responsibilityName}
-        onChangeText={setResponsibilityName}
+        value={areaName}
+        onChangeText={setAreaName}
         autoCapitalize="none"
       />
       <TextInput
@@ -368,7 +368,7 @@ function NewIssueForm({
             setPending(true);
             void createIssueRequest({
               title: title.trim(),
-              responsibilityName: responsibilityName.trim() || undefined,
+              areaName: areaName.trim() || undefined,
               description: description.trim() || undefined,
               dueDate: dueDate.trim() || null,
               reviewDate: reviewDate.trim() || null,

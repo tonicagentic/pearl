@@ -3,14 +3,14 @@ import { once } from "eve/tools/approval";
 import { z } from "zod";
 import {
   createIssue,
-  createResponsibility,
+  createArea,
   ensureUserForPrincipal,
-  findResponsibilityByName,
-  getResponsibility,
+  findAreaByName,
+  getArea,
 } from "@/lib/db/issues";
 
 /**
- * Tool that captures an unresolved responsibility as an issue.
+ * Tool that captures an unresolved area as an issue.
  *
  * @remarks
  * Scoped to the framework-resolved principal (`ctx.session.auth.current`), never
@@ -18,7 +18,7 @@ import {
  * user's approval, then follow-ups in the same turn flow without re-prompting —
  * capture stays low-friction while remaining behind the repo's code-enforced
  * gate for create_/update_-patterned tools (tests/approval-gates.test.ts).
- * Responsibilities resolve by name (case-insensitive); an unknown name creates
+ * Areas resolve by name (case-insensitive); an unknown name creates
  * a matching area instead of failing, so a capture never dead-ends.
  */
 export default defineTool({
@@ -31,7 +31,7 @@ export default defineTool({
   /**
    * Create an issue for the current principal.
    *
-   * @param input - Title, responsibility (name or id), optional notes and dates.
+   * @param input - Title, area (name or id), optional notes and dates.
    * @param ctx - Tool runtime context; supplies the resolved principal.
    */
   async execute(input, ctx) {
@@ -51,34 +51,34 @@ export default defineTool({
       return { error: "The issue needs a title." };
     }
 
-    let responsibilityId: string | undefined;
+    let areaId: string | undefined;
 
-    if (input.responsibilityId) {
-      const known = await getResponsibility(userId, input.responsibilityId);
+    if (input.areaId) {
+      const known = await getArea(userId, input.areaId);
 
       if (!known) {
-        return { error: "Unknown responsibility id." };
+        return { error: "Unknown area id." };
       }
 
-      responsibilityId = known.id;
-    } else if (input.responsibilityName) {
-      const name = input.responsibilityName.trim();
-      const existing = await findResponsibilityByName(userId, name);
-      responsibilityId =
-        existing?.id ?? (await createResponsibility(userId, name)).id;
+      areaId = known.id;
+    } else if (input.areaName) {
+      const name = input.areaName.trim();
+      const existing = await findAreaByName(userId, name);
+      areaId =
+        existing?.id ?? (await createArea(userId, name)).id;
     }
 
-    if (!responsibilityId) {
+    if (!areaId) {
       return {
         error:
-          "No responsibility given. Ask which area of the user's life this belongs to.",
+          "No area given. Ask which area of the user's life this belongs to.",
       };
     }
 
     const issue = await createIssue(userId, {
       title,
       description: input.description?.trim() || null,
-      responsibilityId,
+      areaId,
       dueDate: input.dueDate ?? null,
       reviewDate: input.reviewDate ?? null,
     });
@@ -86,15 +86,15 @@ export default defineTool({
     return {
       id: issue.id,
       title: issue.title,
-      responsibility: issue.responsibilityName,
+      area: issue.areaName,
       dueDate: issue.dueDate,
       reviewDate: issue.reviewDate,
     };
   },
   inputSchema: z.object({
     title: z.string().max(200),
-    responsibilityName: z.string().max(80).optional(),
-    responsibilityId: z.string().optional(),
+    areaName: z.string().max(80).optional(),
+    areaId: z.string().optional(),
     description: z.string().max(4000).optional(),
     // Calendar dates (YYYY-MM-DD): dueDate is when it must be resolved;
     // reviewDate is when it should return to the user's attention.
@@ -111,7 +111,7 @@ export default defineTool({
     error: z.string().optional(),
     id: z.string().optional(),
     title: z.string().optional(),
-    responsibility: z.string().optional(),
+    area: z.string().optional(),
     dueDate: z.string().nullable().optional(),
     reviewDate: z.string().nullable().optional(),
   }),

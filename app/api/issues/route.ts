@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 
 import {
   createIssue,
-  createResponsibility,
+  createArea,
   ensureUserForPrincipal,
-  findResponsibilityByName,
-  flattenResponsibilityOptions,
+  findAreaByName,
+  flattenAreaOptions,
   getIssue,
   listOpenIssues,
   listRecentlyResolvedIssues,
-  listResponsibilities,
+  listAreas,
   reopenIssue,
   resolveIssue,
   updateIssue,
@@ -21,7 +21,7 @@ import { getServerViewer } from "@/lib/session";
 /**
  * Issues data for the mobile app: the same principal-scoped projection the
  * web inbox renders, as JSON. GET returns open issues (with derived state),
- * recently resolved ones, and the responsibility options; POST mutates with
+ * recently resolved ones, and the area options; POST mutates with
  * an `op` field. Authenticated through the same better-auth session the web
  * app uses — the mobile client sends its session cookie.
  */
@@ -61,7 +61,7 @@ export async function GET() {
       viewer.id,
       new Date(Date.now() - 7 * 86_400_000).toISOString(),
     ),
-    listResponsibilities(viewer.id),
+    listAreas(viewer.id),
   ]);
 
   return NextResponse.json({
@@ -71,7 +71,7 @@ export async function GET() {
       state: issueState(row),
       dueSoon: row.status === "open" && row.dueDate !== null && row.dueDate <= todayIso(),
     })),
-    options: flattenResponsibilityOptions(tree),
+    options: flattenAreaOptions(tree),
     tree,
   });
 }
@@ -107,12 +107,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "An issue needs a title." }, { status: 400 });
       }
 
-      const responsibilityName =
-        typeof body.responsibilityName === "string" ? body.responsibilityName.trim() : "";
+      const areaName =
+        typeof body.areaName === "string" ? body.areaName.trim() : "";
 
-      if (!responsibilityName) {
+      if (!areaName) {
         return NextResponse.json(
-          { error: "An issue needs a responsibility to attach to." },
+          { error: "An issue needs a area to attach to." },
           { status: 400 },
         );
       }
@@ -125,17 +125,17 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Dates must be YYYY-MM-DD." }, { status: 400 });
       }
 
-      // The create_issue tool matches responsibilities by name and creates
+      // The create_issue tool matches areas by name and creates
       // unknown ones — keep the same behavior here so capture never dead-ends.
-      const existing = await findResponsibilityByName(viewer.id, responsibilityName);
-      const responsibility =
-        existing ?? (await createResponsibility(viewer.id, responsibilityName));
+      const existing = await findAreaByName(viewer.id, areaName);
+      const area =
+        existing ?? (await createArea(viewer.id, areaName));
 
       const issue = await createIssue(viewer.id, {
         title,
         description:
           typeof body.description === "string" ? body.description.trim() || null : null,
-        responsibilityId: responsibility.id,
+        areaId: area.id,
         dueDate,
         reviewDate,
       });

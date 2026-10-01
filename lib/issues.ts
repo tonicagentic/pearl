@@ -11,7 +11,7 @@
 //                because they nag — they are active, not someday)
 //
 // Shared by the web UI and the agent's issue tools so both answer "what needs
-// attention?" identically. See docs/issues-responsibilities-plan.md.
+// attention?" identically. See docs/issues-areas-plan.md.
 
 export type IssueStatusRow = {
   readonly status: "open" | "resolved";

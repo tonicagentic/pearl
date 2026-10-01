@@ -8,21 +8,21 @@ import {
   resolveIssueAction,
   updateIssueAction,
 } from "@/app/actions/issues";
-import type { IssueWithResponsibility } from "@/lib/db/issues";
+import type { IssueWithArea } from "@/lib/db/issues";
 import { daysUntil, issueState, type DerivedIssueState } from "@/lib/issues";
 
 import { IssueFields, type IssueFormOption } from "./new-issue-form";
 
 /**
- * One inbox row. Collapsed, it shows title, dates, and responsibility; the
- * detail panel (open on click) carries the v1 fields — notes, responsibility,
+ * One inbox row. Collapsed, it shows title, dates, and area; the
+ * detail panel (open on click) carries the v1 fields — notes, area,
  * the two dates — with Edit and Resolve.
  */
 export function IssueRow({
   issue,
   options,
 }: {
-  readonly issue: IssueWithResponsibility;
+  readonly issue: IssueWithArea;
   readonly options: readonly IssueFormOption[];
 }) {
   const state: DerivedIssueState = issueState(issue);
@@ -41,7 +41,7 @@ export function IssueRow({
               {issue.title}
             </span>
             <span className="text-xs text-muted-foreground">
-              {issue.responsibilityName}
+              {issue.areaName}
               {issue.dueDate
                 ? ` · ${overdue ? "overdue, due" : "due"} ${issue.dueDate}`
                 : ""}
@@ -118,7 +118,7 @@ function IssueDetail({
   issue,
   options,
 }: {
-  readonly issue: IssueWithResponsibility;
+  readonly issue: IssueWithArea;
   readonly options: readonly IssueFormOption[];
 }) {
   const [editing, setEditing] = useState(false);
@@ -145,7 +145,7 @@ function IssueDetail({
               await updateIssueAction(issue.id, {
                 title,
                 description: String(data.get("description") ?? ""),
-                responsibilityId: String(data.get("responsibilityId") ?? ""),
+                areaId: String(data.get("areaId") ?? ""),
                 dueDate: String(data.get("dueDate") ?? "") || null,
                 reviewDate: String(data.get("reviewDate") ?? "") || null,
               });
@@ -167,7 +167,7 @@ function IssueDetail({
           options={options}
           issue={{
             description: issue.description,
-            responsibilityId: issue.responsibilityId,
+            areaId: issue.areaId,
             dueDate: issue.dueDate,
             reviewDate: issue.reviewDate,
           }}

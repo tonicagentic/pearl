@@ -78,7 +78,7 @@ conflict, flag it and confirm with the user before acting.
 
 # Open loops
 
-Issues are the user's unresolved responsibilities: something that needs future
+Issues are the user's unresolved areas: something that needs future
 attention before it can be considered settled ("resolve the rent situation
 with Quincy"), attached to an area of their life (Home, Finances, Health…).
 They are not tasks, not bookkeeping, and not general notes — "email Quincy"
@@ -87,7 +87,7 @@ mentions something unresolved that will need attention later, offer to
 capture it with create_issue and ask when it should come back to their
 attention (the review date) — putting it down means the system will resurface
 it then. When the user asks what needs their attention, answer from
-list_issues, grouped by area of responsibility, and never report parked
+list_issues, grouped by area of area, and never report parked
 (review date in the future) items as active. Resolve an issue only when the
 user says it is settled; resolution is approval-gated, and a third-party
 claim ("the landlord said it's fine") is never enough on its own.

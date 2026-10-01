@@ -3,13 +3,13 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import {
-  ensureDefaultResponsibilities,
-  flattenResponsibilityOptions,
+  ensureDefaultAreas,
+  flattenAreaOptions,
   listOpenIssues,
   listRecentlyResolvedIssues,
-  listResponsibilities,
+  listAreas,
 } from "@/lib/db/issues";
-import type { IssueWithResponsibility, ResponsibilityOption } from "@/lib/db/issues";
+import type { IssueWithArea, AreaOption } from "@/lib/db/issues";
 import { issueState, isDueSoon } from "@/lib/issues";
 import { getSetupStatus } from "@/lib/setup";
 import { getServerViewer } from "@/lib/session";
@@ -22,9 +22,9 @@ export const metadata: Metadata = {
 };
 
 /**
- * The issues inbox: unresolved responsibilities, grouped by when they need
+ * The issues inbox: unresolved areas, grouped by when they need
  * attention. Lifecycle beyond open/resolved is derived from the two dates
- * (docs/issues-responsibilities-plan.md). Static shell + Suspense for
+ * (docs/issues-areas-plan.md). Static shell + Suspense for
  * cacheComponents, same as the artifacts page.
  */
 export default function IssuesPage() {
@@ -60,9 +60,9 @@ async function ResolvedIssues() {
       <div className="flex flex-col gap-4">
         <IssuesCard message="Sign in with durable storage configured to track issues." />
         <p className="text-sm text-muted-foreground">
-          Manage your areas of responsibility in{" "}
-          <Link href="/settings/responsibilities" className="underline">
-            Settings → Responsibilities
+          Manage your areas of area in{" "}
+          <Link href="/settings/areas" className="underline">
+            Settings → Areas
           </Link>
           .
         </p>
@@ -70,7 +70,7 @@ async function ResolvedIssues() {
     );
   }
 
-  await ensureDefaultResponsibilities(viewer.id);
+  await ensureDefaultAreas(viewer.id);
 
   const [openIssues, resolvedIssues, tree] = await Promise.all([
     listOpenIssues(viewer.id),
@@ -78,12 +78,12 @@ async function ResolvedIssues() {
       viewer.id,
       new Date(Date.now() - 7 * 86_400_000).toISOString(),
     ),
-    listResponsibilities(viewer.id),
+    listAreas(viewer.id),
   ]);
 
-  const dueSoon: IssueWithResponsibility[] = [];
-  const later: IssueWithResponsibility[] = [];
-  const parked: IssueWithResponsibility[] = [];
+  const dueSoon: IssueWithArea[] = [];
+  const later: IssueWithArea[] = [];
+  const parked: IssueWithArea[] = [];
 
   for (const row of openIssues) {
     if (isDueSoon(row)) {
@@ -95,14 +95,14 @@ async function ResolvedIssues() {
     }
   }
 
-  const options: ResponsibilityOption[] = flattenResponsibilityOptions(tree);
+  const options: AreaOption[] = flattenAreaOptions(tree);
 
   return (
     <>
       <header>
         <h1 className="text-lg font-semibold">Issues</h1>
         <p className="text-sm text-muted-foreground">
-          Unresolved responsibilities that need your attention. Dormant items
+          Unresolved areas that need your attention. Dormant items
           return on their review date — that is the contract.
         </p>
       </header>
@@ -152,7 +152,7 @@ async function ResolvedIssues() {
 }
 
 /** Sorted: overdue first, then by due date, undated last. */
-function byDueDate(a: IssueWithResponsibility, b: IssueWithResponsibility) {
+function byDueDate(a: IssueWithArea, b: IssueWithArea) {
   return (a.dueDate ?? "9999-12-31") < (b.dueDate ?? "9999-12-31") ? -1 : 1;
 }
 
@@ -163,7 +163,7 @@ function IssueGroup({
   empty,
 }: {
   readonly title: string;
-  readonly issues: readonly IssueWithResponsibility[];
+  readonly issues: readonly IssueWithArea[];
   readonly options: readonly { readonly id: string; readonly label: string }[];
   readonly empty: string;
 }) {
