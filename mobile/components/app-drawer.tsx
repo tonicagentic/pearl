@@ -54,6 +54,19 @@ export function AppDrawer({ navigation }: DrawerContentComponentProps) {
           <Text className="text-sm text-foreground">New chat</Text>
         </Pressable>
 
+        {/* Areas */}
+        <Link
+          href="/areas"
+          onPress={close}
+          className={cn(
+            "h-8 flex-row items-center gap-2 rounded-md px-2",
+            pathname.startsWith("/areas") ? "bg-muted/50" : "opacity-80",
+          )}
+        >
+          <NetworkIcon className="size-4 text-foreground" />
+          <Text className="text-sm text-foreground">Areas</Text>
+        </Link>
+
         {/* Issues inbox */}
         <Link
           href="/issues"
@@ -65,19 +78,6 @@ export function AppDrawer({ navigation }: DrawerContentComponentProps) {
         >
           <InboxIcon className="size-4 text-foreground" />
           <Text className="text-sm text-foreground">Issues</Text>
-        </Link>
-
-        {/* Areas tree + mind map: nested under Issues. */}
-        <Link
-          href="/areas"
-          onPress={close}
-          className={cn(
-            "h-8 flex-row items-center gap-2 rounded-md px-2",
-            pathname.startsWith("/areas") ? "bg-muted/50" : "opacity-80",
-          )}
-        >
-          <NetworkIcon className="size-4 text-foreground" />
-          <Text className="text-sm text-foreground">Areas</Text>
         </Link>
 
         {/* Chat threads */}

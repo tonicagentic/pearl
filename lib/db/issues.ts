@@ -243,6 +243,20 @@ export async function renameArea(
     .where(and(eq(area.userId, userId), eq(area.id, id)));
 }
 
+export async function updateAreaProperties(
+  userId: string,
+  id: string,
+  properties: Record<string, unknown>,
+) {
+  const [row] = await db
+    .update(area)
+    .set({ properties })
+    .where(and(eq(area.userId, userId), eq(area.id, id)))
+    .returning({ id: area.id });
+
+  if (!row) throw new Error("Area not found.");
+}
+
 /**
  * Move an area under a new parent (or to the top level) at a sibling
  * position. Refuses to move a subtree under itself. Sorts the area to the

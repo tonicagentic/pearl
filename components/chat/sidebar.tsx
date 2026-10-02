@@ -143,6 +143,17 @@ export function ChatSidebar({
           <PlusIcon className="size-4" />
           New chat
         </button>
+        {/* Areas mind map */}
+        <Link
+          className={cn(
+            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
+            areasActive ? activeRowClass : inactiveRowClass,
+          )}
+          href="/settings/areas"
+        >
+          <NetworkIcon className="size-4" />
+          Areas
+        </Link>
         {/* Issues inbox: styled like the chat rows but anchored to its own
             route rather than the chat list. */}
         <Link
@@ -154,17 +165,6 @@ export function ChatSidebar({
         >
           <InboxIcon className="size-4" />
           Issues
-        </Link>
-        {/* Areas tree + mind map: nested under Issues. */}
-        <Link
-          className={cn(
-            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
-            areasActive ? activeRowClass : inactiveRowClass,
-          )}
-          href="/settings/areas"
-        >
-          <NetworkIcon className="size-4" />
-          Areas
         </Link>
       </div>
 

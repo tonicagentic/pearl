@@ -14,7 +14,9 @@ import {
   reopenIssue,
   resolveIssue,
   updateIssue,
+  updateAreaProperties,
 } from "@/lib/db/issues";
+import { validateAreaProperties } from "@/lib/area-properties";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -214,6 +216,13 @@ export async function renameAreaAction(
   }
 
   await renameArea(viewer.id, id, name);
+  revalidateIssues();
+}
+
+export async function updateAreaPropertiesAction(id: string, input: unknown) {
+  const viewer = await requireViewer();
+  const properties = validateAreaProperties(input);
+  await updateAreaProperties(viewer.id, id, properties);
   revalidateIssues();
 }
 

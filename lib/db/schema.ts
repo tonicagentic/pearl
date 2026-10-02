@@ -222,6 +222,7 @@ export const area = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    properties: jsonb("properties").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
     // Self-reference: the tree is flat rows; depth is derived at read time.
     // Deleting a parent cascades to descendants (the server action refuses
     // the delete while open issues exist anywhere in the subtree).
