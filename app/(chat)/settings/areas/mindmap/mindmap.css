@@ -1,0 +1,139 @@
+.pearl-areas-flow {
+  width: 100%;
+  height: 100%;
+  background: var(--color-background);
+  --xy-background-color: var(--color-background);
+  --xy-node-background-color: var(--color-card);
+  --xy-node-color: var(--color-card-foreground);
+  --xy-node-border: 1px solid var(--color-border);
+  --xy-node-boxshadow-selected: 0 0 0 2px var(--color-ring);
+  --xy-edge-stroke: color-mix(in oklch, var(--color-foreground) 38%, transparent);
+  --xy-edge-stroke-selected: var(--color-foreground);
+  --xy-connectionline-stroke: var(--color-foreground);
+  --xy-attribution-background-color: transparent;
+  --xy-attribution-color: var(--color-muted-foreground);
+  --xy-controls-button-background-color: var(--color-card);
+  --xy-controls-button-background-color-hover: var(--color-accent);
+  --xy-controls-button-color: var(--color-foreground);
+  --xy-controls-button-border-color: var(--color-border);
+  --xy-controls-box-shadow: none;
+}
+
+.pearl-areas-flow .react-flow__background {
+  background: var(--color-background) !important;
+}
+
+.pearl-areas-flow .react-flow__node-mindmap {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--color-card-foreground);
+  box-shadow: none;
+}
+
+.pearl-areas-flow .react-flow__node-mindmap.selected {
+  box-shadow: 0 0 0 2px var(--color-ring);
+}
+
+.pearl-areas-flow .react-flow__node-mindmap.is-root {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.pearl-areas-flow .react-flow__handle {
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--color-background);
+  background: color-mix(in oklch, var(--color-foreground) 45%, transparent);
+  opacity: 0;
+}
+
+.pearl-areas-flow .react-flow__node:hover .react-flow__handle,
+.pearl-areas-flow .react-flow__node.selected .react-flow__handle,
+.pearl-areas-flow .react-flow__handle:hover {
+  opacity: 1;
+}
+
+.pearl-areas-flow .react-flow__edge-path,
+.pearl-areas-flow .react-flow__connection-path {
+  stroke: color-mix(in oklch, var(--color-foreground) 38%, transparent);
+}
+
+.pearl-areas-flow .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--color-foreground);
+}
+
+.pearl-areas-flow .react-flow__connectionline {
+  z-index: 0;
+}
+
+.pearl-areas-flow .inputWrapper {
+  display: flex;
+  height: 20px;
+  z-index: 1;
+  position: relative;
+}
+
+.pearl-areas-flow .dragHandle {
+  background: transparent;
+  width: 14px;
+  height: 100%;
+  margin-right: 4px;
+  display: flex;
+  align-items: center;
+  color: var(--color-muted-foreground);
+  cursor: grab;
+}
+
+.pearl-areas-flow .label {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.pearl-areas-flow .input {
+  border: none;
+  padding: 0 2px;
+  border-radius: 1px;
+  font-weight: 600;
+  font-size: 13px;
+  background: transparent;
+  height: 100%;
+  color: inherit;
+  caret-color: currentColor;
+}
+
+.pearl-areas-flow .input:focus {
+  outline: none;
+  background: color-mix(in oklch, currentColor 12%, transparent);
+}
+
+.pearl-areas-flow .input:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.pearl-areas-flow .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.pearl-areas-flow .react-flow__controls-button {
+  background: var(--color-card);
+  border-bottom-color: var(--color-border);
+  fill: var(--color-foreground);
+}
+
+.pearl-areas-flow .react-flow__attribution {
+  background: transparent;
+  color: var(--color-muted-foreground);
+}

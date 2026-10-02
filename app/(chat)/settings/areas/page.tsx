@@ -1,46 +1,33 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Suspense } from "react";
 
-import {
-  ensureDefaultAreas,
-  listAreas,
-} from "@/lib/db/issues";
-import type { AreaNode } from "@/lib/db/issues";
-import { getSetupStatus } from "@/lib/setup";
+import { ensureDefaultAreas, listAreas } from "@/lib/db/issues";
 import { getServerViewer } from "@/lib/session";
+import { getSetupStatus } from "@/lib/setup";
 
 import { AreaMindmap } from "./areas-mindmap";
-import { AreaNodeEditor } from "./area-node-editor";
 
 export const metadata: Metadata = {
   title: "Areas",
 };
 
 /**
- * The area tree: the enduring structure of the user's life. The
- * structure is just parentId; v1 renders a nested list (no canvas). The
- * default tree is seeded idempotently on first visit — areas are
- * never empty, so issues always have a home.
+ * Areas as a full-canvas mind map. The nested list editor is gone — the
+ * canvas is the only surface: drag from a node to add a child, click to
+ * rename, Backspace to delete.
  */
 export default function AreasPage() {
   return (
-    // Page frame: the shell's main is overflow-hidden (the chat scrolls
-    // internally), so non-chat pages own their scroll here.
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="h-full overflow-y-auto px-4 pt-14 pb-8">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-          <Suspense
-            fallback={
-              <p className="rounded-lg border bg-card px-4 py-4 text-sm text-muted-foreground">
-                Loading areas…
-              </p>
-            }
-          >
-            <ResolvedAreas />
-          </Suspense>
-        </div>
-      </div>
+    <div className="relative min-h-0 flex-1">
+      <Suspense
+        fallback={
+          <p className="px-4 pt-14 text-sm text-muted-foreground">
+            Loading areas…
+          </p>
+        }
+      >
+        <ResolvedAreas />
+      </Suspense>
     </div>
   );
 }
@@ -51,36 +38,14 @@ async function ResolvedAreas() {
 
   if (!viewer || setupStatus.storageMode !== "database") {
     return (
-      <p className="rounded-lg border bg-card px-4 py-4 text-sm text-muted-foreground">
+      <p className="px-4 pt-14 text-sm text-muted-foreground">
         Sign in with durable storage configured to manage areas.
       </p>
     );
   }
 
-  const tree = await (async () => {
-    await ensureDefaultAreas(viewer.id);
-    return listAreas(viewer.id);
-  })();
+  await ensureDefaultAreas(viewer.id);
+  const tree = await listAreas(viewer.id);
 
-  return (
-    <>
-      <header>
-        <h1 className="text-lg font-semibold">Areas</h1>
-        <p className="text-sm text-muted-foreground">
-          The stable areas of your life. They are never “done” — issues come
-          and go underneath them. See them on the{" "}
-          <Link href="/issues" className="underline">
-            issues inbox
-          </Link>
-          .
-        </p>
-      </header>
-      <AreaMindmap tree={tree} />
-      <div className="flex flex-col gap-1">
-        {tree.map((node) => (
-          <AreaNodeEditor key={node.id} node={node} depth={0} />
-        ))}
-      </div>
-    </>
-  );
+  return <AreaMindmap tree={tree} />;
 }
