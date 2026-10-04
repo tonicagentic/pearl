@@ -33,6 +33,40 @@ test("fans top-level areas left and right of the root", () => {
   assert.equal(aestheticsEdge?.targetHandle, "target-left");
 });
 
+test("the shorter side spreads its branches into the available vertical space", () => {
+  const tree = [
+    {
+      id: "body", name: "Body",
+      children: [
+        { id: "a", name: "A", children: [] },
+        { id: "b", name: "B", children: [] },
+      ],
+    },
+    {
+      id: "mind", name: "Mind",
+      children: Array.from({ length: 6 }, (_, index) => ({
+        id: `m${index}`, name: `M${index}`, children: [],
+      })),
+    },
+    { id: "career", name: "Career", children: [] },
+    { id: "home", name: "Home", children: [] },
+  ];
+  const { nodes } = areasToFlow(tree);
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  function absoluteY(id: string): number {
+    const node = byId.get(id);
+    assert.ok(node);
+    return node.position.y + (node.parentId ? absoluteY(node.parentId) : 0);
+  }
+  const right = ["a", "b", "career", "home"].map(absoluteY).sort((a, b) => a - b);
+  const left = Array.from({ length: 6 }, (_, i) => absoluteY(`m${i}`)).sort((a, b) => a - b);
+
+  assert.ok(Math.abs((right.at(-1)! - right[0]) - (left.at(-1)! - left[0])) < 0.001);
+  assert.ok(right[1] - right[0] > 58); // More than the original 40px node + 18px gap.
+  assert.ok(right.every((value, index) => index === 0 || value - right[index - 1] >= 58));
+  assert.equal(absoluteY("body"), (absoluteY("a") + absoluteY("b")) / 2);
+});
+
 test("an empty tree is just the root", () => {
   const { nodes, edges } = areasToFlow([]);
   assert.equal(nodes.length, 1);

@@ -1,8 +1,9 @@
 /**
  * Convert the area tree into a mind-map around a synthetic root: top-level
  * areas split left/right by subtree weight, deeper children continue on the
- * same side. Positions are parent-relative so dragging a node moves its
- * subtree. Edges name left/right handles so lines meet node sides.
+ * same side. The lighter side expands its sibling gaps to fill the taller
+ * side's span. Positions are parent-relative; edges name left/right handles
+ * so lines meet node sides.
  *
  * The root ("Areas") is not a database row — creating a child of it produces
  * a top-level area.
@@ -40,15 +41,34 @@ const X_GAP = 180;
 const Y_GAP = 18;
 const NODE_HEIGHT = 40;
 
-function subtreeHeight(node: LayoutArea): number {
+function subtreeHeight(node: LayoutArea, gap = Y_GAP): number {
   if (node.children.length === 0) {
     return NODE_HEIGHT;
   }
 
+  return sideHeight(node.children, gap);
+}
+
+function sideHeight(children: readonly LayoutArea[], gap = Y_GAP): number {
+  if (children.length === 0) return 0;
   return (
-    node.children.reduce((sum, child) => sum + subtreeHeight(child), 0) +
-    Y_GAP * (node.children.length - 1)
+    children.reduce((sum, child) => sum + subtreeHeight(child, gap), 0) +
+    gap * (children.length - 1)
   );
+}
+
+function leafCount(node: LayoutArea): number {
+  return node.children.length === 0
+    ? 1
+    : node.children.reduce((sum, child) => sum + leafCount(child), 0);
+}
+
+function expandedGap(children: readonly LayoutArea[], targetHeight: number): number {
+  // Every leaf after the first adds one sibling gap somewhere in the side.
+  const gaps = children.reduce((sum, child) => sum + leafCount(child), 0) - 1;
+  return gaps > 0
+    ? Y_GAP + Math.max(0, targetHeight - sideHeight(children)) / gaps
+    : Y_GAP;
 }
 
 function partition(
@@ -104,6 +124,7 @@ function placeSide(
   children: readonly LayoutArea[],
   parentId: string,
   side: 1 | -1,
+  gap: number,
   nodes: FlowMindmapNode[],
   edges: FlowMindmapEdge[],
 ) {
@@ -111,14 +132,12 @@ function placeSide(
     return;
   }
 
-  const total =
-    children.reduce((sum, child) => sum + subtreeHeight(child), 0) +
-    Y_GAP * (children.length - 1);
+  const total = sideHeight(children, gap);
   let y = -total / 2;
   const handles = handlesForSide(side);
 
   for (const child of children) {
-    const height = subtreeHeight(child);
+    const height = subtreeHeight(child, gap);
     placeNode(child, parentId, { x: side * X_GAP, y: y + height / 2 }, nodes);
     edges.push({
       id: `e-${parentId}-${child.id}`,
@@ -127,8 +146,8 @@ function placeSide(
       type: "mindmap",
       ...handles,
     });
-    placeSide(child.children, child.id, side, nodes, edges);
-    y += height + Y_GAP;
+    placeSide(child.children, child.id, side, gap, nodes, edges);
+    y += height + gap;
   }
 }
 
@@ -146,8 +165,9 @@ export function areasToFlow(tree: readonly LayoutArea[]): {
 
   placeNode(root, undefined, { x: 0, y: 0 }, nodes);
   const { left, right } = partition(tree);
-  placeSide(right, root.id, 1, nodes, edges);
-  placeSide(left, root.id, -1, nodes, edges);
+  const targetHeight = Math.max(sideHeight(left), sideHeight(right));
+  placeSide(right, root.id, 1, expandedGap(right, targetHeight), nodes, edges);
+  placeSide(left, root.id, -1, expandedGap(left, targetHeight), nodes, edges);
 
   return { nodes, edges };
 }
