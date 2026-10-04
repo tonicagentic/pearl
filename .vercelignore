@@ -2,5 +2,6 @@ mobile/ios
 mobile/.expo
 mobile/android
 **/node_modules
+.eve
 .next
 .turbo
