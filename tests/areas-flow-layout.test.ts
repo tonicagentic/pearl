@@ -21,9 +21,10 @@ test("fans top-level areas left and right of the root", () => {
   const aestheticsEdge = edges.find((edge) => edge.target === "aesthetics");
 
   assert.equal(root?.deletable, false);
-  assert.equal(body?.parentId, AREAS_ROOT_ID);
-  assert.equal(mind?.parentId, AREAS_ROOT_ID);
-  assert.equal(aesthetics?.parentId, "body");
+  assert.ok(nodes.every((node) => !Object.hasOwn(node, "parentId")));
+  assert.equal(bodyEdge?.source, AREAS_ROOT_ID);
+  assert.equal(edges.find((edge) => edge.target === "mind")?.source, AREAS_ROOT_ID);
+  assert.equal(aestheticsEdge?.source, "body");
   assert.ok((body?.position.x ?? 0) > 0);
   assert.ok((mind?.position.x ?? 0) < 0);
   assert.equal(Math.sign(aesthetics?.position.x ?? 0), Math.sign(body?.position.x ?? 0));
@@ -56,7 +57,7 @@ test("the shorter side spreads its branches into the available vertical space", 
   function absoluteY(id: string): number {
     const node = byId.get(id);
     assert.ok(node);
-    return node.position.y + (node.parentId ? absoluteY(node.parentId) : 0);
+    return node.position.y;
   }
   const right = ["a", "b", "career", "home"].map(absoluteY).sort((a, b) => a - b);
   const left = Array.from({ length: 6 }, (_, i) => absoluteY(`m${i}`)).sort((a, b) => a - b);
@@ -65,6 +66,32 @@ test("the shorter side spreads its branches into the available vertical space", 
   assert.ok(right[1] - right[0] > 58); // More than the original 40px node + 18px gap.
   assert.ok(right.every((value, index) => index === 0 || value - right[index - 1] >= 58));
   assert.equal(absoluteY("body"), (absoluteY("a") + absoluteY("b")) / 2);
+});
+
+test("fourth-generation nodes keep canvas coordinates instead of accumulating parent offsets", () => {
+  const { nodes, edges } = areasToFlow([
+    {
+      id: "activity", name: "Activity", children: [
+        { id: "creative", name: "Creative", children: [
+          { id: "design", name: "Design", children: [
+            { id: "system", name: "System", children: [] },
+            { id: "studio", name: "Studio", children: [] },
+          ] },
+        ] },
+      ],
+    },
+    { id: "mind", name: "Mind", children: [] },
+  ]);
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+
+  assert.deepEqual(
+    ["activity", "creative", "design", "system"].map((id) => byId.get(id)?.position.x),
+    [180, 360, 540, 720],
+  );
+  assert.ok(nodes.every((node) => !Object.hasOwn(node, "parentId")));
+  assert.equal(edges.find((edge) => edge.target === "system")?.source, "design");
+  assert.equal(byId.get("design")?.position.y, 0);
+  assert.ok((byId.get("studio")?.position.y ?? 0) - (byId.get("system")?.position.y ?? 0) >= 58);
 });
 
 test("an empty tree is just the root", () => {

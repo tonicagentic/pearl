@@ -2,8 +2,8 @@
  * Convert the area tree into a mind-map around a synthetic root: top-level
  * areas split left/right by subtree weight, deeper children continue on the
  * same side. The lighter side expands its sibling gaps to fill the taller
- * side's span. Positions are parent-relative; edges name left/right handles
- * so lines meet node sides.
+ * side's span. Nodes use absolute canvas positions so React Flow's parent
+ * bounding boxes cannot shift deeper generations. Edges connect their sides.
  *
  * The root ("Areas") is not a database row — creating a child of it produces
  * a top-level area.
@@ -22,7 +22,6 @@ export type FlowMindmapNode = {
   type: "mindmap";
   data: { label: string; isNew?: boolean };
   position: { x: number; y: number };
-  parentId?: string;
   draggable: false;
   deletable: boolean;
   className?: string;
@@ -104,7 +103,6 @@ function handlesForSide(side: 1 | -1): Pick<
 
 function placeNode(
   node: LayoutArea,
-  parentId: string | undefined,
   position: { x: number; y: number },
   nodes: FlowMindmapNode[],
 ) {
@@ -113,7 +111,6 @@ function placeNode(
     type: "mindmap",
     data: { label: node.name },
     position,
-    parentId,
     draggable: false,
     deletable: node.id !== AREAS_ROOT_ID,
     className: node.id === AREAS_ROOT_ID ? "is-root" : undefined,
@@ -123,6 +120,7 @@ function placeNode(
 function placeSide(
   children: readonly LayoutArea[],
   parentId: string,
+  parentPosition: { x: number; y: number },
   side: 1 | -1,
   gap: number,
   nodes: FlowMindmapNode[],
@@ -138,7 +136,11 @@ function placeSide(
 
   for (const child of children) {
     const height = subtreeHeight(child, gap);
-    placeNode(child, parentId, { x: side * X_GAP, y: y + height / 2 }, nodes);
+    const position = {
+      x: parentPosition.x + side * X_GAP,
+      y: parentPosition.y + y + height / 2,
+    };
+    placeNode(child, position, nodes);
     edges.push({
       id: `e-${parentId}-${child.id}`,
       source: parentId,
@@ -146,7 +148,7 @@ function placeSide(
       type: "mindmap",
       ...handles,
     });
-    placeSide(child.children, child.id, side, gap, nodes, edges);
+    placeSide(child.children, child.id, position, side, gap, nodes, edges);
     y += height + gap;
   }
 }
@@ -163,11 +165,12 @@ export function areasToFlow(tree: readonly LayoutArea[]): {
     children: tree,
   };
 
-  placeNode(root, undefined, { x: 0, y: 0 }, nodes);
+  const rootPosition = { x: 0, y: 0 };
+  placeNode(root, rootPosition, nodes);
   const { left, right } = partition(tree);
   const targetHeight = Math.max(sideHeight(left), sideHeight(right));
-  placeSide(right, root.id, 1, expandedGap(right, targetHeight), nodes, edges);
-  placeSide(left, root.id, -1, expandedGap(left, targetHeight), nodes, edges);
+  placeSide(right, root.id, rootPosition, 1, expandedGap(right, targetHeight), nodes, edges);
+  placeSide(left, root.id, rootPosition, -1, expandedGap(left, targetHeight), nodes, edges);
 
   return { nodes, edges };
 }

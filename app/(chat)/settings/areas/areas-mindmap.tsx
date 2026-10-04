@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ConnectionLineType,
   Controls,
-  type InternalNode,
   type NodeOrigin,
   type OnConnectEnd,
   type OnConnectStart,
@@ -79,31 +78,11 @@ function FlowCanvas({ tree }: { readonly tree: readonly AreaNode[] }) {
     setEdges(next.edges);
   }, [setEdges, setNodes, tree, treeSignature]);
 
-  const getChildNodePosition = (
-    event: MouseEvent | TouchEvent,
-    parentNode?: InternalNode,
-  ) => {
-    const { domNode } = store.getState();
-
-    if (
-      !domNode ||
-      !parentNode?.internals.positionAbsolute ||
-      !parentNode.measured.width ||
-      !parentNode.measured.height
-    ) {
-      return;
-    }
-
-    const panePosition = screenToFlowPosition({
+  const getChildNodePosition = (event: MouseEvent | TouchEvent) =>
+    screenToFlowPosition({
       x: "clientX" in event ? event.clientX : event.touches[0].clientX,
       y: "clientY" in event ? event.clientY : event.touches[0].clientY,
     });
-
-    return {
-      x: panePosition.x - parentNode.internals.positionAbsolute.x,
-      y: panePosition.y - parentNode.internals.positionAbsolute.y,
-    };
-  };
 
   const onConnectStart: OnConnectStart = useCallback((_, { nodeId }) => {
     connectingNodeId.current = nodeId;
@@ -131,11 +110,7 @@ function FlowCanvas({ tree }: { readonly tree: readonly AreaNode[] }) {
         return;
       }
 
-      const position = getChildNodePosition(event, parentNode);
-
-      if (!position) {
-        return;
-      }
+      const position = getChildNodePosition(event);
 
       const tempId = `tmp-${crypto.randomUUID()}`;
       const newNode: FlowMindmapNode = {
@@ -143,11 +118,10 @@ function FlowCanvas({ tree }: { readonly tree: readonly AreaNode[] }) {
         type: "mindmap",
         data: { label: "New area", isNew: true },
         position,
-        parentId: parentNode.id,
         draggable: false,
         deletable: true,
       };
-      const handles = handlesForOffset(position.x);
+      const handles = handlesForOffset(position.x - parentNode.position.x);
       const newEdge = {
         id: `e-${parentNode.id}-${tempId}`,
         source: parentNode.id,
