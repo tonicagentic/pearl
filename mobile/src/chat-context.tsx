@@ -232,7 +232,20 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         }
       },
       prepareSend: async (input) => {
-        const message = typeof input.message === "string" ? input.message : "";
+        const content = input.message;
+        const textPart = Array.isArray(content) ? content.find((part) =>
+          part.type === "text" &&
+          !part.text.startsWith("[Attached PDF:") &&
+          !part.text.startsWith("[Attached text file:"),
+        ) : undefined;
+        const text = typeof content === "string"
+          ? content
+          : textPart?.type === "text" ? textPart.text : "";
+        // Attachment-only sends need a durable pending marker until eve confirms
+        // message.received. Never store file bytes or extracted document text here.
+        const message = text || (Array.isArray(content) && content.length > 0
+          ? "[Attachment]"
+          : "");
         if (!binding.id) {
           const created = await createChat(message || undefined);
           binding.id = created.id;
@@ -290,10 +303,15 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           return false;
         }
         const nextStore = buildStore(chat);
-        const stillPending = chat.pendingUserMessage && !nextStore.snapshot.data.messages.some(
-          (message) => message.role === "user" && message.parts.some(
-            (part) => part.type === "text" && part.text === chat.pendingUserMessage,
-          ),
+        // A generic attachment marker could match an older turn. Keep it
+        // uncertain on reload rather than silently treating an unsent file as sent.
+        const stillPending = chat.pendingUserMessage && (
+          chat.pendingUserMessage === "[Attachment]" ||
+          !nextStore.snapshot.data.messages.some(
+            (message) => message.role === "user" && message.parts.some(
+              (part) => part.type === "text" && part.text === chat.pendingUserMessage,
+            ),
+          )
         );
         bindings.get(nextStore)!.pendingMessage = stillPending ? chat.pendingUserMessage : null;
         const prior = activeStoreRef.current;

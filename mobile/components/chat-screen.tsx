@@ -1,9 +1,10 @@
-import { useMemo, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { Stack, router } from "expo-router";
 import { ListIcon } from "lucide-react-native";
 import {
   AssistantRuntimeProvider,
+  MessageNotSentError,
   useExternalStoreRuntime,
   type AppendMessage,
   type ThreadMessageLike,
@@ -13,6 +14,7 @@ import { useCSSVariable } from "uniwind";
 
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { getModelSelection } from "@/src/model-selection";
+import { createAttachmentMarker, isAttachmentMarker, toEveTurn } from "@/src/attachment-content";
 import { useChats } from "@/src/chat-context";
 import { toThreadMessages, type SpikeState } from "@/src/eve-transport";
 
@@ -33,6 +35,7 @@ export function ChatScreen() {
     { backgroundColor },
   ];
   const { store, activeTitle, persistenceError, retrySync, pendingMessage } = useChats();
+  const [attachmentError, setAttachmentError] = useState<{ store: object; message: string } | null>(null);
   const state = useSyncExternalStore<SpikeState>(
     (cb) => store.subscribe(cb),
     () => store.snapshot.data,
@@ -57,14 +60,26 @@ export function ChatScreen() {
       isRunning: status === "streaming",
       isDisabled: status === "resuming" || status === "submitted",
       onNew: async (message: AppendMessage) => {
-        const text = message.content
-          .filter((p): p is { type: "text"; text: string } => p.type === "text")
-          .map((p) => p.text)
-          .join("\n");
+        setAttachmentError(null);
+        let turn: ReturnType<typeof toEveTurn>;
+        try {
+          turn = toEveTurn(message);
+        } catch (cause) {
+          // Only validation failures are known to have never reached eve.
+          // Restore the draft and chips; network failures remain uncertain.
+          const reason = cause instanceof Error ? cause.message : "Attachment is not ready.";
+          setAttachmentError({ store, message: reason });
+          throw new MessageNotSentError(reason);
+        }
+        // Match an attachment-only pending row to this exact eve receive event
+        // after a force-quit. The token is just a correlation label, not auth.
+        const outgoing = !turn.text.trim() && Array.isArray(turn.message)
+          ? [{ type: "text" as const, text: createAttachmentMarker() }, ...turn.message]
+          : turn.message;
         // The picker's selection rides each send as ephemeral clientContext;
         // the agent's step.started resolver maps it to the gateway model.
         await store.send({
-          message: text,
+          message: outgoing,
           clientContext: { eveModelSelection: getModelSelection() },
         });
       },
@@ -109,9 +124,14 @@ export function ChatScreen() {
       {pendingMessage ? (
         <View className="min-h-11 justify-center bg-muted px-4" accessibilityRole="text">
           <Text className="text-sm text-foreground" numberOfLines={2}>
-            Message may not have sent: {pendingMessage}. Check the conversation before resending.
+            Message may not have sent: {isAttachmentMarker(pendingMessage) ? "attachment" : pendingMessage}. Check the conversation before resending.
           </Text>
         </View>
+      ) : null}
+      {attachmentError?.store === store ? (
+        <Text className="bg-destructive/10 px-4 py-2 text-sm text-destructive" accessibilityRole="alert">
+          {attachmentError.message}
+        </Text>
       ) : null}
       <View style={{ flex: 1 }}>
         <AssistantRuntimeProvider runtime={runtime}>

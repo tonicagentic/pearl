@@ -1,4 +1,8 @@
-import { UserMessageAttachments } from "@/components/assistant-ui/elements/attachment.aui";
+import {
+  ComposerAddAttachment,
+  ComposerAttachments,
+  UserMessageAttachments,
+} from "@/components/assistant-ui/elements/attachment.aui";
 import { ComposerModelPicker } from "@/components/model-picker";
 import {
   groupedIconButtonHitSlop,
@@ -775,6 +779,7 @@ const Composer: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
   );
   // Start with a readable surface until the iOS accessibility setting is known.
   const [reducedTransparency, setReducedTransparency] = useState(true);
+  const [preparingAttachment, setPreparingAttachment] = useState(false);
   useEffect(() => {
     if (!CAN_USE_LIQUID_GLASS) return;
     let mounted = true;
@@ -809,14 +814,21 @@ const Composer: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
             className="border-border/60 dark:border-muted-foreground/15 bg-card absolute inset-0 rounded-3xl border"
           />
         )}
+        <ComposerAttachments />
         <ComposerInput autoFocus={autoFocus} />
-        <ComposerAction />
+        <ComposerAction
+          preparingAttachment={preparingAttachment}
+          onPreparingChange={setPreparingAttachment}
+        />
       </View>
     </ComposerPrimitive.Root>
   );
 };
 
-const ComposerAction: FC = () => {
+const ComposerAction: FC<{
+  preparingAttachment: boolean;
+  onPreparingChange: (preparing: boolean) => void;
+}> = ({ preparingAttachment, onPreparingChange }) => {
   // The stop control only cancels the send while no run it could stop is going.
   const isSending = useAuiState(
     (s) =>
@@ -827,7 +839,11 @@ const ComposerAction: FC = () => {
   return (
     <View className="aui-composer-action-wrapper flex-row items-center justify-between">
       <View className="flex-row items-center gap-1">
-        <ComposerModelPicker />
+        <ComposerAddAttachment
+          preparing={preparingAttachment}
+          onPreparingChange={onPreparingChange}
+        />
+        <ComposerModelPicker disabled={preparingAttachment} />
       </View>
       <View className="flex-row items-center gap-1.5">
         <AuiIf
@@ -837,6 +853,7 @@ const ComposerAction: FC = () => {
           }
         >
           <ComposerPrimitive.Send
+            disabled={preparingAttachment}
             className="aui-composer-send bg-primary active:bg-primary/90 size-11 items-center justify-center rounded-full disabled:opacity-50"
             hitSlop={iconButtonHitSlop}
             accessibilityLabel="Send message"

@@ -8,13 +8,19 @@ import {
   useAui,
   useAuiState,
 } from "@assistant-ui/react-native";
+import * as DocumentPicker from "expo-document-picker";
+import { File } from "expo-file-system";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { PlusIcon, XIcon } from "lucide-react-native";
 import type { FC } from "react";
-import { Image, View } from "react-native";
+import { ActionSheetIOS, Alert, Image, Platform, View } from "react-native";
+import { uploadPdfAttachment } from "@/src/pdf-attachment";
 
 const MAX_IMAGE_EDGE = 2048;
+const MAX_IMAGES = 4;
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_TEXT_BYTES = 16 * 1024;
 
 const encodeJpeg = async (asset: ImagePicker.ImagePickerAsset) => {
   const context = ImageManipulator.manipulate(asset.uri);
@@ -97,43 +103,112 @@ export const ComposerAttachments: FC = () => (
   </AuiIf>
 );
 
-export const ComposerAddAttachment: FC = () => {
+export const ComposerAddAttachment: FC<{
+  preparing: boolean;
+  onPreparingChange: (preparing: boolean) => void;
+}> = ({ preparing, onPreparingChange }) => {
   const aui = useAui();
+  const imageCount = useAuiState((s) => s.composer.attachments.filter((a) => a.type === "image").length);
 
   const pickImages = async () => {
+    if (imageCount >= MAX_IMAGES) throw new Error(`You can attach up to ${MAX_IMAGES} photos.`);
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
-    }).catch(() => null);
-    if (!result || result.canceled) return;
-
+      selectionLimit: MAX_IMAGES - imageCount,
+    });
+    if (result.canceled) return;
     for (const asset of result.assets) {
-      try {
-        const base64 = await encodeJpeg(asset);
-        if (!base64) continue;
-        await aui.composer.addAttachment({
-          name: `${(asset.fileName ?? "image").replace(/\.[^.]+$/, "")}.jpg`,
-          contentType: "image/jpeg",
-          type: "image",
-          content: [
-            { type: "image", image: `data:image/jpeg;base64,${base64}` },
-          ],
-        });
-      } catch {
-        // A failed encode skips the asset; the composer runtime emits composer.attachmentAddError before rejecting.
+      const base64 = await encodeJpeg(asset);
+      if (!base64 || Math.ceil(base64.length * 3 / 4) > MAX_IMAGE_BYTES) {
+        throw new Error("Photo is too large after resizing (2 MB limit).");
       }
+      await aui.composer.addAttachment({
+        name: `${(asset.fileName ?? "image").replace(/\.[^.]+$/, "")}.jpg`,
+        contentType: "image/jpeg",
+        type: "image",
+        content: [{ type: "image", image: `data:image/jpeg;base64,${base64}` }],
+      });
+    }
+  };
+
+  const pickFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["application/pdf", "text/plain", "text/markdown"],
+      copyToCacheDirectory: true,
+    });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    if (!asset) return;
+    if (/\.pdf$/i.test(asset.name) || asset.mimeType === "application/pdf") {
+      const summary = await uploadPdfAttachment({
+        uri: asset.uri,
+        name: asset.name,
+        mimeType: "application/pdf",
+        size: asset.size,
+      });
+      await aui.composer.addAttachment({
+        name: asset.name,
+        contentType: "application/pdf",
+        type: "document",
+        content: [{ type: "text", text: summary }],
+      });
+      return;
+    }
+    if (!/\.(txt|md)$/i.test(asset.name) && !asset.mimeType?.startsWith("text/")) {
+      throw new Error("Choose a PDF, TXT, or Markdown file.");
+    }
+    const file = new File(asset.uri);
+    if ((asset.size ?? file.size) > MAX_TEXT_BYTES) {
+      throw new Error("Text files must be 16 KB or smaller.");
+    }
+    const text = await file.text();
+    if (text.length > MAX_TEXT_BYTES) throw new Error("Text file is too large.");
+    await aui.composer.addAttachment({
+      name: asset.name,
+      contentType: asset.mimeType ?? "text/plain",
+      type: "document",
+      content: [{ type: "text", text: `[Attached text file: ${asset.name}]\n${text}` }],
+    });
+  };
+
+  const runPicker = (picker: () => Promise<void>) => {
+    if (preparing) return;
+    onPreparingChange(true);
+    void picker().catch((cause) => {
+      Alert.alert("Could not attach file", cause instanceof Error ? cause.message : "Try again.");
+    }).finally(() => onPreparingChange(false));
+  };
+  const showOptions = () => {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ["Cancel", "Choose Photo", "Choose File"], cancelButtonIndex: 0 },
+        (choice) => {
+          if (choice === 1) runPicker(pickImages);
+          if (choice === 2) runPicker(pickFile);
+        },
+      );
+    } else {
+      Alert.alert("Add attachment", undefined, [
+        { text: "Choose Photo", onPress: () => runPicker(pickImages) },
+        { text: "Choose File", onPress: () => runPicker(pickFile) },
+        { text: "Cancel", style: "cancel" },
+      ]);
     }
   };
 
   return (
-    <ComposerPrimitive.AddAttachment
-      onPress={pickImages}
-      className="aui-composer-add-attachment active:bg-muted size-7 items-center justify-center rounded-full"
-      hitSlop={iconButtonHitSlop}
-      accessibilityLabel="Add image"
-    >
-      <Icon as={PlusIcon} className="text-muted-foreground size-4" />
-    </ComposerPrimitive.AddAttachment>
+    <View>
+      <ComposerPrimitive.AddAttachment
+        onPress={showOptions}
+        disabled={preparing}
+        className="aui-composer-add-attachment active:bg-muted size-11 items-center justify-center rounded-full"
+        hitSlop={iconButtonHitSlop}
+        accessibilityLabel="Add attachment"
+      >
+        <Icon as={PlusIcon} className="text-muted-foreground size-5" />
+      </ComposerPrimitive.AddAttachment>
+    </View>
   );
 };
 

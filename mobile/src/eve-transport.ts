@@ -12,8 +12,9 @@
 // reducer that ignores message.received drops the user message the moment the
 // server events arrive, leaving the response as a dangling generation.
 
-import { EveAgentStore, defaultMessageReducer, type EveMessageData } from 'eve/client';
+import { EveAgentStore, defaultMessageReducer, type EveMessageData, type EveMessagePart } from 'eve/client';
 import type { ThreadMessageLike } from '@assistant-ui/react-native';
+import { isAttachmentMarker } from './attachment-content';
 
 // Agent endpoint: defaults to the production alias. For local testing against
 // `pnpm dev` in the repo, set EXPO_PUBLIC_AGENT_URL=http://<mac-ip>:3000 in
@@ -52,8 +53,9 @@ export function getStore(): EveAgentStore<SpikeState> {
   return store;
 }
 
-// Text-only projection for the spike. Reasoning, tool calls, approvals and
-// attachments are intentionally dropped — that is the remaining parity work.
+// Project text and authoritative user file metadata from eve. Reasoning, tool
+// calls, and approvals remain separate parity work. File events never contain
+// raw bytes: after reloading, render a name chip unless eve gives a safe URL.
 //
 // The mapping deliberately omits `id`: eve renames the user message when the
 // authoritative server stream replaces the optimistic echo
@@ -63,20 +65,51 @@ export function getStore(): EveAgentStore<SpikeState> {
 // Omitting the id lets the runtime assign its positional fallback ids, which
 // are stable across the handoff, so the swap updates the message in place.
 export function toThreadMessages(state: SpikeState): ThreadMessageLike[] {
-  return state.messages.map((message) => ({
-    role: message.role,
-    content: message.parts
-      .filter((part) => part.type === 'text')
-      .map((part) => ({ type: 'text' as const, text: part.text })),
-    // fromThreadMessageLike rejects status on user messages; only the
-    // streaming assistant message needs the explicit running status.
-    ...(message.role === 'assistant'
-      ? {
-          status:
-            message.metadata?.status === 'streaming'
-              ? ({ type: 'running' } as const)
-              : ({ type: 'complete', reason: 'stop' } as const),
-        }
-      : {}),
-  }));
+  return state.messages.map((message) => {
+    const documentParts = message.role === 'user'
+      ? message.parts.filter((part): part is Extract<EveMessagePart, { type: 'text' }> =>
+          part.type === 'text' &&
+          (part.text.startsWith('[Attached PDF: ') || part.text.startsWith('[Attached text file: ')))
+      : [];
+    const attachments = message.role === 'user'
+      ? message.parts.filter((part) => part.type === 'file').map((part, index) => ({
+          id: `${message.id}:file:${index}`,
+          type: (part.mediaType.startsWith('image/') ? 'image' : 'document') as 'image' | 'document',
+          name: part.filename ?? 'Attachment',
+          contentType: part.mediaType,
+          status: { type: 'complete' as const },
+          content: part.url && part.mediaType.startsWith('image/')
+            ? [{ type: 'image' as const, image: part.url }]
+            : [],
+        })).concat(documentParts.map((part, index) => ({
+          id: `${message.id}:document:${index}`,
+          type: 'document' as const,
+          name: part.text.startsWith('[Attached PDF: ')
+            ? part.text.slice('[Attached PDF: '.length).split(' — ')[0]
+            : part.text.slice('[Attached text file: '.length).split(']')[0],
+          contentType: part.text.startsWith('[Attached PDF: ') ? 'application/pdf' : 'text/plain',
+          status: { type: 'complete' as const },
+          content: [],
+        })))
+      : [];
+    return {
+      role: message.role,
+      content: message.parts
+        .filter((part): part is Extract<EveMessagePart, { type: 'text' }> =>
+          part.type === 'text' && !documentParts.includes(part) &&
+          !isAttachmentMarker(part.text))
+        .map((part) => ({ type: 'text' as const, text: part.text })),
+      ...(attachments.length ? { attachments } : {}),
+      // fromThreadMessageLike rejects status on user messages; only the
+      // streaming assistant message needs the explicit running status.
+      ...(message.role === 'assistant'
+        ? {
+            status:
+              message.metadata?.status === 'streaming'
+                ? ({ type: 'running' } as const)
+                : ({ type: 'complete', reason: 'stop' } as const),
+          }
+        : {}),
+    };
+  });
 }
