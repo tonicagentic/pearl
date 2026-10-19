@@ -41,6 +41,11 @@ import {
 } from "@assistant-ui/react-native";
 import * as Clipboard from "expo-clipboard";
 import {
+  GlassView,
+  isGlassEffectAPIAvailable,
+  isLiquidGlassAvailable,
+} from "expo-glass-effect";
+import {
   ArrowUpIcon,
   AudioLinesIcon,
   CheckIcon,
@@ -169,6 +174,18 @@ type ViewabilityInfo = Parameters<
   NonNullable<FlatListProps<ThreadMessageType>["onViewableItemsChanged"]>
 >[0];
 const SCROLL_RETRY_DELAY = 100;
+const CAN_USE_LIQUID_GLASS =
+  Platform.OS === "ios" &&
+  isGlassEffectAPIAvailable() &&
+  isLiquidGlassAvailable();
+const GLASS_SURFACE_STYLE = {
+  position: "absolute",
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  borderRadius: 24,
+} as const;
 const KeyboardHeightContext = createContext<SharedValue<number> | null>(null);
 
 const ThreadComponentsContext =
@@ -224,9 +241,11 @@ export const Thread: FC<ThreadProps> = ({
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const insets = useSafeAreaInsets();
   const followsKeyboard = Platform.OS === "ios" && !Platform.isPad;
+  const floatsComposer = Platform.OS === "ios";
   // Only bottom-docked iPhone keyboards use the spacer; keep other layouts unchanged.
   const viewportRef = useRef<ComponentRef<typeof View>>(null);
   const [viewportTop, setViewportTop] = useState(0);
+  const [composerOverlayHeight, setComposerOverlayHeight] = useState(insets.bottom + 116);
   const [store] = useState(createViewportStore);
   const listRef = useRef<FlatList<ThreadMessageType>>(null);
   const metricsRef = useRef({
@@ -371,6 +390,13 @@ export const Thread: FC<ThreadProps> = ({
   const measureViewport = () => {
     viewportRef.current?.measureInWindow((_x, y) => setViewportTop(y));
   };
+  // Reserve the actual overlay height at the end of the list, not in its viewport.
+  const measureComposerOverlay = (event: LayoutChangeEvent) => {
+    const height = Math.ceil(event.nativeEvent.layout.height);
+    setComposerOverlayHeight((current) =>
+      current === height ? current : height,
+    );
+  };
 
   const threadViewport = (
     <View
@@ -399,7 +425,16 @@ export const Thread: FC<ThreadProps> = ({
           key={Rail ? "tracked" : "plain"}
           ref={listRef}
           className="aui-message-group flex-1"
-          contentContainerClassName={cn("gap-6 px-4 pt-4 pb-6", Rail && "pl-10")}
+          contentContainerClassName={cn(
+            "gap-6 px-4 pt-4",
+            !floatsComposer && "pb-6",
+            Rail && "pl-10",
+          )}
+          contentContainerStyle={
+            floatsComposer
+              ? { paddingBottom: composerOverlayHeight + 24 }
+              : undefined
+          }
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
@@ -418,16 +453,26 @@ export const Thread: FC<ThreadProps> = ({
           {() => <ThreadMessage />}
         </ThreadPrimitive.MessagesFlatList>
       </AuiIf>
-      <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
-        <View className="px-4 pb-4">
-          <ThreadSuggestions />
-        </View>
-      </AuiIf>
       <View
-        className="aui-thread-viewport-footer px-4"
-        style={{ paddingBottom: insets.bottom + 8 }}
+        pointerEvents={floatsComposer ? "box-none" : undefined}
+        className={floatsComposer ? "absolute inset-x-0 bottom-0" : undefined}
+        onLayout={floatsComposer ? measureComposerOverlay : undefined}
       >
-        <Composer autoFocus={autoFocus} />
+        <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
+          <View
+            pointerEvents={floatsComposer ? "box-none" : undefined}
+            className="px-4 pb-4"
+          >
+            <ThreadSuggestions />
+          </View>
+        </AuiIf>
+        <View
+          pointerEvents={floatsComposer ? "box-none" : undefined}
+          className="aui-thread-viewport-footer px-4"
+          style={{ paddingBottom: insets.bottom + 8 }}
+        >
+          <Composer autoFocus={autoFocus} />
+        </View>
       </View>
       {Rail && (
         <View
@@ -728,10 +773,42 @@ const Composer: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
   const { ComposerInput = DefaultComposerInput } = useContext(
     ThreadComponentsContext,
   );
+  // Start with a readable surface until the iOS accessibility setting is known.
+  const [reducedTransparency, setReducedTransparency] = useState(true);
+  useEffect(() => {
+    if (!CAN_USE_LIQUID_GLASS) return;
+    let mounted = true;
+    const subscription = AccessibilityInfo.addEventListener(
+      "reduceTransparencyChanged",
+      setReducedTransparency,
+    );
+    void AccessibilityInfo.isReduceTransparencyEnabled()
+      .then((enabled) => {
+        if (mounted) setReducedTransparency(enabled);
+      })
+      .catch(() => {}); // Keep the readable fallback if the setting cannot be read.
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+  const showGlass = CAN_USE_LIQUID_GLASS && !reducedTransparency;
 
   return (
     <ComposerPrimitive.Root className="aui-composer-root w-full">
-      <View className="aui-composer-shell border-border/60 dark:border-muted-foreground/15 bg-card gap-2 rounded-3xl border p-2">
+      <View className="aui-composer-shell relative gap-2 rounded-3xl p-2">
+        {showGlass ? (
+          <GlassView
+            pointerEvents="none"
+            glassEffectStyle="regular"
+            style={GLASS_SURFACE_STYLE}
+          />
+        ) : (
+          <View
+            pointerEvents="none"
+            className="border-border/60 dark:border-muted-foreground/15 bg-card absolute inset-0 rounded-3xl border"
+          />
+        )}
         <ComposerInput autoFocus={autoFocus} />
         <ComposerAction />
       </View>
