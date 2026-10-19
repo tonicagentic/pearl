@@ -23,7 +23,8 @@ From the repository root, run `pnpm typecheck` when changing `/api/chats/*` or e
 - Force-quit mid-response and reopen. The session should replay its durable events; an uncertain pending message must be shown, not silently resent.
 - Disconnect network during send, during streaming, during history loading, and during a save. Keep prior content on screen, display a useful error, reconnect, and retry without duplicating messages.
 - Open 100+ conversations and a long transcript. History scrolling, message scrolling, and typing should remain responsive; loading more history should not jump to the top.
-- Open/close the keyboard and model picker; type a multiline message. The caret, send/stop control, and final message should remain visible above the keyboard and home indicator.
+- On an iPhone, focus the composer, dismiss with Done and by dragging the transcript interactively, then repeat with a multiline draft, predictive text, and the emoji keyboard. The composer should follow the keyboard without a second jump or an extra home-indicator gap; the caret and send/stop control stay visible and focus is preserved when appropriate. Keep a transcript scrolled away from the bottom while toggling the keyboard and verify its reading position does not jump.
+- On an iPad, repeat with both docked and floating keyboards; floating keyboards must not lift the whole transcript as if docked. Open and close the model picker while a draft is present.
 - Create an issue with due/review dates, change them, clear them, resolve/reopen an issue, and navigate back using the iOS swipe gesture.
 - Repeat in light/dark mode, large Dynamic Type, VoiceOver, and on both a small iPhone and a larger iPhone.
 

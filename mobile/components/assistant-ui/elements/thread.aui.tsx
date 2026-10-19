@@ -55,6 +55,7 @@ import {
   type ComponentType,
   createContext,
   type FC,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
@@ -77,6 +78,14 @@ import {
   type ViewProps,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { KeyboardController, useKeyboardHandler } from "react-native-keyboard-controller";
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  type SharedValue,
+} from "react-native-reanimated";
 
 const isNewChatView = (s: AssistantState) =>
   s.thread.messages.length === 0 &&
@@ -160,6 +169,7 @@ type ViewabilityInfo = Parameters<
   NonNullable<FlatListProps<ThreadMessageType>["onViewableItemsChanged"]>
 >[0];
 const SCROLL_RETRY_DELAY = 100;
+const KeyboardHeightContext = createContext<SharedValue<number> | null>(null);
 
 const ThreadComponentsContext =
   createContext<ThreadComponents>(EMPTY_COMPONENTS);
@@ -213,6 +223,8 @@ export const Thread: FC<ThreadProps> = ({
   const aui = useAui();
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const insets = useSafeAreaInsets();
+  const followsKeyboard = Platform.OS === "ios" && !Platform.isPad;
+  // Only bottom-docked iPhone keyboards use the spacer; keep other layouts unchanged.
   const viewportRef = useRef<ComponentRef<typeof View>>(null);
   const [viewportTop, setViewportTop] = useState(0);
   const [store] = useState(createViewportStore);
@@ -356,95 +368,149 @@ export const Thread: FC<ThreadProps> = ({
     }
   }, [isRunning]);
 
-  // KeyboardAvoidingView measures its frame against its parent, so a navigation
-  // header above the thread would leave the composer covered by the header's
-  // height; the viewport's window position supplies that offset, minus the
-  // bottom inset the footer already pads.
   const measureViewport = () => {
     viewportRef.current?.measureInWindow((_x, y) => setViewportTop(y));
   };
+
+  const threadViewport = (
+    <View
+      ref={followsKeyboard ? undefined : viewportRef}
+      onLayout={followsKeyboard ? undefined : measureViewport}
+      className="aui-thread-viewport mx-auto w-full max-w-[44rem] flex-1"
+    >
+      <AuiIf condition={isNewChatView}>
+        {followsKeyboard ? (
+          <IosWelcome />
+        ) : (
+          <View className="flex-1 justify-center">
+            <WelcomeSlot />
+          </View>
+        )}
+      </AuiIf>
+      <AuiIf condition={isHistoryLoadingView}>
+        <View className="flex-1">
+          <ThreadHistorySkeleton />
+        </View>
+      </AuiIf>
+      <AuiIf condition={(s) => s.thread.messages.length > 0}>
+        {history?.isLoadingMore && <HistoryEdge />}
+        <ThreadPrimitive.MessagesFlatList
+          // Viewability props cannot change once a FlatList is mounted.
+          key={Rail ? "tracked" : "plain"}
+          ref={listRef}
+          className="aui-message-group flex-1"
+          contentContainerClassName={cn("gap-6 px-4 pt-4 pb-6", Rail && "pl-10")}
+          showsVerticalScrollIndicator={false}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          {...(Rail
+            ? {
+                onContentSizeChange: onListContentSizeChange,
+                onLayout: onListLayout,
+                onScroll: onListScroll,
+                onScrollToIndexFailed,
+                onViewableItemsChanged,
+                viewabilityConfig: MESSAGE_VIEWABILITY,
+              }
+            : {})}
+          {...(history ? { history } : {})}
+        >
+          {() => <ThreadMessage />}
+        </ThreadPrimitive.MessagesFlatList>
+      </AuiIf>
+      <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
+        <View className="px-4 pb-4">
+          <ThreadSuggestions />
+        </View>
+      </AuiIf>
+      <View
+        className="aui-thread-viewport-footer px-4"
+        style={{ paddingBottom: insets.bottom + 8 }}
+      >
+        <Composer autoFocus={autoFocus} />
+      </View>
+      {Rail && (
+        <View
+          pointerEvents="box-none"
+          className="aui-thread-rail absolute inset-0"
+        >
+          <Rail />
+        </View>
+      )}
+    </View>
+  );
 
   return (
     <ThreadComponentsContext.Provider value={components}>
       <ThreadViewportContext.Provider value={viewport}>
         <ThreadPrimitive.Root className="aui-root aui-thread-root bg-background flex-1">
-          <KeyboardAvoidingView
-            className="flex-1"
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-            keyboardVerticalOffset={viewportTop - insets.bottom}
-          >
-            <View
-              ref={viewportRef}
-              onLayout={measureViewport}
-              className="aui-thread-viewport mx-auto w-full max-w-[44rem] flex-1"
+          {followsKeyboard ? (
+            <IosKeyboardLayout bottomInset={insets.bottom}>
+              {threadViewport}
+            </IosKeyboardLayout>
+          ) : (
+            <KeyboardAvoidingView
+              className="flex-1"
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              keyboardVerticalOffset={viewportTop - insets.bottom}
             >
-              <AuiIf condition={isNewChatView}>
-                <View className="flex-1 justify-center">
-                  <WelcomeSlot />
-                </View>
-              </AuiIf>
-              <AuiIf condition={isHistoryLoadingView}>
-                <View className="flex-1">
-                  <ThreadHistorySkeleton />
-                </View>
-              </AuiIf>
-              <AuiIf condition={(s) => s.thread.messages.length > 0}>
-                {history?.isLoadingMore && <HistoryEdge />}
-                <ThreadPrimitive.MessagesFlatList
-                  // Viewability props cannot change once a FlatList is mounted.
-                  key={Rail ? "tracked" : "plain"}
-                  ref={listRef}
-                  className="aui-message-group flex-1"
-                  contentContainerClassName={cn(
-                    "gap-6 px-4 pt-4 pb-6",
-                    Rail && "pl-10",
-                  )}
-                  showsVerticalScrollIndicator={false}
-                  keyboardDismissMode="interactive"
-                  keyboardShouldPersistTaps="handled"
-                  {...(Rail
-                    ? {
-                        onContentSizeChange: onListContentSizeChange,
-                        onLayout: onListLayout,
-                        onScroll: onListScroll,
-                        onScrollToIndexFailed,
-                        onViewableItemsChanged,
-                        viewabilityConfig: MESSAGE_VIEWABILITY,
-                      }
-                    : {})}
-                  {...(history
-                    ? {
-                        history,
-                      }
-                    : {})}
-                >
-                  {() => <ThreadMessage />}
-                </ThreadPrimitive.MessagesFlatList>
-              </AuiIf>
-              <View
-                className="aui-thread-viewport-footer gap-4 px-4"
-                style={{ paddingBottom: insets.bottom + 8 }}
-              >
-                <Composer autoFocus={autoFocus} />
-                <AuiIf
-                  condition={(s) => isNewChatView(s) && s.composer.isEmpty}
-                >
-                  <ThreadSuggestions />
-                </AuiIf>
-              </View>
-              {Rail && (
-                <View
-                  pointerEvents="box-none"
-                  className="aui-thread-rail absolute inset-0"
-                >
-                  <Rail />
-                </View>
-              )}
-            </View>
-          </KeyboardAvoidingView>
+              {threadViewport}
+            </KeyboardAvoidingView>
+          )}
         </ThreadPrimitive.Root>
       </ThreadViewportContext.Provider>
     </ThreadComponentsContext.Provider>
+  );
+};
+
+/** One UI-thread keyboard height drives the iOS composer and transcript together. */
+const IosKeyboardLayout: FC<{ bottomInset: number; children: ReactNode }> = ({
+  bottomInset,
+  children,
+}) => {
+  // A chat can mount while the keyboard is already open (e.g. after sign-in).
+  const keyboardHeight = useSharedValue(
+    KeyboardController.isVisible() ? KeyboardController.state().height : 0,
+  );
+  useKeyboardHandler({
+    onMove: (event) => {
+      "worklet";
+      keyboardHeight.value = Math.max(0, event.height);
+    },
+    onInteractive: (event) => {
+      "worklet";
+      keyboardHeight.value = Math.max(0, event.height);
+    },
+    onEnd: (event) => {
+      "worklet";
+      keyboardHeight.value = Math.max(0, event.height);
+    },
+  }, []);
+  const spacerStyle = useAnimatedStyle(() => ({
+    // The footer already includes the home-indicator inset while closed.
+    height: Math.max(0, keyboardHeight.value - bottomInset),
+  }), [bottomInset]);
+
+  return (
+    <KeyboardHeightContext.Provider value={keyboardHeight}>
+      <View className="flex-1">
+        {children}
+        <Animated.View pointerEvents="none" style={spacerStyle} />
+      </View>
+    </KeyboardHeightContext.Provider>
+  );
+};
+
+const IosWelcome: FC = () => {
+  const keyboardHeight = useContext(KeyboardHeightContext)!;
+  const fadeStyle = useAnimatedStyle(() => ({
+    // Fade before the shrinking viewport moves the welcome headline visibly.
+    opacity: interpolate(keyboardHeight.value, [0, 100], [1, 0], Extrapolation.CLAMP),
+  }));
+  return (
+    <Animated.View style={[{ flex: 1, justifyContent: "center" }, fadeStyle]}>
+      <WelcomeSlot />
+    </Animated.View>
   );
 };
 
