@@ -23,8 +23,7 @@ export const AGENT_URL =
 
 // Session credential captured at sign-in (mirrored to SecureStore by
 // session-store). A better-auth bearer token from the sign-in response body
-// (RN fetch cannot read Set-Cookie). Empty on the local-dev path: eve's
-// localDev() authenticator accepts cookie-less requests on a dev server.
+// (RN fetch cannot read Set-Cookie). Cleared when the user signs out.
 let authCookie: string | null = null;
 
 export function setAuthCookie(cookie: string | null) {

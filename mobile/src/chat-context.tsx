@@ -14,18 +14,22 @@ import {
   defaultMessageReducer,
   type ClientSessionState,
   type EveMessageData,
+  type MessageStreamEvent,
 } from "eve/client";
 
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
 import {
+  appendChatEvents,
   createChat,
   getChat,
   listChats,
+  markPendingChatMessage,
   saveChatSession,
   saveChatSnapshot,
   type ActiveChat,
   type ChatListItem,
 } from "./chats-client";
+import { useAuth } from "./auth";
 
 type ChatsContextValue = {
   /** The active eve store: rebuilt whenever a different chat is selected. */
@@ -34,41 +38,59 @@ type ChatsContextValue = {
   readonly activeTitle: string;
   readonly chats: readonly ChatListItem[];
   readonly chatsLoading: boolean;
+  readonly chatsError: string | null;
   readonly hasMoreChats: boolean;
   readonly loadMoreChats: () => Promise<void>;
   readonly reloadChats: () => Promise<void>;
   /** Open a stored chat (replays its events, attaches its session). */
-  readonly selectChat: (chatId: string) => Promise<void>;
+  readonly selectChat: (chatId: string) => Promise<boolean>;
+  readonly selectionError: string | null;
+  readonly persistenceError: string | null;
+  readonly pendingMessage: string | null;
+  readonly retrySync: () => Promise<void>;
   /** Drop the active chat and start fresh (the row is created on first send). */
   readonly newChat: () => void;
 };
 
 const ChatsContext = createContext<ChatsContextValue | null>(null);
 
-/**
- * Multi-chat support for mobile: the drawer lists the durable chats (the same
- * rows the web sidebar reads) and selecting one builds an EveAgentStore
- * attached to that chat's session, replaying its events through the reducer.
- * Persistence mirrors the web's chat page: the session cursor is saved the
- * moment eve returns it, and the full event snapshot is saved on finish.
- */
+type ChatBinding = {
+  id: string | null;
+  title: string;
+  pendingMessage: string | null;
+  eventIndex: number;
+  queue: Promise<void>;
+  batch: { event: MessageStreamEvent; eventIndex: number }[];
+  timer: ReturnType<typeof setTimeout> | null;
+  syncFailed: boolean;
+};
+
+/** A store keeps its own chat identity even while another chat is selected. */
 export function ChatsProvider({ children }: { readonly children: ReactNode }) {
-  // The id is tracked in a ref because the store's callbacks (prepareSend,
-  // onSessionChange, onFinish) are long-lived and must not go stale; the id
-  // is only assigned on the first send of a fresh chat.
+  const { signedIn } = useAuth();
   const activeChatIdRef = useRef<string | null>(null);
+  const selectionGeneration = useRef(0);
+  const [bindings] = useState(() => new WeakMap<EveAgentStore<EveMessageData>, ChatBinding>());
+  // Retain a store until its final checkpoint finishes; reselecting it must not
+  // create a second writer for the same chat.
+  const [retainedStores] = useState(() => new Map<string, EveAgentStore<EveMessageData>>());
+  const activeStoreRef = useRef<EveAgentStore<EveMessageData> | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [activeTitle, setActiveTitle] = useState("New chat");
   const [chats, setChats] = useState<readonly ChatListItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [chatsLoading, setChatsLoading] = useState(false);
+  const [chatsError, setChatsError] = useState<string | null>(null);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [persistenceError, setPersistenceError] = useState<string | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   const buildStore = useCallback((chat: ActiveChat | null) => {
-    return new EveAgentStore({
+    const store = new EveAgentStore<EveMessageData>({
       host: AGENT_URL,
       headers: () => {
-        const cookie = getAuthCookie();
-        return cookie ? { cookie } : ({} as Record<string, string>);
+        const credential = getAuthCookie();
+        return credential ? { authorization: `Bearer ${credential}` } : ({} as Record<string, string>);
       },
       reducer: defaultMessageReducer(),
       ...(chat
@@ -80,7 +102,19 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           }
         : {}),
     });
-  }, []);
+    bindings.set(store, {
+      id: chat?.id ?? null,
+      title: chat?.title ?? "New chat",
+      pendingMessage: chat?.pendingUserMessage ?? null,
+      eventIndex: store.snapshot.events.length,
+      queue: Promise.resolve(),
+      batch: [],
+      timer: null,
+      syncFailed: false,
+    });
+    if (chat) retainedStores.set(chat.id, store);
+    return store;
+  }, [bindings, retainedStores]);
 
   const reloadChats = useCallback(async () => {
     setChatsLoading(true);
@@ -89,9 +123,10 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       const page = await listChats(null);
       setChats(page.chats);
       setCursor(page.nextCursor);
+      setChatsError(null);
     } catch {
-      // The drawer tolerates a failed list (sign-in required, offline) —
-      // keep whatever was last shown.
+      // Preserve the last successful list but expose the offline state.
+      setChatsError("Could not load history. Check your connection and retry.");
     } finally {
       setChatsLoading(false);
     }
@@ -108,8 +143,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       const page = await listChats(cursor);
       setChats((current) => [...current, ...page.chats]);
       setCursor(page.nextCursor);
+      setChatsError(null);
     } catch {
-      // Ignore: paging is best-effort.
+      setChatsError("Could not load more chats. Tap Load more to retry.");
     } finally {
       setChatsLoading(false);
     }
@@ -118,81 +154,219 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   // One store per active chat; rebuilt only when the selection changes.
   const [store, setStore] = useState(() => buildStore(null));
 
-  // Wire persistence callbacks to the ACTIVE chat id (via ref — the id is
-  // assigned mid-turn by prepareSend).
-  useEffect(() => {
-    store.setCallbacks({
-      onSessionChange: (session) => {
-        const chatId = activeChatIdRef.current;
+  const pruneIdleStore = useCallback((prior: EveAgentStore<EveMessageData> | null) => {
+    if (!prior) return;
+    const binding = bindings.get(prior);
+    if (!binding?.id || binding.pendingMessage || binding.syncFailed) return;
+    // Do not evict until all queued events and snapshots have settled.
+    void binding.queue.then(() => {
+      if (activeStoreRef.current !== prior && prior.snapshot.status === "ready" &&
+          !binding.pendingMessage && !binding.syncFailed && binding.id &&
+          retainedStores.get(binding.id) === prior) {
+        retainedStores.delete(binding.id);
+      }
+    });
+  }, [bindings, retainedStores]);
 
-        if (chatId && session) {
-          void saveChatSession(chatId, session).catch(() => {});
+  // Each callback closes over its own binding. A stream finishing after a chat
+  // switch must NEVER write its events into the newly selected chat.
+  useEffect(() => {
+    const binding = bindings.get(store)!;
+    activeStoreRef.current = store;
+    const reportFailure = () => {
+      binding.syncFailed = true;
+      if (activeStoreRef.current === store) setPersistenceError("Save failed");
+    };
+    const enqueue = (work: () => Promise<void>) => {
+      binding.queue = binding.queue.then(work).catch(reportFailure);
+    };
+    const flush = () => {
+      if (binding.timer) clearTimeout(binding.timer);
+      binding.timer = null;
+      const batch = binding.batch.splice(0);
+      if (binding.id && batch.length > 0) {
+        const id = binding.id;
+        enqueue(() => appendChatEvents(id, batch));
+      }
+    };
+
+    store.setCallbacks({
+      onEvent: (event) => {
+        if (!binding.id) return;
+        binding.batch.push({ event, eventIndex: binding.eventIndex++ });
+        if (event.type === "message.received") {
+          binding.pendingMessage = null;
+          if (activeStoreRef.current === store) setPendingMessage(null);
+        }
+        if (binding.batch.length >= 20) flush();
+        else if (!binding.timer) binding.timer = setTimeout(flush, 250);
+      },
+      onSessionChange: (session) => {
+        flush();
+        if (binding.id && session) {
+          const id = binding.id;
+          enqueue(() => binding.syncFailed ? Promise.resolve() : saveChatSession(id, session));
         }
       },
       onFinish: (snapshot) => {
-        const chatId = activeChatIdRef.current;
-
-        if (!chatId) {
-          return;
+        flush();
+        if (binding.pendingMessage && activeStoreRef.current === store) {
+          setPendingMessage(binding.pendingMessage);
         }
-
-        void saveChatSnapshot(chatId, snapshot.events, snapshot.session)
-          .then(reloadChats)
-          .catch(() => {});
+        if (!binding.id || binding.pendingMessage) return;
+        const id = binding.id;
+        enqueue(async () => {
+          await saveChatSnapshot(id, snapshot.events, snapshot.session);
+          binding.syncFailed = false;
+          if (activeStoreRef.current === store) setPersistenceError(null);
+          await reloadChats();
+          // Check after this queue item settles, not while its promise is pending.
+          if (activeStoreRef.current !== store && !binding.pendingMessage && retainedStores.get(id) === store) {
+            retainedStores.delete(id);
+          }
+        });
+      },
+      onError: () => {
+        if (activeStoreRef.current === store && binding.pendingMessage) {
+          setPendingMessage(binding.pendingMessage);
+        }
       },
       prepareSend: async (input) => {
-        if (!activeChatIdRef.current) {
-          const message =
-            typeof input.message === "string" ? input.message : "";
+        const message = typeof input.message === "string" ? input.message : "";
+        if (!binding.id) {
           const created = await createChat(message || undefined);
-          activeChatIdRef.current = created.id;
-          setActiveChatId(created.id);
-          setActiveTitle(created.title);
+          binding.id = created.id;
+          if (activeStoreRef.current === store) {
+            activeChatIdRef.current = created.id;
+            setActiveChatId(created.id);
+            setActiveTitle(created.title);
+          }
           void reloadChats();
+        } else if (message) {
+          // A previous turn's snapshot clears pendingUserMessage. Wait for that
+          // checkpoint before marking the new turn, or it could erase our mark.
+          binding.pendingMessage = message;
+          await binding.queue;
+          await markPendingChatMessage(binding.id, message);
         }
-
+        binding.pendingMessage = message || null;
+        if (binding.id) retainedStores.set(binding.id, store);
         return input;
       },
     });
-  }, [store, reloadChats]);
+    // An attached session can have an unfinished turn after the app was killed.
+    // Replaying its durable stream reconciles accepted messages before the user
+    // decides whether an unsent message needs resending.
+    if (store.snapshot.session) void store.resume();
+    return () => {
+      flush();
+    };
+  }, [store, reloadChats, bindings, retainedStores]);
 
   const selectChat = useCallback(
-    async (chatId: string) => {
-      if (chatId === activeChatIdRef.current) {
-        return;
+    async (chatId: string): Promise<boolean> => {
+      const generation = ++selectionGeneration.current;
+      if (chatId === activeChatIdRef.current) return true;
+      setSelectionError(null);
+      const retained = retainedStores.get(chatId);
+      if (retained) {
+        const prior = activeStoreRef.current;
+        const binding = bindings.get(retained)!;
+        activeStoreRef.current = retained;
+        activeChatIdRef.current = chatId;
+        setActiveChatId(chatId);
+        setActiveTitle(binding.title);
+        setPendingMessage(binding.pendingMessage);
+        setPersistenceError(binding.syncFailed ? "Save failed" : null);
+        setStore(retained);
+        pruneIdleStore(prior);
+        return true;
       }
-
       try {
         const chat = await getChat(chatId);
-
+        if (generation !== selectionGeneration.current) return false;
         if (!chat) {
-          return;
+          setSelectionError("Conversation not found. Reload history and try again.");
+          return false;
         }
-
+        const nextStore = buildStore(chat);
+        const stillPending = chat.pendingUserMessage && !nextStore.snapshot.data.messages.some(
+          (message) => message.role === "user" && message.parts.some(
+            (part) => part.type === "text" && part.text === chat.pendingUserMessage,
+          ),
+        );
+        bindings.get(nextStore)!.pendingMessage = stillPending ? chat.pendingUserMessage : null;
+        const prior = activeStoreRef.current;
+        activeStoreRef.current = nextStore;
         activeChatIdRef.current = chat.id;
         setActiveChatId(chat.id);
         setActiveTitle(chat.title);
-        setStore(buildStore(chat));
+        setPendingMessage(stillPending ? chat.pendingUserMessage : null);
+        setPersistenceError(null);
+        setStore(nextStore);
+        pruneIdleStore(prior);
+        return true;
       } catch {
-        // Leave the current chat open; the drawer shows a stale list.
+        if (generation === selectionGeneration.current) {
+          setSelectionError("Could not open conversation. Check your connection and try again.");
+        }
+        return false;
       }
     },
-    [activeChatIdRef, buildStore],
+    [buildStore, bindings, retainedStores, pruneIdleStore],
   );
 
   const newChat = useCallback(() => {
+    ++selectionGeneration.current;
     activeChatIdRef.current = null;
     setActiveChatId(null);
     setActiveTitle("New chat");
-    setStore(buildStore(null));
-  }, [buildStore]);
+    setPendingMessage(null);
+    setPersistenceError(null);
+    setSelectionError(null);
+    const nextStore = buildStore(null);
+    const prior = activeStoreRef.current;
+    activeStoreRef.current = nextStore;
+    setStore(nextStore);
+    pruneIdleStore(prior);
+  }, [buildStore, pruneIdleStore]);
 
-  // Load the chat list once signed in (the drawer + chat screen read it).
-  useEffect(() => {
-    if (getAuthCookie()) {
-      void reloadChats();
+  const retrySync = useCallback(async () => {
+    const binding = bindings.get(store);
+    if (!binding?.id) return;
+    const id = binding.id;
+    // Retry belongs to the same queue as onFinish and prepareSend. Otherwise a
+    // follow-up could mark itself pending while an older retry clears the mark.
+    const attempt = binding.queue.then(async () => {
+      const snapshot = store.snapshot;
+      if (binding.pendingMessage) {
+        await appendChatEvents(id, snapshot.events.map((event, eventIndex) => ({ event, eventIndex })));
+        if (snapshot.session) await saveChatSession(id, snapshot.session);
+      } else {
+        await saveChatSnapshot(id, snapshot.events, snapshot.session);
+      }
+    });
+    binding.queue = attempt.catch(() => {
+      binding.syncFailed = true;
+      if (activeStoreRef.current === store) setPersistenceError("Save failed");
+    });
+    try {
+      await attempt;
+      binding.syncFailed = false;
+      if (activeStoreRef.current === store) setPersistenceError(null);
+      await reloadChats();
+    } catch {
+      // The queued handler keeps the failure visible and lets later retries run.
     }
-  }, [reloadChats]);
+  }, [store, reloadChats, bindings]);
+
+  // The auth provider restores the bearer asynchronously; load when signed in.
+  useEffect(() => {
+    if (!signedIn) return;
+    let cancelled = false;
+    Promise.resolve().then(() => { if (!cancelled) void reloadChats(); });
+    return () => { cancelled = true; };
+  }, [signedIn, reloadChats]);
 
   const value = useMemo(
     () => ({
@@ -201,10 +375,15 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       activeTitle,
       chats,
       chatsLoading,
+      chatsError,
       hasMoreChats: cursor !== null,
       loadMoreChats,
       reloadChats,
       selectChat,
+      selectionError,
+      persistenceError,
+      pendingMessage,
+      retrySync,
       newChat,
     }),
     [
@@ -213,10 +392,15 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       activeTitle,
       chats,
       chatsLoading,
+      chatsError,
       cursor,
       loadMoreChats,
       reloadChats,
       selectChat,
+      selectionError,
+      persistenceError,
+      pendingMessage,
+      retrySync,
       newChat,
     ],
   );

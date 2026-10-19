@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { Modal } from "react-native";
 import { CheckIcon, ChevronDownIcon } from "lucide-react-native";
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import {
   COMPOSER_MODELS,
@@ -23,6 +23,7 @@ import {
  * above the composer; tapping the backdrop or choosing a model closes it.
  */
 export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const selectedKey = useSyncExternalStore(
     subscribeModelSelection,
     getModelSelection,
@@ -37,9 +38,11 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
     <View>
       <Pressable
         accessibilityLabel={`Model: ${selected.label}`}
-        className="flex-row items-center gap-1 rounded-full px-2 py-1 active:opacity-70"
+        accessibilityRole="button"
+        accessibilityState={{ expanded: menuOpen, disabled }}
+        className="min-h-11 flex-row items-center gap-1 rounded-full px-3 active:opacity-70"
         disabled={disabled}
-        onPress={() => setModelMenuOpen(true)}
+        onPress={() => setMenuOpen(true)}
       >
         <Text className="text-xs font-medium text-muted-foreground">
           {selected.label}
@@ -48,63 +51,38 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
       </Pressable>
 
       <ModelMenu
+        open={menuOpen}
         selectedKey={selected.key}
+        onClose={() => setMenuOpen(false)}
         onSelect={(key) => {
           setModelSelection(key);
-          setModelMenuOpen(false);
+          setMenuOpen(false);
         }}
       />
     </View>
   );
 }
 
-// Module-level menu visibility keeps the pill stateless; the Modal is only
-// mounted while open.
-let modelMenuOpen = false;
-const modelMenuListeners = new Set<() => void>();
-
-function setModelMenuOpen(open: boolean) {
-  modelMenuOpen = open;
-  for (const listener of modelMenuListeners) listener();
-}
-
-function subscribeModelMenu(listener: () => void): () => void {
-  modelMenuListeners.add(listener);
-  return () => {
-    modelMenuListeners.delete(listener);
-  };
-}
-
-function getModelMenuOpen(): boolean {
-  return modelMenuOpen;
-}
-
 function ModelMenu({
+  open,
   selectedKey,
+  onClose,
   onSelect,
 }: {
+  readonly open: boolean;
   readonly selectedKey: string;
+  readonly onClose: () => void;
   readonly onSelect: (key: string) => void;
 }) {
-  const open = useSyncExternalStore(
-    subscribeModelMenu,
-    getModelMenuOpen,
-    getModelMenuOpen,
-  );
 
   if (!open) {
     return null;
   }
 
   return (
-    <Modal transparent animationType="fade" onRequestClose={() => setModelMenuOpen(false)}>
-      {/* Full-screen backdrop: tap anywhere outside the menu to dismiss. */}
-      <Pressable
-        accessibilityLabel="Close model menu"
-        className="flex-1"
-        onPress={() => setModelMenuOpen(false)}
-      >
-        <View className="flex-1 justify-end px-4 pb-4">
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <View className="flex-1 justify-end px-4 pb-4">
+        <Pressable accessibilityRole="button" accessibilityLabel="Close model menu" className="absolute inset-0" onPress={onClose} />
           <View className="rounded-xl border border-border/60 bg-popover p-1 shadow-lg">
             {COMPOSER_MODELS.map((model: ComposerModel) => {
               const isSelected = model.key === selectedKey;
@@ -119,8 +97,7 @@ function ModelMenu({
               );
             })}
           </View>
-        </View>
-      </Pressable>
+      </View>
     </Modal>
   );
 }
@@ -138,7 +115,7 @@ function ModelOption({
     <Pressable
       accessibilityRole="menuitem"
       accessibilityState={{ selected: isSelected }}
-      className={`flex-row items-center justify-between gap-2 rounded-lg px-2.5 py-2.5 ${isSelected ? "bg-accent/60" : ""}`}
+      className={`min-h-12 flex-row items-center justify-between gap-2 rounded-lg px-3 ${isSelected ? "bg-accent/60" : ""}`}
       onPress={onPress}
     >
       <Text className="text-sm font-medium text-foreground">{model.label}</Text>

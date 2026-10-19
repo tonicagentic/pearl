@@ -11,16 +11,12 @@ import { useEffect, useState } from "react";
 export function useElapsedLabel(active: boolean) {
   const [label, setLabel] = useState<string | undefined>(undefined);
   useEffect(() => {
-    if (!active) {
-      setLabel(undefined);
-      return;
-    }
+    if (!active) return;
     const start = Date.now();
-    setLabel("0s");
     const id = setInterval(() => {
       setLabel(`${Math.round((Date.now() - start) / 1000)}s`);
     }, 1000);
     return () => clearInterval(id);
   }, [active]);
-  return label;
+  return active ? label ?? "0s" : undefined;
 }

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useNavigation } from "expo-router";
-import { MenuIcon } from "lucide-react-native";
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
@@ -21,7 +20,6 @@ import {
  * edited on the web.
  */
 export function IssuesScreen() {
-  const navigation = useNavigation<{ openDrawer: () => void; closeDrawer: () => void }>();
   const [payload, setPayload] = useState<IssuesPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -32,9 +30,6 @@ export function IssuesScreen() {
     | string
     | undefined;
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
-    | string
-    | undefined;
-  const primaryForeground = useCSSVariable("--color-primary-foreground") as
     | string
     | undefined;
 
@@ -72,7 +67,8 @@ export function IssuesScreen() {
     };
   }, []);
 
-  const setResolved = useCallback(    async (issue: IssueDto, resolved: boolean) => {
+  const setResolved = useCallback(
+    async (issue: IssueDto, resolved: boolean) => {
       setBusyId(issue.id);
 
       try {
@@ -106,22 +102,11 @@ export function IssuesScreen() {
   const resolved = (payload?.issues ?? []).filter((issue) => issue.status === "resolved");
 
   return (
-    // Top/left/right insets: the header must clear the status bar and the
-    // dynamic island; the bottom edge is left to the content padding.
+    // The native stack header handles the top inset; scroll content owns its bottom padding.
     <SafeAreaView
       style={{ flex: 1, backgroundColor }}
-      edges={["top", "left", "right"]}
+      edges={["left", "right"]}
     >
-      <View className="flex-row items-center gap-2 px-4 pb-2">
-        <Pressable
-          onPress={() => navigation.openDrawer()}
-          accessibilityLabel="Open menu"
-          className="p-1"
-        >
-          <MenuIcon className="size-5 text-muted-foreground" />
-        </Pressable>
-        <Text className="text-base font-semibold text-foreground">Issues</Text>
-      </View>
 
       <ScrollView
         className="flex-1"
@@ -192,7 +177,8 @@ export function IssuesScreen() {
             />
           ) : (
             <Pressable
-              className="items-center rounded-lg border bg-card px-4 py-2.5"
+              accessibilityRole="button"
+              className="min-h-12 items-center justify-center rounded-lg border bg-card px-4"
               onPress={() => setShowForm(true)}
             >
               <Text className="text-sm font-medium text-foreground">+ New issue</Text>
@@ -271,7 +257,9 @@ function IssueRow({
         </Text>
       </View>
       <Pressable
-        className={`rounded-md px-2.5 py-1 ${resolved ? "border border-border" : "bg-primary"}`}
+        accessibilityRole="button"
+        accessibilityLabel={`${resolved ? "Reopen" : "Resolve"} ${issue.title}`}
+        className={`min-h-11 min-w-11 items-center justify-center rounded-md px-3 ${resolved ? "border border-border" : "bg-primary"}`}
         disabled={busyId === issue.id}
         onPress={() => void onResolve(issue, !resolved)}
       >
@@ -283,6 +271,56 @@ function IssueRow({
           </Text>
         )}
       </Pressable>
+    </View>
+  );
+}
+
+// Use local calendar components rather than UTC serialization (which shifts days).
+function formatDay(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function DateField({ label, value, onChange }: {
+  readonly label: string;
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const backgroundColor = useCSSVariable("--color-background") as string | undefined;
+  const selected = value ? new Date(`${value}T12:00:00`) : new Date();
+  const picker = open ? (
+    <DateTimePicker
+      value={selected}
+      mode="date"
+      display={Platform.OS === "ios" ? "inline" : "default"}
+      presentation={Platform.OS === "ios" ? "inline" : "dialog"}
+      onValueChange={(_event, date) => {
+        onChange(formatDay(date));
+        if (Platform.OS !== "ios") setOpen(false);
+      }}
+      onDismiss={() => setOpen(false)}
+    />
+  ) : null;
+
+  return (
+    <View className="flex-1">
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label} date, ${value || "none"}`} className="min-h-12 justify-center rounded-md border px-3" onPress={() => setOpen(true)}>
+        <Text className="text-sm text-foreground">{label}: {value || "Choose date"}</Text>
+      </Pressable>
+      {Platform.OS === "ios" ? (
+        <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+          <View className="flex-1 justify-end bg-black/40">
+            <View style={{ backgroundColor }} className="rounded-t-2xl px-4 pb-8 pt-4">
+              <Text className="text-lg font-semibold text-foreground">{label} date</Text>
+              {picker}
+              <View className="flex-row justify-between">
+                <Pressable accessibilityRole="button" className="min-h-11 justify-center px-4" onPress={() => { onChange(""); setOpen(false); }}><Text className="text-foreground">Clear</Text></Pressable>
+                <Pressable accessibilityRole="button" className="min-h-11 justify-center px-4" onPress={() => setOpen(false)}><Text className="text-foreground">Done</Text></Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : picker}
     </View>
   );
 }
@@ -334,30 +372,17 @@ function NewIssueForm({
         multiline
       />
       <View className="flex-row gap-3">
-        <TextInput
-          className="flex-1 rounded-md border px-3 py-2 text-sm text-foreground"
-          placeholder="Due (YYYY-MM-DD)"
-          placeholderTextColor={placeholderColor ?? undefined}
-          value={dueDate}
-          onChangeText={setDueDate}
-          autoCapitalize="none"
-        />
-        <TextInput
-          className="flex-1 rounded-md border px-3 py-2 text-sm text-foreground"
-          placeholder="Review (YYYY-MM-DD)"
-          placeholderTextColor={placeholderColor ?? undefined}
-          value={reviewDate}
-          onChangeText={setReviewDate}
-          autoCapitalize="none"
-        />
+        <DateField label="Due" value={dueDate} onChange={setDueDate} />
+        <DateField label="Review" value={reviewDate} onChange={setReviewDate} />
       </View>
       {error ? <Text className="text-sm text-destructive">{error}</Text> : null}
       <View className="flex-row justify-end gap-2">
-        <Pressable className="rounded-md px-3 py-1.5" onPress={() => onDone(false)}>
+        <Pressable accessibilityRole="button" className="min-h-11 justify-center rounded-md px-3" onPress={() => onDone(false)}>
           <Text className="text-sm text-muted-foreground">Cancel</Text>
         </Pressable>
         <Pressable
-          className="rounded-md bg-primary px-3 py-1.5"
+          accessibilityRole="button"
+          className="min-h-11 justify-center rounded-md bg-primary px-3"
           disabled={pending}
           onPress={() => {
             if (!title.trim()) {

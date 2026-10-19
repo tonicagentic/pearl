@@ -1,0 +1,30 @@
+# iOS release gate
+
+Run this on a physical iPhone using a release/TestFlight build, not only Expo Go or a simulator. Do not ship if any item fails. Record device, iOS version, build number, network conditions, and the result of each run.
+
+## Automated checks
+
+From `mobile/`:
+
+```sh
+npx expo lint
+npx tsc --noEmit
+npx expo-doctor
+npx expo install --check
+```
+
+From the repository root, run `pnpm typecheck` when changing `/api/chats/*` or eve session persistence. A local iOS simulator build is `npx expo run:ios` from `mobile/`; `app.json` intentionally builds React Native from source because the prebuilt RN iOS framework failed to link with Gesture Handler in this checkout. Expect a slower first build.
+
+## Device scenarios
+
+- Cold launch, restore an existing session, sign out, sign in as another account. No previous account's chats or messages should appear; sign-in must be required in development and production.
+- New chat, send text, stop mid-stream, then send a follow-up. Each action must produce exactly one user message and a coherent assistant response or a visible failure.
+- Switch chats while a response is streaming, then switch back. Neither conversation should contain the other's events or session cursor.
+- Force-quit mid-response and reopen. The session should replay its durable events; an uncertain pending message must be shown, not silently resent.
+- Disconnect network during send, during streaming, during history loading, and during a save. Keep prior content on screen, display a useful error, reconnect, and retry without duplicating messages.
+- Open 100+ conversations and a long transcript. History scrolling, message scrolling, and typing should remain responsive; loading more history should not jump to the top.
+- Open/close the keyboard and model picker; type a multiline message. The caret, send/stop control, and final message should remain visible above the keyboard and home indicator.
+- Create an issue with due/review dates, change them, clear them, resolve/reopen an issue, and navigate back using the iOS swipe gesture.
+- Repeat in light/dark mode, large Dynamic Type, VoiceOver, and on both a small iPhone and a larger iPhone.
+
+Run release build smoke tests again after changing Expo SDK/native dependencies. A passing typecheck or Expo Doctor result is not a substitute for a successful native build and this device checklist.

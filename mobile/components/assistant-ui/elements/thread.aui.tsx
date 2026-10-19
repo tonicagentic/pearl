@@ -1,8 +1,4 @@
-import {
-  ComposerAddAttachment,
-  ComposerAttachments,
-  UserMessageAttachments,
-} from "@/components/assistant-ui/elements/attachment.aui";
+import { UserMessageAttachments } from "@/components/assistant-ui/elements/attachment.aui";
 import { ComposerModelPicker } from "@/components/model-picker";
 import {
   groupedIconButtonHitSlop,
@@ -15,13 +11,6 @@ import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
 import { SessionTimeline, TIMELINE_TOOLS } from "@/components/assistant-ui/elements/session-timeline";
 import { TaskGroup, DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
 import { ToolGroup } from "@/components/assistant-ui/elements/tool-group";
-import {
-  Reasoning,
-  ReasoningContent,
-  ReasoningRoot,
-  ReasoningText,
-  ReasoningTrigger,
-} from "@/components/assistant-ui/elements/reasoning.aui";
 import {
   ShimmerLabel,
   useAnnounce,
@@ -58,10 +47,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
-  PencilIcon,
   MicIcon,
   PhoneIcon,
-  RefreshCwIcon,
 } from "lucide-react-native";
 import {
   type ComponentRef,
@@ -89,7 +76,6 @@ import {
   View,
   type ViewProps,
 } from "react-native";
-import { ThreadFollowupSuggestions } from "./follow-up-suggestions.aui";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const isNewChatView = (s: AssistantState) =>
@@ -225,7 +211,6 @@ export const Thread: FC<ThreadProps> = ({
   history,
 }) => {
   const aui = useAui();
-  const isEmpty = useAuiState(isNewChatView);
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const insets = useSafeAreaInsets();
   const viewportRef = useRef<ComponentRef<typeof View>>(null);
@@ -391,16 +376,17 @@ export const Thread: FC<ThreadProps> = ({
             <View
               ref={viewportRef}
               onLayout={measureViewport}
-              className={cn(
-                "aui-thread-viewport mx-auto w-full max-w-[44rem] flex-1",
-                isEmpty && "justify-center",
-              )}
+              className="aui-thread-viewport mx-auto w-full max-w-[44rem] flex-1"
             >
               <AuiIf condition={isNewChatView}>
-                <WelcomeSlot />
+                <View className="flex-1 justify-center">
+                  <WelcomeSlot />
+                </View>
               </AuiIf>
               <AuiIf condition={isHistoryLoadingView}>
-                <ThreadHistorySkeleton />
+                <View className="flex-1">
+                  <ThreadHistorySkeleton />
+                </View>
               </AuiIf>
               <AuiIf condition={(s) => s.thread.messages.length > 0}>
                 {history?.isLoadingMore && <HistoryEdge />}
@@ -570,7 +556,7 @@ const SpokenActionBar: FC = () => (
     <View className="aui-spoken-action-bar flex-row gap-1">
       <ActionBarPrimitive.Copy
         copyToClipboard={copyToClipboard}
-        className={cn(iconButtonClassName, "size-6")}
+        className={iconButtonClassName}
         hitSlop={groupedIconButtonHitSlop}
         accessibilityLabel="Copy"
       >
@@ -680,7 +666,6 @@ const Composer: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
   return (
     <ComposerPrimitive.Root className="aui-composer-root w-full">
       <View className="aui-composer-shell border-border/60 dark:border-muted-foreground/15 bg-card gap-2 rounded-3xl border p-2">
-        <ComposerAttachments />
         <ComposerInput autoFocus={autoFocus} />
         <ComposerAction />
       </View>
@@ -699,7 +684,6 @@ const ComposerAction: FC = () => {
   return (
     <View className="aui-composer-action-wrapper flex-row items-center justify-between">
       <View className="flex-row items-center gap-1">
-        <ComposerAddAttachment />
         <ComposerModelPicker />
       </View>
       <View className="flex-row items-center gap-1.5">
@@ -710,7 +694,7 @@ const ComposerAction: FC = () => {
           }
         >
           <ComposerPrimitive.Send
-            className="aui-composer-send bg-primary active:bg-primary/90 size-7 items-center justify-center rounded-full disabled:opacity-50"
+            className="aui-composer-send bg-primary active:bg-primary/90 size-11 items-center justify-center rounded-full disabled:opacity-50"
             hitSlop={iconButtonHitSlop}
             accessibilityLabel="Send message"
           >
@@ -727,7 +711,7 @@ const ComposerAction: FC = () => {
           }
         >
           <ComposerPrimitive.Cancel
-            className="aui-composer-cancel bg-primary active:bg-primary/90 size-7 items-center justify-center rounded-full"
+            className="aui-composer-cancel bg-primary active:bg-primary/90 size-11 items-center justify-center rounded-full"
             hitSlop={iconButtonHitSlop}
             accessibilityLabel={
               isSending ? "Cancel sending" : "Stop generating"
@@ -925,13 +909,6 @@ const AssistantActionBar: FC = () => (
           />
         )}
       </ActionBarPrimitive.Copy>
-      <ActionBarPrimitive.Reload
-        className={iconButtonClassName}
-        hitSlop={groupedIconButtonHitSlop}
-        accessibilityLabel="Refresh"
-      >
-        <Icon as={RefreshCwIcon} className="text-muted-foreground size-4" />
-      </ActionBarPrimitive.Reload>
     </View>
   </AuiIf>
 );
@@ -944,21 +921,8 @@ const UserMessage: FC = () => (
     </View>
     <View className="aui-user-message-footer -me-1 flex-row items-center justify-end">
       <BranchPicker />
-      <UserActionBar />
     </View>
   </MessagePrimitive.Root>
-);
-
-const UserActionBar: FC = () => (
-  <AuiIf condition={(s) => !s.thread.isRunning}>
-    <ActionBarPrimitive.Edit
-      className={cn(iconButtonClassName, "aui-user-action-edit")}
-      hitSlop={groupedIconButtonHitSlop}
-      accessibilityLabel="Edit"
-    >
-      <Icon as={PencilIcon} className="text-muted-foreground size-4" />
-    </ActionBarPrimitive.Edit>
-  </AuiIf>
 );
 
 const DefaultEditComposerInput: FC = () => (

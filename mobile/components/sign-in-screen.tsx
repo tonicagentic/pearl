@@ -4,17 +4,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { useAuth } from "@/src/auth";
-import { AGENT_URL } from "@/src/eve-transport";
 
 /** The sign-in gate: email/password through the agent's better-auth. */
 export function SignInScreen() {
-  const { signIn, signInState, signInError, skipSignIn } = useAuth();
+  const { signIn, signInState, signInError } = useAuth();
   // SafeAreaView is a native codegen view — the theme background goes through
   // style, not className (uniwind can't reach it).
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
   const borderColor = useCSSVariable("--color-input") as string | undefined;
+  const foregroundColor = useCSSVariable("--color-foreground") as string | undefined;
   const buttonColor = useCSSVariable("--color-primary") as string | undefined;
   const buttonTextColor = useCSSVariable("--color-primary-foreground") as
     | string
@@ -31,15 +31,17 @@ export function SignInScreen() {
       <View style={styles.center}>
         <Text style={styles.title}>Pearl</Text>
         <Text style={[styles.hint, hintColor ? { color: hintColor } : null]}>
-          {AGENT_URL}
+          Sign in to continue
         </Text>
         <TextInput
           style={[
             styles.input,
             borderColor ? { borderColor } : null,
-            hintColor ? { color: hintColor } : null,
+            foregroundColor ? { color: foregroundColor } : null,
           ]}
-          placeholder="email"
+          accessibilityLabel="Email"
+          autoComplete="email"
+          placeholder="Email"
           placeholderTextColor={hintColor ?? undefined}
           autoCapitalize="none"
           keyboardType="email-address"
@@ -50,9 +52,11 @@ export function SignInScreen() {
           style={[
             styles.input,
             borderColor ? { borderColor } : null,
-            hintColor ? { color: hintColor } : null,
+            foregroundColor ? { color: foregroundColor } : null,
           ]}
-          placeholder="password"
+          accessibilityLabel="Password"
+          autoComplete="current-password"
+          placeholder="Password"
           placeholderTextColor={hintColor ?? undefined}
           secureTextEntry
           value={password}
@@ -63,7 +67,9 @@ export function SignInScreen() {
             styles.button,
             buttonColor ? { backgroundColor: buttonColor } : null,
           ]}
-          onPress={() => void signIn(email, password)}
+          accessibilityRole="button"
+          disabled={signInState === "signing-in" || !email.trim() || !password}
+          onPress={() => void signIn(email.trim(), password)}
         >
           <Text
             style={[
@@ -75,11 +81,6 @@ export function SignInScreen() {
           </Text>
         </Pressable>
         {signInError ? <Text style={styles.error}>{signInError}</Text> : null}
-        <Pressable onPress={skipSignIn}>
-          <Text style={[styles.skip, hintColor ? { color: hintColor } : null]}>
-            Continue without sign-in (local dev)
-          </Text>
-        </Pressable>
       </View>
     </SafeAreaView>
   );
@@ -98,18 +99,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    minHeight: 48,
+    paddingVertical: 12,
   },
   button: {
     borderRadius: 10,
-    paddingVertical: 10,
+    minHeight: 48,
+    justifyContent: "center",
     alignItems: "center",
   },
   buttonText: { fontSize: 14 },
   error: { textAlign: "center" },
-  skip: {
-    fontSize: 12,
-    textAlign: "center",
-    textDecorationLine: "underline",
-  },
 });

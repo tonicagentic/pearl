@@ -94,6 +94,34 @@ export async function createChat(
   return data.chat;
 }
 
+export async function appendChatEvents(
+  chatId: string,
+  events: readonly { readonly event: MessageStreamEvent; readonly eventIndex: number }[],
+): Promise<void> {
+  if (events.length === 0) return;
+  const response = await fetch(`${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/sync`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ append: events }),
+  });
+  if (!response.ok) {
+    if (response.status === 401) sessionInvalid();
+    throw new Error(`Failed to save chat events (${response.status}).`);
+  }
+}
+
+export async function markPendingChatMessage(chatId: string, message: string): Promise<void> {
+  const response = await fetch(`${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/sync`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ pendingUserMessage: message }),
+  });
+  if (!response.ok) {
+    if (response.status === 401) sessionInvalid();
+    throw new Error(`Failed to save pending message (${response.status}).`);
+  }
+}
+
 export async function saveChatSnapshot(
   chatId: string,
   events: readonly MessageStreamEvent[],

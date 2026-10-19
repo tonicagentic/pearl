@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import {
+  appendChatEventsAction,
+  markChatPendingMessageAction,
   saveChatSessionStateAction,
   saveChatSnapshotAction,
 } from "@/app/actions/chat";
@@ -16,10 +18,34 @@ export async function POST(
 ) {
   const body = (await request.json().catch(() => ({}))) as {
     readonly events?: readonly unknown[];
+    readonly append?: readonly { readonly event: unknown; readonly eventIndex: number }[];
+    readonly pendingUserMessage?: string;
     readonly session?: unknown;
   };
 
   const { id: chatId } = await params;
+
+  if (body.append !== undefined) {
+    if (!Array.isArray(body.append) || body.append.some(
+      (entry) => !Number.isSafeInteger(entry?.eventIndex) || entry.eventIndex < 0 ||
+        typeof entry.event !== "object" || entry.event === null,
+    )) {
+      return NextResponse.json({ error: "Invalid event batch." }, { status: 400 });
+    }
+    await appendChatEventsAction({
+      chatId,
+      events: body.append as Parameters<typeof appendChatEventsAction>[0]["events"],
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.pendingUserMessage !== undefined) {
+    if (typeof body.pendingUserMessage !== "string") {
+      return NextResponse.json({ error: "Invalid pending message." }, { status: 400 });
+    }
+    await markChatPendingMessageAction({ chatId, message: body.pendingUserMessage });
+    return NextResponse.json({ ok: true });
+  }
 
   if (body.events !== undefined) {
     if (!Array.isArray(body.events)) {

@@ -3,7 +3,7 @@ import type { FC } from "react";
 import { Pressable, type PressableProps } from "react-native";
 
 export const iconButtonClassName =
-  "aui-icon-button active:bg-muted size-7 items-center justify-center rounded-md";
+  "aui-icon-button active:bg-muted size-11 items-center justify-center rounded-md";
 
 export const iconButtonHitSlop = 10;
 

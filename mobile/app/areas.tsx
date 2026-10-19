@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { useNavigation } from "expo-router";
-import { MenuIcon } from "lucide-react-native";
+import { useEffect, useState } from "react";
+import { ScrollView, Text, View } from "react-native";
+import { Redirect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { fetchIssues, type IssuesPayload } from "@/src/issues-client";
+import { useAuth } from "@/src/auth";
 
 /**
  * The area tree on mobile: the mind map visualization stays on the
@@ -13,26 +13,13 @@ import { fetchIssues, type IssuesPayload } from "@/src/issues-client";
  * indented list. Editing happens on the web too — this screen is read-only.
  */
 export default function Areas() {
-  const navigation = useNavigation<{ openDrawer: () => void }>();
+  const { signedIn, restoring } = useAuth();
   const [payload, setPayload] = useState<IssuesPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   // SafeAreaView is a native codegen view — theme background through style.
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
-  const mutedColor = useCSSVariable("--color-muted-foreground") as
-    | string
-    | undefined;
-
-  const reload = useCallback(async () => {
-    try {
-      setPayload(await fetchIssues());
-      setError(null);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Failed to load areas.");
-    }
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
 
@@ -56,21 +43,14 @@ export default function Areas() {
     };
   }, []);
 
+  if (restoring) return null;
+  if (!signedIn) return <Redirect href="/" />;
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor }}
-      edges={["top", "left", "right"]}
+      edges={["left", "right"]}
     >
-      <View className="flex-row items-center gap-2 px-4 pb-2">
-        <Pressable
-          onPress={() => navigation.openDrawer()}
-          accessibilityLabel="Open menu"
-          className="p-1"
-        >
-          <MenuIcon className="size-5 text-muted-foreground" />
-        </Pressable>
-        <Text className="text-base font-semibold text-foreground">Areas</Text>
-      </View>
 
       <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10">
         <Text className="mb-4 text-sm text-muted-foreground">

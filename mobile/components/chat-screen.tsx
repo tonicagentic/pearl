@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import { useNavigation } from "expo-router";
-import { MenuIcon } from "lucide-react-native";
+import { Stack, router } from "expo-router";
+import { ListIcon } from "lucide-react-native";
 import {
   AssistantRuntimeProvider,
   useExternalStoreRuntime,
@@ -12,15 +12,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
-import { ComposerModelPicker } from "@/components/model-picker";
 import { getModelSelection } from "@/src/model-selection";
 import { useChats } from "@/src/chat-context";
-import { AGENT_URL, getStore, toThreadMessages, type SpikeState } from "@/src/eve-transport";
+import { toThreadMessages, type SpikeState } from "@/src/eve-transport";
 
 /**
  * The chat screen: the assistant-ui native Thread wired to the eve session
- * protocol through the external-store runtime bridge. Lives inside the
- * drawer's content area; the hamburger opens the drawer.
+ * protocol through the external-store runtime bridge. History is a separate
+ * screen so navigation does not interfere with the active stream.
  */
 export function ChatScreen() {
   // The safe-area container is a native codegen view, so uniwind's className
@@ -33,7 +32,7 @@ export function ChatScreen() {
     { flex: 1 },
     { backgroundColor },
   ];
-  const { store, activeTitle } = useChats();
+  const { store, activeTitle, persistenceError, retrySync, pendingMessage } = useChats();
   const state = useSyncExternalStore<SpikeState>(
     (cb) => store.subscribe(cb),
     () => store.snapshot.data,
@@ -42,7 +41,6 @@ export function ChatScreen() {
     (cb) => store.subscribe(cb),
     () => store.snapshot.status,
   );
-  const navigation = useNavigation<{ openDrawer: () => void; closeDrawer: () => void }>();
 
   // Rebuilt when the store instance changes (chat selection): the adapter
   // closes over the current store, and the runtime core re-syncs on the new
@@ -57,7 +55,7 @@ export function ChatScreen() {
       // honors the per-message status it carries.
       convertMessage: (message: ThreadMessageLike) => message,
       isRunning: status === "streaming",
-      isDisabled: false,
+      isDisabled: status === "resuming" || status === "submitted",
       onNew: async (message: AppendMessage) => {
         const text = message.content
           .filter((p): p is { type: "text"; text: string } => p.type === "text")
@@ -76,48 +74,50 @@ export function ChatScreen() {
     }),
     // state and status change with the store's own updates; the adapter is
     // rebuilt whenever they change so the runtime re-syncs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- state/status are snapshots, store is the dependency
     [store, state, status],
   );
 
   const runtime = useExternalStoreRuntime(adapter);
 
 
-  const openDrawer = useCallback(() => {
-    navigation.openDrawer();
-  }, [navigation]);
-
   return (
-    <SafeAreaView style={screenStyle} edges={["top", "left", "right"]}>
-      <View style={styles.header} className="border-b border-border/60">
-        <Pressable onPress={openDrawer} hitSlop={8} accessibilityLabel="Open menu">
-          <MenuIcon className="size-5 text-muted-foreground" />
+    <SafeAreaView style={screenStyle} edges={["left", "right"]}>
+      <Stack.Screen options={{
+        headerShown: true,
+        title: activeTitle,
+        headerRight: () => (
+          <Pressable
+            onPress={() => router.push("/history")}
+            className="h-11 w-11 items-center justify-center"
+            accessibilityRole="button"
+            accessibilityLabel="Open history"
+          >
+            <ListIcon className="size-5 text-foreground" />
+          </Pressable>
+        ),
+      }} />
+      {status !== "ready" ? (
+        <Text className="px-4 py-1 text-xs text-muted-foreground" accessibilityRole="text">
+          {status === "error" ? "Connection interrupted" : status === "resuming" ? "Reconnecting…" : "Working…"}
+        </Text>
+      ) : null}
+      {persistenceError ? (
+        <Pressable accessibilityRole="button" onPress={() => void retrySync()} className="min-h-11 justify-center bg-destructive/10 px-4">
+          <Text className="text-sm text-destructive">Could not save this chat. Tap to retry.</Text>
         </Pressable>
-        <View style={styles.headerText}>
-          <Text style={styles.headerTitle} numberOfLines={1}>{activeTitle}</Text>
-          <Text style={styles.headerUrl} numberOfLines={1} className="text-muted-foreground">
-            {status === "streaming" ? "streaming…" : AGENT_URL}
+      ) : null}
+      {pendingMessage ? (
+        <View className="min-h-11 justify-center bg-muted px-4" accessibilityRole="text">
+          <Text className="text-sm text-foreground" numberOfLines={2}>
+            Message may not have sent: {pendingMessage}. Check the conversation before resending.
           </Text>
         </View>
-      </View>
+      ) : null}
       <View style={{ flex: 1 }}>
         <AssistantRuntimeProvider runtime={runtime}>
-          <Thread autoFocus />
+          <Thread autoFocus={false} />
         </AssistantRuntimeProvider>
       </View>
     </SafeAreaView>
   );
 }
-
-const styles = {
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  } as const,
-  headerText: { flex: 1, marginRight: 8 } as const,
-  headerTitle: { fontSize: 15, fontWeight: "600" } as const,
-  headerUrl: { fontSize: 10 } as const,
-};

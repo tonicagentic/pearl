@@ -36,10 +36,10 @@ export function useSubagentRuns(): TaskRuns {
 
 export function SubagentRunsProvider({ children }: { readonly children: ReactNode }) {
   const events = useEveEvents();
-  const [now, setNow] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const runs = useMemo(
-    () => deriveSubagentRuns(events, now ?? Number.MAX_SAFE_INTEGER),
+    () => deriveSubagentRuns(events, now),
     [events, now],
   );
 
@@ -49,7 +49,6 @@ export function SubagentRunsProvider({ children }: { readonly children: ReactNod
 
   useEffect(() => {
     if (!anyUndelivered) return;
-    setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [anyUndelivered]);
@@ -175,7 +174,6 @@ function useNowWhileWorking(
 
   useEffect(() => {
     if (!anyWorking) return;
-    setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [anyWorking]);

@@ -14,9 +14,9 @@ try {
     fetch: typeof fetch;
   };
 
-  if (typeof globalThis.fetch !== 'function') {
-    globalThis.fetch = expoFetch as unknown as typeof fetch;
-  }
+  // Native fetch already exists, but does not reliably expose incremental
+  // response bodies to eve. Always install expo's streaming implementation.
+  globalThis.fetch = expoFetch as unknown as typeof fetch;
 } catch {
   // Fast-refresh race: keep the previously installed streaming fetch.
 }
