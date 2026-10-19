@@ -1,7 +1,14 @@
-import { useMemo, useState, useSyncExternalStore } from "react";
-import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import { Stack, router } from "expo-router";
-import { ListIcon } from "lucide-react-native";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Keyboard, Pressable, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
+import { Stack } from "expo-router";
+import * as Haptics from "expo-haptics";
+import ReanimatedDrawerLayout, {
+  DrawerKeyboardDismissMode,
+  DrawerPosition,
+  DrawerType,
+  type DrawerLayoutMethods,
+} from "react-native-gesture-handler/ReanimatedDrawerLayout";
+import { ListIcon, SquarePenIcon } from "lucide-react-native";
 import {
   AssistantRuntimeProvider,
   MessageNotSentError,
@@ -12,6 +19,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
+import { HistoryScreen } from "@/components/app-drawer";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { getModelSelection } from "@/src/model-selection";
 import { createAttachmentMarker, isAttachmentMarker, toEveTurn } from "@/src/attachment-content";
@@ -20,8 +28,8 @@ import { toThreadMessages, type SpikeState } from "@/src/eve-transport";
 
 /**
  * The chat screen: the assistant-ui native Thread wired to the eve session
- * protocol through the external-store runtime bridge. History is a separate
- * screen so navigation does not interfere with the active stream.
+ * protocol through the external-store runtime bridge. The history drawer
+ * overlays the mounted thread so navigation never interrupts its stream.
  */
 export function ChatScreen() {
   // The safe-area container is a native codegen view, so uniwind's className
@@ -34,7 +42,27 @@ export function ChatScreen() {
     { flex: 1 },
     { backgroundColor },
   ];
-  const { store, activeTitle, persistenceError, retrySync, pendingMessage } = useChats();
+  const { store, activeTitle, persistenceError, retrySync, pendingMessage, newChat } = useChats();
+  const { width } = useWindowDimensions();
+  const drawerRef = useRef<DrawerLayoutMethods>(null);
+  const settledOpen = useRef(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const closeHistory = useCallback(() => drawerRef.current?.closeDrawer(), []);
+  const openHistory = useCallback(() => {
+    Keyboard.dismiss();
+    drawerRef.current?.openDrawer();
+  }, []);
+  const onDrawerSettled = useCallback((open: boolean) => {
+    if (settledOpen.current === open) return;
+    settledOpen.current = open;
+    setDrawerOpen(open);
+    // A single tick at the end of the spring, not on every drag frame.
+    void Haptics.selectionAsync().catch(() => {});
+  }, []);
+  const renderHistory = useCallback(
+    () => <HistoryScreen onClose={closeHistory} visible={drawerOpen} />,
+    [closeHistory, drawerOpen],
+  );
   const [attachmentError, setAttachmentError] = useState<{ store: object; message: string } | null>(null);
   const state = useSyncExternalStore<SpikeState>(
     (cb) => store.subscribe(cb),
@@ -100,44 +128,74 @@ export function ChatScreen() {
       <Stack.Screen options={{
         headerShown: true,
         title: activeTitle,
-        headerRight: () => (
+        headerLeft: () => (
           <Pressable
-            onPress={() => router.push("/history")}
+            onPress={drawerOpen ? closeHistory : openHistory}
             className="h-11 w-11 items-center justify-center"
             accessibilityRole="button"
-            accessibilityLabel="Open history"
+            accessibilityLabel={drawerOpen ? "Close history" : "Open history"}
+            accessibilityState={{ expanded: drawerOpen }}
           >
             <ListIcon className="size-5 text-foreground" />
           </Pressable>
         ),
+        headerRight: () => (
+          <Pressable
+            onPress={newChat}
+            disabled={drawerOpen}
+            className="h-11 w-11 items-center justify-center disabled:opacity-40"
+            accessibilityRole="button"
+            accessibilityLabel="New chat"
+            accessibilityState={{ disabled: drawerOpen }}
+          >
+            <SquarePenIcon className="size-5 text-foreground" />
+          </Pressable>
+        ),
       }} />
-      {status !== "ready" ? (
-        <Text className="px-4 py-1 text-xs text-muted-foreground" accessibilityRole="text">
-          {status === "error" ? "Connection interrupted" : status === "resuming" ? "Reconnecting…" : "Working…"}
-        </Text>
-      ) : null}
-      {persistenceError ? (
-        <Pressable accessibilityRole="button" onPress={() => void retrySync()} className="min-h-11 justify-center bg-destructive/10 px-4">
-          <Text className="text-sm text-destructive">Could not save this chat. Tap to retry.</Text>
-        </Pressable>
-      ) : null}
-      {pendingMessage ? (
-        <View className="min-h-11 justify-center bg-muted px-4" accessibilityRole="text">
-          <Text className="text-sm text-foreground" numberOfLines={2}>
-            Message may not have sent: {isAttachmentMarker(pendingMessage) ? "attachment" : pendingMessage}. Check the conversation before resending.
-          </Text>
+      <ReanimatedDrawerLayout
+        ref={drawerRef}
+        drawerWidth={Math.min(width * 0.86, 360)}
+        drawerPosition={DrawerPosition.LEFT}
+        drawerType={DrawerType.FRONT}
+        drawerBackgroundColor={backgroundColor}
+        overlayColor="rgba(0, 0, 0, 0.26)"
+        edgeWidth={32}
+        minSwipeDistance={12}
+        keyboardDismissMode={DrawerKeyboardDismissMode.ON_DRAG}
+        renderNavigationView={renderHistory}
+        onDrawerOpen={() => onDrawerSettled(true)}
+        onDrawerClose={() => onDrawerSettled(false)}
+      >
+        <View style={{ flex: 1 }} accessibilityElementsHidden={drawerOpen}>
+          {status !== "ready" ? (
+            <Text className="px-4 py-1 text-xs text-muted-foreground" accessibilityRole="text">
+              {status === "error" ? "Connection interrupted" : status === "resuming" ? "Reconnecting…" : "Working…"}
+            </Text>
+          ) : null}
+          {persistenceError ? (
+            <Pressable accessibilityRole="button" onPress={() => void retrySync()} className="min-h-11 justify-center bg-destructive/10 px-4">
+              <Text className="text-sm text-destructive">Could not save this chat. Tap to retry.</Text>
+            </Pressable>
+          ) : null}
+          {pendingMessage ? (
+            <View className="min-h-11 justify-center bg-muted px-4" accessibilityRole="text">
+              <Text className="text-sm text-foreground" numberOfLines={2}>
+                Message may not have sent: {isAttachmentMarker(pendingMessage) ? "attachment" : pendingMessage}. Check the conversation before resending.
+              </Text>
+            </View>
+          ) : null}
+          {attachmentError?.store === store ? (
+            <Text className="bg-destructive/10 px-4 py-2 text-sm text-destructive" accessibilityRole="alert">
+              {attachmentError.message}
+            </Text>
+          ) : null}
+          <View style={{ flex: 1 }}>
+            <AssistantRuntimeProvider runtime={runtime}>
+              <Thread autoFocus={false} />
+            </AssistantRuntimeProvider>
+          </View>
         </View>
-      ) : null}
-      {attachmentError?.store === store ? (
-        <Text className="bg-destructive/10 px-4 py-2 text-sm text-destructive" accessibilityRole="alert">
-          {attachmentError.message}
-        </Text>
-      ) : null}
-      <View style={{ flex: 1 }}>
-        <AssistantRuntimeProvider runtime={runtime}>
-          <Thread autoFocus={false} />
-        </AssistantRuntimeProvider>
-      </View>
+      </ReanimatedDrawerLayout>
     </SafeAreaView>
   );
 }

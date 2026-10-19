@@ -27,7 +27,13 @@ function AuthenticatedLayout() {
               <StatusBar style="auto" />
               <Stack>
                 <Stack.Screen name="index" options={{ title: "Chat", headerShown: false }} />
-                <Stack.Screen name="history" options={{ title: "History" }} />
+                <Stack.Screen
+                  name="history"
+                  options={{
+                    title: "History",
+                    animation: Platform.OS === "ios" ? "slide_from_left" : "default",
+                  }}
+                />
                 <Stack.Screen name="areas" options={{ title: "Areas" }} />
                 <Stack.Screen name="issues" options={{ title: "Issues" }} />
               </Stack>
