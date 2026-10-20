@@ -15,8 +15,10 @@ export interface ComposerModel {
 }
 
 export const COMPOSER_MODELS: readonly ComposerModel[] = [
+  { key: "gpt-6.1-sol", label: "GPT 6.1 Sol" },
   { key: "glm-5.3-flash", label: "GLM 5.3 Flash" },
-  { key: "gpt-6-sol", label: "GPT 6 Sol" },
+  { key: "muse-spark-open", label: "Muse Spark Open" },
+  { key: "grok-4.7", label: "Grok 4.7" },
 ];
 
 export const DEFAULT_MODEL_KEY = COMPOSER_MODELS[0].key;

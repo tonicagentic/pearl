@@ -47,30 +47,14 @@ export const WORKFLOW_BATCHING = {
 
 // The gateway data policy must ride each dynamic selection: dynamic model
 // agents cannot set a sibling top-level modelOptions (agent-config), so the
-// resolver returns it per model. Every selection — default, client-picked, or
-// experiment override — routes under the same policy.
-// Per-model gateway routing. GPT 6 Sol is the deliberate exception (user-
-// approved): the gateway has no ZDR provider for it — verified live with the
-// full policy, which fails with `no_zdr_providers_available` (openai:
-// zdr_not_supported, bedrock: zdr_ineligible_model). Its selection keeps the
-// US-region pin and the no-training filter but drops zeroDataRetention, so
-// prompts and responses follow OpenAI's default retention instead of zero
-// retention. Every other model keeps the full policy.
-export function gatewayOptionsForModel(model: string) {
-  if (model === "openai/gpt-6-sol") {
-    return {
-      inferenceRegion: GATEWAY_PROVIDER_OPTIONS.inferenceRegion,
-      disallowPromptTraining: GATEWAY_PROVIDER_OPTIONS.disallowPromptTraining,
-    } as const;
-  }
-  return GATEWAY_PROVIDER_OPTIONS;
-}
+// resolver returns it for every model. Default, client-picked, and experiment
+// override calls all use the same policy.
 
 // Model selection for one model call, in precedence order:
 // 1. AGENT_MODEL_OVERRIDE (experiments pin the model),
 // 2. the composer picker's clientContext marker, validated against the
 //    allowlist in model-selection.ts,
-// 3. the default (GLM 5.3 Flash).
+// 3. the default (GPT 6.1 Sol).
 export function resolveModelForStep(messages: ScannedMessageLike) {
   const override = process.env.AGENT_MODEL_OVERRIDE?.trim();
   if (override) {
@@ -84,7 +68,7 @@ export function resolveModelForStep(messages: ScannedMessageLike) {
     model,
     modelOptions: {
       providerOptions: {
-        gateway: gatewayOptionsForModel(model),
+        gateway: GATEWAY_PROVIDER_OPTIONS,
       },
     },
   };

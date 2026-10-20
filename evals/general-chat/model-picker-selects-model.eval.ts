@@ -6,11 +6,11 @@ import { defineEval } from "eve/evals";
 // intentionally wins over the picker).
 export default defineEval({
   description:
-    "Model picker: a clientContext marker routes the turn's model calls to GPT 6 Sol.",
+    "Model picker: a clientContext marker routes the turn's model calls to Muse Spark Open.",
   tags: ["smoke"],
   async test(t) {
     const turn = await t.send("Reply with the single word: ready.", {
-      clientContext: { eveModelSelection: "gpt-6-sol" },
+      clientContext: { eveModelSelection: "muse-spark-open" },
     });
 
     t.succeeded();
@@ -23,9 +23,9 @@ export default defineEval({
       throw new Error("No step.started events reported for the turn.");
     }
 
-    if (stepModels.some((modelId) => modelId !== "openai/gpt-6-sol")) {
+    if (stepModels.some((modelId) => modelId !== "meta/muse-spark-open")) {
       throw new Error(
-        `Expected every model call to run on openai/gpt-6-sol, got: ${stepModels.join(", ")}`,
+        `Expected every model call to run on meta/muse-spark-open, got: ${stepModels.join(", ")}`,
       );
     }
   },
