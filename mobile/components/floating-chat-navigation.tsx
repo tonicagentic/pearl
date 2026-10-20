@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
 import { EllipsisIcon, SquarePenIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 const CAN_USE_LIQUID_GLASS = Platform.OS === "ios" && isGlassEffectAPIAvailable() && isLiquidGlassAvailable();
 const surfaceStyle = {
@@ -18,11 +19,13 @@ const surfaceStyle = {
 /** Floating iOS controls; the thread and its gestures stay mounted beneath them. */
 export function FloatingChatNavigation({
   title,
+  hasMessages,
   onOpenHistory,
   onNewChat,
   disabled,
 }: {
   title: string;
+  hasMessages: boolean;
   onOpenHistory: () => void;
   onNewChat: () => void;
   disabled: boolean;
@@ -30,6 +33,22 @@ export function FloatingChatNavigation({
   const insets = useSafeAreaInsets();
   const moreButton = useRef<View>(null);
   const [reducedTransparency, setReducedTransparency] = useState(true);
+  const reveal = useSharedValue(hasMessages ? 1 : 0);
+  useEffect(() => {
+    reveal.value = withTiming(hasMessages ? 1 : 0, {
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [hasMessages, reveal]);
+  const pillStyle = useAnimatedStyle(() => ({ width: 56 + 56 * reveal.value }));
+  const newChatStyle = useAnimatedStyle(() => ({
+    // Wait until the expanding glass reaches the icon before fading it in.
+    opacity: interpolate(reveal.value, [0, 0.55, 1], [0, 0, 1]),
+    transform: [{ translateX: 8 * (1 - reveal.value) }],
+  }));
+  const moreStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(reveal.value, [0, 0.35, 1], [0, 1, 1]),
+  }));
 
   useEffect(() => {
     let mounted = true;
@@ -88,30 +107,36 @@ export function FloatingChatNavigation({
           </View>
         </Pressable>
       </View>
-      <View style={styles.pill}>
-        {surface()}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="New chat"
-          accessibilityState={{ disabled }}
-          disabled={disabled}
-          onPress={onNewChat}
-          style={styles.pillButton}
-        >
-          <SquarePenIcon className="size-6 text-foreground" />
-        </Pressable>
-        <Pressable
-          ref={moreButton}
-          accessibilityRole="button"
-          accessibilityLabel="More navigation"
-          accessibilityState={{ disabled }}
-          disabled={disabled}
-          onPress={openMore}
-          style={styles.pillButton}
-        >
-          <EllipsisIcon className="size-6 text-foreground" />
-        </Pressable>
-      </View>
+      {hasMessages ? (
+        <Animated.View style={[styles.pill, pillStyle]}>
+          {surface()}
+          <Animated.View style={[styles.newChatAction, newChatStyle]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="New chat"
+              accessibilityState={{ disabled }}
+              disabled={disabled}
+              onPress={onNewChat}
+              style={styles.pillButton}
+            >
+              <SquarePenIcon className="size-6 text-foreground" />
+            </Pressable>
+          </Animated.View>
+          <Animated.View style={[styles.moreAction, moreStyle]}>
+            <Pressable
+              ref={moreButton}
+              accessibilityRole="button"
+              accessibilityLabel="More navigation"
+              accessibilityState={{ disabled }}
+              disabled={disabled}
+              onPress={openMore}
+              style={styles.pillButton}
+            >
+              <EllipsisIcon className="size-6 text-foreground" />
+            </Pressable>
+          </Animated.View>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
@@ -129,6 +154,8 @@ const styles = StyleSheet.create({
   circle: { width: 48, height: 48 },
   circleButton: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
   historyBars: { gap: 7, alignItems: "flex-start" },
-  pill: { width: 112, height: 48, flexDirection: "row" },
+  pill: { height: 48 },
   pillButton: { width: 56, height: 48, alignItems: "center", justifyContent: "center" },
+  newChatAction: { position: "absolute", right: 56, top: 0 },
+  moreAction: { position: "absolute", right: 0, top: 0 },
 });

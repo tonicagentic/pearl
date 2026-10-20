@@ -265,6 +265,7 @@ export function ChatScreen() {
               {Platform.OS === "ios" ? (
                 <FloatingChatNavigation
                   title={activeTitle}
+                  hasMessages={projectedMessages.length > 0}
                   onOpenHistory={openHistory}
                   onNewChat={newChat}
                   disabled={drawerOpen}
