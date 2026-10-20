@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Keyboard, Platform, Pressable, View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
+import Animated, { interpolate, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
 import ReanimatedDrawerLayout, {
@@ -31,7 +32,7 @@ import { toThreadMessages, type SpikeState } from "@/src/eve-transport";
 /**
  * The chat screen: the assistant-ui native Thread wired to the eve session
  * protocol through the external-store runtime bridge. The history drawer
- * overlays the mounted thread so navigation never interrupts its stream.
+ * moves the mounted thread on iOS without interrupting its stream.
  */
 export function ChatScreen() {
   // The safe-area container is a native codegen view, so uniwind's className
@@ -239,11 +240,11 @@ export function ChatScreen() {
       }} />
       <ReanimatedDrawerLayout
         ref={drawerRef}
-        drawerWidth={Math.min(width * 0.86, 360)}
+        drawerWidth={Math.min(width * (Platform.OS === "ios" ? 0.79 : 0.86), 360)}
         drawerPosition={DrawerPosition.LEFT}
-        drawerType={DrawerType.FRONT}
+        drawerType={Platform.OS === "ios" ? DrawerType.BACK : DrawerType.FRONT}
         drawerBackgroundColor={backgroundColor}
-        overlayColor="rgba(0, 0, 0, 0.26)"
+        overlayColor={Platform.OS === "ios" ? "transparent" : "rgba(0, 0, 0, 0.26)"}
         edgeWidth={32}
         minSwipeDistance={12}
         keyboardDismissMode={DrawerKeyboardDismissMode.ON_DRAG}
@@ -251,24 +252,59 @@ export function ChatScreen() {
         onDrawerOpen={() => onDrawerSettled(true)}
         onDrawerClose={() => onDrawerSettled(false)}
       >
-        <View style={{ flex: 1 }} accessibilityElementsHidden={drawerOpen}>
-          <AssistantRuntimeProvider runtime={runtime}>
-            <Thread
-              autoFocus={Platform.OS === "ios" && activeChatId === null && !drawerOpen}
-              focusNewChatKey={drawerOpen ? drawerFocusEntry : newChatEntry}
-              notice={notice}
-            />
-          </AssistantRuntimeProvider>
-          {Platform.OS === "ios" ? (
-            <FloatingChatNavigation
-              title={activeTitle}
-              onOpenHistory={openHistory}
-              onNewChat={newChat}
-              disabled={drawerOpen}
-            />
-          ) : null}
-        </View>
+        {(progress) => {
+          const chat = (
+            <View style={{ flex: 1 }} accessibilityElementsHidden={drawerOpen}>
+              <AssistantRuntimeProvider runtime={runtime}>
+                <Thread
+                  autoFocus={Platform.OS === "ios" && activeChatId === null && !drawerOpen}
+                  focusNewChatKey={drawerOpen ? drawerFocusEntry : newChatEntry}
+                  notice={notice}
+                />
+              </AssistantRuntimeProvider>
+              {Platform.OS === "ios" ? (
+                <FloatingChatNavigation
+                  title={activeTitle}
+                  onOpenHistory={openHistory}
+                  onNewChat={newChat}
+                  disabled={drawerOpen}
+                />
+              ) : null}
+            </View>
+          );
+          return Platform.OS === "ios" ? (
+            <SlidingChatSurface progress={progress} backgroundColor={backgroundColor}>
+              {chat}
+            </SlidingChatSurface>
+          ) : chat;
+        }}
       </ReanimatedDrawerLayout>
     </SafeAreaView>
+  );
+}
+
+function SlidingChatSurface({
+  progress,
+  backgroundColor,
+  children,
+}: {
+  progress: SharedValue<number> | undefined;
+  backgroundColor: string | undefined;
+  children: ReactNode;
+}) {
+  const shape = useAnimatedStyle(() => ({
+    borderTopLeftRadius: interpolate(progress?.value ?? 0, [0, 1], [0, 48]),
+    borderBottomLeftRadius: interpolate(progress?.value ?? 0, [0, 1], [0, 48]),
+  }));
+  const shadow = useAnimatedStyle(() => ({
+    shadowOpacity: interpolate(progress?.value ?? 0, [0, 1], [0, 0.14]),
+  }));
+
+  return (
+    <Animated.View style={[{ flex: 1, shadowColor: "#000", shadowOffset: { width: -8, height: 0 }, shadowRadius: 24 }, shape, shadow]}>
+      <Animated.View style={[{ flex: 1, overflow: "hidden", backgroundColor }, shape]}>
+        {children}
+      </Animated.View>
+    </Animated.View>
   );
 }

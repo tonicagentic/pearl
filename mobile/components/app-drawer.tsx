@@ -1,6 +1,7 @@
-import { FlatList, Pressable, Text, View } from "react-native";
+import { useRef } from "react";
+import { ActionSheetIOS, FlatList, Platform, Pressable, Text, View, findNodeHandle } from "react-native";
 import { router } from "expo-router";
-import { InboxIcon, NetworkIcon, PlusIcon, XIcon } from "lucide-react-native";
+import { InboxIcon, MessageCircleIcon, NetworkIcon, PlusIcon, SquarePenIcon, UserRoundIcon, XIcon } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
@@ -18,11 +19,25 @@ export function HistoryScreen({
   const { signedIn, viewerEmail, signOut } = useAuth();
   const { chats, activeChatId, chatsLoading, chatsError, hasMoreChats, loadMoreChats, reloadChats, selectChat, selectionError, newChat } = useChats();
   const backgroundColor = useCSSVariable("--color-background") as string | undefined;
+  const iosSidebar = Platform.OS === "ios" && !!onClose;
+  const accountButton = useRef<View>(null);
 
   const goToChat = () => {
     if (onClose) onClose();
     else if (router.canGoBack()) router.back();
     else router.replace("/");
+  };
+  const showAccount = () => {
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title: viewerEmail ?? undefined,
+        options: ["Sign out", "Cancel"],
+        destructiveButtonIndex: 0,
+        cancelButtonIndex: 1,
+        anchor: findNodeHandle(accountButton.current) ?? undefined,
+      },
+      (index) => { if (index === 0) { signOut(); goToChat(); } },
+    );
   };
   const openDestination = (href: "/areas" | "/issues") => {
     onClose?.();
@@ -35,7 +50,19 @@ export function HistoryScreen({
       edges={onClose ? ["top", "left", "right", "bottom"] : ["left", "right", "bottom"]}
       accessibilityElementsHidden={!visible}
     >
-      {onClose ? (
+      {iosSidebar ? (
+        <View className="flex-row items-center justify-between px-7 pb-4 pt-3">
+          <Text className="text-2xl font-semibold text-foreground">Pearl</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="New chat"
+            className="h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card"
+            onPress={() => { newChat(); goToChat(); }}
+          >
+            <SquarePenIcon className="size-6 text-foreground" />
+          </Pressable>
+        </View>
+      ) : onClose ? (
         <View className="flex-row items-center justify-between px-4 py-2">
           <Text className="text-lg font-semibold text-foreground">History</Text>
           <Pressable
@@ -50,7 +77,7 @@ export function HistoryScreen({
       ) : null}
       <FlatList
         className="flex-1"
-        contentContainerClassName="px-4 pb-8"
+        contentContainerClassName={iosSidebar ? "px-5 pb-8" : "px-4 pb-8"}
         data={chats}
         extraData={activeChatId}
         keyExtractor={(chat) => chat.id}
@@ -58,27 +85,43 @@ export function HistoryScreen({
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ selected: activeChatId === chat.id }}
-            className={`min-h-12 justify-center rounded-lg px-3 ${activeChatId === chat.id ? "bg-muted/50" : ""}`}
+            className={`${iosSidebar ? "min-h-12 rounded-xl px-2.5" : "min-h-12 rounded-lg px-3"} justify-center ${activeChatId === chat.id ? "bg-muted/50" : ""}`}
             onPress={() => { void selectChat(chat.id).then((selected) => { if (selected) goToChat(); }); }}
           >
-            <Text className="text-base text-foreground" numberOfLines={1}>{chat.title}</Text>
+            <Text className={iosSidebar ? "text-[17px] text-foreground" : "text-base text-foreground"} numberOfLines={1}>{chat.title}</Text>
           </Pressable>
         )}
         ListHeaderComponent={
           <>
-            <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => { newChat(); goToChat(); }}>
-              <PlusIcon className="size-5 text-foreground" />
-              <Text className="text-base text-foreground">New chat</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/areas")}>
-              <NetworkIcon className="size-5 text-foreground" />
-              <Text className="text-base text-foreground">Areas</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/issues")}>
-              <InboxIcon className="size-5 text-foreground" />
-              <Text className="text-base text-foreground">Issues</Text>
-            </Pressable>
-            <Text className="px-3 pb-2 pt-5 text-xs font-medium uppercase text-muted-foreground">Chats</Text>
+            {iosSidebar ? (
+              <>
+                <Pressable accessibilityRole="button" className="min-h-14 flex-row items-center gap-4 rounded-xl px-2.5" onPress={() => openDestination("/areas")}>
+                  <NetworkIcon className="size-6 text-foreground" />
+                  <Text className="text-lg text-foreground">Areas</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" className="min-h-14 flex-row items-center gap-4 rounded-xl px-2.5" onPress={() => openDestination("/issues")}>
+                  <InboxIcon className="size-6 text-foreground" />
+                  <Text className="text-lg text-foreground">Issues</Text>
+                </Pressable>
+                <Text className="px-2.5 pb-3 pt-8 text-lg font-semibold text-foreground">Recents</Text>
+              </>
+            ) : (
+              <>
+                <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => { newChat(); goToChat(); }}>
+                  <PlusIcon className="size-5 text-foreground" />
+                  <Text className="text-base text-foreground">New chat</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/areas")}>
+                  <NetworkIcon className="size-5 text-foreground" />
+                  <Text className="text-base text-foreground">Areas</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/issues")}>
+                  <InboxIcon className="size-5 text-foreground" />
+                  <Text className="text-base text-foreground">Issues</Text>
+                </Pressable>
+                <Text className="px-3 pb-2 pt-5 text-xs font-medium uppercase text-muted-foreground">Chats</Text>
+              </>
+            )}
             {selectionError ? <Text className="px-3 py-2 text-sm text-destructive" accessibilityRole="alert">{selectionError}</Text> : null}
             {chatsError ? (
               <Pressable accessibilityRole="button" className="min-h-12 justify-center px-3" onPress={() => void reloadChats()}>
@@ -98,16 +141,47 @@ export function HistoryScreen({
           </Pressable>
         ) : null}
       />
-      <View className="border-t border-border px-4 py-2">
-        {signedIn ? (
-          <>
-            <Text className="px-3 text-xs text-muted-foreground" numberOfLines={1}>{viewerEmail}</Text>
-            <Pressable accessibilityRole="button" className="min-h-12 justify-center rounded-lg px-3" onPress={() => { signOut(); goToChat(); }}>
-              <Text className="text-base text-muted-foreground">Sign out</Text>
+      {iosSidebar ? (
+        <View className="px-7 pb-2 pt-3">
+          {signedIn ? (
+            <Text className="pb-3 text-xs text-muted-foreground" numberOfLines={1}>{viewerEmail}</Text>
+          ) : null}
+          <View className="flex-row items-center justify-between">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Return to chat"
+              className="h-12 flex-row items-center gap-2 rounded-full px-5"
+              style={{ backgroundColor: "#3267f6" }}
+              onPress={goToChat}
+            >
+              <MessageCircleIcon size={22} color="white" />
+              <Text className="text-base font-semibold text-white">Chat</Text>
             </Pressable>
-          </>
-        ) : <Text className="px-3 py-2 text-sm text-muted-foreground">Signed out</Text>}
-      </View>
+            {signedIn ? (
+              <Pressable
+                ref={accountButton}
+                accessibilityRole="button"
+                accessibilityLabel="Account options"
+                className="h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card"
+                onPress={showAccount}
+              >
+                <UserRoundIcon className="size-6 text-foreground" />
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : (
+        <View className="border-t border-border px-4 py-2">
+          {signedIn ? (
+            <>
+              <Text className="px-3 text-xs text-muted-foreground" numberOfLines={1}>{viewerEmail}</Text>
+              <Pressable accessibilityRole="button" className="min-h-12 justify-center rounded-lg px-3" onPress={() => { signOut(); goToChat(); }}>
+                <Text className="text-base text-muted-foreground">Sign out</Text>
+              </Pressable>
+            </>
+          ) : <Text className="px-3 py-2 text-sm text-muted-foreground">Signed out</Text>}
+        </View>
+      )}
     </SafeAreaView>
   );
 }
