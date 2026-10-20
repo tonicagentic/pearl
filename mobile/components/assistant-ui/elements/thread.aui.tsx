@@ -84,6 +84,7 @@ import {
   Platform,
   Pressable,
   Text,
+  TextInput,
   View,
   type ViewProps,
 } from "react-native";
@@ -132,6 +133,8 @@ export type ThreadHistory = {
 
 export type ThreadProps = {
   autoFocus?: boolean | undefined;
+  /** Remount only the input when entering a new chat, not on every render. */
+  focusNewChatKey?: number | undefined;
   components?: ThreadComponents | undefined;
   /** A windowed thread: the list asks for older messages when it reaches its start and shows the loading edge above them. */
   history?: ThreadHistory | undefined;
@@ -241,6 +244,7 @@ const copyToClipboard = async (text: string) => {
 
 export const Thread: FC<ThreadProps> = ({
   autoFocus = true,
+  focusNewChatKey = 0,
   components = EMPTY_COMPONENTS,
   history,
   notice,
@@ -480,7 +484,7 @@ export const Thread: FC<ThreadProps> = ({
           className={Platform.OS === "ios" ? "aui-thread-viewport-footer px-3" : "aui-thread-viewport-footer px-4"}
           style={{ paddingBottom: insets.bottom + (Platform.OS === "ios" ? 12 : 8) }}
         >
-          <Composer autoFocus={autoFocus} />
+          <Composer autoFocus={autoFocus} focusNewChatKey={focusNewChatKey} />
         </View>
       </View>
       {Rail && (
@@ -763,28 +767,47 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
   autoFocus,
 }) => {
   const hydrated = useHydrated();
+  const aui = useAui();
+  const text = useAuiState((s) => s.composer.text);
+  const nativeInput = useRef<TextInput>(null);
+  const focusOnMount = useRef(autoFocus);
   const placeholderColor = Platform.OS === "ios"
     ? "accent-muted-foreground/85"
     : "accent-muted-foreground/60";
+  const inputProps = {
+    placeholder: "Send a message...",
+    placeholderTextColorClassName: hydrated ? placeholderColor : undefined,
+    className: cn(
+      "aui-composer-input text-foreground web:resize-none web:outline-none max-h-48 py-1",
+      Platform.OS === "ios"
+        ? "min-h-8 px-[13px] text-[17px] leading-6"
+        : "min-h-10 px-2.5 text-base leading-6",
+    ),
+    multiline: true,
+    accessibilityLabel: "Message input",
+  };
 
-  return (
-    <ComposerPrimitive.Input
-      autoFocus={autoFocus}
-      placeholder="Send a message..."
-      placeholderTextColorClassName={hydrated ? placeholderColor : undefined}
-      className={cn(
-        "aui-composer-input text-foreground web:resize-none web:outline-none max-h-48 py-1",
-        Platform.OS === "ios"
-          ? "min-h-8 px-[13px] text-[17px] leading-6"
-          : "min-h-10 px-2.5 text-base leading-6",
-      )}
-      multiline
-      accessibilityLabel="Message input"
+  useEffect(() => {
+    if (Platform.OS !== "ios" || !focusOnMount.current) return;
+    // The initial native autoFocus can select the field before the window is
+    // ready, leaving a caret but no keyboard. Focus after it has mounted.
+    const timer = setTimeout(() => nativeInput.current?.focus(), 120);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return Platform.OS === "ios" ? (
+    <TextInput
+      ref={nativeInput}
+      value={text}
+      onChangeText={(value) => aui.composer.setText(value)}
+      {...inputProps}
     />
+  ) : (
+    <ComposerPrimitive.Input autoFocus={autoFocus} {...inputProps} />
   );
 };
 
-const Composer: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
+const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFocus, focusNewChatKey }) => {
   const { ComposerInput = DefaultComposerInput } = useContext(
     ThreadComponentsContext,
   );
@@ -831,7 +854,7 @@ const Composer: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
           />
         )}
         <ComposerAttachments />
-        <ComposerInput autoFocus={autoFocus} />
+        <ComposerInput key={focusNewChatKey} autoFocus={autoFocus} />
         <ComposerAction
           preparingAttachment={preparingAttachment}
           onPreparingChange={setPreparingAttachment}

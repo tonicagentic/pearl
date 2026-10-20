@@ -35,6 +35,8 @@ type ChatsContextValue = {
   /** The active eve store: rebuilt whenever a different chat is selected. */
   readonly store: EveAgentStore<EveMessageData>;
   readonly activeChatId: string | null;
+  /** Advances only when the user enters a fresh chat, never during a send. */
+  readonly newChatEntry: number;
   readonly activeTitle: string;
   readonly chats: readonly ChatListItem[];
   readonly chatsLoading: boolean;
@@ -86,6 +88,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const [retainedStores] = useState(() => new Map<string, EveAgentStore<EveMessageData>>());
   const activeStoreRef = useRef<EveAgentStore<EveMessageData> | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [newChatEntry, setNewChatEntry] = useState(0);
   const [activeTitle, setActiveTitle] = useState("New chat");
   const [chats, setChats] = useState<readonly ChatListItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -350,6 +353,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     ++selectionGeneration.current;
     activeChatIdRef.current = null;
     setActiveChatId(null);
+    setNewChatEntry((current) => current + 1);
     setActiveTitle("New chat");
     setPendingMessage(null);
     setPersistenceError(null);
@@ -407,6 +411,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     () => ({
       store,
       activeChatId,
+      newChatEntry,
       activeTitle,
       chats,
       chatsLoading,
@@ -425,6 +430,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     [
       store,
       activeChatId,
+      newChatEntry,
       activeTitle,
       chats,
       chatsLoading,

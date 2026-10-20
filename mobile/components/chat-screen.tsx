@@ -44,11 +44,13 @@ export function ChatScreen() {
     { flex: 1 },
     { backgroundColor },
   ];
-  const { store, activeTitle, persistenceError, retrySync, pendingMessage, newChat, wasSendPrepared } = useChats();
+  const { store, activeChatId, newChatEntry, activeTitle, persistenceError, retrySync, pendingMessage, newChat, wasSendPrepared } = useChats();
   const { width } = useWindowDimensions();
   const drawerRef = useRef<DrawerLayoutMethods>(null);
   const settledOpen = useRef(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // A new chat chosen from History should focus only after the drawer settles.
+  const [drawerFocusEntry, setDrawerFocusEntry] = useState(newChatEntry);
   const closeHistory = useCallback(() => drawerRef.current?.closeDrawer(), []);
   const openHistory = useCallback(() => {
     Keyboard.dismiss();
@@ -57,10 +59,11 @@ export function ChatScreen() {
   const onDrawerSettled = useCallback((open: boolean) => {
     if (settledOpen.current === open) return;
     settledOpen.current = open;
+    if (open) setDrawerFocusEntry(newChatEntry);
     setDrawerOpen(open);
     // A single tick at the end of the spring, not on every drag frame.
     void Haptics.selectionAsync().catch(() => {});
-  }, []);
+  }, [newChatEntry]);
   const renderHistory = useCallback(
     () => <HistoryScreen onClose={closeHistory} visible={drawerOpen} />,
     [closeHistory, drawerOpen],
@@ -249,7 +252,11 @@ export function ChatScreen() {
       >
         <View style={{ flex: 1 }} accessibilityElementsHidden={drawerOpen}>
           <AssistantRuntimeProvider runtime={runtime}>
-            <Thread autoFocus={false} notice={notice} />
+            <Thread
+              autoFocus={Platform.OS === "ios" && activeChatId === null && !drawerOpen}
+              focusNewChatKey={drawerOpen ? drawerFocusEntry : newChatEntry}
+              notice={notice}
+            />
           </AssistantRuntimeProvider>
         </View>
       </ReanimatedDrawerLayout>
