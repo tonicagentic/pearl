@@ -1,6 +1,6 @@
 import { FlatList, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
-import { InboxIcon, NetworkIcon, PlusIcon, XIcon } from "lucide-react-native";
+import { InboxIcon, NetworkIcon, PlusIcon, SettingsIcon, XIcon } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
@@ -24,7 +24,7 @@ export function HistoryScreen({
     else if (router.canGoBack()) router.back();
     else router.replace("/");
   };
-  const openDestination = (href: "/areas" | "/issues") => {
+  const openDestination = (href: "/areas" | "/issues" | "/settings") => {
     onClose?.();
     router.push(href);
   };
@@ -102,6 +102,10 @@ export function HistoryScreen({
         {signedIn ? (
           <>
             <Text className="px-3 text-xs text-muted-foreground" numberOfLines={1}>{viewerEmail}</Text>
+            <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/settings")}>
+              <SettingsIcon className="size-5 text-foreground" />
+              <Text className="text-base text-foreground">Settings</Text>
+            </Pressable>
             <Pressable accessibilityRole="button" className="min-h-12 justify-center rounded-lg px-3" onPress={() => { signOut(); goToChat(); }}>
               <Text className="text-base text-muted-foreground">Sign out</Text>
             </Pressable>

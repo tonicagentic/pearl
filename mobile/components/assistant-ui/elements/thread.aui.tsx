@@ -137,6 +137,7 @@ export type ThreadProps = {
   history?: ThreadHistory | undefined;
   /** Recovery belongs in the transcript, never in a bar that shifts the viewport. */
   notice?: { text: string; actionLabel?: string; onAction?: () => void } | null;
+  authorization?: ReactNode;
 };
 
 export type ThreadViewportSnapshot = {
@@ -244,6 +245,7 @@ export const Thread: FC<ThreadProps> = ({
   components = EMPTY_COMPONENTS,
   history,
   notice,
+  authorization,
 }) => {
   const aui = useAui();
   const isRunning = useAuiState((s) => s.thread.isRunning);
@@ -412,7 +414,7 @@ export const Thread: FC<ThreadProps> = ({
       onLayout={followsKeyboard ? undefined : measureViewport}
       className="aui-thread-viewport mx-auto w-full max-w-[44rem] flex-1"
     >
-      <AuiIf condition={(s) => isNewChatView(s) && !notice}>
+      <AuiIf condition={(s) => isNewChatView(s) && !notice && !authorization}>
         {followsKeyboard ? (
           <IosWelcome />
         ) : (
@@ -426,7 +428,7 @@ export const Thread: FC<ThreadProps> = ({
           <ThreadHistorySkeleton />
         </View>
       </AuiIf>
-      <AuiIf condition={(s) => s.thread.messages.length > 0 || !!notice}>
+      <AuiIf condition={(s) => s.thread.messages.length > 0 || !!notice || !!authorization}>
         {history?.isLoadingMore && <HistoryEdge />}
         <ThreadPrimitive.MessagesFlatList
           // Viewability props cannot change once a FlatList is mounted.
@@ -446,7 +448,7 @@ export const Thread: FC<ThreadProps> = ({
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
-          ListFooterComponent={notice ? <ThreadNotice {...notice} /> : null}
+          ListFooterComponent={authorization || notice ? <>{authorization}{notice ? <ThreadNotice {...notice} /> : null}</> : null}
           {...(Rail
             ? {
                 onContentSizeChange: onListContentSizeChange,

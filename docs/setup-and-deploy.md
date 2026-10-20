@@ -277,16 +277,51 @@ printf '%s' "<slack-connector-uid>" | vercel env add SLACK_CONNECTOR production 
 printf '%s' "<connector-uid>" | vercel env add NOTION_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add LINEAR_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add SENTRY_CONNECTOR production preview development
-vercel env pull .env.local --yes
 ```
 
-For local development, the connections fall back to `slack/eve-chat-template`, `notion`, `linear`, and `sentry`, so local connectors created with the names above can work without editing files under `agent/`.
+For local development, pull to a temporary file and merge only the connector
+lines you need; pulling directly over `.env.local` can erase local-only secrets.
+The existing connections fall back to `slack/eve-chat-template`, `notion`,
+`linear`, and `sentry`, so local connectors created with those names can work
+without editing files under `agent/`.
 
-The composer only shows its connections menu when at least one MCP connector environment variable is configured. A password-only starter deployment omits the menu and tells eve that no external connections are available.
+The older composer connections menu is not wired into the current send path.
+It does not represent connector availability or user authorization. In
+shared-password mode, every holder shares one eve principal and its grants;
+do not enable user-scoped connections there for multiple people.
 
 If a chat requires MCP authorization, use the Connect card in the chat UI. If you want to manage a connector directly, open the project integrations/settings page in Vercel and find the connector.
 
 See [Deploy Button integrations](https://vercel.com/docs/integrations/deploy-button/integrations) for how storage products are declared in the deploy URL.
+
+### Opt-in read-only MCP connections
+
+`agent/connections/vercel.ts`, `github.ts`, and `neon.ts` are optional eve connections. Each resolves to **no connection** unless its required environment variables are present and the active eve session has a personal Better Auth user principal. Shared-password and local development principals cannot use these new grants. These files do not create connectors, obtain grants, or provision credentials. Create and attach connectors yourself in Vercel Connect, then put their connector UIDs (`scl_...` or the UID reported by `vercel connect list`) in the linked project's environment; never put tokens in these variables. For example, after `vercel link`:
+
+```bash
+vercel connect create vercel --target mcp --connection-method mcp --name pearl-vercel
+# GitHub's hosted MCP does not support dynamic client registration. Choose a
+# GitHub connector whose OAuth/installation token the hosted MCP accepts.
+vercel connect create github --name pearl-github
+# Neon: configure a custom OAuth connector against the restricted MCP resource
+# after choosing a separate non-production project and limited SQL role; see below.
+vercel connect list
+vercel connect attach <connector-uid> --yes # Repeat for each connector you enable
+```
+
+Select an MCP-compatible connection method and complete provider authorization if prompted. The managed `github` method may issue installation credentials for the GitHub API rather than a per-user bearer accepted by the hosted MCP; confirm the method and a real read-only MCP call before enabling it. For Neon, use a custom OAuth connector for the *scoped*, read-only MCP URL, not the managed `neon` API-key method (`vercel connect create neon --help` lists only API key). Confirm each connector's endpoint, authentication support, UID, and attachment in Connect before enabling it. `connect()` uses user scope and `autoProvision: false`: a connected project does not grant each user access; the user must authorize their own account from web or mobile Settings, or through the chat authorization card. Do not enable these in shared-password starter mode for multiple people: all password holders share one eve principal and its grants.
+
+| Connection | Required env vars | Scope and permitted tools |
+| --- | --- | --- |
+| Vercel | `VERCEL_CONNECTOR`, `VERCEL_MCP_TEAM_ID`, `VERCEL_MCP_PROJECT_ID` | User-scoped; only `list_deployments`, with its team and project ID supplied by eve. `get_project` has an alternate `idOrName` selector and is excluded until its live schema is verified. Logs and changes are excluded. |
+| GitHub | `GITHUB_CONNECTOR` | User-scoped remote `https://api.githubcopilot.com/mcp/readonly`, `X-MCP-Toolsets: repos,issues,pull_requests`; only `search_repositories`, `get_file_contents`, `issue_read`, `pull_request_read`. The GitHub account's repository permissions still apply. |
+| Neon | `NEON_CONNECTOR`, `NEON_MCP_PROJECT_ID`, `NEON_MCP_ROLE` | User-scoped `https://mcp.neon.tech/mcp?readonly=true&projectId=...&category=querying&roleName=...`; only `inspect_database`. Disabled when `VERCEL_ENV=production`, or when `NODE_ENV=production` without `VERCEL_ENV`. |
+
+For Vercel, take `orgId` and `projectId` from the **target** project's `.vercel/project.json` (not necessarily the project hosting this agent). Pin only a team and project you intend the agent to read. Logs can contain sensitive data, so they are not in the first allowlist. The Vercel allowlist and argument pin follow the [official Vercel eve MCP guide](https://vercel.com/kb/guide/software-factory-vercel-mcp); verify the remote server enforces project scope before treating the pin as a complete isolation boundary. Add logs only with a reviewed approval flow on both web and mobile. GitHub's [remote MCP documentation](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md) describes the `/readonly` endpoint and toolset header; neither grants access to private repos without the user's GitHub permissions.
+
+**Neon is for development/testing data only, never a production database or production data copy.** Check that `NEON_MCP_PROJECT_ID` is a separate, non-production project before enabling it in local Development or Preview; the runtime guard refuses a project ID matching this app's `NEON_PROJECT_ID` when that value is present, but cannot identify every other production database. A dedicated SQL role with limited `SELECT` grants created by your database administrator is required for `NEON_MCP_ROLE`; do not use a Neon Console/CLI/API-created role as a least-privilege substitute, because those roles inherit `neon_superuser`. The role must exist and be login-enabled on every queried branch. The connection stays disabled when this variable is absent, rather than using the database owner. `readonly=true`, `projectId`, `roleName`, and category filtering are described in [Neon's MCP security guidance](https://neon.com/docs/ai/neon-mcp-server). `inspect_database` may include query text or other sensitive diagnostics. **Whether a user-specific Vercel Connect OAuth token is accepted by Neon's MCP server with these URL parameters is unverified**; do not assume a successful connector attachment proves end-to-end authorization. No Neon credentials are created by this template.
+
+Set only the variables for connections you intend to expose, in the appropriate Vercel environments (for example `printf '%s' '<connector-uid>' | vercel env add GITHUB_CONNECTOR preview development`; repeat for the other required values), or in a local `.env.local` that is not committed. Never set the Neon vars for Production. Refresh local values without overwriting local-only secrets: a full `vercel env pull .env.local` can erase them, so pull to a temporary file and merge only the desired lines. Restart local dev or redeploy after changes. Check the actual available tool names and authorization with an authenticated user before relying on a connection: typechecking verifies API compatibility but does not verify remote OAuth, tool availability, provider-enforced scope, or Neon token acceptance. The web and mobile Connections settings list these three alongside the existing Notion, Linear, and Sentry connectors. Users can start Connect authorization from Settings; the web uses a normal browser redirect and native requests a device code for its external browser. Connect owns its callback, stores the per-user grant, and refreshes access tokens. Settings recomputes the grant status from the same Better Auth principal after reload or app restart and never exposes tokens or connector UIDs. A Connect token alone does **not** prove the remote MCP accepted the bearer or that a tool works: validate discovery and a permitted read for each provider before enabling its environment variables in Production. The older composer toggles remain nonfunctional and must not be mistaken for authorization or a security boundary.
 
 ## Deploy
 

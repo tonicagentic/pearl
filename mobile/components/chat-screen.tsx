@@ -20,6 +20,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { HistoryScreen } from "@/components/app-drawer";
+import { AuthorizationStatus } from "@/components/authorization-status";
+import { latestAuthorization } from "@/src/authorization-events";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { getModelSelection } from "@/src/model-selection";
 import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
@@ -80,6 +82,8 @@ export function ChatScreen() {
     (cb) => store.subscribe(cb),
     () => store.snapshot.events,
   );
+  const authorization = latestAuthorization(events);
+  const authorizationPending = authorization?.type === "authorization.required";
   const confirmed = localSend ? hasConfirmedSend(events, localSend) : false;
   const projectedMessages = useMemo(
     () => projectSendMessages(
@@ -105,8 +109,11 @@ export function ChatScreen() {
       // honors the per-message status it carries.
       convertMessage: (message: ThreadMessageLike) => message,
       isRunning: status === "streaming",
-      isDisabled: status === "resuming" || status === "submitted",
+      isDisabled: status === "resuming" || status === "submitted" || authorizationPending,
       onNew: async (message: AppendMessage) => {
+        if (latestAuthorization(store.snapshot.events)?.type === "authorization.required") {
+          throw new MessageNotSentError("Complete connection authorization before sending another message.");
+        }
         setSendError(null);
         if (hasUnresolvedSend(store.snapshot.events, localSend, pendingMessage)) {
           const reason = "Check the previous message in this chat before sending another.";
@@ -187,7 +194,7 @@ export function ChatScreen() {
     }),
     // state and status change with the store's own updates; the adapter is
     // rebuilt whenever they change so the runtime re-syncs.
-    [store, projectedMessages, status, wasSendPrepared, localSend, pendingMessage],
+    [store, projectedMessages, status, wasSendPrepared, localSend, pendingMessage, authorizationPending],
   );
 
   const runtime = useExternalStoreRuntime(adapter);
@@ -249,7 +256,7 @@ export function ChatScreen() {
       >
         <View style={{ flex: 1 }} accessibilityElementsHidden={drawerOpen}>
           <AssistantRuntimeProvider runtime={runtime}>
-            <Thread autoFocus={false} notice={notice} />
+            <Thread autoFocus={false} notice={notice} authorization={authorization ? <AuthorizationStatus key={`${store.snapshot.session?.sessionId ?? activeTitle}:${authorization.type}:${authorization.data.turnId}`} event={authorization} onNewChat={newChat} canResume={status === "ready" || status === "error"} onResume={() => store.resume()} /> : null} />
           </AssistantRuntimeProvider>
         </View>
       </ReanimatedDrawerLayout>

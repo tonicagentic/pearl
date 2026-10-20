@@ -91,6 +91,14 @@ export function UserMenu({
           Usage
         </DropdownMenuItem>
         <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
+            router.push("/settings/connections");
+          }}
+        >
+          Connections
+        </DropdownMenuItem>
+        <DropdownMenuItem
           aria-busy={signingOut}
           disabled={signingOut}
           onSelect={(event) => {
