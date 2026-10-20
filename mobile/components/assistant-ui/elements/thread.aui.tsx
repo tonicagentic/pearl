@@ -566,7 +566,7 @@ const IosKeyboardLayout: FC<{ bottomInset: number; children: ReactNode }> = ({
 const IosWelcome: FC = () => {
   const keyboardHeight = useContext(KeyboardHeightContext)!;
   const fadeStyle = useAnimatedStyle(() => ({
-    // Fade before the shrinking viewport moves the welcome headline visibly.
+    // Fade any custom welcome content before the shrinking viewport moves it.
     opacity: interpolate(keyboardHeight.value, [0, 100], [1, 0], Extrapolation.CLAMP),
   }));
   return (
@@ -577,8 +577,8 @@ const IosWelcome: FC = () => {
 };
 
 const WelcomeSlot: FC = () => {
-  const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext);
-  return <Welcome />;
+  const { Welcome } = useContext(ThreadComponentsContext);
+  return Welcome ? <Welcome /> : null;
 };
 
 const ThreadMessage: FC = () => {
@@ -735,14 +735,6 @@ const ThreadHistorySkeleton: FC = () => (
       <View className="bg-muted h-4 w-10/12 rounded" />
       <View className="bg-muted h-4 w-2/3 rounded" />
     </View>
-  </View>
-);
-
-const ThreadWelcome: FC = () => (
-  <View className="aui-thread-welcome-root mb-6 items-center px-4">
-    <Text className="aui-thread-welcome-message text-foreground text-center text-2xl font-medium tracking-tight">
-      How can I help you today?
-    </Text>
   </View>
 );
 
