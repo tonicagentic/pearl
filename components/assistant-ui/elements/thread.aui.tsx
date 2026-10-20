@@ -284,7 +284,7 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
           <ComposerAttachments />
           <PasteAttachments />
           <ComposerPrimitive.Input
-            placeholder="Send a message..."
+            placeholder="Ask anything"
             className="aui-composer-input caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
             rows={1}
             autoFocus={autoFocus}

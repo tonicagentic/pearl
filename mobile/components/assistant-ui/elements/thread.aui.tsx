@@ -771,7 +771,7 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
     ? "accent-muted-foreground/85"
     : "accent-muted-foreground/60";
   const inputProps = {
-    placeholder: "Send a message...",
+    placeholder: "Ask anything",
     placeholderTextColorClassName: hydrated ? placeholderColor : undefined,
     className: cn(
       "aui-composer-input text-foreground web:resize-none web:outline-none max-h-48 py-1",
