@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Keyboard, Pressable, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
+import { Keyboard, Platform, Pressable, View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
 import { Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
 import ReanimatedDrawerLayout, {
@@ -22,7 +22,8 @@ import { useCSSVariable } from "uniwind";
 import { HistoryScreen } from "@/components/app-drawer";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { getModelSelection } from "@/src/model-selection";
-import { createAttachmentMarker, isAttachmentMarker, toEveTurn } from "@/src/attachment-content";
+import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
+import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft, type LocalSend } from "@/src/send-feedback";
 import { useChats } from "@/src/chat-context";
 import { toThreadMessages, type SpikeState } from "@/src/eve-transport";
 
@@ -38,11 +39,12 @@ export function ChatScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
+  const foregroundColor = useCSSVariable("--color-foreground") as string | undefined;
   const screenStyle: StyleProp<ViewStyle> = [
     { flex: 1 },
     { backgroundColor },
   ];
-  const { store, activeTitle, persistenceError, retrySync, pendingMessage, newChat } = useChats();
+  const { store, activeTitle, persistenceError, retrySync, pendingMessage, newChat, wasSendPrepared } = useChats();
   const { width } = useWindowDimensions();
   const drawerRef = useRef<DrawerLayoutMethods>(null);
   const settledOpen = useRef(false);
@@ -63,7 +65,9 @@ export function ChatScreen() {
     () => <HistoryScreen onClose={closeHistory} visible={drawerOpen} />,
     [closeHistory, drawerOpen],
   );
-  const [attachmentError, setAttachmentError] = useState<{ store: object; message: string } | null>(null);
+  const [sendError, setSendError] = useState<{ store: object; message: string } | null>(null);
+  const [localSends, setLocalSends] = useState<Map<object, LocalSend>>(() => new Map());
+  const localSend = localSends.get(store) ?? null;
   const state = useSyncExternalStore<SpikeState>(
     (cb) => store.subscribe(cb),
     () => store.snapshot.data,
@@ -72,6 +76,21 @@ export function ChatScreen() {
     (cb) => store.subscribe(cb),
     () => store.snapshot.status,
   );
+  const events = useSyncExternalStore(
+    (cb) => store.subscribe(cb),
+    () => store.snapshot.events,
+  );
+  const confirmed = localSend ? hasConfirmedSend(events, localSend) : false;
+  const projectedMessages = useMemo(
+    () => projectSendMessages(
+      toThreadMessages(state),
+      state.messages,
+      confirmed ? null : status === "error" && localSend
+        ? { ...localSend, phase: "uncertain" }
+        : localSend,
+    ),
+    [state, localSend, confirmed, status],
+  );
 
   // Rebuilt when the store instance changes (chat selection): the adapter
   // closes over the current store, and the runtime core re-syncs on the new
@@ -79,7 +98,7 @@ export function ChatScreen() {
   const adapter = useMemo(
     () => ({
       get messages(): ThreadMessageLike[] {
-        return toThreadMessages(state);
+        return projectedMessages;
       },
       // Return the projection as-is: the runtime's converter assigns stable
       // positional fallback ids (the projection omits ids on purpose) and
@@ -88,7 +107,12 @@ export function ChatScreen() {
       isRunning: status === "streaming",
       isDisabled: status === "resuming" || status === "submitted",
       onNew: async (message: AppendMessage) => {
-        setAttachmentError(null);
+        setSendError(null);
+        if (hasUnresolvedSend(store.snapshot.events, localSend, pendingMessage)) {
+          const reason = "Check the previous message in this chat before sending another.";
+          setSendError({ store, message: reason });
+          throw new MessageNotSentError(reason);
+        }
         let turn: ReturnType<typeof toEveTurn>;
         try {
           turn = toEveTurn(message);
@@ -96,7 +120,7 @@ export function ChatScreen() {
           // Only validation failures are known to have never reached eve.
           // Restore the draft and chips; network failures remain uncertain.
           const reason = cause instanceof Error ? cause.message : "Attachment is not ready.";
-          setAttachmentError({ store, message: reason });
+          setSendError({ store, message: reason });
           throw new MessageNotSentError(reason);
         }
         // Match an attachment-only pending row to this exact eve receive event
@@ -104,12 +128,58 @@ export function ChatScreen() {
         const outgoing = !turn.text.trim() && Array.isArray(turn.message)
           ? [{ type: "text" as const, text: createAttachmentMarker() }, ...turn.message]
           : turn.message;
-        // The picker's selection rides each send as ephemeral clientContext;
-        // the agent's step.started resolver maps it to the gateway model.
-        await store.send({
-          message: outgoing,
-          clientContext: { eveModelSelection: getModelSelection() },
-        });
+        // Paint the user turn before the durable marker's network round-trip.
+        // This row is display-only; Eve still waits for prepareSend to persist it.
+        const preview = createLocalSend(
+          store,
+          store.snapshot.data.messages.length,
+          store.snapshot.events.length,
+          message,
+        );
+        setLocalSends((current) => new Map(current).set(store, preview));
+        try {
+          // Model selection is ephemeral context on the turn, not persisted UI state.
+          await store.send({
+            message: outgoing,
+            clientContext: { eveModelSelection: getModelSelection() },
+          });
+          // Eve reports prepareSend failures through status/onError, not by
+          // rejecting send(). Nothing went to Eve if the durable mark failed.
+          if (shouldRestoreUnsentDraft(store.snapshot.status, wasSendPrepared(store))) {
+            throw new Error("Pending message was not saved.");
+          }
+          const accepted = hasConfirmedSend(store.snapshot.events, preview);
+          setLocalSends((current) => {
+            if (current.get(store)?.preview !== preview.preview) return current;
+            const next = new Map(current);
+            if (accepted) next.delete(store);
+            else next.set(store, { ...preview, phase: "uncertain" });
+            return next;
+          });
+        } catch (cause) {
+          if (!wasSendPrepared(store)) {
+            setLocalSends((current) => {
+              if (current.get(store)?.preview !== preview.preview) return current;
+              const next = new Map(current);
+              next.delete(store);
+              return next;
+            });
+            const reason = "Could not save the message before sending. Your draft is still here.";
+            setSendError({ store, message: reason });
+            throw new MessageNotSentError(reason);
+          }
+          // After the durable mark, only Eve's receive event proves acceptance.
+          // A transport error without it is ambiguous; never resend automatically.
+          const accepted = hasConfirmedSend(store.snapshot.events, preview);
+          setLocalSends((current) => {
+            if (current.get(store)?.preview !== preview.preview) return current;
+            const next = new Map(current);
+            if (accepted) next.delete(store);
+            else next.set(store, { ...preview, phase: "uncertain" });
+            return next;
+          });
+          throw cause;
+        }
       },
       onCancel: async () => {
         await store.cancel();
@@ -117,17 +187,28 @@ export function ChatScreen() {
     }),
     // state and status change with the store's own updates; the adapter is
     // rebuilt whenever they change so the runtime re-syncs.
-    [store, state, status],
+    [store, projectedMessages, status, wasSendPrepared, localSend, pendingMessage],
   );
 
   const runtime = useExternalStoreRuntime(adapter);
-
+  const notice = sendError?.store === store
+    ? { text: sendError.message }
+    : persistenceError
+      ? { text: "Could not save this chat.", actionLabel: "Retry save", onAction: () => void retrySync() }
+      : pendingMessage && !localSend
+        ? { text: "Delivery not confirmed. Check this chat before sending again." }
+        : status === "error" && !localSend
+          ? { text: "Connection interrupted. Check this chat before sending again." }
+          : null;
 
   return (
     <SafeAreaView style={screenStyle} edges={["left", "right"]}>
       <Stack.Screen options={{
         headerShown: true,
         title: activeTitle,
+        headerStyle: Platform.OS === "web" ? { backgroundColor } : undefined,
+        headerTintColor: Platform.OS === "web" ? foregroundColor : undefined,
+        headerTitleStyle: Platform.OS === "web" ? { color: foregroundColor } : undefined,
         headerLeft: () => (
           <Pressable
             onPress={drawerOpen ? closeHistory : openHistory}
@@ -167,33 +248,9 @@ export function ChatScreen() {
         onDrawerClose={() => onDrawerSettled(false)}
       >
         <View style={{ flex: 1 }} accessibilityElementsHidden={drawerOpen}>
-          {status !== "ready" ? (
-            <Text className="px-4 py-1 text-xs text-muted-foreground" accessibilityRole="text">
-              {status === "error" ? "Connection interrupted" : status === "resuming" ? "Reconnecting…" : "Working…"}
-            </Text>
-          ) : null}
-          {persistenceError ? (
-            <Pressable accessibilityRole="button" onPress={() => void retrySync()} className="min-h-11 justify-center bg-destructive/10 px-4">
-              <Text className="text-sm text-destructive">Could not save this chat. Tap to retry.</Text>
-            </Pressable>
-          ) : null}
-          {pendingMessage ? (
-            <View className="min-h-11 justify-center bg-muted px-4" accessibilityRole="text">
-              <Text className="text-sm text-foreground" numberOfLines={2}>
-                Message may not have sent: {isAttachmentMarker(pendingMessage) ? "attachment" : pendingMessage}. Check the conversation before resending.
-              </Text>
-            </View>
-          ) : null}
-          {attachmentError?.store === store ? (
-            <Text className="bg-destructive/10 px-4 py-2 text-sm text-destructive" accessibilityRole="alert">
-              {attachmentError.message}
-            </Text>
-          ) : null}
-          <View style={{ flex: 1 }}>
-            <AssistantRuntimeProvider runtime={runtime}>
-              <Thread autoFocus={false} />
-            </AssistantRuntimeProvider>
-          </View>
+          <AssistantRuntimeProvider runtime={runtime}>
+            <Thread autoFocus={false} notice={notice} />
+          </AssistantRuntimeProvider>
         </View>
       </ReanimatedDrawerLayout>
     </SafeAreaView>

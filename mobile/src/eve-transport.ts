@@ -14,13 +14,18 @@
 
 import { EveAgentStore, defaultMessageReducer, type EveMessageData, type EveMessagePart } from 'eve/client';
 import type { ThreadMessageLike } from '@assistant-ui/react-native';
+import { Platform } from 'react-native';
 import { isAttachmentMarker } from './attachment-content';
 
-// Agent endpoint: defaults to the production alias. For local testing against
-// `pnpm dev` in the repo, set EXPO_PUBLIC_AGENT_URL=http://<mac-ip>:3000 in
-// mobile/.env and restart Metro (env is inlined at bundle time).
+// On local web dev, use Metro's loopback-only same-origin proxy so browser
+// requests keep production's CORS/CSRF protection intact. Native clients still
+// contact the configured agent directly; a deployed web build needs its own
+// same-origin API host. Set EXPO_PUBLIC_AGENT_URL for local backend testing.
 export const AGENT_URL =
-  process.env.EXPO_PUBLIC_AGENT_URL ?? 'https://my-agent-pi-eight.vercel.app';
+  Platform.OS === 'web' && __DEV__ && typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+    ? `${window.location.origin}/__pearl_api`
+    : process.env.EXPO_PUBLIC_AGENT_URL ?? 'https://my-agent-pi-eight.vercel.app';
 
 // Session credential captured at sign-in (mirrored to SecureStore by
 // session-store). A better-auth bearer token from the sign-in response body

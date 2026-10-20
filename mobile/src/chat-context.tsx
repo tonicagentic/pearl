@@ -48,6 +48,8 @@ type ChatsContextValue = {
   readonly persistenceError: string | null;
   readonly pendingMessage: string | null;
   readonly retrySync: () => Promise<void>;
+  /** Whether the durable pending marker completed before this store's send. */
+  readonly wasSendPrepared: (source: EveAgentStore<EveMessageData>) => boolean;
   /** Drop the active chat and start fresh (the row is created on first send). */
   readonly newChat: () => void;
 };
@@ -58,11 +60,19 @@ type ChatBinding = {
   id: string | null;
   title: string;
   pendingMessage: string | null;
+  sendPrepared: boolean;
+  sendStartedAt: number | null;
   eventIndex: number;
   queue: Promise<void>;
   batch: { event: MessageStreamEvent; eventIndex: number }[];
   timer: ReturnType<typeof setTimeout> | null;
   syncFailed: boolean;
+};
+
+const traceSend = (binding: ChatBinding, stage: string) => {
+  if (__DEV__ && binding.sendStartedAt !== null) {
+    console.info(`[mobile send] ${stage} +${Math.round(performance.now() - binding.sendStartedAt)}ms`);
+  }
 };
 
 /** A store keeps its own chat identity even while another chat is selected. */
@@ -106,6 +116,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       id: chat?.id ?? null,
       title: chat?.title ?? "New chat",
       pendingMessage: chat?.pendingUserMessage ?? null,
+      sendPrepared: false,
+      sendStartedAt: null,
       eventIndex: store.snapshot.events.length,
       queue: Promise.resolve(),
       batch: [],
@@ -195,6 +207,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         if (!binding.id) return;
         binding.batch.push({ event, eventIndex: binding.eventIndex++ });
         if (event.type === "message.received") {
+          traceSend(binding, "eve accepted");
           binding.pendingMessage = null;
           if (activeStoreRef.current === store) setPendingMessage(null);
         }
@@ -217,9 +230,11 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         const id = binding.id;
         enqueue(async () => {
           await saveChatSnapshot(id, snapshot.events, snapshot.session);
+          traceSend(binding, "snapshot saved");
           binding.syncFailed = false;
           if (activeStoreRef.current === store) setPersistenceError(null);
-          await reloadChats();
+          // The next turn waits on this queue; history GET must not hold its durable mark.
+          void reloadChats();
           // Check after this queue item settles, not while its promise is pending.
           if (activeStoreRef.current !== store && !binding.pendingMessage && retainedStores.get(id) === store) {
             retainedStores.delete(id);
@@ -232,6 +247,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         }
       },
       prepareSend: async (input) => {
+        binding.sendPrepared = false;
+        binding.sendStartedAt = performance.now();
         const content = input.message;
         const textPart = Array.isArray(content) ? content.find((part) =>
           part.type === "text" &&
@@ -254,15 +271,16 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
             setActiveChatId(created.id);
             setActiveTitle(created.title);
           }
-          void reloadChats();
+          setChats((current) => [created, ...current.filter((chat) => chat.id !== created.id)]);
         } else if (message) {
           // A previous turn's snapshot clears pendingUserMessage. Wait for that
           // checkpoint before marking the new turn, or it could erase our mark.
-          binding.pendingMessage = message;
           await binding.queue;
           await markPendingChatMessage(binding.id, message);
         }
         binding.pendingMessage = message || null;
+        binding.sendPrepared = true;
+        traceSend(binding, "pending marker saved");
         if (binding.id) retainedStores.set(binding.id, store);
         return input;
       },
@@ -303,23 +321,17 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           return false;
         }
         const nextStore = buildStore(chat);
-        // A generic attachment marker could match an older turn. Keep it
-        // uncertain on reload rather than silently treating an unsent file as sent.
-        const stillPending = chat.pendingUserMessage && (
-          chat.pendingUserMessage === "[Attachment]" ||
-          !nextStore.snapshot.data.messages.some(
-            (message) => message.role === "user" && message.parts.some(
-              (part) => part.type === "text" && part.text === chat.pendingUserMessage,
-            ),
-          )
-        );
-        bindings.get(nextStore)!.pendingMessage = stillPending ? chat.pendingUserMessage : null;
+        // The server scopes the pending marker to its turn timestamp and clears
+        // it after a settled event or snapshot. Matching text here could mistake
+        // an older identical message for confirmation of this uncertain turn.
+        const stillPending = chat.pendingUserMessage;
+        bindings.get(nextStore)!.pendingMessage = stillPending;
         const prior = activeStoreRef.current;
         activeStoreRef.current = nextStore;
         activeChatIdRef.current = chat.id;
         setActiveChatId(chat.id);
         setActiveTitle(chat.title);
-        setPendingMessage(stillPending ? chat.pendingUserMessage : null);
+        setPendingMessage(stillPending);
         setPersistenceError(null);
         setStore(nextStore);
         pruneIdleStore(prior);
@@ -348,6 +360,11 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     setStore(nextStore);
     pruneIdleStore(prior);
   }, [buildStore, pruneIdleStore]);
+
+  const wasSendPrepared = useCallback(
+    (source: EveAgentStore<EveMessageData>) => bindings.get(source)?.sendPrepared ?? false,
+    [bindings],
+  );
 
   const retrySync = useCallback(async () => {
     const binding = bindings.get(store);
@@ -402,6 +419,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       persistenceError,
       pendingMessage,
       retrySync,
+      wasSendPrepared,
       newChat,
     }),
     [
@@ -419,6 +437,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       persistenceError,
       pendingMessage,
       retrySync,
+      wasSendPrepared,
       newChat,
     ],
   );

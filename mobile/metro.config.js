@@ -2,6 +2,7 @@ const path = require("node:path");
 const { getDefaultConfig } = require("expo/metro-config");
 const { withAui } = require("@assistant-ui/metro");
 const { withUniwindConfig } = require("uniwind/metro");
+const { withWebDevProxy } = require("./web-dev-proxy");
 
 const config = withUniwindConfig(
   withAui(getDefaultConfig(__dirname)),
@@ -35,6 +36,18 @@ const isUniwindOrigin = (originPath) =>
 
 const previousResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // Uniwind 1.12 redirects this react-native-web export to
+  // uniwind/components/InputAccessoryView, but it ships no web wrapper for it.
+  // Keep the actual react-native-web implementation for this import only.
+  if (
+    platform === "web" &&
+    moduleName === "./exports/InputAccessoryView" &&
+    context.originModulePath.endsWith(
+      `${nodeModules}react-native-web${path.sep}dist${path.sep}index.js`,
+    )
+  ) {
+    return context.resolveRequest(context, moduleName, platform);
+  }
   if (
     platform !== "web" &&
     moduleName === "react-native" &&
@@ -50,5 +63,12 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   }
   return context.resolveRequest(context, moduleName, platform);
 };
+
+const previousEnhanceMiddleware = config.server.enhanceMiddleware;
+config.server.enhanceMiddleware = (middleware, server) =>
+  withWebDevProxy(
+    previousEnhanceMiddleware?.(middleware, server) ?? middleware,
+    process.env.EXPO_PUBLIC_AGENT_URL ?? "https://my-agent-pi-eight.vercel.app",
+  );
 
 module.exports = config;

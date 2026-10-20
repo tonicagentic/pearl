@@ -1,19 +1,10 @@
 import {
   Modal,
-  Platform,
   Pressable,
   Text,
   View,
   type PressableProps,
 } from "react-native";
-import { Host, Picker, Text as SwiftUIText } from "@expo/ui/swift-ui";
-import {
-  accessibilityLabel,
-  disabled as nativeDisabled,
-  padding,
-  pickerStyle,
-  tag,
-} from "@expo/ui/swift-ui/modifiers";
 import { CheckIcon, ChevronDownIcon } from "lucide-react-native";
 import { useState, useSyncExternalStore } from "react";
 
@@ -25,10 +16,7 @@ import {
   type ComposerModel,
 } from "@/src/model-selection";
 
-/**
- * Composer model picker: an anchored native menu on iOS, with a modal fallback
- * on Android. Selection is shared with the chat screen through the model store.
- */
+/** Modal model picker for Android and web; iOS uses model-picker.ios.tsx. */
 export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const selectedKey = useSyncExternalStore(
@@ -40,30 +28,6 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
   const selected =
     COMPOSER_MODELS.find((model) => model.key === selectedKey) ??
     COMPOSER_MODELS[0];
-
-  if (Platform.OS === "ios") {
-    return (
-      <Host matchContents ignoreSafeArea="keyboard">
-        <Picker
-          label={selected.label}
-          selection={selected.key}
-          onSelectionChange={setModelSelection}
-          modifiers={[
-            pickerStyle("menu"),
-            padding({ horizontal: 12, vertical: 12 }),
-            nativeDisabled(disabled),
-            accessibilityLabel(`Model: ${selected.label}`),
-          ]}
-        >
-          {COMPOSER_MODELS.map((model) => (
-            <SwiftUIText key={model.key} modifiers={[tag(model.key)]}>
-              {model.label}
-            </SwiftUIText>
-          ))}
-        </Picker>
-      </Host>
-    );
-  }
 
   return (
     <View>

@@ -82,6 +82,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Platform,
+  Pressable,
   Text,
   View,
   type ViewProps,
@@ -134,6 +135,8 @@ export type ThreadProps = {
   components?: ThreadComponents | undefined;
   /** A windowed thread: the list asks for older messages when it reaches its start and shows the loading edge above them. */
   history?: ThreadHistory | undefined;
+  /** Recovery belongs in the transcript, never in a bar that shifts the viewport. */
+  notice?: { text: string; actionLabel?: string; onAction?: () => void } | null;
 };
 
 export type ThreadViewportSnapshot = {
@@ -240,6 +243,7 @@ export const Thread: FC<ThreadProps> = ({
   autoFocus = true,
   components = EMPTY_COMPONENTS,
   history,
+  notice,
 }) => {
   const aui = useAui();
   const isRunning = useAuiState((s) => s.thread.isRunning);
@@ -408,7 +412,7 @@ export const Thread: FC<ThreadProps> = ({
       onLayout={followsKeyboard ? undefined : measureViewport}
       className="aui-thread-viewport mx-auto w-full max-w-[44rem] flex-1"
     >
-      <AuiIf condition={isNewChatView}>
+      <AuiIf condition={(s) => isNewChatView(s) && !notice}>
         {followsKeyboard ? (
           <IosWelcome />
         ) : (
@@ -422,7 +426,7 @@ export const Thread: FC<ThreadProps> = ({
           <ThreadHistorySkeleton />
         </View>
       </AuiIf>
-      <AuiIf condition={(s) => s.thread.messages.length > 0}>
+      <AuiIf condition={(s) => s.thread.messages.length > 0 || !!notice}>
         {history?.isLoadingMore && <HistoryEdge />}
         <ThreadPrimitive.MessagesFlatList
           // Viewability props cannot change once a FlatList is mounted.
@@ -442,6 +446,7 @@ export const Thread: FC<ThreadProps> = ({
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
+          ListFooterComponent={notice ? <ThreadNotice {...notice} /> : null}
           {...(Rail
             ? {
                 onContentSizeChange: onListContentSizeChange,
@@ -1120,16 +1125,46 @@ const AssistantActionBar: FC = () => (
   </AuiIf>
 );
 
+const UserSendState: FC = () => {
+  const phase = useAuiState((s) => s.message.metadata?.custom?.mobileSendState);
+  if (phase !== "preparing" && phase !== "uncertain") return null;
+  return (
+    <Text
+      className="text-muted-foreground text-xs"
+      accessibilityRole={phase === "uncertain" ? "alert" : "text"}
+    >
+      {phase === "preparing" ? "Sending…" : "Delivery not confirmed. Check before resending."}
+    </Text>
+  );
+};
+
 const UserMessage: FC = () => (
   <MessagePrimitive.Root className="aui-user-message-root items-end gap-y-2 px-2">
     <UserMessageAttachments />
     <View className="aui-user-message-content bg-muted max-w-[85%] rounded-xl px-4 py-2">
       <MessagePrimitive.Parts components={{ Text: UserText, Image, File }} />
     </View>
-    <View className="aui-user-message-footer -me-1 flex-row items-center justify-end">
+    <View className="aui-user-message-footer -me-1 flex-row items-center justify-end gap-2">
+      <UserSendState />
       <BranchPicker />
     </View>
   </MessagePrimitive.Root>
+);
+
+const ThreadNotice: FC<NonNullable<ThreadProps["notice"]>> = ({ text, actionLabel, onAction }) => (
+  <View className="border-border/60 bg-muted/40 mx-4 my-3 rounded-xl border p-3">
+    <Text className="text-foreground text-sm" accessibilityRole="alert">{text}</Text>
+    {actionLabel && onAction ? (
+      <Pressable
+        onPress={onAction}
+        accessibilityRole="button"
+        accessibilityLabel={actionLabel}
+        className="mt-1 min-h-11 self-start justify-center"
+      >
+        <Text className="text-foreground text-sm font-medium">{actionLabel}</Text>
+      </Pressable>
+    ) : null}
+  </View>
 );
 
 const DefaultEditComposerInput: FC = () => (

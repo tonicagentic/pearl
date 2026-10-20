@@ -29,7 +29,7 @@ export function SignInScreen() {
   return (
     <SafeAreaView style={[StyleSheet.absoluteFill, { backgroundColor }]}>
       <View style={styles.center}>
-        <Text style={styles.title}>Pearl</Text>
+        <Text style={[styles.title, foregroundColor ? { color: foregroundColor } : null]}>Pearl</Text>
         <Text style={[styles.hint, hintColor ? { color: hintColor } : null]}>
           Sign in to continue
         </Text>
