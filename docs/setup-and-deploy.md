@@ -299,8 +299,19 @@ pnpm build
 Deploy to production:
 
 ```bash
-vercel --prod
+pnpm exec vercel deploy --prod
 ```
+
+A Git push does not guarantee that the production alias has moved. In particular,
+the iOS app calls the deployed `/api/chats/[id]/sync` endpoint to save a pending
+message **before** sending a follow-up to eve. If the mobile app supports a newer
+sync request than the deployed server, the old route can return `400 Nothing to
+sync.` and the draft will remain unsent. After changing that endpoint or the
+mobile persistence client, inspect the production alias with
+`pnpm exec vercel inspect <production-domain>` and deploy the server if it still
+points to an older release. Verify a first message **and** a follow-up on an
+authenticated device before declaring the mobile send path healthy. Do not
+re-send a turn whose delivery is uncertain.
 
 After changing env vars, storage products, or Connect connectors, redeploy so production uses the newest project configuration.
 
