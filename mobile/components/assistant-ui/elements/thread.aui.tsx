@@ -472,8 +472,8 @@ export const Thread: FC<ThreadProps> = ({
         </AuiIf>
         <View
           pointerEvents={floatsComposer ? "box-none" : undefined}
-          className="aui-thread-viewport-footer px-4"
-          style={{ paddingBottom: insets.bottom + 8 }}
+          className={Platform.OS === "ios" ? "aui-thread-viewport-footer px-3" : "aui-thread-viewport-footer px-4"}
+          style={{ paddingBottom: insets.bottom + (Platform.OS === "ios" ? 12 : 8) }}
         >
           <Composer autoFocus={autoFocus} />
         </View>
@@ -758,15 +758,21 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
   autoFocus,
 }) => {
   const hydrated = useHydrated();
+  const placeholderColor = Platform.OS === "ios"
+    ? "accent-muted-foreground/85"
+    : "accent-muted-foreground/60";
 
   return (
     <ComposerPrimitive.Input
       autoFocus={autoFocus}
       placeholder="Send a message..."
-      placeholderTextColorClassName={
-        hydrated ? "accent-muted-foreground/60" : undefined
-      }
-      className="aui-composer-input text-foreground web:resize-none web:outline-none max-h-48 min-h-10 px-2.5 py-1 text-base leading-6"
+      placeholderTextColorClassName={hydrated ? placeholderColor : undefined}
+      className={cn(
+        "aui-composer-input text-foreground web:resize-none web:outline-none max-h-48 py-1",
+        Platform.OS === "ios"
+          ? "min-h-8 px-[13px] text-[17px] leading-6"
+          : "min-h-10 px-2.5 text-base leading-6",
+      )}
       multiline
       accessibilityLabel="Message input"
     />
@@ -801,7 +807,12 @@ const Composer: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
 
   return (
     <ComposerPrimitive.Root className="aui-composer-root w-full">
-      <View className="aui-composer-shell relative gap-2 rounded-3xl p-2">
+      <View
+        className={cn(
+          "aui-composer-shell relative rounded-3xl",
+          Platform.OS === "ios" ? "gap-1 px-[2px] py-[6px]" : "gap-2 p-2",
+        )}
+      >
         {showGlass ? (
           <GlassView
             pointerEvents="none"
@@ -835,6 +846,15 @@ const ComposerAction: FC<{
       s.composer.submission !== undefined &&
       !(s.thread.isRunning && s.thread.capabilities.cancel),
   );
+  const canSend = useAuiState(
+    (s) =>
+      !s.composer.isEmpty &&
+      s.composer.canSend &&
+      (!s.thread.isRunning ||
+        s.thread.capabilities.queue ||
+        s.thread.voice !== undefined),
+  );
+  const isIos = Platform.OS === "ios";
 
   return (
     <View className="aui-composer-action-wrapper flex-row items-center justify-between">
@@ -843,9 +863,12 @@ const ComposerAction: FC<{
           preparing={preparingAttachment}
           onPreparingChange={onPreparingChange}
         />
-        <ComposerModelPicker disabled={preparingAttachment} />
+        {!isIos && <ComposerModelPicker disabled={preparingAttachment} />}
       </View>
-      <View className="flex-row items-center gap-1.5">
+      <View
+        className={isIos ? "flex-row items-center gap-2" : "flex-row items-center gap-1.5"}
+      >
+        {isIos && <ComposerModelPicker disabled={preparingAttachment} />}
         <AuiIf
           condition={(s) =>
             s.composer.submission === undefined &&
@@ -853,15 +876,30 @@ const ComposerAction: FC<{
           }
         >
           <ComposerPrimitive.Send
-            disabled={preparingAttachment}
-            className="aui-composer-send bg-primary active:bg-primary/90 size-11 items-center justify-center rounded-full disabled:opacity-50"
-            hitSlop={iconButtonHitSlop}
+            disabled={preparingAttachment || (isIos && !canSend)}
+            className={cn(
+              "aui-composer-send size-11 items-center justify-center",
+              !isIos && "bg-primary active:bg-primary/90 rounded-full disabled:opacity-50",
+            )}
+            hitSlop={isIos ? undefined : iconButtonHitSlop}
             accessibilityLabel="Send message"
           >
-            <Icon
-              as={ArrowUpIcon}
-              className="aui-composer-send-icon text-primary-foreground size-4"
-            />
+            {isIos ? (
+              <View className="size-8 items-center justify-center rounded-full bg-[#111114] dark:border dark:border-white/25">
+                <Icon
+                  as={ArrowUpIcon}
+                  className={cn(
+                    "aui-composer-send-icon size-5",
+                    canSend && !preparingAttachment ? "text-white" : "text-white/50",
+                  )}
+                />
+              </View>
+            ) : (
+              <Icon
+                as={ArrowUpIcon}
+                className="aui-composer-send-icon text-primary-foreground size-4"
+              />
+            )}
           </ComposerPrimitive.Send>
         </AuiIf>
         <AuiIf
@@ -871,13 +909,22 @@ const ComposerAction: FC<{
           }
         >
           <ComposerPrimitive.Cancel
-            className="aui-composer-cancel bg-primary active:bg-primary/90 size-11 items-center justify-center rounded-full"
-            hitSlop={iconButtonHitSlop}
+            className={cn(
+              "aui-composer-cancel size-11 items-center justify-center",
+              !isIos && "bg-primary active:bg-primary/90 rounded-full",
+            )}
+            hitSlop={isIos ? undefined : iconButtonHitSlop}
             accessibilityLabel={
               isSending ? "Cancel sending" : "Stop generating"
             }
           >
-            <View className="aui-composer-cancel-icon bg-primary-foreground size-3 rounded-[2px]" />
+            {isIos ? (
+              <View className="size-8 items-center justify-center rounded-full bg-[#111114] dark:border dark:border-white/25">
+                <View className="aui-composer-cancel-icon size-2.5 rounded-[2px] bg-white" />
+              </View>
+            ) : (
+              <View className="aui-composer-cancel-icon bg-primary-foreground size-3 rounded-[2px]" />
+            )}
           </ComposerPrimitive.Cancel>
         </AuiIf>
       </View>

@@ -206,7 +206,10 @@ export const ComposerAddAttachment: FC<{
         hitSlop={iconButtonHitSlop}
         accessibilityLabel="Add attachment"
       >
-        <Icon as={PlusIcon} className="text-muted-foreground size-5" />
+        <Icon
+          as={PlusIcon}
+          className={Platform.OS === "ios" ? "text-foreground size-7" : "text-muted-foreground size-5"}
+        />
       </ComposerPrimitive.AddAttachment>
     </View>
   );
