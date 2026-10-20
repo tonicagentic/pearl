@@ -32,7 +32,7 @@ export function HistoryScreen({
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor }}
-      edges={["left", "right", "bottom"]}
+      edges={onClose ? ["top", "left", "right", "bottom"] : ["left", "right", "bottom"]}
       accessibilityElementsHidden={!visible}
     >
       {onClose ? (

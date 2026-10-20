@@ -21,6 +21,7 @@ import { useCSSVariable } from "uniwind";
 
 import { HistoryScreen } from "@/components/app-drawer";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import { FloatingChatNavigation } from "@/components/floating-chat-navigation";
 import { getModelSelection } from "@/src/model-selection";
 import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
 import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft, type LocalSend } from "@/src/send-feedback";
@@ -207,7 +208,7 @@ export function ChatScreen() {
   return (
     <SafeAreaView style={screenStyle} edges={["left", "right"]}>
       <Stack.Screen options={{
-        headerShown: true,
+        headerShown: Platform.OS !== "ios",
         title: activeTitle,
         headerStyle: Platform.OS === "web" ? { backgroundColor } : undefined,
         headerTintColor: Platform.OS === "web" ? foregroundColor : undefined,
@@ -258,6 +259,14 @@ export function ChatScreen() {
               notice={notice}
             />
           </AssistantRuntimeProvider>
+          {Platform.OS === "ios" ? (
+            <FloatingChatNavigation
+              title={activeTitle}
+              onOpenHistory={openHistory}
+              onNewChat={newChat}
+              disabled={drawerOpen}
+            />
+          ) : null}
         </View>
       </ReanimatedDrawerLayout>
     </SafeAreaView>

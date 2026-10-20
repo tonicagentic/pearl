@@ -444,7 +444,11 @@ export const Thread: FC<ThreadProps> = ({
           )}
           contentContainerStyle={
             floatsComposer
-              ? { paddingBottom: composerOverlayHeight + 24 }
+              ? {
+                  // Resting messages clear the floating controls, but can scroll behind them.
+                  paddingTop: insets.top + 80,
+                  paddingBottom: composerOverlayHeight + 24,
+                }
               : undefined
           }
           showsVerticalScrollIndicator={false}
