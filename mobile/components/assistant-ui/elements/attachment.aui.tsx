@@ -1,5 +1,5 @@
 import { Icon } from "@/components/ui/icon";
-import { iconButtonHitSlop } from "./icon-button";
+import { AttachmentMenu } from "./attachment-menu";
 import {
   AttachmentPrimitive,
   AuiIf,
@@ -12,9 +12,9 @@ import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import { PlusIcon, XIcon } from "lucide-react-native";
+import { XIcon } from "lucide-react-native";
 import type { FC } from "react";
-import { ActionSheetIOS, Alert, Image, Platform, View } from "react-native";
+import { Alert, Image, View } from "react-native";
 import { uploadPdfAttachment } from "@/src/pdf-attachment";
 
 const MAX_IMAGE_EDGE = 2048;
@@ -108,6 +108,7 @@ export const ComposerAddAttachment: FC<{
   onPreparingChange: (preparing: boolean) => void;
 }> = ({ preparing, onPreparingChange }) => {
   const aui = useAui();
+  const canAttach = useAuiState((s) => s.composer.isEditing);
   const imageCount = useAuiState((s) => s.composer.attachments.filter((a) => a.type === "image").length);
 
   const pickImages = async () => {
@@ -173,45 +174,19 @@ export const ComposerAddAttachment: FC<{
   };
 
   const runPicker = (picker: () => Promise<void>) => {
-    if (preparing) return;
+    if (preparing || !canAttach) return;
     onPreparingChange(true);
     void picker().catch((cause) => {
       Alert.alert("Could not attach file", cause instanceof Error ? cause.message : "Try again.");
     }).finally(() => onPreparingChange(false));
   };
-  const showOptions = () => {
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: ["Cancel", "Choose Photo", "Choose File"], cancelButtonIndex: 0 },
-        (choice) => {
-          if (choice === 1) runPicker(pickImages);
-          if (choice === 2) runPicker(pickFile);
-        },
-      );
-    } else {
-      Alert.alert("Add attachment", undefined, [
-        { text: "Choose Photo", onPress: () => runPicker(pickImages) },
-        { text: "Choose File", onPress: () => runPicker(pickFile) },
-        { text: "Cancel", style: "cancel" },
-      ]);
-    }
-  };
 
   return (
-    <View>
-      <ComposerPrimitive.AddAttachment
-        onPress={showOptions}
-        disabled={preparing}
-        className="aui-composer-add-attachment active:bg-muted size-11 items-center justify-center rounded-full"
-        hitSlop={iconButtonHitSlop}
-        accessibilityLabel="Add attachment"
-      >
-        <Icon
-          as={PlusIcon}
-          className={Platform.OS === "ios" ? "text-foreground size-7" : "text-muted-foreground size-5"}
-        />
-      </ComposerPrimitive.AddAttachment>
-    </View>
+    <AttachmentMenu
+      disabled={preparing || !canAttach}
+      onChoosePhoto={() => runPicker(pickImages)}
+      onChooseFile={() => runPicker(pickFile)}
+    />
   );
 };
 
