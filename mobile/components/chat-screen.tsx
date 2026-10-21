@@ -22,9 +22,11 @@ import { useCSSVariable } from "uniwind";
 
 import { HistoryScreen } from "@/components/app-drawer";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
 import { FloatingChatNavigation } from "@/components/floating-chat-navigation";
 import { getModelSelection } from "@/src/model-selection";
 import { withPendingAssistant } from "@/src/stream-presentation";
+import { hasPendingAction } from "@/src/message-projection";
 import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
 import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft, type LocalSend } from "@/src/send-feedback";
 import { useChats } from "@/src/chat-context";
@@ -87,10 +89,11 @@ export function ChatScreen() {
     () => store.snapshot.events,
   );
   const confirmed = localSend ? hasConfirmedSend(events, localSend) : false;
+  const waitingForAction = hasPendingAction(state);
   const projectedMessages = useMemo(
     () => withPendingAssistant(
       projectSendMessages(
-        toThreadMessages(state),
+        toThreadMessages(state, { isRunning: status === "streaming", hasError: status === "error" }),
         state.messages,
         confirmed ? null : status === "error" && localSend
           ? { ...localSend, phase: "uncertain" }
@@ -116,8 +119,10 @@ export function ChatScreen() {
       convertMessage: (message: ThreadMessageLike) => message,
       isRunning: status === "streaming",
       isDisabled: status === "resuming" || status === "submitted",
+      isSendDisabled: waitingForAction,
       onNew: async (message: AppendMessage) => {
         setSendError(null);
+        if (waitingForAction) throw new MessageNotSentError("This chat is waiting for authorization or approval.");
         if (hasUnresolvedSend(store.snapshot.events, localSend, pendingMessage)) {
           const reason = "Check the previous message in this chat before sending another.";
           setSendError({ store, message: reason });
@@ -197,7 +202,7 @@ export function ChatScreen() {
     }),
     // state and status change with the store's own updates; the adapter is
     // rebuilt whenever they change so the runtime re-syncs.
-    [store, projectedMessages, status, wasSendPrepared, localSend, pendingMessage],
+    [store, projectedMessages, status, waitingForAction, wasSendPrepared, localSend, pendingMessage],
   );
 
   const runtime = useExternalStoreRuntime(adapter);
@@ -261,6 +266,7 @@ export function ChatScreen() {
           const chat = (
             <View style={{ flex: 1 }} accessibilityElementsHidden={drawerOpen}>
               <AssistantRuntimeProvider runtime={runtime}>
+                <EveAuthorization />
                 <Thread
                   autoFocus={Platform.OS === "ios" && activeChatId === null && !drawerOpen}
                   conversationId={activeChatId}

@@ -1,5 +1,5 @@
 import { ThreadPrimitive, useAuiState, AuiIf } from "@assistant-ui/react-native";
-import { ScrollView, Text } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 
 // RN port of the web follow-up-suggestions element: suggestion chips shown
 // after a response completes, in a horizontal scroller (no edge-fade mask —
@@ -48,6 +48,8 @@ export const ThreadFollowupSuggestions = () => (
       s.thread.suggestions.length > 0
     }
   >
-    <FollowupSuggestionsRow />
+    <View className="px-4 pb-2">
+      <FollowupSuggestionsRow />
+    </View>
   </AuiIf>
 );

@@ -11,7 +11,6 @@ import {
 } from "react";
 import {
   EveAgentStore,
-  defaultMessageReducer,
   type ClientSessionState,
   type EveMessageData,
   type MessageStreamEvent,
@@ -19,6 +18,8 @@ import {
 
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
 import { traceStream } from "./stream-trace";
+import { createMobileMessageReducer } from "./message-reducer";
+import { pendingMessageLabel } from "./message-projection";
 import {
   appendChatEvents,
   createChat,
@@ -106,7 +107,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         const credential = getAuthCookie();
         return credential ? { authorization: `Bearer ${credential}` } : ({} as Record<string, string>);
       },
-      reducer: defaultMessageReducer(),
+      reducer: createMobileMessageReducer(),
       ...(chat
         ? {
             initialEvents: chat.events,
@@ -256,20 +257,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       prepareSend: async (input) => {
         binding.sendPrepared = false;
         binding.sendStartedAt = performance.now();
-        const content = input.message;
-        const textPart = Array.isArray(content) ? content.find((part) =>
-          part.type === "text" &&
-          !part.text.startsWith("[Attached PDF:") &&
-          !part.text.startsWith("[Attached text file:"),
-        ) : undefined;
-        const text = typeof content === "string"
-          ? content
-          : textPart?.type === "text" ? textPart.text : "";
-        // Attachment-only sends need a durable pending marker until eve confirms
-        // message.received. Never store file bytes or extracted document text here.
-        const message = text || (Array.isArray(content) && content.length > 0
-          ? "[Attachment]"
-          : "");
+        // An attachment-only turn uses a safe title/marker. Neither a
+        // correlation token nor pasted document text belongs in chat metadata.
+        const message = pendingMessageLabel(input.message);
         if (!binding.id) {
           const created = await createChat(message || undefined);
           binding.id = created.id;

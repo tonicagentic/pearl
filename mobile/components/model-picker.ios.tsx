@@ -23,11 +23,11 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
   const suffixStart = selected.label.lastIndexOf(" ");
 
   return (
-    <Host matchContents ignoreSafeArea="keyboard">
+    <Host style={{ width: 132, height: 44 }} ignoreSafeArea="keyboard">
       <Menu
         label={
           <RNHostView matchContents>
-            <View className="min-h-11 flex-row items-center gap-1 px-1">
+            <View className="h-11 w-[132px] flex-row items-center justify-center gap-1 px-1">
               <Text className="text-foreground text-[15px] font-medium" numberOfLines={1}>
                 {selected.label.slice(0, suffixStart)}
               </Text>

@@ -10,7 +10,8 @@ import {
 } from "@assistant-ui/react-native";
 import { WrenchIcon } from "lucide-react-native";
 import { type FC, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   field,
   inkButton,
@@ -407,15 +408,34 @@ export const ToolFallbackApproval: FC<
   );
 };
 
+// Only previews content that is already present in the tool call; it never
+// fetches a persisted artifact or presents the draft as a saved download.
+function FilePreview({ path, content }: { path: string; content: string }) {
+  const [open, setOpen] = useState(false);
+  return <>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Preview ${path}`} className="min-h-11 justify-center ps-6" onPress={() => setOpen(true)}>
+      <Text className="text-primary text-sm" numberOfLines={1}>Preview {path}</Text>
+    </Pressable>
+    <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
+      <SafeAreaView className="bg-background flex-1 p-4">
+        <Pressable accessibilityRole="button" className="min-h-11 justify-center" onPress={() => setOpen(false)}>
+          <Text className="text-primary text-base">Close</Text>
+        </Pressable>
+        <Text className="text-foreground mb-3 text-base font-semibold" numberOfLines={2}>{path}</Text>
+        <ScrollView className="flex-1">
+          <Text selectable className="text-foreground text-sm" style={monoStyle}>
+            {content.slice(0, 5_000)}{content.length > 5_000 ? "\n… Preview limited to 5,000 characters" : ""}
+          </Text>
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  </>;
+}
+
 export const ToolFallback: ToolCallMessagePartComponent = ({
   toolName,
-  argsText,
+  args,
   status,
-  approval,
-  interrupt,
-  addResult,
-  resume,
-  respondToApproval,
 }) => {
   const isCancelled =
     status.type === "incomplete" && status.reason === "cancelled";
@@ -431,9 +451,12 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
     status.type === "incomplete" && status.error != null
       ? formatUnknownValue(status.error)
       : "";
-  const shouldRenderApproval =
-    status.type === "requires-action" &&
-    offersInterruptAction(status, approval, interrupt);
+  // eve's native store does not expose respond(inputResponses). Never render
+  // approval buttons that the mobile adapter cannot actually submit.
+  const waitingForApproval = status.type === "requires-action";
+  const preview = toolName === "write_file" && typeof args?.content === "string"
+    ? { path: typeof args.filePath === "string" ? args.filePath : "Draft file", content: args.content }
+    : null;
 
   return (
     <View className="aui-tool-fallback-root border-border bg-card my-1 gap-2 rounded-xl border px-3 py-2">
@@ -453,17 +476,11 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
           </Text>
         </View>
       )}
-      {shouldRenderApproval && (
-        <ToolFallbackApproval
-          className="ps-6"
-          argsText={argsText}
-          status={status}
-          approval={approval}
-          interrupt={interrupt}
-          addResult={addResult}
-          resume={resume}
-          respondToApproval={respondToApproval}
-        />
+      {preview && <FilePreview path={preview.path} content={preview.content} />}
+      {waitingForApproval && (
+        <Text className="text-muted-foreground ps-6 text-xs">
+          Approval is required. Open this chat on the web to respond.
+        </Text>
       )}
     </View>
   );

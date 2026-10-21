@@ -10,6 +10,7 @@ import {
   iconButtonHitSlop,
 } from "@/components/assistant-ui/elements/icon-button";
 import { File } from "@/components/assistant-ui/elements/file";
+import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
 import { Image } from "@/components/assistant-ui/elements/image";
 import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
 import { SessionTimeline, TIMELINE_TOOLS } from "@/components/assistant-ui/elements/session-timeline";
@@ -24,6 +25,8 @@ import {
 } from "@/components/assistant-ui/elements/surfaces";
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback";
 import { TypingIndicator } from "@/components/assistant-ui/elements/typing-indicator";
+import { isTaskNotification } from "@/src/message-projection";
+import { shouldShowThinking } from "@/src/stream-presentation";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import {
@@ -59,6 +62,7 @@ import {
   CopyIcon,
   MicIcon,
   PhoneIcon,
+  Share2Icon,
 } from "lucide-react-native";
 import {
   type ComponentRef,
@@ -84,6 +88,7 @@ import {
   type NativeSyntheticEvent,
   Platform,
   Pressable,
+  Share,
   Text,
   TextInput,
   View,
@@ -541,6 +546,7 @@ export const Thread: FC<ThreadProps> = ({
             <ThreadSuggestions />
           </View>
         </AuiIf>
+        <ThreadFollowupSuggestions />
         <View
           pointerEvents={floatsComposer ? "box-none" : undefined}
           className={Platform.OS === "ios" ? "aui-thread-viewport-footer px-3" : "aui-thread-viewport-footer px-4"}
@@ -1014,6 +1020,14 @@ const ComposerAction: FC<{
   );
 };
 
+const AssistantFailure: FC = () => {
+  const failed = useAuiState((s) => s.message.status?.type === "incomplete" && s.message.status.reason === "error");
+  if (!failed) return null;
+  return <Text className="text-destructive py-2 text-sm" accessibilityRole="alert">
+    This response failed. Check the chat before sending again.
+  </Text>;
+};
+
 const MessageError: FC = () => (
   <ErrorPrimitive.Root className="aui-message-error-root border-destructive bg-destructive/10 dark:bg-destructive/5 mt-2 rounded-md border p-3">
     <ErrorPrimitive.Message
@@ -1031,20 +1045,6 @@ const UserText: TextMessagePartComponent = ({ text }) => (
     {text}
   </Text>
 );
-
-const AssistantIndicator: FC = () => {
-  const isRunning = useAuiState((s) => s.message.status?.type === "running");
-  if (!isRunning) return null;
-
-  return (
-    <TypingIndicator
-      variant="bare"
-      announce={false}
-      className="aui-assistant-message-indicator py-2"
-      accessibilityLabel="Assistant is working"
-    />
-  );
-};
 
 const messageGroupBy = groupPartByType({
   reasoning: ["group-chainOfThought", "group-reasoning"],
@@ -1088,15 +1088,14 @@ const AssistantMessage: FC = () => {
 
   const messageParts = useAuiState((s) => s.message.parts);
   const isRunning = useAuiState((s) => s.message.status?.type === "running");
-  const awaitingContent = isRunning && !messageParts.some((part) =>
-    (part.type === "text" && part.text.length > 0) || part.type === "tool-call",
-  );
+  const awaitingContent = shouldShowThinking(isRunning, messageParts);
   const isTimelineCovered = (index: number) => {
     const part = messageParts[index] as
-      | { toolName?: string; type?: string }
+      | { toolName?: string; type?: string; status?: { type: string } }
       | undefined;
     return (
-      part?.type === "reasoning" || TIMELINE_TOOLS.has(part?.toolName ?? "")
+      part?.type === "reasoning" ||
+      (part?.status?.type !== "requires-action" && part?.toolName !== "write_file" && TIMELINE_TOOLS.has(part?.toolName ?? ""))
     );
   };
 
@@ -1104,15 +1103,13 @@ const AssistantMessage: FC = () => {
     <MessagePrimitive.Root className="aui-assistant-message-root">
       <View className="aui-assistant-message-content px-2">
         {awaitingContent ? (
-          <TypingIndicator
-            variant="bare"
-            announce={false}
-            className="py-2"
-            accessibilityLabel="Assistant is working"
-          />
+          <ShimmerLabel className="text-muted-foreground py-2 text-sm" accessibilityLabel="Assistant is thinking">
+            Thinking
+          </ShimmerLabel>
         ) : null}
         <SessionTimeline />
         <MessageError />
+        <AssistantFailure />
         <MessagePrimitive.GroupedParts groupBy={groupBy}>
           {({ part, children }) => {
             switch (part.type) {
@@ -1166,7 +1163,7 @@ const AssistantMessage: FC = () => {
                 // Summarized by the timeline.
                 return null;
               case "tool-call":
-                if (TIMELINE_TOOLS.has(part.toolName)) {
+                if (TIMELINE_TOOLS.has(part.toolName) && part.status.type !== "requires-action" && part.toolName !== "write_file") {
                   // Summarized by the timeline above.
                   return null;
                 }
@@ -1174,7 +1171,8 @@ const AssistantMessage: FC = () => {
               case "data":
                 return part.dataRendererUI;
               case "indicator":
-                return <AssistantIndicator />;
+                // The in-row Thinking label above owns the pre-content state.
+                return null;
               default:
                 return null;
             }
@@ -1187,6 +1185,22 @@ const AssistantMessage: FC = () => {
         <AssistantActionBar />
       </View>
     </MessagePrimitive.Root>
+  );
+};
+
+const ShareMarkdown: FC = () => {
+  const markdown = useAuiState((s) => s.message.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n\n"));
+  if (Platform.OS === "web" || !markdown.trim()) return null;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Share response as Markdown"
+      className={iconButtonClassName}
+      hitSlop={groupedIconButtonHitSlop}
+      onPress={() => void Share.share({ message: markdown, title: "Pearl response" }).catch(() => {})}
+    >
+      <Icon as={Share2Icon} className="text-muted-foreground size-4" />
+    </Pressable>
   );
 };
 
@@ -1210,6 +1224,7 @@ const AssistantActionBar: FC = () => (
           />
         )}
       </ActionBarPrimitive.Copy>
+      <ShareMarkdown />
     </View>
   </AuiIf>
 );
@@ -1227,18 +1242,26 @@ const UserSendState: FC = () => {
   );
 };
 
-const UserMessage: FC = () => (
-  <MessagePrimitive.Root className="aui-user-message-root items-end gap-y-2 px-2">
-    <UserMessageAttachments />
-    <View className="aui-user-message-content bg-muted max-w-[85%] rounded-xl px-4 py-2">
-      <MessagePrimitive.Parts components={{ Text: UserText, Image, File }} />
-    </View>
-    <View className="aui-user-message-footer -me-1 flex-row items-center justify-end gap-2">
-      <UserSendState />
-      <BranchPicker />
-    </View>
-  </MessagePrimitive.Root>
-);
+const UserMessage: FC = () => {
+  const internalMessage = useAuiState((s) =>
+    s.message.role === "user" && s.message.parts.some((part) =>
+      part.type === "text" && isTaskNotification(part.text ?? ""),
+    ),
+  );
+  if (internalMessage) return null;
+  return (
+    <MessagePrimitive.Root className="aui-user-message-root items-end gap-y-2 px-2">
+      <UserMessageAttachments />
+      <View className="aui-user-message-content bg-muted max-w-[85%] rounded-xl px-4 py-2">
+        <MessagePrimitive.Parts components={{ Text: UserText, Image, File }} />
+      </View>
+      <View className="aui-user-message-footer -me-1 flex-row items-center justify-end gap-2">
+        <UserSendState />
+        <BranchPicker />
+      </View>
+    </MessagePrimitive.Root>
+  );
+};
 
 const ThreadNotice: FC<NonNullable<ThreadProps["notice"]>> = ({ text, actionLabel, onAction }) => (
   <View className="border-border/60 bg-muted/40 mx-4 my-3 rounded-xl border p-3">

@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { nextRevealLength, withPendingAssistant } from "../mobile/src/stream-presentation.ts";
+import { nextRevealLength, shouldShowThinking, withPendingAssistant } from "../mobile/src/stream-presentation.ts";
+
+test("the pre-content state hands off once reasoning, tools, or text are visible", () => {
+  assert.equal(shouldShowThinking(true, []), true);
+  assert.equal(shouldShowThinking(true, [{ type: "indicator" }]), true);
+  assert.equal(shouldShowThinking(true, [{ type: "reasoning", text: "Checking" }]), false);
+  assert.equal(shouldShowThinking(true, [{ type: "tool-call" }]), false);
+  assert.equal(shouldShowThinking(true, [{ type: "text", text: "Hello" }]), false);
+  assert.equal(shouldShowThinking(false, []), false);
+});
 
 test("a continuous stream advances on frames instead of waiting for silence", () => {
   let shown = 0;

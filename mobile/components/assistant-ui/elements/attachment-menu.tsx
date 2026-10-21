@@ -9,16 +9,18 @@ export type AttachmentMenuProps = {
   disabled: boolean;
   onChoosePhoto: () => void;
   onChooseFile: () => void;
+  onPasteText: () => void;
 };
 
 /** Android and web retain the existing attachment choices. */
-export function AttachmentMenu({ disabled, onChoosePhoto, onChooseFile }: AttachmentMenuProps) {
+export function AttachmentMenu({ disabled, onChoosePhoto, onChooseFile, onPasteText }: AttachmentMenuProps) {
   return (
     <View>
       <ComposerPrimitive.AddAttachment
         onPress={() => Alert.alert("Add attachment", undefined, [
           { text: "Choose Photo", onPress: onChoosePhoto },
           { text: "Choose File", onPress: onChooseFile },
+          { text: "Paste Text", onPress: onPasteText },
           { text: "Cancel", style: "cancel" },
         ])}
         disabled={disabled}

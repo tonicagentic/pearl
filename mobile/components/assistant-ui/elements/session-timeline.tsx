@@ -152,7 +152,7 @@ export function SessionTimeline() {
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const streaming = useAuiState((s) => s.message.status?.type === "running");
   const turnId = useAuiState(
-    (s) => (s.message.metadata as { turnId?: string } | undefined)?.turnId,
+    (s) => s.message.metadata?.custom?.turnId as string | undefined,
   );
   const toolCalls = (
     useAuiState((s) => s.message.parts) as readonly unknown[]

@@ -20,6 +20,19 @@ export function nextRevealLength(
   return end;
 }
 
+// The pending assistant row owns one quiet pre-content label. Reasoning and
+// tool steps hand off to the timeline; text and media hand off to their parts.
+export function shouldShowThinking(
+  running: boolean,
+  parts: readonly { type: string; text?: string }[],
+): boolean {
+  return running && !parts.some((part) =>
+    part.type === "text" ? Boolean(part.text?.length) :
+      part.type === "reasoning" || part.type === "tool-call" ||
+      part.type === "data" || part.type === "file" || part.type === "image",
+  );
+}
+
 // eve creates its assistant row on step.started, after message.received. Until
 // then, keep a display-only row at that same position; it is never persisted.
 export function withPendingAssistant(
