@@ -24,6 +24,7 @@ import { HistoryScreen } from "@/components/app-drawer";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { FloatingChatNavigation } from "@/components/floating-chat-navigation";
 import { getModelSelection } from "@/src/model-selection";
+import { withPendingAssistant } from "@/src/stream-presentation";
 import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
 import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft, type LocalSend } from "@/src/send-feedback";
 import { useChats } from "@/src/chat-context";
@@ -87,12 +88,16 @@ export function ChatScreen() {
   );
   const confirmed = localSend ? hasConfirmedSend(events, localSend) : false;
   const projectedMessages = useMemo(
-    () => projectSendMessages(
-      toThreadMessages(state),
+    () => withPendingAssistant(
+      projectSendMessages(
+        toThreadMessages(state),
+        state.messages,
+        confirmed ? null : status === "error" && localSend
+          ? { ...localSend, phase: "uncertain" }
+          : localSend,
+      ),
       state.messages,
-      confirmed ? null : status === "error" && localSend
-        ? { ...localSend, phase: "uncertain" }
-        : localSend,
+      status === "streaming",
     ),
     [state, localSend, confirmed, status],
   );
@@ -258,6 +263,7 @@ export function ChatScreen() {
               <AssistantRuntimeProvider runtime={runtime}>
                 <Thread
                   autoFocus={Platform.OS === "ios" && activeChatId === null && !drawerOpen}
+                  conversationId={activeChatId}
                   focusNewChatKey={drawerOpen ? drawerFocusEntry : newChatEntry}
                   notice={notice}
                 />

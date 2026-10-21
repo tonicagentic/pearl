@@ -1,4 +1,6 @@
-import { useHydrated } from "@/components/assistant-ui/elements/surfaces";
+import { useHydrated, useMotion } from "@/components/assistant-ui/elements/surfaces";
+import { nextRevealLength } from "@/src/stream-presentation";
+import { traceStream } from "@/src/stream-trace";
 import { Icon } from "@/components/ui/icon";
 import type { TextMessagePartProps } from "@assistant-ui/react-native";
 import * as Clipboard from "expo-clipboard";
@@ -7,7 +9,6 @@ import {
   type FC,
   memo,
   type ReactNode,
-  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -24,7 +25,8 @@ import {
 } from "react-native-marked";
 import { useCSSVariable, useUniwind } from "uniwind";
 
-const STREAM_INTERVAL_MS = 50;
+const MIN_RENDER_INTERVAL_MS = 32;
+const REVEAL_WINDOW_MS = 260;
 const MONOSPACE = Platform.select({
   ios: "Menlo",
   android: "monospace",
@@ -65,20 +67,84 @@ export class TaskListTokenizer extends MarkedTokenizer {
 
 const taskListTokenizer = new TaskListTokenizer();
 
-const useThrottledValue = <T,>(value: T, intervalMs: number): T => {
-  const [throttled, setThrottled] = useState(value);
-  const lastEmitRef = useRef(0);
+const useStreamedText = (
+  text: string,
+  status: TextMessagePartProps["status"]["type"],
+): string => {
+  const motion = useMotion();
+  const running = status === "running";
+  const [rendered, setRendered] = useState(() =>
+    running && motion ? text.slice(0, nextRevealLength(text, 0, 16)) : text,
+  );
+  const shown = useRef(rendered);
+  const target = useRef(text);
+  const partStatus = useRef(status);
+  const wasRunning = useRef(running && motion);
+  const targetUpdatedAt = useRef(0);
+  const frame = useRef<number | null>(null);
+  const lastFrame = useRef<number | null>(null);
+  const lastRender = useRef(0);
 
   useEffect(() => {
-    const delay = Math.max(0, intervalMs - (Date.now() - lastEmitRef.current));
-    const timer = setTimeout(() => {
-      lastEmitRef.current = Date.now();
-      setThrottled(value);
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [value, intervalMs]);
+    const now = performance.now();
+    if (target.current !== text || targetUpdatedAt.current === 0) {
+      targetUpdatedAt.current = now;
+      traceStream("source", text.length, Math.max(0, text.length - shown.current.length));
+    }
+    target.current = text;
+    partStatus.current = status;
+    if (running && motion) wasRunning.current = true;
+    const drainTail = status === "complete" && wasRunning.current;
+    if (!motion || (!running && !drainTail) || !text.startsWith(shown.current)) {
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+      frame.current = null;
+      lastFrame.current = null;
+      wasRunning.current = false;
+      shown.current = text;
+      setRendered(text);
+      traceStream(running ? "paint" : "settled", text.length);
+      return;
+    }
+    if (shown.current === text) {
+      if (!running) wasRunning.current = false;
+      return;
+    }
+    if (frame.current !== null) return;
 
-  return throttled;
+    // The same frame loop survives new deltas and a normal completion. The
+    // remaining deadline makes a final burst readable without trailing for
+    // seconds; cancellation and Reduced Motion still flush immediately.
+    const tick = (at: number) => {
+      frame.current = null;
+      const latest = target.current;
+      const current = shown.current;
+      if (!latest.startsWith(current)) {
+        shown.current = latest;
+        setRendered(latest);
+        wasRunning.current = false;
+        return;
+      }
+      const elapsed = at - (lastFrame.current ?? at - 16);
+      const remaining = Math.max(0, REVEAL_WINDOW_MS - (at - targetUpdatedAt.current));
+      const end = nextRevealLength(latest, current.length, elapsed, remaining);
+      lastFrame.current = at;
+      shown.current = latest.slice(0, end);
+      if (end === latest.length || at - lastRender.current >= MIN_RENDER_INTERVAL_MS) {
+        lastRender.current = at;
+        setRendered(shown.current);
+        traceStream("paint", end, latest.length - end);
+      }
+      if (end < latest.length) frame.current = requestAnimationFrame(tick);
+      else if (partStatus.current !== "running") wasRunning.current = false;
+    };
+    frame.current = requestAnimationFrame(tick);
+  }, [text, status, running, motion]);
+
+  useEffect(() => () => {
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+  }, []);
+
+  return rendered;
 };
 
 const CodeBlock: FC<{ code: string; language: string | undefined }> = ({
@@ -286,16 +352,15 @@ type MarkdownTextProps = TextMessagePartProps & {
   variant?: MarkdownTextVariant;
 };
 
-const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, variant }) => {
-  const throttledText = useThrottledValue(text, STREAM_INTERVAL_MS);
-  const deferredText = useDeferredValue(throttledText);
+const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
+  const displayedText = useStreamedText(text, status.type);
   const options = useMarkdownOptions(variant);
   const blocks = useMemo(
     () =>
-      MarkedLexer(deferredText, { gfm: true }).filter(
+      MarkedLexer(displayedText, { gfm: true }).filter(
         (token) => token.type !== "space",
       ),
-    [deferredText],
+    [displayedText],
   );
 
   return (

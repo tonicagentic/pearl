@@ -19,6 +19,7 @@ import {
   ShimmerLabel,
   useAnnounce,
   useHydrated,
+  useMotion,
   webLiveRegion,
 } from "@/components/assistant-ui/elements/surfaces";
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback";
@@ -133,6 +134,8 @@ export type ThreadHistory = {
 
 export type ThreadProps = {
   autoFocus?: boolean | undefined;
+  /** Reset bottom-follow when selecting a different conversation. */
+  conversationId?: string | null | undefined;
   /** Remount only the input when entering a new chat, not on every render. */
   focusNewChatKey?: number | undefined;
   components?: ThreadComponents | undefined;
@@ -244,6 +247,7 @@ const copyToClipboard = async (text: string) => {
 
 export const Thread: FC<ThreadProps> = ({
   autoFocus = true,
+  conversationId,
   focusNewChatKey = 0,
   components = EMPTY_COMPONENTS,
   history,
@@ -251,6 +255,8 @@ export const Thread: FC<ThreadProps> = ({
 }) => {
   const aui = useAui();
   const isRunning = useAuiState((s) => s.thread.isRunning);
+  // Resolve Reduce Motion before the first assistant text part mounts.
+  useMotion();
   const insets = useSafeAreaInsets();
   const followsKeyboard = Platform.OS === "ios" && !Platform.isPad;
   const floatsComposer = Platform.OS === "ios";
@@ -265,6 +271,8 @@ export const Thread: FC<ThreadProps> = ({
     viewportHeight: 0,
     scrollY: 0,
   });
+  const followsEndRef = useRef(true);
+  const followFrameRef = useRef<number | null>(null);
   const jumpRef = useRef<
     | {
         id: string;
@@ -275,7 +283,16 @@ export const Thread: FC<ThreadProps> = ({
   >(undefined);
   const { Rail } = components;
 
-  useEffect(() => () => clearTimeout(jumpRef.current?.timer), []);
+  useEffect(() => () => {
+    clearTimeout(jumpRef.current?.timer);
+    if (followFrameRef.current !== null) cancelAnimationFrame(followFrameRef.current);
+  }, []);
+  useEffect(() => {
+    followsEndRef.current = true;
+    metricsRef.current = { ...metricsRef.current, contentHeight: 0, scrollY: 0 };
+    if (followFrameRef.current !== null) cancelAnimationFrame(followFrameRef.current);
+    followFrameRef.current = null;
+  }, [conversationId]);
 
   const jumpTo = useCallback(
     (id: string) => {
@@ -365,23 +382,58 @@ export const Thread: FC<ThreadProps> = ({
 
   const onListContentSizeChange = useCallback(
     (_width: number, height: number) => {
+      const previousHeight = metricsRef.current.contentHeight;
       metricsRef.current.contentHeight = height;
       publishDescent();
+      if (!followsKeyboard || !isRunning || !followsEndRef.current || previousHeight === 0 ||
+          height <= previousHeight || metricsRef.current.viewportHeight === 0 ||
+          followFrameRef.current !== null) return;
+      // Coalesce content growth to one native scroll per frame. Only follow
+      // while pinned; an intentional drag immediately cancels the request.
+      followFrameRef.current = requestAnimationFrame(() => {
+        followFrameRef.current = null;
+        if (!followsEndRef.current) return;
+        const { contentHeight, viewportHeight } = metricsRef.current;
+        listRef.current?.scrollToOffset({
+          offset: Math.max(0, contentHeight - viewportHeight),
+          animated: true,
+        });
+      });
     },
-    [publishDescent],
+    [followsKeyboard, isRunning, publishDescent],
   );
+
+  const onManualScrollStart = useCallback(() => {
+    followsEndRef.current = false;
+    if (followFrameRef.current !== null) cancelAnimationFrame(followFrameRef.current);
+    followFrameRef.current = null;
+  }, []);
+  const onManualScrollEnd = useCallback(() => {
+    const { contentHeight, viewportHeight, scrollY } = metricsRef.current;
+    followsEndRef.current = contentHeight - viewportHeight - scrollY <= 32;
+  }, []);
 
   const onListLayout = useCallback(
     (event: LayoutChangeEvent) => {
       const { height, y } = event.nativeEvent.layout;
+      const previousHeight = metricsRef.current.viewportHeight;
       metricsRef.current.viewportHeight = height;
+      // Keep keyboard-driven resizes in lockstep with the composer; text-growth
+      // following below is animated independently.
+      if (followsKeyboard && isRunning && followsEndRef.current && previousHeight > 0 &&
+          height !== previousHeight) {
+        listRef.current?.scrollToOffset({
+          offset: Math.max(0, metricsRef.current.contentHeight - height),
+          animated: false,
+        });
+      }
       const snapshot = store.getSnapshot();
       if (height !== snapshot.height || y !== snapshot.top) {
         store.publish({ height, top: y });
       }
       publishDescent();
     },
-    [publishDescent, store],
+    [followsKeyboard, isRunning, publishDescent, store],
   );
 
   const viewport = useMemo(
@@ -436,6 +488,12 @@ export const Thread: FC<ThreadProps> = ({
           // Viewability props cannot change once a FlatList is mounted.
           key={Rail ? "tracked" : "plain"}
           ref={listRef}
+          autoScroll={!(followsKeyboard && isRunning)}
+          {...(followsKeyboard ? {
+            onScrollBeginDrag: onManualScrollStart,
+            onScrollEndDrag: onManualScrollEnd,
+            onMomentumScrollEnd: onManualScrollEnd,
+          } : {})}
           className="aui-message-group flex-1"
           contentContainerClassName={cn(
             "gap-6 px-4 pt-4",
@@ -455,16 +513,16 @@ export const Thread: FC<ThreadProps> = ({
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
           ListFooterComponent={notice ? <ThreadNotice {...notice} /> : null}
-          {...(Rail
-            ? {
-                onContentSizeChange: onListContentSizeChange,
-                onLayout: onListLayout,
-                onScroll: onListScroll,
-                onScrollToIndexFailed,
-                onViewableItemsChanged,
-                viewabilityConfig: MESSAGE_VIEWABILITY,
-              }
-            : {})}
+          {...(Rail || followsKeyboard ? {
+            onContentSizeChange: onListContentSizeChange,
+            onLayout: onListLayout,
+            onScroll: onListScroll,
+          } : {})}
+          {...(Rail ? {
+            onScrollToIndexFailed,
+            onViewableItemsChanged,
+            viewabilityConfig: MESSAGE_VIEWABILITY,
+          } : {})}
           {...(history ? { history } : {})}
         >
           {() => <ThreadMessage />}
@@ -1029,6 +1087,10 @@ const AssistantMessage: FC = () => {
   const groupBy = taskAwareGroupBy;
 
   const messageParts = useAuiState((s) => s.message.parts);
+  const isRunning = useAuiState((s) => s.message.status?.type === "running");
+  const awaitingContent = isRunning && !messageParts.some((part) =>
+    (part.type === "text" && part.text.length > 0) || part.type === "tool-call",
+  );
   const isTimelineCovered = (index: number) => {
     const part = messageParts[index] as
       | { toolName?: string; type?: string }
@@ -1041,6 +1103,14 @@ const AssistantMessage: FC = () => {
   return (
     <MessagePrimitive.Root className="aui-assistant-message-root">
       <View className="aui-assistant-message-content px-2">
+        {awaitingContent ? (
+          <TypingIndicator
+            variant="bare"
+            announce={false}
+            className="py-2"
+            accessibilityLabel="Assistant is working"
+          />
+        ) : null}
         <SessionTimeline />
         <MessageError />
         <MessagePrimitive.GroupedParts groupBy={groupBy}>

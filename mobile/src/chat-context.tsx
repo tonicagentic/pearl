@@ -18,6 +18,7 @@ import {
 } from "eve/client";
 
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
+import { traceStream } from "./stream-trace";
 import {
   appendChatEvents,
   createChat,
@@ -207,6 +208,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
 
     store.setCallbacks({
       onEvent: (event) => {
+        if (event.type === "message.appended") {
+          traceStream("delta", event.data.messageDelta.length);
+        }
         if (!binding.id) return;
         binding.batch.push({ event, eventIndex: binding.eventIndex++ });
         if (event.type === "message.received") {
