@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Keyboard, Platform, Pressable, View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { interpolate, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import ReanimatedDrawerLayout, {
   DrawerKeyboardDismissMode,
@@ -20,7 +20,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
-import { HistoryScreen } from "@/components/app-drawer";
+import { HistoryScreen, type SidebarDestination } from "@/components/app-drawer";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
 import { FloatingChatNavigation } from "@/components/floating-chat-navigation";
@@ -53,6 +53,7 @@ export function ChatScreen() {
   const { width } = useWindowDimensions();
   const drawerRef = useRef<DrawerLayoutMethods>(null);
   const settledOpen = useRef(false);
+  const pendingDestination = useRef<SidebarDestination | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   // A new chat chosen from History should focus only after the drawer settles.
   const [drawerFocusEntry, setDrawerFocusEntry] = useState(newChatEntry);
@@ -61,6 +62,10 @@ export function ChatScreen() {
     Keyboard.dismiss();
     drawerRef.current?.openDrawer();
   }, []);
+  const navigateFromHistory = useCallback((href: SidebarDestination) => {
+    pendingDestination.current = href;
+    closeHistory();
+  }, [closeHistory]);
   const onDrawerSettled = useCallback((open: boolean) => {
     if (settledOpen.current === open) return;
     settledOpen.current = open;
@@ -68,10 +73,15 @@ export function ChatScreen() {
     setDrawerOpen(open);
     // A single tick at the end of the spring, not on every drag frame.
     void Haptics.selectionAsync().catch(() => {});
+    if (!open && pendingDestination.current) {
+      const href = pendingDestination.current;
+      pendingDestination.current = null;
+      router.push(href);
+    }
   }, [newChatEntry]);
   const renderHistory = useCallback(
-    () => <HistoryScreen onClose={closeHistory} visible={drawerOpen} />,
-    [closeHistory, drawerOpen],
+    () => <HistoryScreen onClose={closeHistory} onNavigate={navigateFromHistory} visible={drawerOpen} />,
+    [closeHistory, navigateFromHistory, drawerOpen],
   );
   const [sendError, setSendError] = useState<{ store: object; message: string } | null>(null);
   const [localSends, setLocalSends] = useState<Map<object, LocalSend>>(() => new Map());

@@ -24,17 +24,35 @@ export const COMPOSER_MODELS: readonly ComposerModel[] = [
 export const DEFAULT_MODEL_KEY = COMPOSER_MODELS[0].key;
 
 let selectedKey = DEFAULT_MODEL_KEY;
+let selectionRevision = 0;
+let saveSelection: ((key: string) => Promise<void>) | undefined;
 const listeners = new Set<() => void>();
+
+export function configureModelSelectionPersistence(save: (key: string) => Promise<void>): void {
+  saveSelection = save;
+}
+
+export async function restoreModelSelection(load: () => Promise<string | null>): Promise<void> {
+  const revision = selectionRevision;
+  const saved = await load();
+  // A user's in-flight choice always wins over a slower storage read.
+  if (revision !== selectionRevision || !saved || !COMPOSER_MODELS.some((model) => model.key === saved)) return;
+  if (selectedKey === saved) return;
+  selectedKey = saved;
+  for (const listener of listeners) listener();
+}
 
 export function getModelSelection(): string {
   return selectedKey;
 }
 
-export function setModelSelection(key: string): void {
-  if (!COMPOSER_MODELS.some((model) => model.key === key)) return;
-  if (key === selectedKey) return;
+export function setModelSelection(key: string): Promise<void> {
+  if (!COMPOSER_MODELS.some((model) => model.key === key)) return Promise.resolve();
+  selectionRevision++;
+  if (key === selectedKey) return saveSelection?.(key) ?? Promise.resolve();
   selectedKey = key;
   for (const listener of listeners) listener();
+  return saveSelection?.(key) ?? Promise.resolve();
 }
 
 export function subscribeModelSelection(listener: () => void): () => void {

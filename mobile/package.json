@@ -1,6 +1,6 @@
 {
   "name": "pearl-mobile",
-  "version": "1.0.0",
+  "version": "0.1.0-alpha.2",
   "main": "index.ts",
   "dependencies": {
     "@assistant-ui/core": "^0.3.21",

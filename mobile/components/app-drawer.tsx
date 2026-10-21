@@ -1,7 +1,6 @@
-import { useRef } from "react";
-import { ActionSheetIOS, FlatList, Platform, Pressable, Text, View, findNodeHandle } from "react-native";
+import { FlatList, Platform, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
-import { InboxIcon, MessageCircleIcon, NetworkIcon, PlusIcon, SquarePenIcon, UserRoundIcon, XIcon } from "lucide-react-native";
+import { InboxIcon, NetworkIcon, PlusIcon, Settings2Icon, SquarePenIcon, XIcon } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
@@ -9,39 +8,33 @@ import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 
 /** Shared history content for the swipeable chat panel and direct-link screen. */
+export type SidebarDestination = "/areas" | "/issues" | "/settings";
+
 export function HistoryScreen({
   onClose,
+  onNavigate,
   visible = true,
 }: {
   onClose?: () => void;
+  onNavigate?: (href: SidebarDestination) => void;
   visible?: boolean;
 }) {
-  const { signedIn, viewerEmail, signOut } = useAuth();
+  const { signedIn } = useAuth();
   const { chats, activeChatId, chatsLoading, chatsError, hasMoreChats, loadMoreChats, reloadChats, selectChat, selectionError, newChat } = useChats();
   const backgroundColor = useCSSVariable("--color-background") as string | undefined;
   const iosSidebar = Platform.OS === "ios" && !!onClose;
-  const accountButton = useRef<View>(null);
 
   const goToChat = () => {
     if (onClose) onClose();
     else if (router.canGoBack()) router.back();
     else router.replace("/");
   };
-  const showAccount = () => {
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        title: viewerEmail ?? undefined,
-        options: ["Sign out", "Cancel"],
-        destructiveButtonIndex: 0,
-        cancelButtonIndex: 1,
-        anchor: findNodeHandle(accountButton.current) ?? undefined,
-      },
-      (index) => { if (index === 0) { signOut(); goToChat(); } },
-    );
-  };
-  const openDestination = (href: "/areas" | "/issues") => {
-    onClose?.();
-    router.push(href);
+  const openDestination = (href: SidebarDestination) => {
+    if (onNavigate) onNavigate(href);
+    else {
+      onClose?.();
+      router.push(href);
+    }
   };
 
   return (
@@ -52,15 +45,33 @@ export function HistoryScreen({
     >
       {iosSidebar ? (
         <View className="flex-row items-center justify-between px-7 pb-4 pt-3">
-          <Text className="text-2xl font-semibold text-foreground">Pearl</Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="New chat"
-            className="h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card"
-            onPress={() => { newChat(); goToChat(); }}
+            accessibilityLabel="Settings"
+            className="min-h-12 flex-row items-center gap-3 rounded-xl px-2.5 active:bg-muted/60"
+            onPress={() => openDestination("/settings")}
           >
-            <SquarePenIcon className="size-6 text-foreground" />
+            <Settings2Icon className="size-6 text-foreground" />
+            <Text className="text-lg font-medium text-foreground">Settings</Text>
           </Pressable>
+          <View className="flex-row items-center gap-1">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close sidebar"
+              className="h-11 w-11 items-center justify-center rounded-full"
+              onPress={onClose}
+            >
+              <XIcon className="size-5 text-foreground" />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="New chat"
+              className="h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card"
+              onPress={() => { newChat(); goToChat(); }}
+            >
+              <SquarePenIcon className="size-6 text-foreground" />
+            </Pressable>
+          </View>
         </View>
       ) : onClose ? (
         <View className="flex-row items-center justify-between px-4 py-2">
@@ -107,6 +118,10 @@ export function HistoryScreen({
               </>
             ) : (
               <>
+                <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/settings")}>
+                  <Settings2Icon className="size-5 text-foreground" />
+                  <Text className="text-base text-foreground">Settings</Text>
+                </Pressable>
                 <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => { newChat(); goToChat(); }}>
                   <PlusIcon className="size-5 text-foreground" />
                   <Text className="text-base text-foreground">New chat</Text>
@@ -141,47 +156,6 @@ export function HistoryScreen({
           </Pressable>
         ) : null}
       />
-      {iosSidebar ? (
-        <View className="px-7 pb-2 pt-3">
-          {signedIn ? (
-            <Text className="pb-3 text-xs text-muted-foreground" numberOfLines={1}>{viewerEmail}</Text>
-          ) : null}
-          <View className="flex-row items-center justify-between">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Return to chat"
-              className="h-12 flex-row items-center gap-2 rounded-full px-5"
-              style={{ backgroundColor: "#3267f6" }}
-              onPress={goToChat}
-            >
-              <MessageCircleIcon size={22} color="white" />
-              <Text className="text-base font-semibold text-white">Chat</Text>
-            </Pressable>
-            {signedIn ? (
-              <Pressable
-                ref={accountButton}
-                accessibilityRole="button"
-                accessibilityLabel="Account options"
-                className="h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card"
-                onPress={showAccount}
-              >
-                <UserRoundIcon className="size-6 text-foreground" />
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      ) : (
-        <View className="border-t border-border px-4 py-2">
-          {signedIn ? (
-            <>
-              <Text className="px-3 text-xs text-muted-foreground" numberOfLines={1}>{viewerEmail}</Text>
-              <Pressable accessibilityRole="button" className="min-h-12 justify-center rounded-lg px-3" onPress={() => { signOut(); goToChat(); }}>
-                <Text className="text-base text-muted-foreground">Sign out</Text>
-              </Pressable>
-            </>
-          ) : <Text className="px-3 py-2 text-sm text-muted-foreground">Signed out</Text>}
-        </View>
-      )}
     </SafeAreaView>
   );
 }

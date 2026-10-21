@@ -1,7 +1,7 @@
 import { Host, Menu, RNHostView, Toggle } from "@expo/ui/swift-ui";
 import { accessibilityLabel, disabled as nativeDisabled } from "@expo/ui/swift-ui/modifiers";
 import { useSyncExternalStore } from "react";
-import { Text, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 
 import {
   COMPOSER_MODELS,
@@ -47,7 +47,7 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
             key={model.key}
             label={model.label}
             isOn={model.key === selected.key}
-            onIsOnChange={() => setModelSelection(model.key)}
+            onIsOnChange={() => void setModelSelection(model.key).catch(() => Alert.alert("Could not save model choice", "Try selecting the model again."))}
           />
         ))}
       </Menu>

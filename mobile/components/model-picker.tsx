@@ -1,4 +1,5 @@
 import {
+  Alert,
   Modal,
   Pressable,
   Text,
@@ -50,7 +51,7 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
         selectedKey={selected.key}
         onClose={() => setMenuOpen(false)}
         onSelect={(key) => {
-          setModelSelection(key);
+          void setModelSelection(key).catch(() => Alert.alert("Could not save model choice", "Try selecting the model again."));
           setMenuOpen(false);
         }}
       />
