@@ -9,6 +9,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tonicagentic.pearl",
+      "version": "0.1.0",
       "buildNumber": "2"
     },
     "android": {
