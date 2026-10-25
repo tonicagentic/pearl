@@ -7,7 +7,7 @@ import { mono, ShimmerLabel, SwapLabel } from "./surfaces";
 
 // RN port of the web tool-timeline element: a whole working turn summarized
 // as one collapsed line — a verb and a chip per tool step, ending in
-// file-change stats.
+// file-change stats. Reasoning is Trace-style: verb (+ duration), no prose chip.
 
 export interface TimelineStep {
   verb: string;
@@ -40,50 +40,67 @@ export interface ToolTimelineProps {
 
 function StepRow({
   step,
-  streaming,
   active,
   expanded,
   onToggle,
+  elapsed,
 }: {
   readonly step: TimelineStep;
-  readonly streaming: boolean;
   readonly active: boolean;
   readonly expanded: boolean;
   readonly onToggle: () => void;
+  /** Shown beside Thought/Thinking on single-step turns (Trace description). */
+  readonly elapsed?: string;
 }) {
   const expandable = typeof step.detail === "string" && step.detail.length > 0;
   // Streaming steps read progressive ("Thinking"); settled ones past tense.
   const verb = active && step.verb === "Thought" ? "Thinking" : step.verb;
+  const showChip = step.chip.length > 0;
 
   return (
     <>
       <Pressable
-        className="flex-row items-center gap-2"
+        className={cn(
+          "min-h-8 flex-row items-center gap-1.5 py-0.5",
+          expandable && "active:opacity-70",
+        )}
         disabled={!expandable}
         onPress={onToggle}
         accessibilityState={{ expanded }}
+        hitSlop={expandable ? { top: 6, bottom: 6, left: 4, right: 4 } : undefined}
       >
-        <ShimmerLabel active={active} className="shrink-0 leading-none">
+        <ShimmerLabel
+          active={active}
+          className="text-foreground/55 shrink-0 text-[13px] leading-none"
+        >
           {verb}
         </ShimmerLabel>
-        <Text
-          numberOfLines={1}
-          className="min-w-0 flex-shrink rounded-md bg-foreground/[0.06] px-1.5 py-0.5 text-[11px] text-foreground/70"
-        >
-          {step.chip}
-        </Text>
+        {elapsed !== undefined ? (
+          <Text className={cn(mono, "text-[12px] text-foreground/30")}>{elapsed}</Text>
+        ) : null}
+        {showChip ? (
+          <Text
+            numberOfLines={1}
+            className="min-w-0 flex-shrink rounded-md bg-foreground/[0.06] px-1.5 py-0.5 text-[11px] text-foreground/70"
+          >
+            {step.chip}
+          </Text>
+        ) : null}
         {expandable ? (
           <ChevronDownIcon
             className={cn(
-              "size-3 shrink-0 text-foreground/50 transition-transform",
+              "size-3.5 shrink-0 text-foreground/40 transition-transform",
               expanded && "rotate-180",
             )}
           />
         ) : null}
       </Pressable>
       {expandable && expanded ? (
-        <View className="ms-7 rounded-md bg-foreground/[0.03] px-2 py-1.5 pe-2">
-          <Text className="text-[13px] leading-relaxed text-foreground/60">
+        <View className="ms-0.5 mt-1 rounded-md bg-foreground/[0.03] px-3 py-2.5">
+          <Text
+            selectable
+            className="text-[13px] leading-[20px] text-foreground/55"
+          >
             {step.detail}
           </Text>
         </View>
@@ -147,15 +164,16 @@ export function ToolTimeline({
   // A single step needs no collapse chrome: render it inline.
   if (steps.length === 1) {
     const step = steps[0];
+    const stepElapsed = step.verb === "Thought" ? elapsed : undefined;
 
     return (
       <View data-slot="tool-timeline" className="w-full">
         <StepRow
           step={step}
-          streaming={streaming}
           active={streaming}
           expanded={expandedSteps.has(0)}
           onToggle={() => toggleStep(0)}
+          elapsed={stepElapsed}
         />
         <StatChips stats={stats} />
       </View>
@@ -189,9 +207,8 @@ export function ToolTimeline({
         <View className="flex-col gap-2.5 pb-1 pl-4 pt-2.5">
           {shown.map((step, index) => (
             <StepRow
-              key={`step-${index}-${step.chip}`}
+              key={`step-${index}-${step.verb}-${step.chip}`}
               step={step}
-              streaming={streaming}
               active={streaming && index === shown.length - 1}
               expanded={expandedSteps.has(index)}
               onToggle={() => toggleStep(index)}

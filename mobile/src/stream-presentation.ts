@@ -1,15 +1,15 @@
 import type { ThreadMessageLike } from "@assistant-ui/react-native";
 
 /** Calm base typewriter pace while the assistant part is still streaming. */
-export const LIVE_CHARS_PER_SEC = 58;
+export const LIVE_CHARS_PER_SEC = 95;
 /** Cap per animation frame so a hitch cannot dump a paragraph. */
-export const LIVE_MAX_PER_FRAME = 6;
+export const LIVE_MAX_PER_FRAME = 14;
 /** Backlog (code units) at which live pace reaches its soft boost ceiling. */
-export const LIVE_LAG_SOFT_CAP = 160;
+export const LIVE_LAG_SOFT_CAP = 80;
 /** Peak live rate multiplier when the buffer is deep (still far from a dump). */
-export const LIVE_LAG_BOOST = 0.9;
+export const LIVE_LAG_BOOST = 1.5;
 /** After the turn completes, ease the buffered tail out within this window. */
-export const CATCH_UP_WINDOW_MS = 420;
+export const CATCH_UP_WINDOW_MS = 700;
 
 export type RevealMode =
   | { mode: "live"; charsPerSec?: number; maxPerFrame?: number; carry?: number }

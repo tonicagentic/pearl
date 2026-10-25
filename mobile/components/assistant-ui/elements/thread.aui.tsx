@@ -1175,7 +1175,7 @@ const AssistantMessage: FC = () => {
         </MessagePrimitive.GroupedParts>
         <MessageError />
       </View>
-      <View className="aui-assistant-message-footer min-h-7 flex-row items-center pt-1">
+      <View className="aui-assistant-message-footer min-h-7 flex-row items-center pt-2.5">
         <BranchPicker />
         <AssistantActionBar />
       </View>
@@ -1205,7 +1205,7 @@ const AssistantActionBar: FC = () => (
       !(s.message.role === "assistant" && s.message.status?.type === "running")
     }
   >
-    <View className="aui-assistant-action-bar-root -ms-1 flex-row gap-1">
+    <View className="aui-assistant-action-bar-root flex-row gap-2.5">
       <ActionBarPrimitive.Copy
         copyToClipboard={copyToClipboard}
         className={iconButtonClassName}

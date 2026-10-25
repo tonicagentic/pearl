@@ -119,11 +119,10 @@ function toStep(part: TimelinePart): TimelineStep {
   const filePath =
     typeof args.filePath === "string" ? args.filePath : undefined;
   if (part.type === "reasoning") {
-    const head = (part.text ?? "").replace(/\s+/g, " ").trim();
+    // Trace-style: title only. Prose stays behind expand, not in a chip.
     return {
       verb: "Thought",
-      chip: head.slice(0, 200) || "…",
-      // The full reasoning prose, revealed by expanding the step.
+      chip: "",
       detail: part.text,
       filePath,
     };

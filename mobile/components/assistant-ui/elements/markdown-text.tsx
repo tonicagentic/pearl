@@ -1,6 +1,4 @@
-import { useHydrated, useMotion } from "@/components/assistant-ui/elements/surfaces";
-import { CATCH_UP_WINDOW_MS, nextRevealLength } from "@/src/stream-presentation";
-import { traceStream } from "@/src/stream-trace";
+import { useHydrated } from "@/components/assistant-ui/elements/surfaces";
 import { Icon } from "@/components/ui/icon";
 import type { TextMessagePartProps } from "@assistant-ui/react-native";
 import * as Clipboard from "expo-clipboard";
@@ -25,7 +23,6 @@ import {
 } from "react-native-marked";
 import { useCSSVariable, useUniwind } from "uniwind";
 
-const MIN_RENDER_INTERVAL_MS = 32;
 const MONOSPACE = Platform.select({
   ios: "Menlo",
   android: "monospace",
@@ -66,114 +63,10 @@ export class TaskListTokenizer extends MarkedTokenizer {
 
 const taskListTokenizer = new TaskListTokenizer();
 
-const useStreamedText = (
-  text: string,
-  status: TextMessagePartProps["status"]["type"],
-): string => {
-  const motion = useMotion();
-  const running = status === "running";
-  const [rendered, setRendered] = useState(() => {
-    if (!(running && motion)) return text;
-    return text.slice(0, nextRevealLength(text, 0, 16, { mode: "live" }).end);
-  });
-  const shown = useRef(rendered);
-  const target = useRef(text);
-  const partStatus = useRef(status);
-  const wasRunning = useRef(running && motion);
-  const drainStartedAt = useRef(0);
-  const carry = useRef(0);
-  const frame = useRef<number | null>(null);
-  const lastFrame = useRef<number | null>(null);
-  const lastRender = useRef(0);
-
-  useEffect(() => {
-    if (target.current !== text) {
-      traceStream("source", text.length, Math.max(0, text.length - shown.current.length));
-    }
-    target.current = text;
-    partStatus.current = status;
-    if (running && motion) {
-      wasRunning.current = true;
-      drainStartedAt.current = 0;
-    }
-    const drainTail = status === "complete" && wasRunning.current;
-    if (!motion || (!running && !drainTail) || !text.startsWith(shown.current)) {
-      if (frame.current !== null) cancelAnimationFrame(frame.current);
-      frame.current = null;
-      lastFrame.current = null;
-      drainStartedAt.current = 0;
-      carry.current = 0;
-      wasRunning.current = false;
-      shown.current = text;
-      setRendered(text);
-      traceStream(running ? "paint" : "settled", text.length);
-      return;
-    }
-    if (shown.current === text) {
-      if (!running) wasRunning.current = false;
-      carry.current = 0;
-      return;
-    }
-    if (frame.current !== null) return;
-
-    // Live deltas ease with lag and fractional carry. After completion, catch-up
-    // eases the buffered tail closed; cancel / Reduce Motion still flush above.
-    const tick = (at: number) => {
-      frame.current = null;
-      const latest = target.current;
-      const current = shown.current;
-      if (!latest.startsWith(current)) {
-        shown.current = latest;
-        setRendered(latest);
-        wasRunning.current = false;
-        drainStartedAt.current = 0;
-        carry.current = 0;
-        return;
-      }
-      const elapsed = at - (lastFrame.current ?? at - 16);
-      const draining = partStatus.current !== "running";
-      const step = draining
-        ? (() => {
-          if (drainStartedAt.current === 0) {
-            drainStartedAt.current = at;
-            carry.current = 0;
-          }
-          const remaining = Math.max(0, CATCH_UP_WINDOW_MS - (at - drainStartedAt.current));
-          return nextRevealLength(latest, current.length, elapsed, {
-            mode: "catchUp",
-            remainingMs: remaining,
-            windowMs: CATCH_UP_WINDOW_MS,
-            carry: carry.current,
-          });
-        })()
-        : nextRevealLength(latest, current.length, elapsed, {
-          mode: "live",
-          carry: carry.current,
-        });
-      carry.current = step.carry;
-      lastFrame.current = at;
-      shown.current = latest.slice(0, step.end);
-      if (step.end === latest.length || at - lastRender.current >= MIN_RENDER_INTERVAL_MS) {
-        lastRender.current = at;
-        setRendered(shown.current);
-        traceStream("paint", step.end, latest.length - step.end);
-      }
-      if (step.end < latest.length) frame.current = requestAnimationFrame(tick);
-      else if (partStatus.current !== "running") {
-        wasRunning.current = false;
-        drainStartedAt.current = 0;
-        carry.current = 0;
-      }
-    };
-    frame.current = requestAnimationFrame(tick);
-  }, [text, status, running, motion]);
-
-  useEffect(() => () => {
-    if (frame.current !== null) cancelAnimationFrame(frame.current);
-  }, []);
-
-  return rendered;
-};
+// Show wire text as it arrives (no client typewriter). A paced reveal +
+// setState sync lagged behind eve and hit "Maximum update depth exceeded",
+// which aborted the store as "Connection interrupted".
+const useStreamedText = (text: string): string => text;
 
 const CodeBlock: FC<{ code: string; language: string | undefined }> = ({
   code,
@@ -248,7 +141,8 @@ class MarkdownRenderer extends Renderer {
   keyIndex = 0;
 
   constructor(_source: string) {
-    super();
+    // Custom renderer ignores Markdown's selectable prop; set it here.
+    super({ selectable: true });
   }
 
   override getKey(): string {
@@ -299,9 +193,9 @@ const useMarkdownOptions = (
         : { fontSize: 16, lineHeight: 26 };
     const styles: MarkedStyles = {
       text: bodyText,
-      paragraph: { paddingVertical: 4 },
-      li: bodyText,
-      list: { paddingVertical: 4 },
+      paragraph: { paddingVertical: 6 },
+      li: { ...bodyText, paddingVertical: 2 },
+      list: { paddingVertical: 6, paddingLeft: 4 },
       link: { fontStyle: "normal", textDecorationLine: "underline" },
       codespan: {
         fontFamily: MONOSPACE,
@@ -312,16 +206,16 @@ const useMarkdownOptions = (
       blockquote: {
         borderLeftWidth: 2,
         paddingLeft: 12,
-        marginVertical: 4,
+        marginVertical: 8,
         opacity: 1,
       },
-      hr: { height: 1, marginVertical: 12, borderWidth: 0 },
+      hr: { height: 1, marginVertical: 16, borderWidth: 0 },
       h1: {
         fontSize: 24,
         lineHeight: 32,
         fontWeight: "600",
-        marginTop: 16,
-        marginBottom: 4,
+        marginTop: 20,
+        marginBottom: 8,
         paddingBottom: 0,
         borderBottomWidth: 0,
       },
@@ -329,15 +223,39 @@ const useMarkdownOptions = (
         fontSize: 20,
         lineHeight: 28,
         fontWeight: "600",
-        marginTop: 14,
-        marginBottom: 4,
+        marginTop: 18,
+        marginBottom: 6,
         paddingBottom: 0,
         borderBottomWidth: 0,
       },
-      h3: { fontSize: 18, lineHeight: 26, fontWeight: "600", marginTop: 12 },
-      h4: { fontSize: 16, lineHeight: 26, fontWeight: "600", marginTop: 10 },
-      h5: { fontSize: 16, lineHeight: 26, fontWeight: "600", marginTop: 8 },
-      h6: { fontSize: 16, lineHeight: 26, fontWeight: "600", marginTop: 8 },
+      h3: {
+        fontSize: 18,
+        lineHeight: 26,
+        fontWeight: "600",
+        marginTop: 16,
+        marginBottom: 6,
+      },
+      h4: {
+        fontSize: 16,
+        lineHeight: 26,
+        fontWeight: "600",
+        marginTop: 14,
+        marginBottom: 4,
+      },
+      h5: {
+        fontSize: 16,
+        lineHeight: 26,
+        fontWeight: "600",
+        marginTop: 12,
+        marginBottom: 4,
+      },
+      h6: {
+        fontSize: 16,
+        lineHeight: 26,
+        fontWeight: "600",
+        marginTop: 12,
+        marginBottom: 4,
+      },
       tableCell: { paddingHorizontal: 8, paddingVertical: 6 },
     };
     const options: useMarkdownHookOptions = {
@@ -381,19 +299,32 @@ type MarkdownTextProps = TextMessagePartProps & {
 };
 
 const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
-  const displayedText = useStreamedText(text, status.type);
+  const statusType = status?.type ?? "running";
+  const streaming = statusType === "running";
+  const displayedText = useStreamedText(text);
   const options = useMarkdownOptions(variant);
-  const blocks = useMemo(
-    () =>
-      MarkedLexer(displayedText, { gfm: true }).filter(
-        (token) => token.type !== "space",
-      ),
-    [displayedText],
-  );
+  // Re-lexing markdown on every token stalls the JS thread behind a healthy
+  // wire stream. While running, paint plain text; markdown after the part settles.
+  const blocks = useMemo(() => {
+    if (streaming) return null;
+    return MarkedLexer(displayedText, { gfm: true }).filter(
+      (token) => token.type !== "space",
+    );
+  }, [displayedText, streaming]);
+
+  if (streaming) {
+    return (
+      <View className="aui-md-root">
+        <Text selectable className="text-foreground text-[16px] leading-[26px]">
+          {displayedText}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View className="aui-md-root">
-      {blocks.map((token, index) => (
+      {(blocks ?? []).map((token, index) => (
         <MarkdownBlock key={index} raw={token.raw} options={options} />
       ))}
     </View>
