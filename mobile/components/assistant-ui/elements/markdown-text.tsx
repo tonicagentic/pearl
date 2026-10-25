@@ -1,5 +1,5 @@
 import { useHydrated, useMotion } from "@/components/assistant-ui/elements/surfaces";
-import { nextRevealLength } from "@/src/stream-presentation";
+import { CATCH_UP_WINDOW_MS, nextRevealLength } from "@/src/stream-presentation";
 import { traceStream } from "@/src/stream-trace";
 import { Icon } from "@/components/ui/icon";
 import type { TextMessagePartProps } from "@assistant-ui/react-native";
@@ -26,7 +26,6 @@ import {
 import { useCSSVariable, useUniwind } from "uniwind";
 
 const MIN_RENDER_INTERVAL_MS = 32;
-const REVEAL_WINDOW_MS = 260;
 const MONOSPACE = Platform.select({
   ios: "Menlo",
   android: "monospace",
@@ -73,32 +72,37 @@ const useStreamedText = (
 ): string => {
   const motion = useMotion();
   const running = status === "running";
-  const [rendered, setRendered] = useState(() =>
-    running && motion ? text.slice(0, nextRevealLength(text, 0, 16)) : text,
-  );
+  const [rendered, setRendered] = useState(() => {
+    if (!(running && motion)) return text;
+    return text.slice(0, nextRevealLength(text, 0, 16, { mode: "live" }).end);
+  });
   const shown = useRef(rendered);
   const target = useRef(text);
   const partStatus = useRef(status);
   const wasRunning = useRef(running && motion);
-  const targetUpdatedAt = useRef(0);
+  const drainStartedAt = useRef(0);
+  const carry = useRef(0);
   const frame = useRef<number | null>(null);
   const lastFrame = useRef<number | null>(null);
   const lastRender = useRef(0);
 
   useEffect(() => {
-    const now = performance.now();
-    if (target.current !== text || targetUpdatedAt.current === 0) {
-      targetUpdatedAt.current = now;
+    if (target.current !== text) {
       traceStream("source", text.length, Math.max(0, text.length - shown.current.length));
     }
     target.current = text;
     partStatus.current = status;
-    if (running && motion) wasRunning.current = true;
+    if (running && motion) {
+      wasRunning.current = true;
+      drainStartedAt.current = 0;
+    }
     const drainTail = status === "complete" && wasRunning.current;
     if (!motion || (!running && !drainTail) || !text.startsWith(shown.current)) {
       if (frame.current !== null) cancelAnimationFrame(frame.current);
       frame.current = null;
       lastFrame.current = null;
+      drainStartedAt.current = 0;
+      carry.current = 0;
       wasRunning.current = false;
       shown.current = text;
       setRendered(text);
@@ -107,13 +111,13 @@ const useStreamedText = (
     }
     if (shown.current === text) {
       if (!running) wasRunning.current = false;
+      carry.current = 0;
       return;
     }
     if (frame.current !== null) return;
 
-    // The same frame loop survives new deltas and a normal completion. The
-    // remaining deadline makes a final burst readable without trailing for
-    // seconds; cancellation and Reduced Motion still flush immediately.
+    // Live deltas ease with lag and fractional carry. After completion, catch-up
+    // eases the buffered tail closed; cancel / Reduce Motion still flush above.
     const tick = (at: number) => {
       frame.current = null;
       const latest = target.current;
@@ -122,20 +126,44 @@ const useStreamedText = (
         shown.current = latest;
         setRendered(latest);
         wasRunning.current = false;
+        drainStartedAt.current = 0;
+        carry.current = 0;
         return;
       }
       const elapsed = at - (lastFrame.current ?? at - 16);
-      const remaining = Math.max(0, REVEAL_WINDOW_MS - (at - targetUpdatedAt.current));
-      const end = nextRevealLength(latest, current.length, elapsed, remaining);
+      const draining = partStatus.current !== "running";
+      const step = draining
+        ? (() => {
+          if (drainStartedAt.current === 0) {
+            drainStartedAt.current = at;
+            carry.current = 0;
+          }
+          const remaining = Math.max(0, CATCH_UP_WINDOW_MS - (at - drainStartedAt.current));
+          return nextRevealLength(latest, current.length, elapsed, {
+            mode: "catchUp",
+            remainingMs: remaining,
+            windowMs: CATCH_UP_WINDOW_MS,
+            carry: carry.current,
+          });
+        })()
+        : nextRevealLength(latest, current.length, elapsed, {
+          mode: "live",
+          carry: carry.current,
+        });
+      carry.current = step.carry;
       lastFrame.current = at;
-      shown.current = latest.slice(0, end);
-      if (end === latest.length || at - lastRender.current >= MIN_RENDER_INTERVAL_MS) {
+      shown.current = latest.slice(0, step.end);
+      if (step.end === latest.length || at - lastRender.current >= MIN_RENDER_INTERVAL_MS) {
         lastRender.current = at;
         setRendered(shown.current);
-        traceStream("paint", end, latest.length - end);
+        traceStream("paint", step.end, latest.length - step.end);
       }
-      if (end < latest.length) frame.current = requestAnimationFrame(tick);
-      else if (partStatus.current !== "running") wasRunning.current = false;
+      if (step.end < latest.length) frame.current = requestAnimationFrame(tick);
+      else if (partStatus.current !== "running") {
+        wasRunning.current = false;
+        drainStartedAt.current = 0;
+        carry.current = 0;
+      }
     };
     frame.current = requestAnimationFrame(tick);
   }, [text, status, running, motion]);

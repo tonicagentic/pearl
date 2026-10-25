@@ -16,6 +16,7 @@ import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
 import { SessionTimeline, TIMELINE_TOOLS } from "@/components/assistant-ui/elements/session-timeline";
 import { TaskGroup, DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
 import { ToolGroup } from "@/components/assistant-ui/elements/tool-group";
+import { AssistantThinking } from "@/components/assistant-ui/elements/assistant-thinking";
 import {
   ShimmerLabel,
   useAnnounce,
@@ -26,7 +27,6 @@ import {
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback";
 import { TypingIndicator } from "@/components/assistant-ui/elements/typing-indicator";
 import { isTaskNotification } from "@/src/message-projection";
-import { shouldShowThinking } from "@/src/stream-presentation";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import {
@@ -98,6 +98,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardController, useKeyboardHandler } from "react-native-keyboard-controller";
 import Animated, {
   Extrapolation,
+  FadeInDown,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
@@ -501,7 +502,7 @@ export const Thread: FC<ThreadProps> = ({
           } : {})}
           className="aui-message-group flex-1"
           contentContainerClassName={cn(
-            "gap-6 px-4 pt-4",
+            "gap-4 px-4 pt-4",
             !floatsComposer && "pb-6",
             Rail && "pl-10",
           )}
@@ -1039,7 +1040,7 @@ const MessageError: FC = () => (
 
 const UserText: TextMessagePartComponent = ({ text }) => (
   <Text
-    className="aui-user-message-text text-foreground text-base leading-6"
+    className="aui-user-message-text text-foreground text-[16px] leading-snug"
     selectable
   >
     {text}
@@ -1087,8 +1088,6 @@ const AssistantMessage: FC = () => {
   const groupBy = taskAwareGroupBy;
 
   const messageParts = useAuiState((s) => s.message.parts);
-  const isRunning = useAuiState((s) => s.message.status?.type === "running");
-  const awaitingContent = shouldShowThinking(isRunning, messageParts);
   const isTimelineCovered = (index: number) => {
     const part = messageParts[index] as
       | { toolName?: string; type?: string; status?: { type: string } }
@@ -1101,12 +1100,8 @@ const AssistantMessage: FC = () => {
 
   return (
     <MessagePrimitive.Root className="aui-assistant-message-root">
-      <View className="aui-assistant-message-content px-2">
-        {awaitingContent ? (
-          <ShimmerLabel className="text-muted-foreground py-2 text-sm" accessibilityLabel="Assistant is thinking">
-            Thinking
-          </ShimmerLabel>
-        ) : null}
+      <View className="aui-assistant-message-content">
+        <AssistantThinking />
         <SessionTimeline />
         <MessageError />
         <AssistantFailure />
@@ -1171,7 +1166,7 @@ const AssistantMessage: FC = () => {
               case "data":
                 return part.dataRendererUI;
               case "indicator":
-                // The in-row Thinking label above owns the pre-content state.
+                // AssistantThinking above owns the pre-content state.
                 return null;
               default:
                 return null;
@@ -1180,7 +1175,7 @@ const AssistantMessage: FC = () => {
         </MessagePrimitive.GroupedParts>
         <MessageError />
       </View>
-      <View className="aui-assistant-message-footer ms-2 min-h-7.5 flex-row items-center pt-1.5">
+      <View className="aui-assistant-message-footer min-h-7 flex-row items-center pt-1">
         <BranchPicker />
         <AssistantActionBar />
       </View>
@@ -1231,18 +1226,20 @@ const AssistantActionBar: FC = () => (
 
 const UserSendState: FC = () => {
   const phase = useAuiState((s) => s.message.metadata?.custom?.mobileSendState);
-  if (phase !== "preparing" && phase !== "uncertain") return null;
+  // Preparing is silent: the pending assistant Thinking row covers that beat.
+  if (phase !== "uncertain") return null;
   return (
     <Text
       className="text-muted-foreground text-xs"
-      accessibilityRole={phase === "uncertain" ? "alert" : "text"}
+      accessibilityRole="alert"
     >
-      {phase === "preparing" ? "Sending…" : "Delivery not confirmed. Check before resending."}
+      Delivery not confirmed. Check before resending.
     </Text>
   );
 };
 
 const UserMessage: FC = () => {
+  const motion = useMotion();
   const internalMessage = useAuiState((s) =>
     s.message.role === "user" && s.message.parts.some((part) =>
       part.type === "text" && isTaskNotification(part.text ?? ""),
@@ -1250,16 +1247,27 @@ const UserMessage: FC = () => {
   );
   if (internalMessage) return null;
   return (
-    <MessagePrimitive.Root className="aui-user-message-root items-end gap-y-2 px-2">
-      <UserMessageAttachments />
-      <View className="aui-user-message-content bg-muted max-w-[85%] rounded-xl px-4 py-2">
-        <MessagePrimitive.Parts components={{ Text: UserText, Image, File }} />
-      </View>
-      <View className="aui-user-message-footer -me-1 flex-row items-center justify-end gap-2">
-        <UserSendState />
-        <BranchPicker />
-      </View>
-    </MessagePrimitive.Root>
+    <Animated.View
+      entering={
+        motion
+          ? FadeInDown.springify(220).damping(28).stiffness(280).withInitialValues({
+              opacity: 0,
+              transform: [{ translateY: 14 }],
+            })
+          : undefined
+      }
+    >
+      <MessagePrimitive.Root className="aui-user-message-root items-end gap-y-1">
+        <UserMessageAttachments />
+        <View className="aui-user-message-content bg-muted max-w-[85%] rounded-xl px-4 py-1.5">
+          <MessagePrimitive.Parts components={{ Text: UserText, Image, File }} />
+        </View>
+        <View className="aui-user-message-footer flex-row items-center justify-end gap-2">
+          <UserSendState />
+          <BranchPicker />
+        </View>
+      </MessagePrimitive.Root>
+    </Animated.View>
   );
 };
 

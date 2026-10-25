@@ -115,6 +115,7 @@ export function ChatScreen() {
       ),
       state.messages,
       status === "streaming",
+      Boolean(localSend && localSend.phase === "preparing" && !confirmed),
     ),
     [state, localSend, confirmed, status],
   );
