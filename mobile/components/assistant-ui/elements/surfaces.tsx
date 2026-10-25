@@ -150,6 +150,10 @@ export const ShimmerLabel: FC<TextProps & { active?: boolean }> = ({
   );
 };
 
+/** Thinking-states timing: status line swaps with a short opacity + Y crossfade. */
+export const THINK_SWAP_MS = 150;
+export const THINK_SWAP_Y = 6;
+
 export function SwapLabel({
   active,
   children,
@@ -159,6 +163,90 @@ export function SwapLabel({
   children: [ReactNode, ReactNode];
   className?: string;
 }) {
-  // Functional RN port of the web SwapLabel (which measures and crossfades DOM widths): render the active layer only.
-  return <View className={className}>{children[active]}</View>;
+  const motion = useMotion();
+  const [progress] = useState(() => new Animated.Value(active));
+
+  useEffect(() => {
+    if (!motion) {
+      progress.setValue(active);
+      return;
+    }
+    Animated.timing(progress, {
+      toValue: active,
+      duration: THINK_SWAP_MS,
+      useNativeDriver: Platform.OS !== "web",
+      isInteraction: false,
+    }).start();
+  }, [active, motion, progress]);
+
+  // Crossfade both layers (web SwapLabel measures width; RN overlaps and fades).
+  const layer0 = {
+    opacity: progress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1, 0],
+    }),
+    transform: [
+      {
+        translateY: progress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, -THINK_SWAP_Y],
+        }),
+      },
+    ],
+  };
+  const layer1 = {
+    opacity: progress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 1],
+    }),
+    transform: [
+      {
+        translateY: progress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [THINK_SWAP_Y, 0],
+        }),
+      },
+    ],
+  };
+
+  if (!motion) {
+    return <View className={className}>{children[active]}</View>;
+  }
+
+  return (
+    <View className={cn("relative justify-center", className)}>
+      {/* Invisible sizer: both labels occupy the same cell so width/height stay stable. */}
+      <View
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        className="opacity-0"
+      >
+        <View>{children[0]}</View>
+        <View className="absolute left-0 top-0">{children[1]}</View>
+      </View>
+      <Animated.View
+        className="absolute left-0 top-0"
+        pointerEvents={active === 0 ? "auto" : "none"}
+        style={layer0}
+        accessibilityElementsHidden={active !== 0}
+        importantForAccessibility={
+          active === 0 ? "yes" : "no-hide-descendants"
+        }
+      >
+        {children[0]}
+      </Animated.View>
+      <Animated.View
+        className="absolute left-0 top-0"
+        pointerEvents={active === 1 ? "auto" : "none"}
+        style={layer1}
+        accessibilityElementsHidden={active !== 1}
+        importantForAccessibility={
+          active === 1 ? "yes" : "no-hide-descendants"
+        }
+      >
+        {children[1]}
+      </Animated.View>
+    </View>
+  );
 }
