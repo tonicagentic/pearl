@@ -167,6 +167,8 @@ export function ChatScreen() {
           message,
         );
         setLocalSends((current) => new Map(current).set(store, preview));
+        // Light tick as the bubble appears; skip validation failures above.
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         try {
           // Model selection is ephemeral context on the turn, not persisted UI state.
           await store.send({
