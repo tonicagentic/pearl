@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { AccessibilityInfo, Keyboard, Platform, Pressable, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { interpolate, runOnJS, useAnimatedProps, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Keyboard, Platform, Pressable, View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
+import { runOnJS, type SharedValue } from "react-native-reanimated";
 import { Stack, router } from "expo-router";
-import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import ReanimatedDrawerLayout, {
@@ -37,12 +36,10 @@ import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessag
 import { useChats } from "@/src/chat-context";
 import { toThreadMessages, type SpikeState } from "@/src/eve-transport";
 
-const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
-
 /**
  * The chat screen: the assistant-ui native Thread wired to the eve session
- * protocol through the external-store runtime bridge. The history drawer
- * moves the mounted thread on iOS without interrupting its stream.
+ * protocol through the external-store runtime bridge. The history panel slides
+ * over the mounted thread without interrupting its stream.
  */
 export function ChatScreen() {
   // The safe-area container is a native codegen view, so uniwind's className
@@ -87,7 +84,14 @@ export function ChatScreen() {
     }
   }, [newChatEntry]);
   const renderHistory = useCallback(
-    () => <HistoryScreen onClose={closeHistory} onNavigate={navigateFromHistory} visible={drawerOpen} />,
+    (progress: SharedValue<number>) => (
+      <HistoryScreen
+        onClose={closeHistory}
+        onNavigate={navigateFromHistory}
+        visible={drawerOpen}
+        progress={progress}
+      />
+    ),
     [closeHistory, navigateFromHistory, drawerOpen],
   );
   const [sendError, setSendError] = useState<{ store: object; message: string } | null>(null);
@@ -287,13 +291,14 @@ export function ChatScreen() {
       }} />
       <ReanimatedDrawerLayout
         ref={drawerRef}
-        drawerWidth={Math.min(width * (Platform.OS === "ios" ? 0.79 : 0.86), 360)}
+        // Full-width front panel: covers chat completely; drag tracks open/close.
+        drawerWidth={width}
         drawerPosition={DrawerPosition.LEFT}
-        drawerType={Platform.OS === "ios" ? DrawerType.BACK : DrawerType.FRONT}
+        drawerType={DrawerType.FRONT}
         drawerBackgroundColor={backgroundColor}
-        overlayColor={Platform.OS === "ios" ? "transparent" : "rgba(0, 0, 0, 0.26)"}
-        // Keep a real edge strip for interactive drag. Full-width edgeWidth steals
-        // vertical pans from the transcript FlatList. Anywhere-open is handled below.
+        overlayColor="transparent"
+        // Narrow edge strip for interactive open; anywhere-open is handled below.
+        // A full-width edgeWidth would steal vertical pans from the transcript.
         edgeWidth={Platform.OS === "ios" ? 48 : 32}
         minSwipeDistance={12}
         keyboardDismissMode={DrawerKeyboardDismissMode.ON_DRAG}
@@ -301,8 +306,8 @@ export function ChatScreen() {
         onDrawerOpen={() => onDrawerSettled(true)}
         onDrawerClose={() => onDrawerSettled(false)}
       >
-        {(progress) => {
-          const chat = (
+        {() => (
+          <SwipeOpenSurface swipeOpenEnabled={!drawerOpen} onSwipeOpen={openHistory}>
             <View style={{ flex: 1 }} accessibilityElementsHidden={drawerOpen}>
               <AssistantRuntimeProvider runtime={runtime}>
                 <EveAuthorization />
@@ -353,53 +358,23 @@ export function ChatScreen() {
                 />
               ) : null}
             </View>
-          );
-          return Platform.OS === "ios" ? (
-            <SlidingChatSurface
-              progress={progress}
-              backgroundColor={backgroundColor}
-              swipeOpenEnabled={!drawerOpen}
-              onSwipeOpen={openHistory}
-            >
-              {chat}
-            </SlidingChatSurface>
-          ) : chat;
-        }}
+          </SwipeOpenSurface>
+        )}
       </ReanimatedDrawerLayout>
     </SafeAreaView>
   );
 }
 
-function SlidingChatSurface({
-  progress,
-  backgroundColor,
+/** Horizontal swipe opens the history panel without stealing vertical scroll. */
+function SwipeOpenSurface({
   swipeOpenEnabled,
   onSwipeOpen,
   children,
 }: {
-  progress: SharedValue<number> | undefined;
-  backgroundColor: string | undefined;
   swipeOpenEnabled: boolean;
   onSwipeOpen: () => void;
   children: ReactNode;
 }) {
-  // Prefer a readable dim until the accessibility setting is known.
-  const [reducedTransparency, setReducedTransparency] = useState(true);
-  useEffect(() => {
-    let mounted = true;
-    const subscription = AccessibilityInfo.addEventListener(
-      "reduceTransparencyChanged",
-      setReducedTransparency,
-    );
-    void AccessibilityInfo.isReduceTransparencyEnabled()
-      .then((enabled) => { if (mounted) setReducedTransparency(enabled); })
-      .catch(() => {});
-    return () => { mounted = false; subscription.remove(); };
-  }, []);
-
-  // Full-width drawer edgeWidth blocks transcript scrolling. This pan only
-  // claims a clear horizontal swipe (and fails on vertical), then opens the
-  // drawer — so lists keep their scroll while swipe-from-anywhere still works.
   const openFromAnywhere = useMemo(
     () =>
       Gesture.Pan()
@@ -415,37 +390,9 @@ function SlidingChatSurface({
     [swipeOpenEnabled, onSwipeOpen],
   );
 
-  const shape = useAnimatedStyle(() => ({
-    borderTopLeftRadius: interpolate(progress?.value ?? 0, [0, 1], [0, 48]),
-    borderBottomLeftRadius: interpolate(progress?.value ?? 0, [0, 1], [0, 48]),
-  }));
-  const shadow = useAnimatedStyle(() => ({
-    shadowOpacity: interpolate(progress?.value ?? 0, [0, 1], [0, 0.14]),
-  }));
-  const blurProps = useAnimatedProps(() => ({
-    intensity: interpolate(progress?.value ?? 0, [0, 1], [0, 50]),
-  }));
-  const dimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress?.value ?? 0, [0, 1], [0, 0.18]),
-  }));
-
   return (
     <GestureDetector gesture={openFromAnywhere}>
-      <Animated.View style={[{ flex: 1, shadowColor: "#000", shadowOffset: { width: -8, height: 0 }, shadowRadius: 24 }, shape, shadow]}>
-        <Animated.View style={[{ flex: 1, overflow: "hidden", backgroundColor }, shape]}>
-          {children}
-          {reducedTransparency ? (
-            <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, dimStyle]} />
-          ) : (
-            <AnimatedBlurView
-              pointerEvents="none"
-              tint="default"
-              animatedProps={blurProps}
-              style={StyleSheet.absoluteFill}
-            />
-          )}
-        </Animated.View>
-      </Animated.View>
+      <View style={{ flex: 1 }}>{children}</View>
     </GestureDetector>
   );
 }

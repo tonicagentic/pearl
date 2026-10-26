@@ -211,7 +211,7 @@ const CAN_USE_LIQUID_GLASS =
   isGlassEffectAPIAvailable() &&
   isLiquidGlassAvailable();
 const COMPOSER_SHELL_RADIUS = 28;
-/** Side and bottom float for the iOS composer dock (matches `px-4`). */
+/** Side/bottom float for the iOS composer dock (Mail-style inset from the screen edge). */
 const COMPOSER_EDGE = 16;
 const GLASS_SURFACE_STYLE = {
   position: "absolute",
@@ -403,7 +403,9 @@ export const Thread: FC<ThreadProps> = ({
   // Only bottom-docked iPhone keyboards use the spacer; keep other layouts unchanged.
   const viewportRef = useRef<ComponentRef<typeof View>>(null);
   const [viewportTop, setViewportTop] = useState(0);
-  const [composerOverlayHeight, setComposerOverlayHeight] = useState(insets.bottom + 116);
+  const [composerOverlayHeight, setComposerOverlayHeight] = useState(
+    insets.bottom + COMPOSER_EDGE + 116,
+  );
   const [store] = useState(createViewportStore);
   const listRef = useRef<FlatList<ThreadMessageType>>(null);
   const metricsRef = useRef({
@@ -682,28 +684,12 @@ export const Thread: FC<ThreadProps> = ({
           </View>
         </AuiIf>
         <ThreadFollowupSuggestions />
-        <View
-          pointerEvents={floatsComposer ? "box-none" : undefined}
-          className={
-            floatsComposer
-              ? "aui-thread-viewport-footer"
-              : "aui-thread-viewport-footer px-4"
-          }
-          style={
-            floatsComposer
-              ? {
-                  paddingHorizontal: COMPOSER_EDGE,
-                  // Equal float to the sides; keyboard spacer keeps this gap above the keys.
-                  paddingBottom: COMPOSER_EDGE,
-                }
-              : { paddingBottom: insets.bottom + 8 }
-          }
-        >
-          {waitingAction ? (
-            <WaitingActionCard action={waitingAction} />
-          ) : null}
-          <Composer autoFocus={autoFocus} focusNewChatKey={focusNewChatKey} />
-        </View>
+        <ComposerDock
+          floats={floatsComposer}
+          waitingAction={waitingAction}
+          autoFocus={autoFocus}
+          focusNewChatKey={focusNewChatKey}
+        />
       </View>
       {Rail && (
         <View
@@ -734,6 +720,43 @@ export const Thread: FC<ThreadProps> = ({
         </ThreadPrimitive.Root>
       </ThreadViewportContext.Provider>
     </ThreadComponentsContext.Provider>
+  );
+};
+
+/** Floating composer inset; lives under `IosKeyboardLayout` so it can track the keyboard. */
+const ComposerDock: FC<{
+  floats: boolean;
+  waitingAction: ThreadProps["waitingAction"];
+  autoFocus?: boolean;
+  focusNewChatKey: number;
+}> = ({ floats, waitingAction, autoFocus, focusNewChatKey }) => {
+  const insets = useSafeAreaInsets();
+  const keyboardHeight = useContext(KeyboardHeightContext);
+  const safeBottom = insets.bottom;
+  // Mail-style float: COMPOSER_EDGE from the sides, and the same gap above the
+  // home indicator (or above the keyboard once it covers that inset).
+  const dockStyle = useAnimatedStyle(() => {
+    if (!floats) {
+      return { paddingBottom: safeBottom + 8 };
+    }
+    const lifted = keyboardHeight?.value ?? 0;
+    return {
+      paddingHorizontal: COMPOSER_EDGE,
+      paddingBottom: COMPOSER_EDGE + Math.max(0, safeBottom - lifted),
+    };
+  });
+
+  return (
+    <Animated.View
+      pointerEvents={floats ? "box-none" : undefined}
+      className={
+        floats ? "aui-thread-viewport-footer" : "aui-thread-viewport-footer px-4"
+      }
+      style={dockStyle}
+    >
+      {waitingAction ? <WaitingActionCard action={waitingAction} /> : null}
+      <Composer autoFocus={autoFocus} focusNewChatKey={focusNewChatKey} />
+    </Animated.View>
   );
 };
 
