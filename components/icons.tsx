@@ -38,11 +38,14 @@ export function VercelIcon({ className }: { readonly className?: string }) {
   );
 }
 
-/** Pearl's mark: a simple filled circle. */
+/** Pearl's mark: a solid disk with three pearl cutouts in the lower right. */
 export function PearlIcon({ className }: { readonly className?: string }) {
   return (
     <svg aria-hidden="true" className={className} fill="currentColor" viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="10" />
+      <path
+        d="M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0M11.15 17.4a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M13.65 14.9a2.3 2.3 0 1 0 4.6 0a2.3 2.3 0 1 0-4.6 0M16.8 11.35a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0-2.5 0"
+        fillRule="evenodd"
+      />
     </svg>
   );
 }
