@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { nextRevealLength, shouldShowThinking, withPendingAssistant } from "../mobile/src/stream-presentation.ts";
+import {
+  CATCH_UP_WINDOW_MS,
+  LIVE_MAX_PER_FRAME,
+  nextRevealLength,
+  shouldShowThinking,
+  withPendingAssistant,
+} from "../mobile/src/stream-presentation.ts";
 
 test("the pre-content state hands off once reasoning, tools, or text are visible", () => {
   assert.equal(shouldShowThinking(true, []), true);
@@ -12,40 +18,82 @@ test("the pre-content state hands off once reasoning, tools, or text are visible
   assert.equal(shouldShowThinking(false, []), false);
 });
 
-test("a continuous stream advances on frames instead of waiting for silence", () => {
+test("a continuous live stream advances on frames instead of waiting for silence", () => {
   let shown = 0;
+  let carry = 0;
   for (const text of ["a", "ab", "abc", "abcd", "abcde", "abcdef"]) {
-    shown = nextRevealLength(text, shown, 16);
+    const step = nextRevealLength(text, shown, 16, { mode: "live", carry });
+    shown = step.end;
+    carry = step.carry;
     assert.ok(shown > 0 && shown <= text.length);
+  }
+  // Fractional carry may trail one glyph; a couple more frames close the gap.
+  const final = "abcdef";
+  for (let i = 0; i < 4 && shown < final.length; i++) {
+    const step = nextRevealLength(final, shown, 16, { mode: "live", carry });
+    shown = step.end;
+    carry = step.carry;
   }
   assert.equal(shown, 6);
 });
 
-test("bursts drain in bounded steps without splitting surrogate pairs", () => {
+test("live bursts stay paced over multiple frames without splitting surrogate pairs", () => {
   const text = "🙂" + "x".repeat(500);
-  let shown = nextRevealLength(text, 0, 16);
-  assert.equal(shown, 32); // 31 code points, emoji occupies two UTF-16 units.
-  for (let i = 0; i < 100 && shown < text.length; i++) {
-    const next = nextRevealLength(text, shown, 16);
-    assert.ok(next > shown && next <= text.length);
-    shown = next;
+  let step = nextRevealLength(text, 0, 16, { mode: "live" });
+  let shown = step.end;
+  // First frame always opens with a glyph; emoji is one code point (2 UTF-16).
+  assert.ok(shown >= 2 && shown <= LIVE_MAX_PER_FRAME * 2);
+  assert.ok(shown < text.length);
+  const before = shown;
+  let carry = step.carry;
+  for (let i = 0; i < 8; i++) {
+    step = nextRevealLength(text, shown, 16, { mode: "live", carry });
+    shown = step.end;
+    carry = step.carry;
+  }
+  assert.ok(shown > before && shown < text.length);
+  for (let i = 0; i < 500 && shown < text.length; i++) {
+    step = nextRevealLength(text, shown, 16, { mode: "live", carry });
+    assert.ok(step.end > shown && step.end <= text.length);
+    shown = step.end;
+    carry = step.carry;
   }
   assert.equal(shown, text.length);
 });
 
-test("a multi-kilobyte live burst is revealed, then caught up by its deadline", () => {
+test("catch-up eases a finished burst closed by its deadline", () => {
   const text = "x".repeat(4096);
-  let shown = nextRevealLength(text, 0, 16, 260);
+  let step = nextRevealLength(text, 0, 16, {
+    mode: "catchUp",
+    remainingMs: CATCH_UP_WINDOW_MS,
+    windowMs: CATCH_UP_WINDOW_MS,
+  });
+  let shown = step.end;
+  let carry = step.carry;
   assert.ok(shown > 0 && shown < text.length);
-  for (let elapsed = 32; elapsed <= 272 && shown < text.length; elapsed += 16) {
-    shown = nextRevealLength(text, shown, 16, Math.max(0, 260 - elapsed));
+  for (
+    let elapsed = 32;
+    elapsed <= CATCH_UP_WINDOW_MS + 16 && shown < text.length;
+    elapsed += 16
+  ) {
+    step = nextRevealLength(text, shown, 16, {
+      mode: "catchUp",
+      remainingMs: Math.max(0, CATCH_UP_WINDOW_MS - elapsed),
+      windowMs: CATCH_UP_WINDOW_MS,
+      carry,
+    });
+    shown = step.end;
+    carry = step.carry;
   }
   assert.equal(shown, text.length);
 });
 
 test("history and cancelled turns can show their authoritative text at once", () => {
   const text = "x".repeat(100);
-  assert.equal(nextRevealLength(text, 0, 16, 0), text.length);
+  assert.equal(
+    nextRevealLength(text, 0, 16, { mode: "catchUp", remainingMs: 0 }).end,
+    text.length,
+  );
 });
 
 test("the accepted user turn gets one replaceable working assistant row", () => {
@@ -63,4 +111,12 @@ test("no assistant placeholder before acceptance or after a stopped turn", () =>
   const user = { role: "user", content: [] };
   assert.deepEqual(withPendingAssistant([user], [{ role: "user", metadata: { status: "submitted" } }], true), [user]);
   assert.deepEqual(withPendingAssistant([user], [{ role: "user", metadata: { status: "complete" } }], false), [user]);
+});
+
+test("an optimistic preparing turn gets a Thinking placeholder before streaming", () => {
+  const user = { role: "user", content: [{ type: "text", text: "Hello" }] };
+  const projected = withPendingAssistant([user], [{ role: "user", metadata: { status: "submitted" } }], false, true);
+  assert.equal(projected.length, 2);
+  assert.deepEqual(projected[1], { role: "assistant", content: [], status: { type: "running" } });
+  assert.deepEqual(withPendingAssistant([user], [{ role: "user", metadata: { status: "submitted" } }], false, false), [user]);
 });

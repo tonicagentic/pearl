@@ -44,33 +44,35 @@ export interface ToolTimelineProps {
 }
 
 const rowClasses =
-  "fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-foreground/55 flex items-center gap-2 text-[13.5px] duration-300";
+  "fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-foreground/55 flex min-h-8 items-center gap-1.5 py-0.5 text-[13px] duration-300";
 
 function StepRow({
   step,
   index,
-  streaming,
   active,
   expanded,
   onToggle,
   onOpenFile,
+  elapsed,
 }: {
   step: TimelineStep;
   index: number;
-  streaming: boolean;
   active: boolean;
   expanded: boolean;
   onToggle: () => void;
   onOpenFile?: (path: string) => void;
+  /** Shown beside Thought/Thinking on single-step turns (Trace description). */
+  elapsed?: string;
 }) {
   const expandable = typeof step.detail === "string" && step.detail.length > 0;
   // Streaming steps read progressive ("Thinking"); settled ones past tense.
   const verb =
     active && step.verb === "Thought" ? "Thinking" : step.verb;
+  const showChip = step.chip.length > 0;
 
   const row = (
     <div
-      key={`step-${index}-${step.chip}`}
+      key={`step-${index}-${step.verb}-${step.chip}`}
       className={cn(
         rowClasses,
         expandable &&
@@ -93,13 +95,18 @@ function StepRow({
     >
       <ShimmerLabel
         active={active}
-        className="relative inline-block shrink-0 leading-none"
+        className="relative inline-block shrink-0 leading-none text-foreground/55"
       >
         {verb}
       </ShimmerLabel>
+      {elapsed !== undefined && (
+        <span className={cn(mono, "text-[12px] text-foreground/30 tabular-nums")}>
+          {elapsed}
+        </span>
+      )}
       {/* Truncate long inputs (commands, patterns) instead of wrapping. File
           chips open the file on the canvas, like the artifact card. */}
-      {step.filePath && onOpenFile ? (
+      {showChip && step.filePath && onOpenFile ? (
         <button
           type="button"
           title={`Open ${step.filePath}`}
@@ -111,15 +118,15 @@ function StepRow({
         >
           {step.chip}
         </button>
-      ) : (
+      ) : showChip ? (
         <span className="bg-foreground/[0.06] text-foreground/70 min-w-0 truncate rounded-md px-1.5 py-0.5 font-mono text-[11px]">
           {step.chip}
         </span>
-      )}
+      ) : null}
       {expandable && (
         <ChevronDownIcon
           className={cn(
-            "size-3 shrink-0 opacity-50 transition-transform duration-200 motion-reduce:transition-none",
+            "size-3.5 shrink-0 opacity-40 transition-transform duration-200 motion-reduce:transition-none",
             expanded && "rotate-180",
           )}
         />
@@ -133,7 +140,7 @@ function StepRow({
     <>
       {row}
       {expanded && (
-        <div className="text-foreground/60 bg-foreground/[0.03] max-h-64 overflow-y-auto rounded-md ps-7 pe-2 py-1.5 text-[13px] leading-relaxed whitespace-pre-wrap">
+        <div className="text-foreground/55 bg-foreground/[0.03] mt-1 max-h-64 overflow-y-auto rounded-md px-3 py-2.5 text-[13px] leading-5 whitespace-pre-wrap select-text">
           {step.detail}
         </div>
       )}
@@ -222,16 +229,17 @@ export function ToolTimeline({
   // expandable if it carries a detail).
   if (steps.length === 1) {
     const step = steps[0];
+    const stepElapsed = step.verb === "Thought" ? elapsed : undefined;
     return (
       <div data-slot="tool-timeline" className={cn("w-full max-w-sm", className)}>
         <StepRow
           step={step}
           index={0}
-          streaming={streaming}
           active={streaming}
           expanded={expandedSteps.has(0)}
           onToggle={() => toggleStep(0)}
           onOpenFile={onOpenFile}
+          elapsed={stepElapsed}
         />
         <StatChips stats={stats} onOpenFile={onOpenFile} />
       </div>
@@ -269,10 +277,9 @@ export function ToolTimeline({
         <div className="flex flex-col gap-2.5 ps-4 pt-2.5">
           {steps.slice(0, Math.max(0, Math.min(visibleSteps, steps.length))).map((step, index, shown) => (
             <StepRow
-              key={`step-${index}-${step.chip}`}
+              key={`step-${index}-${step.verb}-${step.chip}`}
               step={step}
               index={index}
-              streaming={streaming}
               active={streaming && index === shown.length - 1}
               expanded={expandedSteps.has(index)}
               onToggle={() => toggleStep(index)}

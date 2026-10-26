@@ -2,7 +2,7 @@
   "expo": {
     "name": "Pearl",
     "slug": "pearl",
-    "version": "0.1.0-alpha.2",
+    "version": "0.1.0-alpha.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -10,7 +10,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.tonicagentic.pearl",
       "version": "0.1.0",
-      "buildNumber": "2"
+      "buildNumber": "3"
     },
     "android": {
       "adaptiveIcon": {
