@@ -1,29 +1,21 @@
 import assert from "node:assert/strict";
+import { register } from "node:module";
 import { test } from "node:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
-// Compile the two pure mobile modules into an ignored local directory so the
-// native package's extensionless imports work in Node without a Metro runtime.
-const mobile = join(process.cwd(), "mobile");
-const mobileRequire = createRequire(join(mobile, "package.json"));
-const babel = mobileRequire("@babel/core");
-const directory = mkdtempSync(join(mobile, ".expo", "projection-test-"));
-for (const name of ["attachment-content", "message-projection", "message-reducer"]) {
-  const source = readFileSync(join(mobile, "src", `${name}.ts`), "utf8");
-  const { code } = babel.transformSync(source, {
-    filename: join(mobile, "src", `${name}.ts`), babelrc: false, configFile: false,
-    presets: [mobileRequire.resolve("@babel/preset-typescript")],
-    plugins: [mobileRequire.resolve("@babel/plugin-transform-modules-commonjs")],
-  });
-  writeFileSync(join(directory, `${name}.js`), code);
-}
-const require = createRequire(join(directory, "message-projection.js"));
-const { toThreadMessages, hasPendingAction, isTaskNotification, pendingMessageLabel } = require("./message-projection.js");
-const { createMobileMessageReducer } = require("./message-reducer.js");
-const { toEveTurn } = require("./attachment-content.js");
-process.on("exit", () => rmSync(directory, { recursive: true, force: true }));
+// CI installs only the root package — not mobile/node_modules — so Babel from
+// Expo is unavailable. Resolve extensionless mobile imports to `.ts` and let
+// Node strip types (same path as tests/mobile-stream-presentation.test.mjs).
+register("./mobile-ts-resolve.mjs", pathToFileURL("./tests/"));
+
+const {
+  toThreadMessages,
+  hasPendingAction,
+  isTaskNotification,
+  pendingMessageLabel,
+} = await import("../mobile/src/message-projection.ts");
+const { createMobileMessageReducer } = await import("../mobile/src/message-reducer.ts");
+const { toEveTurn } = await import("../mobile/src/attachment-content.ts");
 
 const user = { id: "turn:user", role: "user", parts: [{ type: "text", text: "hello" }] };
 const assistant = (parts, status = "streaming") => ({

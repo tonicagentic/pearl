@@ -12,6 +12,8 @@ import {
 // Part 2 (double execution) + Part 5 (partial failure). These tests run
 // against the real Postgres execution ledger — fault injection happens at the
 // delivery boundary (the injected `deliver` dep), not by mocking the ledger.
+// Skip when CI has no DATABASE_URL secret rather than failing the unit tier.
+const dbTest = process.env.DATABASE_URL?.trim() ? test : test.skip;
 
 const TEST_SALT = () => `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -22,7 +24,7 @@ const stubDeps = (deliver: () => Promise<string>) => ({
   resolveEndpoint: () => "stub://notification-endpoint",
 });
 
-test("double execution: a replayed delivery re-reports instead of re-firing", async () => {
+dbTest("double execution: a replayed delivery re-reports instead of re-firing", async () => {
   const salt = TEST_SALT();
   let deliveries = 0;
 
@@ -42,7 +44,7 @@ test("double execution: a replayed delivery re-reports instead of re-firing", as
   assert.equal(deliveries, 1, "the side effect must not re-fire");
 });
 
-test("double execution: distinct keys both deliver", async () => {
+dbTest("double execution: distinct keys both deliver", async () => {
   const salt = TEST_SALT();
   let deliveries = 0;
   const deliver = async () => {
@@ -56,7 +58,7 @@ test("double execution: distinct keys both deliver", async () => {
   assert.equal(deliveries, 2);
 });
 
-test("network failure mid-delivery: throws loudly and the ledger records the failure", async () => {
+dbTest("network failure mid-delivery: throws loudly and the ledger records the failure", async () => {
   const salt = TEST_SALT();
   const deliver = async () => {
     throw new Error("ECONNRESET mid-body");
@@ -72,7 +74,7 @@ test("network failure mid-delivery: throws loudly and the ledger records the fai
   assert.match(state?.detail ?? "", /ECONNRESET/);
 });
 
-test("partial failure: a pending ledger row from a crash mid-delivery is surfaced, never re-fired", async () => {
+dbTest("partial failure: a pending ledger row from a crash mid-delivery is surfaced, never re-fired", async () => {
   // Simulate the real crash the workflow replay produces: beginExecution
   // marked the key pending, the side effect went out, the process died before
   // completeExecution() — leaving a pending row and an unknown upstream state.
@@ -89,7 +91,7 @@ test("partial failure: a pending ledger row from a crash mid-delivery is surface
   assert.match(String(recovery.detail), /may or may not have been sent/i);
 });
 
-test("partial failure: failExecution converts a detected failure into a safe-to-retry state", async () => {
+dbTest("partial failure: failExecution converts a detected failure into a safe-to-retry state", async () => {
   const salt = TEST_SALT();
   const input = { recipient: "ops", message: `safe-${salt}`, idempotencyKey: `ks-${salt}` };
 

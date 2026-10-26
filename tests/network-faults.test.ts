@@ -64,7 +64,10 @@ function saltedInput(note: string) {
   };
 }
 
-describe("network loss mid-response", () => {
+// Ledger writes require DATABASE_URL; skip the suite in CI until the secret exists.
+const describeDb = process.env.DATABASE_URL?.trim() ? describe : describe.skip;
+
+describeDb("network loss mid-response", () => {
   it("a connection destroyed mid-body is a loud failure, not a partial success", async () => {
     mode = "reset-mid-body";
     const input = saltedInput("mid-body-reset");
