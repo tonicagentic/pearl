@@ -183,11 +183,18 @@ export function ChatSidebar({
                   key={chat.id}
                 >
                   <Link
-                    className="flex h-8 min-w-0 items-center px-2 pr-8 text-sm"
+                    className="flex h-8 min-w-0 items-center gap-2 px-2 pr-8 text-sm"
                     href={`/chat/${chat.id}`}
                     onClick={() => onNavigate?.(chat.id)}
                   >
-                    <span className="block truncate">{chat.title}</span>
+                    <span className="block min-w-0 flex-1 truncate">{chat.title}</span>
+                    {chat.waitingForInput ? (
+                      <span
+                        aria-label="Waiting for your reply"
+                        className="size-1.5 shrink-0 rounded-full bg-amber-500"
+                        title="Waiting for your reply"
+                      />
+                    ) : null}
                     <span className="sr-only">Updated {formatHistoryTime(chat.updatedAt)}</span>
                   </Link>
                   <DropdownMenu>

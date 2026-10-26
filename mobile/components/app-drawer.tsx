@@ -69,16 +69,28 @@ export function HistoryScreen({
         contentContainerClassName={iosSidebar ? "px-5 pt-3" : "px-4 pb-8"}
         contentContainerStyle={iosSidebar ? { paddingBottom: iosFooterClearance + 16 } : undefined}
         data={chats}
-        extraData={activeChatId}
+        extraData={`${activeChatId}:${chats.map((chat) => (chat.waitingForInput ? "1" : "0")).join("")}`}
         keyExtractor={(chat) => chat.id}
         renderItem={({ item: chat }) => (
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ selected: activeChatId === chat.id }}
-            className={`${iosSidebar ? "min-h-11 rounded-xl px-2.5" : "min-h-12 rounded-lg px-3"} justify-center ${activeChatId === chat.id ? "bg-muted/50" : ""}`}
+            accessibilityLabel={
+              chat.waitingForInput
+                ? `${chat.title}, waiting for your reply`
+                : chat.title
+            }
+            className={`${iosSidebar ? "min-h-11 rounded-xl px-2.5" : "min-h-12 rounded-lg px-3"} flex-row items-center gap-2 ${activeChatId === chat.id ? "bg-muted/50" : ""}`}
             onPress={() => { void selectChat(chat.id).then((selected) => { if (selected) goToChat(); }); }}
           >
-            <Text className={iosSidebar ? "text-[17px] font-normal text-foreground" : "text-base text-foreground"} numberOfLines={1}>{chat.title}</Text>
+            <Text className={`${iosSidebar ? "text-[17px] font-normal text-foreground" : "text-base text-foreground"} flex-1`} numberOfLines={1}>{chat.title}</Text>
+            {chat.waitingForInput ? (
+              <View
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+                className="h-2 w-2 shrink-0 rounded-full bg-amber-500"
+              />
+            ) : null}
           </Pressable>
         )}
         ListHeaderComponent={

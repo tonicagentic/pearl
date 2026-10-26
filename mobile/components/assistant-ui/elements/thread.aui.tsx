@@ -19,6 +19,7 @@ import { ToolGroup } from "@/components/assistant-ui/elements/tool-group";
 import { AssistantThinking } from "@/components/assistant-ui/elements/assistant-thinking";
 import {
   ShimmerLabel,
+  inkButton,
   useAnnounce,
   useHydrated,
   useMotion,
@@ -149,6 +150,18 @@ export type ThreadProps = {
   history?: ThreadHistory | undefined;
   /** Recovery belongs in the transcript, never in a bar that shifts the viewport. */
   notice?: { text: string; actionLabel?: string; onAction?: () => void } | null;
+  /**
+   * HITL pause above the composer: text-only for authorization, or an approval
+   * card with response buttons so the user does not have to dig into the thread.
+   */
+  waitingAction?: {
+    readonly kind: "authorization" | "approval";
+    readonly title: string;
+    readonly detail?: string;
+    readonly prompt?: string;
+    readonly options?: readonly { readonly id: string; readonly label: string }[];
+    readonly onRespond?: (optionId: string) => void | Promise<void>;
+  } | null;
 };
 
 export type ThreadViewportSnapshot = {
@@ -254,6 +267,123 @@ const copyToClipboard = async (text: string) => {
   await Clipboard.setStringAsync(text);
 };
 
+const WaitingActionCard: FC<{
+  readonly action: NonNullable<ThreadProps["waitingAction"]>;
+}> = ({ action }) => {
+  const motion = useMotion();
+  const [submitting, setSubmitting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useAnnounce(error ?? undefined);
+
+  const respond = (optionId: string) => {
+    if (submitting || !action.onRespond) return;
+    setSubmitting(optionId);
+    setError(null);
+    void (async () => {
+      try {
+        await action.onRespond(optionId);
+      } catch (cause) {
+        setSubmitting(null);
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    })();
+  };
+
+  return (
+    <Animated.View
+      entering={
+        motion
+          ? FadeInDown.springify(260)
+              .damping(26)
+              .stiffness(240)
+              .withInitialValues({
+                opacity: 0,
+                transform: [{ translateY: 18 }],
+              })
+          : undefined
+      }
+      className="mb-2 overflow-hidden rounded-2xl border border-border/70 bg-card px-3.5 py-3 shadow-sm shadow-black/5"
+      accessibilityRole="alert"
+    >
+      <Animated.View
+        entering={
+          motion
+            ? FadeInDown.delay(40).duration(220).withInitialValues({
+                opacity: 0,
+                transform: [{ translateY: 6 }],
+              })
+            : undefined
+        }
+        className="gap-1.5"
+      >
+        <Text className="text-muted-foreground text-sm">
+          <Text className="text-foreground font-medium">Waiting for your confirmation. </Text>
+          {action.title}
+        </Text>
+        {action.prompt ? (
+          <Text className="text-foreground text-sm font-medium leading-snug">
+            {action.prompt}
+          </Text>
+        ) : null}
+        {action.detail ? (
+          <Text className="text-muted-foreground text-xs leading-snug" numberOfLines={3}>
+            {action.detail}
+          </Text>
+        ) : null}
+      </Animated.View>
+      {action.kind === "approval" && action.options && action.options.length > 0 ? (
+        <View className="mt-3 flex-row flex-wrap items-center gap-2">
+          {action.options.map((option, index) => {
+            const primary = index === 0;
+            return (
+              <Animated.View
+                key={option.id}
+                entering={
+                  motion
+                    ? FadeInDown.delay(90 + index * 45)
+                        .springify(220)
+                        .damping(28)
+                        .stiffness(280)
+                        .withInitialValues({
+                          opacity: 0,
+                          transform: [{ translateY: 10 }],
+                        })
+                    : undefined
+                }
+              >
+                <Pressable
+                  onPress={() => respond(option.id)}
+                  disabled={submitting !== null}
+                  accessibilityRole="button"
+                  accessibilityLabel={option.label}
+                  className={cn(
+                    "h-9 justify-center rounded-full px-4 active:opacity-80 disabled:opacity-50",
+                    primary ? inkButton : "border-border/70 bg-background border",
+                  )}
+                >
+                  <Text
+                    className={cn(
+                      "text-sm font-medium",
+                      primary ? "text-background" : "text-foreground",
+                    )}
+                  >
+                    {submitting === option.id ? "…" : option.label}
+                  </Text>
+                </Pressable>
+              </Animated.View>
+            );
+          })}
+        </View>
+      ) : null}
+      {error ? (
+        <Text className="text-destructive mt-2 text-xs" selectable>
+          {error}
+        </Text>
+      ) : null}
+    </Animated.View>
+  );
+};
+
 export const Thread: FC<ThreadProps> = ({
   autoFocus = true,
   conversationId,
@@ -261,6 +391,7 @@ export const Thread: FC<ThreadProps> = ({
   components = EMPTY_COMPONENTS,
   history,
   notice,
+  waitingAction,
 }) => {
   const aui = useAui();
   const isRunning = useAuiState((s) => s.thread.isRunning);
@@ -568,6 +699,9 @@ export const Thread: FC<ThreadProps> = ({
               : { paddingBottom: insets.bottom + 8 }
           }
         >
+          {waitingAction ? (
+            <WaitingActionCard action={waitingAction} />
+          ) : null}
           <Composer autoFocus={autoFocus} focusNewChatKey={focusNewChatKey} />
         </View>
       </View>
@@ -1147,8 +1281,40 @@ const AssistantMessage: FC = () => {
                   if (TaskGroupComponent) return <TaskGroupComponent group={part} />;
                   return null;
                 }
+                const toolParts = groupParts.filter(
+                  (
+                    groupPart,
+                  ): groupPart is Extract<
+                    (typeof groupParts)[number],
+                    { type: "tool-call" }
+                  > => groupPart?.type === "tool-call",
+                );
+                const needsApproval = toolParts.some(
+                  (groupPart) => groupPart.status?.type === "requires-action",
+                );
+                const approved = toolParts.some(
+                  (groupPart) => groupPart.approval?.approved === true,
+                );
+                const denied = toolParts.some(
+                  (groupPart) =>
+                    groupPart.approval?.approved === false ||
+                    groupPart.approval?.resolution === "cancelled" ||
+                    groupPart.approval?.resolution === "expired",
+                );
+                const statusHint = needsApproval
+                  ? "Waiting"
+                  : denied
+                    ? "Cancelled"
+                    : approved
+                      ? "Approved"
+                      : undefined;
                 return (
-                  <ToolGroup count={part.indices.length} active={part.status.type === "running"}>
+                  <ToolGroup
+                    count={part.indices.length}
+                    active={part.status.type === "running"}
+                    defaultOpen={needsApproval}
+                    statusHint={statusHint}
+                  >
                     {children}
                   </ToolGroup>
                 );

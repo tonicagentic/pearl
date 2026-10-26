@@ -28,7 +28,10 @@ import { EveAuthorization } from "@/components/assistant-ui/elements/authorizati
 import { FloatingChatNavigation } from "@/components/floating-chat-navigation";
 import { getModelSelection } from "@/src/model-selection";
 import { withPendingAssistant } from "@/src/stream-presentation";
-import { hasPendingAction } from "@/src/message-projection";
+import {
+  getPendingApprovals,
+  hasPendingAction,
+} from "@/src/message-projection";
 import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
 import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft, type LocalSend } from "@/src/send-feedback";
 import { useChats } from "@/src/chat-context";
@@ -104,6 +107,7 @@ export function ChatScreen() {
   );
   const confirmed = localSend ? hasConfirmedSend(events, localSend) : false;
   const waitingForAction = hasPendingAction(state);
+  const pendingApprovals = useMemo(() => getPendingApprovals(state), [state]);
   const projectedMessages = useMemo(
     () => withPendingAssistant(
       projectSendMessages(
@@ -216,6 +220,22 @@ export function ChatScreen() {
       onCancel: async () => {
         await store.cancel();
       },
+      onRespondToToolApproval: async (response) => {
+        const requestId = response.approvalId;
+        const optionId =
+          response.optionId ??
+          (response.approved ? "approve" : "cancel");
+        await store.send({
+          inputResponses: [
+            {
+              requestId,
+              optionId,
+              ...(response.text ? { text: response.text } : {}),
+            },
+          ],
+          clientContext: { eveModelSelection: getModelSelection() },
+        });
+      },
     }),
     // state and status change with the store's own updates; the adapter is
     // rebuilt whenever they change so the runtime re-syncs.
@@ -291,6 +311,36 @@ export function ChatScreen() {
                   conversationId={activeChatId}
                   focusNewChatKey={drawerOpen ? drawerFocusEntry : newChatEntry}
                   notice={notice}
+                  waitingAction={
+                    pendingApprovals[0]
+                      ? {
+                          kind: "approval" as const,
+                          title: "The agent is paused until you respond.",
+                          prompt: pendingApprovals[0].prompt,
+                          detail: pendingApprovals[0].detail,
+                          options: pendingApprovals[0].options,
+                          onRespond: async (optionId) => {
+                            await store.send({
+                              inputResponses: [
+                                {
+                                  requestId: pendingApprovals[0]!.requestId,
+                                  optionId,
+                                },
+                              ],
+                              clientContext: {
+                                eveModelSelection: getModelSelection(),
+                              },
+                            });
+                          },
+                        }
+                      : waitingForAction
+                        ? {
+                            kind: "authorization" as const,
+                            title:
+                              "The agent is paused on a question or approval above — reply to continue.",
+                          }
+                        : null
+                  }
                 />
               </AssistantRuntimeProvider>
               {Platform.OS === "ios" ? (

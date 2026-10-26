@@ -8,7 +8,7 @@ import {
   type ToolCallMessagePartProps,
   type ToolCallMessagePartStatus,
 } from "@assistant-ui/react-native";
-import { WrenchIcon } from "lucide-react-native";
+import { CheckIcon, XIcon, WrenchIcon } from "lucide-react-native";
 import { type FC, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,6 +23,28 @@ import {
   webLiveRegion,
 } from "./surfaces";
 import { formatUnknownValue } from "../utils/task";
+
+function approvalDetail(args: Record<string, unknown> | undefined): string | null {
+  if (!args) return null;
+  if (typeof args.summary === "string" && args.summary.trim()) return args.summary.trim();
+  if (typeof args.filePath === "string" && args.filePath.trim()) return args.filePath.trim();
+  return null;
+}
+
+function approvalResolution(
+  approval: ToolCallMessagePart["approval"],
+): "approved" | "denied" | null {
+  if (!approval) return null;
+  if (approval.approved === true) return "approved";
+  if (
+    approval.approved === false ||
+    approval.resolution === "cancelled" ||
+    approval.resolution === "expired"
+  ) {
+    return "denied";
+  }
+  return null;
+}
 
 const APPROVED_RESULT = "Approved by user";
 const DENIED_RESULT = "User denied tool execution";
@@ -218,13 +240,8 @@ export const ToolFallbackApproval: FC<
   ) : null;
 
   const subject = argsText ? (
-    <View
-      className={cn(
-        "aui-tool-fallback-approval-args rounded-lg px-2.5 py-2",
-        field,
-      )}
-    >
-      <Text className="text-foreground/70 text-xs" style={monoStyle} selectable>
+    <View className="aui-tool-fallback-approval-args bg-muted/40 rounded-xl px-2.5 py-2">
+      <Text className="text-muted-foreground text-xs" style={monoStyle} selectable>
         {argsText}
       </Text>
     </View>
@@ -435,37 +452,91 @@ function FilePreview({ path, content }: { path: string; content: string }) {
 export const ToolFallback: ToolCallMessagePartComponent = ({
   toolName,
   args,
+  argsText,
   status,
+  approval,
+  interrupt,
+  addResult,
+  resume,
+  respondToApproval,
+  result,
 }) => {
   const isCancelled =
     status.type === "incomplete" && status.reason === "cancelled";
+  const isRequiresAction = status.type === "requires-action";
+  const shouldRenderApproval =
+    isRequiresAction &&
+    offersInterruptAction(status, approval, interrupt) &&
+    respondToApproval != null;
+  const resolution = approvalResolution(approval);
+  const detail = approvalDetail(
+    args && typeof args === "object" && !Array.isArray(args)
+      ? (args as Record<string, unknown>)
+      : undefined,
+  );
   const label =
     status.type === "running"
       ? `Running ${toolName}…`
-      : status.type === "requires-action"
+      : isRequiresAction
         ? `Waiting on ${toolName}`
         : status.type === "incomplete"
           ? `${isCancelled ? "Cancelled" : "Failed"} ${toolName}`
-          : `Used ${toolName}`;
+          : toolName;
   const error =
     status.type === "incomplete" && status.error != null
       ? formatUnknownValue(status.error)
       : "";
-  // eve's native store does not expose respond(inputResponses). Never render
-  // approval buttons that the mobile adapter cannot actually submit.
-  const waitingForApproval = status.type === "requires-action";
   const preview = toolName === "write_file" && typeof args?.content === "string"
     ? { path: typeof args.filePath === "string" ? args.filePath : "Draft file", content: args.content }
     : null;
+  const resultSummary =
+    result && typeof result === "object" && !Array.isArray(result) && typeof (result as { summary?: unknown }).summary === "string"
+      ? (result as { summary: string }).summary
+      : null;
 
   return (
-    <View className="aui-tool-fallback-root border-border bg-card my-1 gap-2 rounded-xl border px-3 py-2">
+    <View className="aui-tool-fallback-root gap-2 py-0.5">
       <View className="aui-tool-fallback-header flex-row items-center gap-2">
         <Icon as={WrenchIcon} className="text-muted-foreground size-4" />
-        <Text className="aui-tool-fallback-title text-muted-foreground text-sm">
+        <Text className="aui-tool-fallback-title text-foreground/80 flex-1 text-sm font-medium">
           {label}
         </Text>
+        {resolution === "approved" ? (
+          <View className="flex-row items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5">
+            <Icon as={CheckIcon} className="size-3 text-emerald-700 dark:text-emerald-400" />
+            <Text className="text-[11px] font-medium text-emerald-800 dark:text-emerald-300">
+              Approved
+            </Text>
+          </View>
+        ) : null}
+        {resolution === "denied" ? (
+          <View className="flex-row items-center gap-1 rounded-full bg-foreground/5 px-2 py-0.5">
+            <Icon as={XIcon} className="text-muted-foreground size-3" />
+            <Text className="text-muted-foreground text-[11px] font-medium">
+              Cancelled
+            </Text>
+          </View>
+        ) : null}
       </View>
+      {detail ? (
+        <Text className="text-muted-foreground ps-6 text-xs leading-snug" numberOfLines={3}>
+          {detail}
+        </Text>
+      ) : null}
+      {resolution === "approved" ? (
+        <Text className="text-muted-foreground ps-6 text-xs leading-snug">
+          {resultSummary
+            ? `You approved · ${resultSummary}`
+            : "You approved this step."}
+        </Text>
+      ) : null}
+      {resolution === "denied" ? (
+        <Text className="text-muted-foreground ps-6 text-xs leading-snug">
+          {approval?.reason
+            ? `You cancelled · ${approval.reason}`
+            : "You cancelled this step."}
+        </Text>
+      ) : null}
       {error !== "" && (
         <View className="aui-tool-fallback-error gap-0.5 ps-6">
           <Text className="text-muted-foreground text-xs font-semibold">
@@ -477,10 +548,16 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
         </View>
       )}
       {preview && <FilePreview path={preview.path} content={preview.content} />}
-      {waitingForApproval && (
-        <Text className="text-muted-foreground ps-6 text-xs">
-          Approval is required. Open this chat on the web to respond.
-        </Text>
+      {shouldRenderApproval && (
+        <ToolFallbackApproval
+          addResult={addResult}
+          resume={resume}
+          interrupt={interrupt}
+          approval={approval}
+          respondToApproval={respondToApproval}
+          status={status}
+          argsText={argsText}
+        />
       )}
     </View>
   );

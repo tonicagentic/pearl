@@ -11,6 +11,7 @@ export type ChatListItem = {
   readonly id: string;
   readonly title: string;
   readonly updatedAt: string;
+  readonly waitingForInput?: boolean;
 };
 
 export type ActiveChat = {

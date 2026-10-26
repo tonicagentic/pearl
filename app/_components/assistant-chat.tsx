@@ -57,6 +57,7 @@ import {
   saveClientChatSession,
   saveClientChatSnapshot,
 } from "@/lib/chat/persistence-client";
+import { chatNeedsUserInput } from "@/lib/chat/events";
 import { createFallbackTitle } from "@/lib/chat/title";
 import type { ActiveChat, StorageMode } from "@/lib/chat/types";
 
@@ -414,6 +415,7 @@ export function AssistantChatSurface({
             id,
             title: currentTitleRef.current,
             updatedAt: new Date().toISOString(),
+            waitingForInput: chatNeedsUserInput(events),
           });
           onActiveChatUpdated?.({
             id,

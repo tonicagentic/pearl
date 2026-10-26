@@ -98,6 +98,25 @@ test("send_notification ships the approval gate and ledger wiring", async () => 
   assert.match(source, /executeSend/, "must go through the ledger-backed path");
 });
 
+test("confirm_step is approval-gated and has no external side effect", async () => {
+  const source = await readFile(`${AGENT_TOOLS_DIR}/confirm_step.ts`, "utf8");
+
+  assert.match(source, /approval:\s*always\(\)/, "must gate every call on approval");
+  assert.match(
+    source,
+    /confirmed:\s*true/,
+    "execute only echoes the approved summary",
+  );
+  assert.doesNotMatch(source, /\bfetch\b/, "must not touch the network");
+  assert.doesNotMatch(source, /executeSend|readFile|writeFile|Blob/, "must not touch ledger, fs, or blob");
+
+  const tool = (await import("../agent/tools/confirm_step.ts")).default as {
+    execute: (input: { summary: string }) => Promise<unknown>;
+  };
+  const result = await tool.execute({ summary: "ship the release" });
+  assert.deepEqual(result, { confirmed: true, summary: "ship the release" });
+});
+
 const dbTest = process.env.DATABASE_URL?.trim() ? test : test.skip;
 
 dbTest("the destructive tool never executes without approval resolution", async () => {

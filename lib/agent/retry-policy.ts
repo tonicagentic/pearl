@@ -38,6 +38,12 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
   // Reads and idempotency-keyed operations: safe to retry.
   get_weather: policy(true, ["network", "timeout"], 2, "Static read, no side effect."),
   read_attachment: policy(true, ["network", "timeout"], 2, "DB read, no side effect."),
+  confirm_step: policy(
+    true,
+    ["timeout"],
+    2,
+    "Approval-gated echo with no side effect; an identical retry returns the same summary.",
+  ),
   send_notification: policy(
     false,
     [],

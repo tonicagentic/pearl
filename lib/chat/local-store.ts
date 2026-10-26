@@ -1,6 +1,7 @@
 "use client";
 
 import type { ClientSessionState, MessageStreamEvent } from "eve/client";
+import { chatNeedsUserInput } from "@/lib/chat/events";
 import { createFallbackTitle, DEFAULT_CHAT_TITLE } from "@/lib/chat/title";
 import type { ActiveChat, ChatListItem } from "@/lib/chat/types";
 
@@ -108,13 +109,17 @@ export function saveLocalChatSnapshot({
   readonly events: readonly MessageStreamEvent[];
   readonly session: ClientSessionState | undefined;
 }) {
-  updateChat(chatId, (chat) => ({
-    ...chat,
-    events,
-    pendingUserMessage: null,
-    session,
-    updatedAt: new Date().toISOString(),
-  }));
+  updateChat(chatId, (chat) => {
+    const streamChanged = events.length !== chat.events.length;
+    return {
+      ...chat,
+      events,
+      pendingUserMessage: null,
+      session,
+      // Keep Recents ordered by last message, not by idle open/resume saves.
+      ...(streamChanged ? { updatedAt: new Date().toISOString() } : {}),
+    };
+  });
 }
 
 export function skipLocalChatAuthorization({
@@ -224,6 +229,7 @@ function toListItem(chat: StoredChat): ChatListItem {
     id: chat.id,
     title: chat.title,
     updatedAt: chat.updatedAt,
+    waitingForInput: chatNeedsUserInput(chat.events),
   };
 }
 

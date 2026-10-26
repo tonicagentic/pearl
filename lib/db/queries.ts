@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { get } from "@vercel/blob";
-import { and, asc, desc, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import type { ClientSessionState, MessageStreamEvent } from "eve/client";
-import { isChatTurnSettledEvent } from "@/lib/chat/events";
+import { chatNeedsUserInput, isChatTurnSettledEvent } from "@/lib/chat/events";
 import type { ActiveChat, ChatListItem, ChatListPage } from "@/lib/chat/types";
 import { createFallbackTitle, DEFAULT_CHAT_TITLE } from "@/lib/chat/title";
 import {
@@ -72,15 +72,63 @@ export async function listChatsPageByUser(
   const hasMore = rows.length > CHAT_HISTORY_PAGE_SIZE;
   const pageRows = hasMore ? rows.slice(0, CHAT_HISTORY_PAGE_SIZE) : rows;
   const last = pageRows[pageRows.length - 1];
+  const waitingByChatId = await waitingForInputByChatIds(
+    pageRows.map((row) => row.id),
+  );
 
   return {
     items: pageRows.map((row) => ({
       id: row.id,
       title: row.title,
       updatedAt: row.updatedAt.toISOString(),
+      waitingForInput: waitingByChatId.get(row.id) ?? false,
     })),
     nextCursor: hasMore && last ? encodeChatCursor(last.updatedAt, last.id) : null,
   };
+}
+
+/** Batch-compute HITL parks for a page of chats from their durable event logs. */
+async function waitingForInputByChatIds(
+  chatIds: readonly string[],
+): Promise<Map<string, boolean>> {
+  const waiting = new Map<string, boolean>();
+  for (const id of chatIds) waiting.set(id, false);
+  if (chatIds.length === 0) return waiting;
+
+  const rows = await db
+    .select({
+      chatId: chatEvent.chatId,
+      event: chatEvent.event,
+      eventIndex: chatEvent.eventIndex,
+    })
+    .from(chatEvent)
+    .where(
+      and(
+        inArray(chatEvent.chatId, [...chatIds]),
+        sql`${chatEvent.event} ->> 'type' in (
+          'input.requested',
+          'input.resolved',
+          'authorization.required',
+          'authorization.completed',
+          'turn.cancelled',
+          'turn.failed'
+        )`,
+      ),
+    )
+    .orderBy(asc(chatEvent.chatId), asc(chatEvent.eventIndex));
+
+  const eventsByChat = new Map<string, MessageStreamEvent[]>();
+  for (const row of rows) {
+    const list = eventsByChat.get(row.chatId) ?? [];
+    list.push(row.event);
+    eventsByChat.set(row.chatId, list);
+  }
+
+  for (const [id, events] of eventsByChat) {
+    waiting.set(id, chatNeedsUserInput(events));
+  }
+
+  return waiting;
 }
 
 export async function createChat(
@@ -425,6 +473,17 @@ export async function saveChatSnapshot({
     throw new Error("Chat not found.");
   }
 
+  const [lastEvent] = await db
+    .select({ eventIndex: chatEvent.eventIndex })
+    .from(chatEvent)
+    .where(eq(chatEvent.chatId, chatId))
+    .orderBy(desc(chatEvent.eventIndex))
+    .limit(1);
+  const previousLength = (lastEvent?.eventIndex ?? -1) + 1;
+  // Recents sort by updatedAt. Only bump it when the durable stream grew or
+  // shrank — idle open/resume snapshots must not reorder the sidebar.
+  const streamChanged = events.length !== previousLength;
+
   if (events.length > 0) {
     await db
       .insert(chatEvent)
@@ -452,7 +511,7 @@ export async function saveChatSnapshot({
       eveSession: session ?? null,
       pendingUserMessage: null,
       pendingUserMessageCreatedAt: null,
-      updatedAt: new Date(),
+      ...(streamChanged ? { updatedAt: new Date() } : {}),
     })
     .where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
 }

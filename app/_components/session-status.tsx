@@ -15,36 +15,55 @@ import { Loader2, X } from "lucide-react";
 // - Stall watchdog: no stream events for 45s while in flight reads as a
 //   warning, so a dead gateway call shows as text instead of an endless
 //   spinner.
-// - Waiting for you: the newest durable state is an unanswered input request
-//   (tool-approval park or ask_question). The request itself renders in the
-//   thread via the mapped tool-approval UI; this banner explains that the
-//   agent is paused on the user.
+// - Waiting for you: an unanswered input request (tool-approval park or
+//   ask_question). Track by requestId across turn.completed — a parked turn
+//   emits input.requested, then turn.completed, then session.waiting. The
+//   request itself renders in the thread via the mapped tool-approval UI;
+//   this banner explains that the agent is paused on the user.
 //
 // Turn failures surface separately through useEveError (EveErrorToast).
 
 const STALL_WARNING_MS = 45_000;
 
+type PendingRequest = {
+  readonly requestId: string;
+  readonly toolName?: string;
+  readonly kind?: string;
+};
+
 type StreamEvent = {
   readonly type?: string;
   readonly meta?: { readonly at?: string };
   readonly data?: {
-    readonly requests?: readonly { callId?: string }[];
+    readonly requests?: readonly {
+      requestId?: string;
+      kind?: string;
+      action?: { callId?: string; toolName?: string };
+    }[];
+    readonly resolutions?: readonly { requestId?: string }[];
     readonly callId?: string;
   };
 };
 
-function lastEventTimestamp(events: readonly unknown[]): number | null {
-  for (let i = events.length - 1; i >= 0; i--) {
-    const event = events[i] as { meta?: { at?: string } };
-    const at = event?.meta?.at;
+const TOOL_WAIT_LABELS: Record<string, string> = {
+  confirm_step: "confirming a step",
+  ask_question: "a question",
+  send_notification: "sending a notification",
+  delete_asset: "deleting an asset",
+  clear_writer_preferences: "clearing writer preferences",
+  resolve_issue: "resolving an issue",
+  create_issue: "creating an issue",
+};
 
-    if (at) {
-      const parsed = Date.parse(at);
-      if (Number.isFinite(parsed)) return parsed;
-    }
+function waitLabel(pending: readonly PendingRequest[]): string {
+  const first = pending[0];
+  if (!first) return "a question or approval";
+  if (first.kind === "question") return "a question";
+  if (first.toolName && TOOL_WAIT_LABELS[first.toolName]) {
+    return TOOL_WAIT_LABELS[first.toolName];
   }
-
-  return null;
+  if (first.toolName) return first.toolName.replaceAll("_", " ");
+  return "a question or approval";
 }
 
 export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean }) {
@@ -66,8 +85,7 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
   // Derive the phase in one forward pass over the authoritative stream:
   // unanswered input requests (the agent is paused on the user), the
   // in-flight turn's start time, and the newest event timestamp.
-  const pendingCalls = new Set<string>();
-  let pendingInput = false;
+  const pendingById = new Map<string, PendingRequest>();
   let workingStartedAt: number | null = null;
   let lastAt: number | null = null;
   let receivedCount = 0;
@@ -85,14 +103,20 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
 
     if (event.type === "input.requested") {
       for (const request of event.data?.requests ?? []) {
-        if (request.callId) pendingCalls.add(request.callId);
+        if (!request.requestId) continue;
+        pendingById.set(request.requestId, {
+          requestId: request.requestId,
+          toolName: request.action?.toolName,
+          kind: request.kind,
+        });
       }
-      pendingInput = pendingCalls.size > 0;
       continue;
     }
 
-    if (event.type === "action.result" && event.data?.callId) {
-      pendingCalls.delete(event.data.callId);
+    if (event.type === "input.resolved") {
+      for (const resolution of event.data?.resolutions ?? []) {
+        if (resolution.requestId) pendingById.delete(resolution.requestId);
+      }
       continue;
     }
 
@@ -115,12 +139,17 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
       event.type === "turn.cancelled" ||
       event.type === "turn.failed"
     ) {
+      // Keep pending input across turn.completed — a HITL park emits
+      // input.requested then turn.completed then session.waiting.
       workingStartedAt = null;
-      pendingCalls.clear();
+      if (event.type === "turn.cancelled" || event.type === "turn.failed") {
+        pendingById.clear();
+      }
     }
   }
 
-  pendingInput = pendingCalls.size > 0;
+  const pendingRequests = [...pendingById.values()];
+  const pendingInput = pendingRequests.length > 0;
 
   // In-flight = the thread reports running (submitted/streaming) and the
   // durable state is not paused on the user. While an assistant message is
@@ -151,7 +180,8 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
         className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100"
       >
         <span className="font-medium">Waiting for your confirmation.</span> The
-        agent is paused on a question or approval above — reply to continue.
+        agent is paused on {waitLabel(pendingRequests)} above — reply to
+        continue.
       </div>
     );
   }

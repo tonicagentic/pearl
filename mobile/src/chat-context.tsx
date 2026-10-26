@@ -19,7 +19,7 @@ import {
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
 import { traceStream } from "./stream-trace";
 import { createMobileMessageReducer } from "./message-reducer";
-import { pendingMessageLabel } from "./message-projection";
+import { pendingMessageLabel, hasPendingAction } from "./message-projection";
 import {
   appendChatEvents,
   createChat,
@@ -67,6 +67,8 @@ type ChatBinding = {
   sendPrepared: boolean;
   sendStartedAt: number | null;
   eventIndex: number;
+  /** Last event count written by a full snapshot; used to skip idle open/resume saves. */
+  savedEventCount: number;
   queue: Promise<void>;
   batch: { event: MessageStreamEvent; eventIndex: number }[];
   timer: ReturnType<typeof setTimeout> | null;
@@ -124,6 +126,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       sendPrepared: false,
       sendStartedAt: null,
       eventIndex: store.snapshot.events.length,
+      savedEventCount: store.snapshot.events.length,
       queue: Promise.resolve(),
       batch: [],
       timer: null,
@@ -236,8 +239,17 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         }
         if (!binding.id || binding.pendingMessage) return;
         const id = binding.id;
+        // eve fires onFinish on mount/resume even when nothing new arrived.
+        // Skip the snapshot so idle opens do not bump Recents order.
+        if (snapshot.events.length === binding.savedEventCount) {
+          if (activeStoreRef.current !== store && !binding.pendingMessage && retainedStores.get(id) === store) {
+            retainedStores.delete(id);
+          }
+          return;
+        }
         enqueue(async () => {
           await saveChatSnapshot(id, snapshot.events, snapshot.session);
+          binding.savedEventCount = snapshot.events.length;
           traceSend(binding, "snapshot saved");
           binding.syncFailed = false;
           if (activeStoreRef.current === store) setPersistenceError(null);
@@ -268,7 +280,10 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
             setActiveChatId(created.id);
             setActiveTitle(created.title);
           }
-          setChats((current) => [created, ...current.filter((chat) => chat.id !== created.id)]);
+          setChats((current) => [
+            { ...created, waitingForInput: false },
+            ...current.filter((chat) => chat.id !== created.id),
+          ]);
         } else if (message) {
           // A previous turn's snapshot clears pendingUserMessage. Wait for that
           // checkpoint before marking the new turn, or it could erase our mark.
@@ -377,6 +392,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         if (snapshot.session) await saveChatSession(id, snapshot.session);
       } else {
         await saveChatSnapshot(id, snapshot.events, snapshot.session);
+        binding.savedEventCount = snapshot.events.length;
       }
     });
     binding.queue = attempt.catch(() => {
@@ -392,6 +408,24 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       // The queued handler keeps the failure visible and lets later retries run.
     }
   }, [store, reloadChats, bindings]);
+
+  // Keep the Recents "needs you" dot in sync with the open chat's HITL park.
+  useEffect(() => {
+    const chatId = activeChatId;
+    if (!chatId) return;
+    return store.subscribe(() => {
+      const waiting = hasPendingAction(store.snapshot.data);
+      setChats((current) => {
+        const index = current.findIndex((chat) => chat.id === chatId);
+        if (index < 0 || Boolean(current[index]?.waitingForInput) === waiting) {
+          return current;
+        }
+        const next = [...current];
+        next[index] = { ...next[index]!, waitingForInput: waiting };
+        return next;
+      });
+    });
+  }, [store, activeChatId]);
 
   // The auth provider restores the bearer asynchronously; load when signed in.
   useEffect(() => {

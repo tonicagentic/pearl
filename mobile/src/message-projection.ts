@@ -99,13 +99,75 @@ export function pendingMessageLabel(content: string | readonly { type: string; t
   return content.length > 0 ? "[Attachment]" : "";
 }
 
+function hasOpenApproval(message: EveMessageData["messages"][number]): boolean {
+  return message.parts.some(
+    (part) => part.type === "dynamic-tool" && part.state === "approval-requested",
+  );
+}
+
+function hasOpenAuthorization(message: EveMessageData["messages"][number]): boolean {
+  return message.parts.some(
+    (part) => part.type === "authorization" && part.state === "required",
+  );
+}
+
+/** True when the latest assistant turn is parked on approval or authorization.
+ * Approvals survive turn.completed (metadata.status becomes "complete"); failed
+ * turns never block the next send. */
 export function hasPendingAction(data: EveMessageData): boolean {
   const message = data.messages.at(-1);
-  return message?.role === "assistant" && message.metadata?.status === "streaming" &&
-    message.parts.some((part) =>
-      (part.type === "authorization" && part.state === "required") ||
-      (part.type === "dynamic-tool" && part.state === "approval-requested"),
-    );
+  if (message?.role !== "assistant") return false;
+  if (message.metadata?.status === "failed") return false;
+  return hasOpenApproval(message) || hasOpenAuthorization(message);
+}
+
+export type PendingApproval = {
+  readonly requestId: string;
+  readonly toolName: string;
+  readonly prompt: string;
+  readonly detail?: string;
+  readonly options: readonly { readonly id: string; readonly label: string }[];
+};
+
+/** Open tool-approval parks on the latest assistant turn, for the composer card. */
+export function getPendingApprovals(data: EveMessageData): readonly PendingApproval[] {
+  const message = data.messages.at(-1);
+  if (message?.role !== "assistant") return [];
+  if (message.metadata?.status === "failed") return [];
+
+  return message.parts.flatMap((part) => {
+    if (part.type !== "dynamic-tool" || part.state !== "approval-requested") {
+      return [];
+    }
+    const request = part.toolMetadata?.eve?.inputRequest;
+    const requestId = request?.requestId ?? part.approval.id;
+    const options = (request?.options?.length
+      ? request.options
+      : [
+          { id: "approve", label: "Approve" },
+          { id: "cancel", label: "Cancel" },
+        ]
+    ).map((option) => ({ id: option.id, label: option.label }));
+    const input =
+      part.input && typeof part.input === "object" && !Array.isArray(part.input)
+        ? (part.input as Record<string, unknown>)
+        : null;
+    const summary =
+      typeof input?.summary === "string"
+        ? input.summary
+        : typeof input?.filePath === "string"
+          ? input.filePath
+          : undefined;
+    return [
+      {
+        requestId,
+        toolName: part.toolName,
+        prompt: request?.prompt ?? `Approve tool call: ${part.toolName}`,
+        ...(summary ? { detail: summary } : {}),
+        options,
+      },
+    ];
+  });
 }
 
 // Omit the message id: eve replaces the optimistic user id on acceptance, and
@@ -117,9 +179,18 @@ export function toThreadMessages(
   return state.messages.map((message, index) => {
     if (message.role === "assistant") {
       const last = index === state.messages.length - 1;
-      const active = last && message.metadata?.status === "streaming" && !hasError;
-      const pendingApproval = active && message.parts.some((p) => p.type === "dynamic-tool" && p.state === "approval-requested");
-      const pendingAuth = active && message.parts.some((p) => p.type === "authorization" && p.state === "required");
+      // HITL parks emit input.requested then turn.completed, so approval-
+      // requested parts remain after metadata.status flips to "complete".
+      const pendingApproval =
+        last &&
+        !hasError &&
+        message.metadata?.status !== "failed" &&
+        hasOpenApproval(message);
+      const pendingAuth =
+        last &&
+        !hasError &&
+        message.metadata?.status !== "failed" &&
+        hasOpenAuthorization(message);
       const status: NonNullable<ThreadMessageLike["status"]> = pendingApproval
         ? { type: "requires-action", reason: "tool-calls" }
         : pendingAuth ? { type: "requires-action", reason: "interrupt" }

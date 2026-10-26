@@ -121,6 +121,8 @@ export function AgentChatShell({
           id: chat.id,
           title: chat.title || current?.title || "New chat",
           updatedAt: chat.updatedAt,
+          waitingForInput:
+            chat.waitingForInput ?? current?.waitingForInput ?? false,
         },
         ...items.filter((item) => item.id !== chat.id),
       ];
@@ -129,7 +131,9 @@ export function AgentChatShell({
 
   const updateChatTitle = useCallback((chatId: string, title: string) => {
     setHistory((items) =>
-      items.map((item) => (item.id === chatId ? { ...item, title } : item)),
+      items.map((item) =>
+        item.id === chatId ? { ...item, title, waitingForInput: item.waitingForInput } : item,
+      ),
     );
   }, []);
 

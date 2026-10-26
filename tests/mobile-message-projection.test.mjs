@@ -11,6 +11,7 @@ register("./mobile-ts-resolve.mjs", pathToFileURL("./tests/"));
 const {
   toThreadMessages,
   hasPendingAction,
+  getPendingApprovals,
   isTaskNotification,
   pendingMessageLabel,
 } = await import("../mobile/src/message-projection.ts");
@@ -78,6 +79,35 @@ test("projects pending approval as action-required and preserves declared option
   assert.deepEqual(message.content[0].approval.options.map(({ id, kind }) => [id, kind]), [
     ["approve", "allow-once"], ["cancel", "reject-once"],
   ]);
+});
+
+test("completed turns with an open approval stay action-required", () => {
+  // HITL parks emit input.requested then turn.completed; metadata flips to
+  // complete while approval-requested parts remain unanswered.
+  const data = { messages: [assistant([{
+    type: "dynamic-tool", toolName: "confirm_step", toolCallId: "c1",
+    input: { summary: "ship the release" }, state: "approval-requested",
+    approval: { id: "approval_park" },
+    toolMetadata: { eve: { kind: "tool-call", name: "confirm_step", inputRequest: {
+      requestId: "approval_park", kind: "tool-approval", prompt: "Confirm?",
+      options: [{ id: "approve", label: "Allow" }, { id: "cancel", label: "Deny" }],
+    } } },
+  }], "complete")] };
+  assert.equal(hasPendingAction(data), true);
+  assert.deepEqual(toThreadMessages(data)[0].status, {
+    type: "requires-action",
+    reason: "tool-calls",
+  });
+  assert.deepEqual(getPendingApprovals(data), [{
+    requestId: "approval_park",
+    toolName: "confirm_step",
+    prompt: "Confirm?",
+    detail: "ship the release",
+    options: [
+      { id: "approve", label: "Allow" },
+      { id: "cancel", label: "Deny" },
+    ],
+  }]);
 });
 
 test("stale approvals on failed turns cannot block the next send", () => {

@@ -430,12 +430,17 @@ const AssistantMessage: FC = () => {
   } = useContext(ThreadComponentsContext);
 
   const messageParts = useAuiState((s) => s.message.parts);
+  // Match mobile: a parked HITL tool must leave the timeline so ToolFallback
+  // mounts Allow/Deny. Settled timeline tools still collapse.
   const isTimelineCovered = (index: number) => {
     const part = messageParts[index] as
-      | { toolName?: string; type?: string }
+      | { toolName?: string; type?: string; status?: { type: string } }
       | undefined;
     return (
-      part?.type === "reasoning" || TIMELINE_TOOLS.has(part?.toolName ?? "")
+      part?.type === "reasoning" ||
+      (part?.status?.type !== "requires-action" &&
+        part?.toolName !== "write_file" &&
+        TIMELINE_TOOLS.has(part?.toolName ?? ""))
     );
   };
 
@@ -518,7 +523,11 @@ const AssistantMessage: FC = () => {
                 // Summarized by the timeline.
                 return null;
               case "tool-call":
-                if (TIMELINE_TOOLS.has(part.toolName)) {
+                if (
+                  TIMELINE_TOOLS.has(part.toolName) &&
+                  part.status.type !== "requires-action" &&
+                  part.toolName !== "write_file"
+                ) {
                   // Summarized by the timeline above; edit_file's renderer
                   // still mounts through its tool UI for the canvas mirror.
                   return part.toolName === "edit_file" ? part.toolUI : null;
