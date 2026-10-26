@@ -98,7 +98,9 @@ test("send_notification ships the approval gate and ledger wiring", async () => 
   assert.match(source, /executeSend/, "must go through the ledger-backed path");
 });
 
-test("the destructive tool never executes without approval resolution", async () => {
+const dbTest = process.env.DATABASE_URL?.trim() ? test : test.skip;
+
+dbTest("the destructive tool never executes without approval resolution", async () => {
   // executeSend is exported and runnable directly — the unit tier proves that
   // calling the tool's behavior path does NOT bypass the ledger record even
   // when invoked programmatically (a code path the approval gate protects in

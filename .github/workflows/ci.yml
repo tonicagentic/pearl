@@ -21,7 +21,8 @@ jobs:
       - name: Unit + fault-injection tests
         run: pnpm test
         env:
-          # The execution-ledger tests run against the real database schema.
+          # Ledger tests need a real Postgres schema. When this secret is unset
+          # they skip; set secrets.DATABASE_URL to a migrated Neon URL to run them.
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
   eval-smoke:
