@@ -996,9 +996,22 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
 }) => {
   const hydrated = useHydrated();
   const aui = useAui();
-  const text = useAuiState((s) => s.composer.text);
+  const storeText = useAuiState((s) => s.composer.text);
+  // Local value is the source of truth while typing. The AUI store lags under
+  // fast iOS keystrokes; feeding `value={storeText}` rewrote the native field
+  // mid-input and jumped the caret. Ignore stale shorter store prefixes.
+  const [value, setValue] = useState(storeText);
   const nativeInput = useRef<TextInput>(null);
   const focusOnMount = useRef(autoFocus);
+  useEffect(() => {
+    if (storeText === value) return;
+    if (storeText === "") {
+      setValue("");
+      return;
+    }
+    if (value.startsWith(storeText) && storeText.length < value.length) return;
+    setValue(storeText);
+  }, [storeText, value]);
   const placeholderColor = Platform.OS === "ios"
     ? "accent-muted-foreground/85"
     : "accent-muted-foreground/60";
@@ -1026,8 +1039,11 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
   return Platform.OS === "ios" ? (
     <TextInput
       ref={nativeInput}
-      value={text}
-      onChangeText={(value) => aui.composer.setText(value)}
+      value={value}
+      onChangeText={(next) => {
+        setValue(next);
+        aui.composer.setText(next);
+      }}
       {...inputProps}
     />
   ) : (

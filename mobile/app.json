@@ -2,17 +2,20 @@
   "expo": {
     "name": "Pearl",
     "slug": "pearl",
-    "version": "0.1.0-alpha.3",
+    "owner": "tonicagentic",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tonicagentic.pearl",
-      "version": "0.1.0",
-      "buildNumber": "3"
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.tonicagentic.pearl",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -26,8 +29,22 @@
     },
     "plugins": [
       "expo-router",
-      ["expo-build-properties", { "ios": { "buildReactNativeFromSource": true } }]
+      "expo-dev-client",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "buildReactNativeFromSource": true
+          }
+        }
+      ]
     ],
-    "scheme": "pearl"
+    "scheme": "pearl",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "43ee6005-c5ac-4b8f-b463-5d910681956d"
+      }
+    }
   }
 }
