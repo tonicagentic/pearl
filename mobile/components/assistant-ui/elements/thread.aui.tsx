@@ -197,13 +197,16 @@ const CAN_USE_LIQUID_GLASS =
   Platform.OS === "ios" &&
   isGlassEffectAPIAvailable() &&
   isLiquidGlassAvailable();
+const COMPOSER_SHELL_RADIUS = 28;
+/** Side and bottom float for the iOS composer dock (matches `px-4`). */
+const COMPOSER_EDGE = 16;
 const GLASS_SURFACE_STYLE = {
   position: "absolute",
   top: 0,
   right: 0,
   bottom: 0,
   left: 0,
-  borderRadius: 24,
+  borderRadius: COMPOSER_SHELL_RADIUS,
 } as const;
 const KeyboardHeightContext = createContext<SharedValue<number> | null>(null);
 
@@ -550,8 +553,20 @@ export const Thread: FC<ThreadProps> = ({
         <ThreadFollowupSuggestions />
         <View
           pointerEvents={floatsComposer ? "box-none" : undefined}
-          className={Platform.OS === "ios" ? "aui-thread-viewport-footer px-3" : "aui-thread-viewport-footer px-4"}
-          style={{ paddingBottom: insets.bottom + (Platform.OS === "ios" ? 12 : 8) }}
+          className={
+            floatsComposer
+              ? "aui-thread-viewport-footer"
+              : "aui-thread-viewport-footer px-4"
+          }
+          style={
+            floatsComposer
+              ? {
+                  paddingHorizontal: COMPOSER_EDGE,
+                  // Equal float to the sides; keyboard spacer keeps this gap above the keys.
+                  paddingBottom: COMPOSER_EDGE,
+                }
+              : { paddingBottom: insets.bottom + 8 }
+          }
         >
           <Composer autoFocus={autoFocus} focusNewChatKey={focusNewChatKey} />
         </View>
@@ -572,9 +587,7 @@ export const Thread: FC<ThreadProps> = ({
       <ThreadViewportContext.Provider value={viewport}>
         <ThreadPrimitive.Root className="aui-root aui-thread-root bg-background flex-1">
           {followsKeyboard ? (
-            <IosKeyboardLayout bottomInset={insets.bottom}>
-              {threadViewport}
-            </IosKeyboardLayout>
+            <IosKeyboardLayout>{threadViewport}</IosKeyboardLayout>
           ) : (
             <KeyboardAvoidingView
               className="flex-1"
@@ -591,10 +604,7 @@ export const Thread: FC<ThreadProps> = ({
 };
 
 /** One UI-thread keyboard height drives the iOS composer and transcript together. */
-const IosKeyboardLayout: FC<{ bottomInset: number; children: ReactNode }> = ({
-  bottomInset,
-  children,
-}) => {
+const IosKeyboardLayout: FC<{ children: ReactNode }> = ({ children }) => {
   // A chat can mount while the keyboard is already open (e.g. after sign-in).
   const keyboardHeight = useSharedValue(
     KeyboardController.isVisible() ? KeyboardController.state().height : 0,
@@ -614,9 +624,9 @@ const IosKeyboardLayout: FC<{ bottomInset: number; children: ReactNode }> = ({
     },
   }, []);
   const spacerStyle = useAnimatedStyle(() => ({
-    // The footer already includes the home-indicator inset while closed.
-    height: Math.max(0, keyboardHeight.value - bottomInset),
-  }), [bottomInset]);
+    // Full keyboard height; footer `COMPOSER_EDGE` padding keeps a matching gap above the keys.
+    height: Math.max(0, keyboardHeight.value),
+  }));
 
   return (
     <KeyboardHeightContext.Provider value={keyboardHeight}>
@@ -898,9 +908,10 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
     <ComposerPrimitive.Root className="aui-composer-root w-full">
       <View
         className={cn(
-          "aui-composer-shell relative rounded-3xl",
+          "aui-composer-shell relative",
           Platform.OS === "ios" ? "gap-1 px-[2px] py-[6px]" : "gap-2 p-2",
         )}
+        style={{ borderRadius: COMPOSER_SHELL_RADIUS }}
       >
         {showGlass ? (
           <GlassView
@@ -911,7 +922,8 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
         ) : (
           <View
             pointerEvents="none"
-            className="border-border/60 dark:border-muted-foreground/15 bg-card absolute inset-0 rounded-3xl border"
+            className="border-border/60 dark:border-muted-foreground/15 bg-card absolute inset-0 border"
+            style={{ borderRadius: COMPOSER_SHELL_RADIUS }}
           />
         )}
         <ComposerAttachments />
@@ -1259,7 +1271,7 @@ const UserMessage: FC = () => {
     >
       <MessagePrimitive.Root className="aui-user-message-root items-end gap-y-1">
         <UserMessageAttachments />
-        <View className="aui-user-message-content bg-muted max-w-[85%] rounded-xl px-4 py-1.5">
+        <View className="aui-user-message-content bg-card max-w-[85%] rounded-xl px-4 py-1.5">
           <MessagePrimitive.Parts components={{ Text: UserText, Image, File }} />
         </View>
         <View className="aui-user-message-footer flex-row items-center justify-end gap-2">
