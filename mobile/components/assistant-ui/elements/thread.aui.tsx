@@ -49,6 +49,7 @@ import {
   useAuiState,
 } from "@assistant-ui/react-native";
 import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
 import {
   GlassView,
   isGlassEffectAPIAvailable,
@@ -103,6 +104,7 @@ import Animated, {
   interpolate,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   type SharedValue,
 } from "react-native-reanimated";
 
@@ -210,17 +212,27 @@ const CAN_USE_LIQUID_GLASS =
   Platform.OS === "ios" &&
   isGlassEffectAPIAvailable() &&
   isLiquidGlassAvailable();
-const COMPOSER_SHELL_RADIUS = 28;
+const COMPOSER_SHELL_RADIUS = 26;
 /** Side/bottom float for the iOS composer dock (Mail-style inset from the screen edge). */
 const COMPOSER_EDGE = 16;
+const COMPOSER_SHELL_STYLE = {
+  borderRadius: COMPOSER_SHELL_RADIUS,
+  borderCurve: "continuous",
+} as const;
 const GLASS_SURFACE_STYLE = {
   position: "absolute",
   top: 0,
   right: 0,
   bottom: 0,
   left: 0,
-  borderRadius: COMPOSER_SHELL_RADIUS,
+  ...COMPOSER_SHELL_STYLE,
 } as const;
+const COMPOSER_HOLD_SPRING = { damping: 22, stiffness: 420 } as const;
+const iosComposerHitSlop = 6;
+
+const lightComposerImpact = () => {
+  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+};
 const KeyboardHeightContext = createContext<SharedValue<number> | null>(null);
 
 const ThreadComponentsContext =
@@ -1019,10 +1031,10 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
     placeholder: "Ask anything",
     placeholderTextColorClassName: hydrated ? placeholderColor : undefined,
     className: cn(
-      "aui-composer-input text-foreground web:resize-none web:outline-none max-h-48 py-1",
+      "aui-composer-input text-foreground web:resize-none web:outline-none max-h-48",
       Platform.OS === "ios"
-        ? "min-h-8 px-[13px] text-[17px] leading-6"
-        : "min-h-10 px-2.5 text-base leading-6",
+        ? "min-h-11 px-2 pb-1 pt-4 text-[17px] leading-[22px]"
+        : "min-h-10 px-2.5 py-1 text-base leading-6",
     ),
     multiline: true,
     accessibilityLabel: "Message input",
@@ -1058,6 +1070,10 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
   // Start with a readable surface until the iOS accessibility setting is known.
   const [reducedTransparency, setReducedTransparency] = useState(true);
   const [preparingAttachment, setPreparingAttachment] = useState(false);
+  const motion = useMotion();
+  const pressed = useSharedValue(0);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdActive = useRef(false);
   useEffect(() => {
     if (!CAN_USE_LIQUID_GLASS) return;
     let mounted = true;
@@ -1075,16 +1091,57 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
       subscription.remove();
     };
   }, []);
+  useEffect(
+    () => () => {
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+    },
+    [],
+  );
   const showGlass = CAN_USE_LIQUID_GLASS && !reducedTransparency;
+  const holdEnabled = Platform.OS === "ios" && motion;
+
+  const holdStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        scale: interpolate(pressed.value, [0, 1], [1, 0.975]),
+      },
+    ],
+  }));
+
+  // Parent onTouch* observes child touches without the touch-delay RNGH would
+  // put on the text field and SwiftUI menus.
+  const clearHold = useCallback(() => {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    if (!holdActive.current) return;
+    holdActive.current = false;
+    pressed.value = withSpring(0, COMPOSER_HOLD_SPRING);
+  }, [pressed]);
+
+  const beginHold = useCallback(() => {
+    if (!holdEnabled) return;
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = setTimeout(() => {
+      holdTimer.current = null;
+      holdActive.current = true;
+      pressed.value = withSpring(1, COMPOSER_HOLD_SPRING);
+      lightComposerImpact();
+    }, 120);
+  }, [holdEnabled, pressed]);
 
   return (
     <ComposerPrimitive.Root className="aui-composer-root w-full">
-      <View
+      <Animated.View
         className={cn(
           "aui-composer-shell relative",
-          Platform.OS === "ios" ? "gap-1 px-[2px] py-[6px]" : "gap-2 p-2",
+          Platform.OS === "ios" ? "px-2 pb-2.5 pt-2" : "gap-2 p-2",
         )}
-        style={{ borderRadius: COMPOSER_SHELL_RADIUS }}
+        style={[COMPOSER_SHELL_STYLE, holdEnabled ? holdStyle : null]}
+        onTouchStart={holdEnabled ? beginHold : undefined}
+        onTouchEnd={holdEnabled ? clearHold : undefined}
+        onTouchCancel={holdEnabled ? clearHold : undefined}
       >
         {showGlass ? (
           <GlassView
@@ -1096,7 +1153,7 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
           <View
             pointerEvents="none"
             className="border-border/60 dark:border-muted-foreground/15 bg-card absolute inset-0 border"
-            style={{ borderRadius: COMPOSER_SHELL_RADIUS }}
+            style={COMPOSER_SHELL_STYLE}
           />
         )}
         <ComposerAttachments />
@@ -1105,7 +1162,7 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
           preparingAttachment={preparingAttachment}
           onPreparingChange={setPreparingAttachment}
         />
-      </View>
+      </Animated.View>
     </ComposerPrimitive.Root>
   );
 };
@@ -1131,18 +1188,20 @@ const ComposerAction: FC<{
   const isIos = Platform.OS === "ios";
 
   return (
-    <View className="aui-composer-action-wrapper flex-row items-center justify-between">
-      <View className="flex-row items-center gap-1">
+    <View
+      className="aui-composer-action-wrapper flex-row items-center justify-between"
+      // Match the placeholder’s top inset (shell pt-2 + input pt-4 ≈ 24)
+      // so the band under the text feels as open as the band above it.
+      style={isIos ? { marginTop: 24 } : undefined}
+    >
+      <View className={isIos ? "flex-row items-center gap-1.5" : "flex-row items-center gap-1"}>
         <ComposerAddAttachment
           preparing={preparingAttachment}
           onPreparingChange={onPreparingChange}
         />
-        {!isIos && <ComposerModelPicker disabled={preparingAttachment} />}
+        <ComposerModelPicker disabled={preparingAttachment} />
       </View>
-      <View
-        className={isIos ? "flex-row items-center gap-2" : "flex-row items-center gap-1.5"}
-      >
-        {isIos && <ComposerModelPicker disabled={preparingAttachment} />}
+      <View className="flex-row items-center">
         <AuiIf
           condition={(s) =>
             s.composer.submission === undefined &&
@@ -1152,10 +1211,12 @@ const ComposerAction: FC<{
           <ComposerPrimitive.Send
             disabled={preparingAttachment || (isIos && !canSend)}
             className={cn(
-              "aui-composer-send size-11 items-center justify-center",
-              !isIos && "bg-primary active:bg-primary/90 rounded-full disabled:opacity-50",
+              "aui-composer-send items-center justify-center",
+              isIos
+                ? "size-8"
+                : "bg-primary active:bg-primary/90 size-11 rounded-full disabled:opacity-50",
             )}
-            hitSlop={isIos ? undefined : iconButtonHitSlop}
+            hitSlop={isIos ? iosComposerHitSlop : iconButtonHitSlop}
             accessibilityLabel="Send message"
           >
             {isIos ? (
@@ -1184,10 +1245,12 @@ const ComposerAction: FC<{
         >
           <ComposerPrimitive.Cancel
             className={cn(
-              "aui-composer-cancel size-11 items-center justify-center",
-              !isIos && "bg-primary active:bg-primary/90 rounded-full",
+              "aui-composer-cancel items-center justify-center",
+              isIos
+                ? "size-8"
+                : "bg-primary active:bg-primary/90 size-11 rounded-full",
             )}
-            hitSlop={isIos ? undefined : iconButtonHitSlop}
+            hitSlop={isIos ? iosComposerHitSlop : iconButtonHitSlop}
             accessibilityLabel={
               isSending ? "Cancel sending" : "Stop generating"
             }
