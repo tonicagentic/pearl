@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+- User-scoped Vercel Connect MCP connections for Gmail, Google Calendar,
+  Google Drive, GitHub, Vercel, and Xero. Sign in with a personal account,
+  then Connect / Check status / Disconnect from web Settings or mobile
+  Settings; grants are stored by Connect and available to the agent.
+- Xero spend-query support: read-only Remote MCP tools (profit and loss,
+  accounts, bank transactions, and related reporting) with agent guidance
+  for questions like "How much did I spend on travel last month?"
+- Production auth host allowlist entry for `pearl.tonicagentic.com`.
+
+### Fixed
+
+- Connections Settings shows Connect and Disconnect when status is
+  "Unable to verify", so a stuck grant can be cleared or retried.
+- TypeScript build blockers around `ChatListItem.waitingForInput` and a
+  couple of tightened test casts so production deploys of this work succeed.
+
 ## 0.1.0-alpha.1 - 2026-10-01
 
 ### Added
