@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.1.0-alpha.4 - 2026-10-27
+
 ### Added
 
 - User-scoped Vercel Connect MCP connections for Gmail, Google Calendar,

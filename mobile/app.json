@@ -3,7 +3,7 @@
     "name": "Pearl",
     "slug": "pearl",
     "owner": "tonicagentic",
-    "version": "0.1.0",
+    "version": "0.1.0-alpha.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,7 +12,8 @@
       "bundleIdentifier": "com.tonicagentic.pearl",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "buildNumber": 2
     },
     "android": {
       "package": "com.tonicagentic.pearl",
