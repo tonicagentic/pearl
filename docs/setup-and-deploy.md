@@ -249,7 +249,7 @@ Open the matching local URL and make sure the Vercel App contains the same callb
 
 ## Optional Vercel Connect Integrations
 
-Slack, Notion, Linear, and Sentry are optional and are not part of the required deploy button flow.
+Slack, Notion, Linear, and Sentry are optional and are not part of the required deploy button flow. Gmail, Google Calendar, Google Drive, GitHub, Vercel, and Xero MCP are also optional and are user-scoped: each signed-in person authorizes their own account from Settings (web or mobile) or through the in-chat Connect card.
 
 Create any connectors you want to use:
 
@@ -258,33 +258,98 @@ Create any connectors you want to use:
 vercel connect create slack --name eve-chat-template --triggers
 vercel connect attach <slack-connector-uid> --triggers --trigger-path /eve/v1/slack --yes
 
-# MCP connections
+# Existing workspace MCP connections
 vercel connect create mcp.notion.com --name notion
 vercel connect create https://mcp.linear.app/mcp --name linear
 vercel connect create https://mcp.sentry.dev/mcp --name sentry
+
+# User-scoped Google Workspace MCP (developer preview). Enable the Gmail,
+# Calendar, and Drive MCP APIs in Google Cloud, create a Web OAuth client
+# marked for an AI-powered agent, then run create --help first and supply
+# that client when prompted.
+vercel connect create https://gmailmcp.googleapis.com/mcp/v1 --name gmail
+vercel connect create https://calendarmcp.googleapis.com/mcp/v1 --name calendar
+vercel connect create https://drivemcp.googleapis.com/mcp/v1 --name drive
+
+# User-scoped GitHub hosted MCP (OAuth bearer accepted by the readonly server;
+# do not use the managed GitHub App installation method). A bare
+# clientId/clientSecret create does not support user grants — use a create
+# payload with userAuthorization + GitHub OAuth discovery:
+#   .secrets/pearl-github-connect-create.json → clientId, clientSecret,
+#   userAuthorization.enabled, refreshTokens.enabled, defaultResource
+#   https://api.githubcopilot.com/mcp/readonly, and serverConfig from
+#   https://github.com/login/oauth/.well-known/openid-configuration
+# GitHub OAuth App callback: https://connect.vercel.com/callback
+vercel connect create https://api.githubcopilot.com/mcp/readonly --name pearl-github \
+  --data @.secrets/pearl-github-connect-create.json
+
+# User-scoped Vercel MCP (select None / user OAuth when prompted).
+vercel connect create vercel --name vercel
+
+# User-scoped Xero Remote MCP (https://api.xero.com/mcp/v1). Create a Xero Web
+# app (not Custom Connection) at https://developer.xero.com/app/manage with
+# redirect URI https://connect.vercel.com/callback. Enable granular
+# accounting.*.read and report scopes (new apps cannot use deprecated
+# accounting.transactions / accounting.reports.read). Put clientId/clientSecret
+# in .secrets/pearl-xero-oauth.json, then build a Connect create payload that
+# enables userAuthorization with Xero's OAuth discovery endpoints (a bare
+# clientId/clientSecret create does not support user grants):
+#   .secrets/pearl-xero-connect-create.json → clientId, clientSecret,
+#   userAuthorization.enabled, refreshTokens.enabled, defaultResource
+#   https://api.xero.com/mcp/v1, and serverConfig from
+#   https://identity.xero.com/.well-known/openid-configuration
+vercel connect create https://api.xero.com/mcp/v1 --name pearl-xero \
+  --data @.secrets/pearl-xero-connect-create.json
+# Pearl's authorize route and agent connection pass scopes from
+# lib/connections/oauth-scopes.ts. Prefer the api.xero.com URL over
+# `vercel connect create xero` (mcp.xero.com), which rejected BYO Web-app tokens.
 ```
 
-Attach it to the linked Vercel project if needed:
+Attach each connector to the linked Vercel project if needed:
 
 ```bash
 vercel connect attach <connector-uid> --yes
 ```
 
-Set the matching environment variable to each connector UID:
+Set the matching environment variable to each connector UID (never put provider tokens in these variables):
 
 ```bash
 printf '%s' "<slack-connector-uid>" | vercel env add SLACK_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add NOTION_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add LINEAR_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add SENTRY_CONNECTOR production preview development
-vercel env pull .env.local --yes
+printf '%s' "<connector-uid>" | vercel env add GMAIL_CONNECTOR production preview development
+printf '%s' "<connector-uid>" | vercel env add CALENDAR_CONNECTOR production preview development
+printf '%s' "<connector-uid>" | vercel env add DRIVE_CONNECTOR production preview development
+printf '%s' "<connector-uid>" | vercel env add GITHUB_CONNECTOR production preview development
+printf '%s' "<connector-uid>" | vercel env add VERCEL_CONNECTOR production preview development
+printf '%s' "<connector-uid>" | vercel env add XERO_CONNECTOR production preview development
 ```
 
-For local development, the connections fall back to `slack/eve-chat-template`, `notion`, `linear`, and `sentry`, so local connectors created with the names above can work without editing files under `agent/`.
+Refresh local values without overwriting local-only secrets: a full
+`vercel env pull .env.local` can erase them, so pull to a temporary file and
+merge only the desired lines. Restart local dev or redeploy after changes.
 
-The composer only shows its connections menu when at least one MCP connector environment variable is configured. A password-only starter deployment omits the menu and tells eve that no external connections are available.
+For local development, Notion, Linear, Sentry, and Slack fall back to
+`notion`, `linear`, `sentry`, and `slack/eve-chat-template` when their env
+vars are unset. Gmail, Calendar, Drive, GitHub, Vercel, and Xero stay
+unavailable until their connector env vars are set and the connectors are
+attached.
 
-If a chat requires MCP authorization, use the Connect card in the chat UI. If you want to manage a connector directly, open the project integrations/settings page in Vercel and find the connector.
+Until those env vars are set, Settings shows Unavailable for that service and
+the agent does not register the connection. Shared-password and local
+development principals cannot authorize user-scoped grants; use a personal
+Better Auth account (email or Sign in with Vercel).
+
+Web Settings → Connections and mobile Settings list all configured
+connections. Users can Connect, Check status, and Disconnect. Connect owns
+the OAuth callback and stores the per-user grant; the app never receives
+provider tokens. If a chat requires MCP authorization first, use the Connect
+card in the chat UI.
+
+The composer hammer menu still only toggles Notion, Linear, and Sentry for
+the current turn. It is not the grant store for Google, GitHub, Vercel, or
+Xero.
 
 See [Deploy Button integrations](https://vercel.com/docs/integrations/deploy-button/integrations) for how storage products are declared in the deploy URL.
 

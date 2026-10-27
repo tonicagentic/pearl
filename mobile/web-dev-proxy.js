@@ -1,7 +1,7 @@
 const { Readable } = require("node:stream");
 
 const PREFIX = "/__pearl_api";
-const ALLOWED_PATH = /^(?:\/api\/(?:auth\/sign-in\/email\/?$|chats(?:\/|$)|issues\/?$|attachments\/?$)|\/eve\/v1\/(?:session(?:\/|$)|health\/?$|info\/?$))/;
+const ALLOWED_PATH = /^(?:\/api\/(?:auth\/sign-in\/email\/?$|chats(?:\/|$)|issues\/?$|attachments\/?$|connections\/(?:status|authorize|revoke)\/?$)|\/eve\/v1\/(?:session(?:\/|$)|health\/?$|info\/?$))/;
 
 // Used only by the local Expo dev server. Production auth does not allow
 // arbitrary browser origins, so same-origin browser requests are forwarded

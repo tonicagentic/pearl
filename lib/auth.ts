@@ -49,6 +49,7 @@ const allowedHosts = [
   "127.0.0.1:3000",
   "127.0.0.1:3001",
   "*.vercel.app",
+  "pearl.tonicagentic.com",
   getAppUrlHost(process.env.BETTER_AUTH_URL),
   getAppUrlHost(process.env.VERCEL_PROJECT_PRODUCTION_URL),
   getAppUrlHost(process.env.VERCEL_URL),

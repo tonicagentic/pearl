@@ -15,13 +15,13 @@ const requested = (requestId: string, toolName = "confirm_step"): MessageStreamE
         },
       ],
     },
-  }) as MessageStreamEvent;
+  }) as unknown as MessageStreamEvent;
 
 const resolved = (requestId: string): MessageStreamEvent =>
   ({
     type: "input.resolved",
     data: { resolutions: [{ requestId }] },
-  }) as MessageStreamEvent;
+  }) as unknown as MessageStreamEvent;
 
 test("open tool approvals mark the chat as waiting for input", () => {
   assert.equal(chatNeedsUserInput([requested("a1")]), true);

@@ -29,6 +29,7 @@ Important files:
 | `agent/connections/notion.ts` | Defines the Notion MCP connection through Vercel Connect. |
 | `agent/connections/linear.ts` | Defines the Linear MCP connection through Vercel Connect. |
 | `agent/connections/sentry.ts` | Defines the Sentry MCP connection through Vercel Connect. |
+| `agent/connections/xero.ts` | Defines the user-scoped Xero Remote MCP connection (read-only spend/reporting). |
 | `agent/instructions.md` | Defines the agent's behavior and long-term-memory rules. |
 | `agent/memory/profile.ts` | Defines the per-principal long-term-memory slot. |
 | `next.config.ts` | Wraps the app with `withEve(nextConfig)`, which mounts the `/eve/v1/*` routes. |
@@ -569,44 +570,31 @@ start a fresh turn with the updated context.
 The composer footer contains `ComposerFooterControls`, which renders
 `IntegrationsMenu`.
 
-Right now the only user-visible connection toggle is Notion. The toggle state is
-kept in `AgentChatShell` as:
+The composer toggles Notion, Linear, and Sentry for the current turn. That
+toggle state is kept in `AgentChatShell` as:
 
 ```ts
-enabledConnections = { notion: true }
+enabledConnections = { notion: true, linear: true, sentry: true }
 ```
-
-When a message is sent, the app passes a natural-language `clientContext` to
-eve:
-
-```ts
-createConnectionClientContext(enabledConnections)
-```
-
-If a connection is enabled, the context tells eve which of Notion, Linear, and
-Sentry the user enabled for this turn. Disabled connections are called out so
-the model does not use them unless the user enables them first.
 
 This toggle does not provision, create, or revoke a Vercel Connect connector. It
-only controls per-turn agent behavior.
+only controls per-turn agent intent for those three connections.
 
-The actual MCP connectors are configured in `agent/connections/*.ts`. For
-example, Notion is configured in `agent/connections/notion.ts`:
+User-scoped Google (Gmail, Calendar, Drive), GitHub, Vercel, and Xero grants
+are managed from Settings on web (`/settings/connections`) and mobile. Those
+connections register dynamically when their connector env vars are set and the
+eve session is a Better Auth user principal. Authorization is stored by Vercel
+Connect under the same subject eve uses (`user` id + `issuer: better-auth`).
+Shared-password and local-dev principals cannot use those grants.
 
-```ts
-const notionConnector = process.env.NOTION_CONNECTOR ?? "notion";
-
-export default defineMcpClientConnection({
-  url: "https://mcp.notion.com/mcp",
-  description: "Notion workspace: search and edit pages and databases.",
-  auth: connect(notionConnector),
-});
-```
-
-For production, set `NOTION_CONNECTOR`, `LINEAR_CONNECTOR`, and
-`SENTRY_CONNECTOR` to the returned Vercel Connect connector UIDs. For local
-development, connectors created with `--name notion`, `--name linear`, and
-`--name sentry` match the fallback names.
+The MCP connectors live in `agent/connections/*.ts`. Notion, Linear, and
+Sentry are static definitions. Gmail, Calendar, Drive, GitHub, Vercel, and
+Xero use `defineDynamic` and read-only tool allowlists. For production, set
+`NOTION_CONNECTOR`, `LINEAR_CONNECTOR`, `SENTRY_CONNECTOR`, and the opt-in
+`GMAIL_CONNECTOR`, `CALENDAR_CONNECTOR`, `DRIVE_CONNECTOR`, `GITHUB_CONNECTOR`,
+`VERCEL_CONNECTOR`, and `XERO_CONNECTOR` env vars to the returned Vercel
+Connect connector UIDs. See `docs/setup-and-deploy.md` for create/attach
+commands.
 
 ## Auth
 
@@ -865,14 +853,17 @@ decisions when tool parts contain predictable JSON instead of prose-only output.
 
 To add another Vercel Connect-backed MCP connection:
 
-1. Add `agent/connections/<name>.ts`.
-2. Use `defineMcpClientConnection`.
-3. Use `connect(process.env.<ENV_NAME> ?? "<local-name>")`.
-4. Add deploy/docs instructions for provisioning that connector.
-5. Extend `EnabledConnections` in `chat-shell-context.tsx`.
-6. Add a toggle in `IntegrationsMenu`.
-7. Update `createConnectionClientContext` so eve receives per-turn intent.
-8. Verify auth-required events render correctly.
+1. Add `agent/connections/<name>.ts` with `defineMcpClientConnection` (or
+   `defineDynamic` for user-scoped opt-in connections).
+2. Use `connect(process.env.<ENV_NAME> ?? "<local-name>")`, or
+   `connect({ connector, autoProvision: false })` for grants that must stay
+   per-user.
+3. Add the id to `lib/connections/catalog.ts` and document create/attach steps
+   in `docs/setup-and-deploy.md`.
+4. For composer turn toggles only (Notion-style), extend `EnabledConnections`
+   and `IntegrationsMenu`. User-scoped Google/GitHub/Vercel/Xero-style grants
+   are managed from Settings instead.
+5. Verify auth-required events render correctly on web and mobile.
 
 Do not parse assistant text to detect auth requirements. Rely on
 `authorization.required` and `authorization.completed` events.

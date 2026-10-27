@@ -110,8 +110,8 @@ test("confirm_step is approval-gated and has no external side effect", async () 
   assert.doesNotMatch(source, /\bfetch\b/, "must not touch the network");
   assert.doesNotMatch(source, /executeSend|readFile|writeFile|Blob/, "must not touch ledger, fs, or blob");
 
-  const tool = (await import("../agent/tools/confirm_step.ts")).default as {
-    execute: (input: { summary: string }) => Promise<unknown>;
+  const tool = (await import("../agent/tools/confirm_step.ts")).default as unknown as {
+    execute: (input: { summary: string }, ctx?: unknown) => Promise<unknown>;
   };
   const result = await tool.execute({ summary: "ship the release" });
   assert.deepEqual(result, { confirmed: true, summary: "ship the release" });

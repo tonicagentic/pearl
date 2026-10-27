@@ -1,6 +1,7 @@
 node_modules
 .env*
 !.env.example
+.secrets/
 .eve
 .vercel
 .workflow-data

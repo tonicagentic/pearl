@@ -164,6 +164,7 @@ export async function createChat(
     id: row.id,
     title: row.title,
     updatedAt: row.updatedAt.toISOString(),
+    waitingForInput: false,
   };
 }
 
