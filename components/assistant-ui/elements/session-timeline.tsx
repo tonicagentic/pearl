@@ -216,6 +216,15 @@ export function SessionTimeline() {
 
   if (steps.length === 0) return null;
 
+  const duration = streaming ? liveElapsed : settledDuration;
+  const restingLabel = settledDuration
+    ? `Worked for ${settledDuration}`
+    : `${steps.length} step${steps.length === 1 ? "" : "s"}${
+        stats.length > 0
+          ? ` · ${stats.length} file change${stats.length === 1 ? "" : "s"}`
+          : ""
+      }`;
+
   return (
     <ToolTimeline
       steps={steps}
@@ -223,11 +232,9 @@ export function SessionTimeline() {
       streaming={streaming}
       open={userOpen ?? streaming}
       onOpenChange={setUserOpen}
-      restingLabel={`${steps.length} step${steps.length === 1 ? "" : "s"}${
-        stats.length > 0 ? ` · ${stats.length} file change${stats.length === 1 ? "" : "s"}` : ""
-      }`}
+      restingLabel={restingLabel}
       activeLabel="Working"
-      elapsed={streaming ? liveElapsed : settledDuration}
+      elapsed={duration}
       stats={stats}
       onOpenFile={openPath}
     />

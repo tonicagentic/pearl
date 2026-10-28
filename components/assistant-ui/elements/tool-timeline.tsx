@@ -1,14 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronDownIcon } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { collapsePanel, mono, ShimmerLabel, SwapLabel } from "./surfaces";
+import {
+  collapsePanel,
+  ShimmerLabel,
+  SwapLabel,
+  threadDiffAdd,
+  threadDiffRemove,
+  threadMeta,
+  threadText,
+} from "./surfaces";
 
 export interface TimelineStep {
   verb: string;
@@ -43,8 +51,10 @@ export interface ToolTimelineProps {
   className?: string;
 }
 
-const rowClasses =
-  "fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-foreground/55 flex min-h-8 items-center gap-1.5 py-0.5 text-[13px] duration-300";
+const rowClasses = cn(
+  "fade-in slide-in-from-bottom-1 animate-in fill-mode-both flex min-h-6 items-center gap-1.5 py-0.5 duration-300",
+  threadMeta,
+);
 
 function StepRow({
   step,
@@ -61,13 +71,12 @@ function StepRow({
   expanded: boolean;
   onToggle: () => void;
   onOpenFile?: (path: string) => void;
-  /** Shown beside Thought/Thinking on single-step turns (Trace description). */
+  /** Shown beside Thought/Thinking on single-step turns. */
   elapsed?: string;
 }) {
   const expandable = typeof step.detail === "string" && step.detail.length > 0;
   // Streaming steps read progressive ("Thinking"); settled ones past tense.
-  const verb =
-    active && step.verb === "Thought" ? "Thinking" : step.verb;
+  const verb = active && step.verb === "Thought" ? "Thinking" : step.verb;
   const showChip = step.chip.length > 0;
 
   const row = (
@@ -76,7 +85,7 @@ function StepRow({
       className={cn(
         rowClasses,
         expandable &&
-          "cursor-pointer rounded-md outline-none hover:text-foreground/90 focus-visible:text-foreground/90",
+          "cursor-pointer rounded-md outline-none hover:text-foreground/70 focus-visible:text-foreground/70",
       )}
       {...(expandable
         ? {
@@ -95,17 +104,14 @@ function StepRow({
     >
       <ShimmerLabel
         active={active}
-        className="relative inline-block shrink-0 leading-none text-foreground/55"
+        className="relative inline-block shrink-0 text-muted-foreground"
       >
         {verb}
       </ShimmerLabel>
       {elapsed !== undefined && (
-        <span className={cn(mono, "text-[12px] text-foreground/30 tabular-nums")}>
-          {elapsed}
-        </span>
+        <span className="tabular-nums opacity-80">{elapsed}</span>
       )}
-      {/* Truncate long inputs (commands, patterns) instead of wrapping. File
-          chips open the file on the canvas, like the artifact card. */}
+      {/* File chips open the canvas; long commands/patterns truncate. */}
       {showChip && step.filePath && onOpenFile ? (
         <button
           type="button"
@@ -114,19 +120,17 @@ function StepRow({
             event.stopPropagation();
             onOpenFile(step.filePath!);
           }}
-          className="bg-foreground/[0.06] text-foreground/70 hover:text-foreground min-w-0 max-w-full cursor-pointer truncate rounded-md px-1.5 py-0.5 font-mono text-[11px] transition-colors outline-none"
+          className="text-muted-foreground hover:text-foreground/80 min-w-0 max-w-full cursor-pointer truncate transition-colors outline-none"
         >
           {step.chip}
         </button>
       ) : showChip ? (
-        <span className="bg-foreground/[0.06] text-foreground/70 min-w-0 truncate rounded-md px-1.5 py-0.5 font-mono text-[11px]">
-          {step.chip}
-        </span>
+        <span className="text-muted-foreground min-w-0 truncate">{step.chip}</span>
       ) : null}
       {expandable && (
         <ChevronDownIcon
           className={cn(
-            "size-3.5 shrink-0 opacity-40 transition-transform duration-200 motion-reduce:transition-none",
+            "size-3.5 shrink-0 opacity-50 transition-transform duration-200 motion-reduce:transition-none",
             expanded && "rotate-180",
           )}
         />
@@ -140,7 +144,12 @@ function StepRow({
     <>
       {row}
       {expanded && (
-        <div className="text-foreground/55 bg-foreground/[0.03] mt-1 max-h-64 overflow-y-auto rounded-md px-3 py-2.5 text-[13px] leading-5 whitespace-pre-wrap select-text">
+        <div
+          className={cn(
+            "text-muted-foreground mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap select-text",
+            threadText,
+          )}
+        >
           {step.detail}
         </div>
       )}
@@ -148,7 +157,7 @@ function StepRow({
   );
 }
 
-function StatChips({
+function StatLine({
   stats,
   onOpenFile,
 }: {
@@ -156,42 +165,31 @@ function StatChips({
   onOpenFile?: (path: string) => void;
 }) {
   if (stats.length === 0) return null;
+
+  const totalAdded = stats.reduce((sum, stat) => sum + (stat.added ?? 0), 0);
+  const totalRemoved = stats.reduce((sum, stat) => sum + (stat.removed ?? 0), 0);
+  const files = stats.length;
+  const summary = `Edited ${files} file${files === 1 ? "" : "s"}`;
+
   return (
-    <div className="flex flex-wrap gap-1.5 pt-1">
-      {stats.map((stat, index) => {
-        const counts = (
-          <>
-            <span>{stat.file}</span>
-            {stat.added !== undefined && (
-              <span className="text-emerald-600 dark:text-emerald-400">
-                +{stat.added}
-              </span>
-            )}
-            {stat.removed !== undefined && (
-              <span className="text-red-600 dark:text-red-400">
-                −{stat.removed}
-              </span>
-            )}
-          </>
-        );
-        const classes =
-          "bg-foreground/[0.06] text-foreground/70 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px]";
-        return stat.filePath && onOpenFile ? (
-          <button
-            key={`stat-${index}`}
-            type="button"
-            title={`Open ${stat.filePath}`}
-            onClick={() => onOpenFile(stat.filePath!)}
-            className={cn(classes, "hover:text-foreground cursor-pointer transition-colors outline-none")}
-          >
-            {counts}
-          </button>
-        ) : (
-          <span key={`stat-${index}`} className={classes}>
-            {counts}
-          </span>
-        );
-      })}
+    <div className={cn("flex flex-wrap items-center gap-x-1.5 gap-y-0.5 py-0.5", threadMeta)}>
+      <span className="min-w-0 truncate">{summary}</span>
+      {(totalAdded > 0 || totalRemoved > 0) && (
+        <span className="inline-flex items-center gap-1.5 tabular-nums">
+          {totalAdded > 0 && <span className={threadDiffAdd}>+{totalAdded}</span>}
+          {totalRemoved > 0 && (
+            <span className={threadDiffRemove}>-{totalRemoved}</span>
+          )}
+        </span>
+      )}
+      {stats.some((stat) => stat.filePath) && onOpenFile ? (
+        <span className="sr-only">
+          {stats
+            .filter((stat) => stat.filePath)
+            .map((stat) => stat.file)
+            .join(", ")}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -231,7 +229,7 @@ export function ToolTimeline({
     const step = steps[0];
     const stepElapsed = step.verb === "Thought" ? elapsed : undefined;
     return (
-      <div data-slot="tool-timeline" className={cn("w-full max-w-sm", className)}>
+      <div data-slot="tool-timeline" className={cn("w-full", className)}>
         <StepRow
           step={step}
           index={0}
@@ -241,52 +239,64 @@ export function ToolTimeline({
           onOpenFile={onOpenFile}
           elapsed={stepElapsed}
         />
-        <StatChips stats={stats} onOpenFile={onOpenFile} />
+        <StatLine stats={stats} onOpenFile={onOpenFile} />
       </div>
     );
   }
+
+  const settledWithDuration =
+    !streaming && elapsed !== undefined && restingLabel.startsWith("Worked");
 
   return (
     <Collapsible
       data-slot="tool-timeline"
       open={open}
       onOpenChange={onOpenChange}
-      className={cn("w-full max-w-sm", className)}
+      className={cn("w-full", className)}
     >
-      <CollapsibleTrigger className="group/trigger text-foreground/55 hover:text-foreground/90 flex items-center gap-1.5 rounded-md py-1 text-[13.5px] transition-colors outline-none">
-        <ChevronRightIcon className="size-3.5 shrink-0 opacity-60 transition-transform duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-open/trigger:rotate-90 group-data-panel-open/trigger:rotate-90 motion-reduce:transition-none" />
+      <CollapsibleTrigger
+        className={cn(
+          "group/trigger hover:text-foreground/70 flex items-center gap-1 rounded-md py-0.5 transition-colors outline-none",
+          threadMeta,
+        )}
+      >
         <SwapLabel
           active={streaming ? 0 : 1}
-          className="text-start tabular-nums"
+          className="text-start"
         >
           <ShimmerLabel
             active={streaming}
-            className="relative inline-block leading-none"
+            className="relative inline-block"
           >
-            {activeLabel}
+            {elapsed ? `${activeLabel} ${elapsed}` : activeLabel}
           </ShimmerLabel>
           <>{restingLabel}</>
         </SwapLabel>
-        {elapsed !== undefined && (
-          <span className={cn(mono, "text-foreground/30 tabular-nums")}>
-            {elapsed}
-          </span>
-        )}
+        <ChevronDownIcon
+          className={cn(
+            "size-3.5 shrink-0 opacity-50 transition-transform duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
+            "group-data-open/trigger:rotate-180 group-data-panel-open/trigger:rotate-180",
+          )}
+        />
+        {/* Keep a hidden duration for accessibility when the resting label already includes it. */}
+        {settledWithDuration ? <span className="sr-only">{elapsed}</span> : null}
       </CollapsibleTrigger>
       <CollapsibleContent className={cn(collapsePanel, "outline-none")}>
-        <div className="flex flex-col gap-2.5 ps-4 pt-2.5">
-          {steps.slice(0, Math.max(0, Math.min(visibleSteps, steps.length))).map((step, index, shown) => (
-            <StepRow
-              key={`step-${index}-${step.verb}-${step.chip}`}
-              step={step}
-              index={index}
-              active={streaming && index === shown.length - 1}
-              expanded={expandedSteps.has(index)}
-              onToggle={() => toggleStep(index)}
-              onOpenFile={onOpenFile}
-            />
-          ))}
-          <StatChips stats={stats} onOpenFile={onOpenFile} />
+        <div className="flex flex-col gap-1 pt-1.5">
+          {steps
+            .slice(0, Math.max(0, Math.min(visibleSteps, steps.length)))
+            .map((step, index, shown) => (
+              <StepRow
+                key={`step-${index}-${step.verb}-${step.chip}`}
+                step={step}
+                index={index}
+                active={streaming && index === shown.length - 1}
+                expanded={expandedSteps.has(index)}
+                onToggle={() => toggleStep(index)}
+                onOpenFile={onOpenFile}
+              />
+            ))}
+          <StatLine stats={stats} onOpenFile={onOpenFile} />
         </div>
       </CollapsibleContent>
     </Collapsible>

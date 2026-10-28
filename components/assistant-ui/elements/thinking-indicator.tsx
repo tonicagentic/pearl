@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
-import { mono, ShimmerLabel } from "./surfaces";
+import { ShimmerLabel, threadMeta } from "./surfaces";
 
 export function ThinkingIndicator({
   label,
@@ -16,27 +16,17 @@ export function ThinkingIndicator({
   return (
     <div
       data-slot="thinking-indicator"
-      className={cn(
-        "text-foreground/55 flex items-center gap-2.5 text-sm",
-        className,
-      )}
-
+      className={cn("flex items-center gap-1.5 py-0.5", threadMeta, className)}
       {...props}
     >
-      <span
-        aria-hidden
-        className="size-1.5 shrink-0 animate-pulse rounded-full bg-blue-500 motion-reduce:animate-none dark:bg-blue-400"
-      />
       <ShimmerLabel
         key={label}
-        className="fade-in slide-in-from-bottom-1 animate-in relative inline-block leading-none duration-300"
+        className="fade-in slide-in-from-bottom-1 animate-in relative inline-block duration-300"
       >
         {label}
       </ShimmerLabel>
       {elapsed !== undefined && (
-        <span className={cn(mono, "text-foreground/30 tabular-nums")}>
-          {elapsed}
-        </span>
+        <span className="tabular-nums opacity-80">{elapsed}</span>
       )}
     </div>
   );

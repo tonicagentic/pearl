@@ -45,6 +45,15 @@ export const live = "text-blue-500 dark:text-blue-400";
 
 export const mono = "font-mono text-[11px] tracking-tight";
 
+/** Shared thread type scale: body and meta stay the same size. */
+export const threadText = "text-[15px] leading-6";
+
+/** Thinking, tool, and timeline chrome — same size as body, quieter color. */
+export const threadMeta = `${threadText} text-muted-foreground`;
+
+export const threadDiffAdd = "text-emerald-600 dark:text-emerald-400";
+export const threadDiffRemove = "text-red-600 dark:text-red-400";
+
 export function ShimmerLabel({
   active = true,
   className,

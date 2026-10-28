@@ -456,7 +456,7 @@ const AssistantMessage: FC = () => {
     >
       <div
         data-slot="aui_assistant-message-content"
-        className="text-foreground px-2 leading-relaxed wrap-break-word"
+        className="text-foreground flex flex-col gap-3 px-2 text-[15px] leading-6 wrap-break-word"
       >
         <AssistantThinking />
         <SessionTimeline />
