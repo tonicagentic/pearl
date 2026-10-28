@@ -1,7 +1,7 @@
 import { Platform, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
-import { InboxIcon, NetworkIcon, PlusIcon, Settings2Icon, SquarePenIcon, XIcon } from "lucide-react-native";
+import { AppWindowIcon, InboxIcon, NetworkIcon, PlusIcon, Settings2Icon, SquarePenIcon, XIcon } from "lucide-react-native";
 import Animated, { interpolate, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
@@ -10,7 +10,7 @@ import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 
 /** Shared history content for the swipeable chat panel and direct-link screen. */
-export type SidebarDestination = "/areas" | "/issues" | "/settings";
+export type SidebarDestination = "/areas" | "/issues" | "/apps" | "/settings";
 
 /** Slight drift while the drawer opens; exit inverts via the same progress. */
 const SIDEBAR_CONTENT_SLIDE_PX = 18;
@@ -125,6 +125,10 @@ export function HistoryScreen({
                     <InboxIcon className="size-5 text-foreground" />
                     <Text className="text-[17px] font-normal text-foreground">Issues</Text>
                   </Pressable>
+                  <Pressable accessibilityRole="button" className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5" onPress={() => openDestination("/apps")}>
+                    <AppWindowIcon className="size-5 text-foreground" />
+                    <Text className="text-[17px] font-normal text-foreground">Apps</Text>
+                  </Pressable>
                   <Text className="px-2.5 pb-2 pt-7 text-[15px] font-normal text-muted-foreground">Recents</Text>
                 </>
               ) : (
@@ -144,6 +148,10 @@ export function HistoryScreen({
                   <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/issues")}>
                     <InboxIcon className="size-5 text-foreground" />
                     <Text className="text-base text-foreground">Issues</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/apps")}>
+                    <AppWindowIcon className="size-5 text-foreground" />
+                    <Text className="text-base text-foreground">Apps</Text>
                   </Pressable>
                   <Text className="px-3 pb-2 pt-5 text-xs font-medium uppercase text-muted-foreground">Chats</Text>
                 </>

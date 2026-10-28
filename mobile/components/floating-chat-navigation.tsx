@@ -74,13 +74,14 @@ export function FloatingChatNavigation({
     ActionSheetIOS.showActionSheetWithOptions(
       {
         title: title === "New chat" ? undefined : title,
-        options: ["Areas", "Issues", "Cancel"],
-        cancelButtonIndex: 2,
+        options: ["Areas", "Issues", "Apps", "Cancel"],
+        cancelButtonIndex: 3,
         anchor: findNodeHandle(moreButton.current) ?? undefined,
       },
       (index) => {
         if (index === 0) router.push("/areas");
         if (index === 1) router.push("/issues");
+        if (index === 2) router.push("/apps");
       },
     );
   };

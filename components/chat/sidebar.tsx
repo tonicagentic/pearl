@@ -2,6 +2,7 @@
 
 import {
   ArrowRightIcon,
+  AppWindowIcon,
   EllipsisIcon,
   InboxIcon,
   NetworkIcon,
@@ -70,6 +71,7 @@ export function ChatSidebar({
   const onChatRoute = pathname === "/" || pathname?.startsWith("/chat") || false;
   const newSessionActive = activeChatId === null && onChatRoute;
   const issuesActive = pathname?.startsWith("/issues") ?? false;
+  const appsActive = pathname?.startsWith("/apps") ?? false;
   const areasActive =
     pathname?.startsWith("/settings/areas") ?? false;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -165,6 +167,16 @@ export function ChatSidebar({
         >
           <InboxIcon className="size-4" />
           Issues
+        </Link>
+        <Link
+          className={cn(
+            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
+            appsActive ? activeRowClass : inactiveRowClass,
+          )}
+          href="/apps"
+        >
+          <AppWindowIcon className="size-4" />
+          Apps
         </Link>
       </div>
 

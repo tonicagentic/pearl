@@ -279,3 +279,40 @@ export const issue = pgTable(
 );
 
 export type Issue = typeof issue.$inferSelect;
+
+// Mini apps the builder subagent creates: one private GitHub repo, one fx
+// session, one named Vercel Sandbox, and one production URL for the viewer.
+export const miniApp = pgTable(
+  "mini_app",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    githubOwner: text("github_owner").notNull(),
+    githubRepo: text("github_repo").notNull(),
+    fxSessionId: text("fx_session_id"),
+    sandboxName: text("sandbox_name").notNull(),
+    vercelProjectId: text("vercel_project_id"),
+    productionUrl: text("production_url"),
+    status: text("status", {
+      enum: ["draft", "building", "published", "failed"],
+    })
+      .notNull()
+      .default("draft"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_mini_app_user").on(table.userId),
+    uniqueIndex("idx_mini_app_user_slug").on(table.userId, table.slug),
+    uniqueIndex("idx_mini_app_github").on(table.githubOwner, table.githubRepo),
+  ],
+);
+
+export type MiniApp = typeof miniApp.$inferSelect;
+export type MiniAppStatus = MiniApp["status"];

@@ -43,6 +43,11 @@ function AuthenticatedLayout() {
                 />
                 <Stack.Screen name="areas" options={{ title: "Areas" }} />
                 <Stack.Screen name="issues" options={{ title: "Issues" }} />
+                <Stack.Screen name="apps/index" options={{ title: "Apps" }} />
+                <Stack.Screen
+                  name="apps/[id]"
+                  options={{ title: "App", headerShown: false }}
+                />
                 <Stack.Screen name="settings" options={{ title: "Settings" }} />
               </Stack>
             </KeyboardProvider>

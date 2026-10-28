@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { withAui } from "@assistant-ui/next";
+import { withDurableHarness } from "durable-harness/next";
 import { withEve } from "eve/next";
 
 const nextConfig: NextConfig = {
@@ -12,12 +13,19 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "25mb",
     },
   },
-  // @firecrawl/pdf-inspector ships a native .node binding that Turbopack
-  // cannot bundle — require it from node_modules at runtime instead.
-  serverExternalPackages: ["@firecrawl/pdf-inspector"],
+  // Native addons / packages that Turbopack cannot bundle.
+  serverExternalPackages: [
+    "@firecrawl/pdf-inspector",
+    "libfx",
+    "durable-harness",
+  ],
   turbopack: {
     root: process.cwd(),
   },
 };
 
-export default withEve(withAui(nextConfig));
+// withDurableHarness discovers lib/apps/fx-agent.ts (createFxAgent) and mounts
+// libfx's wake handler on its own queue topic, separate from eve.
+export default withDurableHarness(withEve(withAui(nextConfig)), {
+  agents: ["lib/apps/fx-agent.ts"],
+});
