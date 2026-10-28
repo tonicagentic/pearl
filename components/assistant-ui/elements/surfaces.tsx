@@ -38,6 +38,24 @@ export const labelSwapIn = "translate-y-0 opacity-100 blur-none";
 export const labelSwapOut =
   "pointer-events-none -translate-y-1.5 select-none opacity-0 blur-[2px]";
 
+/** Motion tokens mirrored from mobile (Reanimated FadeInDown / label swap). */
+export const THINK_SWAP_MS = 150;
+export const THINK_SWAP_Y = 6;
+export const STEP_ENTER_MS = 220;
+export const MESSAGE_ENTER_MS = 220;
+
+/** Message enter: approx mobile spring FadeInDown (Y≈14). */
+export const messageEnter =
+  "fade-in slide-in-from-bottom-[14px] animate-in fill-mode-both duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:animate-none";
+
+/** Timeline / thinking step enter: mobile STEP_ENTER (Y≈6, 220ms). */
+export const stepEnter =
+  "fade-in slide-in-from-bottom-[6px] animate-in fill-mode-both duration-[220ms] ease-out motion-reduce:animate-none";
+
+/** Thinking label swap enter. */
+export const thinkSwapEnter =
+  "fade-in slide-in-from-bottom-[6px] animate-in fill-mode-both duration-[150ms] ease-out motion-reduce:animate-none";
+
 export const collapsePanel =
   "h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] data-[ending-style]:h-0 data-[starting-style]:h-0 motion-reduce:transition-none";
 

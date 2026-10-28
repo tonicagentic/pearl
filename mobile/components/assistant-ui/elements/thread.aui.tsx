@@ -17,6 +17,7 @@ import { SessionTimeline, TIMELINE_TOOLS } from "@/components/assistant-ui/eleme
 import { TaskGroup, DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
 import { ToolGroup } from "@/components/assistant-ui/elements/tool-group";
 import { AssistantThinking } from "@/components/assistant-ui/elements/assistant-thinking";
+import { MessageSources } from "@/components/assistant-ui/elements/citation";
 import {
   ShimmerLabel,
   inkButton,
@@ -293,7 +294,7 @@ const WaitingActionCard: FC<{
     setError(null);
     void (async () => {
       try {
-        await action.onRespond(optionId);
+        await action.onRespond!(optionId);
       } catch (cause) {
         setSubmitting(null);
         setError(cause instanceof Error ? cause.message : String(cause));
@@ -1453,6 +1454,7 @@ const AssistantMessage: FC = () => {
             }
           }}
         </MessagePrimitive.GroupedParts>
+        <MessageSources />
         <MessageError />
       </View>
       <View className="aui-assistant-message-footer min-h-7 flex-row items-center pt-2.5">

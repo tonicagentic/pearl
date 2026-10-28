@@ -25,6 +25,16 @@ export const inkButton = "bg-foreground active:opacity-90";
 
 export const mono = "text-[11px] tracking-tight";
 
+/** Shared thread type scale: body and meta stay the same size. */
+export const threadText = "text-[15px] leading-6";
+
+/** Thinking, tool, and timeline chrome — same size as body, quieter color. */
+export const threadMeta = `${threadText} text-muted-foreground`;
+
+export const threadDiffAdd = "text-emerald-600 dark:text-emerald-400";
+export const threadDiffRemove = "text-red-600 dark:text-red-400";
+
+
 export const textButtonHitSlop = { top: 12, bottom: 12 };
 
 // Live regions only exist on Android and the web; announceForAccessibility covers iOS and Android and is a no-op on the web.

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import {
   collapsePanel,
   ShimmerLabel,
+  stepEnter,
   SwapLabel,
   threadDiffAdd,
   threadDiffRemove,
@@ -52,7 +53,8 @@ export interface ToolTimelineProps {
 }
 
 const rowClasses = cn(
-  "fade-in slide-in-from-bottom-1 animate-in fill-mode-both flex min-h-6 items-center gap-1.5 py-0.5 duration-300",
+  stepEnter,
+  "flex min-h-6 items-center gap-1.5 py-0.5",
   threadMeta,
 );
 

@@ -224,7 +224,7 @@ export function ChatScreen() {
       onCancel: async () => {
         await store.cancel();
       },
-      onRespondToToolApproval: async (response) => {
+      onRespondToToolApproval: async (response: { approvalId: string; optionId?: string; approved?: boolean; text?: string }) => {
         const requestId = response.approvalId;
         const optionId =
           response.optionId ??

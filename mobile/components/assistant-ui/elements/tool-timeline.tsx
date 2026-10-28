@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDownIcon, ChevronRightIcon } from "lucide-react-native";
+import { ChevronDownIcon } from "lucide-react-native";
 import { Pressable, Text, View } from "react-native";
 import Animated, {
   FadeIn,
@@ -9,16 +9,18 @@ import Animated, {
 
 import { cn } from "@/lib/utils";
 import {
-  mono,
   ShimmerLabel,
   SwapLabel,
   THINK_SWAP_MS,
+  threadDiffAdd,
+  threadDiffRemove,
+  threadMeta,
+  threadText,
   useMotion,
 } from "./surfaces";
 
-// RN port of the web tool-timeline element: a whole working turn summarized
-// as one collapsed line — a verb and a chip per tool step, ending in
-// file-change stats. Reasoning is Trace-style: verb (+ duration), no prose chip.
+// RN port of the web tool-timeline: quiet meta rows, Worked-for header,
+// and inline edit stats — no mono chips.
 
 const STEP_ENTER_MS = 220;
 const STEP_ENTER_Y = 6;
@@ -64,7 +66,7 @@ function StepRow({
   readonly active: boolean;
   readonly expanded: boolean;
   readonly onToggle: () => void;
-  /** Shown beside Thought/Thinking on single-step turns (Trace description). */
+  /** Shown beside Thought/Thinking on single-step turns. */
   readonly elapsed?: string;
 }) {
   const motion = useMotion();
@@ -73,7 +75,6 @@ function StepRow({
   const verb = active && step.verb === "Thought" ? "Thinking" : step.verb;
   const showChip = step.chip.length > 0;
 
-  // Stable keys mean entering only runs on newly mounted steps, not re-renders.
   return (
     <Animated.View
       entering={
@@ -87,7 +88,7 @@ function StepRow({
     >
       <Pressable
         className={cn(
-          "min-h-8 flex-row items-center gap-1.5 py-0.5",
+          "min-h-6 flex-row items-center gap-1.5 py-0.5",
           expandable && "active:opacity-70",
         )}
         disabled={!expandable}
@@ -99,27 +100,24 @@ function StepRow({
       >
         <ShimmerLabel
           active={active}
-          className="text-foreground/55 shrink-0 text-[13px] leading-none"
+          className={cn(threadMeta, "shrink-0 leading-none")}
         >
           {verb}
         </ShimmerLabel>
         {elapsed !== undefined ? (
-          <Text className={cn(mono, "text-[12px] text-foreground/30")}>
+          <Text className={cn(threadMeta, "tabular-nums opacity-80")}>
             {elapsed}
           </Text>
         ) : null}
         {showChip ? (
-          <Text
-            numberOfLines={1}
-            className="min-w-0 flex-shrink rounded-md bg-foreground/[0.06] px-1.5 py-0.5 text-[11px] text-foreground/70"
-          >
+          <Text numberOfLines={1} className={cn(threadMeta, "min-w-0 flex-shrink")}>
             {step.chip}
           </Text>
         ) : null}
         {expandable ? (
           <ChevronDownIcon
             className={cn(
-              "size-3.5 shrink-0 text-foreground/40 transition-transform",
+              "size-3.5 shrink-0 text-muted-foreground/50 transition-transform",
               expanded && "rotate-180",
             )}
           />
@@ -129,12 +127,9 @@ function StepRow({
         <Animated.View
           entering={motion ? FadeIn.duration(DETAIL_MS) : undefined}
           exiting={motion ? FadeOut.duration(DETAIL_MS) : undefined}
-          className="ms-0.5 mt-1 rounded-md bg-foreground/[0.03] px-3 py-2.5"
+          className="ms-0.5 mt-1"
         >
-          <Text
-            selectable
-            className="text-[13px] leading-[20px] text-foreground/55"
-          >
+          <Text selectable className={cn(threadMeta, "leading-6")}>
             {step.detail}
           </Text>
         </Animated.View>
@@ -143,25 +138,34 @@ function StepRow({
   );
 }
 
-function StatChips({ stats }: { readonly stats: readonly TimelineStat[] }) {
+function StatLine({ stats }: { readonly stats: readonly TimelineStat[] }) {
   if (stats.length === 0) return null;
 
+  const totalAdded = stats.reduce((sum, stat) => sum + (stat.added ?? 0), 0);
+  const totalRemoved = stats.reduce(
+    (sum, stat) => sum + (stat.removed ?? 0),
+    0,
+  );
+  const files = stats.length;
+  const summary = `Edited ${files} file${files === 1 ? "" : "s"}`;
+
   return (
-    <View className="flex-row flex-wrap gap-1.5 pt-1">
-      {stats.map((stat, index) => (
-        <View
-          key={`stat-${index}`}
-          className="inline-flex flex-row items-center gap-1 rounded-md bg-foreground/[0.06] px-1.5 py-0.5"
-        >
-          <Text className="text-[11px] text-foreground/70">{stat.file}</Text>
-          {stat.added !== undefined ? (
-            <Text className="text-[11px] text-emerald-600">+{stat.added}</Text>
+    <View className="flex-row flex-wrap items-center gap-x-1.5 gap-y-0.5 py-0.5">
+      <Text className={threadMeta}>{summary}</Text>
+      {totalAdded > 0 || totalRemoved > 0 ? (
+        <View className="flex-row items-center gap-1.5">
+          {totalAdded > 0 ? (
+            <Text className={cn(threadText, threadDiffAdd, "tabular-nums")}>
+              +{totalAdded}
+            </Text>
           ) : null}
-          {stat.removed !== undefined ? (
-            <Text className="text-[11px] text-red-600">−{stat.removed}</Text>
+          {totalRemoved > 0 ? (
+            <Text className={cn(threadText, threadDiffRemove, "tabular-nums")}>
+              -{totalRemoved}
+            </Text>
           ) : null}
         </View>
-      ))}
+      ) : null}
     </View>
   );
 }
@@ -224,7 +228,7 @@ export function ToolTimeline({
           onToggle={() => toggleStep(0)}
           elapsed={stepElapsed}
         />
-        <StatChips stats={stats} />
+        <StatLine stats={stats} />
       </Animated.View>
     );
   }
@@ -236,28 +240,25 @@ export function ToolTimeline({
       className="w-full"
     >
       <Pressable
-        className="flex-row items-center gap-1.5 rounded-md py-1"
+        className="flex-row items-center gap-1 rounded-md py-0.5"
         accessibilityState={{ expanded: open }}
         onPress={() => onOpenChange(!open)}
       >
-        <ChevronRightIcon
+        <SwapLabel active={streaming ? 0 : 1} className="text-start">
+          <ShimmerLabel active={streaming} className={cn(threadMeta, "leading-none")}>
+            {elapsed ? `${activeLabel} ${elapsed}` : activeLabel}
+          </ShimmerLabel>
+          <Text className={threadMeta}>{restingLabel}</Text>
+        </SwapLabel>
+        <ChevronDownIcon
           className={cn(
-            "size-3.5 shrink-0 text-foreground/60 transition-transform",
-            open && "rotate-90",
+            "size-3.5 shrink-0 text-muted-foreground/50 transition-transform",
+            open && "rotate-180",
           )}
         />
-        <SwapLabel active={streaming ? 0 : 1} className="text-start">
-          <ShimmerLabel active={streaming} className="leading-none">
-            {activeLabel}
-          </ShimmerLabel>
-          <Text className="text-[13.5px] text-foreground/55">{restingLabel}</Text>
-        </SwapLabel>
-        {elapsed !== undefined ? (
-          <Text className={cn(mono, "text-foreground/30")}>{elapsed}</Text>
-        ) : null}
       </Pressable>
       {open ? (
-        <View className="flex-col gap-2.5 pb-1 pl-4 pt-2.5">
+        <View className="flex-col gap-1 pb-1 pt-1.5">
           {shown.map((step, index) => (
             <StepRow
               key={`step-${index}-${step.verb}-${step.chip}`}
@@ -267,7 +268,7 @@ export function ToolTimeline({
               onToggle={() => toggleStep(index)}
             />
           ))}
-          <StatChips stats={stats} />
+          <StatLine stats={stats} />
         </View>
       ) : null}
     </Animated.View>

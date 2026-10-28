@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
-import { ShimmerLabel, threadMeta } from "./surfaces";
+import { ShimmerLabel, thinkSwapEnter, threadMeta } from "./surfaces";
 
 export function ThinkingIndicator({
   label,
@@ -21,7 +21,7 @@ export function ThinkingIndicator({
     >
       <ShimmerLabel
         key={label}
-        className="fade-in slide-in-from-bottom-1 animate-in relative inline-block duration-300"
+        className={cn("relative inline-block", thinkSwapEnter)}
       >
         {label}
       </ShimmerLabel>

@@ -1,4 +1,9 @@
 import { useHydrated } from "@/components/assistant-ui/elements/surfaces";
+import {
+  CitationChip,
+  isCitationLabel,
+  linkChildrenToText,
+} from "@/components/assistant-ui/elements/citation";
 import { Icon } from "@/components/ui/icon";
 import type { TextMessagePartProps } from "@assistant-ui/react-native";
 import * as Clipboard from "expo-clipboard";
@@ -152,6 +157,26 @@ class MarkdownRenderer extends Renderer {
   override code(text: string, language?: string): ReactNode {
     return <CodeBlock key={this.getKey()} code={text} language={language} />;
   }
+
+  override link(
+    children: string | ReactNode[],
+    href: string,
+    styles?: import("react-native").TextStyle,
+    title?: string,
+  ): ReactNode {
+    const label = linkChildrenToText(children);
+    if (/^https?:\/\//i.test(href) && isCitationLabel(label)) {
+      return (
+        <CitationChip
+          key={this.getKey()}
+          index={label}
+          href={href}
+          title={title?.trim() || undefined}
+        />
+      );
+    }
+    return super.link(children, href, styles, title);
+  }
 }
 
 const asColor = (value: string | number | undefined) =>
@@ -189,8 +214,8 @@ const useMarkdownOptions = (
 
     const bodyText =
       variant === "muted"
-        ? { fontSize: 14, lineHeight: 24 }
-        : { fontSize: 16, lineHeight: 26 };
+        ? { fontSize: 15, lineHeight: 24 }
+        : { fontSize: 15, lineHeight: 24 };
     const styles: MarkedStyles = {
       text: bodyText,
       paragraph: { paddingVertical: 6 },
@@ -211,8 +236,8 @@ const useMarkdownOptions = (
       },
       hr: { height: 1, marginVertical: 16, borderWidth: 0 },
       h1: {
-        fontSize: 24,
-        lineHeight: 32,
+        fontSize: 15,
+        lineHeight: 24,
         fontWeight: "600",
         marginTop: 20,
         marginBottom: 8,
@@ -220,8 +245,8 @@ const useMarkdownOptions = (
         borderBottomWidth: 0,
       },
       h2: {
-        fontSize: 20,
-        lineHeight: 28,
+        fontSize: 15,
+        lineHeight: 24,
         fontWeight: "600",
         marginTop: 18,
         marginBottom: 6,
@@ -229,29 +254,29 @@ const useMarkdownOptions = (
         borderBottomWidth: 0,
       },
       h3: {
-        fontSize: 18,
-        lineHeight: 26,
+        fontSize: 15,
+        lineHeight: 24,
         fontWeight: "600",
         marginTop: 16,
         marginBottom: 6,
       },
       h4: {
-        fontSize: 16,
-        lineHeight: 26,
+        fontSize: 15,
+        lineHeight: 24,
         fontWeight: "600",
         marginTop: 14,
         marginBottom: 4,
       },
       h5: {
-        fontSize: 16,
-        lineHeight: 26,
+        fontSize: 15,
+        lineHeight: 24,
         fontWeight: "600",
         marginTop: 12,
         marginBottom: 4,
       },
       h6: {
-        fontSize: 16,
-        lineHeight: 26,
+        fontSize: 15,
+        lineHeight: 24,
         fontWeight: "600",
         marginTop: 12,
         marginBottom: 4,
@@ -315,7 +340,7 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
   if (streaming) {
     return (
       <View className="aui-md-root">
-        <Text selectable className="text-foreground text-[16px] leading-[26px]">
+        <Text selectable className="text-foreground text-[15px] leading-6">
           {displayedText}
         </Text>
       </View>
