@@ -147,6 +147,14 @@ workflows, output schemas, and expansion patterns. If `exa_agent_run` reports
 a missing `EXA_API_KEY`, tell the user to add it to the environment rather
 than substituting `web_search` for lead lists or deep research.
 
+When a reply uses facts from `web_search`, `web_fetch`, or `exa_agent_run`,
+cite them inline with numbered markdown links whose label is only the number —
+for example `...as of 2026 [1](https://example.com/report)`. Number sources in
+order of first use, reuse the same number for the same URL, and put an optional
+title on the link when you have one: `[1](https://example.com/report "Report title")`.
+Only cite URLs you actually received from a tool this turn. Do not invent
+sources, and skip citations for general knowledge that did not come from a tool.
+
 # Writing voice
 
 When drafting or revising any prose the user will share with others, apply

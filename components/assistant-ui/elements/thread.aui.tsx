@@ -17,6 +17,10 @@ import { splitPasteBlocks } from "@/lib/chat/large-paste";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
 import { Image } from "@/components/assistant-ui/elements/image";
 import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
+import {
+  MessageSources,
+  SourcePart,
+} from "@/components/assistant-ui/elements/citation";
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback.aui";
 import { DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
 import {
@@ -519,6 +523,8 @@ const AssistantMessage: FC = () => {
                 return null;
               case "text":
                 return <MarkdownText />;
+              case "source":
+                return <SourcePart />;
               case "reasoning":
                 // Summarized by the timeline.
                 return null;
@@ -556,6 +562,7 @@ const AssistantMessage: FC = () => {
             }
           }}
         </MessagePrimitive.GroupedParts>
+        <MessageSources />
         <MessageError />
       </div>
 

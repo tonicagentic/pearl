@@ -17,6 +17,11 @@ import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-ic
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { useCanvas } from "@/components/assistant-ui/elements/canvas-context";
 import { cn } from "@/lib/utils";
+import {
+  CitationChip,
+  childrenToPlainText,
+  isCitationLabel,
+} from "@/components/assistant-ui/elements/citation";
 
 type MarkdownTextProps = Partial<TextMessagePartProps> & {
   components?: Parameters<typeof memoizeMarkdownComponents>[0];
@@ -171,12 +176,34 @@ const defaultComponents = memoizeMarkdownComponents({
       {...props}
     />
   ),
-  a: function MarkdownLink({ className, ...props }) {
+  a: function MarkdownLink({ className, children, ...props }) {
     const { openPath } = useCanvas();
     // The agent links referenced files with the file:// scheme (see
     // agent/instructions.md) so the reader can open them on the canvas,
     // like the artifact card. Other links stay ordinary hyperlinks.
     const href = typeof props.href === "string" ? props.href : undefined;
+    const label = childrenToPlainText(children);
+    const title =
+      typeof props.title === "string" && props.title.trim().length > 0
+        ? props.title.trim()
+        : undefined;
+
+    // Numbered research citations: [1](https://…) → compact inline chip.
+    if (
+      href &&
+      /^https?:\/\//i.test(href) &&
+      isCitationLabel(label)
+    ) {
+      return (
+        <CitationChip
+          index={label}
+          href={href}
+          title={title}
+          className={className}
+        />
+      );
+    }
+
     if (href?.startsWith("file://")) {
       const path = decodeURIComponent(href.slice("file://".length));
       return (
@@ -191,7 +218,9 @@ const defaultComponents = memoizeMarkdownComponents({
             openPath(path);
           }}
           {...props}
-        />
+        >
+          {children}
+        </a>
       );
     }
     return (
@@ -201,7 +230,9 @@ const defaultComponents = memoizeMarkdownComponents({
           className,
         )}
         {...props}
-      />
+      >
+        {children}
+      </a>
     );
   },
   blockquote: ({ className, ...props }) => (
