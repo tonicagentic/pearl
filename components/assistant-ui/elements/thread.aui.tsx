@@ -78,6 +78,7 @@ import type { MessageStreamEvent } from "eve/client";
 import {
   createContext,
   useContext,
+  useMemo,
   useState,
   type ComponentType,
   type FC,
@@ -188,6 +189,19 @@ function getPendingComposerApproval(
     }
   }
   return null;
+}
+
+/** Primitive snapshot for useAuiState — returning a fresh object each call loops. */
+function getPendingComposerApprovalKey(s: AssistantState): string {
+  const pending = getPendingComposerApproval(s);
+  return pending ? JSON.stringify(pending) : "";
+}
+
+function parsePendingComposerApproval(
+  key: string,
+): PendingComposerApproval | null {
+  if (!key) return null;
+  return JSON.parse(key) as PendingComposerApproval;
 }
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
@@ -387,7 +401,13 @@ const ThreadSuggestionItem: FC = () => {
 
 const WaitingActionDock: FC = () => {
   const aui = useAui();
-  const pending = useAuiState(getPendingComposerApproval);
+  // Select a string key: a fresh object from useAuiState trips React's
+  // getSnapshot caching check and infinite-loops the render.
+  const pendingKey = useAuiState(getPendingComposerApprovalKey);
+  const pending = useMemo(
+    () => parsePendingComposerApproval(pendingKey),
+    [pendingKey],
+  );
   const events = useEveEvents();
   const needsUserInput = chatNeedsUserInput(
     events as readonly MessageStreamEvent[],
@@ -517,7 +537,7 @@ const WaitingActionCard: FC<{
 
 const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
   const { onComposerPaste } = useLargePasteComposer();
-  const sendBlocked = useAuiState((s) => getPendingComposerApproval(s) != null);
+  const sendBlocked = useAuiState((s) => getPendingComposerApprovalKey(s) !== "");
 
   const blockSendKeys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (!sendBlocked) return;
