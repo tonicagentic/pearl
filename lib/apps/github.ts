@@ -45,6 +45,18 @@ async function githubJson<T>(
   return (await res.json()) as T;
 }
 
+/** GitHub returns 409 (not always 404) when reading refs on a zero-commit repo. */
+export function isEmptyGitRepositoryError(status: number, body: string): boolean {
+  if (status === 404) return true;
+  if (status !== 409) return false;
+  return /git repository is empty/i.test(body);
+}
+
+function isNameAlreadyExistsError(status: number, body: string): boolean {
+  if (status !== 422) return false;
+  return /name already exists/i.test(body);
+}
+
 export async function getGithubLogin(token: string): Promise<string> {
   const user = await githubJson<GithubUser>(token, "/user");
   return user.login;
@@ -53,6 +65,10 @@ export async function getGithubLogin(token: string): Promise<string> {
 /**
  * Create a private `pearl-*` repo under the authenticated user and push the
  * seed as the initial commit via the Git Data API.
+ *
+ * Retries after a cancelled create can hit an empty leftover repo: on 422
+ * "name already exists", adopt that repo and seed `main` only when it has no
+ * commits yet.
  */
 export async function createPearlRepo(args: {
   readonly token: string;
@@ -65,7 +81,7 @@ export async function createPearlRepo(args: {
     throw new Error(`Refusing to create ${args.repo}: only pearl-* repos are allowed.`);
   }
 
-  const created = await githubJson<GithubRepo>(args.token, "/user/repos", {
+  const createRes = await githubFetch(args.token, "/user/repos", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -79,6 +95,35 @@ export async function createPearlRepo(args: {
     }),
   });
 
+  let repo: GithubRepo;
+  if (createRes.ok) {
+    repo = (await createRes.json()) as GithubRepo;
+  } else {
+    const body = await createRes.text();
+    if (!isNameAlreadyExistsError(createRes.status, body)) {
+      throw new Error(
+        `GitHub POST /user/repos → ${createRes.status}: ${body.slice(0, 400)}`,
+      );
+    }
+    repo = await githubJson<GithubRepo>(
+      args.token,
+      `/repos/${args.owner}/${args.repo}`,
+    );
+  }
+
+  const branch = "main";
+  const base = `/repos/${args.owner}/${args.repo}`;
+  const refRes = await githubFetch(args.token, `${base}/git/ref/heads/${branch}`);
+  if (refRes.ok) {
+    // Already seeded (or otherwise has commits); leave files alone.
+    return repo;
+  }
+
+  const refBody = await refRes.text();
+  if (!isEmptyGitRepositoryError(refRes.status, refBody)) {
+    throw new Error(`GitHub GET ref → ${refRes.status}: ${refBody.slice(0, 400)}`);
+  }
+
   await pushCommit({
     token: args.token,
     owner: args.owner,
@@ -87,10 +132,10 @@ export async function createPearlRepo(args: {
     expectedRepo: args.repo,
     message: "Initial pearl mini app",
     files: args.files,
-    branch: "main",
+    branch,
   });
 
-  return created;
+  return repo;
 }
 
 /** Commit and push files to an existing pearl-* repo (non-force). */
@@ -115,6 +160,7 @@ export async function pushCommit(args: {
   const base = `/repos/${args.owner}/${args.repo}`;
 
   // Resolve current HEAD when the branch exists; otherwise start an orphan tree.
+  // Empty repos return 409 "Git Repository is empty" (not only 404).
   let parentSha: string | null = null;
   let baseTreeSha: string | null = null;
   const refRes = await githubFetch(args.token, `${base}/git/ref/heads/${branch}`);
@@ -126,9 +172,11 @@ export async function pushCommit(args: {
       `${base}/git/commits/${parentSha}`,
     );
     baseTreeSha = commit.tree.sha;
-  } else if (refRes.status !== 404) {
+  } else {
     const body = await refRes.text();
-    throw new Error(`GitHub GET ref → ${refRes.status}: ${body.slice(0, 400)}`);
+    if (!isEmptyGitRepositoryError(refRes.status, body)) {
+      throw new Error(`GitHub GET ref → ${refRes.status}: ${body.slice(0, 400)}`);
+    }
   }
 
   const blobs = await Promise.all(
