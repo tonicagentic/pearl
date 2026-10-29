@@ -12,8 +12,8 @@ export function isChatTurnSettledEvent(event: MessageStreamEvent) {
 /**
  * True when the chat is parked on the user: an unresolved tool-approval /
  * ask_question (`input.requested`) or an open authorization challenge.
- * Matches the live session-status banner so history rows can show the same
- * "needs you" signal without reopening the chat.
+ * Matches the composer WaitingActionCard / sidebar "needs you" signal so
+ * history rows stay in sync without reopening the chat.
  */
 export function chatNeedsUserInput(
   events: readonly MessageStreamEvent[],

@@ -15,11 +15,10 @@ import { Loader2, X } from "lucide-react";
 // - Stall watchdog: no stream events for 45s while in flight reads as a
 //   warning, so a dead gateway call shows as text instead of an endless
 //   spinner.
-// - Waiting for you: an unanswered input request (tool-approval park or
-//   ask_question). Track by requestId across turn.completed — a parked turn
-//   emits input.requested, then turn.completed, then session.waiting. The
-//   request itself renders in the thread via the mapped tool-approval UI;
-//   this banner explains that the agent is paused on the user.
+// - Waiting for you: unanswered input requests are tracked so this banner
+//   stays out of the way (the composer WaitingActionCard owns HITL copy).
+//   A parked turn emits input.requested, then turn.completed, then
+//   session.waiting — pending input must survive turn.completed.
 //
 // Turn failures surface separately through useEveError (EveErrorToast).
 
@@ -44,27 +43,6 @@ type StreamEvent = {
     readonly callId?: string;
   };
 };
-
-const TOOL_WAIT_LABELS: Record<string, string> = {
-  confirm_step: "confirming a step",
-  ask_question: "a question",
-  send_notification: "sending a notification",
-  delete_asset: "deleting an asset",
-  clear_writer_preferences: "clearing writer preferences",
-  resolve_issue: "resolving an issue",
-  create_issue: "creating an issue",
-};
-
-function waitLabel(pending: readonly PendingRequest[]): string {
-  const first = pending[0];
-  if (!first) return "a question or approval";
-  if (first.kind === "question") return "a question";
-  if (first.toolName && TOOL_WAIT_LABELS[first.toolName]) {
-    return TOOL_WAIT_LABELS[first.toolName];
-  }
-  if (first.toolName) return first.toolName.replaceAll("_", " ");
-  return "a question or approval";
-}
 
 export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean }) {
   const events = useEveEvents();
@@ -148,16 +126,15 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
     }
   }
 
-  const pendingRequests = [...pendingById.values()];
-  const pendingInput = pendingRequests.length > 0;
+  const pendingInput = pendingById.size > 0;
 
   // In-flight = the thread reports running (submitted/streaming) and the
   // durable state is not paused on the user. While an assistant message is
   // actually streaming, the in-thread ThinkingIndicator owns the status line
   // (assistant-ui thinking-indicator recipe) and this banner stays out of the
   // way; the banner only covers what the thread cannot show: the gap between
-  // submit and the first message (a dead worker shows up here), resuming, and
-  // the waiting-for-confirmation state.
+  // submit and the first message (a dead worker shows up here) and resuming.
+  // HITL parks render above the composer instead of here.
   const assistantStreaming = useAuiState((s) => {
     const last = s.thread.messages.at(-1);
     return last?.role === "assistant" && last.status?.type === "running";
@@ -173,17 +150,9 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
   const stalled =
     startedAt !== null && lastAt !== null && now !== null && now - lastAt > STALL_WARNING_MS;
 
+  // Composer WaitingActionCard owns confirmation copy; stay quiet while parked.
   if (pendingInput) {
-    return (
-      <div
-        data-testid="session-status"
-        className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100"
-      >
-        <span className="font-medium">Waiting for your confirmation.</span> The
-        agent is paused on {waitLabel(pendingRequests)} above — reply to
-        continue.
-      </div>
-    );
+    return null;
   }
 
   if (queued) {

@@ -72,15 +72,123 @@ import {
   XIcon,
 } from "lucide-react";
 import { CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useEveEvents } from "@assistant-ui/eve";
+import { chatNeedsUserInput } from "@/lib/chat/events";
+import type { MessageStreamEvent } from "eve/client";
 import {
   createContext,
   useContext,
+  useState,
   type ComponentType,
   type FC,
+  type KeyboardEvent,
   type PropsWithChildren,
   useEffect,
   useRef,
 } from "react";
+
+const APPROVAL_OPTION_DEFAULT_LABELS: Record<string, string> = {
+  "allow-once": "Allow",
+  "allow-always": "Always allow",
+  "reject-once": "Deny",
+  "reject-always": "Always deny",
+};
+
+const isKnownApprovalKind = (kind: string) =>
+  Object.hasOwn(APPROVAL_OPTION_DEFAULT_LABELS, kind);
+
+type WaitingApprovalOption = {
+  readonly id: string;
+  readonly label: string;
+  readonly kind?: string;
+};
+
+type PendingComposerApproval = {
+  readonly messageIndex: number;
+  readonly toolCallId: string;
+  readonly prompt: string;
+  readonly detail?: string;
+  readonly options: readonly WaitingApprovalOption[];
+  /** Options are local Approve/Cancel stand-ins; respond with approved boolean. */
+  readonly syntheticOptions: boolean;
+};
+
+function approvalDetail(args: unknown): string | undefined {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return undefined;
+  const record = args as Record<string, unknown>;
+  if (typeof record.summary === "string" && record.summary.trim()) {
+    return record.summary;
+  }
+  if (typeof record.filePath === "string" && record.filePath.trim()) {
+    return record.filePath;
+  }
+  if (
+    typeof record.slug === "string" &&
+    record.slug.trim() &&
+    typeof record.title === "string" &&
+    record.title.trim()
+  ) {
+    return `${record.title} (${record.slug})`;
+  }
+  if (typeof record.title === "string" && record.title.trim()) {
+    return record.title;
+  }
+  return undefined;
+}
+
+function getPendingComposerApproval(
+  s: AssistantState,
+): PendingComposerApproval | null {
+  const messages = s.thread.messages;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== "assistant") continue;
+    if (message.status?.type === "incomplete") continue;
+
+    for (const part of message.parts) {
+      if (part.type !== "tool-call" || !part.approval) continue;
+      if (
+        part.approval.approved !== undefined ||
+        part.approval.resolution !== undefined
+      ) {
+        continue;
+      }
+      // Free-form questions stay in the in-thread ToolFallback UI.
+      if (part.approval.display === "text") continue;
+
+      const declared = part.approval.options;
+      const syntheticOptions = !declared || declared.length === 0;
+      const options: WaitingApprovalOption[] = syntheticOptions
+        ? [
+            { id: "approve", label: "Approve" },
+            { id: "cancel", label: "Cancel" },
+          ]
+        : declared.map((option) => ({
+            id: option.id,
+            label:
+              option.label ??
+              (isKnownApprovalKind(option.kind)
+                ? APPROVAL_OPTION_DEFAULT_LABELS[option.kind]
+                : undefined) ??
+              option.id,
+            kind: option.kind,
+          }));
+
+      const detail = approvalDetail(part.args);
+      return {
+        messageIndex: index,
+        toolCallId: part.toolCallId,
+        prompt:
+          part.approval.prompt?.trim() ||
+          `Approve tool call: ${part.toolName}`,
+        ...(detail ? { detail } : {}),
+        options,
+        syntheticOptions,
+      };
+    }
+  }
+  return null;
+}
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
 
@@ -214,6 +322,7 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
           >
             <ThreadScrollToBottom />
             <ThreadFollowupSuggestions />
+            <WaitingActionDock />
             <Composer autoFocus={autoFocus} />
             <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
               <ThreadSuggestions />
@@ -276,8 +385,146 @@ const ThreadSuggestionItem: FC = () => {
   );
 };
 
+const WaitingActionDock: FC = () => {
+  const aui = useAui();
+  const pending = useAuiState(getPendingComposerApproval);
+  const events = useEveEvents();
+  const needsUserInput = chatNeedsUserInput(
+    events as readonly MessageStreamEvent[],
+  );
+
+  if (pending) {
+    return (
+      <WaitingActionCard
+        kind="approval"
+        title="The agent is paused until you respond."
+        prompt={pending.prompt}
+        detail={pending.detail}
+        options={pending.options}
+        onRespond={async (optionId) => {
+          const part = aui.thread
+            .message({ index: pending.messageIndex })
+            .part({ toolCallId: pending.toolCallId });
+          if (pending.syntheticOptions) {
+            await part.respondToToolApproval({
+              approved: optionId === "approve",
+            });
+            return;
+          }
+          const option = pending.options.find((entry) => entry.id === optionId);
+          if (option?.kind && isKnownApprovalKind(option.kind)) {
+            await part.respondToToolApproval({ optionId });
+            return;
+          }
+          await part.respondToToolApproval({
+            optionId,
+            approved: true,
+          });
+        }}
+      />
+    );
+  }
+
+  if (needsUserInput) {
+    return (
+      <WaitingActionCard
+        kind="authorization"
+        title="The agent is paused on a question or approval above — reply to continue."
+      />
+    );
+  }
+
+  return null;
+};
+
+const WaitingActionCard: FC<{
+  readonly kind: "authorization" | "approval";
+  readonly title: string;
+  readonly prompt?: string;
+  readonly detail?: string;
+  readonly options?: readonly WaitingApprovalOption[];
+  readonly onRespond?: (optionId: string) => void | Promise<void>;
+}> = ({ kind, title, prompt, detail, options, onRespond }) => {
+  const [submitting, setSubmitting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const respond = (optionId: string) => {
+    if (submitting || !onRespond) return;
+    setSubmitting(optionId);
+    setError(null);
+    void (async () => {
+      try {
+        await onRespond(optionId);
+      } catch (cause) {
+        setSubmitting(null);
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    })();
+  };
+
+  return (
+    <div
+      data-slot="aui_waiting-action-card"
+      role="alert"
+      className="animate-in fade-in slide-in-from-bottom-2 border-border/70 bg-card mb-0 overflow-hidden rounded-2xl border px-3.5 py-3 shadow-sm duration-200"
+    >
+      <div className="flex flex-col gap-1.5">
+        <p className="text-muted-foreground text-sm">
+          <span className="text-foreground font-medium">
+            Waiting for your confirmation.{" "}
+          </span>
+          {title}
+        </p>
+        {prompt ? (
+          <p className="text-foreground text-sm leading-snug font-medium">
+            {prompt}
+          </p>
+        ) : null}
+        {detail ? (
+          <p className="text-muted-foreground line-clamp-3 text-xs leading-snug">
+            {detail}
+          </p>
+        ) : null}
+      </div>
+      {kind === "approval" && options && options.length > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {options.map((option, index) => {
+            const primary = index === 0;
+            return (
+              <Button
+                key={option.id}
+                type="button"
+                size="sm"
+                variant={primary ? "default" : "outline"}
+                className="h-9 rounded-full px-4"
+                disabled={submitting !== null}
+                onClick={() => respond(option.id)}
+              >
+                {submitting === option.id ? "…" : option.label}
+              </Button>
+            );
+          })}
+        </div>
+      ) : null}
+      {error ? (
+        <p className="text-destructive mt-2 text-xs" role="status">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+};
+
 const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
   const { onComposerPaste } = useLargePasteComposer();
+  const sendBlocked = useAuiState((s) => getPendingComposerApproval(s) != null);
+
+  const blockSendKeys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!sendBlocked) return;
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+    }
+  };
 
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
@@ -296,15 +543,18 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
             enterKeyHint="send"
             aria-label="Message input"
             onPaste={onComposerPaste}
+            onKeyDown={blockSendKeys}
           />
-          <ComposerAction />
+          <ComposerAction sendBlocked={sendBlocked} />
         </div>
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
   );
 };
 
-const ComposerAction: FC = () => {
+const ComposerAction: FC<{ sendBlocked?: boolean }> = ({
+  sendBlocked = false,
+}) => {
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
       <div className="flex items-center gap-1">
@@ -345,19 +595,34 @@ const ComposerAction: FC = () => {
           </AuiIf>
         </AuiIf>
         <AuiIf condition={(s) => !s.thread.isRunning}>
-          <ComposerPrimitive.Send asChild>
+          {sendBlocked ? (
             <TooltipIconButton
-              tooltip="Send message"
+              tooltip="Respond to the approval above to continue"
               side="bottom"
               type="button"
               variant="default"
               size="icon"
               className="aui-composer-send size-7 rounded-full"
               aria-label="Send message"
+              disabled
             >
               <ArrowUpIcon className="aui-composer-send-icon size-4" />
             </TooltipIconButton>
-          </ComposerPrimitive.Send>
+          ) : (
+            <ComposerPrimitive.Send asChild>
+              <TooltipIconButton
+                tooltip="Send message"
+                side="bottom"
+                type="button"
+                variant="default"
+                size="icon"
+                className="aui-composer-send size-7 rounded-full"
+                aria-label="Send message"
+              >
+                <ArrowUpIcon className="aui-composer-send-icon size-4" />
+              </TooltipIconButton>
+            </ComposerPrimitive.Send>
+          )}
         </AuiIf>
         <AuiIf condition={(s) => s.thread.isRunning}>
           <ComposerPrimitive.Cancel asChild>
