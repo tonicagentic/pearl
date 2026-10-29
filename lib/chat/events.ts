@@ -9,15 +9,10 @@ export function isChatTurnSettledEvent(event: MessageStreamEvent) {
   );
 }
 
-/**
- * True when the chat is parked on the user: an unresolved tool-approval /
- * ask_question (`input.requested`) or an open authorization challenge.
- * Matches the composer WaitingActionCard / sidebar "needs you" signal so
- * history rows stay in sync without reopening the chat.
- */
-export function chatNeedsUserInput(
-  events: readonly MessageStreamEvent[],
-): boolean {
+function pendingUserInputState(events: readonly MessageStreamEvent[]): {
+  pendingInput: Set<string>;
+  pendingAuth: Set<string>;
+} {
   const pendingInput = new Set<string>();
   const pendingAuth = new Set<string>();
 
@@ -54,5 +49,30 @@ export function chatNeedsUserInput(
     }
   }
 
+  return { pendingInput, pendingAuth };
+}
+
+/**
+ * True when the chat is parked on the user: an unresolved tool-approval /
+ * ask_question (`input.requested`) or an open authorization challenge.
+ * Matches the composer WaitingActionCard / sidebar "needs you" signal so
+ * history rows stay in sync without reopening the chat.
+ */
+export function chatNeedsUserInput(
+  events: readonly MessageStreamEvent[],
+): boolean {
+  const { pendingInput, pendingAuth } = pendingUserInputState(events);
   return pendingInput.size > 0 || pendingAuth.size > 0;
+}
+
+/**
+ * True only for an open connection/authorization challenge. Used by the
+ * composer text-only WaitingActionCard so a stale `input.requested` (tool
+ * already cancelled in the thread) does not leave a buttonless "paused"
+ * banner after deny/cancel.
+ */
+export function chatNeedsAuthorization(
+  events: readonly MessageStreamEvent[],
+): boolean {
+  return pendingUserInputState(events).pendingAuth.size > 0;
 }

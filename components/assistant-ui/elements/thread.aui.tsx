@@ -73,7 +73,7 @@ import {
 } from "lucide-react";
 import { CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useEveEvents } from "@assistant-ui/eve";
-import { chatNeedsUserInput } from "@/lib/chat/events";
+import { chatNeedsAuthorization } from "@/lib/chat/events";
 import type { MessageStreamEvent } from "eve/client";
 import {
   createContext,
@@ -107,12 +107,20 @@ type WaitingApprovalOption = {
 type PendingComposerApproval = {
   readonly messageIndex: number;
   readonly toolCallId: string;
+  readonly approvalId: string;
   readonly prompt: string;
   readonly detail?: string;
   readonly options: readonly WaitingApprovalOption[];
   /** Options are local Approve/Cancel stand-ins; respond with approved boolean. */
   readonly syntheticOptions: boolean;
 };
+
+const TURN_BUSY_RE =
+  /already processing a turn|turnPolicy:\s*"steer"/i;
+
+function isTurnBusyError(cause: unknown): boolean {
+  return cause instanceof Error && TURN_BUSY_RE.test(cause.message);
+}
 
 function approvalDetail(args: unknown): string | undefined {
   if (!args || typeof args !== "object" || Array.isArray(args)) return undefined;
@@ -144,7 +152,9 @@ function getPendingComposerApproval(
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (message?.role !== "assistant") continue;
-    if (message.status?.type === "incomplete") continue;
+    // Keep scanning incomplete messages: a stop/error mid-park can flip
+    // status while the approval part is still open, and skipping here was
+    // leaving a buttonless "waiting" banner with no Approve/Cancel.
 
     for (const part of message.parts) {
       if (part.type !== "tool-call" || !part.approval) continue;
@@ -179,6 +189,7 @@ function getPendingComposerApproval(
       return {
         messageIndex: index,
         toolCallId: part.toolCallId,
+        approvalId: part.approval.id,
         prompt:
           part.approval.prompt?.trim() ||
           `Approve tool call: ${part.toolName}`,
@@ -409,7 +420,10 @@ const WaitingActionDock: FC = () => {
     [pendingKey],
   );
   const events = useEveEvents();
-  const needsUserInput = chatNeedsUserInput(
+  // Only authorization parks use the text-only fallback. Orphaned
+  // `input.requested` after a cancelled tool approval must not leave a
+  // buttonless "Waiting for your confirmation" card.
+  const needsAuthorization = chatNeedsAuthorization(
     events as readonly MessageStreamEvent[],
   );
 
@@ -422,30 +436,45 @@ const WaitingActionDock: FC = () => {
         detail={pending.detail}
         options={pending.options}
         onRespond={async (optionId) => {
-          const part = aui.thread
-            .message({ index: pending.messageIndex })
-            .part({ toolCallId: pending.toolCallId });
-          if (pending.syntheticOptions) {
+          const sendApproval = async () => {
+            const part = aui.thread
+              .message({ index: pending.messageIndex })
+              .part({ toolCallId: pending.toolCallId });
+            if (pending.syntheticOptions) {
+              await part.respondToToolApproval({
+                approved: optionId === "approve",
+              });
+              return;
+            }
+            const option = pending.options.find(
+              (entry) => entry.id === optionId,
+            );
+            if (option?.kind && isKnownApprovalKind(option.kind)) {
+              await part.respondToToolApproval({ optionId });
+              return;
+            }
             await part.respondToToolApproval({
-              approved: optionId === "approve",
+              optionId,
+              approved: true,
             });
-            return;
+          };
+
+          try {
+            await sendApproval();
+          } catch (cause) {
+            // A click while the park is still streaming (or a second click
+            // after the first already resumed the turn) hits eve's steer
+            // gate. Wait for the active turn to settle, then retry once.
+            if (!isTurnBusyError(cause)) throw cause;
+            await waitForThreadIdle(aui);
+            await sendApproval();
           }
-          const option = pending.options.find((entry) => entry.id === optionId);
-          if (option?.kind && isKnownApprovalKind(option.kind)) {
-            await part.respondToToolApproval({ optionId });
-            return;
-          }
-          await part.respondToToolApproval({
-            optionId,
-            approved: true,
-          });
         }}
       />
     );
   }
 
-  if (needsUserInput) {
+  if (needsAuthorization) {
     return (
       <WaitingActionCard
         kind="authorization"
@@ -457,6 +486,42 @@ const WaitingActionDock: FC = () => {
   return null;
 };
 
+async function waitForThreadIdle(
+  aui: ReturnType<typeof useAui>,
+  timeoutMs = 15_000,
+): Promise<void> {
+  if (!aui.thread.getState().isRunning) return;
+  const runtime = aui.thread.__internal_getRuntime?.();
+  if (runtime) {
+    await new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(() => {
+        unsubscribe();
+        reject(
+          new Error(
+            "Timed out waiting for the agent to pause before recording your approval.",
+          ),
+        );
+      }, timeoutMs);
+      const unsubscribe = runtime.subscribe(() => {
+        if (runtime.getState().isRunning) return;
+        window.clearTimeout(timer);
+        unsubscribe();
+        resolve();
+      });
+    });
+    return;
+  }
+  const started = Date.now();
+  while (aui.thread.getState().isRunning) {
+    if (Date.now() - started > timeoutMs) {
+      throw new Error(
+        "Timed out waiting for the agent to pause before recording your approval.",
+      );
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+  }
+}
+
 const WaitingActionCard: FC<{
   readonly kind: "authorization" | "approval";
   readonly title: string;
@@ -467,17 +532,26 @@ const WaitingActionCard: FC<{
 }> = ({ kind, title, prompt, detail, options, onRespond }) => {
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const submittingRef = useRef(false);
 
   const respond = (optionId: string) => {
-    if (submitting || !onRespond) return;
+    if (submittingRef.current || !onRespond) return;
+    submittingRef.current = true;
     setSubmitting(optionId);
     setError(null);
     void (async () => {
       try {
         await onRespond(optionId);
       } catch (cause) {
+        submittingRef.current = false;
         setSubmitting(null);
-        setError(cause instanceof Error ? cause.message : String(cause));
+        setError(
+          isTurnBusyError(cause)
+            ? "The agent was still working — try Approve again."
+            : cause instanceof Error
+              ? cause.message
+              : String(cause),
+        );
       }
     })();
   };

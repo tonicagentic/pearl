@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { MessageStreamEvent } from "eve/client";
-import { chatNeedsUserInput } from "../lib/chat/events.ts";
+import {
+  chatNeedsAuthorization,
+  chatNeedsUserInput,
+} from "../lib/chat/events.ts";
 
 const requested = (requestId: string, toolName = "confirm_step"): MessageStreamEvent =>
   ({
@@ -58,4 +61,11 @@ test("authorization challenges wait until completed", () => {
   } as MessageStreamEvent;
   assert.equal(chatNeedsUserInput([required]), true);
   assert.equal(chatNeedsUserInput([required, completed]), false);
+  assert.equal(chatNeedsAuthorization([required]), true);
+  assert.equal(chatNeedsAuthorization([required, completed]), false);
+});
+
+test("stale tool approvals are not authorization parks", () => {
+  assert.equal(chatNeedsAuthorization([requested("a1")]), false);
+  assert.equal(chatNeedsUserInput([requested("a1")]), true);
 });
