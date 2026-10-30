@@ -44,7 +44,7 @@ async function ResolvedApps() {
         <h1 className="text-lg font-semibold">Apps</h1>
         <p className="text-sm text-muted-foreground">
           Mini apps Pearl built for you. Ask in chat to create or update one;
-          published apps open here in an iframe.
+          drafts show a sandbox preview, published apps open the live URL.
         </p>
       </header>
 
@@ -64,7 +64,11 @@ async function ResolvedApps() {
                 <div className="truncate text-sm font-medium">{app.title}</div>
                 <div className="truncate text-xs text-muted-foreground">
                   {app.slug} · {app.status}
-                  {app.productionUrl ? " · live" : ""}
+                  {app.productionUrl
+                    ? " · live"
+                    : app.previewUrl
+                      ? " · preview"
+                      : ""}
                 </div>
               </div>
               <Link

@@ -7,7 +7,7 @@ import { publishApp } from "@/lib/apps/publish-service";
 export default defineTool({
   approval: always(),
   description:
-    "Push the mini app's sandbox workspace to its pearl-* GitHub repo, ensure a " +
+    "Create the pearl-* GitHub repo if needed, push the sandbox workspace, ensure a " +
     "Vercel project linked to that repo, wait for production, and save the URL. " +
     "Requires approval. The app then opens in Pearl at /apps/<id>.",
   inputSchema: z.object({

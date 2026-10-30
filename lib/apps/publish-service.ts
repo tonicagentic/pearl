@@ -5,8 +5,13 @@ import {
   failExecution,
 } from "@/lib/agent/execution-ledger";
 
-import { pushCommit } from "./github.ts";
-import { getMiniApp, toPublicMiniApp, updateMiniApp, type MiniAppPublic } from "./queries.ts";
+import { createPearlRepo, getGithubLogin, pushCommit } from "./github.ts";
+import {
+  getMiniApp,
+  toPublicMiniApp,
+  updateMiniApp,
+  type MiniAppPublic,
+} from "./queries.ts";
 import { getGithubUserToken, getVercelUserToken } from "./tokens.ts";
 import {
   ensureVercelProject,
@@ -22,8 +27,9 @@ export type PublishAppInput = {
 };
 
 /**
- * Push the sandbox workspace to the app's pearl-* repo, ensure a Vercel
- * project, wait for production, and store the URL. Ledger-guarded.
+ * Push the sandbox workspace to the app's pearl-* repo (creating the repo on
+ * first publish), ensure a Vercel project, wait for production, and store the
+ * URL. Ledger-guarded. GitHub + Vercel Connect required here — not at create.
  */
 export async function publishApp(
   input: PublishAppInput,
@@ -86,23 +92,42 @@ export async function publishApp(
     }
 
     const githubToken = await getGithubUserToken(input.userId);
-    await pushCommit({
-      token: githubToken,
-      owner: app.githubOwner,
-      repo: app.githubRepo,
-      expectedOwner: app.githubOwner,
-      expectedRepo: app.githubRepo,
-      message: commitMessage,
-      files,
-    });
+    let githubOwner = app.githubOwner;
+    let githubRepo = app.githubRepo;
+
+    if (!githubOwner || !githubRepo) {
+      githubOwner = await getGithubLogin(githubToken);
+      githubRepo = app.slug;
+      await createPearlRepo({
+        token: githubToken,
+        owner: githubOwner,
+        repo: githubRepo,
+        description: `Pearl mini app: ${app.title}`,
+        files,
+      });
+      await updateMiniApp(input.userId, app.id, {
+        githubOwner,
+        githubRepo,
+      });
+    } else {
+      await pushCommit({
+        token: githubToken,
+        owner: githubOwner,
+        repo: githubRepo,
+        expectedOwner: githubOwner,
+        expectedRepo: githubRepo,
+        message: commitMessage,
+        files,
+      });
+    }
 
     const vercelToken = await getVercelUserToken(input.userId);
     const teamId = await resolveVercelTeamId(vercelToken);
     const project = await ensureVercelProject({
       token: vercelToken,
       projectName: app.slug,
-      githubOwner: app.githubOwner,
-      githubRepo: app.githubRepo,
+      githubOwner,
+      githubRepo,
       teamId,
     });
 
@@ -110,8 +135,8 @@ export async function publishApp(
       await triggerProductionDeploy({
         token: vercelToken,
         projectName: project.projectName,
-        githubOwner: app.githubOwner,
-        githubRepo: app.githubRepo,
+        githubOwner,
+        githubRepo,
         teamId,
       });
     } catch {
@@ -125,6 +150,8 @@ export async function publishApp(
     });
 
     const updated = await updateMiniApp(input.userId, app.id, {
+      githubOwner,
+      githubRepo,
       vercelProjectId: project.projectId,
       productionUrl,
       status: "published",
@@ -138,7 +165,13 @@ export async function publishApp(
     return {
       status: "published",
       app: toPublicMiniApp(
-        updated ?? { ...app, productionUrl, status: "published" },
+        updated ?? {
+          ...app,
+          githubOwner,
+          githubRepo,
+          productionUrl,
+          status: "published",
+        },
       ),
     };
   } catch (error) {

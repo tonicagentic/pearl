@@ -293,12 +293,17 @@ export const miniApp = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     slug: text("slug").notNull(),
     title: text("title").notNull(),
-    githubOwner: text("github_owner").notNull(),
-    githubRepo: text("github_repo").notNull(),
+    // Null until publish_app creates the pearl-* GitHub repo. Drafts can
+    // code in a Vercel Sandbox before GitHub is connected.
+    githubOwner: text("github_owner"),
+    githubRepo: text("github_repo"),
     fxSessionId: text("fx_session_id"),
     sandboxName: text("sandbox_name").notNull(),
     vercelProjectId: text("vercel_project_id"),
     productionUrl: text("production_url"),
+    // Live sandbox draft preview (https://*.vercel.run) while building.
+    previewUrl: text("preview_url"),
+    previewPort: integer("preview_port").notNull().default(3000),
     status: text("status", {
       enum: ["draft", "building", "published", "failed"],
     })

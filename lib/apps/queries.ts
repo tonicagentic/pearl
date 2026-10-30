@@ -8,9 +8,11 @@ export type MiniAppPublic = {
   readonly id: string;
   readonly slug: string;
   readonly title: string;
-  readonly githubOwner: string;
-  readonly githubRepo: string;
+  readonly githubOwner: string | null;
+  readonly githubRepo: string | null;
   readonly productionUrl: string | null;
+  readonly previewUrl: string | null;
+  readonly previewPort: number;
   readonly status: MiniAppStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -24,6 +26,8 @@ export function toPublicMiniApp(row: MiniApp): MiniAppPublic {
     githubOwner: row.githubOwner,
     githubRepo: row.githubRepo,
     productionUrl: row.productionUrl,
+    previewUrl: row.previewUrl,
+    previewPort: row.previewPort,
     status: row.status,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -66,10 +70,10 @@ export async function insertMiniApp(input: {
   readonly userId: string;
   readonly slug: string;
   readonly title: string;
-  readonly githubOwner: string;
-  readonly githubRepo: string;
   readonly sandboxName: string;
-  readonly fxSessionId: string;
+  readonly fxSessionId?: string | null;
+  readonly githubOwner?: string | null;
+  readonly githubRepo?: string | null;
 }): Promise<MiniApp> {
   const id = randomUUID();
   const [row] = await db
@@ -79,10 +83,10 @@ export async function insertMiniApp(input: {
       userId: input.userId,
       slug: input.slug,
       title: input.title,
-      githubOwner: input.githubOwner,
-      githubRepo: input.githubRepo,
+      githubOwner: input.githubOwner ?? null,
+      githubRepo: input.githubRepo ?? null,
       sandboxName: input.sandboxName,
-      fxSessionId: input.fxSessionId,
+      fxSessionId: input.fxSessionId ?? null,
       status: "draft",
     })
     .returning();
@@ -99,8 +103,12 @@ export async function updateMiniApp(
   patch: {
     readonly fxSessionId?: string | null;
     readonly sandboxName?: string;
+    readonly githubOwner?: string | null;
+    readonly githubRepo?: string | null;
     readonly vercelProjectId?: string | null;
     readonly productionUrl?: string | null;
+    readonly previewUrl?: string | null;
+    readonly previewPort?: number;
     readonly status?: MiniAppStatus;
   },
 ): Promise<MiniApp | null> {

@@ -92,6 +92,20 @@
       "when": 1793219465245,
       "tag": "0012_mini_apps",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793382927189,
+      "tag": "0013_mini_apps_optional_github",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793393505469,
+      "tag": "0014_mini_apps_preview_url",
+      "breakpoints": true
     }
   ]
 }

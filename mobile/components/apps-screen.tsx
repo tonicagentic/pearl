@@ -86,7 +86,11 @@ export function AppsScreen() {
                 </Text>
                 <Text className="mt-1 text-xs text-muted-foreground">
                   {app.slug} · {app.status}
-                  {app.productionUrl ? " · live" : ""}
+                  {app.productionUrl
+                    ? " · live"
+                    : app.previewUrl
+                      ? " · preview"
+                      : ""}
                 </Text>
               </Pressable>
             ))

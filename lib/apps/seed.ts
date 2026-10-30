@@ -19,9 +19,10 @@ export function pearlAppSeed(args: {
           version: "0.1.0",
           private: true,
           scripts: {
-            dev: "next dev",
+            // Bind all interfaces so Vercel Sandbox port publish can reach Next.
+            dev: "next dev --hostname 0.0.0.0 -p 3000",
             build: "next build",
-            start: "next start",
+            start: "next start --hostname 0.0.0.0 -p 3000",
           },
           dependencies: {
             next: "16.3.1",

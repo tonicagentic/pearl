@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { embeddableProductionUrl } from "@/lib/apps/embed";
+import { preferEmbedUrl } from "@/lib/apps/embed";
 import { getMiniApp, toPublicMiniApp } from "@/lib/apps/queries";
 import { ensureUserForPrincipal } from "@/lib/db/issues";
 import { getServerViewer } from "@/lib/session";
@@ -36,8 +36,8 @@ export async function GET(
   return NextResponse.json({
     app: {
       ...app,
-      // Only expose an embed URL when it passes the https ownership check.
-      embedUrl: embeddableProductionUrl(app.productionUrl),
+      // Production preferred; sandbox draft preview otherwise.
+      embedUrl: preferEmbedUrl(app),
     },
   });
 }

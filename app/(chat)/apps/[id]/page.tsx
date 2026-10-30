@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
 
-import { embeddableProductionUrl } from "@/lib/apps/embed";
+import { embeddableAppUrl, preferEmbedUrl } from "@/lib/apps/embed";
 import { getMiniApp, toPublicMiniApp } from "@/lib/apps/queries";
 import { ensureUserForPrincipal } from "@/lib/db/issues";
 import { getServerViewer } from "@/lib/session";
@@ -52,7 +52,8 @@ async function ResolvedViewer({
   }
 
   const app = toPublicMiniApp(row);
-  const embedUrl = embeddableProductionUrl(app.productionUrl);
+  const embedUrl = preferEmbedUrl(app);
+  const isLive = Boolean(embeddableAppUrl(app.productionUrl));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -61,6 +62,7 @@ async function ResolvedViewer({
           <h1 className="truncate text-lg font-semibold">{app.title}</h1>
           <p className="truncate text-xs text-muted-foreground">
             {app.slug} · {app.status}
+            {embedUrl ? (isLive ? " · live" : " · preview") : ""}
             {app.githubOwner ? ` · ${app.githubOwner}/${app.githubRepo}` : ""}
           </p>
         </div>
@@ -94,8 +96,9 @@ async function ResolvedViewer({
         />
       ) : (
         <div className="rounded-lg border bg-card px-3 py-4 text-sm text-muted-foreground">
-          This app is not published yet. Ask Pearl to finish coding it and
-          publish — then the live URL will open here.
+          No preview yet. Ask Pearl to run coding on this app — a sandbox
+          draft preview opens here while the Vercel Sandbox is alive. Publish
+          when you want a durable production URL.
         </div>
       )}
     </div>

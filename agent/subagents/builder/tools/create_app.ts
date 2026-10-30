@@ -7,15 +7,16 @@ import { createApp } from "@/lib/apps/create-service";
 export default defineTool({
   approval: always(),
   description:
-    "Create a new private pearl-<slug> GitHub repo for a mini app, seed a Next.js " +
-    "starter, and register it in Pearl. Requires approval. Does not deploy yet — " +
-    "follow with code_with_fx and publish_app.",
+    "Register a new Pearl mini app draft (slug + title) with a Vercel Sandbox " +
+    "coding session. Does not require GitHub yet — follow with code_with_fx to " +
+    "build in the sandbox, then publish_app (needs GitHub + Vercel Connect) to " +
+    "create the private pearl-<slug> repo and deploy. Requires approval.",
   inputSchema: z.object({
     slug: z
       .string()
       .min(1)
       .describe(
-        "Short slug: my-notes or pearl-my-notes. Becomes the GitHub repo name pearl-<slug>.",
+        "Short slug: my-notes or pearl-my-notes. Becomes the GitHub repo name pearl-<slug> on publish.",
       ),
     title: z
       .string()

@@ -7,3 +7,9 @@ export {
 } from "./create-service.ts";
 export { codeWithFx, type CodeWithFxInput } from "./code-service.ts";
 export { publishApp, type PublishAppInput } from "./publish-service.ts";
+export {
+  ensureAppPreview,
+  captureAppScreenshot,
+  type EnsureAppPreviewInput,
+  type CaptureAppScreenshotInput,
+} from "./preview-service.ts";

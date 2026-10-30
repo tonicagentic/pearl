@@ -8,7 +8,6 @@ import {
 } from "@/lib/agent/execution-ledger";
 import { ensureUserForPrincipal } from "@/lib/db/issues";
 
-import { createPearlRepo, getGithubLogin } from "./github.ts";
 import {
   getMiniApp,
   getMiniAppBySlug,
@@ -17,9 +16,7 @@ import {
   toPublicMiniApp,
   type MiniAppPublic,
 } from "./queries.ts";
-import { pearlAppSeed } from "./seed.ts";
 import { normalizePearlSlug } from "./slug.ts";
-import { getGithubUserToken } from "./tokens.ts";
 
 export type CreateAppInput = {
   readonly userId: string;
@@ -30,8 +27,9 @@ export type CreateAppInput = {
 };
 
 /**
- * Create a private pearl-* GitHub repo, seed it, and register a mini_app row
- * with a durable fx session id. Ledger-guarded against eve replay.
+ * Register a mini_app draft with a durable fx session id. Does not touch
+ * GitHub — coding happens in a Vercel Sandbox via code_with_fx; publish_app
+ * creates the pearl-* repo when the user is ready to ship.
  *
  * Kept free of libfx / @vercel/sandbox so eve can evaluate create_app / list_apps.
  */
@@ -77,7 +75,7 @@ export async function createApp(
     return {
       status: "error",
       error:
-        "A previous create_app for this slug is still pending. Check GitHub before retrying.",
+        "A previous create_app for this slug is still pending. Retry in a moment.",
     };
   }
 
@@ -96,30 +94,16 @@ export async function createApp(
       },
     });
 
-    const githubToken = await getGithubUserToken(input.userId);
-    const owner = await getGithubLogin(githubToken);
-    const files = pearlAppSeed({ title, slug });
-
-    await createPearlRepo({
-      token: githubToken,
-      owner,
-      repo: slug,
-      description: `Pearl mini app: ${title}`,
-      files,
-    });
-
-    const fxSessionId = randomUUID();
-    // Provisional name; code_with_fx replaces it with durable-harness's dh-* hash.
-    const sandbox = `pearl-app-${fxSessionId}`;
+    // fx session ids must come from pearlBuilderFx.newSessionId() (wrun_…);
+    // code_with_fx allocates on first use. Provisional sandbox name until then.
+    const sandbox = `pearl-app-${randomUUID()}`;
 
     const row = await insertMiniApp({
       userId: input.userId,
       slug,
       title,
-      githubOwner: owner,
-      githubRepo: slug,
       sandboxName: sandbox,
-      fxSessionId,
+      fxSessionId: null,
     });
 
     await completeExecution(key, JSON.stringify({ appId: row.id }));

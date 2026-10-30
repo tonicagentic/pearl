@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { embeddableProductionUrl } from "../lib/apps/embed.ts";
+import {
+  embeddableAppUrl,
+  embeddableProductionUrl,
+  preferEmbedUrl,
+} from "../lib/apps/embed.ts";
 import {
   assertPearlAppRepo,
   isPearlRepoName,
@@ -67,11 +71,19 @@ test("embeddableProductionUrl only allows https URLs without credentials", () =>
     embeddableProductionUrl("https://pearl-notes.vercel.app"),
     "https://pearl-notes.vercel.app/",
   );
+  assert.equal(embeddableAppUrl("https://draft.vercel.run"), "https://draft.vercel.run/");
   assert.equal(embeddableProductionUrl("http://evil.example"), null);
   assert.equal(embeddableProductionUrl("javascript:alert(1)"), null);
   assert.equal(embeddableProductionUrl("https://user:pass@evil.example"), null);
   assert.equal(embeddableProductionUrl(null), null);
   assert.equal(embeddableProductionUrl("not a url"), null);
+  assert.equal(
+    preferEmbedUrl({
+      productionUrl: null,
+      previewUrl: "https://draft.vercel.run",
+    }),
+    "https://draft.vercel.run/",
+  );
 });
 
 test("builder create_app and publish_app declare approval gates", async () => {

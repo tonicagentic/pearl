@@ -28,8 +28,9 @@
     "dev:eve": "eve dev",
     "start:eve": "eve start",
     "check:migrations": "node scripts/check-migrations.mjs",
-    "test": "node --test --env-file-if-exists=.env.development.local tests/",
-    "test:unit": "node --test --env-file-if-exists=.env.development.local tests/",
+    "test": "node --import ./scripts/register-at-alias.mjs --experimental-strip-types --test --env-file-if-exists=.env.development.local tests/",
+    "test:unit": "node --import ./scripts/register-at-alias.mjs --experimental-strip-types --test --env-file-if-exists=.env.development.local tests/",
+    "smoke:sandbox-app": "node --import ./scripts/register-at-alias.mjs --experimental-strip-types scripts/smoke-sandbox-app.mjs",
     "evals:behavior": "pnpm exec eve eval behavior",
     "evals:smoke": "pnpm exec eve eval behavior --tag smoke"
   },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { listAppsForUser } from "@/lib/apps/create-service";
+import { preferEmbedUrl } from "@/lib/apps/embed";
 import { ensureUserForPrincipal } from "@/lib/db/issues";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
@@ -23,5 +24,10 @@ export async function GET() {
   });
 
   const apps = await listAppsForUser(viewer.id);
-  return NextResponse.json({ apps });
+  return NextResponse.json({
+    apps: apps.map((app) => ({
+      ...app,
+      embedUrl: preferEmbedUrl(app),
+    })),
+  });
 }

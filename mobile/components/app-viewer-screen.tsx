@@ -66,7 +66,8 @@ export function AppViewerScreen({ id }: { readonly id: string }) {
 
       {app && !app.embedUrl ? (
         <Text className="px-4 py-4 text-sm text-muted-foreground">
-          This app is not published yet. Ask Pearl to publish it, then reopen.
+          No preview yet. Ask Pearl to code this app for a sandbox draft
+          preview, or publish for a durable URL.
         </Text>
       ) : null}
 

@@ -5,7 +5,7 @@ import { listAppsForUser } from "@/lib/apps/create-service";
 
 export default defineTool({
   description:
-    "List the signed-in user's Pearl mini apps (id, slug, title, status, production URL).",
+    "List the signed-in user's Pearl mini apps (id, slug, title, status, preview URL, production URL).",
   inputSchema: z.object({}),
   async execute(_input, ctx) {
     const principal = ctx.session.auth.current;

@@ -8,9 +8,11 @@ export type MiniAppDto = {
   readonly id: string;
   readonly slug: string;
   readonly title: string;
-  readonly githubOwner: string;
-  readonly githubRepo: string;
+  readonly githubOwner: string | null;
+  readonly githubRepo: string | null;
   readonly productionUrl: string | null;
+  readonly previewUrl: string | null;
+  readonly previewPort?: number;
   readonly status: "draft" | "building" | "published" | "failed";
   readonly createdAt: string;
   readonly updatedAt: string;
