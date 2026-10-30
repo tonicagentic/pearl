@@ -184,7 +184,8 @@ test("ensureAppPreview fails when sandbox name is not dh-*", async () => {
 });
 
 test("ensureAppPreview persists previewUrl via store", async () => {
-  let saved: { previewUrl?: string | null; previewPort?: number } | null = null;
+  let savedPreviewUrl: string | null | undefined;
+  let savedPreviewPort: number | undefined;
   const app = fakeApp();
   const result = await ensureAppPreview({
     userId: "user-1",
@@ -195,7 +196,8 @@ test("ensureAppPreview persists previewUrl via store", async () => {
         return app as never;
       },
       async update(_userId, _id, patch) {
-        saved = patch;
+        savedPreviewUrl = patch.previewUrl;
+        savedPreviewPort = patch.previewPort;
         return { ...app, ...patch } as never;
       },
     },
@@ -203,8 +205,8 @@ test("ensureAppPreview persists previewUrl via store", async () => {
   assert.equal(result.status, "ok");
   if (result.status !== "ok") return;
   assert.equal(result.previewUrl, "https://mock-3000.vercel.run");
-  assert.equal(saved?.previewUrl, "https://mock-3000.vercel.run");
-  assert.equal(saved?.previewPort, 3000);
+  assert.equal(savedPreviewUrl, "https://mock-3000.vercel.run");
+  assert.equal(savedPreviewPort, 3000);
 });
 
 test("captureAppScreenshot uploads PNG via injected uploader", async () => {

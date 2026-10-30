@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db/client";
 import { miniApp, type MiniApp, type MiniAppStatus } from "@/lib/db/schema";
 
+export type { MiniApp, MiniAppStatus };
+
 export type MiniAppPublic = {
   readonly id: string;
   readonly slug: string;
