@@ -13,6 +13,12 @@ import { DEFAULT_MODEL, WORKFLOW_BATCHING } from "../../agent.ts";
  */
 export default defineAgent({
   experimental: WORKFLOW_BATCHING,
+  // libfx loads durable/vercel.mjs via import.meta.url; durable-harness has
+  // the same package-relative assets. Keep both external so eve's hosted
+  // function ships the real package trees instead of a flattened bundle.
+  build: {
+    externalDependencies: ["libfx", "durable-harness"],
+  },
   description:
     "Build and ship small software apps for the signed-in user. Registers a " +
     "draft, writes and tests code with fx inside a Vercel Sandbox (GitHub not " +
