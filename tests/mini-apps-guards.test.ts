@@ -99,3 +99,19 @@ test("builder create_app and publish_app declare approval gates", async () => {
   assert.match(create, /approval:\s*always\(\)/);
   assert.match(publish, /approval:\s*always\(\)/);
 });
+
+test("root instructions require calling builder tool in the same turn", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const instructions = await readFile("agent/instructions.md", "utf8");
+  assert.match(instructions, /calling the `builder` tool directly/);
+  assert.match(instructions, /turn must include the `builder` call/);
+});
+
+test("builder agent keeps libfx external for durable/vercel.mjs", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const agent = await readFile("agent/subagents/builder/agent.ts", "utf8");
+  assert.match(
+    agent,
+    /externalDependencies:\s*\["libfx",\s*"durable-harness"\]/,
+  );
+});
