@@ -115,3 +115,30 @@ test("builder agent keeps libfx external for durable/vercel.mjs", async () => {
     /externalDependencies:\s*\["libfx",\s*"durable-harness"\]/,
   );
 });
+
+test("DELEGATION_TOOLS includes declared subagents for TaskCard lane", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { readdir } = await import("node:fs/promises");
+  const source = await readFile(
+    "components/assistant-ui/elements/task-card.aui.tsx",
+    "utf8",
+  );
+  const mobile = await readFile(
+    "mobile/components/assistant-ui/elements/task-card.aui.tsx",
+    "utf8",
+  );
+  const declared = (await readdir("agent/subagents", { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+  for (const name of ["agent", ...declared]) {
+    assert.match(source, new RegExp(`"${name}"`));
+    assert.match(mobile, new RegExp(`"${name}"`));
+  }
+});
+
+test("code_with_fx follows durable turns with reconnect", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const code = await readFile("lib/apps/code-service.ts", "utf8");
+  assert.match(code, /awaitDurableFxTurn/);
+  assert.doesNotMatch(code, /for await \(const event of turn\)/);
+});

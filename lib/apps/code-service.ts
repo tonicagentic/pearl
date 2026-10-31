@@ -1,3 +1,4 @@
+import { awaitDurableFxTurn } from "./fx-turn.ts";
 import { getMiniApp, toPublicMiniApp, updateMiniApp, type MiniAppPublic } from "./queries.ts";
 import { seedPromptForFx } from "./seed.ts";
 
@@ -85,18 +86,19 @@ export async function codeWithFx(
 
     const session = pearlBuilderFx.session(fxSessionId);
     const turn = session.prompt(promptParts.join("\n"));
-    await turn.accepted;
-
-    const events: Array<{ type: string; [key: string]: unknown }> = [];
-    for await (const event of turn) {
-      events.push(event as { type: string; [key: string]: unknown });
-    }
-    const result = await turn.result;
-    if (result.stopReason === "error") {
+    // Follow via session.stream with reconnect — the in-request turn view
+    // dies when the Function yields near its deadline even though the turn
+    // continues on a wake (see awaitDurableFxTurn).
+    const { events, result } = await awaitDurableFxTurn(session, turn);
+    if (result.stopReason === "error" || result.stopReason === "unknown") {
       await updateMiniApp(input.userId, app.id, { status: "failed" });
       return {
         status: "error",
-        error: result.error?.message ?? "fx turn failed.",
+        error:
+          result.error?.message ??
+          (result.stopReason === "unknown"
+            ? "fx turn stopped before recording an outcome; retry code_with_fx."
+            : "fx turn failed."),
       };
     }
 

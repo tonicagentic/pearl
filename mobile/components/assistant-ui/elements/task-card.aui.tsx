@@ -66,9 +66,14 @@ function formatElapsed(ms: number): string {
   return `${Math.round(minutes / 60)}h`;
 }
 
-// A delegation tool call: the eve built-in `agent` tool and the editor
-// subagent it fronts. Kept in sync with agent/subagents.
-export const DELEGATION_TOOLS = new Set(["agent", "editor"]);
+// Declared subagents under agent/subagents/* plus eve's built-in `agent`.
+export const DELEGATION_TOOLS = new Set([
+  "agent",
+  "builder",
+  "editor",
+  "researcher",
+  "reviewer",
+]);
 
 type ToolCallPartState = {
   readonly type: "tool-call";
@@ -89,9 +94,10 @@ function isDelegationPart(part: unknown): part is ToolCallPartState {
 
 function taskLabel(part: ToolCallPartState): string {
   const args = (part.args ?? {}) as { message?: unknown };
-  const message =
-    typeof args.message === "string" ? args.message.split("\n")[0] : "";
-  return message || part.toolName;
+  const raw =
+    typeof args.message === "string" ? args.message.split("\n")[0].trim() : "";
+  if (!raw) return part.toolName;
+  return raw.length > 80 ? `${raw.slice(0, 77).trimEnd()}…` : raw;
 }
 
 function taskMeta(part: ToolCallPartState, run?: SubagentRun): string {
@@ -146,9 +152,9 @@ export function TaskGroup({
             // the card stays a compact status row with its result below.
             result={
               run?.state === "failed"
-                ? "no result arrived — the run was likely interrupted; ask for the review again"
+                ? "no result arrived — the run was likely interrupted; ask again"
                 : working
-                  ? "working — the reply will land in this thread when it finishes"
+                  ? `Waiting on ${taskMeta(part, run)}…`
                   : undefined
             }
           />

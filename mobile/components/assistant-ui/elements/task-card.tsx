@@ -59,7 +59,12 @@ export function TaskCard({
 }) {
   return (
     <View
-      className={cn(paper, "w-full flex-col overflow-hidden rounded-2xl", className)}
+      className={cn(
+        paper,
+        "w-full flex-col overflow-hidden rounded-2xl",
+        state === "working" && "opacity-90",
+        className,
+      )}
     >
       <View className="flex-row items-center gap-2.5 px-3.5 py-2.5">
         <TaskStateIcon state={state} />

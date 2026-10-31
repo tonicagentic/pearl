@@ -117,6 +117,8 @@ export function TaskCard({
       className={cn(
         paper,
         "flex w-full max-w-sm flex-col overflow-hidden rounded-2xl",
+        state === "working" &&
+          "animate-pulse motion-reduce:animate-none [animation-duration:2.4s]",
         className,
       )}
       {...props}
