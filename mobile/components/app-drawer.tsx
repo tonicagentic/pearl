@@ -12,9 +12,6 @@ import { useChats } from "@/src/chat-context";
 /** Shared history content for the swipeable chat panel and direct-link screen. */
 export type SidebarDestination = "/areas" | "/issues" | "/apps" | "/settings";
 
-/** Slight drift while the drawer opens; exit inverts via the same progress. */
-const SIDEBAR_CONTENT_SLIDE_PX = 18;
-
 export function HistoryScreen({
   onClose,
   onNavigate,
@@ -24,7 +21,7 @@ export function HistoryScreen({
   onClose?: () => void;
   onNavigate?: (href: SidebarDestination) => void;
   visible?: boolean;
-  /** Drawer open progress (0 closed → 1 open). Drives content fade/slide. */
+  /** Push open progress (0 closed → 1 open). Soft fade while scrubbing. */
   progress?: SharedValue<number>;
 }) {
   const { signedIn } = useAuth();
@@ -34,16 +31,11 @@ export function HistoryScreen({
   const iosSidebar = Platform.OS === "ios" && !!onClose;
   // Leave room for the floating Settings / New chat circles above the home indicator.
   const iosFooterClearance = 48 + 40 + Math.max(insets.bottom, 12);
+  // Panel translate is owned by the push layout; only fade content in with progress.
   const contentMotion = useAnimatedStyle(() => {
     const open = progress?.value ?? 1;
     return {
-      opacity: interpolate(open, [0, 1], [0, 1]),
-      transform: [
-        {
-          // Arrive from the left as the drawer opens; reverse on close.
-          translateX: interpolate(open, [0, 1], [-SIDEBAR_CONTENT_SLIDE_PX, 0]),
-        },
-      ],
+      opacity: interpolate(open, [0, 0.55, 1], [0.35, 0.85, 1]),
     };
   });
 

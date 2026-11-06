@@ -1,15 +1,12 @@
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Keyboard, Platform, Pressable, View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
-import { runOnJS, type SharedValue } from "react-native-reanimated";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Platform, Pressable, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
 import { Stack, router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import ReanimatedDrawerLayout, {
-  DrawerKeyboardDismissMode,
-  DrawerPosition,
-  DrawerType,
-  type DrawerLayoutMethods,
-} from "react-native-gesture-handler/ReanimatedDrawerLayout";
+import { GestureDetector } from "react-native-gesture-handler";
 import { ListIcon, SquarePenIcon } from "lucide-react-native";
 import {
   AssistantRuntimeProvider,
@@ -22,6 +19,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { HistoryScreen, type SidebarDestination } from "@/components/app-drawer";
+import {
+  animateChatHistoryPush,
+  useChatHistoryPushGesture,
+  useChatHistoryPushSettle,
+} from "@/components/chat-history-push";
+import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
 import { FloatingChatNavigation } from "@/components/floating-chat-navigation";
@@ -38,8 +41,8 @@ import { toThreadMessages, type SpikeState } from "@/src/eve-transport";
 
 /**
  * The chat screen: the assistant-ui native Thread wired to the eve session
- * protocol through the external-store runtime bridge. The history panel slides
- * over the mounted thread without interrupting its stream.
+ * protocol through the external-store runtime bridge. History and chat push
+ * each other with a finger-tracked horizontal progress value.
  */
 export function ChatScreen({
   chromeRevealed = true,
@@ -60,22 +63,18 @@ export function ChatScreen({
   ];
   const { store, activeChatId, newChatEntry, activeTitle, persistenceError, retrySync, pendingMessage, newChat, wasSendPrepared } = useChats();
   const { width } = useWindowDimensions();
-  const drawerRef = useRef<DrawerLayoutMethods>(null);
+  // 0 = chat full screen, 1 = history full screen; tracks the finger while dragging.
+  const openProgress = useSharedValue(0);
+  const dragStartProgress = useSharedValue(0);
+  const settling = useSharedValue(false);
   const settledOpen = useRef(false);
   const pendingDestination = useRef<SidebarDestination | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   // A new chat chosen from History should focus only after the drawer settles.
   const [drawerFocusEntry, setDrawerFocusEntry] = useState(newChatEntry);
-  const closeHistory = useCallback(() => drawerRef.current?.closeDrawer(), []);
-  const openHistory = useCallback(() => {
-    Keyboard.dismiss();
-    drawerRef.current?.openDrawer();
-  }, []);
-  const navigateFromHistory = useCallback((href: SidebarDestination) => {
-    pendingDestination.current = href;
-    closeHistory();
-  }, [closeHistory]);
+
   const onDrawerSettled = useCallback((open: boolean) => {
+    settling.value = false;
     if (settledOpen.current === open) return;
     settledOpen.current = open;
     if (open) setDrawerFocusEntry(newChatEntry);
@@ -87,18 +86,47 @@ export function ChatScreen({
       pendingDestination.current = null;
       router.push(href);
     }
-  }, [newChatEntry]);
-  const renderHistory = useCallback(
-    (progress: SharedValue<number>) => (
-      <HistoryScreen
-        onClose={closeHistory}
-        onNavigate={navigateFromHistory}
-        visible={drawerOpen}
-        progress={progress}
-      />
-    ),
-    [closeHistory, navigateFromHistory, drawerOpen],
-  );
+  }, [newChatEntry, settling]);
+
+  const settleRef = useRef(onDrawerSettled);
+  settleRef.current = onDrawerSettled;
+  const settleFromGesture = useCallback((open: boolean) => {
+    settleRef.current(open);
+  }, []);
+  useChatHistoryPushSettle(settleFromGesture);
+
+  const animateTo = useCallback((open: boolean) => {
+    animateChatHistoryPush(openProgress, settling, open);
+  }, [openProgress, settling]);
+
+  const closeHistory = useCallback(() => {
+    if (settledOpen.current === false && openProgress.value < 0.01) return;
+    animateTo(false);
+  }, [animateTo, openProgress]);
+
+  const openHistory = useCallback(() => {
+    dismissKeyboard();
+    animateTo(true);
+  }, [animateTo]);
+
+  const navigateFromHistory = useCallback((href: SidebarDestination) => {
+    pendingDestination.current = href;
+    closeHistory();
+  }, [closeHistory]);
+
+  const historyStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: (openProgress.value - 1) * width }],
+  }));
+  const chatStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: openProgress.value * width }],
+  }));
+
+  const pushGesture = useChatHistoryPushGesture({
+    openProgress,
+    dragStartProgress,
+    settling,
+    width,
+  });
   const [sendError, setSendError] = useState<{ store: object; message: string } | null>(null);
   const [localSends, setLocalSends] = useState<Map<object, LocalSend>>(() => new Map());
   const localSend = localSends.get(store) ?? null;
@@ -294,26 +322,34 @@ export function ChatScreen({
           </Pressable>
         ),
       }} />
-      <ReanimatedDrawerLayout
-        ref={drawerRef}
-        // Full-width front panel: covers chat completely; drag tracks open/close.
-        drawerWidth={width}
-        drawerPosition={DrawerPosition.LEFT}
-        drawerType={DrawerType.FRONT}
-        drawerBackgroundColor={backgroundColor}
-        overlayColor="transparent"
-        // Narrow edge strip for interactive open; anywhere-open is handled below.
-        // A full-width edgeWidth would steal vertical pans from the transcript.
-        edgeWidth={Platform.OS === "ios" ? 48 : 32}
-        minSwipeDistance={12}
-        keyboardDismissMode={DrawerKeyboardDismissMode.ON_DRAG}
-        renderNavigationView={renderHistory}
-        onDrawerOpen={() => onDrawerSettled(true)}
-        onDrawerClose={() => onDrawerSettled(false)}
-      >
-        {() => (
-          <SwipeOpenSurface swipeOpenEnabled={!drawerOpen} onSwipeOpen={openHistory}>
-            <View style={{ flex: 1 }} accessibilityElementsHidden={drawerOpen}>
+      <View style={{ flex: 1, overflow: "hidden" }}>
+        <GestureDetector gesture={pushGesture}>
+          <View style={{ flex: 1 }}>
+            <Animated.View
+              pointerEvents={drawerOpen ? "auto" : "none"}
+              style={[
+                {
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  left: 0,
+                  width,
+                  backgroundColor,
+                },
+                historyStyle,
+              ]}
+            >
+              <HistoryScreen
+                onClose={closeHistory}
+                onNavigate={navigateFromHistory}
+                visible={drawerOpen}
+                progress={openProgress}
+              />
+            </Animated.View>
+            <Animated.View
+              style={[{ flex: 1, width, backgroundColor }, chatStyle]}
+              accessibilityElementsHidden={drawerOpen}
+            >
               <AssistantRuntimeProvider runtime={runtime}>
                 <EveAuthorization />
                 <Thread
@@ -359,51 +395,25 @@ export function ChatScreen({
                   }
                 />
               </AssistantRuntimeProvider>
-              {Platform.OS === "ios" && chromeRevealed ? (
-                <FloatingChatNavigation
-                  title={activeTitle}
-                  hasMessages={projectedMessages.length > 0}
-                  onOpenHistory={openHistory}
-                  onNewChat={newChat}
-                  disabled={drawerOpen}
-                />
-              ) : null}
-            </View>
-          </SwipeOpenSurface>
-        )}
-      </ReanimatedDrawerLayout>
+            </Animated.View>
+          </View>
+        </GestureDetector>
+        {/* Outside the pan detector so menu/new-chat presses are not delayed. */}
+        {Platform.OS === "ios" && chromeRevealed ? (
+          <Animated.View
+            pointerEvents="box-none"
+            style={[StyleSheet.absoluteFill, chatStyle]}
+          >
+            <FloatingChatNavigation
+              title={activeTitle}
+              hasMessages={projectedMessages.length > 0}
+              onOpenHistory={openHistory}
+              onNewChat={newChat}
+              disabled={drawerOpen}
+            />
+          </Animated.View>
+        ) : null}
+      </View>
     </SafeAreaView>
-  );
-}
-
-/** Horizontal swipe opens the history panel without stealing vertical scroll. */
-function SwipeOpenSurface({
-  swipeOpenEnabled,
-  onSwipeOpen,
-  children,
-}: {
-  swipeOpenEnabled: boolean;
-  onSwipeOpen: () => void;
-  children: ReactNode;
-}) {
-  const openFromAnywhere = useMemo(
-    () =>
-      Gesture.Pan()
-        .enabled(swipeOpenEnabled)
-        .activeOffsetX(24)
-        .failOffsetY([-16, 16])
-        .onEnd((event) => {
-          "worklet";
-          if (event.translationX > 56 || (event.translationX > 28 && event.velocityX > 450)) {
-            runOnJS(onSwipeOpen)();
-          }
-        }),
-    [swipeOpenEnabled, onSwipeOpen],
-  );
-
-  return (
-    <GestureDetector gesture={openFromAnywhere}>
-      <View style={{ flex: 1 }}>{children}</View>
-    </GestureDetector>
   );
 }
