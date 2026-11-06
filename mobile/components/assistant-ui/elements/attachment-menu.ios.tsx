@@ -7,7 +7,13 @@ import { Icon } from "@/components/ui/icon";
 import type { AttachmentMenuProps } from "./attachment-menu";
 
 /** Match the model switcher's anchored native menu without changing pickers. */
-export function AttachmentMenu({ disabled, onChoosePhoto, onChooseFile, onPasteText }: AttachmentMenuProps) {
+export function AttachmentMenu({
+  disabled,
+  onTakePhoto,
+  onChoosePhoto,
+  onChooseFile,
+  onPasteText,
+}: AttachmentMenuProps) {
   const dark = useColorScheme() === "dark";
   // Stronger than --color-muted so the 32pt circle reads on the glass shell
   // like Grok's + (muted alone washes out against the composer fill).
@@ -28,6 +34,7 @@ export function AttachmentMenu({ disabled, onChoosePhoto, onChooseFile, onPasteT
         }
         modifiers={[nativeDisabled(disabled), accessibilityLabel("Add attachment")]}
       >
+        <Button label="Take Photo" systemImage="camera" onPress={onTakePhoto} />
         <Button label="Choose Photo" systemImage="photo" onPress={onChoosePhoto} />
         <Button label="Choose File" systemImage="doc" onPress={onChooseFile} />
         <Button label="Paste Text" systemImage="doc.on.clipboard" onPress={onPasteText} />

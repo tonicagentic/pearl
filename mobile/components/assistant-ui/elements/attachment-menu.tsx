@@ -7,17 +7,25 @@ import { iconButtonHitSlop } from "./icon-button";
 
 export type AttachmentMenuProps = {
   disabled: boolean;
+  onTakePhoto: () => void;
   onChoosePhoto: () => void;
   onChooseFile: () => void;
   onPasteText: () => void;
 };
 
 /** Android and web retain the existing attachment choices. */
-export function AttachmentMenu({ disabled, onChoosePhoto, onChooseFile, onPasteText }: AttachmentMenuProps) {
+export function AttachmentMenu({
+  disabled,
+  onTakePhoto,
+  onChoosePhoto,
+  onChooseFile,
+  onPasteText,
+}: AttachmentMenuProps) {
   return (
     <View>
       <ComposerPrimitive.AddAttachment
         onPress={() => Alert.alert("Add attachment", undefined, [
+          { text: "Take Photo", onPress: onTakePhoto },
           { text: "Choose Photo", onPress: onChoosePhoto },
           { text: "Choose File", onPress: onChooseFile },
           { text: "Paste Text", onPress: onPasteText },

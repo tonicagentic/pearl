@@ -1038,21 +1038,27 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
   const hydrated = useHydrated();
   const aui = useAui();
   const storeText = useAuiState((s) => s.composer.text);
-  // Local value is the source of truth while typing. The AUI store lags under
-  // fast iOS keystrokes; feeding `value={storeText}` rewrote the native field
-  // mid-input and jumped the caret. Ignore stale shorter store prefixes.
+  // The field owns its text while a keystroke is in flight. The AUI store lags
+  // under fast iOS input; writing that stale value back restored characters
+  // the user had just deleted and jumped the caret. Accept an external write
+  // (send clears the field, a draft replaces it) once the store is no longer
+  // echoing our own edit. An empty store always wins so send can clear a
+  // keystroke that has not echoed yet.
   const [value, setValue] = useState(storeText);
+  const publishedRef = useRef(storeText);
+  const awaitingEchoRef = useRef(false);
   const nativeInput = useRef<TextInput>(null);
   const focusOnMount = useRef(autoFocus);
   useEffect(() => {
-    if (storeText === value) return;
-    if (storeText === "") {
-      setValue("");
+    if (storeText === publishedRef.current) {
+      awaitingEchoRef.current = false;
       return;
     }
-    if (value.startsWith(storeText) && storeText.length < value.length) return;
+    if (awaitingEchoRef.current && storeText !== "") return;
+    publishedRef.current = storeText;
+    awaitingEchoRef.current = false;
     setValue(storeText);
-  }, [storeText, value]);
+  }, [storeText]);
   const placeholderColor = Platform.OS === "ios"
     ? "accent-muted-foreground/85"
     : "accent-muted-foreground/60";
@@ -1082,6 +1088,8 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
       ref={nativeInput}
       value={value}
       onChangeText={(next) => {
+        publishedRef.current = next;
+        awaitingEchoRef.current = true;
         setValue(next);
         aui.composer.setText(next);
       }}

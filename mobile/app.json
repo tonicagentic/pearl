@@ -38,6 +38,14 @@
             "buildReactNativeFromSource": true
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Pearl uses your photos so you can attach them in chat.",
+          "cameraPermission": "Pearl uses the camera so you can take a photo and attach it in chat.",
+          "microphonePermission": false
+        }
       ]
     ],
     "scheme": "pearl",

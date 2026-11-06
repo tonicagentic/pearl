@@ -15,7 +15,7 @@ import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { XIcon } from "lucide-react-native";
 import type { FC } from "react";
-import { Alert, Image, View } from "react-native";
+import { Alert, Image, Platform, View } from "react-native";
 import { uploadPdfAttachment } from "@/src/pdf-attachment";
 
 const MAX_IMAGE_EDGE = 2048;
@@ -113,6 +113,39 @@ export const ComposerAddAttachment: FC<{
   const canAttach = useAuiState((s) => s.composer.isEditing);
   const imageCount = useAuiState((s) => s.composer.attachments.filter((a) => a.type === "image").length);
 
+  const addImageAsset = async (asset: ImagePicker.ImagePickerAsset) => {
+    const base64 = await encodeJpeg(asset);
+    if (!base64 || Math.ceil(base64.length * 3 / 4) > MAX_IMAGE_BYTES) {
+      throw new Error("Photo is too large after resizing (2 MB limit).");
+    }
+    await aui.composer.addAttachment({
+      name: `${(asset.fileName ?? "photo").replace(/\.[^.]+$/, "")}.jpg`,
+      contentType: "image/jpeg",
+      type: "image",
+      content: [{ type: "image", image: `data:image/jpeg;base64,${base64}` }],
+    });
+  };
+
+  const takePhoto = async () => {
+    if (imageCount >= MAX_IMAGES) throw new Error(`You can attach up to ${MAX_IMAGES} photos.`);
+    // The browser camera must open in the same turn as the tap. Native asks
+    // first; that dialog is itself the user gesture.
+    if (Platform.OS !== "web") {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        throw new Error("Allow camera access to take a photo.");
+      }
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    if (!asset) return;
+    await addImageAsset(asset);
+  };
+
   const pickImages = async () => {
     if (imageCount >= MAX_IMAGES) throw new Error(`You can attach up to ${MAX_IMAGES} photos.`);
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -122,16 +155,7 @@ export const ComposerAddAttachment: FC<{
     });
     if (result.canceled) return;
     for (const asset of result.assets) {
-      const base64 = await encodeJpeg(asset);
-      if (!base64 || Math.ceil(base64.length * 3 / 4) > MAX_IMAGE_BYTES) {
-        throw new Error("Photo is too large after resizing (2 MB limit).");
-      }
-      await aui.composer.addAttachment({
-        name: `${(asset.fileName ?? "image").replace(/\.[^.]+$/, "")}.jpg`,
-        contentType: "image/jpeg",
-        type: "image",
-        content: [{ type: "image", image: `data:image/jpeg;base64,${base64}` }],
-      });
+      await addImageAsset(asset);
     }
   };
 
@@ -200,6 +224,7 @@ export const ComposerAddAttachment: FC<{
   return (
     <AttachmentMenu
       disabled={preparing || !canAttach}
+      onTakePhoto={() => runPicker(takePhoto)}
       onChoosePhoto={() => runPicker(pickImages)}
       onChooseFile={() => runPicker(pickFile)}
       onPasteText={() => runPicker(pasteText)}
