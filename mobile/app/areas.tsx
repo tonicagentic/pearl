@@ -76,9 +76,15 @@ export default function Areas() {
               </Text>
             ))}
             {(payload.options ?? []).length === 0 ? (
-              <Text className="py-1 text-sm text-muted-foreground">
-                No areas yet.
-              </Text>
+              <View className="py-3">
+                <Text className="text-base font-medium text-foreground">
+                  No areas yet
+                </Text>
+                <Text className="text-muted-foreground mt-1 text-sm leading-5">
+                  Areas are the stable parts of your life. Create them on the
+                  web, then they will show up here.
+                </Text>
+              </View>
             ) : null}
           </View>
         )}

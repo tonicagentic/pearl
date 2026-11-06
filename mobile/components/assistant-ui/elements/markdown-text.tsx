@@ -10,6 +10,7 @@ import * as Clipboard from "expo-clipboard";
 import { CheckIcon, CopyIcon } from "lucide-react-native";
 import {
   type FC,
+  isValidElement,
   memo,
   type ReactNode,
   useEffect,
@@ -17,7 +18,15 @@ import {
   useRef,
   useState,
 } from "react";
-import { Platform, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  type TextStyle,
+  View,
+  type ViewStyle,
+} from "react-native";
 import {
   MarkedLexer,
   type MarkedStyles,
@@ -33,6 +42,15 @@ const MONOSPACE = Platform.select({
   android: "monospace",
   default: "monospace",
 });
+
+const BODY_SIZE = 17;
+const BODY_LINE = 26;
+const MUTED_SIZE = 15;
+const MUTED_LINE = 24;
+const MARKER_COL = 24;
+const DISC_SIZE = 6;
+const STREAM_PARSE_MS = 80;
+const TASK_BOX_RE = /^[☑☐]/;
 
 type ListToken = NonNullable<ReturnType<MarkedTokenizer["list"]>>;
 type ListItemToken = ListToken["items"][number];
@@ -68,10 +86,66 @@ export class TaskListTokenizer extends MarkedTokenizer {
 
 const taskListTokenizer = new TaskListTokenizer();
 
-// Show wire text as it arrives (no client typewriter). A paced reveal +
-// setState sync lagged behind eve and hit "Maximum update depth exceeded",
-// which aborted the store as "Connection interrupted".
-const useStreamedText = (text: string): string => text;
+// One-way throttle: props → local state only. Writing back into the message
+// store previously hit "Maximum update depth exceeded". Leading edge paints
+// the first chunk immediately; later chunks coalesce on ~80ms.
+const useThrottledMarkdownText = (text: string, streaming: boolean): string => {
+  const [parsedText, setParsedText] = useState(text);
+  const pendingRef = useRef(text);
+  const lastFlushRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    pendingRef.current = text;
+    if (!streaming) {
+      clearTimeout(timerRef.current);
+      timerRef.current = undefined;
+      lastFlushRef.current = 0;
+      setParsedText(text);
+      return;
+    }
+    const now = Date.now();
+    const elapsed = now - lastFlushRef.current;
+    if (elapsed >= STREAM_PARSE_MS) {
+      lastFlushRef.current = now;
+      setParsedText(text);
+      return;
+    }
+    if (timerRef.current !== undefined) return;
+    timerRef.current = setTimeout(() => {
+      timerRef.current = undefined;
+      lastFlushRef.current = Date.now();
+      setParsedText(pendingRef.current);
+    }, STREAM_PARSE_MS - elapsed);
+  }, [text, streaming]);
+
+  useEffect(
+    () => () => {
+      clearTimeout(timerRef.current);
+    },
+    [],
+  );
+
+  return parsedText;
+};
+
+const firstTextContent = (node: ReactNode): string => {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const text = firstTextContent(child);
+      if (text) return text;
+    }
+    return "";
+  }
+  if (isValidElement(node)) {
+    return firstTextContent(
+      (node.props as { children?: ReactNode }).children,
+    );
+  }
+  return "";
+};
 
 const CodeBlock: FC<{ code: string; language: string | undefined }> = ({
   code,
@@ -161,7 +235,7 @@ class MarkdownRenderer extends Renderer {
   override link(
     children: string | ReactNode[],
     href: string,
-    styles?: import("react-native").TextStyle,
+    styles?: TextStyle,
     title?: string,
   ): ReactNode {
     const label = linkChildrenToText(children);
@@ -176,6 +250,69 @@ class MarkdownRenderer extends Renderer {
       );
     }
     return super.link(children, href, styles, title);
+  }
+
+  override list(
+    ordered: boolean,
+    li: ReactNode[],
+    _listStyle?: ViewStyle,
+    textStyle?: TextStyle,
+    startIndex = 1,
+  ): ReactNode {
+    const listKey = this.getKey();
+    const lineHeight =
+      typeof textStyle?.lineHeight === "number"
+        ? textStyle.lineHeight
+        : BODY_LINE;
+    const fontSize =
+      typeof textStyle?.fontSize === "number" ? textStyle.fontSize : BODY_SIZE;
+
+    return (
+      <View key={listKey} style={{ marginVertical: 4 }}>
+        {li.map((item, index) => {
+          const isTask = TASK_BOX_RE.test(firstTextContent(item).trimStart());
+          return (
+            <View
+              key={`${listKey}-${index}`}
+              style={{
+                flexDirection: "row",
+                alignItems: "flex-start",
+                paddingVertical: 4,
+              }}
+            >
+              <View
+                style={{
+                  width: MARKER_COL,
+                  height: lineHeight,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {ordered ? (
+                  <Text
+                    style={{
+                      color: textStyle?.color,
+                      fontSize,
+                      lineHeight,
+                      textAlign: "right",
+                      width: MARKER_COL,
+                    }}
+                  >
+                    {`${startIndex + index}.`}
+                  </Text>
+                ) : isTask ? null : (
+                  <View
+                    className="bg-foreground rounded-full"
+                    style={{ width: DISC_SIZE, height: DISC_SIZE }}
+                  />
+                )}
+              </View>
+              <View style={{ flex: 1, flexShrink: 1 }}>{item}</View>
+            </View>
+          );
+        })}
+      </View>
+    );
   }
 }
 
@@ -214,17 +351,24 @@ const useMarkdownOptions = (
 
     const bodyText =
       variant === "muted"
-        ? { fontSize: 15, lineHeight: 24 }
-        : { fontSize: 15, lineHeight: 24 };
+        ? { fontSize: MUTED_SIZE, lineHeight: MUTED_LINE }
+        : { fontSize: BODY_SIZE, lineHeight: BODY_LINE };
     const styles: MarkedStyles = {
       text: bodyText,
-      paragraph: { paddingVertical: 6 },
-      li: { ...bodyText, paddingVertical: 2 },
-      list: { paddingVertical: 6, paddingLeft: 4 },
-      link: { fontStyle: "normal", textDecorationLine: "underline" },
+      strong: { ...bodyText, fontWeight: "600" },
+      em: bodyText,
+      strikethrough: bodyText,
+      paragraph: { paddingVertical: 0, marginBottom: 14 },
+      li: bodyText,
+      list: {},
+      link: {
+        ...bodyText,
+        fontStyle: "normal",
+        textDecorationLine: "underline",
+      },
       codespan: {
         fontFamily: MONOSPACE,
-        fontSize: 14,
+        fontSize: variant === "muted" ? 13 : 14,
         borderRadius: 4,
         paddingHorizontal: 4,
       },
@@ -236,8 +380,7 @@ const useMarkdownOptions = (
       },
       hr: { height: 1, marginVertical: 16, borderWidth: 0 },
       h1: {
-        fontSize: 15,
-        lineHeight: 24,
+        ...bodyText,
         fontWeight: "600",
         marginTop: 20,
         marginBottom: 8,
@@ -245,8 +388,7 @@ const useMarkdownOptions = (
         borderBottomWidth: 0,
       },
       h2: {
-        fontSize: 15,
-        lineHeight: 24,
+        ...bodyText,
         fontWeight: "600",
         marginTop: 18,
         marginBottom: 6,
@@ -254,29 +396,25 @@ const useMarkdownOptions = (
         borderBottomWidth: 0,
       },
       h3: {
-        fontSize: 15,
-        lineHeight: 24,
+        ...bodyText,
         fontWeight: "600",
         marginTop: 16,
         marginBottom: 6,
       },
       h4: {
-        fontSize: 15,
-        lineHeight: 24,
+        ...bodyText,
         fontWeight: "600",
         marginTop: 14,
         marginBottom: 4,
       },
       h5: {
-        fontSize: 15,
-        lineHeight: 24,
+        ...bodyText,
         fontWeight: "600",
         marginTop: 12,
         marginBottom: 4,
       },
       h6: {
-        fontSize: 15,
-        lineHeight: 24,
+        ...bodyText,
         fontWeight: "600",
         marginTop: 12,
         marginBottom: 4,
@@ -326,21 +464,30 @@ type MarkdownTextProps = TextMessagePartProps & {
 const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
   const statusType = status?.type ?? "running";
   const streaming = statusType === "running";
-  const displayedText = useStreamedText(text);
+  const displayedText = useThrottledMarkdownText(text, streaming);
   const options = useMarkdownOptions(variant);
-  // Re-lexing markdown on every token stalls the JS thread behind a healthy
-  // wire stream. While running, paint plain text; markdown after the part settles.
-  const blocks = useMemo(() => {
-    if (streaming) return null;
-    return MarkedLexer(displayedText, { gfm: true }).filter(
-      (token) => token.type !== "space",
-    );
-  }, [displayedText, streaming]);
+  const fallbackClass =
+    variant === "muted"
+      ? "text-muted-foreground text-[15px] leading-6"
+      : "text-foreground text-[17px] leading-[26px]";
 
-  if (streaming) {
+  // Re-lexing every wire token stalls the JS thread; the throttle above keeps
+  // markdown current without parsing on each chunk.
+  const blocks = useMemo(() => {
+    if (!displayedText) return [];
+    try {
+      return MarkedLexer(displayedText, { gfm: true }).filter(
+        (token) => token.type !== "space",
+      );
+    } catch {
+      return null;
+    }
+  }, [displayedText]);
+
+  if (blocks === null) {
     return (
       <View className="aui-md-root">
-        <Text selectable className="text-foreground text-[15px] leading-6">
+        <Text selectable className={fallbackClass}>
           {displayedText}
         </Text>
       </View>
@@ -349,7 +496,7 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
 
   return (
     <View className="aui-md-root">
-      {(blocks ?? []).map((token, index) => (
+      {blocks.map((token, index) => (
         <MarkdownBlock key={index} raw={token.raw} options={options} />
       ))}
     </View>

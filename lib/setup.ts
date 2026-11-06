@@ -29,9 +29,8 @@ export function isVercelAuthConfigured() {
   );
 }
 
-// Email/password sign-in only needs the Better Auth secret. Sign-up is
-// disabled in lib/auth.ts; accounts are provisioned with
-// scripts/create-user.mjs.
+// Email/password auth only needs the Better Auth secret. Public sign-up is
+// enabled in lib/auth.ts; scripts/create-user.mjs can still seed accounts.
 export function isEmailAuthConfigured() {
   return hasEnv(BETTER_AUTH_SECRET_KEY);
 }

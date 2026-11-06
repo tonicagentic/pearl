@@ -2,8 +2,7 @@
 //
 // Provision an email/password account for the eve chat template.
 //
-// Public sign-up is disabled in lib/auth.ts (emailAndPassword.disableSignUp),
-// so create accounts with this script:
+// Seed an account without going through the public sign-up UI:
 //
 //   node scripts/create-user.mjs <email> <password> [name]
 //

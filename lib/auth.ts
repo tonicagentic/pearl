@@ -87,9 +87,9 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
-    // Accounts are provisioned with scripts/create-user.mjs; public
-    // registration stays closed.
-    disableSignUp: true,
+    // Public email/password registration is open; scripts/create-user.mjs
+    // remains available for seeding accounts.
+    disableSignUp: false,
   },
   onAPIError: {
     errorURL: "/auth/error",

@@ -37,13 +37,24 @@ export async function listChats(
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
   const response = await fetch(`${AGENT_URL}/api/chats${query}`, {
     headers: authHeaders(),
+    // Don't follow HTML login redirects from a misconfigured agent host.
+    redirect: 'manual',
   });
+
+  if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+    throw new Error(`Failed to load chats (redirect ${response.status}).`);
+  }
 
   if (!response.ok) {
     if (response.status === 401) {
       sessionInvalid();
     }
     throw new Error(`Failed to load chats (${response.status}).`);
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    throw new Error('Failed to load chats (unexpected response).');
   }
 
   return (await response.json()) as {

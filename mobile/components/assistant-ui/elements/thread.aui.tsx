@@ -148,6 +148,11 @@ export type ThreadProps = {
   conversationId?: string | null | undefined;
   /** Remount only the input when entering a new chat, not on every render. */
   focusNewChatKey?: number | undefined;
+  /**
+   * When false, welcome + composer stay invisible (auth→chat morph). Defaults
+   * to true for normal mounts and cold-start restore.
+   */
+  chromeRevealed?: boolean | undefined;
   components?: ThreadComponents | undefined;
   /** A windowed thread: the list asks for older messages when it reaches its start and shows the loading edge above them. */
   history?: ThreadHistory | undefined;
@@ -401,6 +406,7 @@ export const Thread: FC<ThreadProps> = ({
   autoFocus = true,
   conversationId,
   focusNewChatKey = 0,
+  chromeRevealed = true,
   components = EMPTY_COMPONENTS,
   history,
   notice,
@@ -624,13 +630,15 @@ export const Thread: FC<ThreadProps> = ({
       className="aui-thread-viewport mx-auto w-full max-w-[44rem] flex-1"
     >
       <AuiIf condition={(s) => isNewChatView(s) && !notice}>
-        {followsKeyboard ? (
-          <IosWelcome />
-        ) : (
-          <View className="flex-1 justify-center">
-            <WelcomeSlot />
-          </View>
-        )}
+        <View style={{ flex: 1, opacity: chromeRevealed ? 1 : 0 }}>
+          {followsKeyboard ? (
+            <IosWelcome />
+          ) : (
+            <View className="flex-1 justify-center">
+              <WelcomeSlot />
+            </View>
+          )}
+        </View>
       </AuiIf>
       <AuiIf condition={isHistoryLoadingView}>
         <View className="flex-1">
@@ -684,9 +692,12 @@ export const Thread: FC<ThreadProps> = ({
         </ThreadPrimitive.MessagesFlatList>
       </AuiIf>
       <View
-        pointerEvents={floatsComposer ? "box-none" : undefined}
+        pointerEvents={
+          !chromeRevealed ? "none" : floatsComposer ? "box-none" : undefined
+        }
         className={floatsComposer ? "absolute inset-x-0 bottom-0" : undefined}
         onLayout={floatsComposer ? measureComposerOverlay : undefined}
+        style={{ opacity: chromeRevealed ? 1 : 0 }}
       >
         <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
           <View
@@ -700,8 +711,8 @@ export const Thread: FC<ThreadProps> = ({
         <ComposerDock
           floats={floatsComposer}
           waitingAction={waitingAction}
-          autoFocus={autoFocus}
-          focusNewChatKey={focusNewChatKey}
+          autoFocus={autoFocus && chromeRevealed}
+          focusNewChatKey={chromeRevealed ? focusNewChatKey : -1}
         />
       </View>
       {Rail && (
@@ -808,6 +819,22 @@ const IosKeyboardLayout: FC<{ children: ReactNode }> = ({ children }) => {
   );
 };
 
+const DefaultWelcome: FC = () => (
+  <View
+    className="aui-thread-welcome items-center justify-center px-8 py-10"
+    accessible
+    accessibilityRole="header"
+    accessibilityLabel="Pearl. Ask anything."
+  >
+    <Text className="text-foreground text-center text-[34px] font-semibold tracking-tight">
+      Pearl
+    </Text>
+    <Text className="text-muted-foreground mt-2 text-center text-[17px] leading-6">
+      Ask anything
+    </Text>
+  </View>
+);
+
 const IosWelcome: FC = () => {
   const keyboardHeight = useContext(KeyboardHeightContext)!;
   const fadeStyle = useAnimatedStyle(() => ({
@@ -823,7 +850,8 @@ const IosWelcome: FC = () => {
 
 const WelcomeSlot: FC = () => {
   const { Welcome } = useContext(ThreadComponentsContext);
-  return Welcome ? <Welcome /> : null;
+  const Component = Welcome ?? DefaultWelcome;
+  return <Component />;
 };
 
 const ThreadMessage: FC = () => {
@@ -1457,13 +1485,18 @@ const AssistantMessage: FC = () => {
         <MessageSources />
         <MessageError />
       </View>
-      <View className="aui-assistant-message-footer min-h-7 flex-row items-center pt-2.5">
+      <View className="aui-assistant-message-footer min-h-7 flex-row items-center pt-1.5">
         <BranchPicker />
         <AssistantActionBar />
       </View>
     </MessagePrimitive.Root>
   );
 };
+
+// Compact action glyphs (~20px) in a 32px visual button; hitSlop keeps ~44pt.
+const assistantActionButtonClassName =
+  "aui-assistant-action-button active:bg-muted size-8 items-center justify-center rounded-md";
+const assistantActionHitSlop = { top: 6, bottom: 6, left: 6, right: 6 };
 
 const ShareMarkdown: FC = () => {
   const markdown = useAuiState((s) => s.message.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n\n"));
@@ -1472,11 +1505,11 @@ const ShareMarkdown: FC = () => {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Share response as Markdown"
-      className={iconButtonClassName}
-      hitSlop={groupedIconButtonHitSlop}
+      className={assistantActionButtonClassName}
+      hitSlop={assistantActionHitSlop}
       onPress={() => void Share.share({ message: markdown, title: "Pearl response" }).catch(() => {})}
     >
-      <Icon as={Share2Icon} className="text-muted-foreground size-4" />
+      <Icon as={Share2Icon} className="text-muted-foreground size-5" />
     </Pressable>
   );
 };
@@ -1487,17 +1520,17 @@ const AssistantActionBar: FC = () => (
       !(s.message.role === "assistant" && s.message.status?.type === "running")
     }
   >
-    <View className="aui-assistant-action-bar-root flex-row gap-2.5">
+    <View className="aui-assistant-action-bar-root flex-row gap-1">
       <ActionBarPrimitive.Copy
         copyToClipboard={copyToClipboard}
-        className={iconButtonClassName}
-        hitSlop={groupedIconButtonHitSlop}
+        className={assistantActionButtonClassName}
+        hitSlop={assistantActionHitSlop}
         accessibilityLabel="Copy"
       >
         {({ isCopied }) => (
           <Icon
             as={isCopied ? CheckIcon : CopyIcon}
-            className="text-muted-foreground size-4"
+            className="text-muted-foreground size-5"
           />
         )}
       </ActionBarPrimitive.Copy>

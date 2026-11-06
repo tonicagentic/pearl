@@ -70,9 +70,14 @@ export function AppsScreen() {
       ) : (
         <ScrollView className="flex-1 px-4">
           {(apps ?? []).length === 0 ? (
-            <Text className="py-4 text-sm text-muted-foreground">
-              No mini apps yet. Ask Pearl in chat to build one.
-            </Text>
+            <View className="py-8">
+              <Text className="text-base font-medium text-foreground">
+                No apps yet
+              </Text>
+              <Text className="text-muted-foreground mt-1.5 text-sm leading-5">
+                Ask Pearl in chat to build a mini app and it will show up here.
+              </Text>
+            </View>
           ) : (
             (apps ?? []).map((app) => (
               <Pressable

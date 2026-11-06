@@ -13,7 +13,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": 2
+      "buildNumber": "2"
     },
     "android": {
       "package": "com.tonicagentic.pearl",

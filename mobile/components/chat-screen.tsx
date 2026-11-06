@@ -41,7 +41,12 @@ import { toThreadMessages, type SpikeState } from "@/src/eve-transport";
  * protocol through the external-store runtime bridge. The history panel slides
  * over the mounted thread without interrupting its stream.
  */
-export function ChatScreen() {
+export function ChatScreen({
+  chromeRevealed = true,
+}: {
+  /** False while the auth→composer morph overlay owns the transition. */
+  chromeRevealed?: boolean;
+} = {}) {
   // The safe-area container is a native codegen view, so uniwind's className
   // binding cannot reach it; paint the theme background through style instead
   // so the color extends under the status bar.
@@ -312,7 +317,13 @@ export function ChatScreen() {
               <AssistantRuntimeProvider runtime={runtime}>
                 <EveAuthorization />
                 <Thread
-                  autoFocus={Platform.OS === "ios" && activeChatId === null && !drawerOpen}
+                  autoFocus={
+                    Platform.OS === "ios" &&
+                    activeChatId === null &&
+                    !drawerOpen &&
+                    chromeRevealed
+                  }
+                  chromeRevealed={chromeRevealed}
                   conversationId={activeChatId}
                   focusNewChatKey={drawerOpen ? drawerFocusEntry : newChatEntry}
                   notice={notice}
@@ -348,7 +359,7 @@ export function ChatScreen() {
                   }
                 />
               </AssistantRuntimeProvider>
-              {Platform.OS === "ios" ? (
+              {Platform.OS === "ios" && chromeRevealed ? (
                 <FloatingChatNavigation
                   title={activeTitle}
                   hasMessages={projectedMessages.length > 0}

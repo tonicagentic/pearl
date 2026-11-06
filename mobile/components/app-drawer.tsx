@@ -157,17 +157,68 @@ export function HistoryScreen({
                 </>
               )}
               {selectionError ? <Text className="px-3 py-2 text-sm text-destructive" accessibilityRole="alert">{selectionError}</Text> : null}
-              {chatsError ? (
-                <Pressable accessibilityRole="button" className="min-h-12 justify-center px-3" onPress={() => void reloadChats()}>
+              {chatsError && chats.length > 0 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  className={`${iosSidebar ? "px-2.5" : "px-3"} min-h-12 justify-center`}
+                  onPress={() => void reloadChats()}
+                >
                   <Text className="text-sm text-destructive">{chatsError} Tap to retry.</Text>
                 </Pressable>
               ) : null}
             </>
           }
           ListEmptyComponent={
-            <Text className="px-3 py-2 text-sm text-muted-foreground">
-              {chatsLoading ? "Loading history…" : signedIn ? "No chats yet." : "Sign in to see your chats."}
-            </Text>
+            <View
+              className={iosSidebar ? "px-2.5 py-8" : "px-3 py-8"}
+              accessible
+              accessibilityRole="summary"
+              accessibilityLabel={
+                chatsLoading
+                  ? "Loading history"
+                  : chatsError
+                    ? "Could not load history"
+                    : signedIn
+                      ? "No chats yet"
+                      : "Sign in to see your chats"
+              }
+            >
+              {chatsLoading ? (
+                <Text className="text-muted-foreground text-sm">Loading history…</Text>
+              ) : chatsError ? (
+                <>
+                  <Text
+                    className={`${iosSidebar ? "text-[17px]" : "text-base"} font-medium text-foreground`}
+                  >
+                    Couldn’t load history
+                  </Text>
+                  <Text className="text-muted-foreground mt-1.5 text-sm leading-5">
+                    Check your connection and try again.
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry loading history"
+                    className="mt-4 min-h-11 justify-center self-start"
+                    onPress={() => void reloadChats()}
+                  >
+                    <Text className="text-sm font-medium text-foreground">Try again</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <Text
+                    className={`${iosSidebar ? "text-[17px]" : "text-base"} font-medium text-foreground`}
+                  >
+                    {signedIn ? "No chats yet" : "Sign in to see chats"}
+                  </Text>
+                  <Text className="text-muted-foreground mt-1.5 text-sm leading-5">
+                    {signedIn
+                      ? "Start a conversation and it will show up here."
+                      : "Your recent conversations appear here after you sign in."}
+                  </Text>
+                </>
+              )}
+            </View>
           }
           ListFooterComponent={hasMoreChats ? (
             <Pressable accessibilityRole="button" className="min-h-12 justify-center rounded-lg px-3" disabled={chatsLoading} onPress={() => void loadMoreChats()}>
