@@ -96,7 +96,15 @@ export function UserMenu({
             router.push("/settings/connections");
           }}
         >
-          Connections
+          Plugins
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
+            router.push("/settings/skills");
+          }}
+        >
+          Skills
         </DropdownMenuItem>
         <DropdownMenuItem
           aria-busy={signingOut}

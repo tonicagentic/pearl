@@ -4,7 +4,7 @@ import { ConnectionsSettings } from "./settings-client";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
-export const metadata: Metadata = { title: "Connections" };
+export const metadata: Metadata = { title: "Plugins" };
 
 export default function ConnectionsPage() {
   return (
@@ -12,7 +12,7 @@ export default function ConnectionsPage() {
       <div className="h-full overflow-y-auto px-4 pt-14 pb-8">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
           <header>
-            <h1 className="text-lg font-semibold">Connections</h1>
+            <h1 className="text-lg font-semibold">Plugins</h1>
             <p className="text-sm text-muted-foreground">
               Connect Google, GitHub, and Vercel for your account, and see which
               services are available to Pearl.
@@ -21,7 +21,7 @@ export default function ConnectionsPage() {
           <Suspense
             fallback={
               <p className="text-sm text-muted-foreground">
-                Loading connections…
+                Loading plugins…
               </p>
             }
           >
@@ -39,14 +39,14 @@ async function AuthenticatedConnections() {
   if (!viewer) {
     return (
       <p className="rounded-lg border bg-card p-4 text-sm">
-        Sign in to manage connections.
+        Sign in to manage plugins.
       </p>
     );
   }
   if (setup.authMode !== "email" && setup.authMode !== "vercel") {
     return (
       <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
-        Individual connections need a personal account. Shared-password and
+        Individual plugins need a personal account. Shared-password and
         local development sessions cannot authorize Google, GitHub, or Vercel.
       </p>
     );

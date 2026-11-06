@@ -46,7 +46,10 @@ export function HistoryScreen({
   };
   const openDestination = (href: SidebarDestination) => {
     if (onNavigate) onNavigate(href);
-    else {
+    else if (href === "/settings") {
+      // Sheet covers history; don't close first.
+      router.push(href);
+    } else {
       onClose?.();
       router.push(href);
     }

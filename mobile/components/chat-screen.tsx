@@ -110,6 +110,13 @@ export function ChatScreen({
   }, [animateTo]);
 
   const navigateFromHistory = useCallback((href: SidebarDestination) => {
+    // Form sheets should cover the open history panel — don't slide back to
+    // the thread first. Full-screen destinations still settle the drawer so
+    // dismiss lands on chat.
+    if (href === "/settings") {
+      router.push(href);
+      return;
+    }
     pendingDestination.current = href;
     closeHistory();
   }, [closeHistory]);

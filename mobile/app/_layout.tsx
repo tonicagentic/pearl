@@ -48,7 +48,52 @@ function AuthenticatedLayout() {
                   name="apps/[id]"
                   options={{ title: "App", headerShown: false }}
                 />
-                <Stack.Screen name="settings" options={{ title: "Settings" }} />
+                <Stack.Screen
+                  name="settings"
+                  options={{
+                    title: "Settings",
+                    presentation: "formSheet",
+                    sheetAllowedDetents: [0.92],
+                    sheetGrabberVisible: true,
+                    sheetCornerRadius: 28,
+                    // Content owns the title — native headers overlap formSheet scroll views.
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen
+                  name="skills"
+                  options={{
+                    title: "Skills",
+                    presentation: "formSheet",
+                    sheetAllowedDetents: [0.92],
+                    sheetGrabberVisible: true,
+                    sheetCornerRadius: 28,
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen
+                  name="plugins"
+                  options={{
+                    title: "Plugins",
+                    presentation: "formSheet",
+                    sheetAllowedDetents: [0.92],
+                    sheetGrabberVisible: true,
+                    sheetCornerRadius: 28,
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen
+                  name="models"
+                  options={{
+                    title: "Models",
+                    presentation: "formSheet",
+                    sheetAllowedDetents: [0.62, 0.92],
+                    sheetInitialDetentIndex: 0,
+                    sheetGrabberVisible: true,
+                    sheetCornerRadius: 28,
+                    headerShown: false,
+                  }}
+                />
               </Stack>
             </KeyboardProvider>
           </SafeAreaProvider>

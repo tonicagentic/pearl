@@ -154,6 +154,37 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     1,
     "Resolution is approval-gated; a retried resolve must status check that the issue is still open first — never blind-settle again.",
   ),
+  // User-scoped skills (settings + agent tools).
+  list_skills: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "DB read of the caller's own skills, no side effect.",
+  ),
+  get_skill: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "DB read of one skill row, no side effect.",
+  ),
+  create_skill: policy(
+    false,
+    [],
+    1,
+    "Creating twice would duplicate the skill slug; a retry must re-read the skill list first (status check) instead of blind-inserting.",
+  ),
+  update_skill: policy(
+    false,
+    [],
+    1,
+    "Skill writes change agent behavior afterward; a retried update must re-read the current row first — never blind-overwrite again.",
+  ),
+  delete_skill: policy(
+    false,
+    [],
+    1,
+    "Deletion is approval-gated: a retried delete must status check existence first; deleting twice would also hit the wrong row if ids shifted.",
+  ),
   // Declared subagents (agent/subagents/<name>/): the delegation call itself
   // is a background task spawn.
   reviewer: policy(

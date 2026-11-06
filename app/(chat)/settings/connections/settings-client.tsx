@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { PluginLogo } from "@/components/connections/plugin-logo";
 import type { ConnectionId, ConnectionStatus } from "@/lib/connections/catalog";
 
 const LABELS: Record<ConnectionStatus["status"], string> = {
@@ -33,7 +34,7 @@ export function ConnectionsSettings() {
         signal,
       });
       if (!response.ok) {
-        throw new Error(`Could not load connections (${response.status}).`);
+        throw new Error(`Could not load plugins (${response.status}).`);
       }
       const data = (await response.json()) as {
         connections: ConnectionStatus[];
@@ -42,7 +43,7 @@ export function ConnectionsSettings() {
     } catch (cause) {
       if (!signal?.aborted) {
         setError(
-          cause instanceof Error ? cause.message : "Could not load connections.",
+          cause instanceof Error ? cause.message : "Could not load plugins.",
         );
       }
     } finally {
@@ -144,7 +145,7 @@ export function ConnectionsSettings() {
   };
 
   return (
-    <section className="flex flex-col gap-4" aria-label="Connection status">
+    <section className="flex flex-col gap-4" aria-label="Plugin status">
       <p className="text-sm text-muted-foreground">
         Available means the connector is attached to this app; it does not mean
         you have authorized it. Your authorization is stored by Vercel Connect,
@@ -174,7 +175,10 @@ export function ConnectionsSettings() {
             key={item.id}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-medium">{item.label}</h2>
+              <div className="flex min-w-0 items-center gap-3">
+                <PluginLogo id={item.id} />
+                <h2 className="font-medium">{item.label}</h2>
+              </div>
               <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
                 {LABELS[item.status]}
               </span>
@@ -222,7 +226,7 @@ export function ConnectionsSettings() {
         ))}
       </div>
       <p className="text-xs text-muted-foreground">
-        If a connection needs authorization, Pearl will also show a sign-in
+        If a plugin needs authorization, Pearl will also show a sign-in
         challenge when you use it in chat.
       </p>
     </section>

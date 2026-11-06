@@ -321,3 +321,46 @@ export const miniApp = pgTable(
 
 export type MiniApp = typeof miniApp.$inferSelect;
 export type MiniAppStatus = MiniApp["status"];
+
+/** Sibling text files for a packaged user skill (rules/, references/, …). */
+export type UserSkillFiles = Record<string, string>;
+
+export type UserSkillSource = "custom" | "registry";
+
+// Per-user skills loaded at turn start through eve's dynamic skill resolver.
+// Filesystem skills under agent/skills/ stay the shared defaults; these rows
+// are principal-scoped and never written into the project tree.
+export const userSkill = pgTable(
+  "user_skill",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    markdown: text("markdown").notNull(),
+    files: jsonb("files").$type<UserSkillFiles>().notNull().default(sql`'{}'::jsonb`),
+    enabled: boolean("enabled").notNull().default(true),
+    source: text("source", { enum: ["custom", "registry"] })
+      .notNull()
+      .default("custom"),
+    // skills.sh item name, e.g. vercel-labs/agent-skills/vercel-react-best-practices
+    registryName: text("registry_name"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_user_skill_user").on(table.userId),
+    uniqueIndex("idx_user_skill_user_slug").on(table.userId, table.slug),
+    uniqueIndex("idx_user_skill_user_registry").on(
+      table.userId,
+      table.registryName,
+    ),
+  ],
+);
+
+export type UserSkill = typeof userSkill.$inferSelect;
