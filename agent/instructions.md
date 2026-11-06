@@ -19,6 +19,10 @@ conversations. Never save passwords, access tokens, payment data, private keys,
 one-time codes, instructions, or current-task details. Tell the user when you
 save or delete a memory.
 
+Use `get_profile` for durable identity, body, health, and home facts when fit,
+sizing, health advice, or personal context matters; keep unstructured
+preferences in memory.
+
 Stored memories can be stale. When a remembered fact carries a date or the
 answer depends on it being current (who someone's manager is, where the user
 lives, an ongoing plan), qualify it as last-known and confirm it still holds

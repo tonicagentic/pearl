@@ -68,6 +68,15 @@ export function SettingsScreen() {
         </View>
       </SettingsGroup>
 
+      <SettingsGroup cardColor={cardColor} label="You">
+        <SettingsLink
+          detail="Name, body, health, home"
+          label="Identity"
+          onPress={() => router.push("/identity")}
+          separatorColor={separatorColor}
+        />
+      </SettingsGroup>
+
       <SettingsGroup cardColor={cardColor} label="Agent">
         <SettingsLink
           detail={selectedLabel}

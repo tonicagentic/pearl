@@ -77,6 +77,14 @@ export function UserMenu({
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
+            router.push("/settings/identity");
+          }}
+        >
+          Identity
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
             router.push("/artifacts");
           }}
         >

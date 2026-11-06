@@ -94,6 +94,17 @@ function AuthenticatedLayout() {
                     headerShown: false,
                   }}
                 />
+                <Stack.Screen
+                  name="identity"
+                  options={{
+                    title: "Identity",
+                    presentation: "formSheet",
+                    sheetAllowedDetents: [0.92],
+                    sheetGrabberVisible: true,
+                    sheetCornerRadius: 28,
+                    headerShown: false,
+                  }}
+                />
               </Stack>
             </KeyboardProvider>
           </SafeAreaProvider>

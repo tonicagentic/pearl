@@ -185,6 +185,13 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     1,
     "Deletion is approval-gated: a retried delete must status check existence first; deleting twice would also hit the wrong row if ids shifted.",
   ),
+  // Structured identity profile (Settings → Identity).
+  get_profile: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "DB read of the caller's own identity profile, no side effect.",
+  ),
   // Declared subagents (agent/subagents/<name>/): the delegation call itself
   // is a background task spawn.
   reviewer: policy(

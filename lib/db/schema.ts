@@ -364,3 +364,29 @@ export const userSkill = pgTable(
 );
 
 export type UserSkill = typeof userSkill.$inferSelect;
+
+// Structured identity profile for fit/health/home context. Loaded on demand
+// via get_profile — not auto-injected into every turn like file memory.
+export const userProfile = pgTable("user_profile", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  displayName: text("display_name"),
+  birthdate: date("birthdate"),
+  nationality: text("nationality"),
+  height: text("height"),
+  eyeColor: text("eye_color"),
+  hairColor: text("hair_color"),
+  skinTone: text("skin_tone"),
+  weight: text("weight"),
+  build: text("build"),
+  gender: text("gender"),
+  measurements: text("measurements"),
+  healthNotes: text("health_notes"),
+  primaryResidence: text("primary_residence"),
+  additionalHomes: text("additional_homes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type UserProfile = typeof userProfile.$inferSelect;
