@@ -14,7 +14,8 @@ import {
   type AttachmentAdapter,
   type CompleteAttachment,
   type PendingAttachment,
-} from "@assistant-ui/react";import { AssistantRuntimeProvider } from "@assistant-ui/react";
+} from "@assistant-ui/react";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import type {
   EveAgentStoreSnapshot,
   EveMessageData,
@@ -49,6 +50,7 @@ import {
   CanvasSplitLine,
 } from "@/components/assistant-ui/elements/canvas-split";
 import { MarkdownContent } from "@/components/assistant-ui/elements/markdown-content";
+import { ThreadActionsMenu } from "@/components/chat/thread-actions-menu";
 import { EveAuthorization } from "@/components/eve-authorization";
 import {
   appendClientChatEvents,
@@ -571,7 +573,11 @@ export function AssistantChatSurface({
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <CanvasProvider chatId={chatId}>
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-start justify-end px-2 py-2 md:px-3">
+            <ThreadActionsMenu chatId={chatId} />
+          </div>
+
           {toastError ? (
             <ErrorToast
               message={toastError}

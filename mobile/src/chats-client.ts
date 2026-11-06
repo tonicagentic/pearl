@@ -176,3 +176,20 @@ export async function saveChatSession(
     throw new Error(`Failed to save the chat session (${response.status}).`);
   }
 }
+
+export async function deleteChat(chatId: string): Promise<void> {
+  const response = await fetch(
+    `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}`,
+    {
+      method: 'DELETE',
+      headers: authHeaders(),
+    },
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
+    throw new Error(`Failed to delete the chat (${response.status}).`);
+  }
+}

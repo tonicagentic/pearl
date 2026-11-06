@@ -12,6 +12,11 @@ const config = withUniwindConfig(
   },
 );
 
+// Shared usage/cost helpers live in the web app's `lib/usage` (no server deps).
+// Watch the parent `lib` tree so Metro can resolve relative imports from mobile.
+const repoLib = path.resolve(__dirname, "../lib");
+config.watchFolders = [...new Set([...(config.watchFolders ?? []), repoLib])];
+
 // uniwind styles React Native components by redirecting every
 // `import ... from "react-native"` to its own className-aware wrappers. Its
 // resolver skips files that come from "the react-native package" by matching
@@ -34,8 +39,17 @@ const isRealReactNativeOrigin = (originPath) =>
 const isUniwindOrigin = (originPath) =>
   originPath.includes(`${nodeModules}uniwind${path.sep}`);
 
+const usageRoot = path.join(repoLib, "usage");
 const previousResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // Shared usage helpers: `@pearl/usage/foo` → `../lib/usage/foo.ts`.
+  if (typeof moduleName === "string" && moduleName.startsWith("@pearl/usage/")) {
+    const file = path.join(usageRoot, `${moduleName.slice("@pearl/usage/".length)}.ts`);
+    return {
+      type: "sourceFile",
+      filePath: file,
+    };
+  }
   // Uniwind 1.12 redirects this react-native-web export to
   // uniwind/components/InputAccessoryView, but it ships no web wrapper for it.
   // Keep the actual react-native-web implementation for this import only.
@@ -57,6 +71,15 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     !isUniwindOrigin(context.originModulePath)
   ) {
     return context.resolveRequest(context, "uniwind/components", platform);
+  }
+  // Shared `lib/usage` modules use Node-style `.ts` import specifiers. Metro
+  // resolves the path as written, so strip the extension before looking up.
+  if (typeof moduleName === "string" && moduleName.endsWith(".ts")) {
+    const withoutTs = moduleName.slice(0, -3);
+    if (previousResolveRequest) {
+      return previousResolveRequest(context, withoutTs, platform);
+    }
+    return context.resolveRequest(context, withoutTs, platform);
   }
   if (previousResolveRequest) {
     return previousResolveRequest(context, moduleName, platform);

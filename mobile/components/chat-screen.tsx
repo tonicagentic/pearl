@@ -1,5 +1,15 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Platform, Pressable, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
+import {
+  ActionSheetIOS,
+  Alert,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -7,7 +17,7 @@ import Animated, {
 import { Stack, router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { GestureDetector } from "react-native-gesture-handler";
-import { HouseIcon, SquarePenIcon } from "lucide-react-native";
+import { EllipsisIcon, HouseIcon, SquarePenIcon } from "lucide-react-native";
 import {
   AssistantRuntimeProvider,
   MessageNotSentError,
@@ -28,6 +38,7 @@ import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
 import { FloatingChatNavigation } from "@/components/floating-chat-navigation";
+import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { getModelSelection } from "@/src/model-selection";
 import { withPendingAssistant } from "@/src/stream-presentation";
 import {
@@ -61,7 +72,18 @@ export function ChatScreen({
     { flex: 1 },
     { backgroundColor },
   ];
-  const { store, activeChatId, newChatEntry, activeTitle, persistenceError, retrySync, pendingMessage, newChat, wasSendPrepared } = useChats();
+  const {
+    store,
+    activeChatId,
+    newChatEntry,
+    activeTitle,
+    persistenceError,
+    retrySync,
+    pendingMessage,
+    newChat,
+    deleteChat,
+    wasSendPrepared,
+  } = useChats();
   const { width } = useWindowDimensions();
   // 0 = chat full screen, 1 = history full screen; tracks the finger while dragging.
   const openProgress = useSharedValue(0);
@@ -70,6 +92,7 @@ export function ChatScreen({
   const settledOpen = useRef(false);
   const pendingDestination = useRef<SidebarDestination | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [costOpen, setCostOpen] = useState(false);
   // A new chat chosen from History should focus only after the drawer settles.
   const [drawerFocusEntry, setDrawerFocusEntry] = useState(newChatEntry);
 
@@ -108,6 +131,69 @@ export function ChatScreen({
     dismissKeyboard();
     animateTo(true);
   }, [animateTo]);
+
+  const openCost = useCallback(() => {
+    dismissKeyboard();
+    setCostOpen(true);
+  }, []);
+
+  const performDelete = useCallback(() => {
+    if (!activeChatId) return;
+    void deleteChat(activeChatId).catch(() => {
+      Alert.alert("Could not delete", "Check your connection and try again.");
+    });
+  }, [activeChatId, deleteChat]);
+
+  const confirmDelete = useCallback(() => {
+    if (!activeChatId) return;
+    Alert.alert(
+      "Delete thread?",
+      "This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: performDelete,
+        },
+      ],
+    );
+  }, [activeChatId, performDelete]);
+
+  const openThreadActions = useCallback(() => {
+    dismissKeyboard();
+    const canDelete = Boolean(activeChatId);
+    if (Platform.OS === "ios") {
+      const options = canDelete
+        ? ["Cost", "Delete", "Cancel"]
+        : ["Cost", "Cancel"];
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: activeTitle === "New chat" ? undefined : activeTitle,
+          options,
+          cancelButtonIndex: options.length - 1,
+          destructiveButtonIndex: canDelete ? 1 : undefined,
+        },
+        (index) => {
+          if (index === 0) openCost();
+          if (canDelete && index === 1) confirmDelete();
+        },
+      );
+      return;
+    }
+
+    Alert.alert(
+      activeTitle === "New chat" ? "Thread" : activeTitle,
+      undefined,
+      [
+        { text: "Cost", onPress: openCost },
+        ...(canDelete
+          ? [{ text: "Delete", style: "destructive" as const, onPress: confirmDelete }]
+          : []),
+        { text: "Cancel", style: "cancel" as const },
+      ],
+    );
+  }, [activeChatId, activeTitle, confirmDelete, openCost]);
 
   const navigateFromHistory = useCallback((href: SidebarDestination) => {
     // Form sheets should cover the open history panel — don't slide back to
@@ -317,16 +403,30 @@ export function ChatScreen({
           </Pressable>
         ),
         headerRight: () => (
-          <Pressable
-            onPress={newChat}
-            disabled={drawerOpen}
-            className="h-11 w-11 items-center justify-center disabled:opacity-40"
-            accessibilityRole="button"
-            accessibilityLabel="New chat"
-            accessibilityState={{ disabled: drawerOpen }}
-          >
-            <SquarePenIcon className="size-5 text-foreground" />
-          </Pressable>
+          <View className="flex-row items-center">
+            {projectedMessages.length > 0 ? (
+              <Pressable
+                onPress={openThreadActions}
+                disabled={drawerOpen}
+                className="h-11 w-11 items-center justify-center disabled:opacity-40"
+                accessibilityRole="button"
+                accessibilityLabel="Thread actions"
+                accessibilityState={{ disabled: drawerOpen }}
+              >
+                <EllipsisIcon className="size-5 text-foreground" />
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={newChat}
+              disabled={drawerOpen}
+              className="h-11 w-11 items-center justify-center disabled:opacity-40"
+              accessibilityRole="button"
+              accessibilityLabel="New chat"
+              accessibilityState={{ disabled: drawerOpen }}
+            >
+              <SquarePenIcon className="size-5 text-foreground" />
+            </Pressable>
+          </View>
         ),
       }} />
       <View style={{ flex: 1, overflow: "hidden" }}>
@@ -414,12 +514,16 @@ export function ChatScreen({
             <FloatingChatNavigation
               title={activeTitle}
               hasMessages={projectedMessages.length > 0}
+              canDelete={Boolean(activeChatId)}
               onOpenHistory={openHistory}
               onNewChat={newChat}
+              onOpenCost={openCost}
+              onDeleteChat={performDelete}
               disabled={drawerOpen}
             />
           </Animated.View>
         ) : null}
+        <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
       </View>
     </SafeAreaView>
   );

@@ -259,6 +259,7 @@ export function AgentChatShell({
   const contextValue = useMemo(
     () => ({
       activeChatId,
+      deleteChat: handleDeleteChat,
       desktopSidebarOpen,
       enabledConnections,
       removeChat,
@@ -274,6 +275,7 @@ export function AgentChatShell({
       activeChatId,
       desktopSidebarOpen,
       enabledConnections,
+      handleDeleteChat,
       removeChat,
       requestSignIn,
       setConnectionEnabled,

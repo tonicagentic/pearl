@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, ActionSheetIOS, Keyboard, Platform, Pressable, StyleSheet, View, findNodeHandle } from "react-native";
-import { router } from "expo-router";
+import { AccessibilityInfo, ActionSheetIOS, Alert, Keyboard, Platform, Pressable, StyleSheet, View, findNodeHandle } from "react-native";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
 import { EllipsisIcon, HouseIcon, SquarePenIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,14 +19,20 @@ const surfaceStyle = {
 export function FloatingChatNavigation({
   title,
   hasMessages,
+  canDelete,
   onOpenHistory,
   onNewChat,
+  onOpenCost,
+  onDeleteChat,
   disabled,
 }: {
   title: string;
   hasMessages: boolean;
+  canDelete: boolean;
   onOpenHistory: () => void;
   onNewChat: () => void;
+  onOpenCost: () => void;
+  onDeleteChat: () => void;
   disabled: boolean;
 }) {
   const insets = useSafeAreaInsets();
@@ -69,19 +74,38 @@ export function FloatingChatNavigation({
     <View pointerEvents="none" className="absolute inset-0 rounded-full border border-border/60 bg-card" />
   );
 
+  const confirmDelete = () => {
+    Alert.alert(
+      "Delete thread?",
+      "This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: onDeleteChat,
+        },
+      ],
+    );
+  };
+
   const openMore = () => {
     Keyboard.dismiss();
+    const options = canDelete
+      ? ["Cost", "Delete", "Cancel"]
+      : ["Cost", "Cancel"];
+    const cancelButtonIndex = options.length - 1;
     ActionSheetIOS.showActionSheetWithOptions(
       {
         title: title === "New chat" ? undefined : title,
-        options: ["Areas", "Issues", "Apps", "Cancel"],
-        cancelButtonIndex: 3,
+        options,
+        cancelButtonIndex,
+        destructiveButtonIndex: canDelete ? 1 : undefined,
         anchor: findNodeHandle(moreButton.current) ?? undefined,
       },
       (index) => {
-        if (index === 0) router.push("/areas");
-        if (index === 1) router.push("/issues");
-        if (index === 2) router.push("/apps");
+        if (index === 0) onOpenCost();
+        if (canDelete && index === 1) confirmDelete();
       },
     );
   };
@@ -124,7 +148,7 @@ export function FloatingChatNavigation({
             <Pressable
               ref={moreButton}
               accessibilityRole="button"
-              accessibilityLabel="More navigation"
+              accessibilityLabel="Thread actions"
               accessibilityState={{ disabled }}
               disabled={disabled}
               onPress={openMore}

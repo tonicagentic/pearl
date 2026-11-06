@@ -23,6 +23,7 @@ import { pendingMessageLabel, hasPendingAction } from "./message-projection";
 import {
   appendChatEvents,
   createChat,
+  deleteChat as deleteChatRequest,
   getChat,
   listChats,
   markPendingChatMessage,
@@ -56,6 +57,8 @@ type ChatsContextValue = {
   readonly wasSendPrepared: (source: EveAgentStore<EveMessageData>) => boolean;
   /** Drop the active chat and start fresh (the row is created on first send). */
   readonly newChat: () => void;
+  /** Delete a stored chat; opens a new chat when the deleted id is active. */
+  readonly deleteChat: (chatId: string) => Promise<void>;
 };
 
 const ChatsContext = createContext<ChatsContextValue | null>(null);
@@ -374,6 +377,18 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     pruneIdleStore(prior);
   }, [buildStore, pruneIdleStore]);
 
+  const deleteChat = useCallback(
+    async (chatId: string) => {
+      await deleteChatRequest(chatId);
+      setChats((current) => current.filter((chat) => chat.id !== chatId));
+      retainedStores.delete(chatId);
+      if (activeChatIdRef.current === chatId) {
+        newChat();
+      }
+    },
+    [newChat, retainedStores],
+  );
+
   const wasSendPrepared = useCallback(
     (source: EveAgentStore<EveMessageData>) => bindings.get(source)?.sendPrepared ?? false,
     [bindings],
@@ -454,6 +469,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       retrySync,
       wasSendPrepared,
       newChat,
+      deleteChat,
     }),
     [
       store,
@@ -473,6 +489,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       retrySync,
       wasSendPrepared,
       newChat,
+      deleteChat,
     ],
   );
 

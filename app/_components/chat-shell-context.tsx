@@ -11,6 +11,7 @@ export type EnabledConnections = {
 
 type ChatShellContextValue = {
   readonly activeChatId: string | null;
+  readonly deleteChat: (chatId: string) => Promise<void>;
   readonly desktopSidebarOpen: boolean;
   readonly enabledConnections: EnabledConnections;
   readonly removeChat: (chatId: string) => void;
