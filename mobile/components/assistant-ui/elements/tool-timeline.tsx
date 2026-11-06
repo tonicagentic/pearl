@@ -7,6 +7,7 @@ import Animated, {
   FadeOut,
 } from "react-native-reanimated";
 
+import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import {
   ShimmerLabel,
@@ -55,6 +56,21 @@ export interface ToolTimelineProps {
   readonly elapsed?: string;
 }
 
+/** ChevronDown points right when collapsed, down when open (native transform). */
+function MetaChevron({ open }: { readonly open: boolean }) {
+  return (
+    <View
+      className="size-3.5 items-center justify-center"
+      style={{ transform: [{ rotate: open ? "0deg" : "-90deg" }] }}
+    >
+      <Icon
+        as={ChevronDownIcon}
+        className="size-3.5 text-muted-foreground/55"
+      />
+    </View>
+  );
+}
+
 function StepRow({
   step,
   active,
@@ -74,6 +90,9 @@ function StepRow({
   // Streaming steps read progressive ("Thinking"); settled ones past tense.
   const verb = active && step.verb === "Thought" ? "Thinking" : step.verb;
   const showChip = step.chip.length > 0;
+  // One text node keeps verb + duration on the same baseline.
+  const label =
+    elapsed !== undefined ? `${verb} ${elapsed}` : verb;
 
   return (
     <Animated.View
@@ -88,7 +107,7 @@ function StepRow({
     >
       <Pressable
         className={cn(
-          "min-h-6 flex-row items-center gap-1.5 py-0.5",
+          "min-h-7 flex-row items-center gap-1.5 py-1",
           expandable && "active:opacity-70",
         )}
         disabled={!expandable}
@@ -100,28 +119,19 @@ function StepRow({
       >
         <ShimmerLabel
           active={active}
-          className={cn(threadMeta, "shrink-0 leading-none")}
+          className={cn(threadMeta, "shrink-0 leading-6")}
         >
-          {verb}
+          {label}
         </ShimmerLabel>
-        {elapsed !== undefined ? (
-          <Text className={cn(threadMeta, "tabular-nums opacity-80")}>
-            {elapsed}
-          </Text>
-        ) : null}
         {showChip ? (
-          <Text numberOfLines={1} className={cn(threadMeta, "min-w-0 flex-shrink")}>
+          <Text
+            numberOfLines={1}
+            className={cn(threadMeta, "min-w-0 flex-shrink leading-6")}
+          >
             {step.chip}
           </Text>
         ) : null}
-        {expandable ? (
-          <ChevronDownIcon
-            className={cn(
-              "size-3.5 shrink-0 text-muted-foreground/50 transition-transform",
-              expanded && "rotate-180",
-            )}
-          />
-        ) : null}
+        {expandable ? <MetaChevron open={expanded} /> : null}
       </Pressable>
       {expandable && expanded ? (
         <Animated.View
@@ -151,16 +161,16 @@ function StatLine({ stats }: { readonly stats: readonly TimelineStat[] }) {
 
   return (
     <View className="flex-row flex-wrap items-center gap-x-1.5 gap-y-0.5 py-0.5">
-      <Text className={threadMeta}>{summary}</Text>
+      <Text className={cn(threadMeta, "leading-6")}>{summary}</Text>
       {totalAdded > 0 || totalRemoved > 0 ? (
         <View className="flex-row items-center gap-1.5">
           {totalAdded > 0 ? (
-            <Text className={cn(threadText, threadDiffAdd, "tabular-nums")}>
+            <Text className={cn(threadText, threadDiffAdd, "tabular-nums leading-6")}>
               +{totalAdded}
             </Text>
           ) : null}
           {totalRemoved > 0 ? (
-            <Text className={cn(threadText, threadDiffRemove, "tabular-nums")}>
+            <Text className={cn(threadText, threadDiffRemove, "tabular-nums leading-6")}>
               -{totalRemoved}
             </Text>
           ) : null}
@@ -240,22 +250,20 @@ export function ToolTimeline({
       className="w-full"
     >
       <Pressable
-        className="flex-row items-center gap-1 rounded-md py-0.5"
+        className="min-h-7 flex-row items-center gap-1.5 py-1"
         accessibilityState={{ expanded: open }}
         onPress={() => onOpenChange(!open)}
       >
         <SwapLabel active={streaming ? 0 : 1} className="text-start">
-          <ShimmerLabel active={streaming} className={cn(threadMeta, "leading-none")}>
+          <ShimmerLabel
+            active={streaming}
+            className={cn(threadMeta, "leading-6")}
+          >
             {elapsed ? `${activeLabel} ${elapsed}` : activeLabel}
           </ShimmerLabel>
-          <Text className={threadMeta}>{restingLabel}</Text>
+          <Text className={cn(threadMeta, "leading-6")}>{restingLabel}</Text>
         </SwapLabel>
-        <ChevronDownIcon
-          className={cn(
-            "size-3.5 shrink-0 text-muted-foreground/50 transition-transform",
-            open && "rotate-180",
-          )}
-        />
+        <MetaChevron open={open} />
       </Pressable>
       {open ? (
         <View className="flex-col gap-1 pb-1 pt-1.5">

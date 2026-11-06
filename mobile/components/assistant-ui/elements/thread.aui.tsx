@@ -1317,7 +1317,7 @@ const MessageError: FC = () => (
 
 const UserText: TextMessagePartComponent = ({ text }) => (
   <Text
-    className="aui-user-message-text text-foreground text-[16px] leading-snug"
+    className="aui-user-message-text text-foreground text-[17px] leading-[26px]"
     selectable
   >
     {text}
@@ -1377,7 +1377,7 @@ const AssistantMessage: FC = () => {
 
   return (
     <MessagePrimitive.Root className="aui-assistant-message-root">
-      <View className="aui-assistant-message-content">
+      <View className="aui-assistant-message-content gap-2">
         <AssistantThinking />
         <SessionTimeline />
         <MessageError />
@@ -1439,9 +1439,14 @@ const AssistantMessage: FC = () => {
                     : approved
                       ? "Approved"
                       : undefined;
+                // A solo tool (common for approvals) should name itself instead
+                // of reading as the generic "1 tool call".
+                const toolName =
+                  toolParts.length === 1 ? toolParts[0]?.toolName : undefined;
                 return (
                   <ToolGroup
                     count={part.indices.length}
+                    toolName={toolName}
                     active={part.status.type === "running"}
                     defaultOpen={needsApproval}
                     statusHint={statusHint}
@@ -1572,9 +1577,9 @@ const UserMessage: FC = () => {
           : undefined
       }
     >
-      <MessagePrimitive.Root className="aui-user-message-root items-end gap-y-1">
+      <MessagePrimitive.Root className="aui-user-message-root items-end gap-y-1.5">
         <UserMessageAttachments />
-        <View className="aui-user-message-content bg-card max-w-[85%] rounded-xl px-4 py-1.5">
+        <View className="aui-user-message-content bg-card max-w-[85%] rounded-2xl px-4 py-2.5">
           <MessagePrimitive.Parts components={{ Text: UserText, Image, File }} />
         </View>
         <View className="aui-user-message-footer flex-row items-center justify-end gap-2">

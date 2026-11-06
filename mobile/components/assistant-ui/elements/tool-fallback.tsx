@@ -8,7 +8,7 @@ import {
   type ToolCallMessagePartProps,
   type ToolCallMessagePartStatus,
 } from "@assistant-ui/react-native";
-import { CheckIcon, XIcon, WrenchIcon } from "lucide-react-native";
+import { CheckIcon, XIcon } from "lucide-react-native";
 import { type FC, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,6 +22,7 @@ import {
   useHydrated,
   webLiveRegion,
 } from "./surfaces";
+import { getToolPresentation } from "./tool-presentation";
 import { formatUnknownValue } from "../utils/task";
 
 function approvalDetail(args: Record<string, unknown> | undefined): string | null {
@@ -474,14 +475,15 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
       ? (args as Record<string, unknown>)
       : undefined,
   );
+  const presentation = getToolPresentation(toolName);
   const label =
     status.type === "running"
-      ? `Running ${toolName}…`
+      ? `Running ${presentation.label}…`
       : isRequiresAction
-        ? `Waiting on ${toolName}`
+        ? `Waiting on ${presentation.label}`
         : status.type === "incomplete"
-          ? `${isCancelled ? "Cancelled" : "Failed"} ${toolName}`
-          : toolName;
+          ? `${isCancelled ? "Cancelled" : "Failed"} ${presentation.label}`
+          : presentation.label;
   const error =
     status.type === "incomplete" && status.error != null
       ? formatUnknownValue(status.error)
@@ -497,7 +499,7 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
   return (
     <View className="aui-tool-fallback-root gap-2 py-0.5">
       <View className="aui-tool-fallback-header flex-row items-center gap-2">
-        <Icon as={WrenchIcon} className="text-muted-foreground size-4" />
+        <Icon as={presentation.icon} className="text-muted-foreground size-4" />
         <Text className="aui-tool-fallback-title text-foreground/80 flex-1 text-sm font-medium">
           {label}
         </Text>

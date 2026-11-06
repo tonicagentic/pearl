@@ -1,10 +1,6 @@
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
-import {
-  BrainIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-} from "lucide-react-native";
+import { BrainIcon, ChevronDownIcon } from "lucide-react-native";
 import {
   type ComponentRef,
   createContext,
@@ -103,7 +99,7 @@ export const ReasoningTrigger: FC<ReasoningTriggerProps> = ({
   return (
     <Pressable
       className={cn(
-        "aui-reasoning-trigger flex-row items-center gap-2 py-1.5",
+        "aui-reasoning-trigger min-h-7 flex-row items-center gap-1.5 py-1",
         className,
       )}
       accessibilityRole="button"
@@ -116,17 +112,22 @@ export const ReasoningTrigger: FC<ReasoningTriggerProps> = ({
       }}
       {...props}
     >
-      <Icon as={BrainIcon} className="text-muted-foreground size-4" />
+      <Icon as={BrainIcon} className="text-muted-foreground size-3.5" />
       <ShimmerLabel
         active={active}
-        className="text-muted-foreground text-sm tabular-nums"
+        className="text-muted-foreground text-[15px] leading-6 tabular-nums"
       >
         {label}
       </ShimmerLabel>
-      <Icon
-        as={isOpen ? ChevronDownIcon : ChevronRightIcon}
-        className="text-muted-foreground size-4"
-      />
+      <View
+        className="size-3.5 items-center justify-center"
+        style={{ transform: [{ rotate: isOpen ? "0deg" : "-90deg" }] }}
+      >
+        <Icon
+          as={ChevronDownIcon}
+          className="size-3.5 text-muted-foreground/55"
+        />
+      </View>
     </Pressable>
   );
 };
