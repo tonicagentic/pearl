@@ -7,7 +7,7 @@ import Animated, {
 import { Stack, router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { GestureDetector } from "react-native-gesture-handler";
-import { ListIcon, SquarePenIcon } from "lucide-react-native";
+import { HouseIcon, SquarePenIcon } from "lucide-react-native";
 import {
   AssistantRuntimeProvider,
   MessageNotSentError,
@@ -303,10 +303,10 @@ export function ChatScreen({
             onPress={drawerOpen ? closeHistory : openHistory}
             className="h-11 w-11 items-center justify-center"
             accessibilityRole="button"
-            accessibilityLabel={drawerOpen ? "Close history" : "Open history"}
+            accessibilityLabel={drawerOpen ? "Back to chat" : "Home"}
             accessibilityState={{ expanded: drawerOpen }}
           >
-            <ListIcon className="size-5 text-foreground" />
+            <HouseIcon className="size-5 text-foreground" />
           </Pressable>
         ),
         headerRight: () => (

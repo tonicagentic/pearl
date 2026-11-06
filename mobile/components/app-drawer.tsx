@@ -1,7 +1,7 @@
 import { Platform, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
-import { AppWindowIcon, InboxIcon, NetworkIcon, PlusIcon, Settings2Icon, SquarePenIcon, XIcon } from "lucide-react-native";
+import { AppWindowIcon, ChevronRightIcon, InboxIcon, NetworkIcon, PlusIcon, Settings2Icon, SquarePenIcon } from "lucide-react-native";
 import Animated, { interpolate, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
@@ -68,11 +68,11 @@ export function HistoryScreen({
             <Text className="text-lg font-semibold text-foreground">History</Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Close history"
+              accessibilityLabel="Back to chat"
               className="h-11 w-11 items-center justify-center"
               onPress={onClose}
             >
-              <XIcon className="size-5 text-foreground" />
+              <ChevronRightIcon className="size-5 text-foreground" />
             </Pressable>
           </View>
         ) : null}
@@ -219,33 +219,48 @@ export function HistoryScreen({
           ) : null}
         />
         {iosSidebar ? (
-          <View
-            pointerEvents="box-none"
-            className="absolute right-0 bottom-0 left-0"
-            style={{ paddingBottom: Math.max(insets.bottom, 12), backgroundColor }}
-          >
+          <>
             <View
               pointerEvents="box-none"
-              className="flex-row items-center justify-between px-5 pt-3"
+              style={{ position: "absolute", top: 12, right: 20, zIndex: 20 }}
             >
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Settings"
+                accessibilityLabel="Back to chat"
                 className="h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card active:bg-muted/60"
-                onPress={() => openDestination("/settings")}
+                onPress={onClose}
               >
-                <Settings2Icon className="size-6 text-foreground" />
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="New chat"
-                className="h-12 w-12 items-center justify-center rounded-full bg-foreground active:opacity-80"
-                onPress={() => { newChat(); goToChat(); }}
-              >
-                <SquarePenIcon className="size-6" color={backgroundColor ?? "#fff"} />
+                <ChevronRightIcon className="size-6 text-foreground" />
               </Pressable>
             </View>
-          </View>
+            <View
+              pointerEvents="box-none"
+              className="absolute right-0 bottom-0 left-0"
+              style={{ paddingBottom: Math.max(insets.bottom, 12), backgroundColor, zIndex: 20 }}
+            >
+              <View
+                pointerEvents="box-none"
+                className="flex-row items-center justify-between px-5 pt-3"
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Settings"
+                  className="h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card active:bg-muted/60"
+                  onPress={() => openDestination("/settings")}
+                >
+                  <Settings2Icon className="size-6 text-foreground" />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="New chat"
+                  className="h-12 w-12 items-center justify-center rounded-full bg-foreground active:opacity-80"
+                  onPress={() => { newChat(); goToChat(); }}
+                >
+                  <SquarePenIcon className="size-6" color={backgroundColor ?? "#fff"} />
+                </Pressable>
+              </View>
+            </View>
+          </>
         ) : null}
       </Animated.View>
     </SafeAreaView>

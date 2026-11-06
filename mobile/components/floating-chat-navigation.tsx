@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, ActionSheetIOS, Keyboard, Platform, Pressable, StyleSheet, View, findNodeHandle } from "react-native";
 import { router } from "expo-router";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
-import { EllipsisIcon, SquarePenIcon } from "lucide-react-native";
+import { EllipsisIcon, HouseIcon, SquarePenIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
@@ -95,17 +95,14 @@ export function FloatingChatNavigation({
         {surface()}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Open history"
+          accessibilityLabel="Home"
           accessibilityHint="Shows your chats and navigation"
           accessibilityState={{ disabled }}
           disabled={disabled}
           onPress={onOpenHistory}
           style={styles.circleButton}
         >
-          <View style={styles.historyBars}>
-            <View className="h-[2.5px] w-6 rounded-full bg-foreground" />
-            <View className="h-[2.5px] w-4 rounded-full bg-foreground" />
-          </View>
+          <HouseIcon className="size-6 text-foreground" />
         </Pressable>
       </View>
       {hasMessages ? (
@@ -154,7 +151,6 @@ const styles = StyleSheet.create({
   },
   circle: { width: 48, height: 48 },
   circleButton: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
-  historyBars: { gap: 7, alignItems: "flex-start" },
   pill: { height: 48 },
   pillButton: { width: 56, height: 48, alignItems: "center", justifyContent: "center" },
   newChatAction: { position: "absolute", right: 56, top: 0 },
