@@ -111,6 +111,14 @@ function AuthenticatedLayout() {
                   name="json-render-smoke"
                   options={{ title: "json-render smoke" }}
                 />
+                <Stack.Screen
+                  name="browser"
+                  options={{
+                    title: "Browser",
+                    headerShown: false,
+                    presentation: "modal",
+                  }}
+                />
               </Stack>
             </KeyboardProvider>
           </SafeAreaProvider>

@@ -1,8 +1,9 @@
 import { useMemo, type ComponentProps, type ReactNode } from "react";
-import { Linking, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useAuiState } from "@assistant-ui/react-native";
 
 import { cn } from "@/lib/utils";
+import { openWebUrl } from "@/src/open-web-url";
 import { threadMeta } from "./surfaces";
 
 export type CitationRef = {
@@ -44,10 +45,6 @@ function hostnameOf(url: string): string {
   }
 }
 
-function openUrl(url: string) {
-  void Linking.openURL(url).catch(() => {});
-}
-
 export function CitationChip({
   index,
   href,
@@ -67,7 +64,7 @@ export function CitationChip({
       accessibilityRole="link"
       accessibilityLabel={`Source ${label}: ${displayTitle}`}
       hitSlop={6}
-      onPress={() => openUrl(href)}
+      onPress={() => openWebUrl(href)}
       className={cn(
         "bg-muted ms-0.5 h-4 min-w-4 items-center justify-center rounded px-1 active:opacity-70",
         className,
@@ -121,7 +118,7 @@ export function MessageSources({ className }: ComponentProps<typeof View>) {
             <Pressable
               accessibilityRole="link"
               accessibilityLabel={ref.title ?? ref.url}
-              onPress={() => openUrl(ref.url)}
+              onPress={() => openWebUrl(ref.url)}
               className="min-w-0 flex-1 active:opacity-70"
             >
               <Text className={cn(threadMeta)} numberOfLines={1}>

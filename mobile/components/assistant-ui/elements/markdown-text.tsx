@@ -5,6 +5,7 @@ import {
   linkChildrenToText,
 } from "@/components/assistant-ui/elements/citation";
 import { Icon } from "@/components/ui/icon";
+import { openWebUrl } from "@/src/open-web-url";
 import type { TextMessagePartProps } from "@assistant-ui/react-native";
 import * as Clipboard from "expo-clipboard";
 import { CheckIcon, CopyIcon } from "lucide-react-native";
@@ -247,6 +248,21 @@ class MarkdownRenderer extends Renderer {
           href={href}
           title={title?.trim() || undefined}
         />
+      );
+    }
+    // Keep http(s) links in-app; react-native-marked's default opens Safari.
+    if (/^https?:\/\//i.test(href)) {
+      return (
+        <Text
+          key={this.getKey()}
+          selectable
+          accessibilityRole="link"
+          accessibilityLabel={title || "Link"}
+          onPress={() => openWebUrl(href)}
+          style={styles}
+        >
+          {children}
+        </Text>
       );
     }
     return super.link(children, href, styles, title);
