@@ -29,6 +29,8 @@ import {
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback";
 import { TypingIndicator } from "@/components/assistant-ui/elements/typing-indicator";
 import { isTaskNotification } from "@/src/message-projection";
+import { dismissKeyboard } from "@/components/dismiss-keyboard";
+import { LiveSession } from "@/components/live-session";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import {
@@ -66,6 +68,7 @@ import {
   MicIcon,
   PhoneIcon,
   Share2Icon,
+  VideoIcon,
 } from "lucide-react-native";
 import {
   type ComponentRef,
@@ -94,6 +97,7 @@ import {
   Share,
   Text,
   TextInput,
+  useColorScheme,
   View,
   type ViewProps,
 } from "react-native";
@@ -1223,6 +1227,9 @@ const ComposerAction: FC<{
         s.thread.voice !== undefined),
   );
   const isIos = Platform.OS === "ios";
+  const dark = useColorScheme() === "dark";
+  const chipFill = dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.08)";
+  const [liveOpen, setLiveOpen] = useState(false);
 
   return (
     <View
@@ -1236,6 +1243,24 @@ const ComposerAction: FC<{
           preparing={preparingAttachment}
           onPreparingChange={onPreparingChange}
         />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Start live video"
+          disabled={preparingAttachment}
+          onPress={() => {
+            dismissKeyboard();
+            setLiveOpen(true);
+          }}
+          hitSlop={isIos ? iosComposerHitSlop : iconButtonHitSlop}
+          className={
+            isIos
+              ? "size-8 items-center justify-center rounded-full"
+              : "size-11 items-center justify-center rounded-full active:bg-muted"
+          }
+          style={isIos ? { backgroundColor: chipFill, opacity: preparingAttachment ? 0.4 : 1 } : undefined}
+        >
+          <Icon as={VideoIcon} className="text-foreground size-4" />
+        </Pressable>
         <ComposerModelPicker disabled={preparingAttachment} />
       </View>
       <View className="flex-row items-center">
@@ -1302,6 +1327,7 @@ const ComposerAction: FC<{
           </ComposerPrimitive.Cancel>
         </AuiIf>
       </View>
+      {liveOpen ? <LiveSession onClose={() => setLiveOpen(false)} /> : null}
     </View>
   );
 };

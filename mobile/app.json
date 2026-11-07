@@ -46,6 +46,24 @@
           "cameraPermission": "Pearl uses the camera so you can take a photo and attach it in chat.",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Pearl uses the camera for live video and for photos you attach in chat.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Pearl uses the microphone so you can talk during a live conversation.",
+          "recordAudioAndroid": true,
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
       ]
     ],
     "scheme": "pearl",
