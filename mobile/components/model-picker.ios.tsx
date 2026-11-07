@@ -51,7 +51,7 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
           <RNHostView matchContents>
             <View
               onLayout={onChipLayout}
-              className="h-8 flex-row items-center gap-1 rounded-full bg-muted px-2.5"
+              className="h-8 flex-row items-center gap-1 rounded-full px-2.5"
             >
               <Text className="text-foreground text-[15px] font-medium" numberOfLines={1}>
                 {name}

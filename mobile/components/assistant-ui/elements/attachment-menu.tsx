@@ -29,7 +29,7 @@ export function AttachmentMenu({
           { text: "Cancel", style: "cancel" },
         ])}
         disabled={disabled}
-        className="aui-composer-add-attachment active:bg-muted size-11 items-center justify-center rounded-full"
+        className="aui-composer-add-attachment bg-muted active:bg-muted/80 size-11 items-center justify-center rounded-full"
         hitSlop={iconButtonHitSlop}
         accessibilityLabel="Add attachment"
       >
