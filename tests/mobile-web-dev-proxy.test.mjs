@@ -99,6 +99,20 @@ test("loopback proxy forwards auth, chats, and connections without storing a coo
   assert.equal(authorize.headers.get("set-cookie"), null);
   assert.equal(authorize.headers.get("cache-control"), "no-store");
 
+  const liveToken = await fetch(`${proxyUrl}/__pearl_api/api/live/token`, {
+    method: "POST",
+    headers: {
+      origin: proxyUrl,
+      authorization: "Bearer test-token",
+      "content-type": "application/json",
+    },
+    body: "{}",
+  });
+  assert.equal(liveToken.status, 200);
+  assert.equal(seen.url, "/api/live/token");
+  assert.equal(seen.authorization, "Bearer test-token");
+  assert.equal(liveToken.headers.get("set-cookie"), null);
+
   const revoke = await fetch(`${proxyUrl}/__pearl_api/api/connections/revoke`, {
     method: "POST",
     headers: {
