@@ -35,7 +35,7 @@ export function ThreadCostDrawer({
       transparent
       onRequestClose={onClose}
     >
-      <View className="flex-1 justify-end bg-black/50">
+      <View className="flex-1 justify-end bg-foreground/50">
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Dismiss"

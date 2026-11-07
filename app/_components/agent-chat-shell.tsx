@@ -376,7 +376,7 @@ export function AgentChatShell({
 
         <div
           className={cn(
-            "fixed inset-0 z-40 bg-black/50 transition-opacity md:hidden",
+            "fixed inset-0 z-40 bg-foreground/50 transition-opacity md:hidden",
             mobileSidebarOpen
               ? "pointer-events-auto opacity-100"
               : "pointer-events-none opacity-0",

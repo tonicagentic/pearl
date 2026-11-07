@@ -1608,8 +1608,11 @@ const ComposerTrailingControls: FC<{
             style={preparingAttachment ? { opacity: 0.5 } : undefined}
           >
             {isIos ? (
-              <View className="size-8 items-center justify-center rounded-full bg-[#111114] dark:border dark:border-white/25">
-                <Icon as={AudioLinesIcon} className="size-5 text-white" />
+              <View className="size-8 items-center justify-center rounded-full border border-border/60 bg-primary">
+                <Icon
+                  as={AudioLinesIcon}
+                  className="size-5 text-primary-foreground"
+                />
               </View>
             ) : (
               <Icon
@@ -1631,12 +1634,14 @@ const ComposerTrailingControls: FC<{
             accessibilityLabel="Send message"
           >
             {isIos ? (
-              <View className="size-8 items-center justify-center rounded-full bg-[#111114] dark:border dark:border-white/25">
+              <View className="size-8 items-center justify-center rounded-full border border-border/60 bg-primary">
                 <Icon
                   as={ArrowUpIcon}
                   className={cn(
                     "aui-composer-send-icon size-5",
-                    canSend && !preparingAttachment ? "text-white" : "text-white/50",
+                    canSend && !preparingAttachment
+                      ? "text-primary-foreground"
+                      : "text-primary-foreground/50",
                   )}
                 />
               </View>
@@ -1668,8 +1673,8 @@ const ComposerTrailingControls: FC<{
           }
         >
           {isIos ? (
-            <View className="size-8 items-center justify-center rounded-full bg-[#111114] dark:border dark:border-white/25">
-              <View className="aui-composer-cancel-icon size-2.5 rounded-[2px] bg-white" />
+            <View className="size-8 items-center justify-center rounded-full border border-border/60 bg-primary">
+              <View className="aui-composer-cancel-icon size-2.5 rounded-[2px] bg-primary-foreground" />
             </View>
           ) : (
             <View className="aui-composer-cancel-icon bg-primary-foreground size-3 rounded-[2px]" />

@@ -309,7 +309,7 @@ function DateField({ label, value, onChange }: {
       </Pressable>
       {Platform.OS === "ios" ? (
         <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-          <View className="flex-1 justify-end bg-black/40">
+          <View className="flex-1 justify-end bg-foreground/40">
             <View style={{ backgroundColor }} className="rounded-t-2xl px-4 pb-8 pt-4">
               <Text className="text-lg font-semibold text-foreground">{label} date</Text>
               {picker}
@@ -406,7 +406,7 @@ function NewIssueForm({
           }}
         >
           {pending ? (
-            <ActivityIndicator size="small" color={primaryForeground ?? "#fff"} />
+            <ActivityIndicator size="small" color={primaryForeground} />
           ) : (
             <Text className="text-sm font-medium text-primary-foreground">Capture</Text>
           )}

@@ -1,6 +1,5 @@
 import { useState, useSyncExternalStore } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useCSSVariable } from "uniwind";
 
 import { SheetScaffold } from "@/components/sheet-scaffold";
 import {
@@ -9,8 +8,6 @@ import {
   setModelSelection,
   subscribeModelSelection,
 } from "@/src/model-selection";
-
-const IOS_TINT = "#007AFF";
 
 /**
  * Default model picker. Models power each inference call; Pearl the agent
@@ -24,8 +21,6 @@ export function ModelsScreen() {
     getModelSelection,
     getModelSelection,
   );
-  const cardColor = useCSSVariable("--color-card") as string | undefined;
-  const separatorColor = useCSSVariable("--color-border") as string | undefined;
 
   const selectModel = (key: string) => {
     if (saving) return;
@@ -61,23 +56,15 @@ export function ModelsScreen() {
               </Text>
             ) : null}
           </View>
-          <View
-            className="overflow-hidden rounded-[10px]"
-            style={{ backgroundColor: cardColor ?? "#fff" }}
-          >
+          <View className="overflow-hidden rounded-[10px] bg-card">
             {section.models.map((model, index) => {
               const selected = selectedKey === model.key;
               return (
                 <View key={model.key}>
                   {index > 0 ? (
                     <View
-                      style={[
-                        styles.separator,
-                        {
-                          backgroundColor:
-                            separatorColor ?? "rgba(60,60,67,0.29)",
-                        },
-                      ]}
+                      className="ml-4 bg-border"
+                      style={styles.separator}
                     />
                   ) : null}
                   <Pressable
@@ -104,7 +91,11 @@ export function ModelsScreen() {
                         </View>
                       ) : null}
                     </View>
-                    {selected ? <Text style={styles.check}>✓</Text> : null}
+                    {selected ? (
+                      <Text className="text-[17px] font-semibold leading-[22px] text-primary">
+                        ✓
+                      </Text>
+                    ) : null}
                   </Pressable>
                 </View>
               );
@@ -135,13 +126,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   separator: {
-    marginLeft: 16,
     height: StyleSheet.hairlineWidth,
-  },
-  check: {
-    color: IOS_TINT,
-    fontSize: 17,
-    fontWeight: "600",
-    lineHeight: 22,
   },
 });

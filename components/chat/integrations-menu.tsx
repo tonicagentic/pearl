@@ -88,7 +88,7 @@ export function IntegrationsMenu({
               >
                 <span
                   className={cn(
-                    "size-3 rounded-full bg-white shadow-sm transition-transform",
+                    "size-3 rounded-full bg-background shadow-sm transition-transform",
                     enabled ? "translate-x-[15px]" : "translate-x-0.5",
                   )}
                 />

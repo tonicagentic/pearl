@@ -31,11 +31,12 @@ export function HistoryScreen({
   const iosSidebar = Platform.OS === "ios" && !!onClose;
   // Leave room for the floating Settings / New chat circles above the home indicator.
   const iosFooterClearance = 48 + 40 + Math.max(insets.bottom, 12);
-  // Panel translate is owned by the push layout; only fade content in with progress.
+  // Panel translate + blur are owned by the push layout; keep a light fade so
+  // content softens with the blur without going fully transparent mid-swipe.
   const contentMotion = useAnimatedStyle(() => {
     const open = progress?.value ?? 1;
     return {
-      opacity: interpolate(open, [0, 0.55, 1], [0.35, 0.85, 1]),
+      opacity: interpolate(open, [0, 0.45, 1], [0.72, 0.9, 1]),
     };
   });
 
@@ -259,7 +260,10 @@ export function HistoryScreen({
                   className="h-12 w-12 items-center justify-center rounded-full bg-foreground active:opacity-80"
                   onPress={() => { newChat(); goToChat(); }}
                 >
-                  <SquarePenIcon className="size-6" color={backgroundColor ?? "#fff"} />
+                  <SquarePenIcon
+                    className="size-6 text-background"
+                    color={backgroundColor}
+                  />
                 </Pressable>
               </View>
             </View>

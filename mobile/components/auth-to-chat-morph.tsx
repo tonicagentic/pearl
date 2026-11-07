@@ -36,10 +36,14 @@ export function AuthToChatMorph({
   const progress = useSharedValue(0);
 
   const primary = useCSSVariable("--color-primary") as string | undefined;
+  const primaryForeground = useCSSVariable("--color-primary-foreground") as
+    | string
+    | undefined;
   const card = useCSSVariable("--color-card") as string | undefined;
   const muted = useCSSVariable("--color-muted") as string | undefined;
-  const fromColor = primary ?? "#111114";
-  const toColor = card ?? muted ?? "#F4F4F5";
+  const fromColor = primary ?? muted ?? "transparent";
+  const toColor = card ?? muted ?? "transparent";
+  const labelColor = primaryForeground ?? "#FFFFFF";
 
   const target = {
     x: COMPOSER_EDGE,
@@ -100,7 +104,7 @@ export function AuthToChatMorph({
         >
           <Animated.Text
             style={{
-              color: "#FFFFFF",
+              color: labelColor,
               fontSize: 17,
               fontWeight: "600",
             }}

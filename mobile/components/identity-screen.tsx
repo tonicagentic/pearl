@@ -7,10 +7,10 @@ import {
   Text,
   View,
 } from "react-native";
-import { useCSSVariable } from "uniwind";
 
 import { SheetScaffold } from "@/components/sheet-scaffold";
 import { TextField } from "@/components/ui/text-field";
+import { cn } from "@/lib/utils";
 import {
   BUILD_OPTIONS,
   EYE_COLOR_OPTIONS,
@@ -140,7 +140,6 @@ export function IdentityScreen() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedHint, setSavedHint] = useState<string | null>(null);
-  const cardColor = useCSSVariable("--color-card") as string | undefined;
 
   const load = useCallback(async () => {
     setError(null);
@@ -235,7 +234,7 @@ export function IdentityScreen() {
             </Text>
           ) : null}
 
-          <FieldGroup cardColor={cardColor} label="About you">
+          <FieldGroup label="About you">
             <TextRow
               label="Display name"
               onChangeText={(value) => setField("displayName", value)}
@@ -255,7 +254,7 @@ export function IdentityScreen() {
             />
           </FieldGroup>
 
-          <FieldGroup cardColor={cardColor} label="Physical">
+          <FieldGroup label="Physical">
             <HeightRow
               onChange={(height) => setField("height", height)}
               value={form.height}
@@ -321,7 +320,7 @@ export function IdentityScreen() {
             />
           </FieldGroup>
 
-          <FieldGroup cardColor={cardColor} label="Health">
+          <FieldGroup label="Health">
             <MultilineRow
               label="Health notes"
               last
@@ -331,7 +330,7 @@ export function IdentityScreen() {
             />
           </FieldGroup>
 
-          <FieldGroup cardColor={cardColor} label="Home">
+          <FieldGroup label="Home">
             <TextRow
               label="Primary residence"
               onChangeText={(value) => setField("primaryResidence", value)}
@@ -347,14 +346,9 @@ export function IdentityScreen() {
 
           <Pressable
             accessibilityRole="button"
-            className="items-center overflow-hidden rounded-[10px] active:opacity-80"
+            className="min-h-11 items-center justify-center overflow-hidden rounded-[10px] bg-card active:opacity-80"
             disabled={saving}
             onPress={onSave}
-            style={{
-              backgroundColor: cardColor ?? "#fff",
-              minHeight: 44,
-              justifyContent: "center",
-            }}
           >
             <Text className="text-[17px] font-semibold text-foreground">
               {saving ? "Saving…" : "Save"}
@@ -375,23 +369,16 @@ export function IdentityScreen() {
 function FieldGroup({
   label,
   children,
-  cardColor,
 }: {
   readonly label: string;
   readonly children: ReactNode;
-  readonly cardColor?: string;
 }) {
   return (
     <View className="gap-1.5">
       <Text className="px-1 text-[13px] font-normal uppercase tracking-[0.04em] text-muted-foreground">
         {label}
       </Text>
-      <View
-        className="overflow-hidden rounded-[10px]"
-        style={{ backgroundColor: cardColor ?? "#fff" }}
-      >
-        {children}
-      </View>
+      <View className="overflow-hidden rounded-[10px] bg-card">{children}</View>
     </View>
   );
 }
@@ -410,7 +397,7 @@ function TextRow({
   readonly last?: boolean;
 }) {
   return (
-    <View style={[styles.fieldBlock, !last ? styles.fieldBorder : null]}>
+    <View className={cn("gap-2 px-4 pt-2.5 pb-3", !last && "border-b border-border")}>
       <Text className="text-[13px] text-muted-foreground">{label}</Text>
       <TextField
         autoCapitalize="sentences"
@@ -438,7 +425,7 @@ function MultilineRow({
   readonly last?: boolean;
 }) {
   return (
-    <View style={[styles.fieldBlock, !last ? styles.fieldBorder : null]}>
+    <View className={cn("gap-2 px-4 pt-2.5 pb-3", !last && "border-b border-border")}>
       <Text className="text-[13px] text-muted-foreground">{label}</Text>
       <TextField
         autoCapitalize="sentences"
@@ -462,20 +449,20 @@ function UnitPills<T extends string>({
   readonly onChange: (value: T) => void;
 }) {
   return (
-    <View style={styles.unitRow}>
+    <View className="flex-row overflow-hidden rounded-lg border border-border">
       {options.map((option) => {
         const active = value === option.id;
         return (
           <Pressable
             key={option.id}
+            className={cn("px-2.5 py-1.5", active && "bg-primary")}
             onPress={() => onChange(option.id)}
-            style={[styles.unitPill, active ? styles.unitPillActive : null]}
           >
             <Text
-              style={[
-                styles.unitPillText,
-                active ? styles.unitPillTextActive : null,
-              ]}
+              className={cn(
+                "text-xs",
+                active ? "text-primary-foreground" : "text-muted-foreground",
+              )}
             >
               {option.label}
             </Text>
@@ -494,8 +481,8 @@ function HeightRow({
   readonly onChange: (value: HeightParts) => void;
 }) {
   return (
-    <View style={[styles.fieldBlock, styles.fieldBorder]}>
-      <View style={styles.rowBetween}>
+    <View className="gap-2 border-b border-border px-4 pt-2.5 pb-3">
+      <View className="flex-row items-center justify-between gap-3">
         <Text className="text-[13px] text-muted-foreground">Height</Text>
         <UnitPills<HeightUnit>
           onChange={(unit) => onChange({ ...value, unit })}
@@ -507,7 +494,7 @@ function HeightRow({
         />
       </View>
       {value.unit === "imperial" ? (
-        <View style={styles.dualInputs}>
+        <View className="flex-row gap-2">
           <TextField
             keyboardType="number-pad"
             onChangeText={(feet) => onChange({ ...value, feet })}
@@ -544,8 +531,8 @@ function WeightRow({
   readonly onChange: (value: WeightParts) => void;
 }) {
   return (
-    <View style={[styles.fieldBlock, styles.fieldBorder]}>
-      <View style={styles.rowBetween}>
+    <View className="gap-2 border-b border-border px-4 pt-2.5 pb-3">
+      <View className="flex-row items-center justify-between gap-3">
         <Text className="text-[13px] text-muted-foreground">Weight</Text>
         <UnitPills<WeightUnit>
           onChange={(unit) => onChange({ ...value, unit })}
@@ -583,23 +570,30 @@ function ChipRow({
   readonly onCustomChange: (value: string) => void;
 }) {
   return (
-    <View style={[styles.fieldBlock, styles.fieldBorder]}>
+    <View className="gap-2 border-b border-border px-4 pt-2.5 pb-3">
       <Text className="text-[13px] text-muted-foreground">{label}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.chipRow}>
+        <View className="flex-row gap-2 py-0.5">
           {options.map((option) => {
             const active = selected === option;
             return (
               <Pressable
                 key={option}
+                className={cn(
+                  "rounded-full border px-3 py-1.5",
+                  active
+                    ? "border-primary bg-primary"
+                    : "border-border bg-transparent",
+                )}
                 onPress={() => onSelect(active ? "" : option)}
-                style={[styles.chip, active ? styles.chipActive : null]}
               >
                 <Text
-                  style={[
-                    styles.chipText,
-                    active ? styles.chipTextActive : null,
-                  ]}
+                  className={cn(
+                    "text-[13px]",
+                    active
+                      ? "text-primary-foreground"
+                      : "text-muted-foreground",
+                  )}
                 >
                   {option}
                 </Text>
@@ -639,32 +633,32 @@ function SwatchRow({
   readonly onCustomChange: (value: string) => void;
 }) {
   return (
-    <View style={[styles.fieldBlock, styles.fieldBorder]}>
+    <View className="gap-2 border-b border-border px-4 pt-2.5 pb-3">
       <Text className="text-[13px] text-muted-foreground">{label}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.swatchRow}>
+        <View className="flex-row gap-2.5 py-1">
           {options.map((option) => {
             const active = selected === option.label;
             return (
               <Pressable
                 key={option.label}
                 accessibilityLabel={option.label}
+                className="w-14 items-center gap-1"
                 onPress={() => onSelect(active ? "" : option.label)}
-                style={styles.swatchItem}
               >
                 <View
-                  style={[
-                    styles.swatch,
-                    { backgroundColor: option.swatch },
-                    active ? styles.swatchActive : null,
-                  ]}
+                  className={cn(
+                    "size-8 rounded-full border",
+                    active ? "border-2 border-foreground" : "border-border",
+                  )}
+                  style={{ backgroundColor: option.swatch }}
                 />
                 <Text
+                  className={cn(
+                    "text-center text-[10px]",
+                    active ? "text-foreground" : "text-muted-foreground",
+                  )}
                   numberOfLines={1}
-                  style={[
-                    styles.swatchLabel,
-                    active ? styles.swatchLabelActive : null,
-                  ]}
                 >
                   {option.label}
                 </Text>
@@ -672,19 +666,22 @@ function SwatchRow({
             );
           })}
           <Pressable
+            className="w-14 items-center gap-1"
             onPress={() => onSelect(selected === "Custom" ? "" : "Custom")}
-            style={styles.swatchItem}
           >
             <View
-              style={[
-                styles.swatch,
-                styles.swatchCustom,
-                selected === "Custom" ? styles.swatchActive : null,
-              ]}
+              className={cn(
+                "size-8 items-center justify-center rounded-full border border-dashed bg-transparent",
+                selected === "Custom"
+                  ? "border-2 border-foreground"
+                  : "border-border",
+              )}
             >
-              <Text style={styles.swatchPlus}>+</Text>
+              <Text className="text-base text-muted-foreground">+</Text>
             </View>
-            <Text style={styles.swatchLabel}>Custom</Text>
+            <Text className="text-center text-[10px] text-muted-foreground">
+              Custom
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -713,9 +710,9 @@ function MeasurementsBlock({
     onChange({ ...value, [key]: next });
   };
   return (
-    <View style={[styles.fieldBlock, !last ? styles.fieldBorder : null]}>
+    <View className={cn("gap-2 px-4 pt-2.5 pb-3", !last && "border-b border-border")}>
       <Text className="text-[13px] text-muted-foreground">Measurements</Text>
-      <View style={styles.dualInputs}>
+      <View className="flex-row gap-2">
         <MiniMeasure
           label="Chest"
           onChangeText={(chest) => set("chest", chest)}
@@ -727,7 +724,7 @@ function MeasurementsBlock({
           value={value.waist}
         />
       </View>
-      <View style={styles.dualInputs}>
+      <View className="flex-row gap-2">
         <MiniMeasure
           label="Hips"
           onChangeText={(hips) => set("hips", hips)}
@@ -765,8 +762,8 @@ function MiniMeasure({
   readonly onChangeText: (value: string) => void;
 }) {
   return (
-    <View style={styles.halfField}>
-      <Text style={styles.miniLabel}>{label}</Text>
+    <View className="flex-1 gap-1">
+      <Text className="text-[11px] text-muted-foreground">{label}</Text>
       <TextField
         onChangeText={onChangeText}
         placeholder='32"'
@@ -778,16 +775,6 @@ function MiniMeasure({
 }
 
 const styles = StyleSheet.create({
-  fieldBlock: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 12,
-    gap: 8,
-  },
-  fieldBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(60,60,67,0.29)",
-  },
   inlineField: {
     minHeight: 40,
     borderRadius: 8,
@@ -799,105 +786,7 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
     paddingTop: 10,
   },
-  rowBetween: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  unitRow: {
-    flexDirection: "row",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(60,60,67,0.29)",
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  unitPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  unitPillActive: {
-    backgroundColor: "#111",
-  },
-  unitPillText: {
-    fontSize: 12,
-    color: "#8E8E93",
-  },
-  unitPillTextActive: {
-    color: "#fff",
-  },
-  dualInputs: {
-    flexDirection: "row",
-    gap: 8,
-  },
   halfField: {
     flex: 1,
-    gap: 4,
-  },
-  chipRow: {
-    flexDirection: "row",
-    gap: 8,
-    paddingVertical: 2,
-  },
-  chip: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(60,60,67,0.29)",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  chipActive: {
-    backgroundColor: "#111",
-    borderColor: "#111",
-  },
-  chipText: {
-    fontSize: 13,
-    color: "#8E8E93",
-  },
-  chipTextActive: {
-    color: "#fff",
-  },
-  swatchRow: {
-    flexDirection: "row",
-    gap: 10,
-    paddingVertical: 4,
-  },
-  swatchItem: {
-    alignItems: "center",
-    width: 56,
-    gap: 4,
-  },
-  swatch: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(0,0,0,0.12)",
-  },
-  swatchActive: {
-    borderWidth: 2,
-    borderColor: "#111",
-  },
-  swatchCustom: {
-    alignItems: "center",
-    justifyContent: "center",
-    borderStyle: "dashed",
-    backgroundColor: "transparent",
-  },
-  swatchPlus: {
-    fontSize: 16,
-    color: "#8E8E93",
-  },
-  swatchLabel: {
-    fontSize: 10,
-    color: "#8E8E93",
-    textAlign: "center",
-  },
-  swatchLabelActive: {
-    color: "#111",
-  },
-  miniLabel: {
-    fontSize: 11,
-    color: "#8E8E93",
   },
 });

@@ -31,6 +31,7 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import { KeyboardController } from "react-native-keyboard-controller";
+import { useCSSVariable } from "uniwind";
 
 import { focusComposerInput } from "@/src/composer-input-focus";
 import {
@@ -60,6 +61,8 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
   const selected =
     COMPOSER_MODELS.find((model) => model.key === selectedKey) ??
     COMPOSER_MODELS[0];
+  const primaryColor =
+    (useCSSVariable("--color-primary") as string | undefined) ?? "#007AFF";
   const [hostWidth, setHostWidth] = useState(() =>
     estimateChipWidth(selected.label),
   );
@@ -179,7 +182,7 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
                           <Image
                             systemName="checkmark"
                             size={14}
-                            modifiers={[tint("#007AFF")]}
+                            modifiers={[tint(primaryColor)]}
                           />
                         ) : null}
                       </HStack>

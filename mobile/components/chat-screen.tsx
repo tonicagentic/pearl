@@ -10,7 +10,10 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import Animated, {
+  interpolate,
+  useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
@@ -26,7 +29,7 @@ import {
   type ThreadMessageLike,
 } from "@assistant-ui/react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCSSVariable } from "uniwind";
+import { useCSSVariable, useUniwind } from "uniwind";
 
 import { HistoryScreen, type SidebarDestination } from "@/components/app-drawer";
 import {
@@ -51,6 +54,10 @@ import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
 import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft, type LocalSend } from "@/src/send-feedback";
 import { useChats } from "@/src/chat-context";
 import { toThreadMessages, type SpikeState } from "@/src/eve-transport";
+
+const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
+/** Peak blur while scrubbing between recents and the thread. */
+const PUSH_BLUR_MAX = 48;
 
 /**
  * The chat screen: the assistant-ui native Thread wired to the eve session
@@ -221,6 +228,31 @@ export function ChatScreen({
   const chatStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: openProgress.value * width }],
   }));
+  // Soft-focus each surface while it is mid-transition: the departing view
+  // blurs as it leaves, the arriving view sharpens as it settles. Opacity
+  // tracks intensity so a settled panel never keeps a frosted residue.
+  const historyBlurProps = useAnimatedProps(() => ({
+    intensity: interpolate(
+      openProgress.value,
+      [0, 1],
+      [PUSH_BLUR_MAX, 0],
+    ),
+  }));
+  const chatBlurProps = useAnimatedProps(() => ({
+    intensity: interpolate(
+      openProgress.value,
+      [0, 1],
+      [0, PUSH_BLUR_MAX],
+    ),
+  }));
+  const historyBlurStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(openProgress.value, [0, 1], [1, 0]),
+  }));
+  const chatBlurStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(openProgress.value, [0, 1], [0, 1]),
+  }));
+  const { theme } = useUniwind();
+  const blurTint = theme === "dark" ? "systemMaterialDark" : "systemMaterialLight";
 
   const pushGesture = useChatHistoryPushGesture({
     openProgress,
@@ -460,6 +492,13 @@ export function ChatScreen({
                 visible={drawerOpen}
                 progress={openProgress}
               />
+              <AnimatedBlurView
+                pointerEvents="none"
+                tint={blurTint}
+                intensity={0}
+                animatedProps={historyBlurProps}
+                style={[StyleSheet.absoluteFill, historyBlurStyle]}
+              />
             </Animated.View>
             <Animated.View
               style={[{ flex: 1, width, backgroundColor }, chatStyle]}
@@ -510,6 +549,13 @@ export function ChatScreen({
                   }
                 />
               </AssistantRuntimeProvider>
+              <AnimatedBlurView
+                pointerEvents="none"
+                tint={blurTint}
+                intensity={0}
+                animatedProps={chatBlurProps}
+                style={[StyleSheet.absoluteFill, chatBlurStyle]}
+              />
             </Animated.View>
           </View>
         </GestureDetector>

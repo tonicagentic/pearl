@@ -612,7 +612,7 @@ function SwatchField({
               type="button"
             >
               <span
-                className="size-8 rounded-full border border-black/10 shadow-sm"
+                className="size-8 rounded-full border border-border shadow-sm"
                 style={{ backgroundColor: option.swatch }}
               />
               <span

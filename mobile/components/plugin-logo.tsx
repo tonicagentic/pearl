@@ -132,7 +132,7 @@ export function PluginLogo({
         width: size,
         height: size,
         borderRadius: size * 0.28,
-        backgroundColor: spec?.background ?? fallbackBg ?? "#eee",
+        backgroundColor: spec?.background ?? fallbackBg,
         alignItems: "center",
         justifyContent: "center",
         overflow: "hidden",
@@ -146,7 +146,7 @@ export function PluginLogo({
                 cx="12"
                 cy="12"
                 r="8"
-                fill={fallbackFg ?? "#111"}
+                fill={fallbackFg}
               />
             )}
       </Svg>
