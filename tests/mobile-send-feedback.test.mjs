@@ -48,6 +48,26 @@ test("unresolved turns cannot be overwritten before confirmation", () => {
   assert.equal(hasUnresolvedSend([], null, null), false);
 });
 
+test("a sent photo stays on the bubble instead of the file placeholder", () => {
+  const image = "data:image/jpeg;base64,YWJj";
+  const attachment = {
+    id: "image-1", name: "photo.jpg", type: "image", contentType: "image/jpeg",
+    status: { type: "complete" }, content: [{ type: "image", image }],
+  };
+  const pending = createLocalSend({}, 0, 0, {
+    content: [{ type: "text", text: "what's this" }],
+    attachments: [attachment],
+  });
+  const summary = user("what's this\n[file: photo.jpg]");
+  const during = projectSendMessages([summary], [{ role: "user" }], pending);
+  assert.equal(during[0].content[0].text, "what's this");
+  assert.equal(during[0].attachments[0].content[0].image, image);
+  const accepted = projectSendMessages([summary], [{ role: "user" }], pending, true);
+  assert.equal(accepted[0].content[0].text, "what's this");
+  assert.equal(accepted[0].attachments[0].content[0].image, image);
+  assert.equal(accepted[0].metadata, undefined);
+});
+
 test("attachment-only turn keeps its chip and never relies on text matching", () => {
   const attachment = { id: "image-1", name: "photo.jpg", type: "image", contentType: "image/jpeg", status: { type: "complete" }, content: [] };
   const pending = createLocalSend({}, 0, 0, { content: [], attachments: [attachment] });

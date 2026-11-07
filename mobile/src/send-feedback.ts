@@ -50,6 +50,50 @@ export function hasUnresolvedSend(
   return localSend ? !hasConfirmedSend(events, localSend) : Boolean(pendingMessage);
 }
 
+const imageParts = (message: ThreadMessageLike) =>
+  (message.attachments ?? []).filter((attachment) =>
+    attachment.type === "image" &&
+    attachment.content?.some((part) => part.type === "image" && part.image),
+  );
+
+// Same stand-in lines as stripFilePlaceholders in message-projection.
+const FILE_PLACEHOLDER_LINE = /^\[(?:file(?:: [^\]]*)?|image: [^\]]+)\]$/;
+
+function stripFilePlaceholders(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !FILE_PLACEHOLDER_LINE.test(line.trim()))
+    .join("\n")
+    .trim();
+}
+
+function withoutFilePlaceholders(content: ThreadMessageLike["content"]): ThreadMessageLike["content"] {
+  const source = typeof content === "string" ? [{ type: "text" as const, text: content }] : content;
+  const parts: Array<Exclude<ThreadMessageLike["content"], string>[number]> = [];
+  for (const part of source) {
+    if (part.type !== "text") {
+      parts.push(part);
+      continue;
+    }
+    const text = stripFilePlaceholders(part.text);
+    if (text) parts.push({ type: "text", text });
+  }
+  return parts;
+}
+
+/** Keep the composer's photo when eve's row only has a `[file: name]` summary. */
+function withPreviewImages(row: ThreadMessageLike, preview: ThreadMessageLike): ThreadMessageLike {
+  if (imageParts(row).length > 0 || imageParts(preview).length === 0) return row;
+  return {
+    ...row,
+    content: withoutFilePlaceholders(row.content),
+    attachments: [
+      ...(row.attachments ?? []).filter((attachment) => attachment.type !== "image"),
+      ...imageParts(preview),
+    ],
+  };
+}
+
 /** Hand off at the same positional row when eve publishes its own user message. */
 export function projectSendMessages(
   messages: readonly ThreadMessageLike[],
@@ -62,9 +106,14 @@ export function projectSendMessages(
   const userIndex = sourceMessages.findIndex(
     (message, index) => index >= pending.baseline && message.role === "user",
   );
-  if (userIndex >= 0 && confirmed) return next;
+  if (userIndex >= 0 && confirmed) {
+    next[userIndex] = withPreviewImages(next[userIndex]!, pending.preview);
+    return next;
+  }
+  // Eve's optimistic user row is the text summary, which drops the photo.
+  // Keep the composer preview until that row actually carries the image.
   const index = userIndex >= 0 ? userIndex : next.length;
-  const row = userIndex >= 0 ? next[userIndex] : pending.preview;
+  const row = pending.preview;
   next[index] = {
     ...row,
     metadata: {

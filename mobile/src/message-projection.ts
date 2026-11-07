@@ -5,6 +5,21 @@ import { isAttachmentMarker } from "./attachment-content";
 type Part = Exclude<ThreadMessageLike["content"], string>[number];
 
 const safeUrl = (value?: string) => value && /^https:\/\//i.test(value) ? value : undefined;
+// Sent photos come back as data URLs. https stays allowed; other data URLs do not.
+const displayImageUrl = (value?: string) =>
+  safeUrl(value) ??
+  (value && /^data:image\/(?:jpeg|jpg|png|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(value)
+    ? value
+    : undefined);
+const FILE_PLACEHOLDER_LINE = /^\[(?:file(?:: [^\]]*)?|image: [^\]]+)\]$/;
+/** Drop eve's text stand-in for a file once the image itself is on the message. */
+export function stripFilePlaceholders(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !FILE_PLACEHOLDER_LINE.test(line.trim()))
+    .join("\n")
+    .trim();
+}
 const argsObject = (value: unknown) =>
   value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -67,7 +82,7 @@ function assistantPart(part: EveMessagePart): Part | null {
       } };
     }
     case "file": {
-      const url = safeUrl(part.url);
+      const url = displayImageUrl(part.url);
       if (url && part.mediaType.startsWith("image/")) {
         return { type: "image", image: url, ...(part.filename ? { filename: part.filename } : {}) };
       }
@@ -211,14 +226,16 @@ export function toThreadMessages(
         part.text.startsWith("[Pasted text]\n")),
     );
     const attachments = message.parts.filter((part): part is Extract<EveMessagePart, { type: "file" }> => part.type === "file")
-      .map((part, fileIndex) => ({
-        id: `${message.id}:file:${fileIndex}`,
-        type: (part.mediaType.startsWith("image/") ? "image" : "document") as "image" | "document",
-        name: part.filename ?? "Attachment", contentType: part.mediaType,
-        status: { type: "complete" as const },
-        content: safeUrl(part.url) && part.mediaType.startsWith("image/")
-          ? [{ type: "image" as const, image: part.url! }] : [],
-      })).concat(documentParts.map((part, fileIndex) => ({
+      .map((part, fileIndex) => {
+        const image = part.mediaType.startsWith("image/") ? displayImageUrl(part.url) : undefined;
+        return {
+          id: `${message.id}:file:${fileIndex}`,
+          type: (part.mediaType.startsWith("image/") ? "image" : "document") as "image" | "document",
+          name: part.filename ?? "Attachment", contentType: part.mediaType,
+          status: { type: "complete" as const },
+          content: image ? [{ type: "image" as const, image }] : [],
+        };
+      }).concat(documentParts.map((part, fileIndex) => ({
         id: `${message.id}:document:${fileIndex}`,
         type: "document" as const,
         name: part.text.startsWith("[Pasted text]\n")
@@ -229,12 +246,16 @@ export function toThreadMessages(
         contentType: part.text.startsWith("[Attached PDF: ") ? "application/pdf" : "text/plain",
         status: { type: "complete" as const }, content: [],
       })));
+    const hasImage = attachments.some((attachment) => attachment.type === "image" && attachment.content.length > 0);
     return {
       role: "user",
       content: message.parts.filter((part): part is Extract<EveMessagePart, { type: "text" }> =>
         part.type === "text" && typeof part.text === "string" &&
         !documentParts.includes(part) && !isAttachmentMarker(part.text),
-      ).map((part) => ({ type: "text" as const, text: part.text })),
+      ).flatMap((part) => {
+        const text = hasImage ? stripFilePlaceholders(part.text) : part.text;
+        return text ? [{ type: "text" as const, text }] : [];
+      }),
       ...(attachments.length ? { attachments } : {}),
     };
   });

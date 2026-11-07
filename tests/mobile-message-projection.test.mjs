@@ -159,6 +159,20 @@ test("an explicit clipboard paste is sent as text and survives as a collapsed us
   assert.equal(message.attachments[0].contentType, "text/plain");
 });
 
+test("keeps a sent photo when eve returns it as a data url", () => {
+  const image = "data:image/jpeg;base64,YWJj";
+  const [message] = toThreadMessages({ messages: [{ id: "u", role: "user", parts: [
+    { type: "text", text: "what's this\n[file: photo.jpg (image/jpeg)]" },
+    { type: "file", mediaType: "image/jpeg", filename: "photo.jpg", url: image },
+  ] }] });
+  assert.equal(message.content[0].text, "what's this");
+  assert.equal(message.attachments[0].content[0].image, image);
+  const [blocked] = toThreadMessages({ messages: [{ id: "u", role: "user", parts: [
+    { type: "file", mediaType: "image/jpeg", filename: "x.jpg", url: "data:text/html;base64,PHNjcmlwdD4=" },
+  ] }] });
+  assert.deepEqual(blocked.attachments[0].content, []);
+});
+
 test("keeps user attachment chips while removing only internal marker text", () => {
   const [message] = toThreadMessages({ messages: [{ id: "u", role: "user", parts: [
     { type: "text", text: "[mobile-attachment:abc]" },
