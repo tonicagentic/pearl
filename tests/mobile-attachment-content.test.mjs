@@ -47,5 +47,17 @@ test("PDF extraction becomes text, not an unsupported raw PDF file", () => {
 test("incomplete, oversized or empty attachments cannot masquerade as sent", () => {
   assert.throws(() => toEveTurn({ content: [], attachments: [{ ...image, status: { type: "incomplete", reason: "error" } }] }), /not ready/);
   assert.throws(() => toEveTurn({ content: [], attachments: [{ ...image, content: [] }] }), /no content/);
-  assert.throws(() => toEveTurn({ content: [], attachments: [{ ...image, content: [{ type: "image", image: "x".repeat(2_800_001) }] }] }), /too large together/);
+  assert.throws(() => toEveTurn({ content: [], attachments: [{ ...image, content: [{ type: "image", image: "x".repeat(1_200_001) }] }] }), /too large together/);
 });
+
+test("https photo URLs do not count against the inline size budget", () => {
+  const url = "https://example.blob.vercel-storage.com/photo.jpg";
+  const hosted = {
+    ...image,
+    content: [{ type: "image", image: url }],
+  };
+  assert.deepEqual(toEveTurn({ content: [], attachments: [hosted] }).message, [
+    { type: "file", data: url, mediaType: "image/jpeg", filename: "receipt.jpg" },
+  ]);
+});
+

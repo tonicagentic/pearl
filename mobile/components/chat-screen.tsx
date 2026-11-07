@@ -362,6 +362,15 @@ export function ChatScreen({
             else next.set(store, { ...preview, phase: "uncertain" });
             return next;
           });
+          if (!accepted) {
+            const detail = store.snapshot.error?.message?.trim();
+            setSendError({
+              store,
+              message: detail
+                ? `Delivery not confirmed: ${detail}`
+                : "Delivery not confirmed. Check this chat before sending again.",
+            });
+          }
         } catch (cause) {
           if (!wasSendPrepared(store)) {
             setLocalSends((current) => {
@@ -384,6 +393,12 @@ export function ChatScreen({
             else next.set(store, { ...preview, phase: "uncertain" });
             return next;
           });
+          const detail =
+            (cause instanceof Error && cause.message.trim()) ||
+            store.snapshot.error?.message?.trim();
+          if (!accepted && detail) {
+            setSendError({ store, message: `Delivery not confirmed: ${detail}` });
+          }
           throw cause;
         }
       },

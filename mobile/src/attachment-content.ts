@@ -45,9 +45,14 @@ export function toEveTurn(message: Pick<AppendMessage, "content" | "attachments"
     }
   }
 
-  // Images travel inline as base64 in the eve request. Bound the aggregate
-  // JSON body, not only individual photos, before clearing the draft.
-  if (files.reduce((total, file) => total + file.data.length, 0) > 2_800_000) {
+  // Inline data-URL photos inflate the eve turn JSON; https Blob URLs stay
+  // tiny. Bound the aggregate payload before clearing the draft.
+  const inlineBytes = files.reduce(
+    (total, file) =>
+      total + (/^https?:\/\//i.test(file.data) ? 0 : file.data.length),
+    0,
+  );
+  if (inlineBytes > 1_200_000) {
     throw new Error("Photos are too large together. Remove one and try again.");
   }
   if (files.length === 0 && extraText.length === 0) {

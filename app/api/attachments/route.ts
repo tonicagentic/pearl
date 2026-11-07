@@ -81,14 +81,15 @@ export async function POST(request: Request) {
 
   if (process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN) {
     try {
+      // Images must be publicly fetchable so the model/gateway can load them
+      // as FilePart URLs (mobile sends the URL instead of a multi-MB data URL).
+      // PDFs/text stay private — the agent reads extracted text / read_attachment.
+      const isImage = mediaType.toLowerCase().startsWith("image/");
       const blob = await put(
         `attachments/${viewer.id}/${Date.now()}-${file.name}`,
         bytes,
         {
-          // The store is private: user documents must not be publicly
-          // accessible. The model never fetches the blob — it reads the
-          // extracted text returned below.
-          access: "private",
+          access: isImage ? "public" : "private",
           contentType: mediaType,
           addRandomSuffix: false,
         },

@@ -15,11 +15,16 @@ import * as ImagePicker from "expo-image-picker";
 import { XIcon } from "lucide-react-native";
 import type { FC } from "react";
 import { Alert, Image, Platform, View } from "react-native";
+import { uploadImageAttachment } from "@/src/image-attachment";
 import { uploadPdfAttachment } from "@/src/pdf-attachment";
 
-const MAX_IMAGE_EDGE = 2048;
+// Match live-camera sizing so photo turns stay under the gateway body cap.
+// Oversized inline data URLs were causing prepareSend to stick with
+// "Delivery not confirmed" after the eve turn POST failed.
+const MAX_IMAGE_EDGE = 1280;
 const MAX_IMAGES = 4;
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 1 * 1024 * 1024;
+const JPEG_QUALITY = 0.65;
 const MAX_TEXT_BYTES = 16 * 1024;
 
 const encodeJpeg = async (asset: ImagePicker.ImagePickerAsset) => {
@@ -36,7 +41,7 @@ const encodeJpeg = async (asset: ImagePicker.ImagePickerAsset) => {
     try {
       const { base64 } = await image.saveAsync({
         format: SaveFormat.JPEG,
-        compress: 0.8,
+        compress: JPEG_QUALITY,
         base64: true,
       });
       return base64;
@@ -47,6 +52,16 @@ const encodeJpeg = async (asset: ImagePicker.ImagePickerAsset) => {
     context.release();
   }
 };
+
+function base64ToBytes(base64: string): Uint8Array {
+  const cleaned = base64.replace(/[\t\n\f\r ]/g, "");
+  const binary = globalThis.atob(cleaned);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
 
 const useAttachmentImageUri = () =>
   useAuiState((s) => {
@@ -114,13 +129,32 @@ export const ComposerAddAttachment: FC<{
   const addImageAsset = async (asset: ImagePicker.ImagePickerAsset) => {
     const base64 = await encodeJpeg(asset);
     if (!base64 || Math.ceil(base64.length * 3 / 4) > MAX_IMAGE_BYTES) {
-      throw new Error("Photo is too large after resizing (2 MB limit).");
+      throw new Error("Photo is too large after resizing (1 MB limit).");
+    }
+    const name = `${(asset.fileName ?? "photo").replace(/\.[^.]+$/, "")}.jpg`;
+    const bytes = base64ToBytes(base64);
+    // Prefer a public Blob URL so the eve turn JSON stays small. Fall back to
+    // an inline data URL only when Blob is unavailable (local without store).
+    let imageUri: string;
+    try {
+      imageUri = await uploadImageAttachment({
+        bytes,
+        name,
+        mediaType: "image/jpeg",
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "";
+      if (/Blob store|public URL|No Blob/i.test(message)) {
+        imageUri = `data:image/jpeg;base64,${base64}`;
+      } else {
+        throw cause;
+      }
     }
     await aui.composer.addAttachment({
-      name: `${(asset.fileName ?? "photo").replace(/\.[^.]+$/, "")}.jpg`,
+      name,
       contentType: "image/jpeg",
       type: "image",
-      content: [{ type: "image", image: `data:image/jpeg;base64,${base64}` }],
+      content: [{ type: "image", image: imageUri }],
     });
   };
 
