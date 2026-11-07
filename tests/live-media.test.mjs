@@ -8,6 +8,7 @@ import {
 } from "../lib/live-token.ts";
 import {
   LIVE_BARGE_IN_LEVEL,
+  LIVE_CAPTURE_SAMPLE_RATE,
   LIVE_FRAME_MAX_BYTES,
   LIVE_PLAYBACK_CHUNK_BYTES,
   LIVE_SAMPLE_RATE,
@@ -66,7 +67,10 @@ test("a data-policy mint failure is explained and other failures stay generic", 
   );
 });
 
-test("pcm16 capture round-trips and resamples to 24 kHz", () => {
+test("pcm16 capture round-trips and resamples device capture to 24 kHz", () => {
+  assert.equal(LIVE_CAPTURE_SAMPLE_RATE, 48_000);
+  assert.notEqual(LIVE_CAPTURE_SAMPLE_RATE, LIVE_SAMPLE_RATE);
+
   const samples = new Float32Array([0, 0.5, -1, 0.25]);
   const pcm = captureToPcm16Base64({
     data: new Uint8Array(samples.buffer),
@@ -78,7 +82,15 @@ test("pcm16 capture round-trips and resamples to 24 kHz", () => {
   assert.equal(decoded.byteLength, samples.length * 2);
   assert.deepEqual(base64ToBytes(bytesToBase64(decoded)), decoded);
 
-  const halved = resampleLinear(samples, 48_000, LIVE_SAMPLE_RATE);
+  const fromCapture = captureToPcm16Base64({
+    data: new Uint8Array(new Float32Array([0, 0.5, -1, 0.25, 0, 0.25, -0.5, 0.1]).buffer),
+    encoding: "float32",
+    sampleRate: LIVE_CAPTURE_SAMPLE_RATE,
+    channels: 1,
+  });
+  assert.equal(base64ToBytes(fromCapture).byteLength, 4 * 2);
+
+  const halved = resampleLinear(samples, LIVE_CAPTURE_SAMPLE_RATE, LIVE_SAMPLE_RATE);
   assert.equal(halved.length, 2);
 });
 

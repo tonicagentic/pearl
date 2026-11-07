@@ -17,7 +17,9 @@ import { useChats } from "@/src/chat-context";
 import { resizeLiveJpeg } from "@/src/live-camera";
 import {
   LIVE_BARGE_IN_LEVEL,
+  LIVE_CAPTURE_SAMPLE_RATE,
   LIVE_MAX_SESSION_MS,
+  LIVE_MIC_SETTLE_MS,
   LIVE_SAMPLE_RATE,
   PcmPlaybackBuffer,
   captureToPcm16Base64,
@@ -69,14 +71,22 @@ function stopStream(stream: { stop: () => void }) {
   }
 }
 
+async function startMicStream(stream: { start: () => Promise<unknown> }) {
+  // Give AVAudioSession time to settle after permission / category changes.
+  // Starting immediately can leave inputNode at 0 Hz and abort in installTap.
+  await new Promise((resolve) => setTimeout(resolve, LIVE_MIC_SETTLE_MS));
+  await stream.start();
+}
+
 export function LiveSession({ onClose }: { readonly onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const { store } = useChats();
   const cameraRef = useRef<CameraView>(null);
   const onCapture = useRef<(buffer: AudioStreamBuffer) => void>(() => {});
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  // Capture at a hardware-friendly rate; captureToPcm16Base64 resamples to 24 kHz.
   const { stream } = useAudioStream({
-    sampleRate: LIVE_SAMPLE_RATE,
+    sampleRate: LIVE_CAPTURE_SAMPLE_RATE,
     channels: 1,
     encoding: "int16",
     onBuffer: (buffer) => onCapture.current(buffer),
@@ -306,7 +316,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
             finishRef.current();
           }, LIVE_MAX_SESSION_MS);
           if (!mutedRef.current) {
-            void streamRef.current.start().catch(() => {
+            void startMicStream(streamRef.current).catch(() => {
               setError("The microphone did not start.");
             });
           }
@@ -438,7 +448,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       setVoiceMode("muted");
     } else if (phase === "live" && !closedRef.current) {
       setVoiceMode(suppressMicRef.current ? "speaking" : "idle");
-      void streamRef.current.start().catch(() => setError("The microphone did not start."));
+      void startMicStream(streamRef.current).catch(() => setError("The microphone did not start."));
     }
   };
 

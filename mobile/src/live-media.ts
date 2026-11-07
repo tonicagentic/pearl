@@ -1,7 +1,16 @@
 // Pure helpers for the mobile live session. The Gateway socket speaks the
 // normalized AI SDK realtime events; this file does not open that socket.
 
+/** Wire rate for gateway realtime PCM (input-audio-append / playback). */
 export const LIVE_SAMPLE_RATE = 24_000;
+/**
+ * Mic capture rate for expo-audio's AudioStream. Physical iOS devices can
+ * abort in installTap when the preferred rate is 24 kHz (expo's own guidance
+ * lists 48000 / 44100 / 16000). Capture at 48 kHz and resample to the wire rate.
+ */
+export const LIVE_CAPTURE_SAMPLE_RATE = 48_000;
+/** Brief pause after audio-session / permission setup before AudioStream.start. */
+export const LIVE_MIC_SETTLE_MS = 200;
 export const LIVE_FRAME_MAX_BYTES = 200 * 1024;
 export const LIVE_MAX_SESSION_MS = 25 * 60 * 1000;
 /** 200 ms of 16-bit mono audio. Short enough to start playback, long enough to hear. */
