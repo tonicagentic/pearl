@@ -10,10 +10,12 @@ import {
 import { resolveModelForStep } from "../agent/agent.ts";
 import {
   COMPOSER_MODELS as WEB_MODELS,
+  COMPOSER_MODEL_SECTIONS as WEB_SECTIONS,
   DEFAULT_MODEL_KEY as WEB_DEFAULT_KEY,
 } from "../app/_components/model-selection.ts";
 import {
   COMPOSER_MODELS as MOBILE_MODELS,
+  COMPOSER_MODEL_SECTIONS as MOBILE_SECTIONS,
   DEFAULT_MODEL_KEY as MOBILE_DEFAULT_KEY,
 } from "../mobile/src/model-selection.ts";
 
@@ -159,9 +161,27 @@ describe("composer model lists", () => {
     assert.equal(WEB_DEFAULT_KEY, "gpt-6.1-sol");
     assert.equal(MOBILE_DEFAULT_KEY, WEB_DEFAULT_KEY);
     assert.deepEqual(MOBILE_MODELS, WEB_MODELS);
+    assert.deepEqual(MOBILE_SECTIONS, WEB_SECTIONS);
     assert.deepEqual(
       WEB_MODELS.map((model) => model.key).sort(),
       Object.keys(CLIENT_MODEL_KEYS).sort(),
+    );
+  });
+
+  it("groups daily drivers and frontier models with the frontier blurb", () => {
+    assert.deepEqual(
+      WEB_SECTIONS.map((section) => section.id),
+      ["daily-driver", "frontier"],
+    );
+    assert.equal(
+      WEB_SECTIONS.find((section) => section.id === "frontier")?.description,
+      "Frontier coding, long-running agents, and advanced computer use.",
+    );
+    assert.deepEqual(
+      WEB_SECTIONS.find((section) => section.id === "frontier")?.models.map(
+        (model) => model.key,
+      ),
+      ["gpt-6-astra", "gemini-4-argon", "muse-wonder-1.0"],
     );
   });
 });

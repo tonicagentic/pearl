@@ -30,6 +30,7 @@ import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback";
 import { TypingIndicator } from "@/components/assistant-ui/elements/typing-indicator";
 import { isTaskNotification } from "@/src/message-projection";
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
+import { registerComposerInputFocus } from "@/src/composer-input-focus";
 import { LiveSession } from "@/components/live-session";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -1247,6 +1248,13 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    return registerComposerInputFocus(() => {
+      nativeInput.current?.focus();
+    });
+  }, []);
+
   return Platform.OS === "ios" ? (
     <AnimatedTextInput
       ref={nativeInput}
@@ -1523,8 +1531,9 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
               className="aui-composer-action-wrapper flex-row items-center"
               style={actionRowStyle}
               onTouchStart={() => {
-                // Keep full chrome through native menu presentation.
-                chromeApi?.pinExpanded();
+                // Hold full chrome only when the keyboard is up — pin while
+                // collapsed would expand the morph under attachment/model sheets.
+                if (KeyboardController.isVisible()) chromeApi?.pinExpanded();
               }}
             >
               <ComposerAddAttachment

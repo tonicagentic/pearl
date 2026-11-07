@@ -16,6 +16,9 @@ export const CLIENT_MODEL_KEYS = {
   "glm-5.3-flash": "zai/glm-5.3-flash",
   "muse-spark-open": "meta/muse-spark-open",
   "grok-4.7": "spacexai/grok-4.7",
+  "gpt-6-astra": "openai/gpt-6-astra",
+  "gemini-4-argon": "google/gemini-4-argon",
+  "muse-wonder-1.0": "meta/muse-wonder-1.0",
 } as const;
 
 export type ClientModelKey = keyof typeof CLIENT_MODEL_KEYS;

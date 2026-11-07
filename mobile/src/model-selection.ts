@@ -12,14 +12,55 @@ export interface ComposerModel {
   /** Picker key sent to the agent; validated against agent-side allowlist. */
   key: string;
   label: string;
+  /** Shown under the label as “by {company}”. */
+  company: string;
+  /** When true, the picker shows an Open Weight tag. */
+  openWeight?: boolean;
 }
 
-export const COMPOSER_MODELS: readonly ComposerModel[] = [
-  { key: "gpt-6.1-sol", label: "GPT 6.1 Sol" },
-  { key: "glm-5.3-flash", label: "GLM 5.3 Flash" },
-  { key: "muse-spark-open", label: "Muse Spark Open" },
-  { key: "grok-4.7", label: "Grok 4.7" },
+export interface ComposerModelSection {
+  id: string;
+  title: string;
+  description?: string;
+  models: readonly ComposerModel[];
+}
+
+export const COMPOSER_MODEL_SECTIONS: readonly ComposerModelSection[] = [
+  {
+    id: "daily-driver",
+    title: "Daily Driver",
+    models: [
+      { key: "gpt-6.1-sol", label: "GPT 6.1 Sol", company: "OpenAI" },
+      {
+        key: "glm-5.3-flash",
+        label: "GLM 5.3 Flash",
+        company: "Z.ai",
+        openWeight: true,
+      },
+      {
+        key: "muse-spark-open",
+        label: "Muse Spark Open",
+        company: "Meta",
+        openWeight: true,
+      },
+      { key: "grok-4.7", label: "Grok 4.7", company: "xAI" },
+    ],
+  },
+  {
+    id: "frontier",
+    title: "Frontier",
+    description:
+      "Frontier coding, long-running agents, and advanced computer use.",
+    models: [
+      { key: "gpt-6-astra", label: "GPT 6 Astra", company: "OpenAI" },
+      { key: "gemini-4-argon", label: "Gemini 4 Argon", company: "Google" },
+      { key: "muse-wonder-1.0", label: "Muse Wonder 1.0", company: "Meta" },
+    ],
+  },
 ];
+
+export const COMPOSER_MODELS: readonly ComposerModel[] =
+  COMPOSER_MODEL_SECTIONS.flatMap((section) => section.models);
 
 export const DEFAULT_MODEL_KEY = COMPOSER_MODELS[0].key;
 

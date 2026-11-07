@@ -4,7 +4,7 @@ import { useCSSVariable } from "uniwind";
 
 import { SheetScaffold } from "@/components/sheet-scaffold";
 import {
-  COMPOSER_MODELS,
+  COMPOSER_MODEL_SECTIONS,
   getModelSelection,
   setModelSelection,
   subscribeModelSelection,
@@ -49,48 +49,69 @@ export function ModelsScreen() {
         </Text>
       }
     >
-      <View className="gap-1.5">
-        <Text className="px-1 text-[13px] font-normal uppercase tracking-[0.04em] text-muted-foreground">
-          Default
-        </Text>
-        <View
-          className="overflow-hidden rounded-[10px]"
-          style={{ backgroundColor: cardColor ?? "#fff" }}
-        >
-          {COMPOSER_MODELS.map((model, index) => {
-            const selected = selectedKey === model.key;
-            return (
-              <View key={model.key}>
-                {index > 0 ? (
-                  <View
-                    style={[
-                      styles.separator,
-                      {
-                        backgroundColor:
-                          separatorColor ?? "rgba(60,60,67,0.29)",
-                      },
-                    ]}
-                  />
-                ) : null}
-                <Pressable
-                  accessibilityRole="radio"
-                  accessibilityLabel={model.label}
-                  accessibilityState={{ checked: selected, disabled: saving }}
-                  className="active:bg-muted/80"
-                  disabled={saving}
-                  onPress={() => selectModel(model.key)}
-                  style={styles.row}
-                >
-                  <Text className="flex-1 text-[17px] leading-[22px] text-foreground">
-                    {model.label}
-                  </Text>
-                  {selected ? <Text style={styles.check}>✓</Text> : null}
-                </Pressable>
-              </View>
-            );
-          })}
+      {COMPOSER_MODEL_SECTIONS.map((section) => (
+        <View key={section.id} className="gap-1.5">
+          <View className="px-1">
+            <Text className="text-[13px] font-normal uppercase tracking-[0.04em] text-muted-foreground">
+              {section.title}
+            </Text>
+            {section.description ? (
+              <Text className="mt-1 text-[13px] leading-[18px] text-muted-foreground">
+                {section.description}
+              </Text>
+            ) : null}
+          </View>
+          <View
+            className="overflow-hidden rounded-[10px]"
+            style={{ backgroundColor: cardColor ?? "#fff" }}
+          >
+            {section.models.map((model, index) => {
+              const selected = selectedKey === model.key;
+              return (
+                <View key={model.key}>
+                  {index > 0 ? (
+                    <View
+                      style={[
+                        styles.separator,
+                        {
+                          backgroundColor:
+                            separatorColor ?? "rgba(60,60,67,0.29)",
+                        },
+                      ]}
+                    />
+                  ) : null}
+                  <Pressable
+                    accessibilityRole="radio"
+                    accessibilityLabel={model.label}
+                    accessibilityState={{ checked: selected, disabled: saving }}
+                    className="active:bg-muted/80"
+                    disabled={saving}
+                    onPress={() => selectModel(model.key)}
+                    style={styles.row}
+                  >
+                    <View className="min-w-0 flex-1 gap-0.5">
+                      <Text className="text-[17px] leading-[22px] text-foreground">
+                        {model.label}
+                      </Text>
+                      <Text className="text-[13px] leading-[18px] text-muted-foreground">
+                        {`by ${model.company}`}
+                      </Text>
+                      {model.openWeight ? (
+                        <View className="mt-0.5 self-start rounded-full bg-muted px-2 py-0.5">
+                          <Text className="text-[11px] font-medium text-muted-foreground">
+                            Open Weight
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    {selected ? <Text style={styles.check}>✓</Text> : null}
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
         </View>
-      </View>
+      ))}
 
       {saveError ? (
         <Text

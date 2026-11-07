@@ -6,6 +6,7 @@ import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   COMPOSER_MODELS,
+  COMPOSER_MODEL_SECTIONS,
   getModelSelection,
   setModelSelection,
   subscribeModelSelection,
@@ -67,34 +68,61 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
         <div
           role="listbox"
           aria-label="Model"
-          className="bg-popover border-border/60 absolute bottom-full left-0 z-50 mb-2 w-56 overflow-hidden rounded-xl border p-1 shadow-lg"
+          className="bg-popover border-border/60 absolute bottom-full left-0 z-50 mb-2 w-72 overflow-hidden rounded-xl border p-1 shadow-lg"
         >
-          {COMPOSER_MODELS.map((model) => {
-            const isSelected = model.key === selected.key;
-            return (
-              <button
-                key={model.key}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                onClick={() => {
-                  setModelSelection(model.key);
-                  setOpen(false);
-                }}
-                className={cn(
-                  "hover:bg-accent flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-                  isSelected && "bg-accent/60",
-                )}
-              >
-                <span className="text-foreground font-medium">
-                  {model.label}
-                </span>
-                {isSelected ? (
-                  <CheckIcon className="text-foreground size-3.5 shrink-0" />
+          {COMPOSER_MODEL_SECTIONS.map((section, sectionIndex) => (
+            <div
+              key={section.id}
+              className={cn(sectionIndex > 0 && "mt-1 border-t border-border/60 pt-1")}
+            >
+              <div className="px-2.5 pb-1 pt-1.5">
+                <div className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+                  {section.title}
+                </div>
+                {section.description ? (
+                  <div className="text-muted-foreground mt-0.5 text-[11px] leading-snug">
+                    {section.description}
+                  </div>
                 ) : null}
-              </button>
-            );
-          })}
+              </div>
+              {section.models.map((model) => {
+                const isSelected = model.key === selected.key;
+                return (
+                  <button
+                    key={model.key}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    onClick={() => {
+                      setModelSelection(model.key);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      "hover:bg-accent flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+                      isSelected && "bg-accent/60",
+                    )}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="text-foreground block font-medium">
+                        {model.label}
+                      </span>
+                      <span className="text-muted-foreground block text-[11px]">
+                        {`by ${model.company}`}
+                      </span>
+                      {model.openWeight ? (
+                        <span className="bg-muted text-muted-foreground mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium">
+                          Open Weight
+                        </span>
+                      ) : null}
+                    </span>
+                    {isSelected ? (
+                      <CheckIcon className="text-foreground size-3.5 shrink-0" />
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
       ) : null}
     </div>
