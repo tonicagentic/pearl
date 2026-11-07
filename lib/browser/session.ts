@@ -13,7 +13,11 @@ import {
 
 export const BROWSER_TIMEOUT_MS = 30 * 60 * 1000;
 
-/** Private / link-local / metadata ranges the browser must not reach. */
+/**
+ * Private / link-local / metadata ranges the browser must not reach.
+ * Vercel Sandbox networkPolicy currently accepts IPv4 CIDRs only — IPv6
+ * entries (e.g. `::1/128`) return `Invalid CIDR` and block sandbox create.
+ */
 export const BROWSER_SUBNET_DENY = [
   "10.0.0.0/8",
   "172.16.0.0/12",
@@ -21,9 +25,6 @@ export const BROWSER_SUBNET_DENY = [
   "127.0.0.0/8",
   "169.254.0.0/16",
   "0.0.0.0/8",
-  "::1/128",
-  "fc00::/7",
-  "fe80::/10",
 ] as const;
 
 export type BrowserSessionHandle = {
@@ -133,23 +134,30 @@ async function startControlServer(sandbox: BrowserSandbox): Promise<void> {
     },
   ]);
 
+  // Ubuntu 26.04 sandbox images need Playwright ≥1.65; older releases reject
+  // `install chromium` with "does not support chromium on ubuntu26.04-x64".
+  // Marker file skips the ~30s install on later ensureBrowserSession calls.
   const install = await sandbox.runCommand({
     cmd: "bash",
     args: [
       "-c",
       [
+        "set -e",
         "cd /workspace/.pearl-browser",
-        "if [ ! -d node_modules/playwright-core ]; then",
-        "  npm install --no-fund --no-audit playwright-core@1.55.0 ws@8.18.3",
-        "  npx playwright-core install chromium",
+        "MARKER=.browsers-ready-1.65.0",
+        "if [ ! -f \"$MARKER\" ]; then",
+        "  npm install --no-fund --no-audit playwright-core@1.65.0 ws@8.18.3",
+        "  npx playwright-core install --with-deps chromium",
+        "  touch \"$MARKER\"",
         "fi",
       ].join("\n"),
     ],
   });
   if (install.exitCode !== 0) {
     const err = await install.stderr();
+    const out = await install.stdout();
     throw new Error(
-      `Failed to install browser control deps: ${err || "unknown error"}`,
+      `Failed to install browser control deps: ${err || out || "unknown error"}`,
     );
   }
 
