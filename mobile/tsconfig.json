@@ -15,6 +15,7 @@
     "uniwind-types.d.ts",
     "../lib/usage/**/*.ts",
     "../lib/browser/tabs.ts",
-    "../lib/browser/types.ts"
+    "../lib/browser/types.ts",
+    "../lib/json-render/**/*.ts"
   ]
 }

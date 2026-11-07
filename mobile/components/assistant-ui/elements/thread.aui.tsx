@@ -12,7 +12,8 @@ import {
 import { File } from "@/components/assistant-ui/elements/file";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
 import { Image } from "@/components/assistant-ui/elements/image";
-import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
+import { AssistantInlineText } from "@/components/json-render/chat-json-render";
+import { proseFromMessageText } from "../../../../lib/json-render/inline-spec";
 import { SessionTimeline, TIMELINE_TOOLS } from "@/components/assistant-ui/elements/session-timeline";
 import { TaskGroup, DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
 import { ToolGroup } from "@/components/assistant-ui/elements/tool-group";
@@ -1837,7 +1838,7 @@ const AssistantMessage: FC = () => {
                 // Reasoning is summarized by the timeline.
                 return null;
               case "text":
-                return <MarkdownText {...part} />;
+                return <AssistantInlineText />;
               case "image":
                 return <Image {...part} />;
               case "file":
@@ -1878,7 +1879,14 @@ const assistantActionButtonClassName =
 const assistantActionHitSlop = { top: 6, bottom: 6, left: 6, right: 6 };
 
 const ShareMarkdown: FC = () => {
-  const markdown = useAuiState((s) => s.message.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n\n"));
+  const markdown = useAuiState((s) =>
+    proseFromMessageText(
+      s.message.parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("\n\n"),
+    ),
+  );
   if (Platform.OS === "web" || !markdown.trim()) return null;
   return (
     <Pressable

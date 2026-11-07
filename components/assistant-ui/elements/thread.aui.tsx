@@ -16,7 +16,8 @@ import { ComposerModelPicker } from "@/app/_components/model-picker";
 import { splitPasteBlocks } from "@/lib/chat/large-paste";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
 import { Image } from "@/components/assistant-ui/elements/image";
-import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
+import { AssistantInlineText } from "@/components/json-render/chat-json-render";
+import { proseFromMessageText } from "@/lib/json-render/inline-spec";
 import {
   MessageSources,
   SourcePart,
@@ -882,7 +883,7 @@ const AssistantMessage: FC = () => {
                 // Reasoning is summarized by the timeline.
                 return null;
               case "text":
-                return <MarkdownText />;
+                return <AssistantInlineText />;
               case "source":
                 return <SourcePart />;
               case "reasoning":
@@ -937,6 +938,38 @@ const AssistantMessage: FC = () => {
   );
 };
 
+const messageProse = (parts: readonly { type: string; text?: string }[]) =>
+  proseFromMessageText(
+    parts
+      .filter((part) => part.type === "text" && typeof part.text === "string")
+      .map((part) => part.text ?? "")
+      .join("\n\n"),
+  );
+
+const AssistantProseCopy: FC = () => {
+  const [copied, setCopied] = useState(false);
+  const parts = useAuiState((s) => s.message.parts);
+  return (
+    <TooltipIconButton
+      tooltip={copied ? "Copied" : "Copy"}
+      onClick={() => {
+        const prose = messageProse(parts);
+        if (!prose || !navigator.clipboard) return;
+        void navigator.clipboard.writeText(prose).then(() => {
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+    >
+      {copied ? (
+        <CheckIcon className="animate-in zoom-in-50 fade-in duration-200 ease-out" />
+      ) : (
+        <CopyIcon className="animate-in zoom-in-75 fade-in duration-150" />
+      )}
+    </TooltipIconButton>
+  );
+};
+
 const AssistantActionBar: FC = () => {
   return (
     <ActionBarPrimitive.Root
@@ -944,16 +977,7 @@ const AssistantActionBar: FC = () => {
       autohide="not-last"
       className="aui-assistant-action-bar-root text-muted-foreground animate-in fade-in col-start-3 row-start-2 -ms-1 flex gap-1 duration-200"
     >
-      <ActionBarPrimitive.Copy asChild>
-        <TooltipIconButton tooltip="Copy">
-          <AuiIf condition={(s) => s.message.isCopied}>
-            <CheckIcon className="animate-in zoom-in-50 fade-in duration-200 ease-out" />
-          </AuiIf>
-          <AuiIf condition={(s) => !s.message.isCopied}>
-            <CopyIcon className="animate-in zoom-in-75 fade-in duration-150" />
-          </AuiIf>
-        </TooltipIconButton>
-      </ActionBarPrimitive.Copy>
+      <AssistantProseCopy />
       <ActionBarPrimitive.Reload asChild>
         <TooltipIconButton tooltip="Refresh">
           <RefreshCwIcon />
@@ -974,7 +998,20 @@ const AssistantActionBar: FC = () => {
           sideOffset={6}
           className="aui-action-bar-more-content bg-popover text-popover-foreground data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-xl border p-1.5"
         >
-          <ActionBarPrimitive.ExportMarkdown asChild>
+          <ActionBarPrimitive.ExportMarkdown
+            onExport={async (content) => {
+              const prose = proseFromMessageText(content);
+              if (!prose) return;
+              const blob = new Blob([prose], { type: "text/markdown" });
+              const url = URL.createObjectURL(blob);
+              const anchor = document.createElement("a");
+              anchor.href = url;
+              anchor.download = `message-${Date.now()}.md`;
+              anchor.click();
+              window.setTimeout(() => URL.revokeObjectURL(url), 40_000);
+            }}
+            asChild
+          >
             <ActionBarMorePrimitive.Item className="aui-action-bar-more-item hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none">
               <DownloadIcon className="size-4" />
               Export as Markdown

@@ -12,10 +12,24 @@ const config = withUniwindConfig(
   },
 );
 
-// Shared usage/cost helpers live in the web app's `lib/usage` (no server deps).
-// Watch the parent `lib` tree so Metro can resolve relative imports from mobile.
-const repoLib = path.resolve(__dirname, "../lib");
+// Shared helpers live in the web app's `lib/` (usage, json-render, …).
+// Watch that tree so Metro can resolve relative imports from mobile.
+// Files under `../lib` import `@json-render/*`; Metro's hierarchical lookup
+// from those files never reaches `mobile/node_modules`, so pin those packages
+// explicitly. Do not add the repo-root node_modules to the search path — that
+// pulls web Expo installs and breaks native modules (ExpoAsset).
+const repoRoot = path.resolve(__dirname, "..");
+const repoLib = path.resolve(repoRoot, "lib");
+const mobileNodeModules = path.resolve(__dirname, "node_modules");
 config.watchFolders = [...new Set([...(config.watchFolders ?? []), repoLib])];
+config.resolver.extraNodeModules = {
+  ...(config.resolver.extraNodeModules ?? {}),
+  "@json-render/core": path.resolve(mobileNodeModules, "@json-render/core"),
+  "@json-render/react-native": path.resolve(
+    mobileNodeModules,
+    "@json-render/react-native",
+  ),
+};
 
 // uniwind styles React Native components by redirecting every
 // `import ... from "react-native"` to its own className-aware wrappers. Its
