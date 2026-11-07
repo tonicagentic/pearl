@@ -258,10 +258,13 @@ export function ToolTimeline({
           <ShimmerLabel
             active={streaming}
             className={cn(threadMeta, "leading-6")}
+            numberOfLines={1}
           >
             {elapsed ? `${activeLabel} ${elapsed}` : activeLabel}
           </ShimmerLabel>
-          <Text className={cn(threadMeta, "leading-6")}>{restingLabel}</Text>
+          <Text className={cn(threadMeta, "leading-6")} numberOfLines={1}>
+            {restingLabel}
+          </Text>
         </SwapLabel>
         <MetaChevron open={open} />
       </Pressable>

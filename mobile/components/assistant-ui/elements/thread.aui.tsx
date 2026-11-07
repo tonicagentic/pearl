@@ -967,21 +967,7 @@ const IosKeyboardLayout: FC<{ children: ReactNode }> = ({ children }) => {
   );
 };
 
-const DefaultWelcome: FC = () => (
-  <View
-    className="aui-thread-welcome items-center justify-center px-8 py-10"
-    accessible
-    accessibilityRole="header"
-    accessibilityLabel="Pearl. Ask anything."
-  >
-    <Text className="text-foreground text-center text-[34px] font-semibold tracking-tight">
-      Pearl
-    </Text>
-    <Text className="text-muted-foreground mt-2 text-center text-[17px] leading-6">
-      Ask anything
-    </Text>
-  </View>
-);
+const DefaultWelcome: FC = () => null;
 
 const IosWelcome: FC = () => {
   const keyboardHeight = useContext(KeyboardHeightContext)!;

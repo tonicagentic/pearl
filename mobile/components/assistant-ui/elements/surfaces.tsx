@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import {
   type FC,
   type ReactNode,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -175,6 +176,21 @@ export function SwapLabel({
 }) {
   const motion = useMotion();
   const [progress] = useState(() => new Animated.Value(active));
+  // Fit the larger of the two labels. Sizing only to children[0] ("Working 12s")
+  // left "Worked for 12s" wrapping inside that narrower box and spilling onto
+  // the message below.
+  const [box, setBox] = useState({ width: 0, height: 0 });
+  const mergeLayout = useCallback((width: number, height: number) => {
+    setBox((prev) => {
+      const next = {
+        width: Math.max(prev.width, Math.ceil(width)),
+        height: Math.max(prev.height, Math.ceil(height)),
+      };
+      return next.width === prev.width && next.height === prev.height
+        ? prev
+        : next;
+    });
+  }, []);
 
   useEffect(() => {
     if (!motion) {
@@ -223,17 +239,40 @@ export function SwapLabel({
     return <View className={className}>{children[active]}</View>;
   }
 
+  const sized =
+    box.width > 0
+      ? { width: box.width, height: box.height }
+      : undefined;
+
   return (
-    <View className={cn("relative justify-center", className)}>
-      {/* Invisible sizer: both labels occupy the same cell so width/height stay stable. */}
+    <View
+      className={cn("relative justify-center", className)}
+      style={sized}
+    >
+      {/* Unconstrained measurers so the cell grows to the wider resting label. */}
       <View
         pointerEvents="none"
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        className="opacity-0"
+        style={{ position: "absolute", opacity: 0 }}
+        onLayout={(event) => {
+          const { width, height } = event.nativeEvent.layout;
+          mergeLayout(width, height);
+        }}
       >
-        <View>{children[0]}</View>
-        <View className="absolute left-0 top-0">{children[1]}</View>
+        {children[0]}
+      </View>
+      <View
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={{ position: "absolute", opacity: 0 }}
+        onLayout={(event) => {
+          const { width, height } = event.nativeEvent.layout;
+          mergeLayout(width, height);
+        }}
+      >
+        {children[1]}
       </View>
       <Animated.View
         className="absolute left-0 top-0"
