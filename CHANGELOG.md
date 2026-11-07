@@ -6,6 +6,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.1.0-alpha.5 - 2026-11-07
+
+### Added
+
+- Inline json-render scoreboards and generative UI for eve chat on web and
+  mobile (ComparisonBar and related catalog components).
+- In-app browser for mobile chat links, with an option to open in Safari.
+- Builder subagent that ships `pearl-*` mini apps, sandbox draft previews,
+  and `screenshot_app`.
+- Shared live browser workspace with file tabs on web and mobile.
+- Spoken live camera session on mobile.
+- Inline research citations for tool-backed claims.
+- Structured identity profile with on-demand `get_profile` access.
+- User-scoped skills plus mobile settings sheets for plugins, models, and
+  skills.
+- Native model drawer with Daily Driver and Frontier sections.
+- Thread cost drawer and delete actions under the thread dots menu.
+- Recents↔thread swipe blur and theme-token route chrome.
+- Finger-tracked push panels for chat history (replacing the overlay drawer).
+
+### Changed
+
+- Mobile composer morphs during live voice and stays stable while editing
+  drafts or attaching camera photos.
+- Chat thread typography, thinking chrome, citations, and tool labels are
+  aligned across web and mobile.
+- Sent photos stay on the mobile message instead of collapsing to a filename.
+- History uses a home icon with a forward control to return to chat.
+- Empty-thread welcome is removed; Worked-for labels no longer wrap awkwardly.
+
+### Fixed
+
+- HITL waiting card crashes, stuck approvals, and approve/steer races; tool
+  approvals stay pinned above the web composer.
+- Live browser sandbox startup on Ubuntu 26.04.
+- Mobile PDF attachment staging reliability.
+- iOS composer chrome staying expanded after menus close.
+- Builder / libfx packaging so `durable/vercel.mjs` ships on Vercel; empty-repo
+  seeding so `create_app` can finish; fx turn streams reconnect after Function
+  yields.
+
 ## 0.1.0-alpha.4 - 2026-10-27
 
 ### Added
@@ -54,5 +95,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The iOS app is versioned with the repository release instead of a separate
   counter.
 
+[0.1.0-alpha.5]: https://github.com/tonicagentic/pearl/releases/tag/v0.1.0-alpha.5
+[0.1.0-alpha.4]: https://github.com/tonicagentic/pearl/releases/tag/v0.1.0-alpha.4
 [0.1.0-alpha.1]: https://github.com/tonicagentic/pearl/releases/tag/v0.1.0-alpha.1
 
