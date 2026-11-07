@@ -10,31 +10,43 @@ import {
   type ReactNode,
 } from "react";
 
-// Page-level canvas state: the document currently shown beside the thread.
-// The write_file tool renderer claims the canvas while its call streams and
-// updates the content as the model writes; the chat layout reads it to split
-// the thread into a rail.
+import {
+  activeFileTab,
+  closeActiveTab,
+  closeTab,
+  emptyWorkspace,
+  openFileTab,
+  openPageTab,
+  selectTab,
+  syncPageTabs,
+  updateFileTab,
+  updateFileTabByPath,
+} from "@/lib/browser/tabs";
+import type {
+  BrowserControlMode,
+  BrowserTabInfo,
+  WorkspacePageTab,
+  WorkspaceState,
+  WorkspaceTab,
+} from "@/lib/browser/types";
+
+// Page-level workspace: file and live-browser tabs beside the thread.
+// write_file claims a file tab while it streams; the browser tool syncs page
+// tabs from the control server. Closing the last tab collapses the panel.
+
+/** @deprecated Prefer WorkspaceFileTab — kept for existing file tool callers. */
 export type CanvasDocument = {
-  /** Stable id of the tool call that owns this document. */
   readonly id: string;
   readonly path: string;
   readonly content: string;
   readonly running: boolean;
   readonly note: string | null;
-  /** Session-scoped revision count for this path (write_file + edit_file). */
   readonly version: number;
 };
 
-// Session-scoped revision counters per file path. Each completed write_file
-// or edit_file call bumps the count, so the canvas header shows a real
-// revision number as the draft iterates. Resets on reload — the durable
-// history lives in the agent_file_revision table.
 const pathVersions = new Map<string, number>();
 const callVersions = new Map<string, number>();
 
-// Idempotent per tool call: a streaming call renders many times before it
-// completes, and StrictMode renders twice — the first completed render for a
-// call id claims the next version, later renders reuse it.
 export function versionForCall(
   callId: string,
   path: string,
@@ -60,10 +72,15 @@ export function pathVersion(path: string): number {
 }
 
 type CanvasContextValue = {
+  readonly chatId: string | null;
+  readonly workspace: WorkspaceState;
+  readonly tabs: readonly WorkspaceTab[];
+  readonly activeTabId: string | null;
+  /** Active file tab, or null when a page is focused / nothing open. */
   readonly document: CanvasDocument | null;
+  readonly controlMode: BrowserControlMode;
+  readonly viewUrl: string | null;
   openDocument: (doc: CanvasDocument) => void;
-  /** Open a file by path on the canvas, resolving content from the chat's
-   * saved files when not provided (timeline chips, referenced paths). */
   openPath: (path: string, content?: string) => void;
   updateDocument: (
     id: string,
@@ -74,6 +91,12 @@ type CanvasContextValue = {
     update: (doc: CanvasDocument) => CanvasDocument,
   ) => void;
   closeDocument: () => void;
+  selectWorkspaceTab: (tabId: string) => void;
+  closeWorkspaceTab: (tabId: string) => void;
+  syncBrowserPages: (pages: readonly BrowserTabInfo[]) => void;
+  openBrowserPage: (page: Omit<WorkspacePageTab, "kind" | "id">) => void;
+  setControlMode: (mode: BrowserControlMode) => void;
+  setViewUrl: (url: string | null) => void;
 };
 
 const CanvasContext = createContext<CanvasContextValue | null>(null);
@@ -86,22 +109,43 @@ export function CanvasProvider({
   /** Chat used to resolve file content for openPath (null before a chat exists). */
   chatId?: string | null;
 }) {
-  const [document, setDocument] = useState<CanvasDocument | null>(null);
-  const documentRef = useRef(document);
-  documentRef.current = document;
+  const [workspace, setWorkspace] = useState<WorkspaceState>(emptyWorkspace);
+  const [controlMode, setControlMode] = useState<BrowserControlMode>("agent");
+  const [viewUrl, setViewUrl] = useState<string | null>(null);
+  const workspaceRef = useRef(workspace);
+  workspaceRef.current = workspace;
+
+  const document = useMemo(() => {
+    const file = activeFileTab(workspace);
+    if (!file) return null;
+    return {
+      id: file.id,
+      path: file.path,
+      content: file.content,
+      running: file.running,
+      note: file.note,
+      version: file.version,
+    } satisfies CanvasDocument;
+  }, [workspace]);
 
   const openPath = useCallback(
     (path: string, content?: string) => {
-      if (documentRef.current?.path === path) return;
+      const current = activeFileTab(workspaceRef.current);
+      if (current?.path === path) {
+        setWorkspace((prev) => selectTab(prev, current.id));
+        return;
+      }
       if (content !== undefined) {
-        setDocument({
-          id: `ref:${path}`,
-          path,
-          content,
-          running: false,
-          note: null,
-          version: pathVersion(path),
-        });
+        setWorkspace((prev) =>
+          openFileTab(prev, {
+            id: `ref:${path}`,
+            path,
+            content,
+            running: false,
+            note: null,
+            version: pathVersion(path),
+          }),
+        );
         return;
       }
       if (!chatId) return;
@@ -119,18 +163,18 @@ export function CanvasProvider({
           const text = await (
             await fetch(`/api/chats/${chatId}/files?fileId=${file.id}`)
           ).text();
-          if (documentRef.current?.path === file.path) return;
-          setDocument({
-            id: `file:${file.id}`,
-            path: file.path,
-            content: text,
-            running: false,
-            note: null,
-            version: pathVersion(file.path),
-          });
+          setWorkspace((prev) =>
+            openFileTab(prev, {
+              id: `file:${file.id}`,
+              path: file.path,
+              content: text,
+              running: false,
+              note: null,
+              version: pathVersion(file.path),
+            }),
+          );
         } catch {
-          // No content available (storage mode, network) — leave the canvas
-          // as it is rather than opening an empty document.
+          // No content available — leave the workspace as it is.
         }
       })();
     },
@@ -138,46 +182,115 @@ export function CanvasProvider({
   );
 
   const openDocument = useCallback((doc: CanvasDocument) => {
-    setDocument(doc);
+    setWorkspace((prev) => openFileTab(prev, doc));
   }, []);
 
   const updateDocument = useCallback(
     (id: string, patch: Partial<Omit<CanvasDocument, "id">>) => {
-      setDocument((prev) =>
-        prev && prev.id === id ? { ...prev, ...patch } : prev,
-      );
+      setWorkspace((prev) => updateFileTab(prev, id, patch));
     },
     [],
   );
 
-  // Path-matched update with a functional form: targeted edits arrive from a
-  // different tool call than the one that claimed the canvas (edit_file vs
-  // write_file), and consecutive edits must chain off the latest content even
-  // when their results settle in the same render batch.
   const updateDocumentByPath = useCallback(
     (
       path: string,
       update: (doc: CanvasDocument) => CanvasDocument,
     ): void => {
-      setDocument((prev) => (prev && prev.path === path ? update(prev) : prev));
+      setWorkspace((prev) =>
+        updateFileTabByPath(prev, path, (tab) => {
+          const next = update({
+            id: tab.id,
+            path: tab.path,
+            content: tab.content,
+            running: tab.running,
+            note: tab.note,
+            version: tab.version,
+          });
+          return {
+            ...tab,
+            path: next.path,
+            content: next.content,
+            running: next.running,
+            note: next.note,
+            version: next.version,
+          };
+        }),
+      );
     },
     [],
   );
 
   const closeDocument = useCallback(() => {
-    setDocument(null);
+    setWorkspace((prev) => closeActiveTab(prev));
   }, []);
+
+  const selectWorkspaceTab = useCallback((tabId: string) => {
+    setWorkspace((prev) => selectTab(prev, tabId));
+  }, []);
+
+  const closeWorkspaceTab = useCallback((tabId: string) => {
+    setWorkspace((prev) => closeTab(prev, tabId));
+  }, []);
+
+  const syncBrowserPages = useCallback((pages: readonly BrowserTabInfo[]) => {
+    setWorkspace((prev) =>
+      syncPageTabs(
+        prev,
+        pages.map((page) => ({
+          pageId: page.id,
+          url: page.url,
+          title: page.title || page.url,
+          active: page.active,
+        })),
+      ),
+    );
+  }, []);
+
+  const openBrowserPage = useCallback(
+    (page: Omit<WorkspacePageTab, "kind" | "id">) => {
+      setWorkspace((prev) => openPageTab(prev, page));
+    },
+    [],
+  );
 
   const value = useMemo(
     () => ({
+      chatId: chatId ?? null,
+      workspace,
+      tabs: workspace.tabs,
+      activeTabId: workspace.activeTabId,
       document,
+      controlMode,
+      viewUrl,
       openDocument,
       openPath,
       updateDocument,
       updateDocumentByPath,
       closeDocument,
+      selectWorkspaceTab,
+      closeWorkspaceTab,
+      syncBrowserPages,
+      openBrowserPage,
+      setControlMode,
+      setViewUrl,
     }),
-    [document, openDocument, openPath, updateDocument, updateDocumentByPath, closeDocument],
+    [
+      chatId,
+      workspace,
+      document,
+      controlMode,
+      viewUrl,
+      openDocument,
+      openPath,
+      updateDocument,
+      updateDocumentByPath,
+      closeDocument,
+      selectWorkspaceTab,
+      closeWorkspaceTab,
+      syncBrowserPages,
+      openBrowserPage,
+    ],
   );
 
   return (

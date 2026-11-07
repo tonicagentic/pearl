@@ -56,6 +56,12 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     1,
     "Starts a billed Exa agent run; the polling phase is idempotent but a replay of the start call would double-bill.",
   ),
+  browser: policy(
+    false,
+    [],
+    1,
+    "Live browser actions (click, type, navigate) mutate page state; a blind retry can double-submit or click twice. Re-snapshot and decide again.",
+  ),
   write_file: policy(
     false,
     [],

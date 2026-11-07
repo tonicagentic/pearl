@@ -37,6 +37,7 @@ export const TIMELINE_TOOLS = new Set([
   "read_file",
   "web_search",
   "web_fetch",
+  "browser",
   "exa_agent_run",
   "file__save_memory",
   "file__remove_memory",
@@ -57,6 +58,7 @@ const TOOL_META: Record<string, { verb: string }> = {
   read_file: { verb: "Read" },
   web_search: { verb: "Searched" },
   web_fetch: { verb: "Fetched" },
+  browser: { verb: "Browsed" },
   exa_agent_run: { verb: "Researched" },
   file__save_memory: { verb: "Remembered" },
   file__remove_memory: { verb: "Forgot" },
@@ -148,7 +150,6 @@ function formatDuration(ms: number): string {
 
 // A whole working turn summarized as one collapsed line. Rendered beside the
 // message parts; the covered tool parts render null so nothing shows twice.
-// Mobile has no canvas, so file chips are inert here (no onOpenFile).
 export function SessionTimeline() {
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const streaming = useAuiState((s) => s.message.status?.type === "running");

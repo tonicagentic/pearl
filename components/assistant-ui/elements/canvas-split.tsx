@@ -1,9 +1,22 @@
 "use client";
 
-import type { ComponentProps } from "react";
-import { CheckIcon, CopyIcon, FileTextIcon, XIcon } from "lucide-react";
+import type { ComponentProps, ReactNode } from "react";
+import {
+  CheckIcon,
+  CopyIcon,
+  FileTextIcon,
+  GlobeIcon,
+  XIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { field, ghostButton, mono, paper } from "@/lib/surfaces";
+
+export type CanvasTabItem = {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: "file" | "page";
+  readonly active: boolean;
+};
 
 export function CanvasSplit({ className, ...props }: ComponentProps<"div">) {
   return (
@@ -142,6 +155,66 @@ export function CanvasSplitHeader({
       >
         <XIcon className="size-3.5" />
       </button>
+    </div>
+  );
+}
+
+export function CanvasTabStrip({
+  tabs,
+  onSelectTab,
+  onCloseTab,
+  trailing,
+  className,
+  ...props
+}: Omit<ComponentProps<"div">, "children"> & {
+  tabs: readonly CanvasTabItem[];
+  onSelectTab: (id: string) => void;
+  onCloseTab: (id: string) => void;
+  trailing?: ReactNode;
+}) {
+  return (
+    <div
+      data-slot="canvas-tab-strip"
+      className={cn(
+        "border-foreground/[0.07] flex min-h-10 items-center gap-1 border-b px-2 py-1.5",
+        className,
+      )}
+      {...props}
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+        {tabs.map((tab) => {
+          const Icon = tab.kind === "page" ? GlobeIcon : FileTextIcon;
+          return (
+            <div
+              key={tab.id}
+              className={cn(
+                "flex max-w-[12rem] shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[12px]",
+                tab.active
+                  ? "bg-foreground/[0.08] text-foreground"
+                  : "text-foreground/55 hover:bg-foreground/[0.04]",
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => onSelectTab(tab.id)}
+                className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+              >
+                <Icon className="size-3 shrink-0 opacity-60" />
+                <span className="truncate font-medium">{tab.label}</span>
+              </button>
+              <button
+                type="button"
+                aria-label={`Close ${tab.label}`}
+                onClick={() => onCloseTab(tab.id)}
+                className={cn(ghostButton, "size-5 shrink-0")}
+              >
+                <XIcon className="size-3" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      {trailing ? <div className="flex shrink-0 items-center gap-1">{trailing}</div> : null}
     </div>
   );
 }

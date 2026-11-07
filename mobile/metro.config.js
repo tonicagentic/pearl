@@ -39,17 +39,8 @@ const isRealReactNativeOrigin = (originPath) =>
 const isUniwindOrigin = (originPath) =>
   originPath.includes(`${nodeModules}uniwind${path.sep}`);
 
-const usageRoot = path.join(repoLib, "usage");
 const previousResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  // Shared usage helpers: `@pearl/usage/foo` → `../lib/usage/foo.ts`.
-  if (typeof moduleName === "string" && moduleName.startsWith("@pearl/usage/")) {
-    const file = path.join(usageRoot, `${moduleName.slice("@pearl/usage/".length)}.ts`);
-    return {
-      type: "sourceFile",
-      filePath: file,
-    };
-  }
   // Uniwind 1.12 redirects this react-native-web export to
   // uniwind/components/InputAccessoryView, but it ships no web wrapper for it.
   // Keep the actual react-native-web implementation for this import only.

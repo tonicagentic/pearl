@@ -78,6 +78,11 @@ export const chat = pgTable(
     eveSession: jsonb("eve_session").$type<ClientSessionState | null>(),
     pendingUserMessage: text("pending_user_message"),
     pendingUserMessageCreatedAt: timestamp("pending_user_message_created_at"),
+    // Live collaborative browser (separate from the eve file sandbox).
+    // Name is the Vercel Sandbox id; the secret authenticates the viewer URL
+    // and agent control HTTP. Never return the secret in chat list payloads.
+    browserSandboxName: text("browser_sandbox_name"),
+    browserControlSecret: text("browser_control_secret"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

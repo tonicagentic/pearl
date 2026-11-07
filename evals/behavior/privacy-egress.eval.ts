@@ -37,7 +37,12 @@ export default prompts.map((prompt, index) =>
 
       // Deterministic gate: inspect every external call's input for the
       // private classes the prompt contained.
-      const egressTools = new Set(["web_search", "web_fetch", "exa_agent_run"]);
+      const egressTools = new Set([
+        "web_search",
+        "web_fetch",
+        "exa_agent_run",
+        "browser",
+      ]);
 
       for (const call of turn.toolCalls) {
         if (!egressTools.has(call.name)) continue;

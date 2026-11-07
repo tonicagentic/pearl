@@ -40,16 +40,18 @@ import {
   ReadFileToolUI,
   WriteFileToolUI,
 } from "@/components/assistant-ui/elements/file-tool.aui";
+import { BrowserToolUI } from "@/components/assistant-ui/elements/browser-tool.aui";
 import {
   CanvasProvider,
   useCanvas,
 } from "@/components/assistant-ui/elements/canvas-context";
 import {
   CanvasSplitBody,
-  CanvasSplitHeader,
   CanvasSplitLine,
+  CanvasTabStrip,
 } from "@/components/assistant-ui/elements/canvas-split";
 import { MarkdownContent } from "@/components/assistant-ui/elements/markdown-content";
+import { ghostButton, mono } from "@/lib/surfaces";
 import { ThreadActionsMenu } from "@/components/chat/thread-actions-menu";
 import { EveAuthorization } from "@/components/eve-authorization";
 import {
@@ -588,6 +590,7 @@ export function AssistantChatSurface({
           <WriteFileToolUI />
           <EditFileToolUI />
           <ReadFileToolUI />
+          <BrowserToolUI />
           <SessionStatusBanner isRunning={isRunning} />
           <CanvasLayout />
 
@@ -601,66 +604,162 @@ export function AssistantChatSurface({
   );
 }
 
-// When an agent-written document is open, the thread narrows to a rail and
-// the document takes the room (assistant-ui Canvas pattern). Otherwise the
-// thread renders full width. Markdown files render formatted through the
-// standalone markdown renderer; anything else stays raw monospace.
+// When workspace tabs are open, the thread narrows to a rail and the
+// workspace takes the room. Otherwise the thread renders full width.
+// One Thread instance — remounting on open/close looked like a page refresh.
 function isMarkdownPath(path: string): boolean {
   return /\.mdx?$/i.test(path);
 }
 
-function CanvasLayout() {
-  const { document: doc, closeDocument } = useCanvas();
+function basename(path: string): string {
+  return path.split("/").pop() || path;
+}
 
-  // One Thread instance whose container changes layout when a document is
-  // open. Rendering the two states as separate branches would remount the
-  // whole thread on every canvas open/close — which looked like a page
-  // refresh when clicking a file link.
+function CanvasLayout() {
+  const {
+    chatId,
+    tabs,
+    activeTabId,
+    document: doc,
+    controlMode,
+    viewUrl,
+    selectWorkspaceTab,
+    closeWorkspaceTab,
+    setControlMode,
+    setViewUrl,
+  } = useCanvas();
+
+  const open = tabs.length > 0;
+  const active = tabs.find((tab) => tab.id === activeTabId) ?? null;
+  const hasPageTab = tabs.some((tab) => tab.kind === "page");
+
+  useEffect(() => {
+    if (!chatId || !hasPageTab || viewUrl) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/chats/${chatId}/browser`);
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { viewUrl?: string };
+        if (data.viewUrl && !cancelled) setViewUrl(data.viewUrl);
+      } catch {
+        // Leave the starting state; a later tool call can retry.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId, hasPageTab, viewUrl, setViewUrl]);
+
+  const onSelectTab = (tabId: string) => {
+    selectWorkspaceTab(tabId);
+    const tab = tabs.find((t) => t.id === tabId);
+    if (tab?.kind === "page" && chatId) {
+      void fetch(`/api/chats/${chatId}/browser`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ op: "select", tabId: tab.pageId }),
+      }).catch(() => {});
+    }
+  };
+
+  const setMode = (mode: "agent" | "user") => {
+    setControlMode(mode);
+    if (!chatId) return;
+    void fetch(`/api/chats/${chatId}/browser`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ op: "control", mode }),
+    }).catch(() => {});
+  };
+
   return (
     <SubagentRunsProvider>
       <div
         className={cn(
           "flex min-h-0 flex-1 flex-col",
-          doc && "md:flex-row",
+          open && "md:flex-row",
         )}
       >
         <div
           className={cn(
             "flex min-h-0 min-w-0 flex-col",
-            doc
+            open
               ? "max-md:flex-1 md:w-[26rem] md:shrink-0 md:border-r md:border-border/60"
               : "flex-1",
           )}
         >
           <Thread components={{ TaskGroup }} />
         </div>
-        {doc && (
+        {open && (
           <div className="border-border/60 bg-background flex min-h-0 flex-1 flex-col max-md:h-80 max-md:shrink-0 max-md:border-t md:border-l">
-            <CanvasSplitHeader
-              title={doc.path}
-              version={doc.version}
-              saved={!doc.running}
-              onCopy={
-                doc.content
-                  ? () => navigator.clipboard.writeText(doc.content)
-                  : undefined
+            <CanvasTabStrip
+              tabs={tabs.map((tab) => ({
+                id: tab.id,
+                kind: tab.kind,
+                active: tab.id === activeTabId,
+                label:
+                  tab.kind === "file"
+                    ? basename(tab.path)
+                    : tab.title || tab.url || "Page",
+              }))}
+              onSelectTab={onSelectTab}
+              onCloseTab={closeWorkspaceTab}
+              trailing={
+                active?.kind === "page" ? (
+                  <>
+                    <span className={cn(mono, "text-foreground/35 hidden sm:inline")}>
+                      {controlMode === "user" ? "you" : "agent"}
+                    </span>
+                    <button
+                      type="button"
+                      className={cn(ghostButton, "h-7 px-2 text-[12px]")}
+                      onClick={() =>
+                        setMode(controlMode === "user" ? "agent" : "user")
+                      }
+                    >
+                      {controlMode === "user" ? "Hand back" : "Take over"}
+                    </button>
+                  </>
+                ) : doc ? (
+                  <span className={cn(mono, "text-foreground/30 px-1")}>
+                    v{doc.version}
+                  </span>
+                ) : null
               }
-              onClose={closeDocument}
             />
-            <CanvasSplitBody writing={doc.running} className="min-h-0 flex-1">
-              {doc.content ? (
-                isMarkdownPath(doc.path) ? (
-                  <MarkdownContent
-                    text={doc.content}
-                    className="mx-auto max-w-[65ch] text-[13px]"
+            {active?.kind === "page" ? (
+              <div className="bg-foreground/[0.03] relative min-h-0 flex-1">
+                {viewUrl ? (
+                  <iframe
+                    title={active.title || active.url || "Browser"}
+                    src={viewUrl}
+                    className="absolute inset-0 h-full w-full border-0"
+                    referrerPolicy="no-referrer"
+                    allow="clipboard-read; clipboard-write"
                   />
                 ) : (
-                  <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
-                    {doc.content}
-                  </CanvasSplitLine>
-                )
-              ) : null}
-            </CanvasSplitBody>
+                  <div className="text-foreground/45 flex h-full items-center justify-center text-[13px]">
+                    Starting browser…
+                  </div>
+                )}
+              </div>
+            ) : doc ? (
+              <CanvasSplitBody writing={doc.running} className="min-h-0 flex-1">
+                {doc.content ? (
+                  isMarkdownPath(doc.path) ? (
+                    <MarkdownContent
+                      text={doc.content}
+                      className="mx-auto max-w-[65ch] text-[13px]"
+                    />
+                  ) : (
+                    <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
+                      {doc.content}
+                    </CanvasSplitLine>
+                  )
+                ) : null}
+              </CanvasSplitBody>
+            ) : null}
           </div>
         )}
       </div>

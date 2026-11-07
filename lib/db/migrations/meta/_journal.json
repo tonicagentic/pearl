@@ -127,6 +127,13 @@
       "when": 1793998991579,
       "tag": "0017_sweet_doorman",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794011120655,
+      "tag": "0018_browser_session",
+      "breakpoints": true
     }
   ]
 }

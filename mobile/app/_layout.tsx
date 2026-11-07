@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from "@/src/auth";
 import { ChatsProvider } from "@/src/chat-context";
 import { configureModelSelectionPersistence, restoreModelSelection } from "@/src/model-selection";
 import { loadSavedModelSelection, saveModelSelection } from "@/src/model-preferences";
+import { WorkspaceProvider } from "@/src/workspace-context";
 
 /** Keep the active chat mounted beneath pushed screens so its stream survives navigation. */
 export default function RootLayout() {
@@ -27,6 +28,7 @@ function AuthenticatedLayout() {
   const accountKey = signedIn ? `account:${viewerEmail}` : "signed-out";
   return (
     <ChatsProvider key={accountKey}>
+      <WorkspaceProvider>
       <SubagentRunsProvider>
         <GestureHandlerRootView className="flex-1">
           <SafeAreaProvider>
@@ -110,6 +112,7 @@ function AuthenticatedLayout() {
           </SafeAreaProvider>
         </GestureHandlerRootView>
       </SubagentRunsProvider>
+      </WorkspaceProvider>
     </ChatsProvider>
   );
 }

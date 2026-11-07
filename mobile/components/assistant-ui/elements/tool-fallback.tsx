@@ -9,7 +9,7 @@ import {
   type ToolCallMessagePartStatus,
 } from "@assistant-ui/react-native";
 import { CheckIcon, XIcon } from "lucide-react-native";
-import { type FC, useState } from "react";
+import { type FC, useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -24,6 +24,7 @@ import {
 } from "./surfaces";
 import { getToolPresentation } from "./tool-presentation";
 import { formatUnknownValue } from "../utils/task";
+import { useWorkspaceOptional } from "@/src/workspace-context";
 
 function approvalDetail(args: Record<string, unknown> | undefined): string | null {
   if (!args) return null;
@@ -429,10 +430,20 @@ export const ToolFallbackApproval: FC<
 // Only previews content that is already present in the tool call; it never
 // fetches a persisted artifact or presents the draft as a saved download.
 function FilePreview({ path, content }: { path: string; content: string }) {
+  const workspace = useWorkspaceOptional();
   const [open, setOpen] = useState(false);
+
+  const openPreview = () => {
+    if (workspace) {
+      workspace.openFile({ path, content });
+      return;
+    }
+    setOpen(true);
+  };
+
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Preview ${path}`} className="min-h-11 justify-center ps-6" onPress={() => setOpen(true)}>
-      <Text className="text-primary text-sm" numberOfLines={1}>Preview {path}</Text>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Open ${path}`} className="min-h-11 justify-center ps-6" onPress={openPreview}>
+      <Text className="text-primary text-sm" numberOfLines={1}>Open {path}</Text>
     </Pressable>
     <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
       <SafeAreaView className="bg-background flex-1 p-4">
@@ -462,6 +473,7 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
   respondToApproval,
   result,
 }) => {
+  const workspace = useWorkspaceOptional();
   const isCancelled =
     status.type === "incomplete" && status.reason === "cancelled";
   const isRequiresAction = status.type === "requires-action";
@@ -469,6 +481,31 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
     isRequiresAction &&
     offersInterruptAction(status, approval, interrupt) &&
     respondToApproval != null;
+
+  useEffect(() => {
+    if (toolName !== "browser" || !workspace) return;
+    if (!result || typeof result !== "object" || Array.isArray(result)) return;
+    const tabs = (result as { tabs?: unknown }).tabs;
+    if (!Array.isArray(tabs) || tabs.length === 0) return;
+    workspace.openBrowserPages(
+      tabs.filter(
+        (tab): tab is {
+          id: string;
+          url: string;
+          title: string;
+          active: boolean;
+        } =>
+          !!tab &&
+          typeof tab === "object" &&
+          typeof (tab as { id?: unknown }).id === "string",
+      ),
+    );
+    const mode = (result as { controlMode?: unknown }).controlMode;
+    if (mode === "agent" || mode === "user") {
+      workspace.setControlMode(mode);
+    }
+    void workspace.ensureViewUrl();
+  }, [toolName, result, workspace]);
   const resolution = approvalResolution(approval);
   const detail = approvalDetail(
     args && typeof args === "object" && !Array.isArray(args)

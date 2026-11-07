@@ -521,6 +521,46 @@ export async function deleteChatForUser(chatId: string, userId: string) {
   await db.delete(chat).where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
 }
 
+/**
+ * Browser sandbox credentials for a chat. The control secret must never be
+ * included in chat list or generic chat payloads — only browser routes and
+ * the agent tool use this.
+ */
+export async function getChatBrowserSession(chatId: string): Promise<{
+  readonly browserSandboxName: string | null;
+  readonly browserControlSecret: string | null;
+} | null> {
+  const [row] = await db
+    .select({
+      browserSandboxName: chat.browserSandboxName,
+      browserControlSecret: chat.browserControlSecret,
+    })
+    .from(chat)
+    .where(eq(chat.id, chatId))
+    .limit(1);
+
+  return row ?? null;
+}
+
+export async function setChatBrowserSession({
+  chatId,
+  browserSandboxName,
+  browserControlSecret,
+}: {
+  readonly chatId: string;
+  readonly browserSandboxName: string;
+  readonly browserControlSecret: string;
+}): Promise<void> {
+  await db
+    .update(chat)
+    .set({
+      browserSandboxName,
+      browserControlSecret,
+      updatedAt: new Date(),
+    })
+    .where(eq(chat.id, chatId));
+}
+
 // ============================================================================
 // Agent files
 // ============================================================================

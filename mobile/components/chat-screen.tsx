@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   ActionSheetIOS,
   Alert,
@@ -39,8 +39,10 @@ import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
 import { FloatingChatNavigation } from "@/components/floating-chat-navigation";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
+import { WorkspaceScreen } from "@/components/workspace-screen";
 import { getModelSelection } from "@/src/model-selection";
 import { withPendingAssistant } from "@/src/stream-presentation";
+import { useWorkspace } from "@/src/workspace-context";
 import {
   getPendingApprovals,
   hasPendingAction,
@@ -84,7 +86,13 @@ export function ChatScreen({
     deleteChat,
     wasSendPrepared,
   } = useChats();
+  const { setChatId } = useWorkspace();
   const { width } = useWindowDimensions();
+
+  useEffect(() => {
+    setChatId(activeChatId);
+  }, [activeChatId, setChatId]);
+
   // 0 = chat full screen, 1 = history full screen; tracks the finger while dragging.
   const openProgress = useSharedValue(0);
   const dragStartProgress = useSharedValue(0);
@@ -524,6 +532,7 @@ export function ChatScreen({
           </Animated.View>
         ) : null}
         <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
+        <WorkspaceScreen />
       </View>
     </SafeAreaView>
   );

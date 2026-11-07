@@ -52,6 +52,7 @@ const TOOL_PRESENTATION: Record<string, ToolPresentation> = {
   bash: { label: "Run command", icon: TerminalIcon },
   web_search: { label: "Search the web", icon: SearchIcon },
   web_fetch: { label: "Fetch page", icon: GlobeIcon },
+  browser: { label: "Browse the web", icon: GlobeIcon },
   get_weather: { label: "Check weather", icon: CloudSunIcon },
   get_profile: { label: "Profile", icon: BookUserIcon },
   list_skills: { label: "List skills", icon: SparklesIcon },

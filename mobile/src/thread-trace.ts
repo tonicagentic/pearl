@@ -1,5 +1,5 @@
 // Re-export the web app's pure usage/cost helpers so the mobile bundle shares
-// one implementation. Metro maps `@pearl/usage/*` → `../lib/usage/*`.
+// one implementation. Metro watches `../lib` (see metro.config.js).
 
 export {
   threadTraceFromEvents,
@@ -7,6 +7,6 @@ export {
   type ThreadTraceCall,
   type ThreadTraceEvent,
   type ThreadTraceTurn,
-} from "@pearl/usage/thread-trace";
+} from "../../lib/usage/thread-trace";
 
-export { formatTokens, formatUsd } from "@pearl/usage/usage";
+export { formatTokens, formatUsd } from "../../lib/usage/usage";

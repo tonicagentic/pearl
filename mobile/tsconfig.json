@@ -6,9 +6,6 @@
     "paths": {
       "@/*": [
         "./*"
-      ],
-      "@pearl/usage/*": [
-        "../lib/usage/*"
       ]
     }
   },
@@ -16,6 +13,8 @@
     "**/*.ts",
     "**/*.tsx",
     "uniwind-types.d.ts",
-    "../lib/usage/**/*.ts"
+    "../lib/usage/**/*.ts",
+    "../lib/browser/tabs.ts",
+    "../lib/browser/types.ts"
   ]
 }
