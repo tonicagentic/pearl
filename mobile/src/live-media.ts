@@ -1,13 +1,6 @@
 // Pure helpers for the mobile live session. The Gateway socket speaks the
 // normalized AI SDK realtime events; this file does not open that socket.
 
-/** Same US / zero-data-retention / no-training routing as agent/agent.ts. */
-export const LIVE_GATEWAY_OPTIONS = {
-  inferenceRegion: { scope: "zone" as const, geoRegion: "us" as const },
-  zeroDataRetention: true,
-  disallowPromptTraining: true,
-};
-
 export const LIVE_SAMPLE_RATE = 24_000;
 export const LIVE_FRAME_MAX_BYTES = 200 * 1024;
 export const LIVE_MAX_SESSION_MS = 25 * 60 * 1000;
@@ -17,20 +10,71 @@ export const LIVE_PLAYBACK_CHUNK_BYTES = Math.floor(LIVE_SAMPLE_RATE * 2 * 0.2);
 export const LIVE_SOCKET_PROTOCOL = "ai-gateway-realtime.v1";
 export const LIVE_AUTH_PROTOCOL_PREFIX = "ai-gateway-auth.";
 
+/**
+ * Client session-update payload. Gateway data-policy flags (ZDR, no-training,
+ * inferenceRegion) must be pinned when minting the client secret — see
+ * lib/live-token.ts — not sent here.
+ */
 export const LIVE_SESSION_CONFIG = {
   instructions:
-    "You are Pearl, a personal agent. The user may show you a live camera. Answer out loud, briefly, and say what you see when a camera frame arrives.",
+    "You are Pearl, a personal agent in a live voice conversation. On the first response, greet the user in one short spoken sentence and invite them to talk. After that, answer out loud and briefly. If the user shares a camera frame, say what you see; otherwise stay on the voice conversation.",
+  voice: "alloy",
   outputModalities: ["audio"],
   inputAudioTranscription: {},
   outputAudioTranscription: {},
   inputAudioFormat: { type: "audio/pcm", rate: LIVE_SAMPLE_RATE },
   outputAudioFormat: { type: "audio/pcm", rate: LIVE_SAMPLE_RATE },
   turnDetection: { type: "server-vad" },
-  providerOptions: { gateway: LIVE_GATEWAY_OPTIONS },
 } as const;
+
+/** Peak amplitude 0..1 from little-endian PCM16 mono bytes. */
+export function pcm16PeakLevel(pcm: Uint8Array): number {
+  const even = pcm.byteLength - (pcm.byteLength % 2);
+  if (even < 2) return 0;
+  const view = new DataView(pcm.buffer, pcm.byteOffset, even);
+  let peak = 0;
+  for (let i = 0; i < even; i += 2) {
+    const sample = Math.abs(view.getInt16(i, true)) / 0x8000;
+    if (sample > peak) peak = sample;
+  }
+  return Math.min(1, peak);
+}
+
+/** While Pearl is speaking, a strong local mic peak means the user is interrupting. */
+export const LIVE_BARGE_IN_LEVEL = 0.14;
+
+export type LiveVoiceMode =
+  | "connecting"
+  | "idle"
+  | "listening"
+  | "speaking"
+  | "muted"
+  | "ended";
+
+export function liveVoiceStatusLabel(mode: LiveVoiceMode): string {
+  switch (mode) {
+    case "connecting":
+      return "Connecting";
+    case "idle":
+      return "Listening";
+    case "listening":
+      return "You're talking";
+    case "speaking":
+      return "Pearl is talking";
+    case "muted":
+      return "Muted";
+    case "ended":
+      return "Live ended";
+  }
+}
 
 export function liveSessionUpdateEvent() {
   return { type: "session-update" as const, config: LIVE_SESSION_CONFIG };
+}
+
+/** Kick the model so the first turn is an audible greeting. */
+export function liveGreetingResponseEvent() {
+  return { type: "response-create" as const };
 }
 
 export function liveSocketProtocols(token: string): [string, string] {

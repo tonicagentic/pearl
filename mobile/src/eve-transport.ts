@@ -13,18 +13,59 @@
 // server events arrive, leaving the response as a dangling generation.
 
 import { EveAgentStore, defaultMessageReducer, type EveMessageData } from 'eve/client';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 export { toThreadMessages } from './message-projection';
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+const DEFAULT_AGENT_URL = 'https://my-agent-pi-eight.vercel.app';
+
+function metroLanHostname(): string | null {
+  const hostUri =
+    Constants.expoConfig?.hostUri ??
+    Constants.experienceUrl?.replace(/^[a-z]+:\/\//, '') ??
+    null;
+  if (!hostUri) return null;
+  const host = hostUri.split('/')[0]?.split(':')[0]?.trim();
+  if (!host || LOOPBACK_HOSTS.has(host)) return null;
+  return host;
+}
+
+/**
+ * Resolve the agent API base URL.
+ *
+ * On a physical device, `127.0.0.1` is the phone — rewrite loopback agent URLs
+ * to Metro's LAN host so local Next stays reachable without editing .env.
+ */
+export function resolveAgentUrl(configured = process.env.EXPO_PUBLIC_AGENT_URL ?? DEFAULT_AGENT_URL): string {
+  if (
+    Platform.OS === 'web' &&
+    __DEV__ &&
+    typeof window !== 'undefined' &&
+    LOOPBACK_HOSTS.has(window.location.hostname)
+  ) {
+    return `${window.location.origin}/__pearl_api`;
+  }
+
+  if (Platform.OS === 'web' || !__DEV__) return configured;
+
+  try {
+    const url = new URL(configured);
+    if (!LOOPBACK_HOSTS.has(url.hostname)) return configured;
+    const lanHost = metroLanHostname();
+    if (!lanHost) return configured;
+    url.hostname = lanHost;
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return configured;
+  }
+}
 
 // On local web dev, use Metro's loopback-only same-origin proxy so browser
 // requests keep production's CORS/CSRF protection intact. Native clients still
 // contact the configured agent directly; a deployed web build needs its own
 // same-origin API host. Set EXPO_PUBLIC_AGENT_URL for local backend testing.
-export const AGENT_URL =
-  Platform.OS === 'web' && __DEV__ && typeof window !== 'undefined' &&
-  ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
-    ? `${window.location.origin}/__pearl_api`
-    : process.env.EXPO_PUBLIC_AGENT_URL ?? 'https://my-agent-pi-eight.vercel.app';
+export const AGENT_URL = resolveAgentUrl();
 
 // Session credential captured at sign-in (mirrored to SecureStore by
 // session-store). A better-auth bearer token from the sign-in response body

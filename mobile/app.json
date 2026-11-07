@@ -11,7 +11,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.tonicagentic.pearl",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
       },
       "buildNumber": "2"
     },
@@ -50,7 +53,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Pearl uses the camera for live video and for photos you attach in chat.",
+          "cameraPermission": "Pearl uses the camera for optional live video and for photos you attach in chat.",
           "microphonePermission": false,
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": false

@@ -2,12 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { GATEWAY_PROVIDER_OPTIONS } from "../agent/agent.ts";
-import { describeLiveTokenError, LIVE_MODEL_ID } from "../lib/live-token.ts";
 import {
+  describeLiveTokenError,
+  LIVE_MODEL_ID,
+} from "../lib/live-token.ts";
+import {
+  LIVE_BARGE_IN_LEVEL,
   LIVE_FRAME_MAX_BYTES,
-  LIVE_GATEWAY_OPTIONS,
   LIVE_PLAYBACK_CHUNK_BYTES,
   LIVE_SAMPLE_RATE,
+  LIVE_SESSION_CONFIG,
   PcmPlaybackBuffer,
   base64ToBytes,
   bytesToBase64,
@@ -16,20 +20,45 @@ import {
   isFatalLiveError,
   isVideoFrameRejection,
   liveFrameEvent,
+  liveGreetingResponseEvent,
   liveSocketProtocols,
+  liveVoiceStatusLabel,
+  pcm16PeakLevel,
   resampleLinear,
   wavFromPcm16,
 } from "../mobile/src/live-media.ts";
 
-test("live routing matches the agent gateway data policy", () => {
-  assert.deepEqual(LIVE_GATEWAY_OPTIONS, GATEWAY_PROVIDER_OPTIONS);
-  assert.equal(LIVE_MODEL_ID, "google/gemini-3.8-live");
+test("live session config stays voice-first without gateway providerOptions", () => {
+  // Chat still uses ZDR; realtime client-secret mint cannot pin it today.
+  assert.equal(GATEWAY_PROVIDER_OPTIONS.zeroDataRetention, true);
+  assert.equal(GATEWAY_PROVIDER_OPTIONS.disallowPromptTraining, true);
+  assert.equal("providerOptions" in LIVE_SESSION_CONFIG, false);
+  assert.equal(LIVE_MODEL_ID, "openai/gpt-realtime-mini");
+  assert.equal(LIVE_SESSION_CONFIG.turnDetection.type, "server-vad");
+  assert.equal(liveGreetingResponseEvent().type, "response-create");
+});
+
+test("pcm peak level and voice labels support the speaking orb", () => {
+  const silent = new Uint8Array(4);
+  assert.equal(pcm16PeakLevel(silent), 0);
+  const loud = new Uint8Array(4);
+  new DataView(loud.buffer).setInt16(0, 20000, true);
+  new DataView(loud.buffer).setInt16(2, -20000, true);
+  assert.ok(pcm16PeakLevel(loud) > LIVE_BARGE_IN_LEVEL);
+  assert.equal(liveVoiceStatusLabel("speaking"), "Pearl is talking");
+  assert.equal(liveVoiceStatusLabel("listening"), "You're talking");
 });
 
 test("a data-policy mint failure is explained and other failures stay generic", () => {
   assert.equal(
     describeLiveTokenError(new Error("no_providers_available for zero data retention")),
-    "Live video is not available under the current data policy.",
+    "Live mode is not available under the current data policy.",
+  );
+  assert.equal(
+    describeLiveTokenError(
+      new Error("Client secrets can only be minted with a Gateway API key"),
+    ),
+    "Live sessions need an AI Gateway API key on the server.",
   );
   assert.equal(
     describeLiveTokenError(new Error("gateway timeout")),

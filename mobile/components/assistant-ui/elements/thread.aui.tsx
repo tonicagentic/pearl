@@ -68,7 +68,6 @@ import {
   MicIcon,
   PhoneIcon,
   Share2Icon,
-  VideoIcon,
 } from "lucide-react-native";
 import {
   type ComponentRef,
@@ -102,7 +101,10 @@ import {
   type ViewProps,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { KeyboardController, useKeyboardHandler } from "react-native-keyboard-controller";
+import {
+  KeyboardController,
+  useKeyboardHandler,
+} from "react-native-keyboard-controller";
 import Animated, {
   Extrapolation,
   FadeInDown,
@@ -225,6 +227,17 @@ const CAN_USE_LIQUID_GLASS =
 const COMPOSER_SHELL_RADIUS = 26;
 /** Side/bottom float for the iOS composer dock (Mail-style inset from the screen edge). */
 const COMPOSER_EDGE = 16;
+/** Extra side inset while collapsed so the mini-player bar doesn’t span edge-to-edge. */
+const COMPOSER_MINIMIZED_EDGE = 28;
+/** Idle (keyboard closed) tuck: sit nearer the home indicator than the expanded float. */
+const COMPOSER_MINIMIZED_BOTTOM_GAP = 4;
+/** Keyboard height range that morphs minimized ↔ expanded chrome (follows interactive drag). */
+const COMPOSER_MORPH_RANGE = 120;
+const COMPOSER_CHIP = 32;
+const COMPOSER_ROW_GAP = 6;
+const COMPOSER_MIN_INPUT = 36;
+const COMPOSER_EXPANDED_INPUT_MIN = 44;
+const COMPOSER_EXPANDED_INPUT_MAX = 192;
 const COMPOSER_SHELL_STYLE = {
   borderRadius: COMPOSER_SHELL_RADIUS,
   borderCurve: "continuous",
@@ -247,6 +260,17 @@ const KeyboardHeightContext = createContext<SharedValue<number> | null>(null);
 
 const ThreadComponentsContext =
   createContext<ThreadComponents>(EMPTY_COMPONENTS);
+
+/** 0 = minimized (keyboard closed), 1 = expanded (keyboard up). Tracks interactive drag. */
+function composerMorphProgress(keyboardHeight: number): number {
+  "worklet";
+  return interpolate(
+    keyboardHeight,
+    [0, COMPOSER_MORPH_RANGE],
+    [0, 1],
+    Extrapolation.CLAMP,
+  );
+}
 
 const ThreadViewportContext = createContext<ThreadViewportStore>({
   subscribe: () => () => {},
@@ -761,16 +785,25 @@ const ComposerDock: FC<{
   const insets = useSafeAreaInsets();
   const keyboardHeight = useContext(KeyboardHeightContext);
   const safeBottom = insets.bottom;
-  // Mail-style float: COMPOSER_EDGE from the sides, and the same gap above the
-  // home indicator (or above the keyboard once it covers that inset).
+  const minimizedBottom = Math.max(COMPOSER_MINIMIZED_BOTTOM_GAP, safeBottom - 8);
+  // Side inset eases from the wider collapsed pad back to COMPOSER_EDGE when
+  // expanded; bottom pad morphs with interactive keyboard height.
   const dockStyle = useAnimatedStyle(() => {
     if (!floats) {
       return { paddingBottom: safeBottom + 8 };
     }
     const lifted = keyboardHeight?.value ?? 0;
+    const progress = composerMorphProgress(lifted);
+    const aboveKeyboard = COMPOSER_EDGE + Math.max(0, safeBottom - lifted);
     return {
-      paddingHorizontal: COMPOSER_EDGE,
-      paddingBottom: COMPOSER_EDGE + Math.max(0, safeBottom - lifted),
+      paddingHorizontal: interpolate(
+        progress,
+        [0, 1],
+        [COMPOSER_MINIMIZED_EDGE, COMPOSER_EDGE],
+        Extrapolation.CLAMP,
+      ),
+      paddingBottom:
+        minimizedBottom + (aboveKeyboard - minimizedBottom) * progress,
     };
   });
 
@@ -795,6 +828,10 @@ const IosKeyboardLayout: FC<{ children: ReactNode }> = ({ children }) => {
     KeyboardController.isVisible() ? KeyboardController.state().height : 0,
   );
   useKeyboardHandler({
+    onStart: (event) => {
+      "worklet";
+      keyboardHeight.value = Math.max(0, event.height);
+    },
     onMove: (event) => {
       "worklet";
       keyboardHeight.value = Math.max(0, event.height);
@@ -809,7 +846,7 @@ const IosKeyboardLayout: FC<{ children: ReactNode }> = ({ children }) => {
     },
   }, []);
   const spacerStyle = useAnimatedStyle(() => ({
-    // Full keyboard height; footer `COMPOSER_EDGE` padding keeps a matching gap above the keys.
+    // Tracks interactive drag; composer dock morphs against the same value.
     height: Math.max(0, keyboardHeight.value),
   }));
 
@@ -1035,6 +1072,8 @@ const ThreadSuggestionItem: FC = () => (
   </SuggestionPrimitive.Trigger>
 );
 
+const ComposerInputHeightContext = createContext<SharedValue<number> | null>(null);
+
 // The placeholder color is a class to prop mapping that reads the CSSOM, so it applies from the first render after hydration.
 const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
   autoFocus,
@@ -1042,6 +1081,7 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
   const hydrated = useHydrated();
   const aui = useAui();
   const storeText = useAuiState((s) => s.composer.text);
+  const expandedHeight = useContext(ComposerInputHeightContext);
   // The field owns its text while a keystroke is in flight. The AUI store lags
   // under fast iOS input; writing that stale value back restored characters
   // the user had just deleted and jumped the caret. Accept an external write
@@ -1070,12 +1110,13 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
     placeholder: "Ask anything",
     placeholderTextColorClassName: hydrated ? placeholderColor : undefined,
     className: cn(
-      "aui-composer-input text-foreground web:resize-none web:outline-none max-h-48",
+      "aui-composer-input text-foreground web:resize-none web:outline-none",
       Platform.OS === "ios"
-        ? "min-h-11 px-2 pb-1 pt-4 text-[17px] leading-[22px]"
-        : "min-h-10 px-2.5 py-1 text-base leading-6",
+        ? "h-full w-full px-2 pt-2 pb-1 text-[17px] leading-[22px]"
+        : "min-h-10 max-h-48 px-2.5 py-1 text-base leading-6",
     ),
     multiline: true,
+    textAlignVertical: "top" as const,
     accessibilityLabel: "Message input",
   };
 
@@ -1097,6 +1138,18 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
         setValue(next);
         aui.composer.setText(next);
       }}
+      onContentSizeChange={(event) => {
+        if (!expandedHeight) return;
+        // Match pt-2 + pb-1 so the measured frame stays flush with the text.
+        const next = Math.min(
+          COMPOSER_EXPANDED_INPUT_MAX,
+          Math.max(
+            COMPOSER_EXPANDED_INPUT_MIN,
+            Math.ceil(event.nativeEvent.contentSize.height) + 12,
+          ),
+        );
+        if (expandedHeight.value !== next) expandedHeight.value = next;
+      }}
       {...inputProps}
     />
   ) : (
@@ -1108,11 +1161,15 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
   const { ComposerInput = DefaultComposerInput } = useContext(
     ThreadComponentsContext,
   );
+  const keyboardHeight = useContext(KeyboardHeightContext);
   // Start with a readable surface until the iOS accessibility setting is known.
   const [reducedTransparency, setReducedTransparency] = useState(true);
   const [preparingAttachment, setPreparingAttachment] = useState(false);
   const motion = useMotion();
   const pressed = useSharedValue(0);
+  const shellWidth = useSharedValue(0);
+  const contentTop = useSharedValue(0);
+  const expandedHeight = useSharedValue(COMPOSER_EXPANDED_INPUT_MIN);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdActive = useRef(false);
   useEffect(() => {
@@ -1141,13 +1198,85 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
   const showGlass = CAN_USE_LIQUID_GLASS && !reducedTransparency;
   const holdEnabled = Platform.OS === "ios" && motion;
 
-  const holdStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        scale: interpolate(pressed.value, [0, 1], [1, 0.975]),
-      },
-    ],
-  }));
+  const shellStyle = useAnimatedStyle(() => {
+    const progress =
+      Platform.OS === "ios" && keyboardHeight
+        ? composerMorphProgress(keyboardHeight.value)
+        : 1;
+    const holdScale = interpolate(pressed.value, [0, 1], [1, 0.975]);
+    return {
+      paddingTop: interpolate(progress, [0, 1], [6, 8]),
+      paddingBottom: interpolate(progress, [0, 1], [6, 8]),
+      paddingHorizontal: 8,
+      transform: [{ scale: holdEnabled ? holdScale : 1 }],
+    };
+  });
+
+  const inputSpacerStyle = useAnimatedStyle(() => {
+    const progress = composerMorphProgress(keyboardHeight?.value ?? 0);
+    return {
+      height: interpolate(progress, [0, 1], [0, expandedHeight.value]),
+    };
+  });
+
+  const actionRowStyle = useAnimatedStyle(() => {
+    const progress = composerMorphProgress(keyboardHeight?.value ?? 0);
+    return {
+      marginTop: interpolate(progress, [0, 1], [0, 16]),
+      minHeight: COMPOSER_MIN_INPUT,
+    };
+  });
+
+  const miniTrackStyle = useAnimatedStyle(() => {
+    const progress = composerMorphProgress(keyboardHeight?.value ?? 0);
+    return {
+      flexGrow: interpolate(progress, [0, 1], [1, 0]),
+      flexBasis: interpolate(progress, [0, 1], [1, 0]),
+      minWidth: interpolate(progress, [0, 1], [24, 0]),
+      height: COMPOSER_MIN_INPUT,
+      marginHorizontal: interpolate(progress, [0, 1], [COMPOSER_ROW_GAP, 0]),
+    };
+  });
+
+  const modelStyle = useAnimatedStyle(() => {
+    const progress = composerMorphProgress(keyboardHeight?.value ?? 0);
+    return {
+      opacity: progress,
+      maxWidth: interpolate(progress, [0, 1], [0, 220]),
+      marginLeft: interpolate(progress, [0, 1], [0, COMPOSER_ROW_GAP]),
+      overflow: "hidden" as const,
+    };
+  });
+
+  const endSpacerStyle = useAnimatedStyle(() => {
+    const progress = composerMorphProgress(keyboardHeight?.value ?? 0);
+    return {
+      flexGrow: interpolate(progress, [0, 1], [0, 1]),
+      flexBasis: interpolate(progress, [0, 1], [0, 1]),
+      minWidth: interpolate(progress, [0, 1], [0, 8]),
+      height: 1,
+    };
+  });
+
+  const inputFrameStyle = useAnimatedStyle(() => {
+    const progress = composerMorphProgress(keyboardHeight?.value ?? 0);
+    // Absolute children are laid out inside shell padding, so left:0 is the
+    // content edge — don't add the pad again.
+    const contentWidth = Math.max(0, shellWidth.value - 16);
+    const miniLeft = COMPOSER_CHIP + COMPOSER_ROW_GAP;
+    const miniWidth = Math.max(
+      0,
+      contentWidth - COMPOSER_CHIP * 2 - COMPOSER_ROW_GAP * 2,
+    );
+    return {
+      position: "absolute" as const,
+      left: interpolate(progress, [0, 1], [miniLeft, 0]),
+      width: interpolate(progress, [0, 1], [miniWidth, contentWidth]),
+      top: contentTop.value,
+      height: interpolate(progress, [0, 1], [COMPOSER_MIN_INPUT, expandedHeight.value]),
+      zIndex: 2,
+    };
+  });
 
   // Parent onTouch* observes child touches without the touch-delay RNGH would
   // put on the text field and SwiftUI menus.
@@ -1172,46 +1301,109 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
     }, 120);
   }, [holdEnabled, pressed]);
 
+  if (Platform.OS !== "ios") {
+    return (
+      <ComposerPrimitive.Root className="aui-composer-root w-full">
+        <Animated.View
+          className="aui-composer-shell relative gap-2 p-2"
+          style={COMPOSER_SHELL_STYLE}
+        >
+          {showGlass ? (
+            <GlassView
+              pointerEvents="none"
+              glassEffectStyle="regular"
+              style={GLASS_SURFACE_STYLE}
+            />
+          ) : (
+            <View
+              pointerEvents="none"
+              className="border-border/60 dark:border-muted-foreground/15 bg-card absolute inset-0 border"
+              style={COMPOSER_SHELL_STYLE}
+            />
+          )}
+          <ComposerAttachments />
+          <ComposerInput key={focusNewChatKey} autoFocus={autoFocus} />
+          <View className="aui-composer-action-wrapper flex-row items-center justify-between">
+            <View className="flex-row items-center gap-1">
+              <ComposerAddAttachment
+                preparing={preparingAttachment}
+                onPreparingChange={setPreparingAttachment}
+              />
+              <ComposerModelPicker disabled={preparingAttachment} />
+            </View>
+            <ComposerTrailingControls
+              preparingAttachment={preparingAttachment}
+            />
+          </View>
+        </Animated.View>
+      </ComposerPrimitive.Root>
+    );
+  }
+
+  // iOS morph: collapsed mini-player row ↔ full composer (input above, actions below).
+  // One TextInput is absolutely positioned so keyboard drag never remounts it.
   return (
-    <ComposerPrimitive.Root className="aui-composer-root w-full">
-      <Animated.View
-        className={cn(
-          "aui-composer-shell relative",
-          Platform.OS === "ios" ? "px-2 pb-2.5 pt-2" : "gap-2 p-2",
-        )}
-        style={[COMPOSER_SHELL_STYLE, holdEnabled ? holdStyle : null]}
-        onTouchStart={holdEnabled ? beginHold : undefined}
-        onTouchEnd={holdEnabled ? clearHold : undefined}
-        onTouchCancel={holdEnabled ? clearHold : undefined}
-      >
-        {showGlass ? (
-          <GlassView
-            pointerEvents="none"
-            glassEffectStyle="regular"
-            style={GLASS_SURFACE_STYLE}
-          />
-        ) : (
+    <ComposerInputHeightContext.Provider value={expandedHeight}>
+      <ComposerPrimitive.Root className="aui-composer-root w-full">
+        <Animated.View
+          className="aui-composer-shell relative"
+          style={[COMPOSER_SHELL_STYLE, shellStyle]}
+          onLayout={(event) => {
+            shellWidth.value = event.nativeEvent.layout.width;
+          }}
+          onTouchStart={holdEnabled ? beginHold : undefined}
+          onTouchEnd={holdEnabled ? clearHold : undefined}
+          onTouchCancel={holdEnabled ? clearHold : undefined}
+        >
+          {showGlass ? (
+            <GlassView
+              pointerEvents="none"
+              glassEffectStyle="regular"
+              style={GLASS_SURFACE_STYLE}
+            />
+          ) : (
+            <View
+              pointerEvents="none"
+              className="border-border/60 dark:border-muted-foreground/15 bg-card absolute inset-0 border"
+              style={COMPOSER_SHELL_STYLE}
+            />
+          )}
+          <ComposerAttachments />
           <View
-            pointerEvents="none"
-            className="border-border/60 dark:border-muted-foreground/15 bg-card absolute inset-0 border"
-            style={COMPOSER_SHELL_STYLE}
-          />
-        )}
-        <ComposerAttachments />
-        <ComposerInput key={focusNewChatKey} autoFocus={autoFocus} />
-        <ComposerAction
-          preparingAttachment={preparingAttachment}
-          onPreparingChange={setPreparingAttachment}
-        />
-      </Animated.View>
-    </ComposerPrimitive.Root>
+            collapsable={false}
+            onLayout={(event) => {
+              contentTop.value = event.nativeEvent.layout.y;
+            }}
+          >
+            <Animated.View pointerEvents="none" style={inputSpacerStyle} />
+            <Animated.View
+              className="aui-composer-action-wrapper flex-row items-center"
+              style={actionRowStyle}
+            >
+              <ComposerAddAttachment
+                preparing={preparingAttachment}
+                onPreparingChange={setPreparingAttachment}
+              />
+              <Animated.View pointerEvents="none" style={miniTrackStyle} />
+              <Animated.View style={modelStyle} pointerEvents="box-none">
+                <ComposerModelPicker disabled={preparingAttachment} />
+              </Animated.View>
+              <Animated.View pointerEvents="none" style={endSpacerStyle} />
+              <ComposerTrailingControls preparingAttachment={preparingAttachment} />
+            </Animated.View>
+          </View>
+          <Animated.View style={inputFrameStyle}>
+            <ComposerInput key={focusNewChatKey} autoFocus={autoFocus} />
+          </Animated.View>
+        </Animated.View>
+      </ComposerPrimitive.Root>
+    </ComposerInputHeightContext.Provider>
   );
 };
 
-const ComposerAction: FC<{
+const ComposerTrailingControls: FC<{
   preparingAttachment: boolean;
-  onPreparingChange: (preparing: boolean) => void;
-}> = ({ preparingAttachment, onPreparingChange }) => {
+}> = ({ preparingAttachment }) => {
   // The stop control only cancels the send while no run it could stop is going.
   const isSending = useAuiState(
     (s) =>
@@ -1226,50 +1418,49 @@ const ComposerAction: FC<{
         s.thread.capabilities.queue ||
         s.thread.voice !== undefined),
   );
+  const isEmpty = useAuiState((s) => s.composer.isEmpty);
   const isIos = Platform.OS === "ios";
-  const dark = useColorScheme() === "dark";
-  const chipFill = dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.08)";
   const [liveOpen, setLiveOpen] = useState(false);
+  const openLive = () => {
+    dismissKeyboard();
+    setLiveOpen(true);
+  };
 
   return (
-    <View
-      className="aui-composer-action-wrapper flex-row items-center justify-between"
-      // Match the placeholder’s top inset (shell pt-2 + input pt-4 ≈ 24)
-      // so the band under the text feels as open as the band above it.
-      style={isIos ? { marginTop: 24 } : undefined}
-    >
-      <View className={isIos ? "flex-row items-center gap-1.5" : "flex-row items-center gap-1"}>
-        <ComposerAddAttachment
-          preparing={preparingAttachment}
-          onPreparingChange={onPreparingChange}
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Start live video"
-          disabled={preparingAttachment}
-          onPress={() => {
-            dismissKeyboard();
-            setLiveOpen(true);
-          }}
-          hitSlop={isIos ? iosComposerHitSlop : iconButtonHitSlop}
-          className={
-            isIos
-              ? "size-8 items-center justify-center rounded-full"
-              : "size-11 items-center justify-center rounded-full active:bg-muted"
-          }
-          style={isIos ? { backgroundColor: chipFill, opacity: preparingAttachment ? 0.4 : 1 } : undefined}
-        >
-          <Icon as={VideoIcon} className="text-foreground size-4" />
-        </Pressable>
-        <ComposerModelPicker disabled={preparingAttachment} />
-      </View>
-      <View className="flex-row items-center">
-        <AuiIf
-          condition={(s) =>
-            s.composer.submission === undefined &&
-            (!s.thread.isRunning || s.thread.voice !== undefined)
-          }
-        >
+    <View className="flex-row items-center">
+      <AuiIf
+        condition={(s) =>
+          s.composer.submission === undefined &&
+          (!s.thread.isRunning || s.thread.voice !== undefined)
+        }
+      >
+        {isEmpty ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Start live conversation"
+            disabled={preparingAttachment}
+            onPress={openLive}
+            hitSlop={isIos ? iosComposerHitSlop : iconButtonHitSlop}
+            className={cn(
+              "aui-composer-live items-center justify-center",
+              isIos
+                ? "size-8"
+                : "bg-primary active:bg-primary/90 size-11 rounded-full disabled:opacity-50",
+            )}
+            style={preparingAttachment ? { opacity: 0.5 } : undefined}
+          >
+            {isIos ? (
+              <View className="size-8 items-center justify-center rounded-full bg-[#111114] dark:border dark:border-white/25">
+                <Icon as={AudioLinesIcon} className="size-5 text-white" />
+              </View>
+            ) : (
+              <Icon
+                as={AudioLinesIcon}
+                className="text-primary-foreground size-4"
+              />
+            )}
+          </Pressable>
+        ) : (
           <ComposerPrimitive.Send
             disabled={preparingAttachment || (isIos && !canSend)}
             className={cn(
@@ -1298,35 +1489,35 @@ const ComposerAction: FC<{
               />
             )}
           </ComposerPrimitive.Send>
-        </AuiIf>
-        <AuiIf
-          condition={(s) =>
-            s.composer.submission !== undefined ||
-            (s.thread.isRunning && s.thread.voice === undefined)
+        )}
+      </AuiIf>
+      <AuiIf
+        condition={(s) =>
+          s.composer.submission !== undefined ||
+          (s.thread.isRunning && s.thread.voice === undefined)
+        }
+      >
+        <ComposerPrimitive.Cancel
+          className={cn(
+            "aui-composer-cancel items-center justify-center",
+            isIos
+              ? "size-8"
+              : "bg-primary active:bg-primary/90 size-11 rounded-full",
+          )}
+          hitSlop={isIos ? iosComposerHitSlop : iconButtonHitSlop}
+          accessibilityLabel={
+            isSending ? "Cancel sending" : "Stop generating"
           }
         >
-          <ComposerPrimitive.Cancel
-            className={cn(
-              "aui-composer-cancel items-center justify-center",
-              isIos
-                ? "size-8"
-                : "bg-primary active:bg-primary/90 size-11 rounded-full",
-            )}
-            hitSlop={isIos ? iosComposerHitSlop : iconButtonHitSlop}
-            accessibilityLabel={
-              isSending ? "Cancel sending" : "Stop generating"
-            }
-          >
-            {isIos ? (
-              <View className="size-8 items-center justify-center rounded-full bg-[#111114] dark:border dark:border-white/25">
-                <View className="aui-composer-cancel-icon size-2.5 rounded-[2px] bg-white" />
-              </View>
-            ) : (
-              <View className="aui-composer-cancel-icon bg-primary-foreground size-3 rounded-[2px]" />
-            )}
-          </ComposerPrimitive.Cancel>
-        </AuiIf>
-      </View>
+          {isIos ? (
+            <View className="size-8 items-center justify-center rounded-full bg-[#111114] dark:border dark:border-white/25">
+              <View className="aui-composer-cancel-icon size-2.5 rounded-[2px] bg-white" />
+            </View>
+          ) : (
+            <View className="aui-composer-cancel-icon bg-primary-foreground size-3 rounded-[2px]" />
+          )}
+        </ComposerPrimitive.Cancel>
+      </AuiIf>
       {liveOpen ? <LiveSession onClose={() => setLiveOpen(false)} /> : null}
     </View>
   );

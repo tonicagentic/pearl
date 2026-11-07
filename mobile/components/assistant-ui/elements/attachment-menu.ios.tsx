@@ -12,7 +12,6 @@ export function AttachmentMenu({
   onTakePhoto,
   onChoosePhoto,
   onChooseFile,
-  onPasteText,
 }: AttachmentMenuProps) {
   const dark = useColorScheme() === "dark";
   // Stronger than --color-muted so the 32pt circle reads on the glass shell
@@ -37,7 +36,6 @@ export function AttachmentMenu({
         <Button label="Take Photo" systemImage="camera" onPress={onTakePhoto} />
         <Button label="Choose Photo" systemImage="photo" onPress={onChoosePhoto} />
         <Button label="Choose File" systemImage="doc" onPress={onChooseFile} />
-        <Button label="Paste Text" systemImage="doc.on.clipboard" onPress={onPasteText} />
       </Menu>
     </Host>
   );

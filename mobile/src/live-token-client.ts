@@ -8,14 +8,19 @@ export type LiveTokenResponse = {
 
 export async function fetchLiveToken(): Promise<LiveTokenResponse> {
   const credential = getAuthCookie();
-  const response = await fetch(`${AGENT_URL}/api/live/token`, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      ...(credential ? { authorization: `Bearer ${credential}` } : {}),
-    },
-    redirect: "manual",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${AGENT_URL}/api/live/token`, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        ...(credential ? { authorization: `Bearer ${credential}` } : {}),
+      },
+      redirect: "manual",
+    });
+  } catch {
+    throw new Error("Could not reach the agent. Check that Next is running and the phone can reach it.");
+  }
   if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
     throw new Error("Could not start the live session.");
   }

@@ -6,8 +6,8 @@ import { getSetupStatus } from "@/lib/setup";
 
 const NO_STORE = { headers: { "Cache-Control": "no-store" } };
 
-// Mobile live mode. The short-lived client secret is minted with the same
-// OIDC credential eve uses for model calls. The token never stays on the server.
+// Mobile live mode. Realtime client secrets require AI_GATEWAY_API_KEY
+// (OIDC alone is rejected by the Gateway). The token never stays on the server.
 export async function POST() {
   const setupStatus = await getSetupStatus();
   if (!setupStatus.appReady) {

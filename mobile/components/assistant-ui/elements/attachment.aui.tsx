@@ -8,7 +8,6 @@ import {
   useAui,
   useAuiState,
 } from "@assistant-ui/react-native";
-import * as Clipboard from "expo-clipboard";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
@@ -22,7 +21,6 @@ const MAX_IMAGE_EDGE = 2048;
 const MAX_IMAGES = 4;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_TEXT_BYTES = 16 * 1024;
-const MAX_PASTE_CHARS = 64 * 1024;
 
 const encodeJpeg = async (asset: ImagePicker.ImagePickerAsset) => {
   const context = ImageManipulator.manipulate(asset.uri);
@@ -199,20 +197,6 @@ export const ComposerAddAttachment: FC<{
     });
   };
 
-  const pasteText = async () => {
-    const text = await Clipboard.getStringAsync();
-    if (!text.trim()) throw new Error("The clipboard has no text to attach.");
-    if (text.length > MAX_PASTE_CHARS) {
-      throw new Error("Pasted text is too large (64,000 characters). Split it into parts.");
-    }
-    await aui.composer.addAttachment({
-      name: `Pasted text · ${text.length.toLocaleString("en-US")} characters`,
-      contentType: "text/plain",
-      type: "document",
-      content: [{ type: "text", text: `[Pasted text]\n${text}` }],
-    });
-  };
-
   const runPicker = (picker: () => Promise<void>) => {
     if (preparing || !canAttach) return;
     onPreparingChange(true);
@@ -227,7 +211,6 @@ export const ComposerAddAttachment: FC<{
       onTakePhoto={() => runPicker(takePhoto)}
       onChoosePhoto={() => runPicker(pickImages)}
       onChooseFile={() => runPicker(pickFile)}
-      onPasteText={() => runPicker(pasteText)}
     />
   );
 };

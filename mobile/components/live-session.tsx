@@ -12,9 +12,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { LiveVoiceOrb } from "@/components/live-voice-orb";
 import { useChats } from "@/src/chat-context";
 import { resizeLiveJpeg } from "@/src/live-camera";
 import {
+  LIVE_BARGE_IN_LEVEL,
   LIVE_MAX_SESSION_MS,
   LIVE_SAMPLE_RATE,
   PcmPlaybackBuffer,
@@ -23,10 +25,13 @@ import {
   isFatalLiveError,
   isVideoFrameRejection,
   liveFrameEvent,
+  liveGreetingResponseEvent,
   liveSessionUpdateEvent,
   liveSocketProtocols,
+  pcm16PeakLevel,
   wavFromPcm16,
   type LiveTurn,
+  type LiveVoiceMode,
 } from "@/src/live-media";
 import { fetchLiveToken } from "@/src/live-token-client";
 import { getModelSelection } from "@/src/model-selection";
@@ -82,12 +87,14 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [handoffError, setHandoffError] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
-  const [cameraOn, setCameraOn] = useState(true);
+  const [cameraOn, setCameraOn] = useState(false);
   const [facing, setFacing] = useState<CameraType>("back");
   const [cameraReady, setCameraReady] = useState(false);
   const [videoRejected, setVideoRejected] = useState(false);
   const [turns, setTurns] = useState<readonly LiveTurn[]>([]);
   const [assistantCaption, setAssistantCaption] = useState("");
+  const [voiceMode, setVoiceMode] = useState<LiveVoiceMode>("connecting");
+  const [micLevel, setMicLevel] = useState(0);
 
   const socketRef = useRef<WebSocket | null>(null);
   const streamRef = useRef(stream);
@@ -107,11 +114,23 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
   const slotUri = useRef<(string | null)[]>([null, null]);
   const queueRef = useRef<string[]>([]);
   const finishRef = useRef<() => void>(() => {});
+  const suppressMicRef = useRef(false);
+  const awaitPlaybackDrainRef = useRef(false);
+  const levelTickRef = useRef(0);
 
   const sendEvent = useCallback((event: object) => {
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN || closedRef.current) return;
     socket.send(JSON.stringify(event));
+  }, []);
+
+  const settleAfterPlayback = useCallback(() => {
+    if (!awaitPlaybackDrainRef.current) return;
+    if (queueRef.current.length > 0 || busyRef.current.some(Boolean)) return;
+    awaitPlaybackDrainRef.current = false;
+    suppressMicRef.current = false;
+    setMicLevel(0);
+    if (!closedRef.current && !mutedRef.current) setVoiceMode("idle");
   }, []);
 
   const enqueueWav = useCallback((pcm: Uint8Array) => {
@@ -123,6 +142,9 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     } catch {
       return;
     }
+    suppressMicRef.current = true;
+    awaitPlaybackDrainRef.current = false;
+    setVoiceMode((current) => current === "muted" ? current : "speaking");
     const index = busyRef.current.findIndex((busy) => !busy);
     if (index < 0) {
       queueRef.current.push(uri);
@@ -147,6 +169,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       slotUri.current[index] = null;
       if (uri) deleteWav(uri);
     });
+    awaitPlaybackDrainRef.current = false;
   }, []);
 
   const finish = useCallback(() => {
@@ -158,6 +181,9 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     socket?.close();
     stopStream(streamRef.current);
     stopPlayback();
+    suppressMicRef.current = false;
+    setVoiceMode("ended");
+    setMicLevel(0);
     setPhase("closed");
     const spoken = partialRef.current.trim();
     partialRef.current = "";
@@ -206,6 +232,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       } else {
         busyRef.current[index] = false;
         slotUri.current[index] = null;
+        settleAfterPlayback();
       }
       if (previous && previous !== next) deleteWav(previous);
     }));
@@ -214,20 +241,33 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       for (const player of players) player.remove();
       playersRef.current = null;
     };
-  }, []);
+  }, [settleAfterPlayback]);
 
   useEffect(() => {
     onCapture.current = (buffer) => {
       if (mutedRef.current || closedRef.current) return;
+      const bytes = new Uint8Array(buffer.data);
+      const level = pcm16PeakLevel(bytes);
+      const now = Date.now();
+      if (now - levelTickRef.current > 80) {
+        levelTickRef.current = now;
+        setMicLevel(level);
+      }
+      if (suppressMicRef.current) {
+        if (level < LIVE_BARGE_IN_LEVEL) return;
+        stopPlayback();
+        suppressMicRef.current = false;
+        setVoiceMode("listening");
+      }
       const audio = captureToPcm16Base64({
-        data: new Uint8Array(buffer.data),
+        data: bytes,
         encoding: "int16",
         sampleRate: buffer.sampleRate || LIVE_SAMPLE_RATE,
         channels: buffer.channels || 1,
       });
       if (audio) sendEvent({ type: "input-audio-append", audio });
     };
-  }, [sendEvent]);
+  }, [sendEvent, stopPlayback]);
 
   useEffect(() => {
     let cancelled = false;
@@ -258,7 +298,9 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
         socket.onopen = () => {
           if (cancelled || closedRef.current) return;
           sendEvent(liveSessionUpdateEvent());
+          sendEvent(liveGreetingResponseEvent());
           setPhase("live");
+          setVoiceMode(mutedRef.current ? "muted" : "idle");
           sessionTimer = setTimeout(() => {
             setNotice("The 25 minute live session ended.");
             finishRef.current();
@@ -286,8 +328,12 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
             } else if (message.type === "audio-done" || message.type === "response-done") {
               const tail = playbackRef.current.flush();
               if (tail) enqueueWav(tail);
+              awaitPlaybackDrainRef.current = true;
+              settleAfterPlayback();
             } else if (message.type === "speech-started") {
               stopPlayback();
+              suppressMicRef.current = false;
+              if (!mutedRef.current) setVoiceMode("listening");
             } else if (message.type === "audio-transcript-delta" && typeof message.delta === "string") {
               partialRef.current += message.delta;
               setAssistantCaption(partialRef.current);
@@ -305,11 +351,13 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
                 turnsRef.current = [...turnsRef.current, { role: "user", text }];
                 setTurns(turnsRef.current);
               }
+              if (!suppressMicRef.current && !mutedRef.current) setVoiceMode("idle");
             } else if (message.type === "error" && typeof message.message === "string") {
               const text = message.message.slice(0, 240);
               if (isFatalLiveError(text)) {
                 setError(text);
                 setPhase("error");
+                setVoiceMode("ended");
                 socketRef.current?.close();
               } else if (frameSentRef.current || isVideoFrameRejection(text)) {
                 frameSentRef.current = false;
@@ -327,11 +375,13 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
         socket.onclose = () => {
           if (cancelled || closedRef.current) return;
           setPhase((current) => current === "error" ? current : "closed");
+          setVoiceMode("ended");
           stopStream(streamRef.current);
         };
       } catch (cause) {
         if (cancelled) return;
         setPhase("error");
+        setVoiceMode("ended");
         setError(cause instanceof Error ? cause.message : "Could not start the live session.");
       }
     };
@@ -344,7 +394,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       stopStream(streamRef.current);
       stopPlayback();
     };
-  }, [enqueueWav, sendEvent, stopPlayback]);
+  }, [enqueueWav, sendEvent, settleAfterPlayback, stopPlayback]);
 
   useEffect(() => {
     if (!cameraOn || !cameraReady || videoRejected || phase !== "live") return;
@@ -382,8 +432,12 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     const next = !mutedRef.current;
     mutedRef.current = next;
     setMuted(next);
-    if (next) stopStream(streamRef.current);
-    else if (phase === "live" && !closedRef.current) {
+    setMicLevel(0);
+    if (next) {
+      stopStream(streamRef.current);
+      setVoiceMode("muted");
+    } else if (phase === "live" && !closedRef.current) {
+      setVoiceMode(suppressMicRef.current ? "speaking" : "idle");
       void streamRef.current.start().catch(() => setError("The microphone did not start."));
     }
   };
@@ -408,11 +462,21 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
             mute
             animateShutter={false}
             onCameraReady={() => setCameraReady(true)}
-            onMountError={() => setError("The camera did not start.")}
+            onMountError={() => {
+              setCameraReady(false);
+              setCameraOn(false);
+              setNotice("Camera unavailable. Voice stays on.");
+            }}
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, styles.cameraOff]} />
         )}
+        <View style={styles.orbStage} pointerEvents="none">
+          <LiveVoiceOrb
+            mode={phase === "connecting" ? "connecting" : phase === "error" ? "ended" : voiceMode}
+            level={voiceMode === "speaking" ? Math.max(micLevel, 0.35) : micLevel}
+          />
+        </View>
         <View style={[styles.top, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
           <Text style={styles.status}>
             {phase === "connecting" ? "Connecting" : phase === "live" ? "Live" : phase === "error" ? "Live stopped" : "Live ended"}
@@ -426,7 +490,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
                 : "The model is not receiving video."}
             </Text>
           ) : null}
-          {!cameraGranted ? (
+          {cameraOn && !cameraGranted ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Allow camera"
@@ -449,18 +513,31 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
           {handoffError ? <Text style={styles.banner}>{handoffError}</Text> : null}
           <View style={styles.controls}>
             <Control label={muted ? "Unmute" : "Mute"} onPress={toggleMute} />
-            <Control
-              label="Flip camera"
-              onPress={() => {
-                setCameraReady(false);
-                setFacing((current) => current === "back" ? "front" : "back");
-              }}
-            />
+            {cameraOn && cameraGranted ? (
+              <Control
+                label="Flip camera"
+                onPress={() => {
+                  setCameraReady(false);
+                  setFacing((current) => current === "back" ? "front" : "back");
+                }}
+              />
+            ) : null}
             <Control
               label={cameraOn ? "Turn camera off" : "Turn camera on"}
               onPress={() => {
                 setCameraReady(false);
-                setCameraOn((current) => !current);
+                if (cameraOn) {
+                  setCameraOn(false);
+                  return;
+                }
+                if (cameraGranted) {
+                  setCameraOn(true);
+                  return;
+                }
+                void requestCameraPermission().then((result) => {
+                  if (result.granted) setCameraOn(true);
+                  else setNotice("Camera permission is optional. Voice stays on.");
+                });
               }}
             />
             <Control label={endLabel} onPress={finish} />
@@ -481,7 +558,13 @@ function Control({ label, onPress }: { readonly label: string; readonly onPress:
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#000" },
-  cameraOff: { backgroundColor: "#111" },
+  cameraOff: { backgroundColor: "#0B0D12" },
+  orbStage: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: 48,
+  },
   top: { position: "absolute", top: 0, left: 16, right: 16, gap: 8 },
   bottom: { position: "absolute", left: 16, right: 16, bottom: 0, gap: 12 },
   status: { color: "#fff", fontSize: 17, fontWeight: "600" },

@@ -1,10 +1,29 @@
 import { randomUUID } from "node:crypto";
+import { networkInterfaces } from "node:os";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { bearer } from "better-auth/plugins";
 import { getAppUrlHost, getEffectiveAppUrl } from "@/lib/auth-url";
 import { db } from "@/lib/db/client";
+
+/** Dev-only: phone → Mac LAN IP:3000 must be an allowed better-auth host. */
+function localLanAgentHosts(): string[] {
+  if (process.env.NODE_ENV === "production") return [];
+  try {
+    const hosts: string[] = [];
+    for (const addrs of Object.values(networkInterfaces())) {
+      for (const addr of addrs ?? []) {
+        if (addr.family === "IPv4" && !addr.internal) {
+          hosts.push(`${addr.address}:3000`, `${addr.address}:3001`);
+        }
+      }
+    }
+    return hosts;
+  } catch {
+    return [];
+  }
+}
 
 const vercelClientId = process.env.NEXT_PUBLIC_VERCEL_APP_CLIENT_ID?.trim() ?? "";
 const vercelClientSecret = process.env.VERCEL_APP_CLIENT_SECRET?.trim() ?? "";
@@ -48,6 +67,7 @@ const allowedHosts = [
   "localhost:3001",
   "127.0.0.1:3000",
   "127.0.0.1:3001",
+  ...localLanAgentHosts(),
   "*.vercel.app",
   "pearl.tonicagentic.com",
   getAppUrlHost(process.env.BETTER_AUTH_URL),

@@ -10,7 +10,6 @@ export type AttachmentMenuProps = {
   onTakePhoto: () => void;
   onChoosePhoto: () => void;
   onChooseFile: () => void;
-  onPasteText: () => void;
 };
 
 /** Android and web retain the existing attachment choices. */
@@ -19,7 +18,6 @@ export function AttachmentMenu({
   onTakePhoto,
   onChoosePhoto,
   onChooseFile,
-  onPasteText,
 }: AttachmentMenuProps) {
   return (
     <View>
@@ -28,7 +26,6 @@ export function AttachmentMenu({
           { text: "Take Photo", onPress: onTakePhoto },
           { text: "Choose Photo", onPress: onChoosePhoto },
           { text: "Choose File", onPress: onChooseFile },
-          { text: "Paste Text", onPress: onPasteText },
           { text: "Cancel", style: "cancel" },
         ])}
         disabled={disabled}
