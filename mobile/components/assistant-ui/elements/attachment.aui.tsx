@@ -169,7 +169,9 @@ export const ComposerAddAttachment: FC<{
       const summary = await uploadPdfAttachment({
         uri: asset.uri,
         name: asset.name,
-        mimeType: "application/pdf",
+        // iOS often reports UTIs like public.data; keep the name-based PDF
+        // signal and let the upload helper normalize the media type.
+        mimeType: asset.mimeType ?? "application/pdf",
         size: asset.size,
       });
       await aui.composer.addAttachment({

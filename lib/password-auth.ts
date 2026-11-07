@@ -53,16 +53,25 @@ export function verifyPasswordSessionToken(token: string | undefined, now = Date
 export function getPasswordSessionFromHeaders(headers: Headers) {
   const cookieHeader = headers.get("cookie");
 
-  if (!cookieHeader) {
-    return false;
+  if (cookieHeader) {
+    const token = cookieHeader
+      .split(";")
+      .map((cookie) => cookie.trim().split("="))
+      .find(([name]) => name === PASSWORD_SESSION_COOKIE_NAME)?.[1];
+
+    if (verifyPasswordSessionToken(token ? decodeURIComponent(token) : undefined)) {
+      return true;
+    }
   }
 
-  const token = cookieHeader
-    .split(";")
-    .map((cookie) => cookie.trim().split("="))
-    .find(([name]) => name === PASSWORD_SESSION_COOKIE_NAME)?.[1];
+  // Mobile clients cannot reliably persist Set-Cookie, so they send the
+  // password session token as Authorization: Bearer <token> instead.
+  const authorization = headers.get("authorization");
+  if (authorization?.toLowerCase().startsWith("bearer ")) {
+    return verifyPasswordSessionToken(authorization.slice(7).trim());
+  }
 
-  return verifyPasswordSessionToken(token ? decodeURIComponent(token) : undefined);
+  return false;
 }
 
 export function hasSameOriginRequest(request: Request) {
