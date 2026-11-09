@@ -19,6 +19,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Vendored Vercel React/Next agent skills into the coder
   (`vercel-react-best-practices`, composition, view-transitions, React Native,
   web-design-guidelines, and Next.js cache/prefetch/bundle/dev-loop skills).
+- Vendored Emil design-eng + mobile, Expo mobile topic skills, Neon Postgres,
+  and obra superpowers plan skills (`brainstorming`, `writing-plans`,
+  `executing-plans`) into the coder.
 
 ### Changed
 
