@@ -64,6 +64,23 @@ export const COMPOSER_MODELS: readonly ComposerModel[] =
 
 export const DEFAULT_MODEL_KEY = COMPOSER_MODELS[0].key;
 
+// Image models are a second radio group — selecting one must not replace the
+// chat model. Keys match agent/model-selection.ts.
+export const IMAGE_MODEL_SECTION: ComposerModelSection = {
+  id: "image",
+  title: "Image",
+  description: "Used by generate_image for pictorial graphics.",
+  models: [
+    { key: "gpt-image-1", label: "GPT Image 1", company: "OpenAI" },
+    { key: "imagen-4", label: "Imagen 4", company: "Google" },
+    { key: "grok-imagine", label: "Grok Imagine", company: "xAI" },
+  ],
+};
+
+export const IMAGE_MODELS: readonly ComposerModel[] = IMAGE_MODEL_SECTION.models;
+
+export const DEFAULT_IMAGE_MODEL_KEY = IMAGE_MODELS[0].key;
+
 let selectedKey = DEFAULT_MODEL_KEY;
 let selectionRevision = 0;
 let saveSelection: ((key: string) => Promise<void>) | undefined;
@@ -100,5 +117,67 @@ export function subscribeModelSelection(listener: () => void): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
+  };
+}
+
+let selectedImageKey = DEFAULT_IMAGE_MODEL_KEY;
+let imageSelectionRevision = 0;
+let saveImageSelection: ((key: string) => Promise<void>) | undefined;
+const imageListeners = new Set<() => void>();
+
+export function configureImageModelSelectionPersistence(
+  save: (key: string) => Promise<void>,
+): void {
+  saveImageSelection = save;
+}
+
+export async function restoreImageModelSelection(
+  load: () => Promise<string | null>,
+): Promise<void> {
+  const revision = imageSelectionRevision;
+  const saved = await load();
+  if (
+    revision !== imageSelectionRevision ||
+    !saved ||
+    !IMAGE_MODELS.some((model) => model.key === saved)
+  ) {
+    return;
+  }
+  if (selectedImageKey === saved) return;
+  selectedImageKey = saved;
+  for (const listener of imageListeners) listener();
+}
+
+export function getImageModelSelection(): string {
+  return selectedImageKey;
+}
+
+export function setImageModelSelection(key: string): Promise<void> {
+  if (!IMAGE_MODELS.some((model) => model.key === key)) {
+    return Promise.resolve();
+  }
+  imageSelectionRevision++;
+  if (key === selectedImageKey) {
+    return saveImageSelection?.(key) ?? Promise.resolve();
+  }
+  selectedImageKey = key;
+  for (const listener of imageListeners) listener();
+  return saveImageSelection?.(key) ?? Promise.resolve();
+}
+
+export function subscribeImageModelSelection(
+  listener: () => void,
+): () => void {
+  imageListeners.add(listener);
+  return () => {
+    imageListeners.delete(listener);
+  };
+}
+
+/** Ephemeral clientContext markers for chat + image model pickers. */
+export function modelClientContext(): Record<string, string> {
+  return {
+    eveModelSelection: getModelSelection(),
+    eveImageModelSelection: getImageModelSelection(),
   };
 }

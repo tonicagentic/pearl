@@ -32,8 +32,11 @@ import { expandHeldPastes, setLargePasteErrorHandler } from "@/lib/chat/large-pa
 import { getAgentMode } from "@/app/_components/agent-mode";
 import {
   COMPOSER_MODELS,
+  DEFAULT_IMAGE_MODEL_KEY,
   DEFAULT_MODEL_KEY,
+  getImageModelSelection,
   getModelSelection,
+  IMAGE_MODELS,
 } from "@/app/_components/model-selection";
 import { ProjectPickerDialog } from "@/app/_components/project-picker-dialog";
 import { attachChatToProjectAction } from "@/app/actions/projects";
@@ -55,6 +58,9 @@ import {
   CanvasTabStrip,
 } from "@/components/assistant-ui/elements/canvas-split";
 import { MarkdownContent } from "@/components/assistant-ui/elements/markdown-content";
+import { MermaidBlock } from "@/components/assistant-ui/elements/mermaid-block";
+import { SceneViewer } from "@/components/assistant-ui/elements/scene-viewer";
+import { previewKindForPath } from "@/lib/design/preview-kind";
 import { ghostButton, mono } from "@/lib/surfaces";
 import { ThreadActionsMenu } from "@/components/chat/thread-actions-menu";
 import { EveAuthorization } from "@/components/eve-authorization";
@@ -521,6 +527,9 @@ export function AssistantChatSurface({
         const selected = COMPOSER_MODELS.find(
           (model) => model.key === getModelSelection(),
         );
+        const selectedImage = IMAGE_MODELS.find(
+          (model) => model.key === getImageModelSelection(),
+        );
         const clientContext: Record<string, string> = {
           [MODE_MARKER]: mode,
         };
@@ -529,6 +538,9 @@ export function AssistantChatSurface({
         }
         if (selected && selected.key !== DEFAULT_MODEL_KEY) {
           clientContext.eveModelSelection = selected.key;
+        }
+        if (selectedImage && selectedImage.key !== DEFAULT_IMAGE_MODEL_KEY) {
+          clientContext.eveImageModelSelection = selectedImage.key;
         }
         return {
           ...input,
@@ -667,15 +679,87 @@ export function AssistantChatSurface({
   );
 }
 
-// When workspace tabs are open, the thread narrows to a rail and the
-// workspace takes the room. Otherwise the thread renders full width.
-// One Thread instance — remounting on open/close looked like a page refresh.
-function isMarkdownPath(path: string): boolean {
-  return /\.mdx?$/i.test(path);
-}
-
 function basename(path: string): string {
   return path.split("/").pop() || path;
+}
+
+function CanvasFilePreview({
+  path,
+  content,
+}: {
+  readonly path: string;
+  readonly content: string;
+}) {
+  const kind = previewKindForPath(path);
+  switch (kind) {
+    case "markdown":
+      return (
+        <MarkdownContent
+          text={content}
+          className="mx-auto max-w-[65ch] text-[13px]"
+        />
+      );
+    case "html":
+      return (
+        <iframe
+          title={basename(path)}
+          srcDoc={content}
+          sandbox=""
+          className="h-full min-h-[20rem] w-full flex-1 border-0 bg-white"
+          referrerPolicy="no-referrer"
+        />
+      );
+    case "svg":
+      return (
+        <div
+          className="flex min-h-[12rem] items-center justify-center overflow-auto p-4 [&_svg]:max-h-full [&_svg]:max-w-full"
+          // SVG authored into the workspace by the agent / user; treated as
+          // a design artifact (no script execution in the host page beyond
+          // the inline markup the browser draws as an image tree).
+          dangerouslySetInnerHTML={{ __html: content }}
+        />
+      );
+    case "pdf":
+    case "image": {
+      // Content may be a URL the agent wrote, or raw bytes are not expected
+      // in text tabs — prefer an http(s) or data URL when present.
+      const src = content.trim();
+      if (/^(https?:|data:|blob:)/i.test(src)) {
+        if (kind === "pdf") {
+          return (
+            <iframe
+              title={basename(path)}
+              src={src}
+              className="h-full min-h-[20rem] w-full flex-1 border-0"
+            />
+          );
+        }
+        return (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={src}
+            alt={basename(path)}
+            className="mx-auto max-h-full max-w-full object-contain p-4"
+          />
+        );
+      }
+      return (
+        <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
+          {content}
+        </CanvasSplitLine>
+      );
+    }
+    case "scene":
+      return <SceneViewer content={content} className="min-h-[20rem] flex-1" />;
+    case "mermaid":
+      return <MermaidBlock code={content} className="m-4" />;
+    default:
+      return (
+        <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
+          {content}
+        </CanvasSplitLine>
+      );
+  }
 }
 
 function CanvasLayout() {
@@ -810,16 +894,7 @@ function CanvasLayout() {
             ) : doc ? (
               <CanvasSplitBody writing={doc.running} className="min-h-0 flex-1">
                 {doc.content ? (
-                  isMarkdownPath(doc.path) ? (
-                    <MarkdownContent
-                      text={doc.content}
-                      className="mx-auto max-w-[65ch] text-[13px]"
-                    />
-                  ) : (
-                    <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
-                      {doc.content}
-                    </CanvasSplitLine>
-                  )
+                  <CanvasFilePreview path={doc.path} content={doc.content} />
                 ) : null}
               </CanvasSplitBody>
             ) : null}

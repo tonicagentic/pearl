@@ -2,6 +2,7 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 const MODEL_KEY = "pearl.default_model.v1";
+const IMAGE_MODEL_KEY = "pearl.image_model.v1";
 
 export async function loadSavedModelSelection(): Promise<string | null> {
   if (Platform.OS === "web") {
@@ -21,5 +22,29 @@ export function saveModelSelection(key: string): Promise<void> {
     await SecureStore.setItemAsync(MODEL_KEY, key);
   });
   lastWrite = write;
+  return write;
+}
+
+export async function loadSavedImageModelSelection(): Promise<string | null> {
+  if (Platform.OS === "web") {
+    return typeof window === "undefined"
+      ? null
+      : window.localStorage.getItem(IMAGE_MODEL_KEY);
+  }
+  return SecureStore.getItemAsync(IMAGE_MODEL_KEY);
+}
+
+let lastImageWrite = Promise.resolve();
+export function saveImageModelSelection(key: string): Promise<void> {
+  const write = lastImageWrite.catch(() => {}).then(async () => {
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(IMAGE_MODEL_KEY, key);
+      }
+      return;
+    }
+    await SecureStore.setItemAsync(IMAGE_MODEL_KEY, key);
+  });
+  lastImageWrite = write;
   return write;
 }

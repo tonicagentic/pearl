@@ -7,9 +7,16 @@ import { cn } from "@/lib/utils";
 import {
   COMPOSER_MODELS,
   COMPOSER_MODEL_SECTIONS,
+  getImageModelSelection,
   getModelSelection,
+  IMAGE_MODEL_SECTION,
+  IMAGE_MODELS,
+  setImageModelSelection,
   setModelSelection,
+  subscribeImageModelSelection,
   subscribeModelSelection,
+  type ComposerModel,
+  type ComposerModelSection,
 } from "@/app/_components/model-selection";
 
 // Composer model picker, following assistant-ui's composer-model-picker
@@ -17,6 +24,9 @@ import {
 // the composer's action row names the active model and opens a short list to
 // switch it. The trigger and menu are fully controlled — neither closes
 // itself, so outside pointer-downs and Escape are handled here.
+//
+// Chat models and image models are separate radio groups so picking an image
+// model never replaces the model that writes replies.
 export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }) {
   const selectedKey = useSyncExternalStore(
     subscribeModelSelection,
@@ -24,6 +34,11 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
     // The module state is identical on server and client (default until a
     // picker interaction), so the same getter serves as getServerSnapshot.
     getModelSelection,
+  );
+  const selectedImageKey = useSyncExternalStore(
+    subscribeImageModelSelection,
+    getImageModelSelection,
+    getImageModelSelection,
   );
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -47,6 +62,9 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
   const selected =
     COMPOSER_MODELS.find((model) => model.key === selectedKey) ??
     COMPOSER_MODELS[0];
+  const selectedImage =
+    IMAGE_MODELS.find((model) => model.key === selectedImageKey) ??
+    IMAGE_MODELS[0];
 
   return (
     <div ref={rootRef} className="relative">
@@ -54,7 +72,7 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
         type="button"
         aria-expanded={open}
         aria-haspopup="listbox"
-        aria-label={`Model: ${selected.label}`}
+        aria-label={`Model: ${selected.label}; Image: ${selectedImage.label}`}
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
         className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
@@ -67,64 +85,95 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
       {open ? (
         <div
           role="listbox"
-          aria-label="Model"
-          className="bg-popover border-border/60 absolute bottom-full left-0 z-50 mb-2 w-72 overflow-hidden rounded-xl border p-1 shadow-lg"
+          aria-label="Models"
+          className="bg-popover border-border/60 absolute bottom-full left-0 z-50 mb-2 max-h-[min(28rem,70vh)] w-72 overflow-y-auto rounded-xl border p-1 shadow-lg"
         >
           {COMPOSER_MODEL_SECTIONS.map((section, sectionIndex) => (
-            <div
+            <ModelSection
               key={section.id}
-              className={cn(sectionIndex > 0 && "mt-1 border-t border-border/60 pt-1")}
-            >
-              <div className="px-2.5 pb-1 pt-1.5">
-                <div className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-                  {section.title}
-                </div>
-                {section.description ? (
-                  <div className="text-muted-foreground mt-0.5 text-[11px] leading-snug">
-                    {section.description}
-                  </div>
-                ) : null}
-              </div>
-              {section.models.map((model) => {
-                const isSelected = model.key === selected.key;
-                return (
-                  <button
-                    key={model.key}
-                    type="button"
-                    role="option"
-                    aria-selected={isSelected}
-                    onClick={() => {
-                      setModelSelection(model.key);
-                      setOpen(false);
-                    }}
-                    className={cn(
-                      "hover:bg-accent flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-                      isSelected && "bg-accent/60",
-                    )}
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="text-foreground block font-medium">
-                        {model.label}
-                      </span>
-                      <span className="text-muted-foreground block text-[11px]">
-                        {`by ${model.company}`}
-                      </span>
-                      {model.openWeight ? (
-                        <span className="bg-muted text-muted-foreground mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium">
-                          Open Weight
-                        </span>
-                      ) : null}
-                    </span>
-                    {isSelected ? (
-                      <CheckIcon className="text-foreground size-3.5 shrink-0" />
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
+              section={section}
+              selectedKey={selected.key}
+              sectionIndex={sectionIndex}
+              onSelect={(key) => {
+                setModelSelection(key);
+                setOpen(false);
+              }}
+            />
           ))}
+          <ModelSection
+            section={IMAGE_MODEL_SECTION}
+            selectedKey={selectedImage.key}
+            sectionIndex={COMPOSER_MODEL_SECTIONS.length}
+            onSelect={(key) => {
+              setImageModelSelection(key);
+            }}
+          />
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function ModelSection({
+  section,
+  selectedKey,
+  sectionIndex,
+  onSelect,
+}: {
+  readonly section: ComposerModelSection;
+  readonly selectedKey: string;
+  readonly sectionIndex: number;
+  readonly onSelect: (key: string) => void;
+}) {
+  return (
+    <div
+      className={cn(sectionIndex > 0 && "mt-1 border-t border-border/60 pt-1")}
+      role="group"
+      aria-label={section.title}
+    >
+      <div className="px-2.5 pb-1 pt-1.5">
+        <div className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+          {section.title}
+        </div>
+        {section.description ? (
+          <div className="text-muted-foreground mt-0.5 text-[11px] leading-snug">
+            {section.description}
+          </div>
+        ) : null}
+      </div>
+      {section.models.map((model: ComposerModel) => {
+        const isSelected = model.key === selectedKey;
+        return (
+          <button
+            key={model.key}
+            type="button"
+            role="option"
+            aria-selected={isSelected}
+            onClick={() => onSelect(model.key)}
+            className={cn(
+              "hover:bg-accent flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+              isSelected && "bg-accent/60",
+            )}
+          >
+            <span className="min-w-0 flex-1">
+              <span className="text-foreground block font-medium">
+                {model.label}
+              </span>
+              <span className="text-muted-foreground block text-[11px]">
+                {`by ${model.company}`}
+              </span>
+              {model.openWeight ? (
+                <span className="bg-muted text-muted-foreground mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium">
+                  Open Weight
+                </span>
+              ) : null}
+            </span>
+            {isSelected ? (
+              <CheckIcon className="text-foreground size-3.5 shrink-0" />
+            ) : null}
+          </button>
+        );
+      })}
     </div>
   );
 }

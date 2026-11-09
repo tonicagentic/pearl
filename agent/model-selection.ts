@@ -25,6 +25,23 @@ export type ClientModelKey = keyof typeof CLIENT_MODEL_KEYS;
 
 export const MODEL_SELECTION_MARKER = "eveModelSelection";
 
+// Image generation models for generate_image. Separate allowlist from chat
+// models so a client cannot select an image id as the reply model (or the
+// reverse). Only models expected to honor the US / ZDR / no-training gateway
+// policy belong here; generate_image fails closed when no compliant provider
+// is available for the chosen id.
+export const DEFAULT_IMAGE_MODEL = "openai/gpt-image-1";
+
+export const CLIENT_IMAGE_MODEL_KEYS = {
+  "gpt-image-1": "openai/gpt-image-1",
+  "imagen-4": "google/imagen-4.0-generate-001",
+  "grok-imagine": "xai/grok-imagine-image",
+} as const;
+
+export type ClientImageModelKey = keyof typeof CLIENT_IMAGE_MODEL_KEYS;
+
+export const IMAGE_MODEL_SELECTION_MARKER = "eveImageModelSelection";
+
 interface ScannedMessage {
   role: string;
   content: unknown;
@@ -32,6 +49,56 @@ interface ScannedMessage {
 }
 
 export type ScannedMessageLike = readonly ScannedMessage[];
+
+function messageText(content: unknown): string | null {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return null;
+  const parts: string[] = [];
+  for (const part of content) {
+    if (typeof part === "string") {
+      parts.push(part);
+      continue;
+    }
+    if (
+      part &&
+      typeof part === "object" &&
+      "type" in part &&
+      part.type === "text" &&
+      "text" in part &&
+      typeof part.text === "string"
+    ) {
+      parts.push(part.text);
+    }
+  }
+  return parts.length > 0 ? parts.join("") : null;
+}
+
+function isClientContextMessage(message: ScannedMessage): boolean {
+  if (message.role !== "user") return false;
+  if (message.kind === "context.instruction") return true;
+  if (message.kind !== undefined) return false;
+  const text = messageText(message.content);
+  return text?.startsWith("Client context:") === true;
+}
+
+function readAllowlistedMarker(
+  messages: readonly ScannedMessage[],
+  marker: string,
+  allowlist: Record<string, string>,
+): string | undefined {
+  const markerPattern = new RegExp(`"${marker}"\\s*:\\s*"([^"]+)"`);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!isClientContextMessage(message)) continue;
+    const text = messageText(message.content);
+    if (!text) continue;
+    const match = text.match(markerPattern);
+    if (!match) continue;
+    const key = match[1];
+    if (key in allowlist) return allowlist[key];
+  }
+  return undefined;
+}
 
 // Scan a turn's messages (newest first) for the clientContext marker and
 // return the gateway model id it selects, or undefined when absent or unknown.
@@ -47,20 +114,27 @@ export type ScannedMessageLike = readonly ScannedMessage[];
 export function readClientModelSelection(
   messages: readonly ScannedMessage[],
 ): string | undefined {
-  const markerPattern = new RegExp(
-    `"${MODEL_SELECTION_MARKER}"\\s*:\\s*"([^"]+)"`,
+  return readAllowlistedMarker(
+    messages,
+    MODEL_SELECTION_MARKER,
+    CLIENT_MODEL_KEYS,
   );
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (message.role !== "user") continue;
-    if (message.kind !== "context.instruction") continue;
-    if (typeof message.content !== "string") continue;
-    const match = message.content.match(markerPattern);
-    if (!match) continue;
-    const key = match[1];
-    if (key in CLIENT_MODEL_KEYS) {
-      return CLIENT_MODEL_KEYS[key as ClientModelKey];
-    }
-  }
-  return undefined;
+}
+
+/** Gateway image-model id from clientContext, or undefined when absent/unknown. */
+export function readClientImageModelSelection(
+  messages: readonly ScannedMessage[],
+): string | undefined {
+  return readAllowlistedMarker(
+    messages,
+    IMAGE_MODEL_SELECTION_MARKER,
+    CLIENT_IMAGE_MODEL_KEYS,
+  );
+}
+
+/** Resolve the image model for generate_image (allowlist → default). */
+export function resolveImageModelForTurn(
+  messages: readonly ScannedMessage[],
+): string {
+  return readClientImageModelSelection(messages) ?? DEFAULT_IMAGE_MODEL;
 }

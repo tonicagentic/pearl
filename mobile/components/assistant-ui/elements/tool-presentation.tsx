@@ -84,7 +84,7 @@ const TOOL_PRESENTATION: Record<string, ToolPresentation> = {
   lint_against_style: { label: "Lint style", icon: SpellCheckIcon },
   glob: { label: "Find files", icon: FolderSearchIcon },
   grep: { label: "Search files", icon: TextSearchIcon },
-  todo: { label: "Update plan", icon: ListChecksIcon },
+  todo: { label: "To-dos", icon: ListChecksIcon },
   task_cancel: { label: "Cancel task", icon: BanIcon },
   load_skill: { label: "Load skill", icon: SparklesIcon },
   file__save_memory: { label: "Remember", icon: BrainIcon },
