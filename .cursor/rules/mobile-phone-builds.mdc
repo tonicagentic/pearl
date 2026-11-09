@@ -1,0 +1,16 @@
+---
+description: Phone / device EAS builds must be standalone — never require Metro or a local dig server.
+globs: mobile/eas.json,mobile/app.json,mobile/AGENTS.md,mobile/**/*
+alwaysApply: false
+---
+
+# Mobile phone builds (no dev server)
+
+When Alex asks for a build “on my phone”, “for the device”, “installable”, or similar:
+
+- Use EAS profile **`preview`** (internal, standalone) or **`production`**.
+- **Never** use profile **`development`** for phone installs. That profile sets `developmentClient: true` and the app will refuse to run without Metro.
+- Do not start Metro / `expo start` as a substitute for a phone install unless Alex explicitly wants a development client session.
+- Prefer: `eas build --platform ios --profile preview` (or android) from `mobile/`.
+
+The `development` profile remains for local/dev-client workflows only when Alex asks for a development client by name.

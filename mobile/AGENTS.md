@@ -32,8 +32,11 @@ This app uses **Expo Router** with a drawer layout (`app/_layout.tsx`) whose con
 Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
 Docs: https://docs.expo.dev/eas/index.md
 
+**Phone / device installs:** always use profile **`preview`** (or `production`). Never ship a phone build with profile `development` — that enables `developmentClient` and requires a Metro/dev server on the device. Reserve `development` for explicit development-client work only.
+
 ## Rules
 
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
-- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
+- Phone builds for Alex must not require a local bundler: `eas build --profile preview` (or `production`). Do not use `--profile development` for “build on my phone”.
+- Expo Go only includes its bundled native modules. After adding a library with native code, a **development client** (local `npx expo run:ios|android`, or `eas build --profile development`) is needed for Metro-based iteration — that is separate from phone preview installs.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
