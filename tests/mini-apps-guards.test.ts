@@ -107,9 +107,9 @@ test("root instructions require calling builder tool in the same turn", async ()
   assert.match(instructions, /turn must include the `builder` call/);
 });
 
-test("builder agent keeps libfx external for durable/vercel.mjs", async () => {
+test("root agent keeps libfx external for the builder's durable/vercel.mjs", async () => {
   const { readFile } = await import("node:fs/promises");
-  const agent = await readFile("agent/subagents/builder/agent.ts", "utf8");
+  const agent = await readFile("agent/agent.ts", "utf8");
   assert.match(
     agent,
     /externalDependencies:\s*\["libfx",\s*"durable-harness"\]/,

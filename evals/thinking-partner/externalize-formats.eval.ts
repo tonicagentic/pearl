@@ -12,13 +12,14 @@ export default defineEval({
   tags: ["smoke"],
   timeoutMs: 240_000,
   async test(t) {
-    const first = await t.send(
+    const session = await t.session();
+    const first = await session.send(
       `${IDEA} The pushback I keep getting is that this is just ERP middleware again, but I think the difference is that agents make decisions — they need the policy, not just the integration.`,
     );
 
     first.expectOk();
 
-    const memo = await t.send(
+    const memo = await session.send(
       "Turn this into a short memo for my team so we can decide whether to pursue it.",
     );
 
@@ -35,24 +36,22 @@ export default defineEval({
       satisfies((length: number) => length > 200, "the memo was written as an artifact"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The memo is decision-ready: it states the proposal (a shared business-logic layer for agents), names the key objection (this is just ERP middleware) and the response (agents make decisions and need the policy where the integration lives, not a rewrite per framework), and ends with what the team must decide. It does not pad with unrelated content or invent evidence, and it preserves the author's framing.",
         { on: memoMaterial },
       )
       .atLeast(0.8);
 
-    const friend = await t.send(
+    const friend = await session.send(
       "Now explain the same idea to a friend who isn't in tech — no jargon.",
     );
 
     friend.expectOk();
     friend.notCalledTool("write_file");
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply explains the idea in plain, jargon-free language (no 'business-logic layer', 'integrations', or 'agent frameworks' left unexplained): an analogy or everyday phrasing carries the point (the same rules should exist once, for every helper that acts on the company's behalf). The register is casual and spoken, and the core idea matches the memo — it does not invent a different argument.",
-        { on: friend.message },
+        { on: friend.reply },
       )
       .atLeast(0.8);
   },

@@ -29,15 +29,13 @@ export default calibration.map((example) =>
     tags: ["reliability", "calibration"],
     async test(t) {
       if (example.label === "yes") {
-        t.judge.autoevals
-          .closedQA(example.criterion, { on: example.reply })
+        t.judge(example.criterion, { on: example.reply })
           .atLeast(0.8);
       } else {
         // For a "no" label the reply fails the original criterion. The graded
         // check is the human-authored positive failure criterion (never a
         // double negative — those flip the judge).
-        t.judge.autoevals
-          .closedQA(
+        t.judge(
             example.positive_failure ??
               `The reply does NOT satisfy this: ${example.criterion}`,
             { on: example.reply },

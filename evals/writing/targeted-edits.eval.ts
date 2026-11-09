@@ -39,14 +39,12 @@ export default cases.map((draft) =>
         satisfies(Boolean, "the thread reply stays shorter than the artifact"),
       );
 
-      t.judge.autoevals
-        .closedQA(draft.criteria, { on: fileContent })
+      t.judge(draft.criteria, { on: fileContent })
         .atLeast(0.8);
 
-      t.judge.autoevals
-        .closedQA(
+      t.judge(
           "The rewrite is scoped to the requested change: it does not add new content to the passage itself, restructure sections that were not asked about, or turn the passage into a formatted document with headers and bullets unless the instruction asked for that. A brief note outside the passage flagging a judgment call or ambiguity in the edit is acceptable and does not count as added content.",
-          { on: `${fileContent}\n\n---\n\n${turn.message ?? ""}` },
+          { on: `${fileContent}\n\n---\n\n${turn.reply ?? ""}` },
         )
         .atLeast(0.7);
     },

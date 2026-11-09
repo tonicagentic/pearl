@@ -18,21 +18,19 @@ export default defineEval({
 
     t.succeeded();
 
-    const reply = turn.message ?? "";
+    const reply = turn.reply ?? "";
     t.check(
       reply.length,
       satisfies((length: number) => length > 200, "the reply delivers the analysis and the options"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply offers at least two genuinely distinct hook alternatives using different strategies (for example a concrete data beat, a question, a short story) — not one rewrite restated three ways. Each alternative is specific and concrete (numbers, a scene, or a sharp question), not abstract advice about what a hook should do.",
         { on: reply },
       )
       .atLeast(0.8);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply briefly diagnoses the original (what works, what is weak: generic opener, no stakes, no promise) and the alternatives sound like the practitioner author rather than marketing copy: concrete, plain, specific to the craft. The suggested lines follow house style: no em dashes, no hype vocabulary (revolutionary, game-changing, seamless, unlock, leverage).",
         { on: reply },
       )

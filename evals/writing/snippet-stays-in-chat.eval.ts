@@ -15,10 +15,9 @@ export default defineEval({
     t.succeeded();
     t.usedNoTools();
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply contains a single active-voice rewrite of the sentence (the team decided to move the deadline, or equivalent), with no file creation, no commentary, and no extra content.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
   },

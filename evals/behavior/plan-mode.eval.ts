@@ -51,7 +51,7 @@ export default defineEval({
     t.calledTool("save_plan");
     t.notCalledTool("create_issue");
     t.notCalledTool("builder");
-    t.noFailedActions();
+    t.noFailedCalls();
 
     const saveCalls = turn.toolCalls.filter((call) => call.name === "save_plan");
     if (saveCalls.length === 0) {

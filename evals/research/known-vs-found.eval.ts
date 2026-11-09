@@ -15,19 +15,17 @@ export default defineEval({
 
     t.succeeded();
     t.calledTool("web_search");
-    t.noFailedActions();
+    t.noFailedCalls();
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The stable fact is answered correctly as something the agent knew (Canberra is the capital of Australia — not Sydney or Melbourne), and the Bitcoin price comes from a search with the lookup made explicit.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply explicitly labels which answer came from the agent's own knowledge and which came from searching, rather than presenting both as the same kind of answer.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
   },

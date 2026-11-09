@@ -36,7 +36,7 @@ export default defineEval({
     t.calledTool("todo");
     t.calledTool("get_weather");
     t.toolOrder(["todo", "get_weather"]);
-    t.noFailedActions();
+    t.noFailedCalls();
 
     const todoCalls = turn.toolCalls.filter((call) => call.name === "todo");
     const tracked = todoCalls.some((call) =>
@@ -45,9 +45,9 @@ export default defineEval({
 
     t.check(tracked, trackedGate);
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       "The recommendation references the actual weather results for both Tokyo and Paris before recommending one.",
-      { on: turn.message },
+      { on: turn.reply },
     );
   },
 });

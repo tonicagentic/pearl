@@ -21,19 +21,19 @@ export default defineEval({
   tags: ["reliability", "nightly"],
   timeoutMs: 240_000,
   async test(t) {
-    await t.send(s.plan_seed);
+    const session = await t.session();
+    await session.send(s.plan_seed);
     t.succeeded();
 
-    await t.send(s.discard);
+    await session.send(s.discard);
     t.succeeded();
 
-    const sessionB = await t.newSession();
+    const sessionB = await t.session();
     const turn = await sessionB.send(s.bleed_probe);
     t.succeeded();
 
-    t.judge.autoevals
-      .closedQA(rubric("cross_session_bleed.no_resurrection"), {
-        on: turn.message,
+    t.judge(rubric("cross_session_bleed.no_resurrection"), {
+        on: turn.reply,
       })
       .atLeast(0.8);
   },

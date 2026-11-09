@@ -9,7 +9,8 @@ export default defineEval({
   tags: ["smoke", "multimodal"],
   timeoutMs: 240_000,
   async test(t) {
-    const turn = await t.sendFile(
+    const session = await t.session();
+    const turn = await session.sendFile(
       "This is a screenshot from my deploy dashboard. What's the deploy status, which region is it in, how many warnings are there, and what version is rolling out?",
       "evals/thinking-partner/fixtures/screenshot.png",
       "image/png",
@@ -17,10 +18,9 @@ export default defineEval({
 
     turn.expectOk();
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply answers from the screenshot with the exact values: deploy status GREEN, region eu-central-1, 3 warnings, and version 2.14.0 at 80 percent rollout. It must not invent different values.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
   },

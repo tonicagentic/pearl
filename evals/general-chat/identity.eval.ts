@@ -11,9 +11,9 @@ export default defineEval({
     t.usedNoTools();
     t.messageIncludes("eve");
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       "The answer explains that the assistant is an agent built with the eve framework, without inventing unrelated frameworks.",
-      { on: turn.message },
+      { on: turn.reply },
     );
   },
 });

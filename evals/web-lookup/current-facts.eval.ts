@@ -12,11 +12,11 @@ export default defineEval({
 
     t.succeeded();
     t.calledTool("web_search");
-    t.noFailedActions();
+    t.noFailedCalls();
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       "The answer states a specific recent Next.js version number and references a source (URL or site name) it searched.",
-      { on: turn.message },
+      { on: turn.reply },
     );
   },
 });

@@ -38,17 +38,15 @@ export default defineEval({
 
     turn.expectOk();
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply describes each design's aesthetic with visual vocabulary: Aurora Bank as minimal/light/calm (light background, serif type, navy/blue tones, restrained) and NEONX as loud/neon/dark (black background, bright green and magenta accents, monospace, hype marketing energy like 100x leverage and 420.69% APY). Describing only the literal text content without aesthetic characterization fails.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The comparative judgment is honest and reasonable: the Aurora Bank design reads as more trustworthy for a bank (calm, restrained, conventional banking cues), while NEONX's hype/leverage/no-KYC energy reads as risky or inappropriate for a bank. A wishy-washy 'both are equally trustworthy' answer fails.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
   },

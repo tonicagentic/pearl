@@ -10,12 +10,12 @@ export default defineEval({
     );
 
     t.succeeded();
-    t.loadedSkill("lead-generation");
+    t.calledSkill("lead-generation");
     t.notCalledTool("exa_agent_run");
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       "The answer describes a lead-generation process that starts by confirming the ideal customer profile before building the list.",
-      { on: turn.message },
+      { on: turn.reply },
     );
   },
 });

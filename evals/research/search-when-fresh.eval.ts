@@ -15,19 +15,17 @@ export default defineEval({
 
     t.succeeded();
     t.calledTool("web_search");
-    t.noFailedActions();
+    t.noFailedCalls();
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The answer covers recent EU AI-regulation developments (e.g., AI Act implementation, enforcement, guidance) that plausibly match the current week or month, and attributes each news item to a source.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "News items are attributed to identifiable sources rather than stated as bare unsupported claims.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
   },

@@ -24,14 +24,13 @@ export default defineEval({
       satisfies(Boolean, "the agent researched inline or delegated to the researcher"),
     );
 
-    const reply = turn.message ?? "";
+    const reply = turn.reply ?? "";
     t.check(
       reply.length,
       satisfies((length: number) => length > 120, "the reply carries findings or a legible research handoff"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply either presents concrete findings (statistics, studies, or expert statements) each tied to a named source with publication and year where available, or delegates the research with a framing that will produce verifiable findings and says the results land in this thread. In both cases: no invented studies, fabricated quotes, or made-up numbers; sources are real, verifiable publications or organizations; where evidence is thin, dated, or contested, the reply says so.",
         { on: reply },
       )

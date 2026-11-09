@@ -36,15 +36,13 @@ export default defineEval({
       satisfies(Boolean, "the thread reply stays shorter than the artifact"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The tightened version keeps the author's distinctive voice: conversational and self-deprecating with personality (the reveal framing, direct asides to the reader, the emphatic 'Two. Lines.' beat, the wry ending asking for acknowledgement). A flat, generic corporate summary of the same events fails.",
         { on: fileContent },
       )
       .atLeast(0.8);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The tightened version is genuinely shorter than the original (roughly a third less) while keeping all the key story beats: three days of debugging, the culprit was a timezone (not a race condition or off-by-one), the midnight-UTC-vs-yesterday mechanism, the two-line fix.",
         { on: fileContent },
       )

@@ -36,15 +36,13 @@ export default defineEval({
       satisfies(Boolean, "the thread reply stays shorter than the artifact"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The edit identifies or repairs the logical gaps: an ugly dashboard does not by itself imply cost savings, there is no evidence switching saves money or improves customer happiness, the March auto-renewal is a deadline/leverage point rather than a reason itself, and promising a customer before a decision is made is a risk. The revised draft's conclusion is now supported by its premises or clearly marked as needing evidence.",
         { on: fileContent },
       )
       .atLeast(0.8);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The response is honest about weaknesses in the original argument rather than diplomatically rewording them — it tells the author what does not follow and why.",
         { on: fileContent },
       )

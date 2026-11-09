@@ -34,13 +34,13 @@ export default defineEval({
 
     t.succeeded();
     t.calledTool("exa_agent_run");
-    t.noFailedActions();
+    t.noFailedCalls();
 
     const call = turn.requireToolCall("exa_agent_run");
     t.check(call.output, leadListStructured);
-    t.judge.autoevals.closedQA(
+    t.judge(
       "The answer presents AI infrastructure startup leads with websites and ICP fit scores.",
-      { on: turn.message },
+      { on: turn.reply },
     );
   },
 });

@@ -16,7 +16,7 @@ export default defineEval({
 
     t.succeeded();
 
-    const reply = turn.message ?? "";
+    const reply = turn.reply ?? "";
     t.check(
       reply.length,
       satisfies((length: number) => length > 80, "the reply frames the outline and invites the author in"),
@@ -26,15 +26,13 @@ export default defineEval({
     // iterate on (the canvas renders it); grade the material wherever it is.
     const outlineMaterial = `${reply}\n\n${artifactMaterial(turn)}`;
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The material (the reply plus the attached file artifact, if any) contains a structured outline for the article: named sections in a sensible order (hook or opening, introduction with a problem statement, body sections each carrying key points and the evidence those points need, conclusion), plus research gaps or a to-do list naming what needs a source (statistics, examples, expert quotes). An outline that is only generic section labels with no substance, or a full draft of the article instead of an outline, fails. If the outline lives in a file artifact, the reply must link it with a file:// link so the author can open it.",
         { on: outlineMaterial },
       )
       .atLeast(0.8);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply behaves like a collaborator on the outline: it either asks about audience, goal, or format, or states explicit assumptions about them. Silently picking an audience and vanishing into drafting fails; a wall of interrogatives also fails (at most a couple of focused questions).",
         { on: reply },
       )

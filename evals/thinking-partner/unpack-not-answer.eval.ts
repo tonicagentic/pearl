@@ -73,15 +73,15 @@ export default defineEval({
     t.succeeded();
     turn.notCalledTool("write_file");
     t.check(
-      turn.message?.length ?? 0,
+      turn.reply?.length ?? 0,
       conversationalNotEssay.soft(),
     );
     t.check(
-      turn.message?.length ?? 0,
+      turn.reply?.length ?? 0,
       conversationalLengthTarget.soft(),
     );
 
-    const reply = turn.message ?? "";
+    const reply = turn.reply ?? "";
     const questions = interrogativeStats(reply);
     t.check(questions.count, questionCount1Or2);
     t.check(questions.endsWithQuestion, endsReturningFloor);
@@ -90,14 +90,13 @@ export default defineEval({
     // opening phrase once more than half of the recorded runs share it.
     const drift = openerDrift(
       "thinking-partner/unpack-not-answer",
-      turn.message,
+      turn.reply,
     );
     t.check(drift, noOpenerDrift);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply engages the specific observation (French feeling weirdly orderly — word order, grammatical gender, formal register, whatever the user might be noticing) rather than giving a generic reply about languages. It helps uncover the thought by offering candidate distinctions, mechanisms, or comparisons — and those candidates must be offered AS CANDIDATES or questions ('might', 'could be', 'one possibility is', or framed as a question for the user), never asserted as settled fact. A candidate mechanism stated as a flat factual claim fails — for example, answering the observation by asserting as fact that 'the EU still writes its working documents in French first, which is why it feels orderly' fails, even if the claim happens to be true: the failure is certainty, not accuracy. Well-known contextual grounding that frames the reply (a date, a body's existence) is acceptable; what fails is presenting the explanation of the user's observation as settled. The reply does not deliver a comprehensive explanation of French grammar, does not produce a lecture or essay, and does not simply agree ('yes, French is very orderly!').",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
   },

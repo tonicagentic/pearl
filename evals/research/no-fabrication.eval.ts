@@ -15,12 +15,11 @@ export default defineEval({
 
     t.succeeded();
     t.calledTool("web_search");
-    t.noFailedActions();
+    t.noFailedCalls();
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply reports a specific star count for drizzle-orm that it attributes to the search (e.g., GitHub itself), or explicitly hedges on the exact number while pointing at where to check it. It must not state a precise number with no source, and the number should be plausible for the current date (tens of thousands).",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
   },

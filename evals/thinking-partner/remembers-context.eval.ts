@@ -23,17 +23,16 @@ export default defineEval({
     t.check(saved, booleanGate("memory-saved").soft());
 
     // A second, independent session must still know the context.
-    const second = t.newSession();
+    const second = await t.session();
     const followUp = await second.send(
       "I'm planning my dinners for race week — any quick thoughts?",
     );
 
     followUp.expectOk();
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The dinner suggestions are appropriate for a vegan runner before the Berlin Marathon (plant-based, carb-conscious, marathon-aware), and the reply does NOT ask the user to repeat that they are vegan or training for a marathon — it uses what it was told in the earlier session.",
-        { on: followUp.message },
+        { on: followUp.reply },
       )
       .atLeast(0.8);
   },

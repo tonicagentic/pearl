@@ -12,17 +12,15 @@ export default defineEval({
 
     t.succeeded();
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply says the agent does not know the user's favorite color (or asks the user what it is). It must NOT state a specific color as if it knew the user's preference.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply is brief and conversational. It may transparently mention what the agent already has on file and offer to save the favorite color — an essay about how memory works is what fails.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.6);
   },

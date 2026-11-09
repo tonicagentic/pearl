@@ -10,9 +10,9 @@ export default defineEval({
     t.succeeded();
     t.calledTool("get_weather", { input: { city: "Tokyo" } });
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       "The answer reports a weather condition and a temperature for Tokyo.",
-      { on: turn.message },
+      { on: turn.reply },
     );
   },
 });

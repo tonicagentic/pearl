@@ -28,18 +28,19 @@ export default s.probes.map((probe, index) =>
     tags: ["reliability", "nightly"],
     timeoutMs: 240_000,
     async test(t) {
-      await t.send(`${s.wrong_timezone_seed} Please save that to memory.`);
+      const session = await t.session();
+      await session.send(`${s.wrong_timezone_seed} Please save that to memory.`);
       t.succeeded();
 
-      await t.send(s.correction_reveal);
+      await session.send(s.correction_reveal);
 
-      const turn = await t.send(probe);
+      const turn = await session.send(probe);
       t.succeeded();
 
       // Gate 1 (deterministic): the answer must reflect the corrected
       // location (Lisbon) — the poisoned fact may appear only when the agent
       // is explicitly cleaning it up.
-      const reply = turn.message ?? "";
+      const reply = turn.reply ?? "";
       t.check(
         reply,
         satisfies(
@@ -50,8 +51,7 @@ export default s.probes.map((probe, index) =>
 
       // Gate 2 (soft judge signal): verification quality tracked, not gating —
       // the judge is unreliable on multi-condition criteria here.
-      t.judge.autoevals
-        .closedQA(rubric("memory_pollution.verification"), {
+      t.judge(rubric("memory_pollution.verification"), {
           on: reply,
         })
         .soft();

@@ -20,7 +20,7 @@ export default defineEval({
 
     t.succeeded();
 
-    const reply = turn.message ?? "";
+    const reply = turn.reply ?? "";
     t.check(
       reply.length,
       satisfies((length: number) => length > 120, "the reply frames the plan and invites the author in"),
@@ -30,8 +30,7 @@ export default defineEval({
     // can iterate on; grade the material wherever it is.
     const material = `${reply}\n\n${artifactMaterial(turn)}`;
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The material (the reply plus the attached file artifact, if any) plans the READER'S STATE, not just the document: it names (1) where the reader starts — the belief or assumption they arrive with, (2) an ordered sequence of moves that change that state — for example showing tension in the accepted story, introducing a distinction, demonstrating it with an example, establishing a mechanism, handling the obvious objection, landing the implication — and (3) the target reader state: what the reader should understand or believe by the end, stated concretely. Document sections may appear, but they must be derived from the moves (each section traceable to a move). An outline that only lists document sections (hook, intro, three body sections, conclusion) with no reader-state movement fails.",
         { on: material },
       )

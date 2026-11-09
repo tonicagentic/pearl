@@ -24,7 +24,8 @@ export default defineEval({
     "Audience fit: retarget the same technical draft for executives, then for engineers, along the dimensions each audience actually needs.",
   tags: ["smoke"],
   async test(t) {
-    const execTurn = await t.send(
+    const session = await t.session();
+    const execTurn = await session.send(
       `Rewrite this for our executive staff meeting — they care about cost, risk, and timeline, not implementation detail:\n\n${TECHNICAL_DRAFT}`,
     );
 
@@ -41,14 +42,13 @@ export default defineEval({
       satisfies(Boolean, "the thread reply stays shorter than the artifact"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The executive version foregrounds cost (paying for an underused Redis cluster, Postgres sessions are effectively free), risk (trivial rollback via feature flag, Redis kept running two weeks), and timeline (migration/cutover) — and drops or minimizes engineering mechanics like LRU caches, row sizes, and read-through patterns.",
         { on: execFileContent },
       )
       .atLeast(0.8);
 
-    const engTurn = await t.send(
+    const engTurn = await session.send(
       "Now rewrite it again, this time for the platform engineering team's design review — they want the mechanics and tradeoffs.",
     );
 
@@ -65,15 +65,13 @@ export default defineEval({
       satisfies(Boolean, "the thread reply stays shorter than the artifact"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The engineer version keeps or sharpens the technical specifics: read-through pattern with Postgres as source of truth, in-process LRU for p99 latency, ~2KB sessions and 40k active sessions sizing, dual-write/flag-based rollback with Redis retained two weeks. It does not dumbed-down into only cost-and-risk language.",
         { on: engFileContent },
       )
       .atLeast(0.8);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The two versions are meaningfully different — an executive and an engineer each got the version aimed at their concerns, not one rewrite lightly edited.",
         { on: `${execFileContent}\n\n---\n\n${engFileContent}` },
       )

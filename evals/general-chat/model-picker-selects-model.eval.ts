@@ -1,7 +1,7 @@
 import { defineEval } from "eve/evals";
 
 // The composer model picker's transport: a clientContext marker selects the
-// model for the turn, and step.started events report the concrete modelId of
+// model for the turn, and model.started events report the concrete modelId of
 // each model call. Requires AGENT_MODEL_OVERRIDE to be unset (the override
 // intentionally wins over the picker).
 export default defineEval({
@@ -15,12 +15,12 @@ export default defineEval({
 
     t.succeeded();
 
-    const stepModels = t.events
-      .filter((event) => event.type === "step.started")
-      .map((event) => (event.data as { modelId: string }).modelId);
+    const stepModels = turn.events.flatMap((event) =>
+      event.type === "model.started" ? [event.data.modelId] : [],
+    );
 
     if (stepModels.length === 0) {
-      throw new Error("No step.started events reported for the turn.");
+      throw new Error("No model.started events reported for the turn.");
     }
 
     if (stepModels.some((modelId) => modelId !== "meta/muse-spark-open")) {
