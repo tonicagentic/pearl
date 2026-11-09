@@ -30,7 +30,10 @@ export default defineEval({
         "write_file. Do not ask clarifying questions; produce the file now.",
     );
     t.succeeded();
-    poster.loadedSkill("graphic-design");
+    poster.calledTool("load_skill", {
+      input: { skill: "graphic-design" },
+      count: 1,
+    });
     const wrote = poster.toolCalls.some((call) => call.name === "write_file");
     const generated = poster.toolCalls.some(
       (call) => call.name === "generate_image",

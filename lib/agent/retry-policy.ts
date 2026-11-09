@@ -252,45 +252,8 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     2,
     "DB read of the caller's own identity profile, no side effect.",
   ),
-  // Projects / Plan mode.
-  create_project: policy(
-    false,
-    [],
-    1,
-    "Creating twice would duplicate the project; a retry must re-read the project list first instead of blind-inserting.",
-  ),
-  list_plans: policy(
-    true,
-    ["network", "timeout"],
-    2,
-    "DB read of project plans, no side effect.",
-  ),
-  read_plan: policy(
-    true,
-    ["network", "timeout"],
-    2,
-    "DB read of one plan document, no side effect.",
-  ),
-  save_plan: policy(
-    true,
-    ["network", "timeout"],
-    2,
-    "Plan write is last-write-wins for a given project/slug; an identical retry stores identical content.",
-  ),
-  sync_turn_intent: policy(
-    true,
-    ["network", "timeout"],
-    2,
-    "Ephemeral turn-intent sync; identical retries are a no-op for the same markers.",
-  ),
   // Declared subagents (agent/subagents/<name>/): the delegation call itself
   // is a background task spawn.
-  editor: policy(
-    false,
-    [],
-    1,
-    "Subagent delegation spawns a durable child run; a replay would double the run — resume via status check instead.",
-  ),
   coder: policy(
     false,
     [],
