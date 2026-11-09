@@ -50,6 +50,7 @@ export default defineEval({
     t.succeeded();
     t.calledTool("save_plan");
     t.notCalledTool("create_issue");
+    t.notCalledTool("coder");
     t.noFailedCalls();
 
     const saveCalls = turn.toolCalls.filter((call) => call.name === "save_plan");

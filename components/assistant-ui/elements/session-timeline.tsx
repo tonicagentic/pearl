@@ -89,6 +89,14 @@ const TOOL_META: Record<string, { verb: string }> = {
   task_cancel: { verb: "Cancelled" },
   send_notification: { verb: "Notified" },
   read_attachment: { verb: "Read attachment" },
+  coder: { verb: "Delegated to coder" },
+  deploy_vercel: { verb: "Deployed" },
+  merge_pr: { verb: "Merged" },
+  eas_build: { verb: "Started EAS build" },
+  eas_submit: { verb: "Submitted to EAS" },
+  run_with_env: { verb: "Ran with env" },
+  preview_check: { verb: "Checked preview" },
+  deployment_logs: { verb: "Fetched logs" },
 };
 
 function basename(path: string): string {

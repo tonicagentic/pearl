@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+- `coder` subagent for GitHub repos: draft PRs, user-scoped Vercel preview
+  and production deploys, Expo EAS iOS build/submit, and approval-gated
+  merge / env injection. Pearl routes coding requests to it from web, iOS,
+  and Slack.
+
 ### Changed
 
 - Sidebar and mobile drawer list the signed-in user's GitHub repositories

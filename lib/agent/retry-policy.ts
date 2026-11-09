@@ -198,8 +198,51 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     2,
     "DB read of the caller's own identity profile, no side effect.",
   ),
+  // Projects / Plan mode.
+  create_project: policy(
+    false,
+    [],
+    1,
+    "Creating twice would duplicate the project; a retry must re-read the project list first instead of blind-inserting.",
+  ),
+  list_plans: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "DB read of project plans, no side effect.",
+  ),
+  read_plan: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "DB read of one plan document, no side effect.",
+  ),
+  save_plan: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Plan write is last-write-wins for a given project/slug; an identical retry stores identical content.",
+  ),
+  sync_turn_intent: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Ephemeral turn-intent sync; identical retries are a no-op for the same markers.",
+  ),
   // Declared subagents (agent/subagents/<name>/): the delegation call itself
   // is a background task spawn.
+  editor: policy(
+    false,
+    [],
+    1,
+    "Subagent delegation spawns a durable child run; a replay would double the run — resume via status check instead.",
+  ),
+  coder: policy(
+    false,
+    [],
+    1,
+    "Coder delegation opens a durable sandbox task; a replay would spawn a second coding run — continue with taskId instead.",
+  ),
   reviewer: policy(
     false,
     [],
@@ -211,6 +254,50 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     [],
     1,
     "Subagent delegation spawns a durable child run; a replay would double the run and the research spend — resume via status check instead.",
+  ),
+  // Coder HITL tools (agent/subagents/coder/tools/) — referenced from
+  // instructions and the UI; keep taxonomy coverage for ship actions.
+  deploy_vercel: policy(
+    false,
+    [],
+    1,
+    "Approval-gated deploy; a blind retry can create a second deployment — check the first URL first.",
+  ),
+  merge_pr: policy(
+    false,
+    [],
+    1,
+    "Approval-gated squash merge; never blind-retry — re-read PR state first.",
+  ),
+  eas_build: policy(
+    false,
+    [],
+    1,
+    "Approval-gated Expo build start; a replay would queue a second Mac build.",
+  ),
+  eas_submit: policy(
+    false,
+    [],
+    1,
+    "Approval-gated store/TestFlight submit; never blind-retry a submit.",
+  ),
+  run_with_env: policy(
+    false,
+    [],
+    1,
+    "Approval-gated command with injected secrets; a replay can double side effects.",
+  ),
+  preview_check: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "HTTP status / screenshot read of a public URL, no mutating side effect.",
+  ),
+  deployment_logs: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Read-only Vercel log fetch, no side effect.",
   ),
 };
 

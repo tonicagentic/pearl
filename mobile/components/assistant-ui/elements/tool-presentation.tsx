@@ -81,6 +81,14 @@ const TOOL_PRESENTATION: Record<string, ToolPresentation> = {
   file__save_memory: { label: "Remember", icon: BrainIcon },
   file__remove_memory: { label: "Forget", icon: BrainIcon },
   get_surface_rubric: { label: "Get rubric", icon: ClipboardCheckIcon },
+  coder: { label: "Coder", icon: TerminalIcon },
+  deploy_vercel: { label: "Deploy to Vercel", icon: UploadIcon },
+  merge_pr: { label: "Merge pull request", icon: CircleCheckBigIcon },
+  eas_build: { label: "EAS iOS build", icon: SparklesIcon },
+  eas_submit: { label: "EAS submit", icon: SparklesIcon },
+  run_with_env: { label: "Run with env", icon: WrenchIcon },
+  preview_check: { label: "Check preview", icon: GlobeIcon },
+  deployment_logs: { label: "Deployment logs", icon: TerminalIcon },
 };
 
 /** Turn `confirm_step` / `file__save_memory` into a readable fallback label. */
