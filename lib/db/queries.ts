@@ -595,9 +595,9 @@ export async function getChatIdByEveSessionId(
  */
 export async function getChatLinkByEveSessionId(
   sessionId: string,
-): Promise<{ id: string; userId: string } | null> {
+): Promise<{ id: string; userId: string; title: string } | null> {
   const [row] = await db
-    .select({ id: chat.id, userId: chat.userId })
+    .select({ id: chat.id, userId: chat.userId, title: chat.title })
     .from(chat)
     .where(sql`${chat.eveSession} ->> 'sessionId' = ${sessionId}`)
     .limit(1);

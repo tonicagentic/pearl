@@ -96,6 +96,11 @@ export const chat = pgTable(
     index("idx_chat_user_updated").on(table.userId, table.updatedAt),
     index("idx_chat_user_created").on(table.userId, table.createdAt),
     index("idx_chat_project").on(table.projectId),
+    // Lookup chats from eve hooks by durable session id (jsonb path).
+    index("idx_chat_eve_session_id").using(
+      "btree",
+      sql`(${table.eveSession} ->> 'sessionId')`,
+    ),
   ],
 );
 
@@ -456,3 +461,52 @@ export const plan = pgTable(
 );
 
 export type Plan = typeof plan.$inferSelect;
+
+/** Expo push tokens registered by the mobile app for reply / HITL alerts. */
+export const devicePushToken = pgTable(
+  "device_push_token",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    platform: text("platform").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_device_push_token_user").on(table.userId),
+    uniqueIndex("idx_device_push_token_token").on(table.token),
+  ],
+);
+
+export type DevicePushToken = typeof devicePushToken.$inferSelect;
+
+/**
+ * At-most-once gate for mobile push: hooks are at-least-once, so a retried
+ * step must not send a second banner for the same turn boundary.
+ */
+export const pushDelivery = pgTable(
+  "push_delivery",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    sessionId: text("session_id").notNull(),
+    turnId: text("turn_id").notNull(),
+    kind: text("kind").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_push_delivery_session_turn_kind").on(
+      table.sessionId,
+      table.turnId,
+      table.kind,
+    ),
+  ],
+);
+
+export type PushDelivery = typeof pushDelivery.$inferSelect;

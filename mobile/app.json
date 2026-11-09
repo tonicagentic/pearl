@@ -69,6 +69,14 @@
           "enableBackgroundPlayback": false
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#111111",
+          "defaultChannel": "default"
+        }
+      ],
       "./plugins/with-live-audio-session.js"
     ],
     "scheme": "pearl",

@@ -8,13 +8,14 @@ import {
   type ReactNode,
 } from "react";
 
-import { AGENT_URL, setAuthCookie } from "./eve-transport";
+import { AGENT_URL, getAuthCookie, setAuthCookie } from "./eve-transport";
 import {
   clearSession,
   loadSession,
   onSessionInvalid,
   saveSession,
 } from "./session-store";
+import { unregisterForPushNotifications } from "./push-notifications";
 
 export type SignInState = "idle" | "signing-in" | "error";
 
@@ -249,6 +250,8 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(() => {
+    const credential = getAuthCookie();
+    void unregisterForPushNotifications(credential);
     setAuthCookie(null);
     void clearSession();
     setViewerEmail(null);

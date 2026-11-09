@@ -7,6 +7,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { SubagentRunsProvider } from "@/components/assistant-ui/elements/task-card.aui";
+import { PushNotificationsBridge } from "@/components/push-notifications-bridge";
 import { AuthProvider, useAuth } from "@/src/auth";
 import { ChatsProvider } from "@/src/chat-context";
 import {
@@ -42,6 +43,7 @@ function AuthenticatedLayout() {
     <ChatsProvider key={accountKey}>
       <WorkspaceProvider>
       <SubagentRunsProvider>
+        <PushNotificationsBridge />
         <GestureHandlerRootView className="flex-1">
           <SafeAreaProvider>
             <KeyboardProvider enabled={Platform.OS === "ios" && !Platform.isPad}>

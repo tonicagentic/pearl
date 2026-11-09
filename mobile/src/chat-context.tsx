@@ -9,6 +9,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { AppState, type AppStateStatus } from "react-native";
 import {
   EveAgentStore,
   type ClientSessionState,
@@ -341,6 +342,27 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       flush();
     };
   }, [store, reloadChats, bindings, retainedStores]);
+
+  // When iOS/Android returns the process to the foreground, catch up the
+  // active chat from eve's durable stream without waiting for a banner tap.
+  useEffect(() => {
+    const onChange = (next: AppStateStatus) => {
+      if (next !== "active") {
+        return;
+      }
+      const active = activeStoreRef.current;
+      if (!active?.snapshot.session) {
+        return;
+      }
+      void active.resume().catch(() => {
+        // Already streaming, or a transient network error — leave the UI alone.
+      });
+    };
+    const subscription = AppState.addEventListener("change", onChange);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   const selectChat = useCallback(
     async (chatId: string): Promise<boolean> => {
