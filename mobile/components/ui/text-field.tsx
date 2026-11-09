@@ -1,15 +1,15 @@
 import { forwardRef } from "react";
 import {
   TextInput,
+  type TextInputInstance,
   type TextInputProps,
-  type TextInput as TextInputType,
 } from "react-native";
 import { useCSSVariable } from "uniwind";
 
 export type TextFieldProps = TextInputProps;
 
 /** Themed text field for auth and other forms. */
-export const TextField = forwardRef<TextInputType, TextFieldProps>(
+export const TextField = forwardRef<TextInputInstance, TextFieldProps>(
   function TextField({ style, placeholderTextColor, ...props }, ref) {
     const foregroundColor = useCSSVariable("--color-foreground") as
       | string

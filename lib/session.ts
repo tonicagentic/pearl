@@ -11,14 +11,21 @@ const PASSWORD_VIEWER: Viewer = {
   name: "eve user",
 };
 
-export async function getServerViewer(setupStatus?: SetupStatus): Promise<Viewer | null> {
+export async function getServerViewer(
+  setupStatus?: SetupStatus,
+  /**
+   * Prefer the Route Handler's `request.headers` when available. Mobile sends a
+   * Bearer token; nested server-action `headers()` calls can miss it.
+   */
+  incomingHeaders?: Headers,
+): Promise<Viewer | null> {
   const status = setupStatus ?? (await getSetupStatus());
 
   if (!status.appReady) {
     return null;
   }
 
-  const requestHeaders = await headers();
+  const requestHeaders = incomingHeaders ?? (await headers());
 
   if (status.authMode === "local-dev") {
     return PASSWORD_VIEWER;

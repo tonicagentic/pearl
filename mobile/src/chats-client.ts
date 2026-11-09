@@ -105,6 +105,7 @@ export async function createChat(
   if (!response.ok) {
     if (response.status === 401) {
       sessionInvalid();
+      throw new Error("Sign in to continue.");
     }
     throw new Error(`Failed to create the chat (${response.status}).`);
   }

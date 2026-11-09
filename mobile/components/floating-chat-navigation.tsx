@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   View,
+  type PressableInstance,
 } from "react-native";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
 import {
@@ -63,7 +64,7 @@ export function FloatingChatNavigation({
   historyOpen: boolean;
 }) {
   const insets = useSafeAreaInsets();
-  const moreButton = useRef<View>(null);
+  const moreButton = useRef<PressableInstance>(null);
   const [reducedTransparency, setReducedTransparency] = useState(true);
   const reveal = useSharedValue(hasMessages ? 1 : 0);
   useEffect(() => {

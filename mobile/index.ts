@@ -1,5 +1,27 @@
 import './global.css';
 
+// eve's SessionStore calls `crypto.randomUUID()` for optimistic submissions.
+// Hermes has no `crypto` global, and `crypto.randomUUID?.()` still throws
+// "Property 'crypto' doesn't exist" before optional chaining can help.
+try {
+  const ExpoCrypto = require('expo-crypto') as {
+    getRandomValues: <T extends ArrayBufferView>(typedArray: T) => T;
+    randomUUID: () => string;
+  };
+  const crypto =
+    (globalThis as { crypto?: Crypto }).crypto ??
+    ({} as Pick<Crypto, 'getRandomValues' | 'randomUUID'>);
+  if (typeof crypto.getRandomValues !== 'function') {
+    crypto.getRandomValues = ExpoCrypto.getRandomValues;
+  }
+  if (typeof crypto.randomUUID !== 'function') {
+    crypto.randomUUID = ExpoCrypto.randomUUID;
+  }
+  (globalThis as { crypto: typeof crypto }).crypto = crypto;
+} catch {
+  // Fast-refresh race or missing native module: leave whatever is installed.
+}
+
 // Spike: stream-capable fetch must be global BEFORE any module that calls
 // fetch at import time (eve's client builds fetch calls lazily, but the patch
 // is cheapest first). RN/Hermes' global fetch buffers responses; expo/fetch

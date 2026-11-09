@@ -7,7 +7,7 @@ import {
   Text,
   View,
   type LayoutChangeEvent,
-  type TextInput,
+  type TextInputInstance,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
@@ -47,7 +47,7 @@ export function SignInScreen({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
   const ctaFrameRef = useRef<AuthCtaFrame | null>(null);
-  const emailRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInputInstance>(null);
 
   const busy = signInState === "signing-in";
   const error = localError ?? signInError;
@@ -57,7 +57,9 @@ export function SignInScreen({
     (mode === "sign-in" || confirmPassword.length > 0);
 
   const onCtaLayout = (event: LayoutChangeEvent) => {
-    event.target.measureInWindow((x, y, width, height) => {
+    const target = event.target;
+    if (!target || typeof target === "number") return;
+    target.measureInWindow((x: number, y: number, width: number, height: number) => {
       if (width <= 0 || height <= 0) return;
       const frame = { x, y, width, height };
       ctaFrameRef.current = frame;

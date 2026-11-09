@@ -110,6 +110,7 @@ import {
   TextInput,
   useColorScheme,
   View,
+  type TextInputInstance,
   type ViewProps,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -731,7 +732,7 @@ export const Thread: FC<ThreadProps> = ({
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
-            ListFooterComponent={notice ? <ThreadNotice {...notice} /> : null}
+            ListFooterComponent={notice ? <ThreadNotice {...notice} /> : undefined}
             {...(Rail || followsKeyboard ? {
               onContentSizeChange: onListContentSizeChange,
               onLayout: onListLayout,
@@ -1215,7 +1216,7 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
   const [value, setValue] = useState(storeText);
   const publishedRef = useRef(storeText);
   const awaitingEchoRef = useRef(false);
-  const nativeInput = useRef<TextInput>(null);
+  const nativeInput = useRef<TextInputInstance>(null);
   const focusOnMount = useRef(autoFocus);
   useEffect(() => {
     if (storeText === publishedRef.current) {

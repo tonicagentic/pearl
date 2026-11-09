@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TextInput,
   View,
+  type TextInputInstance,
 } from "react-native";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SearchIcon } from "lucide-react-native";
@@ -45,7 +46,7 @@ export function HistorySearchBar({
   active: boolean;
 }) {
   const insets = useSafeAreaInsets();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const [reducedTransparency, setReducedTransparency] = useState(true);
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
     | string

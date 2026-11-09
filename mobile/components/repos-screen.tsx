@@ -72,7 +72,7 @@ export function ReposScreen() {
               <View className="py-8">
                 <ActivityIndicator />
               </View>
-            ) : error ? null : (
+            ) : error ? undefined : (
               <View className="py-8">
                 <Text className="text-base font-medium text-foreground">No repos found</Text>
               </View>
@@ -92,7 +92,7 @@ export function ReposScreen() {
                   <Text className="text-sm text-muted-foreground">Load more</Text>
                 )}
               </Pressable>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item }) => (
             <Pressable

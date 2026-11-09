@@ -1,7 +1,5 @@
 import { defineAgent, defineDynamic } from "eve";
-import { defineDynamic as defineModelDynamic } from "eve/models";
 
-import { WORKFLOW_BATCHING } from "../../agent.ts";
 import { readTurnClientIntent } from "../../lib/turn-context.ts";
 import { resolveCoderModel } from "./model-router.ts";
 
@@ -13,9 +11,10 @@ import { resolveCoderModel } from "./model-router.ts";
  * submits iOS builds through Expo EAS. Omitted in Plan mode so planning
  * cannot mutate code.
  *
- * Model is routed per call (Sol by default, Astra when hard or after
- * failures) via AI Gateway — see model-router.ts. The chat picker does not
- * retarget an in-progress coding task.
+ * Model is chosen when the subagent is selected (Sol by default, Astra when
+ * hard or after failures) via AI Gateway — see model-router.ts. Eve requires
+ * dynamic subagents to return a static model; per-call nesting of
+ * defineModelDynamic is rejected with REACTION_FAILED.
  */
 const CODER_DESCRIPTION =
   "Implement, review, and ship code for the signed-in user on their GitHub " +
@@ -28,20 +27,17 @@ const CODER_DESCRIPTION =
   "deploy_vercel, merge_pr, eas_build, eas_submit, preview_check, " +
   "deployment_logs, and run_with_env.";
 
-function coderAgent() {
-  return defineAgent({
-    experimental: WORKFLOW_BATCHING,
-    description: CODER_DESCRIPTION,
-    // Dynamic model is supported at runtime for the child session. The outer
-    // plan-mode omit wrapper types the return as a static-model agent; cast
-    // keeps omit + per-call routing.
-    model: defineModelDynamic(async (ctx) => resolveCoderModel(ctx)),
-  });
-}
-
 export default defineDynamic(async (ctx) => {
   if (readTurnClientIntent(await ctx.messages()).mode === "plan") {
     return null;
   }
-  return coderAgent() as ReturnType<typeof coderAgent>;
+
+  // Do not set `experimental` or a nested defineModelDynamic here: dynamic
+  // subagent resolvers can only return a static-model defineAgent (or null).
+  const selection = await resolveCoderModel(ctx);
+  return defineAgent({
+    description: CODER_DESCRIPTION,
+    model: selection.model,
+    modelOptions: selection.modelOptions,
+  });
 });

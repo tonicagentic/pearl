@@ -77,7 +77,9 @@
           "defaultChannel": "default"
         }
       ],
-      "./plugins/with-live-audio-session.js"
+      "./plugins/with-live-audio-session.js",
+      "expo-asset",
+      "expo-font"
     ],
     "scheme": "pearl",
     "extra": {

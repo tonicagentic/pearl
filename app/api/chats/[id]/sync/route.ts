@@ -25,52 +25,59 @@ export async function POST(
 
   const { id: chatId } = await params;
 
-  if (body.append !== undefined) {
-    if (!Array.isArray(body.append) || body.append.some(
-      (entry) => !Number.isSafeInteger(entry?.eventIndex) || entry.eventIndex < 0 ||
-        typeof entry.event !== "object" || entry.event === null,
-    )) {
-      return NextResponse.json({ error: "Invalid event batch." }, { status: 400 });
-    }
-    await appendChatEventsAction({
-      chatId,
-      events: body.append as Parameters<typeof appendChatEventsAction>[0]["events"],
-    });
-    return NextResponse.json({ ok: true });
-  }
-
-  if (body.pendingUserMessage !== undefined) {
-    if (typeof body.pendingUserMessage !== "string") {
-      return NextResponse.json({ error: "Invalid pending message." }, { status: 400 });
-    }
-    await markChatPendingMessageAction({ chatId, message: body.pendingUserMessage });
-    return NextResponse.json({ ok: true });
-  }
-
-  if (body.events !== undefined) {
-    if (!Array.isArray(body.events)) {
-      return NextResponse.json({ error: "events must be an array." }, { status: 400 });
+  try {
+    if (body.append !== undefined) {
+      if (!Array.isArray(body.append) || body.append.some(
+        (entry) => !Number.isSafeInteger(entry?.eventIndex) || entry.eventIndex < 0 ||
+          typeof entry.event !== "object" || entry.event === null,
+      )) {
+        return NextResponse.json({ error: "Invalid event batch." }, { status: 400 });
+      }
+      await appendChatEventsAction({
+        chatId,
+        events: body.append as Parameters<typeof appendChatEventsAction>[0]["events"],
+      });
+      return NextResponse.json({ ok: true });
     }
 
-    await saveChatSnapshotAction({
-      chatId,
-      events: body.events as Parameters<typeof saveChatSnapshotAction>[0]["events"],
-      session: (body.session ?? undefined) as Parameters<
-        typeof saveChatSnapshotAction
-      >[0]["session"],
-    });
+    if (body.pendingUserMessage !== undefined) {
+      if (typeof body.pendingUserMessage !== "string") {
+        return NextResponse.json({ error: "Invalid pending message." }, { status: 400 });
+      }
+      await markChatPendingMessageAction({ chatId, message: body.pendingUserMessage });
+      return NextResponse.json({ ok: true });
+    }
 
-    return NextResponse.json({ ok: true });
+    if (body.events !== undefined) {
+      if (!Array.isArray(body.events)) {
+        return NextResponse.json({ error: "events must be an array." }, { status: 400 });
+      }
+
+      await saveChatSnapshotAction({
+        chatId,
+        events: body.events as Parameters<typeof saveChatSnapshotAction>[0]["events"],
+        session: (body.session ?? undefined) as Parameters<
+          typeof saveChatSnapshotAction
+        >[0]["session"],
+      });
+
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.session !== undefined && body.session !== null) {
+      await saveChatSessionStateAction({
+        chatId,
+        session: body.session as Parameters<typeof saveChatSessionStateAction>[0]["session"],
+      });
+
+      return NextResponse.json({ ok: true });
+    }
+
+    return NextResponse.json({ error: "Nothing to sync." }, { status: 400 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Sign in to continue.") {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    throw error;
   }
-
-  if (body.session !== undefined && body.session !== null) {
-    await saveChatSessionStateAction({
-      chatId,
-      session: body.session as Parameters<typeof saveChatSessionStateAction>[0]["session"],
-    });
-
-    return NextResponse.json({ ok: true });
-  }
-
-  return NextResponse.json({ error: "Nothing to sync." }, { status: 400 });
 }

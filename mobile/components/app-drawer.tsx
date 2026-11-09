@@ -347,7 +347,7 @@ export function HistoryScreen({
                   {chatsLoading ? "Loading…" : "Load more"}
                 </Text>
               </Pressable>
-            ) : null
+            ) : undefined
           }
         />
       </Animated.View>
