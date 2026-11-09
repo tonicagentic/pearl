@@ -9,10 +9,11 @@ import {
 } from "expo-audio";
 import { File, Paths } from "expo-file-system";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { LiveVoiceOrb } from "@/components/live-voice-orb";
+import { createLiveVoice, type LiveVoice } from "@/modules/live-voice";
 import { useChats } from "@/src/chat-context";
 import { resizeLiveJpeg } from "@/src/live-camera";
 import {
@@ -74,6 +75,9 @@ function stopStream(stream: { stop: () => void }) {
 async function startMicStream(stream: { start: () => Promise<unknown> }) {
   // Give AVAudioSession time to settle after permission / category changes.
   // Starting immediately can leave inputNode at 0 Hz and abort in installTap.
+  // The session must stay play-and-record. plugins/with-live-audio-session.js
+  // keeps AudioStream.start() from switching iOS to record-only, which would
+  // silence playback and hold the microphone closed until that playback ends.
   await new Promise((resolve) => setTimeout(resolve, LIVE_MIC_SETTLE_MS));
   await stream.start();
 }
@@ -127,6 +131,8 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
   const suppressMicRef = useRef(false);
   const awaitPlaybackDrainRef = useRef(false);
   const levelTickRef = useRef(0);
+  const voiceRef = useRef<LiveVoice | null>(null);
+  const iosDuplex = Platform.OS === "ios";
 
   const sendEvent = useCallback((event: object) => {
     const socket = socketRef.current;
@@ -190,6 +196,8 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     socketRef.current = null;
     socket?.close();
     stopStream(streamRef.current);
+    voiceRef.current?.stopPlayback();
+    voiceRef.current?.stop();
     stopPlayback();
     suppressMicRef.current = false;
     setVoiceMode("ended");
@@ -228,6 +236,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
   }, [finish]);
 
   useEffect(() => {
+    if (iosDuplex) return;
     const players = [createAudioPlayer(null), createAudioPlayer(null)];
     playersRef.current = players;
     const subscriptions = players.map((player, index) => player.addListener("playbackStatusUpdate", (status) => {
@@ -251,7 +260,28 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       for (const player of players) player.remove();
       playersRef.current = null;
     };
-  }, [settleAfterPlayback]);
+  }, [iosDuplex, settleAfterPlayback]);
+
+  useEffect(() => {
+    if (!iosDuplex) return;
+    const voice = createLiveVoice();
+    if (!voice) return;
+    voiceRef.current = voice;
+    const buffers = voice.addBufferListener((buffer) => {
+      onCapture.current({ ...buffer, timestamp: 0 });
+    });
+    const drained = voice.addDrainedListener(() => {
+      if (closedRef.current) return;
+      setMicLevel(0);
+      setVoiceMode((current) => current === "listening" || current === "muted" ? current : "idle");
+    });
+    return () => {
+      buffers.remove();
+      drained.remove();
+      voice.stop();
+      if (voiceRef.current === voice) voiceRef.current = null;
+    };
+  }, [iosDuplex]);
 
   useEffect(() => {
     onCapture.current = (buffer) => {
@@ -263,7 +293,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
         levelTickRef.current = now;
         setMicLevel(level);
       }
-      if (suppressMicRef.current) {
+      if (!iosDuplex && suppressMicRef.current) {
         if (level < LIVE_BARGE_IN_LEVEL) return;
         stopPlayback();
         suppressMicRef.current = false;
@@ -277,7 +307,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       });
       if (audio) sendEvent({ type: "input-audio-append", audio });
     };
-  }, [sendEvent, stopPlayback]);
+  }, [iosDuplex, sendEvent, stopPlayback]);
 
   useEffect(() => {
     let cancelled = false;
@@ -292,12 +322,26 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
           setError("Microphone access is required for a live conversation.");
           return;
         }
-        await setAudioModeAsync({
-          allowsRecording: true,
-          playsInSilentMode: true,
-          shouldRouteThroughEarpiece: false,
-          interruptionMode: "duckOthers",
-        });
+        if (iosDuplex) {
+          // The native engine owns the session. setAudioModeAsync would put it
+          // back in mode .default and the echo canceller would lose its reference.
+          await new Promise((resolve) => setTimeout(resolve, LIVE_MIC_SETTLE_MS));
+          if (cancelled) return;
+          const voice = voiceRef.current;
+          if (!voice) throw new Error("The microphone did not start.");
+          await voice.start();
+          if (cancelled || closedRef.current) {
+            voice.stop();
+            return;
+          }
+        } else {
+          await setAudioModeAsync({
+            allowsRecording: true,
+            playsInSilentMode: true,
+            shouldRouteThroughEarpiece: false,
+            interruptionMode: "duckOthers",
+          });
+        }
         const secret = await fetchLiveToken();
         if (cancelled) return;
         if (secret.expiresAt != null && Date.now() >= secret.expiresAt * 1000) {
@@ -315,7 +359,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
             setNotice("The 25 minute live session ended.");
             finishRef.current();
           }, LIVE_MAX_SESSION_MS);
-          if (!mutedRef.current) {
+          if (!iosDuplex && !mutedRef.current) {
             void startMicStream(streamRef.current).catch(() => {
               setError("The microphone did not start.");
             });
@@ -334,13 +378,21 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
             if (!item || typeof item !== "object") continue;
             const message = item as ServerEvent;
             if (message.type === "audio-delta" && typeof message.delta === "string") {
-              for (const chunk of playbackRef.current.pushBase64(message.delta)) enqueueWav(chunk);
+              if (iosDuplex) {
+                voiceRef.current?.enqueuePcm16Base64(message.delta);
+                setVoiceMode((current) => current === "muted" || current === "speaking" ? current : "speaking");
+              } else {
+                for (const chunk of playbackRef.current.pushBase64(message.delta)) enqueueWav(chunk);
+              }
             } else if (message.type === "audio-done" || message.type === "response-done") {
-              const tail = playbackRef.current.flush();
-              if (tail) enqueueWav(tail);
-              awaitPlaybackDrainRef.current = true;
-              settleAfterPlayback();
+              if (!iosDuplex) {
+                const tail = playbackRef.current.flush();
+                if (tail) enqueueWav(tail);
+                awaitPlaybackDrainRef.current = true;
+                settleAfterPlayback();
+              }
             } else if (message.type === "speech-started") {
+              voiceRef.current?.stopPlayback();
               stopPlayback();
               suppressMicRef.current = false;
               if (!mutedRef.current) setVoiceMode("listening");
@@ -361,7 +413,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
                 turnsRef.current = [...turnsRef.current, { role: "user", text }];
                 setTurns(turnsRef.current);
               }
-              if (!suppressMicRef.current && !mutedRef.current) setVoiceMode("idle");
+              if (!iosDuplex && !suppressMicRef.current && !mutedRef.current) setVoiceMode("idle");
             } else if (message.type === "error" && typeof message.message === "string") {
               const text = message.message.slice(0, 240);
               if (isFatalLiveError(text)) {
@@ -387,6 +439,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
           setPhase((current) => current === "error" ? current : "closed");
           setVoiceMode("ended");
           stopStream(streamRef.current);
+          voiceRef.current?.stop();
         };
       } catch (cause) {
         if (cancelled) return;
@@ -402,9 +455,11 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       socket?.close();
       if (socketRef.current === socket) socketRef.current = null;
       stopStream(streamRef.current);
+      voiceRef.current?.stopPlayback();
+      voiceRef.current?.stop();
       stopPlayback();
     };
-  }, [enqueueWav, sendEvent, settleAfterPlayback, stopPlayback]);
+  }, [enqueueWav, iosDuplex, sendEvent, settleAfterPlayback, stopPlayback]);
 
   useEffect(() => {
     if (!cameraOn || !cameraReady || videoRejected || phase !== "live") return;
@@ -443,6 +498,10 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     mutedRef.current = next;
     setMuted(next);
     setMicLevel(0);
+    if (iosDuplex) {
+      setVoiceMode(next ? "muted" : "idle");
+      return;
+    }
     if (next) {
       stopStream(streamRef.current);
       setVoiceMode("muted");
@@ -570,7 +629,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#000" },
   cameraOff: { backgroundColor: "#0B0D12" },
   orbStage: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
     paddingBottom: 48,

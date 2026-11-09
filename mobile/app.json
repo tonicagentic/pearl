@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.tonicagentic.pearl",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "NSMicrophoneUsageDescription": "Pearl uses the microphone so you can talk during a live conversation.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         }
@@ -47,14 +48,14 @@
         {
           "photosPermission": "Pearl uses your photos so you can attach them in chat.",
           "cameraPermission": "Pearl uses the camera so you can take a photo and attach it in chat.",
-          "microphonePermission": false
+          "microphonePermission": "Pearl uses the microphone so you can talk during a live conversation."
         }
       ],
       [
         "expo-camera",
         {
           "cameraPermission": "Pearl uses the camera for optional live video and for photos you attach in chat.",
-          "microphonePermission": false,
+          "microphonePermission": "Pearl uses the microphone so you can talk during a live conversation.",
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": false
         }
@@ -67,7 +68,8 @@
           "enableBackgroundRecording": false,
           "enableBackgroundPlayback": false
         }
-      ]
+      ],
+      "./plugins/with-live-audio-session.js"
     ],
     "scheme": "pearl",
     "extra": {

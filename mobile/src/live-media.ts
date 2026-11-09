@@ -49,7 +49,11 @@ export function pcm16PeakLevel(pcm: Uint8Array): number {
   return Math.min(1, peak);
 }
 
-/** While Pearl is speaking, a strong local mic peak means the user is interrupting. */
+/**
+ * Android local interrupt threshold. iOS does not use it: the mic and the
+ * speaker share one voice-processing engine, and server speech-started is
+ * the only interrupt.
+ */
 export const LIVE_BARGE_IN_LEVEL = 0.14;
 
 export type LiveVoiceMode =

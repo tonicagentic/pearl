@@ -1,0 +1,10 @@
+{
+  "name": "live-voice",
+  "version": "1.0.0",
+  "description": "Echo-cancelled duplex audio for Pearl live conversations.",
+  "license": "UNLICENSED",
+  "author": "Pearl",
+  "homepage": "https://github.com/tonicagentic/pearl",
+  "main": "index.ts",
+  "private": true
+}
