@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { issueSignedToken, presignUrl, put } from "@vercel/blob";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -8,8 +8,14 @@ import { getSetupStatus } from "@/lib/setup";
 // @firecrawl/pdf-inspector so the model can read the document without
 // native PDF support. Media types and size mirror the eve channel's upload
 // policy (agent/channels/eve.ts).
+//
+// The project Blob store is private. Images still need a fetchable HTTPS URL
+// for vision FileParts, so we return a time-limited signed GET URL to clients
+// while archiving the canonical private URL in the DB.
 
 const MAX_BYTES = 10 * 1024 * 1024;
+/** Signed image URLs stay fetchable long enough for a turn (and retries). */
+const IMAGE_SIGNED_URL_TTL_MS = 24 * 60 * 60 * 1000;
 const ALLOWED_MEDIA_TYPES = [
   "image/*",
   "text/*",
@@ -29,6 +35,22 @@ function mediaTypeAllowed(mediaType: string) {
 
     return lower === allowed;
   });
+}
+
+async function signedImageGetUrl(pathname: string): Promise<string> {
+  const validUntil = Date.now() + IMAGE_SIGNED_URL_TTL_MS;
+  const token = await issueSignedToken({
+    pathname,
+    operations: ["get"],
+    validUntil,
+  });
+  const { presignedUrl } = await presignUrl(token, {
+    operation: "get",
+    pathname,
+    access: "private",
+    validUntil,
+  });
+  return presignedUrl;
 }
 
 export async function POST(request: Request) {
@@ -83,24 +105,29 @@ export async function POST(request: Request) {
   // Vercel deployments via OIDC). Local dev without a token skips archiving —
   // extraction below is the part the agent actually needs.
   let blobUrl: string | null = null;
+  let clientBlobUrl: string | null = null;
   let blobError: string | null = null;
+  const isImage = mediaType.toLowerCase().startsWith("image/");
 
   if (process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN) {
     try {
-      // Images must be publicly fetchable so the model/gateway can load them
-      // as FilePart URLs (mobile sends the URL instead of a multi-MB data URL).
-      // PDFs/text stay private — the agent reads extracted text / read_attachment.
-      const isImage = mediaType.toLowerCase().startsWith("image/");
+      // Always private — the connected store rejects public puts.
+      // Images: mint a signed GET URL so the model/gateway can fetch them
+      // (mobile sends that URL instead of a multi-MB data URL).
+      // PDFs/text: agent uses extracted text / read_attachment.
       const blob = await put(
         `attachments/${viewer.id}/${Date.now()}-${file.name}`,
         bytes,
         {
-          access: isImage ? "public" : "private",
+          access: "private",
           contentType: mediaType,
           addRandomSuffix: false,
         },
       );
       blobUrl = blob.url;
+      clientBlobUrl = isImage
+        ? await signedImageGetUrl(blob.pathname)
+        : blob.url;
     } catch (error) {
       blobError =
         error instanceof Error ? error.message : "Blob upload failed.";
@@ -154,7 +181,8 @@ export async function POST(request: Request) {
     mediaType,
     byteLength: bytes.byteLength,
     attachmentId,
-    blobUrl,
+    // Clients get a signed URL for images; DB keeps the canonical private URL.
+    blobUrl: clientBlobUrl ?? blobUrl,
     blobError,
     pdfType,
     pages,

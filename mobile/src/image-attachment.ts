@@ -16,8 +16,9 @@ export type ImageUploadResponse = {
 const MAX_IMAGE_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 /**
- * Upload a JPEG for vision. Returns a public Blob URL the model can fetch.
- * Call before the eve turn so the session payload stays small on mobile.
+ * Upload a JPEG for vision. Returns a fetchable HTTPS URL (signed private
+ * Blob GET) the model can load. Call before the eve turn so the session
+ * payload stays small on mobile.
  */
 export async function uploadImageAttachment(input: {
   readonly bytes: Uint8Array;
@@ -68,7 +69,7 @@ export async function uploadImageAttachment(input: {
   if (!blobUrl || !/^https:\/\//i.test(blobUrl)) {
     throw new Error(
       data?.blobError?.trim() ||
-        "Photo upload did not return a public URL. Check Blob storage.",
+        "Photo upload did not return a Blob URL. Check Blob storage.",
     );
   }
   return blobUrl;

@@ -353,7 +353,13 @@ export const ComposerAddAttachment: FC<{
       });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "";
-      if (/Blob store|public URL|No Blob/i.test(message)) {
+      // Blob misconfig / private-store issues: still attach as a data URL so
+      // vision works; keep size under the resize cap above.
+      if (
+        /Blob|public URL|No Blob|private store|signed URL|Photo upload/i.test(
+          message,
+        )
+      ) {
         imageUri = `data:image/jpeg;base64,${base64}`;
       } else {
         throw cause;
