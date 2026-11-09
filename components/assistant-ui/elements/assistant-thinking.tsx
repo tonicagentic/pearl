@@ -37,7 +37,10 @@ export function AssistantThinking() {
   const label = useAuiState((s) => {
     if (s.message.status?.type !== "running") return undefined;
     const pending = s.message.parts.find(
-      (part) => part.type === "tool-call" && part.status.type === "running",
+      (part) =>
+        part.type === "tool-call" &&
+        part.status.type === "running" &&
+        part.toolName !== "todo",
     );
     if (pending?.type === "tool-call") return `Running ${pending.toolName}`;
     // The runtime emits a placeholder "indicator" part while a message has no

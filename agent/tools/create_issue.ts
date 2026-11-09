@@ -8,6 +8,7 @@ import {
   findAreaByName,
   getArea,
 } from "@/lib/db/issues";
+import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
 /**
  * Tool that captures an unresolved area as an issue.
@@ -35,6 +36,10 @@ export default defineTool({
    * @param ctx - Tool runtime context; supplies the resolved principal.
    */
   async execute(input, ctx) {
+    if (isPlanMode()) {
+      return planModeBlocked("create_issue");
+    }
+
     const principal = ctx.session.auth.current;
     const userId =
       principal?.principalType === "user" ? principal.principalId : null;

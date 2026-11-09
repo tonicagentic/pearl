@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 import { createSkillForPrincipal } from "#lib/user-skills.js";
+import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
 /**
  * Create a custom skill for the signed-in user.
@@ -18,6 +19,9 @@ export default defineTool({
     "Requires approval every time. The description is the routing hint; the " +
     "markdown loads only when the skill is activated. Cannot reuse a built-in skill name.",
   async execute(input, ctx) {
+    if (isPlanMode()) {
+      return { success: false as const, ...planModeBlocked("create_skill") };
+    }
     try {
       const row = await createSkillForPrincipal(ctx.session.auth.current, input);
       return {

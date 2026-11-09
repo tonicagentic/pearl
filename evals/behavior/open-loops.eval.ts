@@ -15,11 +15,7 @@ type ScenarioShape = {
   open_loops: {
     capture: {
       unresolved: string[];
-    };
-    attention_query: {
       attention_query: string[];
-    };
-    scope_refusal: {
       scope_refusal: string[];
     };
   };
@@ -71,7 +67,7 @@ export default [
   ),
 
   // Scope: the inbox must not become a life-management database.
-  ...s.scope_refusal.scope_refusal.map((message) =>
+  ...s.capture.scope_refusal.map((message) =>
     defineEval({
       description:
         "Open loops scope guard: recurring bookkeeping and general life data are declined as issues, with the boundary explained.",
@@ -93,7 +89,7 @@ export default [
   ),
 
   // Attention: "what needs my attention?" answers from the issues list only.
-  ...s.attention_query.attention_query.map((message) =>
+  ...s.capture.attention_query.map((message) =>
     defineEval({
       description:
         "Open loops attention query: the answer comes from the issues list, grouped by area of area; parked issues are not reported as active.",

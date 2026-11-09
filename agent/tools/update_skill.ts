@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 import { updateSkillForPrincipal } from "#lib/user-skills.js";
+import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
 /**
  * Update one of the signed-in user's skills.
@@ -17,6 +18,9 @@ export default defineTool({
     "Load with get_skill first, then pass the fields to change. Optional newSlug " +
     "renames the skill. Cannot take a built-in skill name.",
   async execute(input, ctx) {
+    if (isPlanMode()) {
+      return { success: false as const, ...planModeBlocked("update_skill") };
+    }
     try {
       const row = await updateSkillForPrincipal(ctx.session.auth.current, input);
       return {

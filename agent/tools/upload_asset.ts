@@ -6,6 +6,7 @@ import {
   WRITER_PREFERENCES_PREFIX,
 } from "#lib/writer-preferences.js";
 import { isReservedArtifactPath, isReservedArtifactUrl } from "#lib/artifacts.js";
+import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
 /**
  * Tool that uploads text or binary content to Vercel Blob storage.
@@ -36,6 +37,16 @@ export default defineTool({
     addRandomSuffix,
     allowOverwrite,
   }) {
+    if (isPlanMode()) {
+      return {
+        ...planModeBlocked("upload_asset"),
+        contentType: contentType ?? "unknown",
+        downloadUrl: "",
+        pathname,
+        success: false as const,
+        url: "",
+      };
+    }
     if (isReservedWriterPath(pathname) || isReservedArtifactPath(pathname)) {
       return {
         contentType: contentType ?? "unknown",

@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 import { executeSend } from "../../lib/agent/notification";
+import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
 // Destructive reference tool: an external side effect (delivering a message
 // through the notification endpoint). It carries the three code-level
@@ -31,6 +32,9 @@ export default defineTool({
   }),
   approval: always(),
   async execute(input) {
+    if (isPlanMode()) {
+      return planModeBlocked("send_notification");
+    }
     return executeSend(input, {
       deliver: async (endpoint, body) => {
         const res = await fetch(endpoint, {

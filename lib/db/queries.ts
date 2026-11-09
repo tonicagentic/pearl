@@ -135,8 +135,10 @@ export async function createChat(
   userId: string,
   {
     pendingUserMessage,
+    projectId,
   }: {
     readonly pendingUserMessage?: string;
+    readonly projectId?: string | null;
   } = {},
 ) {
   const pendingMessage = pendingUserMessage?.trim();
@@ -149,11 +151,13 @@ export async function createChat(
       pendingUserMessageCreatedAt: pendingMessageCreatedAt,
       title: pendingMessage ? createFallbackTitle(pendingMessage) : DEFAULT_CHAT_TITLE,
       userId,
+      projectId: projectId ?? null,
     })
     .returning({
       id: chat.id,
       title: chat.title,
       updatedAt: chat.updatedAt,
+      projectId: chat.projectId,
     });
 
   if (!row) {
@@ -176,6 +180,7 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
       eveSession: chat.eveSession,
       pendingUserMessage: chat.pendingUserMessage,
       pendingUserMessageCreatedAt: chat.pendingUserMessageCreatedAt,
+      projectId: chat.projectId,
     })
     .from(chat)
     .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
@@ -209,6 +214,7 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
     events: eventValues,
     id: row.id,
     pendingUserMessage: hasCurrentTurnCompleted ? null : row.pendingUserMessage,
+    projectId: row.projectId ?? null,
     session: row.eveSession ?? undefined,
     title: row.title,
   };

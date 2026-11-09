@@ -35,6 +35,7 @@ export function createLocalChat(pendingUserMessage?: string) {
     events: [],
     id: crypto.randomUUID(),
     pendingUserMessage: pendingMessage,
+    projectId: null,
     session: undefined,
     title: pendingMessage ? createFallbackTitle(pendingMessage) : DEFAULT_CHAT_TITLE,
     updatedAt: now,
@@ -219,6 +220,7 @@ function toActiveChat(chat: StoredChat): ActiveChat {
     events: chat.events,
     id: chat.id,
     pendingUserMessage: chat.pendingUserMessage ?? null,
+    projectId: chat.projectId ?? null,
     session: chat.session,
     title: chat.title,
   };

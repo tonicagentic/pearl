@@ -8,3 +8,7 @@ When planning a trip:
 2. Check the destination's weather with the `get_weather` tool before suggesting activities.
 3. Suggest a short itinerary that fits the weather: outdoor activities when it is clear, indoor alternatives otherwise.
 4. Keep the plan concise — a few bullet points per day, not an essay.
+
+When Client context has `eveAgentMode` set to `plan` and an `eveProjectId`, the
+deliverable is a project plan document: write it with `save_plan` instead of
+pasting a long itinerary into chat.

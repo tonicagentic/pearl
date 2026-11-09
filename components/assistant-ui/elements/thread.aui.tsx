@@ -11,7 +11,9 @@ import {
   SessionTimeline,
   TIMELINE_TOOLS,
 } from "@/components/assistant-ui/elements/session-timeline";
+import { SessionTodoList } from "@/components/assistant-ui/elements/todo-list";
 import { useLargePasteComposer, useHeldLargePastes } from "@/app/_components/large-paste";
+import { ComposerModePicker } from "@/app/_components/mode-picker";
 import { ComposerModelPicker } from "@/app/_components/model-picker";
 import { splitPasteBlocks } from "@/lib/chat/large-paste";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
@@ -654,6 +656,7 @@ const ComposerAction: FC<{ sendBlocked?: boolean }> = ({
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
       <div className="flex items-center gap-1">
         <ComposerAddAttachment />
+        <ComposerModePicker />
         <ComposerModelPicker />
       </div>
       <div className="flex items-center gap-1.5">
@@ -805,7 +808,8 @@ const AssistantMessage: FC = () => {
       part?.type === "reasoning" ||
       (part?.status?.type !== "requires-action" &&
         part?.toolName !== "write_file" &&
-        TIMELINE_TOOLS.has(part?.toolName ?? ""))
+        (part?.toolName === "todo" ||
+          TIMELINE_TOOLS.has(part?.toolName ?? "")))
     );
   };
 
@@ -825,6 +829,7 @@ const AssistantMessage: FC = () => {
       >
         <AssistantThinking />
         <SessionTimeline />
+        <SessionTodoList />
         <MessageError />
         <MessagePrimitive.GroupedParts
           groupBy={groupPartByType({
@@ -890,6 +895,7 @@ const AssistantMessage: FC = () => {
                 // Summarized by the timeline.
                 return null;
               case "tool-call":
+                if (part.toolName === "todo") return null;
                 if (
                   TIMELINE_TOOLS.has(part.toolName) &&
                   part.status.type !== "requires-action" &&

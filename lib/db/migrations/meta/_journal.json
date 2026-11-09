@@ -134,6 +134,13 @@
       "when": 1794011120655,
       "tag": "0018_browser_session",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794212545801,
+      "tag": "0019_projects_and_plans",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ import {
   getChatLinkByEveSessionId,
   upsertAgentFile,
 } from "@/lib/db/queries";
+import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
 type WriteOutcome = { existed: boolean; path: string };
 
@@ -145,6 +146,9 @@ async function resolveOutcome(
 export default defineTool({
   ...writeFile,
   async execute(input, ctx) {
+    if (isPlanMode()) {
+      throw new Error(planModeBlocked("write_file").error);
+    }
     // Same-file mutations are serialized with edit_file (shared per-path
     // lock): a write racing a targeted edit is the same lost-update shape.
     return withFileLock(input.filePath, async () => {

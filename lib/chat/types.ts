@@ -27,6 +27,7 @@ export type ActiveChat = {
   readonly events: readonly MessageStreamEvent[];
   readonly id: string;
   readonly pendingUserMessage: string | null;
+  readonly projectId: string | null;
   readonly session: ClientSessionState | undefined;
   readonly title: string;
 };

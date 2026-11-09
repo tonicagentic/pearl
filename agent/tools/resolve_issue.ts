@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 import { ensureUserForPrincipal, listOpenIssues, resolveIssue } from "@/lib/db/issues";
+import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
 /**
  * Tool that settles an issue: the unresolved area is resolved.
@@ -24,6 +25,10 @@ export default defineTool({
    * @param ctx - Tool runtime context; supplies the resolved principal.
    */
   async execute(input, ctx) {
+    if (isPlanMode()) {
+      return planModeBlocked("resolve_issue");
+    }
+
     const principal = ctx.session.auth.current;
     const userId =
       principal?.principalType === "user" ? principal.principalId : null;

@@ -83,12 +83,19 @@ export const chat = pgTable(
     // and agent control HTTP. Never return the secret in chat list payloads.
     browserSandboxName: text("browser_sandbox_name"),
     browserControlSecret: text("browser_control_secret"),
+    // Optional project workspace. Deleting a project unlinks chats
+    // (set null) so history remains in the sidebar. Late reference: the
+    // project table is declared below.
+    projectId: text("project_id").references((): AnyPgColumn => project.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
     index("idx_chat_user_updated").on(table.userId, table.updatedAt),
     index("idx_chat_user_created").on(table.userId, table.createdAt),
+    index("idx_chat_project").on(table.projectId),
   ],
 );
 
@@ -395,3 +402,57 @@ export const userProfile = pgTable("user_profile", {
 });
 
 export type UserProfile = typeof userProfile.$inferSelect;
+
+// Projects are workspaces for a body of work that outlives one chat:
+// shared instructions, related chats, and plan documents. Separate from
+// Areas (the life tree Issues attach to). See docs plan for Projects.
+export const project = pgTable(
+  "project",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    instructions: text("instructions").notNull().default(""),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_project_user").on(table.userId),
+    uniqueIndex("idx_project_user_name").on(table.userId, table.name),
+  ],
+);
+
+export type Project = typeof project.$inferSelect;
+
+// Markdown plan documents that live inside a project. Plan mode writes
+// these; Agent mode reads them before carrying the work out.
+export const plan = pgTable(
+  "plan",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    slug: text("slug").notNull(),
+    markdown: text("markdown").notNull().default(""),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_plan_user").on(table.userId),
+    index("idx_plan_project").on(table.projectId),
+    uniqueIndex("idx_plan_project_slug").on(table.projectId, table.slug),
+  ],
+);
+
+export type Plan = typeof plan.$inferSelect;

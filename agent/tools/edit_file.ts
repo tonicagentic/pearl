@@ -5,6 +5,7 @@ import { writeFile } from "eve/tools/write_file";
 import { houseLint } from "../lib/house-lint.js";
 import { withFileLock } from "@/lib/agent/file-mutex";
 import { persistAgentFile } from "@/agent/tools/write_file";
+import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
 type WriteOutcome = { existed: boolean; path: string };
 
@@ -98,6 +99,9 @@ export default defineTool({
     newText: z.string().describe("The replacement text."),
   }),
   async execute(input, ctx) {
+    if (isPlanMode()) {
+      throw new Error(planModeBlocked("edit_file").error);
+    }
     // Same-file mutations are serialized: parallel edit_file calls each read
     // the same base content and last-write-wins, silently dropping one edit.
     return withFileLock(input.filePath, async () => {

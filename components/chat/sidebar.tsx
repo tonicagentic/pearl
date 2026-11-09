@@ -4,6 +4,7 @@ import {
   ArrowRightIcon,
   AppWindowIcon,
   EllipsisIcon,
+  FolderKanbanIcon,
   InboxIcon,
   NetworkIcon,
   PanelLeftIcon,
@@ -72,6 +73,7 @@ export function ChatSidebar({
   const newSessionActive = activeChatId === null && onChatRoute;
   const issuesActive = pathname?.startsWith("/issues") ?? false;
   const appsActive = pathname?.startsWith("/apps") ?? false;
+  const projectsActive = pathname?.startsWith("/projects") ?? false;
   const areasActive =
     pathname?.startsWith("/settings/areas") ?? false;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -155,6 +157,16 @@ export function ChatSidebar({
         >
           <NetworkIcon className="size-4" />
           Areas
+        </Link>
+        <Link
+          className={cn(
+            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
+            projectsActive ? activeRowClass : inactiveRowClass,
+          )}
+          href="/projects"
+        >
+          <FolderKanbanIcon className="size-4" />
+          Projects
         </Link>
         {/* Issues inbox: styled like the chat rows but anchored to its own
             route rather than the chat list. */}

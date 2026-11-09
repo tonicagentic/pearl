@@ -29,11 +29,15 @@ import { ErrorToast } from "@/app/_components/error-toast";
 import { SessionStatusBanner } from "@/app/_components/session-status";
 import { SubagentRunsProvider, TaskGroup } from "@/components/assistant-ui/elements/task-card.aui";
 import { expandHeldPastes, setLargePasteErrorHandler } from "@/lib/chat/large-paste";
+import { getAgentMode } from "@/app/_components/agent-mode";
 import {
   COMPOSER_MODELS,
   DEFAULT_MODEL_KEY,
   getModelSelection,
 } from "@/app/_components/model-selection";
+import { ProjectPickerDialog } from "@/app/_components/project-picker-dialog";
+import { attachChatToProjectAction } from "@/app/actions/projects";
+import { MODE_MARKER, PROJECT_ID_MARKER } from "@/lib/agent-mode-context";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import {
   EditFileToolUI,
@@ -301,7 +305,9 @@ export function AssistantChatSurface({
   const [clientError, setClientError] = useState<string | null>(null);
   const [dismissedError, setDismissedError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const activeChatIdRef = useRef<string | null>(chatId);
+  const projectIdRef = useRef<string | null>(activeChat?.projectId ?? null);
   const eventIndexRef = useRef(activeChat?.events.length ?? 0);
   const savedEventCountRef = useRef(activeChat?.events.length ?? 0);
   const currentTitleRef = useRef(activeChat?.title ?? "New chat");
@@ -309,8 +315,16 @@ export function AssistantChatSurface({
     { event: MessageStreamEvent; eventIndex: number }[]
   >([]);
   const eventFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const projectPickWaiterRef = useRef<{
+    resolve: (projectId: string) => void;
+    reject: (error: Error) => void;
+  } | null>(null);
 
   const isDisabled = !viewer || !setupStatus.appReady;
+
+  useEffect(() => {
+    projectIdRef.current = activeChat?.projectId ?? null;
+  }, [activeChat?.projectId]);
 
   const persistSessionChange = useCallback(
     (session: ClientSessionState | undefined) => {
@@ -425,6 +439,7 @@ export function AssistantChatSurface({
             id,
             events,
             pendingUserMessage: null,
+            projectId: projectIdRef.current,
             session,
             title: currentTitleRef.current,
           });
@@ -457,14 +472,39 @@ export function AssistantChatSurface({
         throw new Error(`${limit.message} Retry in ${limit.retryAfter}s.`);
       }
 
+      const mode = getAgentMode();
+
+      // Plan mode needs a project before the turn starts. Open the picker and
+      // wait; attaching the chat happens after the row exists.
+      if (mode === "plan" && !projectIdRef.current) {
+        if (storageMode !== "database") {
+          throw new Error("Plan mode needs durable storage and a project.");
+        }
+        const projectId = await new Promise<string>((resolve, reject) => {
+          projectPickWaiterRef.current = { resolve, reject };
+          setProjectPickerOpen(true);
+        });
+        projectIdRef.current = projectId;
+      }
+
       if (!activeChatIdRef.current) {
         const created = await createClientChat(storageMode, {
           pendingUserMessage: messageText,
+          projectId: projectIdRef.current,
         });
         activeChatIdRef.current = created.id;
         setActiveChatId(created.id);
         touchChat(created);
         onChatCreated?.(created.id);
+      } else if (
+        projectIdRef.current &&
+        storageMode === "database" &&
+        !activeChat?.projectId
+      ) {
+        await attachChatToProjectAction({
+          chatId: activeChatIdRef.current,
+          projectId: projectIdRef.current,
+        });
       }
 
       if (messageText) {
@@ -475,26 +515,32 @@ export function AssistantChatSurface({
       // restore message see the composer text (held pastes are chips), while
       // the outgoing turn message carries the full inline blocks.
       if (typeof input.message === "string") {
-        // Composer model picker: the selection rides the turn as ephemeral
-        // clientContext, which the agent's step.started model resolver parses
-        // (agent/model-selection.ts). The default needs no marker. The cast is
-        // safe: the eve client passes extra send fields through to the server
-        // (client createMessageBody includes clientContext).
+        // Mode, project, and model ride the turn as ephemeral clientContext.
+        // The agent reads them from context.instruction messages
+        // (agent/lib/turn-context.ts, agent/model-selection.ts).
         const selected = COMPOSER_MODELS.find(
           (model) => model.key === getModelSelection(),
         );
+        const clientContext: Record<string, string> = {
+          [MODE_MARKER]: mode,
+        };
+        if (projectIdRef.current) {
+          clientContext[PROJECT_ID_MARKER] = projectIdRef.current;
+        }
+        if (selected && selected.key !== DEFAULT_MODEL_KEY) {
+          clientContext.eveModelSelection = selected.key;
+        }
         return {
           ...input,
           message: expandHeldPastes(input.message).text,
-          ...(selected && selected.key !== DEFAULT_MODEL_KEY
-            ? { clientContext: { eveModelSelection: selected.key } }
-            : {}),
+          clientContext,
         } as Parameters<PrepareSend>[0];
       }
 
       return input;
     },
     [
+      activeChat?.projectId,
       onChatCreated,
       requestSignIn,
       setActiveChatId,
@@ -595,6 +641,23 @@ export function AssistantChatSurface({
           <CanvasLayout />
 
           <EveAuthorization />
+          <ProjectPickerDialog
+            onOpenChange={(open) => {
+              setProjectPickerOpen(open);
+              if (!open && projectPickWaiterRef.current) {
+                projectPickWaiterRef.current.reject(
+                  new Error("Choose a project to use Plan mode."),
+                );
+                projectPickWaiterRef.current = null;
+              }
+            }}
+            onSelect={(project) => {
+              projectIdRef.current = project.id;
+              projectPickWaiterRef.current?.resolve(project.id);
+              projectPickWaiterRef.current = null;
+            }}
+            open={projectPickerOpen}
+          />
         </div>
 
         <SessionCursorPersistence chatId={chatId} storageMode={storageMode} />
