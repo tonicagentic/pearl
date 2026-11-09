@@ -1,7 +1,7 @@
 import { Platform, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
-import { AppWindowIcon, ChevronRightIcon, InboxIcon, NetworkIcon, PlusIcon, Settings2Icon, SquarePenIcon } from "lucide-react-native";
+import { FolderGit2Icon, ChevronRightIcon, InboxIcon, NetworkIcon, PlusIcon, Settings2Icon, SquarePenIcon } from "lucide-react-native";
 import Animated, { interpolate, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
@@ -10,7 +10,7 @@ import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 
 /** Shared history content for the swipeable chat panel and direct-link screen. */
-export type SidebarDestination = "/areas" | "/issues" | "/apps" | "/settings";
+export type SidebarDestination = "/areas" | "/issues" | "/repos" | "/settings";
 
 export function HistoryScreen({
   onClose,
@@ -121,9 +121,9 @@ export function HistoryScreen({
                     <InboxIcon className="size-5 text-foreground" />
                     <Text className="text-[17px] font-normal text-foreground">Issues</Text>
                   </Pressable>
-                  <Pressable accessibilityRole="button" className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5" onPress={() => openDestination("/apps")}>
-                    <AppWindowIcon className="size-5 text-foreground" />
-                    <Text className="text-[17px] font-normal text-foreground">Apps</Text>
+                  <Pressable accessibilityRole="button" className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5" onPress={() => openDestination("/repos")}>
+                    <FolderGit2Icon className="size-5 text-foreground" />
+                    <Text className="text-[17px] font-normal text-foreground">Repos</Text>
                   </Pressable>
                   <Text className="px-2.5 pb-2 pt-7 text-[15px] font-normal text-muted-foreground">Recents</Text>
                 </>
@@ -145,9 +145,9 @@ export function HistoryScreen({
                     <InboxIcon className="size-5 text-foreground" />
                     <Text className="text-base text-foreground">Issues</Text>
                   </Pressable>
-                  <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/apps")}>
-                    <AppWindowIcon className="size-5 text-foreground" />
-                    <Text className="text-base text-foreground">Apps</Text>
+                  <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/repos")}>
+                    <FolderGit2Icon className="size-5 text-foreground" />
+                    <Text className="text-base text-foreground">Repos</Text>
                   </Pressable>
                   <Text className="px-3 pb-2 pt-5 text-xs font-medium uppercase text-muted-foreground">Chats</Text>
                 </>

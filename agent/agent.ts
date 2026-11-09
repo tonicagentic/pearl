@@ -85,8 +85,4 @@ export default defineAgent({
     resolveModelForStep(await ctx.messages()),
   ),
   experimental: WORKFLOW_BATCHING,
-  // Used by the builder subagent; build settings apply to the whole agent.
-  build: {
-    externalDependencies: ["libfx", "durable-harness"],
-  },
 });

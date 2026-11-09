@@ -1,7 +1,6 @@
 import { networkInterfaces } from "node:os";
 import type { NextConfig } from "next";
 import { withAui } from "@assistant-ui/next";
-import { withDurableHarness } from "durable-harness/next";
 import { withEve } from "eve/next";
 
 /** Phone → Mac LAN IP for Next.js 16 allowedDevOrigins (hostname only). */
@@ -31,18 +30,10 @@ const nextConfig: NextConfig = {
     },
   },
   // Native addons / packages that Turbopack cannot bundle.
-  serverExternalPackages: [
-    "@firecrawl/pdf-inspector",
-    "libfx",
-    "durable-harness",
-  ],
+  serverExternalPackages: ["@firecrawl/pdf-inspector"],
   turbopack: {
     root: process.cwd(),
   },
 };
 
-// withDurableHarness discovers lib/apps/fx-agent.ts (createFxAgent) and mounts
-// libfx's wake handler on its own queue topic, separate from eve.
-export default withDurableHarness(withEve(withAui(nextConfig)), {
-  agents: ["lib/apps/fx-agent.ts"],
-});
+export default withEve(withAui(nextConfig));

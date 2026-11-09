@@ -1,9 +1,10 @@
 import { Redirect } from "expo-router";
 
-import { AppsScreen } from "@/components/apps-screen";
+import { ReposScreen } from "@/components/repos-screen";
 import { useAuth } from "@/src/auth";
 
-export default function Apps() {
+/** The GitHub repos route; requires the auth gate (redirects home otherwise). */
+export default function Repos() {
   const { signedIn, restoring } = useAuth();
 
   if (restoring) {
@@ -14,5 +15,5 @@ export default function Apps() {
     return <Redirect href="/" />;
   }
 
-  return <AppsScreen />;
+  return <ReposScreen />;
 }

@@ -4,7 +4,7 @@ import { defineEval } from "eve/evals";
 import { MODE_MARKER, PROJECT_ID_MARKER } from "../../lib/agent-mode-context.ts";
 
 // Plan mode: clientContext sets mode=plan; the agent writes via save_plan and
-// does not call create_issue or builder. Seeds a project for the local-dev
+// does not call create_issue or a mutating tool. Seeds a project for the local-dev
 // principal (eve eval / eve dev) so save_plan can succeed.
 
 async function seedPlanModeProject(): Promise<string> {
@@ -27,7 +27,7 @@ async function seedPlanModeProject(): Promise<string> {
 export default defineEval({
   description:
     "Plan mode: with eveAgentMode=plan and a projectId, the agent saves a plan " +
-    "via save_plan and does not call create_issue or builder.",
+    "via save_plan and does not call create_issue or a mutating tool.",
   tags: ["reliability", "nightly"],
   timeoutMs: 240_000,
   async test(t) {
@@ -38,7 +38,7 @@ export default defineEval({
         "questions and do not load any skills. Immediately call save_plan with " +
         "title 'Sidebar nav cleanup', slug 'sidebar-nav-cleanup', and a short " +
         "markdown body with two bullet steps. Do not create an issue, do not " +
-        "build an app, and do not call the builder.",
+        "build an app, and do not call any other mutating tool.",
       {
         clientContext: {
           [MODE_MARKER]: "plan",
@@ -50,7 +50,6 @@ export default defineEval({
     t.succeeded();
     t.calledTool("save_plan");
     t.notCalledTool("create_issue");
-    t.notCalledTool("builder");
     t.noFailedCalls();
 
     const saveCalls = turn.toolCalls.filter((call) => call.name === "save_plan");

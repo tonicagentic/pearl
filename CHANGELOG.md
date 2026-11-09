@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Changed
+
+- Sidebar and mobile drawer list the signed-in user's GitHub repositories
+  (Repos) instead of Apps.
+
+### Removed
+
+- Builder subagent, fx agent, mini-app services, and `/apps` routes on web and
+  mobile. GitHub and Vercel user-token helpers moved to `lib/connections`.
+
 ## 0.1.0-alpha.5 - 2026-11-07
 
 ### Added
