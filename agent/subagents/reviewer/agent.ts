@@ -19,7 +19,7 @@ import { DEFAULT_MODEL, WORKFLOW_BATCHING } from "../../agent.ts";
  * banned-words floor) by judging the qualitative rubric a regex cannot.
  *
  * `description` is required for a subagent: the root reads it to decide when to delegate.
- * `outputSchema` makes the verdict a structured result the root can act on directly.
+ * eve 1.0 subagents take no `outputSchema`; the result contract lives in `instructions.md`.
  *
  * @see The review rubric and verdict contract in this folder's `instructions.md`.
  */
@@ -38,42 +38,4 @@ export default defineAgent({
   // agent/agent.ts applies to subagents too, and compliance for other providers is an
   // explicit decision, not a port default.
   model: process.env.AGENT_MODEL_OVERRIDE?.trim() || DEFAULT_MODEL,
-  outputSchema: {
-    additionalProperties: false,
-    properties: {
-      issues: {
-        description:
-          "One entry per concrete problem; empty when the verdict is 'ready'.",
-        items: {
-          additionalProperties: false,
-          properties: {
-            fix: {
-              description: "A concrete suggested change.",
-              type: "string",
-            },
-            quote: {
-              description: "The offending excerpt, quoted from the draft.",
-              type: "string",
-            },
-            rule: {
-              description: "The rubric rule or reference the excerpt breaks.",
-              type: "string",
-            },
-            severity: { enum: ["high", "medium", "low"], type: "string" },
-          },
-          required: ["severity", "rule", "quote", "fix"],
-          type: "object",
-        },
-        type: "array",
-      },
-      verdict: {
-        description:
-          "'ready' = clean enough to send as-is; 'revise' = fix the issues first.",
-        enum: ["ready", "revise"],
-        type: "string",
-      },
-    },
-    required: ["verdict", "issues"],
-    type: "object",
-  },
 });

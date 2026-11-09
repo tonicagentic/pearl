@@ -16,9 +16,7 @@ import { connectionTokenParams } from "@/lib/connections/oauth-scopes";
 // (mcp.xero.com), which rejected BYO Web-app tokens after consent.
 // Block known write tools instead of allowlisting reads — Remote MCP tool
 // names (incl. org listing) can differ from the OSS list.
-export default defineDynamic({
-  events: {
-    "turn.started": (_event, ctx) => {
+export default defineDynamic((ctx) => {
       const connector = process.env.XERO_CONNECTOR?.trim();
       if (!connector || !isBetterAuthUserPrincipal(ctx.session.auth.current)) {
         return null;
@@ -36,6 +34,4 @@ export default defineDynamic({
         }),
         tools: { block: [...CONNECTION_WRITE_BLOCKLISTS.xero] },
       });
-    },
-  },
 });

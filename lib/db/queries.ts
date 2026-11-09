@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { get } from "@vercel/blob";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
-import type { ClientSessionState, MessageStreamEvent } from "eve/client";
+import type { ClientSessionState, SessionStreamEvent } from "eve/client";
 import { chatNeedsUserInput, isChatTurnSettledEvent } from "@/lib/chat/events";
 import type { ActiveChat, ChatListItem, ChatListPage } from "@/lib/chat/types";
 import { createFallbackTitle, DEFAULT_CHAT_TITLE } from "@/lib/chat/title";
@@ -106,18 +106,16 @@ async function waitingForInputByChatIds(
       and(
         inArray(chatEvent.chatId, [...chatIds]),
         sql`${chatEvent.event} ->> 'type' in (
-          'input.requested',
-          'input.resolved',
-          'authorization.required',
-          'authorization.completed',
-          'turn.cancelled',
-          'turn.failed'
+          'interaction.opened',
+          'interaction.settled',
+          'turn.settled',
+          'session.ended'
         )`,
       ),
     )
     .orderBy(asc(chatEvent.chatId), asc(chatEvent.eventIndex));
 
-  const eventsByChat = new Map<string, MessageStreamEvent[]>();
+  const eventsByChat = new Map<string, SessionStreamEvent[]>();
   for (const row of rows) {
     const list = eventsByChat.get(row.chatId) ?? [];
     list.push(row.event);
@@ -290,7 +288,7 @@ export async function skipChatAuthorization({
   userId,
 }: {
   readonly chatId: string;
-  readonly events: readonly MessageStreamEvent[];
+  readonly events: readonly SessionStreamEvent[];
   readonly session: ClientSessionState | undefined;
   readonly userId: string;
 }) {
@@ -385,7 +383,7 @@ export async function appendChatEvent({
   userId,
 }: {
   readonly chatId: string;
-  readonly event: MessageStreamEvent;
+  readonly event: SessionStreamEvent;
   readonly eventIndex: number;
   readonly userId: string;
 }) {
@@ -420,7 +418,7 @@ export async function appendChatEvents({
 }: {
   readonly chatId: string;
   readonly events: readonly {
-    readonly event: MessageStreamEvent;
+    readonly event: SessionStreamEvent;
     readonly eventIndex: number;
   }[];
   readonly userId: string;
@@ -466,7 +464,7 @@ export async function saveChatSnapshot({
   userId,
 }: {
   readonly chatId: string;
-  readonly events: readonly MessageStreamEvent[];
+  readonly events: readonly SessionStreamEvent[];
   readonly session: ClientSessionState | undefined;
   readonly userId: string;
 }) {

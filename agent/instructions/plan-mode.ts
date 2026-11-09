@@ -27,15 +27,11 @@ Rules:
   overwrite edits the user made in the editor.
 `;
 
-export default defineDynamic({
-  events: {
-    "turn.started": (_event, ctx) => {
-      const intent = syncTurnClientIntent(ctx.messages);
-      if (intent.mode !== "plan") return null;
-      return defineInstructions({
-        content: PLAN_MODE_INSTRUCTIONS,
-        role: "system",
-      });
-    },
-  },
+export default defineDynamic(async (ctx) => {
+  const intent = syncTurnClientIntent(await ctx.messages());
+  if (intent.mode !== "plan") return null;
+  return defineInstructions({
+    content: PLAN_MODE_INSTRUCTIONS,
+    role: "system",
+  });
 });

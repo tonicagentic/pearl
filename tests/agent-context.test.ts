@@ -65,12 +65,24 @@ test("currentDatetime: full ISO timestamp is embedded verbatim", () => {
   assert.ok(currentDatetime(now).includes(now.toISOString()));
 });
 
-// The dynamic instruction modules must wire the builders to the right
-// lifecycle events and roles: identity at session start (system), time per
-// turn (system, outside history so stale timestamps never accumulate).
-test("dynamic instruction modules: identity at session.started, time at turn.started", async () => {
-  const identity = (await import("../agent/instructions/caller-identity.ts")).default;
-  const datetime = (await import("../agent/instructions/current-datetime.ts")).default;
+// The dynamic instruction modules must resolve the right instructions and
+// roles: identity from the caller's principal (system), time on every run
+// (system, outside history so stale timestamps never accumulate).
+const DYNAMIC_SENTINEL = Symbol.for("eve.dynamic");
+
+function dynamicFn<T>(module: unknown): (ctx: never) => Promise<T> | T {
+  return (module as Record<symbol, (ctx: never) => Promise<T> | T>)[
+    DYNAMIC_SENTINEL
+  ];
+}
+
+test("dynamic instruction modules: identity from the principal, time on every run", async () => {
+  const identity = dynamicFn<{ role?: string; content: string } | null>(
+    (await import("../agent/instructions/caller-identity.ts")).default,
+  );
+  const datetime = dynamicFn<{ role?: string; content: string }>(
+    (await import("../agent/instructions/current-datetime.ts")).default,
+  );
 
   const ctx = {
     session: {
@@ -80,29 +92,13 @@ test("dynamic instruction modules: identity at session.started, time at turn.sta
     },
   } as never;
 
-  const identityEvents = identity.events as Record<
-    string,
-    (event: never, ctx: never) => unknown
-  >;
-
-  const identityResolved = (await identityEvents["session.started"](
-    undefined as never,
-    ctx,
-  )) as { role?: string; content: string } | null;
+  const identityResolved = await identity(ctx);
 
   assert.ok(identityResolved);
   assert.equal(identityResolved.role, "system");
   assert.ok(identityResolved.content.includes("Alex Rivera"));
 
-  const datetimeModule = (await import("../agent/instructions/current-datetime.ts")).default;
-  const datetimeEvents = datetimeModule.events as Record<
-    string,
-    (event: never, ctx: never) => Promise<{ role?: string; content: string }>
-  >;
-  const timeResolved = (await datetimeEvents["turn.started"](
-    undefined as never,
-    ctx,
-  )) as { role?: string; content: string };
+  const timeResolved = await datetime(ctx);
 
   assert.ok(timeResolved);
   assert.equal(timeResolved.role, "system");
@@ -110,16 +106,11 @@ test("dynamic instruction modules: identity at session.started, time at turn.sta
 });
 
 test("dynamic identity module: returns null when unauthenticated", async () => {
-  const identity = (await import("../agent/instructions/caller-identity.ts")).default;
-  const identityEvents = identity.events as Record<
-    string,
-    (event: never, ctx: never) => unknown
-  >;
-
-  const resolved = await identityEvents["session.started"](
-    undefined as never,
-    { session: { auth: { current: null } } } as never,
+  const identity = dynamicFn(
+    (await import("../agent/instructions/caller-identity.ts")).default,
   );
+
+  const resolved = await identity({ session: { auth: { current: null } } } as never);
 
   assert.equal(resolved, null);
 });

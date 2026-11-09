@@ -31,17 +31,11 @@ function builderAgent() {
   });
 }
 
-export default defineDynamic({
-  build: {
-    externalDependencies: ["libfx", "durable-harness"],
-  },
-  events: {
-    // Read mode from this turn's clientContext messages — do not rely on
-    // instruction-resolver order for defineState.
-    "turn.started": (_event, ctx) => {
-      if (readTurnClientIntent(ctx.messages).mode === "plan") return null;
-      return builderAgent();
-    },
-    "session.started": () => builderAgent(),
-  },
+// build.externalDependencies for libfx / durable-harness lives on the root
+// agent: build settings cannot be dynamic and apply to subagents too.
+export default defineDynamic(async (ctx) => {
+  // Read mode from this turn's clientContext messages — do not rely on
+  // instruction order for defineState.
+  if (readTurnClientIntent(await ctx.messages()).mode === "plan") return null;
+  return builderAgent();
 });

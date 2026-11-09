@@ -21,7 +21,7 @@ import { DEFAULT_MODEL, WORKFLOW_BATCHING } from "../../agent.ts";
  * back with citations, and surfaces `gaps` to the writer instead of papering over them.
  *
  * `description` is required for a subagent: the root reads it to decide when to delegate.
- * `outputSchema` makes the findings a structured, cited result the root can act on directly.
+ * eve 1.0 subagents take no `outputSchema`; the result contract lives in `instructions.md`.
  *
  * @see The research methodology and output contract in this folder's `instructions.md`.
  */
@@ -35,71 +35,4 @@ export default defineAgent({
     "caller passes the question and any known context in the message.",
   // Our OSS default (agent.ts DEFAULT_MODEL); see the reviewer note on model policy.
   model: process.env.AGENT_MODEL_OVERRIDE?.trim() || DEFAULT_MODEL,
-  outputSchema: {
-    additionalProperties: false,
-    properties: {
-      findings: {
-        description:
-          "One entry per verified factual claim; every entry carries at least one real source.",
-        items: {
-          additionalProperties: false,
-          properties: {
-            claim: {
-              description:
-                "A single, specific factual claim the draft can rely on.",
-              type: "string",
-            },
-            confidence: {
-              description:
-                "'high' = multiple strong independent sources; 'low' = single or weaker source.",
-              enum: ["high", "medium", "low"],
-              type: "string",
-            },
-            notes: {
-              description:
-                "Caveats: date-sensitivity, scope limits, or where sources disagree.",
-              type: "string",
-            },
-            sources: {
-              description:
-                "The real, fetched sources backing the claim; never empty, never invented.",
-              items: {
-                additionalProperties: false,
-                properties: {
-                  title: {
-                    description: "The source's title or publication name.",
-                    type: "string",
-                  },
-                  url: {
-                    description: "The source URL, as visited.",
-                    type: "string",
-                  },
-                },
-                required: ["url", "title"],
-                type: "object",
-              },
-              minItems: 1,
-              type: "array",
-            },
-          },
-          required: ["claim", "sources", "confidence", "notes"],
-          type: "object",
-        },
-        type: "array",
-      },
-      gaps: {
-        description:
-          "What could not be found or verified; surfaced to the writer rather than guessed at.",
-        items: { type: "string" },
-        type: "array",
-      },
-      summary: {
-        description:
-          "A 1-3 sentence synthesis of what the research establishes, for the root to scan first.",
-        type: "string",
-      },
-    },
-    required: ["summary", "findings", "gaps"],
-    type: "object",
-  },
 });

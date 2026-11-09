@@ -9,9 +9,7 @@ import { isBetterAuthUserPrincipal } from "../lib/user-connection.js";
 //   vercel connect create vercel --name vercel
 // (or mcp.vercel.com with the MCP connection method). Scope follows the
 // signed-in user's Vercel account; do not pin a team or project.
-export default defineDynamic({
-  events: {
-    "turn.started": (_event, ctx) => {
+export default defineDynamic((ctx) => {
       const connector = process.env.VERCEL_CONNECTOR?.trim();
       if (!connector || !isBetterAuthUserPrincipal(ctx.session.auth.current)) {
         return null;
@@ -25,6 +23,4 @@ export default defineDynamic({
         auth: connect({ connector, autoProvision: false }),
         tools: { allow: [...CONNECTION_READONLY_ALLOWLISTS.vercel] },
       });
-    },
-  },
 });

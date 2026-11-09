@@ -1,15 +1,14 @@
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionStreamEvent } from "eve/client";
 
-export function isChatTurnSettledEvent(event: MessageStreamEvent) {
+export function isChatTurnSettledEvent(event: SessionStreamEvent) {
   return (
-    event.type === "authorization.required" ||
-    event.type === "session.completed" ||
-    event.type === "session.failed" ||
-    event.type === "session.waiting"
+    event.type === "turn.paused" ||
+    event.type === "turn.settled" ||
+    event.type === "session.ended"
   );
 }
 
-function pendingUserInputState(events: readonly MessageStreamEvent[]): {
+function pendingUserInputState(events: readonly SessionStreamEvent[]): {
   pendingInput: Set<string>;
   pendingAuth: Set<string>;
 } {
@@ -17,33 +16,23 @@ function pendingUserInputState(events: readonly MessageStreamEvent[]): {
   const pendingAuth = new Set<string>();
 
   for (const event of events) {
-    if (event.type === "input.requested") {
-      for (const request of event.data.requests ?? []) {
-        if (request.requestId) pendingInput.add(request.requestId);
+    if (event.type === "interaction.opened") {
+      const { interactionId, request } = event.data;
+      if (request.kind === "sign-in") {
+        pendingAuth.add(interactionId);
+      } else {
+        pendingInput.add(interactionId);
       }
       continue;
     }
 
-    if (event.type === "input.resolved") {
-      for (const resolution of event.data.resolutions ?? []) {
-        if (resolution.requestId) pendingInput.delete(resolution.requestId);
-      }
+    if (event.type === "interaction.settled") {
+      pendingInput.delete(event.data.interactionId);
+      pendingAuth.delete(event.data.interactionId);
       continue;
     }
 
-    if (event.type === "authorization.required") {
-      const key = event.data.attemptId ?? event.data.name;
-      if (key) pendingAuth.add(key);
-      continue;
-    }
-
-    if (event.type === "authorization.completed") {
-      const key = event.data.attemptId ?? event.data.name;
-      if (key) pendingAuth.delete(key);
-      continue;
-    }
-
-    if (event.type === "turn.cancelled" || event.type === "turn.failed") {
+    if (event.type === "turn.settled" || event.type === "session.ended") {
       pendingInput.clear();
       pendingAuth.clear();
     }
@@ -53,26 +42,25 @@ function pendingUserInputState(events: readonly MessageStreamEvent[]): {
 }
 
 /**
- * True when the chat is parked on the user: an unresolved tool-approval /
- * ask_question (`input.requested`) or an open authorization challenge.
- * Matches the composer WaitingActionCard / sidebar "needs you" signal so
- * history rows stay in sync without reopening the chat.
+ * True when the chat is parked on the user: an unresolved tool approval,
+ * question, or budget prompt, or an open sign-in challenge. Matches the
+ * composer WaitingActionCard / sidebar "needs you" signal so history rows
+ * stay in sync without reopening the chat.
  */
 export function chatNeedsUserInput(
-  events: readonly MessageStreamEvent[],
+  events: readonly SessionStreamEvent[],
 ): boolean {
   const { pendingInput, pendingAuth } = pendingUserInputState(events);
   return pendingInput.size > 0 || pendingAuth.size > 0;
 }
 
 /**
- * True only for an open connection/authorization challenge. Used by the
- * composer text-only WaitingActionCard so a stale `input.requested` (tool
- * already cancelled in the thread) does not leave a buttonless "paused"
- * banner after deny/cancel.
+ * True only for an open sign-in challenge. Used by the composer text-only
+ * WaitingActionCard so a stale approval (tool already cancelled in the
+ * thread) does not leave a buttonless "paused" banner after deny/cancel.
  */
 export function chatNeedsAuthorization(
-  events: readonly MessageStreamEvent[],
+  events: readonly SessionStreamEvent[],
 ): boolean {
   return pendingUserInputState(events).pendingAuth.size > 0;
 }

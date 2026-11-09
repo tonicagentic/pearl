@@ -76,3 +76,23 @@ Return a verdict: `ready` when the draft is clean enough to send as-is (no issue
 one issue per real problem — its severity, the rule or level, the quoted excerpt, and the fix. When you're
 torn between the two, choose `revise`: a fresh-eyes pass exists to catch what the writer's own pass
 missed.
+
+## Result format
+
+Reply with one JSON object and nothing else:
+
+```json
+{
+  "verdict": "ready | revise",
+  "issues": [
+    {
+      "severity": "high | medium | low",
+      "rule": "The rubric rule or reference the excerpt breaks.",
+      "quote": "The offending excerpt, quoted from the draft.",
+      "fix": "A concrete suggested change."
+    }
+  ]
+}
+```
+
+`issues` is empty when the verdict is `ready`.

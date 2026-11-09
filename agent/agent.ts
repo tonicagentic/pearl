@@ -1,4 +1,5 @@
-import { defineAgent, defineDynamic } from "eve";
+import { defineAgent } from "eve";
+import { defineDynamic } from "eve/models";
 
 import {
   DEFAULT_MODEL,
@@ -75,16 +76,17 @@ export function resolveModelForStep(messages: ScannedMessageLike) {
 }
 
 export default defineAgent({
-  // Resolution runs per model call (step.started) rather than turn.started
-  // because the ephemeral clientContext is inserted into each model request
-  // for the turn: by the first model step it is visible in ctx.messages.
-  // Per-step resolution is a cheap marker scan. Tradeoff to keep in mind:
+  // Resolution runs before every model call. The ephemeral clientContext is
+  // inserted into each model request for the turn, so it is visible in
+  // ctx.messages(). Per-call resolution is a cheap marker scan. Tradeoff:
   // prompt caches are per model, so switching models mid-session re-ingests
   // the conversation at uncached prices.
-  model: defineDynamic({
-    events: {
-      "step.started": (_event, ctx) => resolveModelForStep(ctx.messages),
-    },
-  }),
+  model: defineDynamic(async (ctx) =>
+    resolveModelForStep(await ctx.messages()),
+  ),
   experimental: WORKFLOW_BATCHING,
+  // Used by the builder subagent; build settings apply to the whole agent.
+  build: {
+    externalDependencies: ["libfx", "durable-harness"],
+  },
 });

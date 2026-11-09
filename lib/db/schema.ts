@@ -12,7 +12,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { randomUUID } from "node:crypto";
-import type { ClientSessionState, MessageStreamEvent } from "eve/client";
+import type { ClientSessionState, SessionStreamEvent } from "eve/client";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -107,7 +107,7 @@ export const chatEvent = pgTable(
       .notNull()
       .references(() => chat.id, { onDelete: "cascade" }),
     eventIndex: integer("event_index").notNull(),
-    event: jsonb("event").$type<MessageStreamEvent>().notNull().default(sql`'{}'::jsonb`),
+    event: jsonb("event").$type<SessionStreamEvent>().notNull().default(sql`'{}'::jsonb`),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [

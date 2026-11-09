@@ -1,6 +1,6 @@
 "use client";
 
-import type { ClientSessionState, MessageStreamEvent } from "eve/client";
+import type { ClientSessionState, SessionStreamEvent } from "eve/client";
 import {
   appendChatEventAction,
   appendChatEventsAction,
@@ -104,7 +104,7 @@ export async function appendClientChatEvent(
   storageMode: StorageMode,
   input: {
     readonly chatId: string;
-    readonly event: MessageStreamEvent;
+    readonly event: SessionStreamEvent;
     readonly eventIndex: number;
   },
 ) {
@@ -121,7 +121,7 @@ export async function appendClientChatEvents(
   input: {
     readonly chatId: string;
     readonly events: readonly {
-      readonly event: MessageStreamEvent;
+      readonly event: SessionStreamEvent;
       readonly eventIndex: number;
     }[];
   },
@@ -156,7 +156,7 @@ export async function saveClientChatSnapshot(
   storageMode: StorageMode,
   input: {
     readonly chatId: string;
-    readonly events: readonly MessageStreamEvent[];
+    readonly events: readonly SessionStreamEvent[];
     readonly session: ClientSessionState | undefined;
   },
 ) {
@@ -172,7 +172,7 @@ export async function skipClientChatAuthorization(
   storageMode: StorageMode,
   input: {
     readonly chatId: string;
-    readonly events: readonly MessageStreamEvent[];
+    readonly events: readonly SessionStreamEvent[];
     readonly session: ClientSessionState | undefined;
   },
 ) {

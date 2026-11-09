@@ -1,6 +1,6 @@
 "use client";
 
-import type { ClientSessionState, MessageStreamEvent } from "eve/client";
+import type { ClientSessionState, SessionStreamEvent } from "eve/client";
 import { chatNeedsUserInput } from "@/lib/chat/events";
 import { createFallbackTitle, DEFAULT_CHAT_TITLE } from "@/lib/chat/title";
 import type { ActiveChat, ChatListItem } from "@/lib/chat/types";
@@ -81,7 +81,7 @@ export function appendLocalChatEvent({
   eventIndex,
 }: {
   readonly chatId: string;
-  readonly event: MessageStreamEvent;
+  readonly event: SessionStreamEvent;
   readonly eventIndex: number;
 }) {
   updateChat(chatId, (chat) => {
@@ -107,7 +107,7 @@ export function saveLocalChatSnapshot({
   session,
 }: {
   readonly chatId: string;
-  readonly events: readonly MessageStreamEvent[];
+  readonly events: readonly SessionStreamEvent[];
   readonly session: ClientSessionState | undefined;
 }) {
   updateChat(chatId, (chat) => {
@@ -129,7 +129,7 @@ export function skipLocalChatAuthorization({
   session,
 }: {
   readonly chatId: string;
-  readonly events: readonly MessageStreamEvent[];
+  readonly events: readonly SessionStreamEvent[];
   readonly session: ClientSessionState | undefined;
 }) {
   const chat = updateChat(chatId, (current) => ({

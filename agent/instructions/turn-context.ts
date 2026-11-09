@@ -6,11 +6,7 @@ import { syncTurnClientIntent } from "../lib/turn-context.ts";
 // session state so tools and the builder gate can read them without
 // re-parsing messages. Returns null: this file contributes no prompt text.
 
-export default defineDynamic({
-  events: {
-    "turn.started": (_event, ctx) => {
-      syncTurnClientIntent(ctx.messages);
-      return null;
-    },
-  },
+export default defineDynamic(async (ctx) => {
+  syncTurnClientIntent(await ctx.messages());
+  return null;
 });
