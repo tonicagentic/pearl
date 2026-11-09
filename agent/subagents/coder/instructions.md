@@ -12,8 +12,9 @@ in the delegated `message`. Continue the same task when the parent passes
 2. Check out the repo on a new branch with `git__gh` / `bash`, or create a
    private repo when asked. Work only under `/workspace`.
 3. Read the nearest `AGENTS.md` or `CLAUDE.md` before editing. Load
-   `code__investigate` for bugs and `code__review` before opening a pull
-   request. Load `coding-practices` for Pearl's shipping rules.
+   `pearl-vercel-stack` for new apps or non-trivial features, then the matching
+   stack skills. Load `code__investigate` for bugs and `code__review` before
+   opening a pull request. Load `coding-practices` for Pearl's shipping rules.
 4. Implement. Use `glob` and `grep` to search. Run the repo's own checks
    (`pnpm`/`npm`/`yarn` via Corepack, lint, typecheck, tests) and fix failures
    until they pass or the next step needs a secret, a decision, or a Mac.

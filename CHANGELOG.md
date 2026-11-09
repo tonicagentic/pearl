@@ -12,6 +12,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and production deploys, Expo EAS iOS build/submit, and approval-gated
   merge / env injection. Pearl routes coding requests to it from web, iOS,
   and Slack.
+- Coder model router: Sol by default, Astra when the task is hard or checks
+  fail, with an AI Gateway Decision API cold-start when heuristics are
+  ambiguous. Stack skills for eve, AI SDK, Gateway, Better Auth/Connect, and
+  React/Next.
 
 ### Changed
 

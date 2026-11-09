@@ -1,7 +1,9 @@
 import { defineAgent, defineDynamic } from "eve";
+import { defineDynamic as defineModelDynamic } from "eve/models";
 
-import { DEFAULT_MODEL, WORKFLOW_BATCHING } from "../../agent.ts";
+import { WORKFLOW_BATCHING } from "../../agent.ts";
 import { readTurnClientIntent } from "../../lib/turn-context.ts";
+import { resolveCoderModel } from "./model-router.ts";
 
 /**
  * Coder subagent — the only coding specialist.
@@ -10,6 +12,10 @@ import { readTurnClientIntent } from "../../lib/turn-context.ts";
  * GitHub repos, opens draft PRs, deploys to the user's Vercel account, and
  * submits iOS builds through Expo EAS. Omitted in Plan mode so planning
  * cannot mutate code.
+ *
+ * Model is routed per call (Sol by default, Astra when hard or after
+ * failures) via AI Gateway — see model-router.ts. The chat picker does not
+ * retarget an in-progress coding task.
  */
 const CODER_DESCRIPTION =
   "Implement, review, and ship code for the signed-in user on their GitHub " +
@@ -26,7 +32,10 @@ function coderAgent() {
   return defineAgent({
     experimental: WORKFLOW_BATCHING,
     description: CODER_DESCRIPTION,
-    model: process.env.AGENT_MODEL_OVERRIDE?.trim() || DEFAULT_MODEL,
+    // Dynamic model is supported at runtime for the child session. The outer
+    // plan-mode omit wrapper types the return as a static-model agent; cast
+    // keeps omit + per-call routing.
+    model: defineModelDynamic(async (ctx) => resolveCoderModel(ctx)),
   });
 }
 
@@ -34,5 +43,5 @@ export default defineDynamic(async (ctx) => {
   if (readTurnClientIntent(await ctx.messages()).mode === "plan") {
     return null;
   }
-  return coderAgent();
+  return coderAgent() as ReturnType<typeof coderAgent>;
 });
