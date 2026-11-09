@@ -6,6 +6,7 @@ import {
 } from "@/components/assistant-ui/elements/citation";
 import { Icon } from "@/components/ui/icon";
 import { openWebUrl } from "@/src/open-web-url";
+import { useWorkspaceOptional } from "@/src/workspace-context";
 import type { TextMessagePartProps } from "@assistant-ui/react-native";
 import * as Clipboard from "expo-clipboard";
 import { CheckIcon, CopyIcon } from "lucide-react-native";
@@ -217,6 +218,36 @@ const CodeBlock: FC<{ code: string; language: string | undefined }> = ({
 // One renderer per parse: the constructor takes the text it renders so the
 // memo that creates it stays keyed on that text under React Compiler, and the
 // key ordinal restarts with each instance.
+/** In-app opener for agent `file://` workspace links (matches web canvas). */
+function WorkspaceFileLink({
+  href,
+  children,
+  styles,
+  title,
+}: {
+  readonly href: string;
+  readonly children: string | ReactNode[];
+  readonly styles?: TextStyle;
+  readonly title?: string;
+}) {
+  const workspace = useWorkspaceOptional();
+  const path = decodeURIComponent(href.replace(/^file:\/\//i, ""));
+
+  return (
+    <Text
+      selectable
+      accessibilityRole="link"
+      accessibilityLabel={title || `Open ${path}`}
+      onPress={() => {
+        void workspace?.openPath(path);
+      }}
+      style={styles}
+    >
+      {children}
+    </Text>
+  );
+}
+
 class MarkdownRenderer extends Renderer {
   keyIndex = 0;
 
@@ -263,6 +294,20 @@ class MarkdownRenderer extends Renderer {
         >
           {children}
         </Text>
+      );
+    }
+    // Agent deliverables use file:// (see agent/instructions.md); open in
+    // the mobile workspace instead of Linking.openURL (which does nothing).
+    if (/^file:\/\//i.test(href)) {
+      return (
+        <WorkspaceFileLink
+          key={this.getKey()}
+          href={href}
+          styles={styles}
+          title={title?.trim() || undefined}
+        >
+          {children}
+        </WorkspaceFileLink>
       );
     }
     return super.link(children, href, styles, title);

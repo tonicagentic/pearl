@@ -471,13 +471,16 @@ export function ChatScreen({
 
   // Carry out (and similar) creates a chat with a durable pending marker but no
   // eve receive yet. Auto-send once when the thread is empty — never retry
-  // uncertain mid-send recoveries that already have stream events.
+  // when a session/history already exists (re-open must load, not resend).
   useEffect(() => {
     if (!pendingMessage || !activeChatId) return;
     if (status === "busy" || status === "resuming") {
       return;
     }
-    if (store.snapshot.events.length > 0) return;
+    const { events, session, messages } = store.snapshot;
+    if (events.length > 0 || messages.length > 0 || session) {
+      return;
+    }
     if (autoSentPendingFor.current === activeChatId) return;
     autoSentPendingFor.current = activeChatId;
     void store.send({
@@ -487,11 +490,15 @@ export function ChatScreen({
   }, [pendingMessage, activeChatId, status, store, activeProjectId]);
 
   const runtime = useExternalStoreRuntime(adapter);
+  const hasLoadedHistory =
+    store.snapshot.events.length > 0 ||
+    store.snapshot.messages.length > 0 ||
+    Boolean(store.snapshot.session);
   const notice = sendError?.store === store
     ? { text: sendError.message }
     : persistenceError
       ? { text: "Could not save this chat.", actionLabel: "Retry save", onAction: () => void retrySync() }
-      : pendingMessage && !localSend
+      : pendingMessage && !localSend && !hasLoadedHistory
         ? { text: "Delivery not confirmed. Check this chat before sending again." }
         : hasError && !localSend
           ? { text: "Connection interrupted. Check this chat before sending again." }

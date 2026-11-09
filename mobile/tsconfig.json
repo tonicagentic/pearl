@@ -18,6 +18,7 @@
     "../lib/browser/types.ts",
     "../lib/json-render/**/*.ts",
     "../lib/agent-todos.ts",
-    "../lib/agent-mode-context.ts"
+    "../lib/agent-mode-context.ts",
+    "../lib/design/preview-kind.ts"
   ]
 }

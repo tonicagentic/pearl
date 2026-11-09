@@ -40,7 +40,6 @@ import {
   setPendingAttachments,
   type PendingAttachmentDraft,
 } from "@/src/pending-attachments";
-
 // Match live-camera sizing so photo turns stay under the gateway body cap.
 const MAX_IMAGE_EDGE = 1280;
 const MAX_IMAGES = 4;
@@ -95,12 +94,14 @@ const useAttachmentTextPreview = () =>
     return part?.type === "text" ? part.text : undefined;
   });
 
-const useAttachmentMeta = () =>
-  useAuiState((s) => ({
-    name: s.attachment.name,
-    contentType: s.attachment.contentType,
-    type: s.attachment.type,
-  }));
+// Select primitives only — a fresh object from useAuiState fails React's
+// getSnapshot caching check and infinite-loops (see citation.tsx).
+const useAttachmentMeta = () => {
+  const name = useAuiState((s) => s.attachment.name);
+  const contentType = useAuiState((s) => s.attachment.contentType);
+  const type = useAuiState((s) => s.attachment.type);
+  return { name, contentType, type };
+};
 
 function AttachmentPreviewSheet({
   open,

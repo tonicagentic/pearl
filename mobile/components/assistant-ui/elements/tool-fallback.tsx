@@ -528,6 +528,15 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
   const preview = toolName === "write_file" && typeof args?.content === "string"
     ? { path: typeof args.filePath === "string" ? args.filePath : "Draft file", content: args.content }
     : null;
+  const generatedSvgPath =
+    toolName === "generate_svg" &&
+    result &&
+    typeof result === "object" &&
+    !Array.isArray(result) &&
+    (result as { success?: unknown }).success === true &&
+    typeof (result as { filePath?: unknown }).filePath === "string"
+      ? (result as { filePath: string }).filePath
+      : null;
   const resultSummary =
     result && typeof result === "object" && !Array.isArray(result) && typeof (result as { summary?: unknown }).summary === "string"
       ? (result as { summary: string }).summary
@@ -587,6 +596,20 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
         </View>
       )}
       {preview && <FilePreview path={preview.path} content={preview.content} />}
+      {generatedSvgPath && workspace ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${generatedSvgPath}`}
+          className="min-h-11 justify-center ps-6"
+          onPress={() => {
+            void workspace.openPath(generatedSvgPath);
+          }}
+        >
+          <Text className="text-primary text-sm" numberOfLines={1}>
+            Open {generatedSvgPath}
+          </Text>
+        </Pressable>
+      ) : null}
       {shouldRenderApproval && (
         <ToolFallbackApproval
           addResult={addResult}

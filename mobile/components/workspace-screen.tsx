@@ -11,15 +11,19 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
+import { previewKindForPath } from "../../lib/design/preview-kind";
 import { useWorkspace } from "@/src/workspace-context";
 import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
 
 type WebViewComponent = ComponentType<{
-  readonly source: { readonly uri: string };
+  readonly source: { readonly uri: string } | { readonly html: string };
   readonly style?: object;
   readonly allowsBackForwardNavigationGestures?: boolean;
   readonly sharedCookiesEnabled?: boolean;
   readonly startInLoadingState?: boolean;
+  readonly originWhitelist?: readonly string[];
+  readonly javaScriptEnabled?: boolean;
+  readonly scalesPageToFit?: boolean;
 }>;
 
 function loadWebView(): WebViewComponent | null {
@@ -32,6 +36,38 @@ function loadWebView(): WebViewComponent | null {
 
 function basename(path: string): string {
   return path.split("/").pop() || path;
+}
+
+/** Render workspace SVG as an image tree (WebView, JS off) instead of raw XML. */
+function SvgFilePreview({
+  path,
+  content,
+  WebView,
+}: {
+  readonly path: string;
+  readonly content: string;
+  readonly WebView: WebViewComponent | null;
+}) {
+  if (!WebView) {
+    return (
+      <ScrollView className="flex-1 px-4 py-3">
+        <Text className="text-muted-foreground mb-2 text-xs">{path}</Text>
+        <Text selectable className="text-foreground text-sm leading-6">
+          {content}
+        </Text>
+      </ScrollView>
+    );
+  }
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><style>html,body{margin:0;padding:24px;background:#fff;min-height:100%;display:flex;align-items:center;justify-content:center;}svg{max-width:100%;height:auto;}</style></head><body>${content}</body></html>`;
+  return (
+    <WebView
+      source={{ html }}
+      style={{ flex: 1, backgroundColor: "#fff" }}
+      originWhitelist={["*"]}
+      javaScriptEnabled={false}
+      scalesPageToFit
+    />
+  );
 }
 
 /**
@@ -199,14 +235,22 @@ export function WorkspaceScreen() {
             </View>
           )
         ) : active?.kind === "file" ? (
-          <ScrollView className="flex-1 px-4 py-3">
-            <Text className="text-muted-foreground mb-2 text-xs">
-              {active.path}
-            </Text>
-            <Text selectable className="text-foreground text-sm leading-6">
-              {active.content}
-            </Text>
-          </ScrollView>
+          previewKindForPath(active.path) === "svg" ? (
+            <SvgFilePreview
+              path={active.path}
+              content={active.content}
+              WebView={WebView}
+            />
+          ) : (
+            <ScrollView className="flex-1 px-4 py-3">
+              <Text className="text-muted-foreground mb-2 text-xs">
+                {active.path}
+              </Text>
+              <Text selectable className="text-foreground text-sm leading-6">
+                {active.content}
+              </Text>
+            </ScrollView>
+          )
         ) : null}
       </View>
     </View>

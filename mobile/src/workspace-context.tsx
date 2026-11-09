@@ -36,6 +36,8 @@ type WorkspaceContextValue = {
     readonly content: string;
     readonly version?: number;
   }) => void;
+  /** Open a workspace path; fetches chat file content when not provided. */
+  openPath: (path: string, content?: string) => Promise<void>;
   openBrowserPages: (pages: readonly BrowserTabInfo[]) => void;
   selectWorkspaceTab: (tabId: string) => void;
   closeWorkspaceTab: (tabId: string) => void;
@@ -80,6 +82,40 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       );
     },
     [],
+  );
+
+  const openPath = useCallback(
+    async (path: string, content?: string) => {
+      if (content !== undefined) {
+        openFile({ path, content });
+        return;
+      }
+      if (!chatId) return;
+      try {
+        const listRes = await fetch(
+          `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/files`,
+          { headers: authHeaders() },
+        );
+        if (!listRes.ok) return;
+        const list = (await listRes.json()) as {
+          files?: readonly { id: string; path: string }[];
+        };
+        const file = list.files?.find(
+          (f) => f.path === path || f.path.endsWith(`/${path}`),
+        );
+        if (!file) return;
+        const textRes = await fetch(
+          `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/files?fileId=${encodeURIComponent(file.id)}`,
+          { headers: authHeaders() },
+        );
+        if (!textRes.ok) return;
+        const text = await textRes.text();
+        openFile({ id: `file:${file.id}`, path: file.path, content: text });
+      } catch {
+        // Leave the workspace as it is when the file cannot be fetched.
+      }
+    },
+    [chatId, openFile],
   );
 
   const openBrowserPages = useCallback((pages: readonly BrowserTabInfo[]) => {
@@ -133,6 +169,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       viewUrl,
       chatId,
       openFile,
+      openPath,
       openBrowserPages,
       selectWorkspaceTab,
       closeWorkspaceTab,
@@ -147,6 +184,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       viewUrl,
       chatId,
       openFile,
+      openPath,
       openBrowserPages,
       selectWorkspaceTab,
       closeWorkspaceTab,

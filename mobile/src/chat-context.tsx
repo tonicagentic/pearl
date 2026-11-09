@@ -383,7 +383,15 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         setActiveTitle(binding.title);
         activeProjectIdRef.current = binding.projectId;
         setActiveProjectIdState(binding.projectId);
-        setPendingMessage(binding.pendingMessage);
+        // Pending is only for empty "Carry out" chats. If this store already
+        // has a session/history, reopening must resume — never resend.
+        const hasHistory =
+          Boolean(retained.snapshot.session) ||
+          retained.snapshot.events.length > 0 ||
+          retained.snapshot.messages.length > 0;
+        const pending = hasHistory ? null : binding.pendingMessage;
+        if (hasHistory) binding.pendingMessage = null;
+        setPendingMessage(pending);
         setPersistenceError(binding.syncFailed ? "Save failed" : null);
         setStore(retained);
         pruneIdleStore(prior);
@@ -400,7 +408,12 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         // The server scopes the pending marker to its turn timestamp and clears
         // it after a settled event or snapshot. Matching text here could mistake
         // an older identical message for confirmation of this uncertain turn.
-        const stillPending = chat.pendingUserMessage;
+        // If a session or events already exist, treat pending as stale — the
+        // user is reopening history, not completing a Carry-out handoff.
+        const hasHistory =
+          Boolean(chat.session) || chat.events.length > 0;
+        const stillPending =
+          hasHistory ? null : chat.pendingUserMessage;
         bindings.get(nextStore)!.pendingMessage = stillPending;
         const prior = activeStoreRef.current;
         activeStoreRef.current = nextStore;
