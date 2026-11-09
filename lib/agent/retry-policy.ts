@@ -111,6 +111,12 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     1,
     "Starts a billed image generation and Blob upload; a blind retry would double the spend and the object — retry only after a status check.",
   ),
+  generate_svg: policy(
+    false,
+    [],
+    1,
+    "Starts a billed Quiver Arrow text-to-SVG call and workspace write; a blind retry would double the spend and the file — retry only after a status check.",
+  ),
   render_design: policy(
     false,
     [],

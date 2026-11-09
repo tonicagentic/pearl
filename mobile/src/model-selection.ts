@@ -81,6 +81,23 @@ export const IMAGE_MODELS: readonly ComposerModel[] = IMAGE_MODEL_SECTION.models
 
 export const DEFAULT_IMAGE_MODEL_KEY = IMAGE_MODELS[0].key;
 
+// Vector models are a third radio group for generate_svg. Keys match
+// agent/model-selection.ts. Selecting one must not replace chat or image.
+export const VECTOR_MODEL_SECTION: ComposerModelSection = {
+  id: "vector",
+  title: "Vector",
+  description: "Used by generate_svg for logos, icons, and vector art.",
+  models: [
+    { key: "arrow-2", label: "Arrow 2", company: "QuiverAI" },
+    { key: "arrow-2-telos", label: "Arrow 2 Telos", company: "QuiverAI" },
+  ],
+};
+
+export const VECTOR_MODELS: readonly ComposerModel[] =
+  VECTOR_MODEL_SECTION.models;
+
+export const DEFAULT_VECTOR_MODEL_KEY = VECTOR_MODELS[0].key;
+
 let selectedKey = DEFAULT_MODEL_KEY;
 let selectionRevision = 0;
 let saveSelection: ((key: string) => Promise<void>) | undefined;
@@ -174,10 +191,65 @@ export function subscribeImageModelSelection(
   };
 }
 
-/** Ephemeral clientContext markers for chat + image model pickers. */
+let selectedVectorKey = DEFAULT_VECTOR_MODEL_KEY;
+let vectorSelectionRevision = 0;
+let saveVectorSelection: ((key: string) => Promise<void>) | undefined;
+const vectorListeners = new Set<() => void>();
+
+export function configureVectorModelSelectionPersistence(
+  save: (key: string) => Promise<void>,
+): void {
+  saveVectorSelection = save;
+}
+
+export async function restoreVectorModelSelection(
+  load: () => Promise<string | null>,
+): Promise<void> {
+  const revision = vectorSelectionRevision;
+  const saved = await load();
+  if (
+    revision !== vectorSelectionRevision ||
+    !saved ||
+    !VECTOR_MODELS.some((model) => model.key === saved)
+  ) {
+    return;
+  }
+  if (selectedVectorKey === saved) return;
+  selectedVectorKey = saved;
+  for (const listener of vectorListeners) listener();
+}
+
+export function getVectorModelSelection(): string {
+  return selectedVectorKey;
+}
+
+export function setVectorModelSelection(key: string): Promise<void> {
+  if (!VECTOR_MODELS.some((model) => model.key === key)) {
+    return Promise.resolve();
+  }
+  vectorSelectionRevision++;
+  if (key === selectedVectorKey) {
+    return saveVectorSelection?.(key) ?? Promise.resolve();
+  }
+  selectedVectorKey = key;
+  for (const listener of vectorListeners) listener();
+  return saveVectorSelection?.(key) ?? Promise.resolve();
+}
+
+export function subscribeVectorModelSelection(
+  listener: () => void,
+): () => void {
+  vectorListeners.add(listener);
+  return () => {
+    vectorListeners.delete(listener);
+  };
+}
+
+/** Ephemeral clientContext markers for chat + image + vector model pickers. */
 export function modelClientContext(): Record<string, string> {
   return {
     eveModelSelection: getModelSelection(),
     eveImageModelSelection: getImageModelSelection(),
+    eveVectorModelSelection: getVectorModelSelection(),
   };
 }

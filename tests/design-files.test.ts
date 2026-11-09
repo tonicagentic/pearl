@@ -9,6 +9,12 @@ import {
 import { previewKindForPath } from "../lib/design/preview-kind.ts";
 import { wrapMermaidAsSvgFixture } from "../lib/design/render.ts";
 import { parseDesignScene } from "../lib/design/scene.ts";
+import {
+  extractSvgDocument,
+  prepareSvgDocument,
+  sanitizeSvgDocument,
+  workspaceSvgPath,
+} from "../lib/design/svg.ts";
 
 describe("design file helpers", () => {
   it("detects design extensions and skips prose content types", () => {
@@ -47,6 +53,53 @@ describe("design file helpers", () => {
     const svg = wrapMermaidAsSvgFixture("flowchart LR\n  a-->b");
     assert.match(svg, /^<svg /);
     assert.match(svg, /flowchart LR/);
+  });
+});
+
+describe("svg extract and sanitize", () => {
+  it("extracts the first SVG document from model prose", () => {
+    const text =
+      "Here you go:\n```svg\n<svg viewBox=\"0 0 24 24\"><circle cx=\"12\" cy=\"12\" r=\"8\"/></svg>\n```\nDone.";
+    const extracted = extractSvgDocument(text);
+    assert.equal(
+      extracted,
+      '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>',
+    );
+  });
+
+  it("returns null when no SVG document is present", () => {
+    assert.equal(extractSvgDocument("no graphics here"), null);
+    assert.equal(prepareSvgDocument("still nothing"), null);
+  });
+
+  it("strips script, foreignObject, handlers, and javascript URLs", () => {
+    const dirty =
+      '<svg viewBox="0 0 10 10">' +
+      '<script>alert(1)</script>' +
+      '<foreignObject width="10" height="10"><div xmlns="http://www.w3.org/1999/xhtml">x</div></foreignObject>' +
+      '<a href="javascript:alert(1)" onclick="evil()"><circle cx="5" cy="5" r="2"/></a>' +
+      "</svg>";
+    const clean = sanitizeSvgDocument(dirty);
+    assert.equal(/<script/i.test(clean), false);
+    assert.equal(/foreignObject/i.test(clean), false);
+    assert.equal(/onclick/i.test(clean), false);
+    assert.equal(/javascript:/i.test(clean), false);
+    assert.match(clean, /<circle/);
+  });
+
+  it("prepareSvgDocument extracts then sanitizes", () => {
+    const prepared = prepareSvgDocument(
+      'prefix <svg><script>x</script><rect width="1" height="1"/></svg> suffix',
+    );
+    assert.ok(prepared);
+    assert.equal(/script/i.test(prepared!), false);
+    assert.match(prepared!, /<rect/);
+  });
+
+  it("normalizes workspace SVG paths", () => {
+    assert.equal(workspaceSvgPath("mark"), "/workspace/mark.svg");
+    assert.equal(workspaceSvgPath("/workspace/logo.svg"), "/workspace/logo.svg");
+    assert.equal(workspaceSvgPath("workspace/icon"), "/workspace/icon.svg");
   });
 });
 

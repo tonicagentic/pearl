@@ -5,12 +5,17 @@ import {
   DEFAULT_MODEL,
   CLIENT_MODEL_KEYS,
   CLIENT_IMAGE_MODEL_KEYS,
+  CLIENT_VECTOR_MODEL_KEYS,
   DEFAULT_IMAGE_MODEL,
+  DEFAULT_VECTOR_MODEL,
   IMAGE_MODEL_SELECTION_MARKER,
   MODEL_SELECTION_MARKER,
+  VECTOR_MODEL_SELECTION_MARKER,
   readClientImageModelSelection,
   readClientModelSelection,
+  readClientVectorModelSelection,
   resolveImageModelForTurn,
+  resolveVectorModelForTurn,
 } from "../agent/model-selection.ts";
 import { resolveModelForStep } from "../agent/agent.ts";
 import {
@@ -18,14 +23,18 @@ import {
   COMPOSER_MODEL_SECTIONS as WEB_SECTIONS,
   DEFAULT_IMAGE_MODEL_KEY as WEB_DEFAULT_IMAGE_KEY,
   DEFAULT_MODEL_KEY as WEB_DEFAULT_KEY,
+  DEFAULT_VECTOR_MODEL_KEY as WEB_DEFAULT_VECTOR_KEY,
   IMAGE_MODELS as WEB_IMAGE_MODELS,
+  VECTOR_MODELS as WEB_VECTOR_MODELS,
 } from "../app/_components/model-selection.ts";
 import {
   COMPOSER_MODELS as MOBILE_MODELS,
   COMPOSER_MODEL_SECTIONS as MOBILE_SECTIONS,
   DEFAULT_IMAGE_MODEL_KEY as MOBILE_DEFAULT_IMAGE_KEY,
   DEFAULT_MODEL_KEY as MOBILE_DEFAULT_KEY,
+  DEFAULT_VECTOR_MODEL_KEY as MOBILE_DEFAULT_VECTOR_KEY,
   IMAGE_MODELS as MOBILE_IMAGE_MODELS,
+  VECTOR_MODELS as MOBILE_VECTOR_MODELS,
 } from "../mobile/src/model-selection.ts";
 
 // eve wraps a JSON-object clientContext as an ephemeral framework user message
@@ -206,6 +215,20 @@ describe("composer model lists", () => {
       assert.equal(key in CLIENT_MODEL_KEYS, false);
     }
   });
+
+  it("keeps vector models on a separate allowlist from chat and image models", () => {
+    assert.equal(WEB_DEFAULT_VECTOR_KEY, "arrow-2");
+    assert.equal(MOBILE_DEFAULT_VECTOR_KEY, WEB_DEFAULT_VECTOR_KEY);
+    assert.deepEqual(MOBILE_VECTOR_MODELS, WEB_VECTOR_MODELS);
+    assert.deepEqual(
+      WEB_VECTOR_MODELS.map((model) => model.key).sort(),
+      Object.keys(CLIENT_VECTOR_MODEL_KEYS).sort(),
+    );
+    for (const key of Object.keys(CLIENT_VECTOR_MODEL_KEYS)) {
+      assert.equal(key in CLIENT_MODEL_KEYS, false);
+      assert.equal(key in CLIENT_IMAGE_MODEL_KEYS, false);
+    }
+  });
 });
 
 describe("readClientImageModelSelection", () => {
@@ -232,6 +255,42 @@ describe("readClientImageModelSelection", () => {
   it("ignores chat-model keys sent as image selection", () => {
     assert.equal(
       readClientImageModelSelection([imageMarkerMessage("gpt-6.1-sol")]),
+      undefined,
+    );
+  });
+});
+
+describe("readClientVectorModelSelection", () => {
+  function vectorMarkerMessage(key: string) {
+    return {
+      role: "user",
+      kind: "context.instruction",
+      content: `Client context:\n${JSON.stringify({ [VECTOR_MODEL_SELECTION_MARKER]: key })}`,
+    };
+  }
+
+  it("maps allowlisted vector keys and falls back to the default", () => {
+    for (const [key, model] of Object.entries(CLIENT_VECTOR_MODEL_KEYS)) {
+      assert.equal(
+        readClientVectorModelSelection([vectorMarkerMessage(key)]),
+        model,
+      );
+    }
+    assert.equal(readClientVectorModelSelection([]), undefined);
+    assert.equal(resolveVectorModelForTurn([]), DEFAULT_VECTOR_MODEL);
+    assert.equal(
+      resolveVectorModelForTurn([vectorMarkerMessage("not-a-model")]),
+      DEFAULT_VECTOR_MODEL,
+    );
+  });
+
+  it("ignores chat and image keys sent as vector selection", () => {
+    assert.equal(
+      readClientVectorModelSelection([vectorMarkerMessage("gpt-6.1-sol")]),
+      undefined,
+    );
+    assert.equal(
+      readClientVectorModelSelection([vectorMarkerMessage("gpt-image-1")]),
       undefined,
     );
   });

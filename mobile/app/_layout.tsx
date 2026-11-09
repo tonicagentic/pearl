@@ -13,14 +13,18 @@ import { ChatsProvider } from "@/src/chat-context";
 import {
   configureImageModelSelectionPersistence,
   configureModelSelectionPersistence,
+  configureVectorModelSelectionPersistence,
   restoreImageModelSelection,
   restoreModelSelection,
+  restoreVectorModelSelection,
 } from "@/src/model-selection";
 import {
   loadSavedImageModelSelection,
   loadSavedModelSelection,
+  loadSavedVectorModelSelection,
   saveImageModelSelection,
   saveModelSelection,
+  saveVectorModelSelection,
 } from "@/src/model-preferences";
 import { WorkspaceProvider } from "@/src/workspace-context";
 
@@ -34,8 +38,10 @@ function AuthenticatedLayout() {
   useEffect(() => {
     configureModelSelectionPersistence(saveModelSelection);
     configureImageModelSelectionPersistence(saveImageModelSelection);
+    configureVectorModelSelectionPersistence(saveVectorModelSelection);
     void restoreModelSelection(loadSavedModelSelection).catch(() => {});
     void restoreImageModelSelection(loadSavedImageModelSelection).catch(() => {});
+    void restoreVectorModelSelection(loadSavedVectorModelSelection).catch(() => {});
   }, []);
   // Dispose in-memory chat state whenever an account signs out or changes.
   const accountKey = signedIn ? `account:${viewerEmail}` : "signed-out";

@@ -83,6 +83,23 @@ export const IMAGE_MODELS: readonly ComposerModel[] = IMAGE_MODEL_SECTION.models
 
 export const DEFAULT_IMAGE_MODEL_KEY = IMAGE_MODELS[0].key;
 
+// Vector models are a third radio group for generate_svg. Keys match
+// agent/model-selection.ts. Selecting one must not replace chat or image.
+export const VECTOR_MODEL_SECTION: ComposerModelSection = {
+  id: "vector",
+  title: "Vector",
+  description: "Used by generate_svg for logos, icons, and vector art.",
+  models: [
+    { key: "arrow-2", label: "Arrow 2", company: "QuiverAI" },
+    { key: "arrow-2-telos", label: "Arrow 2 Telos", company: "QuiverAI" },
+  ],
+};
+
+export const VECTOR_MODELS: readonly ComposerModel[] =
+  VECTOR_MODEL_SECTION.models;
+
+export const DEFAULT_VECTOR_MODEL_KEY = VECTOR_MODELS[0].key;
+
 let selectedKey = DEFAULT_MODEL_KEY;
 const listeners = new Set<() => void>();
 
@@ -124,5 +141,28 @@ export function subscribeImageModelSelection(
   imageListeners.add(listener);
   return () => {
     imageListeners.delete(listener);
+  };
+}
+
+let selectedVectorKey = DEFAULT_VECTOR_MODEL_KEY;
+const vectorListeners = new Set<() => void>();
+
+export function getVectorModelSelection(): string {
+  return selectedVectorKey;
+}
+
+export function setVectorModelSelection(key: string): void {
+  if (!VECTOR_MODELS.some((model) => model.key === key)) return;
+  if (key === selectedVectorKey) return;
+  selectedVectorKey = key;
+  for (const listener of vectorListeners) listener();
+}
+
+export function subscribeVectorModelSelection(
+  listener: () => void,
+): () => void {
+  vectorListeners.add(listener);
+  return () => {
+    vectorListeners.delete(listener);
   };
 }

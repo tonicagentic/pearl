@@ -42,6 +42,21 @@ export type ClientImageModelKey = keyof typeof CLIENT_IMAGE_MODEL_KEYS;
 
 export const IMAGE_MODEL_SELECTION_MARKER = "eveImageModelSelection";
 
+// Vector (text-to-SVG) models for generate_svg. Separate allowlist from chat
+// and raster image models. Arrow runs as gateway chat models without the US /
+// ZDR / no-training filters — Quiver is not a ZDR provider — so these ids must
+// never be selectable as the reply model.
+export const DEFAULT_VECTOR_MODEL = "quiverai/arrow-2";
+
+export const CLIENT_VECTOR_MODEL_KEYS = {
+  "arrow-2": "quiverai/arrow-2",
+  "arrow-2-telos": "quiverai/arrow-2-telos",
+} as const;
+
+export type ClientVectorModelKey = keyof typeof CLIENT_VECTOR_MODEL_KEYS;
+
+export const VECTOR_MODEL_SELECTION_MARKER = "eveVectorModelSelection";
+
 interface ScannedMessage {
   role: string;
   content: unknown;
@@ -137,4 +152,22 @@ export function resolveImageModelForTurn(
   messages: readonly ScannedMessage[],
 ): string {
   return readClientImageModelSelection(messages) ?? DEFAULT_IMAGE_MODEL;
+}
+
+/** Gateway vector-model id from clientContext, or undefined when absent/unknown. */
+export function readClientVectorModelSelection(
+  messages: readonly ScannedMessage[],
+): string | undefined {
+  return readAllowlistedMarker(
+    messages,
+    VECTOR_MODEL_SELECTION_MARKER,
+    CLIENT_VECTOR_MODEL_KEYS,
+  );
+}
+
+/** Resolve the vector model for generate_svg (allowlist → default). */
+export function resolveVectorModelForTurn(
+  messages: readonly ScannedMessage[],
+): string {
+  return readClientVectorModelSelection(messages) ?? DEFAULT_VECTOR_MODEL;
 }

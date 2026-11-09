@@ -9,12 +9,17 @@ import {
   COMPOSER_MODEL_SECTIONS,
   getImageModelSelection,
   getModelSelection,
+  getVectorModelSelection,
   IMAGE_MODEL_SECTION,
   IMAGE_MODELS,
   setImageModelSelection,
   setModelSelection,
+  setVectorModelSelection,
   subscribeImageModelSelection,
   subscribeModelSelection,
+  subscribeVectorModelSelection,
+  VECTOR_MODEL_SECTION,
+  VECTOR_MODELS,
   type ComposerModel,
   type ComposerModelSection,
 } from "@/app/_components/model-selection";
@@ -25,8 +30,8 @@ import {
 // switch it. The trigger and menu are fully controlled — neither closes
 // itself, so outside pointer-downs and Escape are handled here.
 //
-// Chat models and image models are separate radio groups so picking an image
-// model never replaces the model that writes replies.
+// Chat, image, and vector models are separate radio groups so picking an
+// image or vector model never replaces the model that writes replies.
 export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }) {
   const selectedKey = useSyncExternalStore(
     subscribeModelSelection,
@@ -39,6 +44,11 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
     subscribeImageModelSelection,
     getImageModelSelection,
     getImageModelSelection,
+  );
+  const selectedVectorKey = useSyncExternalStore(
+    subscribeVectorModelSelection,
+    getVectorModelSelection,
+    getVectorModelSelection,
   );
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -65,6 +75,9 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
   const selectedImage =
     IMAGE_MODELS.find((model) => model.key === selectedImageKey) ??
     IMAGE_MODELS[0];
+  const selectedVector =
+    VECTOR_MODELS.find((model) => model.key === selectedVectorKey) ??
+    VECTOR_MODELS[0];
 
   return (
     <div ref={rootRef} className="relative">
@@ -72,7 +85,7 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
         type="button"
         aria-expanded={open}
         aria-haspopup="listbox"
-        aria-label={`Model: ${selected.label}; Image: ${selectedImage.label}`}
+        aria-label={`Model: ${selected.label}; Image: ${selectedImage.label}; Vector: ${selectedVector.label}`}
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
         className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
@@ -106,6 +119,14 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
             sectionIndex={COMPOSER_MODEL_SECTIONS.length}
             onSelect={(key) => {
               setImageModelSelection(key);
+            }}
+          />
+          <ModelSection
+            section={VECTOR_MODEL_SECTION}
+            selectedKey={selectedVector.key}
+            sectionIndex={COMPOSER_MODEL_SECTIONS.length + 1}
+            onSelect={(key) => {
+              setVectorModelSelection(key);
             }}
           />
         </div>

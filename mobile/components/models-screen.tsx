@@ -6,19 +6,23 @@ import {
   COMPOSER_MODEL_SECTIONS,
   getImageModelSelection,
   getModelSelection,
+  getVectorModelSelection,
   IMAGE_MODEL_SECTION,
   setImageModelSelection,
   setModelSelection,
+  setVectorModelSelection,
   subscribeImageModelSelection,
   subscribeModelSelection,
+  subscribeVectorModelSelection,
+  VECTOR_MODEL_SECTION,
   type ComposerModel,
   type ComposerModelSection,
 } from "@/src/model-selection";
 
 /**
  * Default model picker. Models power each inference call; Pearl the agent
- * still decides which tools to use and how to loop across steps. Image models
- * are a separate radio group for generate_image.
+ * still decides which tools to use and how to loop across steps. Image and
+ * vector models are separate radio groups for generate_image / generate_svg.
  */
 export function ModelsScreen() {
   const [saving, setSaving] = useState(false);
@@ -32,6 +36,11 @@ export function ModelsScreen() {
     subscribeImageModelSelection,
     getImageModelSelection,
     getImageModelSelection,
+  );
+  const selectedVectorKey = useSyncExternalStore(
+    subscribeVectorModelSelection,
+    getVectorModelSelection,
+    getVectorModelSelection,
   );
 
   const selectModel = (key: string) => {
@@ -50,6 +59,17 @@ export function ModelsScreen() {
     setSaving(true);
     setSaveError(null);
     void setImageModelSelection(key)
+      .catch(() => {
+        setSaveError("Couldn't save this choice. Tap it again to retry.");
+      })
+      .finally(() => setSaving(false));
+  };
+
+  const selectVectorModel = (key: string) => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
+    void setVectorModelSelection(key)
       .catch(() => {
         setSaveError("Couldn't save this choice. Tap it again to retry.");
       })
@@ -82,6 +102,13 @@ export function ModelsScreen() {
         selectedKey={selectedImageKey}
         saving={saving}
         onSelect={selectImageModel}
+      />
+
+      <ModelSection
+        section={VECTOR_MODEL_SECTION}
+        selectedKey={selectedVectorKey}
+        saving={saving}
+        onSelect={selectVectorModel}
       />
 
       {saveError ? (

@@ -7,7 +7,9 @@ import {
 } from "@/lib/agent-mode-context";
 import {
   DEFAULT_IMAGE_MODEL,
+  DEFAULT_VECTOR_MODEL,
   resolveImageModelForTurn,
+  resolveVectorModelForTurn,
 } from "../model-selection.ts";
 
 export { MODE_MARKER, PROJECT_ID_MARKER, type AgentMode };
@@ -16,11 +18,13 @@ export { MODE_MARKER, PROJECT_ID_MARKER, type AgentMode };
 // chat is attached to. The composer sends these as untrusted clientContext;
 // resolvers and tools re-verify ownership before acting on a projectId.
 // imageModelId is the allowlisted gateway id for generate_image.
+// vectorModelId is the allowlisted gateway id for generate_svg.
 
 export type TurnClientIntent = {
   readonly mode: AgentMode;
   readonly projectId: string | null;
   readonly imageModelId: string;
+  readonly vectorModelId: string;
 };
 
 export const turnClientIntent = defineState(
@@ -29,6 +33,7 @@ export const turnClientIntent = defineState(
     mode: "agent",
     projectId: null,
     imageModelId: DEFAULT_IMAGE_MODEL,
+    vectorModelId: DEFAULT_VECTOR_MODEL,
   }),
 );
 
@@ -88,7 +93,7 @@ function readMarker(
   return undefined;
 }
 
-/** Parse mode + projectId + image model from ephemeral clientContext messages. */
+/** Parse mode + projectId + image/vector models from ephemeral clientContext. */
 export function readTurnClientIntent(
   messages: readonly ScannedMessage[],
 ): TurnClientIntent {
@@ -98,12 +103,20 @@ export function readTurnClientIntent(
   const imageModelId = resolveImageModelForTurn(
     messages as Parameters<typeof resolveImageModelForTurn>[0],
   );
-  return { mode, projectId, imageModelId };
+  const vectorModelId = resolveVectorModelForTurn(
+    messages as Parameters<typeof resolveVectorModelForTurn>[0],
+  );
+  return { mode, projectId, imageModelId, vectorModelId };
 }
 
 /** Allowlisted gateway image-model id for the current turn. */
 export function currentImageModelId(): string {
   return turnClientIntent.get().imageModelId || DEFAULT_IMAGE_MODEL;
+}
+
+/** Allowlisted gateway vector-model id for the current turn. */
+export function currentVectorModelId(): string {
+  return turnClientIntent.get().vectorModelId || DEFAULT_VECTOR_MODEL;
 }
 
 export function syncTurnClientIntent(

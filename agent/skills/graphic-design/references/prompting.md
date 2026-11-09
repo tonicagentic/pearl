@@ -2,11 +2,22 @@
 
 ## When to use SVG
 
-- Logos, marks, icons, simple posters, diagrams with fixed geometry.
+- Logos, marks, icons, simple posters, diagrams with fixed geometry — via
+  `logo-design`, `icon-design`, or `vector-graphics` + `generate_svg` /
+  `write_file`.
 - Anything that must resize cleanly or stay editable as code.
 
 Keep a single root `<svg>` with `viewBox`, explicit `width`/`height` only when
 the export size matters, and accessible titles when useful.
+
+## When to use `generate_svg`
+
+- Editable vector marks, icons, and flat illustrations after loading
+  `vector-graphics`.
+- The tool uses the Vector model from Models settings; do not invent a model
+  id.
+- Prompt with subject, use and size, style, hex palette, composition, include,
+  and avoid.
 
 ## When to use `generate_image`
 
@@ -15,7 +26,7 @@ the export size matters, and accessible titles when useful.
 - The tool uses the image model selected in Models settings; do not invent a
   model id.
 
-## Prompt anatomy
+## Prompt anatomy (pictorial)
 
 1. Subject and action.
 2. Composition (framing, negative space, camera or layout).

@@ -32,9 +32,12 @@ import {
   COMPOSER_MODELS,
   DEFAULT_IMAGE_MODEL_KEY,
   DEFAULT_MODEL_KEY,
+  DEFAULT_VECTOR_MODEL_KEY,
   getImageModelSelection,
   getModelSelection,
+  getVectorModelSelection,
   IMAGE_MODELS,
+  VECTOR_MODELS,
 } from "@/app/_components/model-selection";
 import { ProjectPickerDialog } from "@/app/_components/project-picker-dialog";
 import { attachChatToProjectAction } from "@/app/actions/projects";
@@ -528,6 +531,9 @@ export function AssistantChatSurface({
         const selectedImage = IMAGE_MODELS.find(
           (model) => model.key === getImageModelSelection(),
         );
+        const selectedVector = VECTOR_MODELS.find(
+          (model) => model.key === getVectorModelSelection(),
+        );
         const clientContext: Record<string, string> = {
           [MODE_MARKER]: mode,
         };
@@ -539,6 +545,9 @@ export function AssistantChatSurface({
         }
         if (selectedImage && selectedImage.key !== DEFAULT_IMAGE_MODEL_KEY) {
           clientContext.eveImageModelSelection = selectedImage.key;
+        }
+        if (selectedVector && selectedVector.key !== DEFAULT_VECTOR_MODEL_KEY) {
+          clientContext.eveVectorModelSelection = selectedVector.key;
         }
         return {
           ...input,

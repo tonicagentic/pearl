@@ -11,10 +11,17 @@ the answer changes the deliverable.
 Then load the matching field skill and produce the artifact:
 
 - Print piece, poster layout, or PDF → `print-design`
-- Logo, mark, social graphic, illustration → `graphic-design`
+- Logo, mark, wordmark, or lockup → `logo-design`
+- Icon or icon family → `icon-design`
+- Illustration or editorial art → `illustration-design`
+- Social graphic or mixed graphic → `graphic-design`
 - Website or page mockup → `web-design`
 - Flow, sequence, architecture, or spatial diagram → `diagrams`
 - Orbitable 3D scene → `3d-design`
+
+Load `design-principles` when art direction or critique is the job. Load
+`vector-graphics` before `generate_svg` (logo, icon, and illustration skills
+point there).
 
 If several media are in play, pick the primary deliverable first; satellite
 assets follow after that one lands.
