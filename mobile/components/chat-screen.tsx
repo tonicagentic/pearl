@@ -43,8 +43,10 @@ import { EveAuthorization } from "@/components/assistant-ui/elements/authorizati
 import { FloatingChatNavigation } from "@/components/floating-chat-navigation";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { WorkspaceScreen } from "@/components/workspace-screen";
-import { getModelSelection } from "@/src/model-selection";
+import { ProjectPickerModal } from "@/components/project-picker-modal";
+import { getAgentMode } from "@/src/agent-mode";
 import { withPendingAssistant } from "@/src/stream-presentation";
+import { buildTurnClientContext } from "@/src/turn-client-context";
 import { useWorkspace } from "@/src/workspace-context";
 import {
   getPendingApprovals,
@@ -84,6 +86,8 @@ export function ChatScreen({
   const {
     store,
     activeChatId,
+    activeProjectId,
+    setActiveProjectId,
     newChatEntry,
     activeTitle,
     persistenceError,
@@ -106,10 +110,25 @@ export function ChatScreen({
   const settling = useSharedValue(false);
   const settledOpen = useRef(false);
   const pendingDestination = useRef<SidebarDestination | null>(null);
+  const projectPickWaiter = useRef<{
+    resolve: (projectId: string) => void;
+    reject: (reason?: unknown) => void;
+  } | null>(null);
+  const autoSentPendingFor = useRef<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   // A new chat chosen from History should focus only after the drawer settles.
   const [drawerFocusEntry, setDrawerFocusEntry] = useState(newChatEntry);
+
+  const ensureProjectForPlanMode = useCallback(async (): Promise<string | null> => {
+    if (getAgentMode() !== "plan") return activeProjectId;
+    if (activeProjectId) return activeProjectId;
+    return new Promise<string>((resolve, reject) => {
+      projectPickWaiter.current = { resolve, reject };
+      setProjectPickerOpen(true);
+    });
+  }, [activeProjectId]);
 
   const onDrawerSettled = useCallback((open: boolean) => {
     settling.value = false;
@@ -317,6 +336,15 @@ export function ChatScreen({
           setSendError({ store, message: reason });
           throw new MessageNotSentError(reason);
         }
+        let projectIdForTurn = activeProjectId;
+        try {
+          projectIdForTurn = await ensureProjectForPlanMode();
+          if (projectIdForTurn) setActiveProjectId(projectIdForTurn);
+        } catch {
+          const reason = "Plan mode needs a project before sending.";
+          setSendError({ store, message: reason });
+          throw new MessageNotSentError(reason);
+        }
         let turn: ReturnType<typeof toEveTurn>;
         try {
           turn = toEveTurn(message);
@@ -344,10 +372,10 @@ export function ChatScreen({
         // Light tick as the bubble appears; skip validation failures above.
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         try {
-          // Model selection is ephemeral context on the turn, not persisted UI state.
+          // Mode, project, and model ride the turn as ephemeral clientContext.
           await store.send({
             message: outgoing,
-            clientContext: { eveModelSelection: getModelSelection() },
+            clientContext: buildTurnClientContext(projectIdForTurn),
           });
           // Eve reports prepareSend failures through status/onError, not by
           // rejecting send(). Nothing went to Eve if the durable mark failed.
@@ -418,14 +446,42 @@ export function ChatScreen({
               ...(response.text ? { text: response.text } : {}),
             },
           ],
-          clientContext: { eveModelSelection: getModelSelection() },
+          clientContext: buildTurnClientContext(activeProjectId),
         });
       },
     }),
     // state and status change with the store's own updates; the adapter is
     // rebuilt whenever they change so the runtime re-syncs.
-    [store, projectedMessages, status, waitingForAction, wasSendPrepared, localSend, pendingMessage],
+    [
+      store,
+      projectedMessages,
+      status,
+      waitingForAction,
+      wasSendPrepared,
+      localSend,
+      pendingMessage,
+      activeProjectId,
+      ensureProjectForPlanMode,
+      setActiveProjectId,
+    ],
   );
+
+  // Carry out (and similar) creates a chat with a durable pending marker but no
+  // eve receive yet. Auto-send once when the thread is empty — never retry
+  // uncertain mid-send recoveries that already have stream events.
+  useEffect(() => {
+    if (!pendingMessage || !activeChatId) return;
+    if (status === "streaming" || status === "submitted" || status === "resuming") {
+      return;
+    }
+    if (store.snapshot.events.length > 0) return;
+    if (autoSentPendingFor.current === activeChatId) return;
+    autoSentPendingFor.current = activeChatId;
+    void store.send({
+      message: pendingMessage,
+      clientContext: buildTurnClientContext(activeProjectId),
+    });
+  }, [pendingMessage, activeChatId, status, store, activeProjectId]);
 
   const runtime = useExternalStoreRuntime(adapter);
   const notice = sendError?.store === store
@@ -548,9 +604,7 @@ export function ChatScreen({
                                   optionId,
                                 },
                               ],
-                              clientContext: {
-                                eveModelSelection: getModelSelection(),
-                              },
+                              clientContext: buildTurnClientContext(activeProjectId),
                             });
                           },
                         }
@@ -594,6 +648,21 @@ export function ChatScreen({
         ) : null}
         <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
         <WorkspaceScreen />
+        <ProjectPickerModal
+          open={projectPickerOpen}
+          onClose={() => {
+            setProjectPickerOpen(false);
+            const waiter = projectPickWaiter.current;
+            projectPickWaiter.current = null;
+            waiter?.reject(new Error("Project picker closed."));
+          }}
+          onSelect={(project) => {
+            setActiveProjectId(project.id);
+            const waiter = projectPickWaiter.current;
+            projectPickWaiter.current = null;
+            waiter?.resolve(project.id);
+          }}
+        />
       </View>
     </SafeAreaView>
   );

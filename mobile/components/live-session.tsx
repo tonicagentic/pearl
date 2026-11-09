@@ -46,7 +46,7 @@ import {
   type LiveVoiceMode,
 } from "@/src/live-media";
 import { fetchLiveToken } from "@/src/live-token-client";
-import { getModelSelection } from "@/src/model-selection";
+import { buildTurnClientContext } from "@/src/turn-client-context";
 import { cn } from "@/lib/utils";
 
 type Phase = "connecting" | "live" | "closed" | "error";
@@ -93,7 +93,7 @@ async function startMicStream(stream: { start: () => Promise<unknown> }) {
 }
 
 export function LiveSession({ onClose }: { readonly onClose: () => void }) {
-  const { store } = useChats();
+  const { store, activeProjectId } = useChats();
   const cameraRef = useRef<CameraView>(null);
   const onCapture = useRef<(buffer: AudioStreamBuffer) => void>(() => {});
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -231,14 +231,14 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     }
     void store.send({
       message: transcript,
-      clientContext: { eveModelSelection: getModelSelection() },
+      clientContext: buildTurnClientContext(activeProjectId),
     }).then(() => {
       onClose();
     }).catch((cause: unknown) => {
       endingRef.current = false;
       setHandoffError(cause instanceof Error ? cause.message : "Could not save the live conversation to this chat.");
     });
-  }, [onClose, stopPlayback, store]);
+  }, [onClose, stopPlayback, store, activeProjectId]);
 
   useEffect(() => {
     finishRef.current = finish;

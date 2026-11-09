@@ -3,6 +3,7 @@ import {
   ComposerAttachments,
   UserMessageAttachments,
 } from "@/components/assistant-ui/elements/attachment.aui";
+import { ComposerModePicker } from "@/components/mode-picker";
 import { ComposerModelPicker } from "@/components/model-picker";
 import {
   groupedIconButtonHitSlop,
@@ -15,6 +16,7 @@ import { Image } from "@/components/assistant-ui/elements/image";
 import { AssistantInlineText } from "@/components/json-render/chat-json-render";
 import { proseFromMessageText } from "../../../../lib/json-render/inline-spec";
 import { SessionTimeline, TIMELINE_TOOLS } from "@/components/assistant-ui/elements/session-timeline";
+import { SessionTodoList } from "@/components/assistant-ui/elements/todo-list";
 import { TaskGroup, DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
 import { ToolGroup } from "@/components/assistant-ui/elements/tool-group";
 import { AssistantThinking } from "@/components/assistant-ui/elements/assistant-thinking";
@@ -1525,6 +1527,7 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
                 preparing={preparingAttachment}
                 onPreparingChange={setPreparingAttachment}
               />
+              <ComposerModePicker disabled={preparingAttachment} />
               <ComposerModelPicker disabled={preparingAttachment} />
             </View>
             <ComposerTrailingControls
@@ -1571,7 +1574,10 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
               />
               <Animated.View pointerEvents="none" style={miniTrackStyle} />
               <Animated.View style={modelStyle} pointerEvents="box-none">
-                <ComposerModelPicker disabled={preparingAttachment} />
+                <View className="flex-row items-center gap-1">
+                  <ComposerModePicker disabled={preparingAttachment} />
+                  <ComposerModelPicker disabled={preparingAttachment} />
+                </View>
               </Animated.View>
               <Animated.View pointerEvents="none" style={endSpacerStyle} />
               <ComposerTrailingControls
@@ -1784,7 +1790,7 @@ const AssistantMessage: FC = () => {
       | undefined;
     return (
       part?.type === "reasoning" ||
-      (part?.status?.type !== "requires-action" && part?.toolName !== "write_file" && TIMELINE_TOOLS.has(part?.toolName ?? ""))
+      (part?.status?.type !== "requires-action" && part?.toolName !== "write_file" && (part?.toolName === "todo" || TIMELINE_TOOLS.has(part?.toolName ?? "")))
     );
   };
 
@@ -1793,6 +1799,7 @@ const AssistantMessage: FC = () => {
       <View className="aui-assistant-message-content gap-2">
         <AssistantThinking />
         <SessionTimeline />
+        <SessionTodoList />
         <MessageError />
         <AssistantFailure />
         <MessagePrimitive.GroupedParts groupBy={groupBy}>
@@ -1885,6 +1892,7 @@ const AssistantMessage: FC = () => {
                 // Summarized by the timeline.
                 return null;
               case "tool-call":
+                if (part.toolName === "todo") return null;
                 if (TIMELINE_TOOLS.has(part.toolName) && part.status.type !== "requires-action" && part.toolName !== "write_file") {
                   // Summarized by the timeline above.
                   return null;

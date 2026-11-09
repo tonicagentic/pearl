@@ -16,6 +16,8 @@
     "../lib/usage/**/*.ts",
     "../lib/browser/tabs.ts",
     "../lib/browser/types.ts",
-    "../lib/json-render/**/*.ts"
+    "../lib/json-render/**/*.ts",
+    "../lib/agent-todos.ts",
+    "../lib/agent-mode-context.ts"
   ]
 }

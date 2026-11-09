@@ -14,6 +14,7 @@ export type ChatListItem = {
   readonly id: string;
   readonly title: string;
   readonly updatedAt: string;
+  readonly projectId?: string | null;
   /** Parked on an approval, question, or authorization the user must answer. */
   readonly waitingForInput: boolean;
 };

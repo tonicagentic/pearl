@@ -22,6 +22,7 @@ import { createMobileMessageReducer } from "./message-reducer";
 import { pendingMessageLabel, hasPendingAction } from "./message-projection";
 import {
   appendChatEvents,
+  attachChatToProject,
   createChat,
   deleteChat as deleteChatRequest,
   getChat,
@@ -38,6 +39,9 @@ type ChatsContextValue = {
   /** The active eve store: rebuilt whenever a different chat is selected. */
   readonly store: EveAgentStore<EveMessageData>;
   readonly activeChatId: string | null;
+  /** Project linked to the active chat (Plan mode / project chats). */
+  readonly activeProjectId: string | null;
+  readonly setActiveProjectId: (projectId: string | null) => void;
   /** Advances only when the user enters a fresh chat, never during a send. */
   readonly newChatEntry: number;
   readonly activeTitle: string;
@@ -66,6 +70,7 @@ const ChatsContext = createContext<ChatsContextValue | null>(null);
 type ChatBinding = {
   id: string | null;
   title: string;
+  projectId: string | null;
   pendingMessage: string | null;
   sendPrepared: boolean;
   sendStartedAt: number | null;
@@ -95,6 +100,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const [retainedStores] = useState(() => new Map<string, EveAgentStore<EveMessageData>>());
   const activeStoreRef = useRef<EveAgentStore<EveMessageData> | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [activeProjectId, setActiveProjectIdState] = useState<string | null>(null);
+  const activeProjectIdRef = useRef<string | null>(null);
   const [newChatEntry, setNewChatEntry] = useState(0);
   const [activeTitle, setActiveTitle] = useState("New chat");
   const [chats, setChats] = useState<readonly ChatListItem[]>([]);
@@ -104,6 +111,16 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+
+  const setActiveProjectId = useCallback((projectId: string | null) => {
+    activeProjectIdRef.current = projectId;
+    setActiveProjectIdState(projectId);
+    const store = activeStoreRef.current;
+    if (store) {
+      const binding = bindings.get(store);
+      if (binding) binding.projectId = projectId;
+    }
+  }, [bindings]);
 
   const buildStore = useCallback((chat: ActiveChat | null) => {
     const store = new EveAgentStore<EveMessageData>({
@@ -125,6 +142,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     bindings.set(store, {
       id: chat?.id ?? null,
       title: chat?.title ?? "New chat",
+      projectId: chat?.projectId ?? null,
       pendingMessage: chat?.pendingUserMessage ?? null,
       sendPrepared: false,
       sendStartedAt: null,
@@ -275,23 +293,38 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         // An attachment-only turn uses a safe title/marker. Neither a
         // correlation token nor pasted document text belongs in chat metadata.
         const message = pendingMessageLabel(input.message);
+        const projectId =
+          binding.projectId ?? activeProjectIdRef.current ?? null;
         if (!binding.id) {
-          const created = await createChat(message || undefined);
+          const created = await createChat(message || undefined, projectId);
           binding.id = created.id;
+          binding.projectId = created.projectId ?? projectId;
           if (activeStoreRef.current === store) {
             activeChatIdRef.current = created.id;
             setActiveChatId(created.id);
             setActiveTitle(created.title);
+            activeProjectIdRef.current = binding.projectId;
+            setActiveProjectIdState(binding.projectId);
           }
           setChats((current) => [
             { ...created, waitingForInput: false },
             ...current.filter((chat) => chat.id !== created.id),
           ]);
-        } else if (message) {
-          // A previous turn's snapshot clears pendingUserMessage. Wait for that
-          // checkpoint before marking the new turn, or it could erase our mark.
-          await binding.queue;
-          await markPendingChatMessage(binding.id, message);
+        } else {
+          if (projectId && !binding.projectId) {
+            await attachChatToProject(binding.id, projectId);
+            binding.projectId = projectId;
+            if (activeStoreRef.current === store) {
+              activeProjectIdRef.current = projectId;
+              setActiveProjectIdState(projectId);
+            }
+          }
+          if (message) {
+            // A previous turn's snapshot clears pendingUserMessage. Wait for that
+            // checkpoint before marking the new turn, or it could erase our mark.
+            await binding.queue;
+            await markPendingChatMessage(binding.id, message);
+          }
         }
         binding.pendingMessage = message || null;
         binding.sendPrepared = true;
@@ -322,6 +355,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         activeChatIdRef.current = chatId;
         setActiveChatId(chatId);
         setActiveTitle(binding.title);
+        activeProjectIdRef.current = binding.projectId;
+        setActiveProjectIdState(binding.projectId);
         setPendingMessage(binding.pendingMessage);
         setPersistenceError(binding.syncFailed ? "Save failed" : null);
         setStore(retained);
@@ -346,6 +381,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         activeChatIdRef.current = chat.id;
         setActiveChatId(chat.id);
         setActiveTitle(chat.title);
+        activeProjectIdRef.current = chat.projectId ?? null;
+        setActiveProjectIdState(chat.projectId ?? null);
         setPendingMessage(stillPending);
         setPersistenceError(null);
         setStore(nextStore);
@@ -365,6 +402,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     ++selectionGeneration.current;
     activeChatIdRef.current = null;
     setActiveChatId(null);
+    activeProjectIdRef.current = null;
+    setActiveProjectIdState(null);
     setNewChatEntry((current) => current + 1);
     setActiveTitle("New chat");
     setPendingMessage(null);
@@ -454,6 +493,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     () => ({
       store,
       activeChatId,
+      activeProjectId,
+      setActiveProjectId,
       newChatEntry,
       activeTitle,
       chats,
@@ -474,6 +515,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     [
       store,
       activeChatId,
+      activeProjectId,
+      setActiveProjectId,
       newChatEntry,
       activeTitle,
       chats,

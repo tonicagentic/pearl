@@ -53,6 +53,7 @@ export async function listChatsPageByUser(
       id: chat.id,
       title: chat.title,
       updatedAt: chat.updatedAt,
+      projectId: chat.projectId,
     })
     .from(chat)
     .where(
@@ -81,6 +82,7 @@ export async function listChatsPageByUser(
       id: row.id,
       title: row.title,
       updatedAt: row.updatedAt.toISOString(),
+      projectId: row.projectId ?? null,
       waitingForInput: waitingByChatId.get(row.id) ?? false,
     })),
     nextCursor: hasMore && last ? encodeChatCursor(last.updatedAt, last.id) : null,
@@ -168,6 +170,7 @@ export async function createChat(
     id: row.id,
     title: row.title,
     updatedAt: row.updatedAt.toISOString(),
+    projectId: row.projectId ?? null,
     waitingForInput: false,
   };
 }

@@ -1,7 +1,7 @@
 import { Platform, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
-import { AppWindowIcon, ChevronRightIcon, InboxIcon, NetworkIcon, PlusIcon, Settings2Icon, SquarePenIcon } from "lucide-react-native";
+import { AppWindowIcon, ChevronRightIcon, FolderIcon, InboxIcon, NetworkIcon, PlusIcon, Settings2Icon, SquarePenIcon } from "lucide-react-native";
 import Animated, { interpolate, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
@@ -10,7 +10,7 @@ import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 
 /** Shared history content for the swipeable chat panel and direct-link screen. */
-export type SidebarDestination = "/areas" | "/issues" | "/apps" | "/settings";
+export type SidebarDestination = "/areas" | "/projects" | "/issues" | "/apps" | "/settings";
 
 export function HistoryScreen({
   onClose,
@@ -117,6 +117,10 @@ export function HistoryScreen({
                     <NetworkIcon className="size-5 text-foreground" />
                     <Text className="text-[17px] font-normal text-foreground">Areas</Text>
                   </Pressable>
+                  <Pressable accessibilityRole="button" className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5" onPress={() => openDestination("/projects")}>
+                    <FolderIcon className="size-5 text-foreground" />
+                    <Text className="text-[17px] font-normal text-foreground">Projects</Text>
+                  </Pressable>
                   <Pressable accessibilityRole="button" className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5" onPress={() => openDestination("/issues")}>
                     <InboxIcon className="size-5 text-foreground" />
                     <Text className="text-[17px] font-normal text-foreground">Issues</Text>
@@ -140,6 +144,10 @@ export function HistoryScreen({
                   <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/areas")}>
                     <NetworkIcon className="size-5 text-foreground" />
                     <Text className="text-base text-foreground">Areas</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/projects")}>
+                    <FolderIcon className="size-5 text-foreground" />
+                    <Text className="text-base text-foreground">Projects</Text>
                   </Pressable>
                   <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/issues")}>
                     <InboxIcon className="size-5 text-foreground" />

@@ -11,6 +11,7 @@ export type ChatListItem = {
   readonly id: string;
   readonly title: string;
   readonly updatedAt: string;
+  readonly projectId?: string | null;
   readonly waitingForInput?: boolean;
 };
 
@@ -18,6 +19,7 @@ export type ActiveChat = {
   readonly events: readonly MessageStreamEvent[];
   readonly id: string;
   readonly pendingUserMessage: string | null;
+  readonly projectId: string | null;
   readonly session: ClientSessionState | undefined;
   readonly title: string;
 };
@@ -87,11 +89,17 @@ export async function getChat(id: string): Promise<ActiveChat | null> {
 
 export async function createChat(
   pendingUserMessage?: string,
-): Promise<{ id: string; title: string; updatedAt: string }> {
+  projectId?: string | null,
+): Promise<{
+  id: string;
+  title: string;
+  updatedAt: string;
+  projectId?: string | null;
+}> {
   const response = await fetch(`${AGENT_URL}/api/chats`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ pendingUserMessage }),
+    body: JSON.stringify({ pendingUserMessage, projectId }),
   });
 
   if (!response.ok) {
@@ -101,9 +109,43 @@ export async function createChat(
     throw new Error(`Failed to create the chat (${response.status}).`);
   }
 
-  const data = (await response.json()) as { chat: { id: string; title: string; updatedAt: string } };
+  const data = (await response.json()) as {
+    chat: {
+      id: string;
+      title: string;
+      updatedAt: string;
+      projectId?: string | null;
+    };
+  };
 
   return data.chat;
+}
+
+/** Attach an existing chat to a project (Plan mode / project chats). */
+export async function attachChatToProject(
+  chatId: string,
+  projectId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}`,
+    {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({ projectId }),
+    },
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
+    const body = (await response.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    throw new Error(
+      body.error ?? `Failed to attach chat (${response.status}).`,
+    );
+  }
 }
 
 export async function appendChatEvents(

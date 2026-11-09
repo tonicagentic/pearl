@@ -44,6 +44,15 @@ function AuthenticatedLayout() {
                   }}
                 />
                 <Stack.Screen name="areas" options={{ title: "Areas" }} />
+                <Stack.Screen name="projects/index" options={{ title: "Projects" }} />
+                <Stack.Screen
+                  name="projects/[id]/index"
+                  options={{ title: "Project" }}
+                />
+                <Stack.Screen
+                  name="projects/[id]/plans/[planId]"
+                  options={{ title: "Plan" }}
+                />
                 <Stack.Screen name="issues" options={{ title: "Issues" }} />
                 <Stack.Screen name="apps/index" options={{ title: "Apps" }} />
                 <Stack.Screen

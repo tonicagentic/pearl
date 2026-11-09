@@ -31,10 +31,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     readonly pendingUserMessage?: string;
+    readonly projectId?: string | null;
   };
 
   const created = await createChatAction({
     pendingUserMessage: body.pendingUserMessage,
+    projectId: body.projectId,
   });
 
   return NextResponse.json({ chat: created });
