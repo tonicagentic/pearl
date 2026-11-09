@@ -4,19 +4,28 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_MODEL,
   CLIENT_MODEL_KEYS,
+  CLIENT_IMAGE_MODEL_KEYS,
+  DEFAULT_IMAGE_MODEL,
+  IMAGE_MODEL_SELECTION_MARKER,
   MODEL_SELECTION_MARKER,
+  readClientImageModelSelection,
   readClientModelSelection,
+  resolveImageModelForTurn,
 } from "../agent/model-selection.ts";
 import { resolveModelForStep } from "../agent/agent.ts";
 import {
   COMPOSER_MODELS as WEB_MODELS,
   COMPOSER_MODEL_SECTIONS as WEB_SECTIONS,
+  DEFAULT_IMAGE_MODEL_KEY as WEB_DEFAULT_IMAGE_KEY,
   DEFAULT_MODEL_KEY as WEB_DEFAULT_KEY,
+  IMAGE_MODELS as WEB_IMAGE_MODELS,
 } from "../app/_components/model-selection.ts";
 import {
   COMPOSER_MODELS as MOBILE_MODELS,
   COMPOSER_MODEL_SECTIONS as MOBILE_SECTIONS,
+  DEFAULT_IMAGE_MODEL_KEY as MOBILE_DEFAULT_IMAGE_KEY,
   DEFAULT_MODEL_KEY as MOBILE_DEFAULT_KEY,
+  IMAGE_MODELS as MOBILE_IMAGE_MODELS,
 } from "../mobile/src/model-selection.ts";
 
 // eve wraps a JSON-object clientContext as an ephemeral framework user message
@@ -182,6 +191,48 @@ describe("composer model lists", () => {
         (model) => model.key,
       ),
       ["gpt-6-astra", "gemini-4-argon", "muse-wonder-1.0"],
+    );
+  });
+
+  it("keeps image models on a separate allowlist from chat models", () => {
+    assert.equal(WEB_DEFAULT_IMAGE_KEY, "gpt-image-1");
+    assert.equal(MOBILE_DEFAULT_IMAGE_KEY, WEB_DEFAULT_IMAGE_KEY);
+    assert.deepEqual(MOBILE_IMAGE_MODELS, WEB_IMAGE_MODELS);
+    assert.deepEqual(
+      WEB_IMAGE_MODELS.map((model) => model.key).sort(),
+      Object.keys(CLIENT_IMAGE_MODEL_KEYS).sort(),
+    );
+    for (const key of Object.keys(CLIENT_IMAGE_MODEL_KEYS)) {
+      assert.equal(key in CLIENT_MODEL_KEYS, false);
+    }
+  });
+});
+
+describe("readClientImageModelSelection", () => {
+  function imageMarkerMessage(key: string) {
+    return {
+      role: "user",
+      kind: "context.instruction",
+      content: `Client context:\n${JSON.stringify({ [IMAGE_MODEL_SELECTION_MARKER]: key })}`,
+    };
+  }
+
+  it("maps allowlisted image keys and falls back to the default", () => {
+    for (const [key, model] of Object.entries(CLIENT_IMAGE_MODEL_KEYS)) {
+      assert.equal(readClientImageModelSelection([imageMarkerMessage(key)]), model);
+    }
+    assert.equal(readClientImageModelSelection([]), undefined);
+    assert.equal(resolveImageModelForTurn([]), DEFAULT_IMAGE_MODEL);
+    assert.equal(
+      resolveImageModelForTurn([imageMarkerMessage("not-a-model")]),
+      DEFAULT_IMAGE_MODEL,
+    );
+  });
+
+  it("ignores chat-model keys sent as image selection", () => {
+    assert.equal(
+      readClientImageModelSelection([imageMarkerMessage("gpt-6.1-sol")]),
+      undefined,
     );
   });
 });

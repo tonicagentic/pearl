@@ -5,21 +5,31 @@ import {
   PROJECT_ID_MARKER,
   type AgentMode,
 } from "@/lib/agent-mode-context";
+import {
+  DEFAULT_IMAGE_MODEL,
+  resolveImageModelForTurn,
+} from "../model-selection.ts";
 
 export { MODE_MARKER, PROJECT_ID_MARKER, type AgentMode };
 
 // Per-turn client intent: Agent vs Plan mode, and the project workspace the
 // chat is attached to. The composer sends these as untrusted clientContext;
 // resolvers and tools re-verify ownership before acting on a projectId.
+// imageModelId is the allowlisted gateway id for generate_image.
 
 export type TurnClientIntent = {
   readonly mode: AgentMode;
   readonly projectId: string | null;
+  readonly imageModelId: string;
 };
 
 export const turnClientIntent = defineState(
   "pearl.turnClientIntent",
-  (): TurnClientIntent => ({ mode: "agent", projectId: null }),
+  (): TurnClientIntent => ({
+    mode: "agent",
+    projectId: null,
+    imageModelId: DEFAULT_IMAGE_MODEL,
+  }),
 );
 
 interface ScannedMessage {
@@ -78,14 +88,22 @@ function readMarker(
   return undefined;
 }
 
-/** Parse mode + projectId from the turn's ephemeral clientContext messages. */
+/** Parse mode + projectId + image model from ephemeral clientContext messages. */
 export function readTurnClientIntent(
   messages: readonly ScannedMessage[],
 ): TurnClientIntent {
   const modeRaw = readMarker(messages, MODE_MARKER);
   const mode: AgentMode = modeRaw === "plan" ? "plan" : "agent";
   const projectId = readMarker(messages, PROJECT_ID_MARKER)?.trim() || null;
-  return { mode, projectId };
+  const imageModelId = resolveImageModelForTurn(
+    messages as Parameters<typeof resolveImageModelForTurn>[0],
+  );
+  return { mode, projectId, imageModelId };
+}
+
+/** Allowlisted gateway image-model id for the current turn. */
+export function currentImageModelId(): string {
+  return turnClientIntent.get().imageModelId || DEFAULT_IMAGE_MODEL;
 }
 
 export function syncTurnClientIntent(

@@ -9,8 +9,18 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SubagentRunsProvider } from "@/components/assistant-ui/elements/task-card.aui";
 import { AuthProvider, useAuth } from "@/src/auth";
 import { ChatsProvider } from "@/src/chat-context";
-import { configureModelSelectionPersistence, restoreModelSelection } from "@/src/model-selection";
-import { loadSavedModelSelection, saveModelSelection } from "@/src/model-preferences";
+import {
+  configureImageModelSelectionPersistence,
+  configureModelSelectionPersistence,
+  restoreImageModelSelection,
+  restoreModelSelection,
+} from "@/src/model-selection";
+import {
+  loadSavedImageModelSelection,
+  loadSavedModelSelection,
+  saveImageModelSelection,
+  saveModelSelection,
+} from "@/src/model-preferences";
 import { WorkspaceProvider } from "@/src/workspace-context";
 
 /** Keep the active chat mounted beneath pushed screens so its stream survives navigation. */
@@ -22,7 +32,9 @@ function AuthenticatedLayout() {
   const { signedIn, viewerEmail } = useAuth();
   useEffect(() => {
     configureModelSelectionPersistence(saveModelSelection);
+    configureImageModelSelectionPersistence(saveImageModelSelection);
     void restoreModelSelection(loadSavedModelSelection).catch(() => {});
+    void restoreImageModelSelection(loadSavedImageModelSelection).catch(() => {});
   }, []);
   // Dispose in-memory chat state whenever an account signs out or changes.
   const accountKey = signedIn ? `account:${viewerEmail}` : "signed-out";

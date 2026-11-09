@@ -9,13 +9,22 @@ import {
   useIsMarkdownCodeBlock,
 } from "@assistant-ui/react-markdown";
 import remarkGfm from "remark-gfm";
-import { type FC, memo, useMemo, useRef, type ReactNode } from "react";
+import {
+  type ComponentPropsWithoutRef,
+  type FC,
+  isValidElement,
+  memo,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from "react";
 import type { TextMessagePartProps } from "@assistant-ui/react";
 import { CheckIcon, CopyIcon, FileIcon } from "lucide-react";
 
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { useCanvas } from "@/components/assistant-ui/elements/canvas-context";
+import { MermaidBlock } from "@/components/assistant-ui/elements/mermaid-block";
 import { cn } from "@/lib/utils";
 import {
   CitationChip,
@@ -321,15 +330,23 @@ const defaultComponents = memoizeMarkdownComponents({
       {...props}
     />
   ),
-  pre: ({ className, ...props }) => (
-    <pre
-      className={cn(
-        "aui-md-pre border-border/50 bg-muted/30 overflow-x-auto rounded-t-none rounded-b-xl border border-t-0 p-3.5 text-[13px] leading-relaxed",
-        className,
-      )}
-      {...props}
-    />
-  ),
+  pre: ({ className, children, ...props }) => {
+    const mermaidCode = extractMermaidCode(children);
+    if (mermaidCode !== null) {
+      return <MermaidBlock code={mermaidCode} className="my-3" />;
+    }
+    return (
+      <pre
+        className={cn(
+          "aui-md-pre border-border/50 bg-muted/30 overflow-x-auto rounded-t-none rounded-b-xl border border-t-0 p-3.5 text-[13px] leading-relaxed",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </pre>
+    );
+  },
   code: function Code({ className, ...props }) {
     const isCodeBlock = useIsMarkdownCodeBlock();
     // A referenced file path in backticks opens on the canvas, like the
@@ -341,7 +358,9 @@ const defaultComponents = memoizeMarkdownComponents({
     const isFilePath =
       !isCodeBlock &&
       text !== undefined &&
-      /^[\w@.-]+(\/[\w@.-]+)*\.(mdx?|txt|tsx?|jsx?|json|csv)$/i.test(text);
+      /^[\w@.-]+(\/[\w@.-]+)*\.(mdx?|txt|tsx?|jsx?|json|csv|html?|svg|mmd|scene\.json)$/i.test(
+        text,
+      );
     if (isFilePath && text) {
       return (
         <FilePathLink path={text}>
@@ -373,3 +392,18 @@ const defaultComponents = memoizeMarkdownComponents({
 // (the docs: outside a message part, render react-markdown directly with the
 // same components so surfaces stay visually identical).
 export const markdownTextComponents = defaultComponents;
+
+function extractMermaidCode(children: ReactNode): string | null {
+  const child = Array.isArray(children) ? children[0] : children;
+  if (!isValidElement(child)) return null;
+  const props = child.props as ComponentPropsWithoutRef<"code"> & {
+    className?: string;
+  };
+  const className = props.className ?? "";
+  if (!/\blanguage-mermaid\b/.test(className)) return null;
+  if (typeof props.children === "string") return props.children;
+  if (Array.isArray(props.children)) {
+    return props.children.map(String).join("");
+  }
+  return props.children != null ? String(props.children) : null;
+}

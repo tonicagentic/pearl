@@ -46,7 +46,7 @@ import {
   type LiveVoiceMode,
 } from "@/src/live-media";
 import { fetchLiveToken } from "@/src/live-token-client";
-import { getModelSelection } from "@/src/model-selection";
+import { modelClientContext } from "@/src/model-selection";
 import { cn } from "@/lib/utils";
 
 type Phase = "connecting" | "live" | "closed" | "error";
@@ -231,7 +231,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     }
     void store.send({
       message: transcript,
-      clientContext: { eveModelSelection: getModelSelection() },
+      clientContext: modelClientContext(),
     }).then(() => {
       onClose();
     }).catch((cause: unknown) => {

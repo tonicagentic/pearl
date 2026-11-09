@@ -3,6 +3,7 @@ import { defineTool } from "eve/tools";
 import { writeFile } from "eve/tools/write_file";
 
 import { houseLint } from "../lib/house-lint.js";
+import { isDesignFilePath } from "../lib/design-files.js";
 import { withFileLock } from "@/lib/agent/file-mutex";
 import { persistAgentFile } from "@/agent/tools/write_file";
 import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
@@ -156,13 +157,13 @@ export default defineTool({
         updated,
       );
 
-      // House mechanical rules on the post-edit content, surfaced in the
-      // result so the model fixes them with a follow-up targeted edit.
+      // House mechanical rules apply to prose drafts only; design source skips.
+      const lint = isDesignFilePath(outcome.path) ? [] : houseLint(updated);
       return {
         path: outcome.path,
         updated: true,
         ...persistence,
-        lint: houseLint(updated),
+        lint,
       };
     });
   },

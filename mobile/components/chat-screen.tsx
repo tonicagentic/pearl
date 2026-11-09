@@ -43,7 +43,7 @@ import { EveAuthorization } from "@/components/assistant-ui/elements/authorizati
 import { FloatingChatNavigation } from "@/components/floating-chat-navigation";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { WorkspaceScreen } from "@/components/workspace-screen";
-import { getModelSelection } from "@/src/model-selection";
+import { modelClientContext } from "@/src/model-selection";
 import { withPendingAssistant } from "@/src/stream-presentation";
 import { useWorkspace } from "@/src/workspace-context";
 import {
@@ -347,7 +347,7 @@ export function ChatScreen({
           // Model selection is ephemeral context on the turn, not persisted UI state.
           await store.send({
             message: outgoing,
-            clientContext: { eveModelSelection: getModelSelection() },
+            clientContext: modelClientContext(),
           });
           // Eve reports prepareSend failures through status/onError, not by
           // rejecting send(). Nothing went to Eve if the durable mark failed.
@@ -418,7 +418,7 @@ export function ChatScreen({
               ...(response.text ? { text: response.text } : {}),
             },
           ],
-          clientContext: { eveModelSelection: getModelSelection() },
+          clientContext: modelClientContext(),
         });
       },
     }),
@@ -548,9 +548,7 @@ export function ChatScreen({
                                   optionId,
                                 },
                               ],
-                              clientContext: {
-                                eveModelSelection: getModelSelection(),
-                              },
+                              clientContext: modelClientContext(),
                             });
                           },
                         }
