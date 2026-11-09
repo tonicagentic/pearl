@@ -14,6 +14,8 @@ import {
   type LiveVoiceMode,
 } from "@/src/live-media";
 
+export type LiveVoiceOrbSize = "stage" | "compact";
+
 function modeAccent(mode: LiveVoiceMode): string {
   switch (mode) {
     case "speaking":
@@ -27,18 +29,28 @@ function modeAccent(mode: LiveVoiceMode): string {
   }
 }
 
+const SIZE = {
+  stage: { core: 92, minHeight: 220, labelTop: 28, labelSize: 16 },
+  compact: { core: 40, minHeight: 40, labelTop: 0, labelSize: 13 },
+} as const;
+
 export function LiveVoiceOrb({
   mode,
   level,
+  size = "stage",
+  showLabel = true,
 }: {
   readonly mode: LiveVoiceMode;
   readonly level: number;
+  readonly size?: LiveVoiceOrbSize;
+  readonly showLabel?: boolean;
 }) {
   const breath = useSharedValue(0);
   const energy = useSharedValue(0);
   const boost = useSharedValue(0.04);
   const baseOpacity = useSharedValue(0.92);
   const active = mode === "listening" || mode === "speaking";
+  const dim = SIZE[size];
 
   useEffect(() => {
     breath.value = withRepeat(
@@ -88,18 +100,23 @@ export function LiveVoiceOrb({
   });
 
   const tint = modeAccent(mode);
+  const coreBox = { width: dim.core, height: dim.core, borderRadius: 999 };
 
   return (
     <View
       accessibilityRole="image"
       accessibilityLabel={liveVoiceStatusLabel(mode)}
-      style={styles.wrap}
+      style={[styles.wrap, { minHeight: dim.minHeight }]}
       pointerEvents="none"
     >
-      <Animated.View style={[styles.ring, { borderColor: tint }, outerStyle]} />
-      <Animated.View style={[styles.ring, { borderColor: tint }, ringStyle]} />
-      <Animated.View style={[styles.core, { backgroundColor: tint }, coreStyle]} />
-      <Text style={styles.label}>{liveVoiceStatusLabel(mode)}</Text>
+      <Animated.View style={[styles.ring, coreBox, { borderColor: tint }, outerStyle]} />
+      <Animated.View style={[styles.ring, coreBox, { borderColor: tint }, ringStyle]} />
+      <Animated.View style={[styles.core, coreBox, { backgroundColor: tint }, coreStyle]} />
+      {showLabel && size === "stage" ? (
+        <Text style={[styles.label, { marginTop: dim.labelTop, fontSize: dim.labelSize }]}>
+          {liveVoiceStatusLabel(mode)}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -108,12 +125,8 @@ const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 220,
   },
   core: {
-    width: 92,
-    height: 92,
-    borderRadius: 999,
     shadowColor: "#9EC7FF",
     shadowOpacity: 0.45,
     shadowRadius: 28,
@@ -121,15 +134,10 @@ const styles = StyleSheet.create({
   },
   ring: {
     position: "absolute",
-    width: 92,
-    height: 92,
-    borderRadius: 999,
     borderWidth: 2,
   },
   label: {
-    marginTop: 28,
     color: "rgba(255,255,255,0.82)",
-    fontSize: 16,
     fontWeight: "500",
     letterSpacing: 0.2,
   },

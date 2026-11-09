@@ -268,12 +268,15 @@ const KeyboardHeightContext = createContext<SharedValue<number> | null>(null);
 
 type ComposerChromeApi = {
   readonly stickyExpanded: SharedValue<number>;
+  /** 1 while a live call fills the composer — keeps dock inset expanded with no keyboard. */
+  readonly liveActive: SharedValue<number>;
   /** Hold full chrome (focus or chrome-control tap before a native menu opens). */
   readonly pinExpanded: () => void;
   /** Collapse shortly after blur once the keyboard is gone (menus get a beat to open). */
   readonly scheduleCollapse: () => void;
   /** Collapse immediately (interactive dismiss, Live, etc.). */
   readonly collapseNow: () => void;
+  readonly setLiveActive: (active: boolean) => void;
 };
 
 /**
@@ -827,6 +830,14 @@ const ComposerDock: FC<{
     if (!floats) {
       return { paddingBottom: safeBottom + 8 };
     }
+    const live = chromeApi?.liveActive.value ?? 0;
+    if (live > 0.5) {
+      // Call bar keeps the expanded floating inset with the keyboard dismissed.
+      return {
+        paddingHorizontal: COMPOSER_EDGE,
+        paddingBottom: minimizedBottom,
+      };
+    }
     const lifted = keyboardHeight?.value ?? 0;
     const chrome = composerChromeProgress(
       lifted,
@@ -874,8 +885,13 @@ const IosKeyboardLayout: FC<{ children: ReactNode }> = ({ children }) => {
   // Sticky is only for native menus stealing focus — keyboard height alone
   // drives the morph while the field is selected.
   const stickyExpanded = useSharedValue(0);
+  const liveActive = useSharedValue(0);
   const stickyClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuHoldUntil = useRef(0);
+
+  const setLiveActive = useCallback((active: boolean) => {
+    liveActive.value = active ? 1 : 0;
+  }, [liveActive]);
 
   const collapseNow = useCallback(() => {
     if (stickyClearTimer.current) {
@@ -925,8 +941,15 @@ const IosKeyboardLayout: FC<{ children: ReactNode }> = ({ children }) => {
   );
 
   const chromeApi = useMemo<ComposerChromeApi>(
-    () => ({ stickyExpanded, pinExpanded, scheduleCollapse, collapseNow }),
-    [stickyExpanded, pinExpanded, scheduleCollapse, collapseNow],
+    () => ({
+      stickyExpanded,
+      liveActive,
+      pinExpanded,
+      scheduleCollapse,
+      collapseNow,
+      setLiveActive,
+    }),
+    [stickyExpanded, liveActive, pinExpanded, scheduleCollapse, collapseNow, setLiveActive],
   );
 
   useKeyboardHandler({
@@ -1286,12 +1309,23 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
   // Start with a readable surface until the iOS accessibility setting is known.
   const [reducedTransparency, setReducedTransparency] = useState(true);
   const [preparingAttachment, setPreparingAttachment] = useState(false);
+  const [liveOpen, setLiveOpen] = useState(false);
   const motion = useMotion();
   const pressed = useSharedValue(0);
   const shellWidth = useSharedValue(0);
   const expandedHeight = useSharedValue(COMPOSER_EXPANDED_INPUT_MIN);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdActive = useRef(false);
+  const openLive = useCallback(() => {
+    chromeApi?.collapseNow();
+    chromeApi?.setLiveActive(true);
+    dismissKeyboard();
+    setLiveOpen(true);
+  }, [chromeApi]);
+  const closeLive = useCallback(() => {
+    chromeApi?.setLiveActive(false);
+    setLiveOpen(false);
+  }, [chromeApi]);
   useEffect(() => {
     if (!CAN_USE_LIQUID_GLASS) return;
     let mounted = true;
@@ -1312,8 +1346,9 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
   useEffect(
     () => () => {
       if (holdTimer.current) clearTimeout(holdTimer.current);
+      chromeApi?.setLiveActive(false);
     },
-    [],
+    [chromeApi],
   );
   const showGlass = CAN_USE_LIQUID_GLASS && !reducedTransparency;
   const holdEnabled = Platform.OS === "ios" && motion;
@@ -1444,6 +1479,36 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
     }, 120);
   }, [holdEnabled, pressed]);
 
+  const shellSurface = showGlass ? (
+    <GlassView
+      pointerEvents="none"
+      glassEffectStyle="regular"
+      style={GLASS_SURFACE_STYLE}
+    />
+  ) : (
+    <View
+      pointerEvents="none"
+      className="border-border/60 dark:border-muted-foreground/15 bg-card absolute inset-0 border"
+      style={COMPOSER_SHELL_STYLE}
+    />
+  );
+
+  // Live call replaces the text composer inside the same glass shell. Skip the
+  // keyboard morph so the call bar keeps a stable height with no keyboard up.
+  if (liveOpen) {
+    return (
+      <ComposerPrimitive.Root className="aui-composer-root w-full">
+        <View
+          className="aui-composer-shell relative p-2"
+          style={COMPOSER_SHELL_STYLE}
+        >
+          {shellSurface}
+          <LiveSession onClose={closeLive} />
+        </View>
+      </ComposerPrimitive.Root>
+    );
+  }
+
   if (Platform.OS !== "ios") {
     return (
       <ComposerPrimitive.Root className="aui-composer-root w-full">
@@ -1451,19 +1516,7 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
           className="aui-composer-shell relative gap-2 p-2"
           style={COMPOSER_SHELL_STYLE}
         >
-          {showGlass ? (
-            <GlassView
-              pointerEvents="none"
-              glassEffectStyle="regular"
-              style={GLASS_SURFACE_STYLE}
-            />
-          ) : (
-            <View
-              pointerEvents="none"
-              className="border-border/60 dark:border-muted-foreground/15 bg-card absolute inset-0 border"
-              style={COMPOSER_SHELL_STYLE}
-            />
-          )}
+          {shellSurface}
           <ComposerAttachments />
           <ComposerInput key={focusNewChatKey} autoFocus={autoFocus} />
           <View className="aui-composer-action-wrapper flex-row items-center justify-between">
@@ -1476,6 +1529,7 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
             </View>
             <ComposerTrailingControls
               preparingAttachment={preparingAttachment}
+              onOpenLive={openLive}
             />
           </View>
         </Animated.View>
@@ -1498,19 +1552,7 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
           onTouchEnd={holdEnabled ? clearHold : undefined}
           onTouchCancel={holdEnabled ? clearHold : undefined}
         >
-          {showGlass ? (
-            <GlassView
-              pointerEvents="none"
-              glassEffectStyle="regular"
-              style={GLASS_SURFACE_STYLE}
-            />
-          ) : (
-            <View
-              pointerEvents="none"
-              className="border-border/60 dark:border-muted-foreground/15 bg-card absolute inset-0 border"
-              style={COMPOSER_SHELL_STYLE}
-            />
-          )}
+          {shellSurface}
           <ComposerAttachments />
           <View collapsable={false}>
             <Animated.View pointerEvents="none" style={inputSpacerStyle} />
@@ -1532,7 +1574,10 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
                 <ComposerModelPicker disabled={preparingAttachment} />
               </Animated.View>
               <Animated.View pointerEvents="none" style={endSpacerStyle} />
-              <ComposerTrailingControls preparingAttachment={preparingAttachment} />
+              <ComposerTrailingControls
+                preparingAttachment={preparingAttachment}
+                onOpenLive={openLive}
+              />
             </Animated.View>
             <Animated.View style={inputFrameStyle}>
               <ComposerInput key={focusNewChatKey} autoFocus={autoFocus} />
@@ -1546,7 +1591,8 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
 
 const ComposerTrailingControls: FC<{
   preparingAttachment: boolean;
-}> = ({ preparingAttachment }) => {
+  onOpenLive: () => void;
+}> = ({ preparingAttachment, onOpenLive }) => {
   // The stop control only cancels the send while no run it could stop is going.
   const isSending = useAuiState(
     (s) =>
@@ -1562,14 +1608,7 @@ const ComposerTrailingControls: FC<{
         s.thread.voice !== undefined),
   );
   const isEmpty = useAuiState((s) => s.composer.isEmpty);
-  const chromeApi = useContext(ComposerChromeContext);
   const isIos = Platform.OS === "ios";
-  const [liveOpen, setLiveOpen] = useState(false);
-  const openLive = () => {
-    chromeApi?.collapseNow();
-    dismissKeyboard();
-    setLiveOpen(true);
-  };
 
   return (
     <View className="flex-row items-center">
@@ -1584,7 +1623,7 @@ const ComposerTrailingControls: FC<{
             accessibilityRole="button"
             accessibilityLabel="Start live conversation"
             disabled={preparingAttachment}
-            onPress={openLive}
+            onPress={onOpenLive}
             hitSlop={isIos ? iosComposerHitSlop : iconButtonHitSlop}
             className={cn(
               "aui-composer-live items-center justify-center",
@@ -1668,7 +1707,6 @@ const ComposerTrailingControls: FC<{
           )}
         </ComposerPrimitive.Cancel>
       </AuiIf>
-      {liveOpen ? <LiveSession onClose={() => setLiveOpen(false)} /> : null}
     </View>
   );
 };

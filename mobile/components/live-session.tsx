@@ -8,11 +8,19 @@ import {
   type AudioStreamBuffer,
 } from "expo-audio";
 import { File, Paths } from "expo-file-system";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  MicIcon,
+  MicOffIcon,
+  PhoneOffIcon,
+  SwitchCameraIcon,
+  VideoIcon,
+  VideoOffIcon,
+} from "lucide-react-native";
 
 import { LiveVoiceOrb } from "@/components/live-voice-orb";
+import { Icon } from "@/components/ui/icon";
 import { createLiveVoice, type LiveVoice } from "@/modules/live-voice";
 import { useChats } from "@/src/chat-context";
 import { resizeLiveJpeg } from "@/src/live-camera";
@@ -31,6 +39,7 @@ import {
   liveGreetingResponseEvent,
   liveSessionUpdateEvent,
   liveSocketProtocols,
+  liveVoiceStatusLabel,
   pcm16PeakLevel,
   wavFromPcm16,
   type LiveTurn,
@@ -38,6 +47,7 @@ import {
 } from "@/src/live-media";
 import { fetchLiveToken } from "@/src/live-token-client";
 import { getModelSelection } from "@/src/model-selection";
+import { cn } from "@/lib/utils";
 
 type Phase = "connecting" | "live" | "closed" | "error";
 
@@ -83,7 +93,6 @@ async function startMicStream(stream: { start: () => Promise<unknown> }) {
 }
 
 export function LiveSession({ onClose }: { readonly onClose: () => void }) {
-  const insets = useSafeAreaInsets();
   const { store } = useChats();
   const cameraRef = useRef<CameraView>(null);
   const onCapture = useRef<(buffer: AudioStreamBuffer) => void>(() => {});
@@ -512,17 +521,62 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
   };
 
   const cameraGranted = cameraPermission?.granted === true;
-  const recent = turns.slice(-4);
+  const lastTurn = turns[turns.length - 1];
+  const caption = assistantCaption
+    ? `Pearl: ${assistantCaption}`
+    : lastTurn
+      ? `${lastTurn.role === "user" ? "You" : "Pearl"}: ${lastTurn.text}`
+      : null;
+  const orbMode = phase === "connecting" ? "connecting" : phase === "error" ? "ended" : voiceMode;
   const endLabel = phase === "live" || phase === "connecting"
-    ? "End"
+    ? "End live"
     : turns.length > 0 || handoffError
       ? "Save to chat"
       : "Close";
 
+  const toggleCamera = () => {
+    setCameraReady(false);
+    if (cameraOn) {
+      setCameraOn(false);
+      return;
+    }
+    if (cameraGranted) {
+      setCameraOn(true);
+      return;
+    }
+    void requestCameraPermission().then((result) => {
+      if (result.granted) setCameraOn(true);
+      else setNotice("Camera permission is optional. Voice stays on.");
+    });
+  };
+
   return (
-    <Modal animationType="slide" presentationStyle="fullScreen" statusBarTranslucent onRequestClose={finish}>
-      <View style={styles.root}>
-        {cameraOn && cameraGranted ? (
+    <View accessibilityLiveRegion="polite" className="w-full gap-3 px-1 py-1">
+      <View className="flex-row items-center gap-3">
+        <LiveVoiceOrb
+          mode={orbMode}
+          level={voiceMode === "speaking" ? Math.max(micLevel, 0.35) : micLevel}
+          size="compact"
+          showLabel={false}
+        />
+        <View className="min-w-0 flex-1 gap-0.5">
+          <Text className="text-foreground text-[15px] font-semibold" numberOfLines={1}>
+            {liveVoiceStatusLabel(orbMode)}
+          </Text>
+          {caption ? (
+            <Text className="text-muted-foreground text-[13px] leading-[18px]" numberOfLines={2}>
+              {caption}
+            </Text>
+          ) : (
+            <Text className="text-muted-foreground text-[13px] leading-[18px]" numberOfLines={1}>
+              {phase === "connecting" ? "Starting the call…" : "Say something"}
+            </Text>
+          )}
+        </View>
+      </View>
+
+      {cameraOn && cameraGranted ? (
+        <View className="overflow-hidden rounded-2xl" style={styles.preview}>
           <CameraView
             ref={cameraRef}
             style={StyleSheet.absoluteFill}
@@ -537,111 +591,104 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
               setNotice("Camera unavailable. Voice stays on.");
             }}
           />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, styles.cameraOff]} />
-        )}
-        <View style={styles.orbStage} pointerEvents="none">
-          <LiveVoiceOrb
-            mode={phase === "connecting" ? "connecting" : phase === "error" ? "ended" : voiceMode}
-            level={voiceMode === "speaking" ? Math.max(micLevel, 0.35) : micLevel}
-          />
         </View>
-        <View style={[styles.top, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
-          <Text style={styles.status}>
-            {phase === "connecting" ? "Connecting" : phase === "live" ? "Live" : phase === "error" ? "Live stopped" : "Live ended"}
-          </Text>
-          {error ? <Text style={styles.banner}>{error}</Text> : null}
-          {notice ? <Text style={styles.banner}>{notice}</Text> : null}
-          {videoRejected ? (
-            <Text style={styles.banner}>
-              {phase === "live"
-                ? "The model is not receiving video. Voice stays on until you end."
-                : "The model is not receiving video."}
-            </Text>
-          ) : null}
-          {cameraOn && !cameraGranted ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Allow camera"
-              onPress={() => void requestCameraPermission()}
-              style={styles.permission}
-            >
-              <Text style={styles.controlText}>Allow camera</Text>
-            </Pressable>
-          ) : null}
-        </View>
-        <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
-          <View accessibilityLiveRegion="polite" style={styles.captions}>
-            {recent.map((turn, index) => (
-              <Text key={`${turn.role}-${index}`} style={styles.caption}>
-                {turn.role === "user" ? "You" : "Pearl"}: {turn.text}
-              </Text>
-            ))}
-            {assistantCaption ? <Text style={styles.caption}>Pearl: {assistantCaption}</Text> : null}
-          </View>
-          {handoffError ? <Text style={styles.banner}>{handoffError}</Text> : null}
-          <View style={styles.controls}>
-            <Control label={muted ? "Unmute" : "Mute"} onPress={toggleMute} />
-            {cameraOn && cameraGranted ? (
-              <Control
-                label="Flip camera"
-                onPress={() => {
-                  setCameraReady(false);
-                  setFacing((current) => current === "back" ? "front" : "back");
-                }}
-              />
-            ) : null}
-            <Control
-              label={cameraOn ? "Turn camera off" : "Turn camera on"}
+      ) : null}
+
+      {error ? <Text className="text-destructive text-[13px]">{error}</Text> : null}
+      {notice ? <Text className="text-muted-foreground text-[13px]">{notice}</Text> : null}
+      {videoRejected ? (
+        <Text className="text-muted-foreground text-[13px]">
+          The model is not receiving video. Voice stays on.
+        </Text>
+      ) : null}
+      {cameraOn && !cameraGranted ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Allow camera"
+          onPress={() => void requestCameraPermission()}
+        >
+          <Text className="text-primary text-[13px] font-medium">Allow camera</Text>
+        </Pressable>
+      ) : null}
+      {handoffError ? <Text className="text-destructive text-[13px]">{handoffError}</Text> : null}
+
+      <View className="flex-row items-center justify-between">
+        <View className="flex-row items-center gap-2">
+          <CallControl
+            label={muted ? "Unmute" : "Mute"}
+            onPress={toggleMute}
+            active={muted}
+          >
+            <Icon as={muted ? MicOffIcon : MicIcon} className="text-foreground size-5" />
+          </CallControl>
+          <CallControl
+            label={cameraOn ? "Turn camera off" : "Turn camera on"}
+            onPress={toggleCamera}
+            active={cameraOn}
+          >
+            <Icon as={cameraOn ? VideoIcon : VideoOffIcon} className="text-foreground size-5" />
+          </CallControl>
+          {cameraOn && cameraGranted ? (
+            <CallControl
+              label="Flip camera"
               onPress={() => {
                 setCameraReady(false);
-                if (cameraOn) {
-                  setCameraOn(false);
-                  return;
-                }
-                if (cameraGranted) {
-                  setCameraOn(true);
-                  return;
-                }
-                void requestCameraPermission().then((result) => {
-                  if (result.granted) setCameraOn(true);
-                  else setNotice("Camera permission is optional. Voice stays on.");
-                });
+                setFacing((current) => current === "back" ? "front" : "back");
               }}
-            />
-            <Control label={endLabel} onPress={finish} />
-          </View>
+            >
+              <Icon as={SwitchCameraIcon} className="text-foreground size-5" />
+            </CallControl>
+          ) : null}
         </View>
+        <CallControl
+          label={endLabel}
+          onPress={finish}
+          danger
+        >
+          <Icon as={PhoneOffIcon} className="size-5 text-white" />
+        </CallControl>
       </View>
-    </Modal>
+    </View>
   );
 }
 
-function Control({ label, onPress }: { readonly label: string; readonly onPress: () => void }) {
+function CallControl({
+  label,
+  onPress,
+  active = false,
+  danger = false,
+  children,
+}: {
+  readonly label: string;
+  readonly onPress: () => void;
+  readonly active?: boolean;
+  readonly danger?: boolean;
+  readonly children: ReactNode;
+}) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.control}>
-      <Text style={styles.controlText}>{label}</Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      hitSlop={6}
+      className={cn(
+        "size-10 items-center justify-center rounded-full",
+        danger
+          ? "bg-destructive active:bg-destructive/90"
+          : active
+            ? "bg-foreground/15 active:bg-foreground/20"
+            : "bg-foreground/8 active:bg-foreground/12",
+      )}
+    >
+      {children}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#000" },
-  cameraOff: { backgroundColor: "#0B0D12" },
-  orbStage: {
-    ...StyleSheet.absoluteFill,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingBottom: 48,
+  preview: {
+    height: 120,
+    width: "100%",
+    backgroundColor: "#0B0D12",
   },
-  top: { position: "absolute", top: 0, left: 16, right: 16, gap: 8 },
-  bottom: { position: "absolute", left: 16, right: 16, bottom: 0, gap: 12 },
-  status: { color: "#fff", fontSize: 17, fontWeight: "600" },
-  banner: { color: "#fff", backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 12, padding: 10, overflow: "hidden" },
-  captions: { gap: 4 },
-  caption: { color: "#fff", fontSize: 16 },
-  controls: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  control: { backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 },
-  controlText: { color: "#fff", fontSize: 15 },
-  permission: { alignSelf: "flex-start", backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 },
 });
