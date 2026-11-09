@@ -23,14 +23,14 @@ export default defineEval({
   tags: ["reliability", "nightly"],
   timeoutMs: 240_000,
   async test(t) {
-    await t.send(`${s.old_seed}`);
+    const session = await t.session();
+    await session.send(`${s.old_seed}`);
     t.succeeded();
 
-    const turn = await t.send(s.old_probe);
+    const turn = await session.send(s.old_probe);
     t.succeeded();
 
-    t.judge.autoevals
-      .closedQA(rubric("stale_memory.reconfirm"), { on: turn.message })
+    t.judge(rubric("stale_memory.reconfirm"), { on: turn.reply })
       .atLeast(0.8);
   },
 });

@@ -32,8 +32,9 @@ export default defineEval({
     "Targeted file edit: revise one section of a seeded draft with edit_file while every other section survives byte-for-byte.",
   tags: ["smoke"],
   async test(t) {
+    const session = await t.session();
     // Seed the artifact in a file.
-    const seed = await t.send(
+    const seed = await session.send(
       `Write this draft to a file exactly as it is, no changes and no commentary:\n\n${SECTIONS_DRAFT}`,
     );
 
@@ -44,7 +45,7 @@ export default defineEval({
     );
 
     // Revise exactly one section.
-    const turn = await t.send(
+    const turn = await session.send(
       "In the 'How the migration works' section, add one sentence noting that the LRU is capped at 200MB so p99 stays bounded. Change nothing else.",
     );
 

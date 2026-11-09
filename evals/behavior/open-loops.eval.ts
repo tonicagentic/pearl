@@ -35,20 +35,21 @@ export default [
       tags: ["reliability", "nightly"],
       timeoutMs: 240_000,
       async test(t) {
-        let turn = await t.send(message);
+        const session = await t.session();
+        let turn = await session.send(message);
 
         // create_issue is gated (once()): settle an approval park; and if the
         // agent asked when the item should come back, answer with a review
         // date so the capture completes.
         if (parkedApproval(turn)) {
-          turn = await resolveAllPending(t, turn, { optionId: APPROVE });
+          turn = await resolveAllPending(turn, { optionId: APPROVE });
         }
 
         if (issueToolCalls(turn) === 0) {
-          turn = await t.send("Come back to me about it in a week.");
+          turn = await session.send("Come back to me about it in a week.");
 
           if (parkedApproval(turn)) {
-            turn = await resolveAllPending(t, turn, { optionId: APPROVE });
+            turn = await resolveAllPending(turn, { optionId: APPROVE });
           }
         }
 
@@ -59,8 +60,7 @@ export default [
         );
         t.notCalledTool("write_file");
 
-        t.judge.autoevals
-          .closedQA(rubric("open_loops.captured_as_issue"), { on: turn.message })
+        t.judge(rubric("open_loops.captured_as_issue"), { on: turn.reply })
           .atLeast(0.8);
       },
     }),
@@ -81,8 +81,7 @@ export default [
           satisfies((n) => n === 0, "a scope-refused request must not create an issue"),
         );
 
-        t.judge.autoevals
-          .closedQA(rubric("open_loops.refused_scope"), { on: turn.message })
+        t.judge(rubric("open_loops.refused_scope"), { on: turn.reply })
           .atLeast(0.8);
       },
     }),
@@ -100,9 +99,8 @@ export default [
 
         t.calledTool("list_issues", { count: 1 });
 
-        t.judge.autoevals
-          .closedQA(rubric("open_loops.attention_answered_from_issues"), {
-            on: turn.message,
+        t.judge(rubric("open_loops.attention_answered_from_issues"), {
+            on: turn.reply,
           })
           .atLeast(0.8);
       },

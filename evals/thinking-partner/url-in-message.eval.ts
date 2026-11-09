@@ -15,10 +15,9 @@ export default defineEval({
     t.succeeded();
     t.calledTool("web_fetch");
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply summarizes the actual content of https://example.com (an 'Example Domain' placeholder page — reserved for documentation/demonstrations, not a real site), rather than inventing page content.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
   },

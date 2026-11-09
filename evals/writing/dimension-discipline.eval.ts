@@ -35,15 +35,13 @@ export default defineEval({
       satisfies(Boolean, "the thread reply stays shorter than the artifact"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The rewrite reads casual and human (contractions, plain words, natural sentence rhythm) where the original was stiff and formal.",
         { on: fileContent },
       )
       .atLeast(0.8);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "Only the register changed: the rewrite preserves the same facts in the same order (migration done, finished 40 minutes early, verification scripts/counts/checksums clean, services stayed up, monitor errors 72 hours, summary to wiki), roughly similar length, and adds no headers, bullets, or new content.",
         { on: fileContent },
       )

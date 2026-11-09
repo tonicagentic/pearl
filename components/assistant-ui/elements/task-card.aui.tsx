@@ -68,7 +68,7 @@ function formatElapsed(ms: number): string {
 // Declared subagents under agent/subagents/* plus eve's built-in `agent`.
 export const DELEGATION_TOOLS = new Set([
   "agent",
-  "builder",
+  "coder",
   "editor",
   "researcher",
   "reviewer",

@@ -77,7 +77,7 @@ import {
 import { CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useEveEvents } from "@assistant-ui/eve";
 import { chatNeedsAuthorization } from "@/lib/chat/events";
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionStreamEvent } from "eve/client";
 import {
   createContext,
   useContext,
@@ -427,7 +427,7 @@ const WaitingActionDock: FC = () => {
   // `input.requested` after a cancelled tool approval must not leave a
   // buttonless "Waiting for your confirmation" card.
   const needsAuthorization = chatNeedsAuthorization(
-    events as readonly MessageStreamEvent[],
+    events as readonly SessionStreamEvent[],
   );
 
   if (pending) {

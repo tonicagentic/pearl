@@ -333,15 +333,19 @@ const syncSharedReferences = async (sources) => {
  * type-checked by `tsc`.
  *
  * @param surfaces - The surface ids, in stable sorted order.
+ * @param bannedWords - Each surface's banned-words list.
  * @returns The full module source, with a trailing newline.
  */
-const renderSurfacesModule = (surfaces) =>
+const renderSurfacesModule = (surfaces, bannedWords) =>
   `${[
     GENERATED_HEADER,
     "",
     `export const SURFACES = ${JSON.stringify(surfaces)} as const;`,
     "",
     "export type Surface = (typeof SURFACES)[number];",
+    "",
+    "/** Each surface's banned-words list, bundled so tools need no skill file access. */",
+    `export const BANNED_WORDS: Readonly<Record<Surface, readonly string[]>> = ${JSON.stringify(bannedWords, null, 2)};`,
   ].join("\n")}\n`;
 
 /**
@@ -441,7 +445,23 @@ const generateReviewerRubric = async (sources) => {
 const generateSurfacesModule = async (surfaces) => {
   const path = resolveWithin(agentDir, SURFACES_MODULE);
   await mkdir(dirname(path), { recursive: true });
-  return writeIfChanged(path, renderSurfacesModule(surfaces));
+  const bannedWords = Object.fromEntries(
+    await Promise.all(
+      surfaces.map(async (surface) => {
+        const file = resolveWithin(
+          skillsDir,
+          join(skillsDir, `${surface}${SKILL_SUFFIX}`, "references", "banned-words.json")
+        );
+        try {
+          const parsed = JSON.parse(await readFile(file, "utf8"));
+          return [surface, Array.isArray(parsed) ? parsed.filter((w) => typeof w === "string") : []];
+        } catch {
+          return [surface, []];
+        }
+      })
+    )
+  );
+  return writeIfChanged(path, renderSurfacesModule(surfaces, bannedWords));
 };
 
 const sharedSources = await readSources();

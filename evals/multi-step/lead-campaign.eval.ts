@@ -48,7 +48,7 @@ export default defineEval({
     t.calledTool("todo");
     t.calledTool("exa_agent_run");
     t.toolOrder(["todo", "exa_agent_run"]);
-    t.noFailedActions();
+    t.noFailedCalls();
 
     const todoCalls = turn.toolCalls.filter((call) => call.name === "todo");
     const tracked = todoCalls.some(
@@ -64,9 +64,9 @@ export default defineEval({
     );
     t.check(saved, booleanGate("exa-lead-list-structured"));
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       "The answer contains a personalized cold email for each lead, each mentioning the company or its product by name, roughly matching the number of leads requested.",
-      { on: turn.message },
+      { on: turn.reply },
     );
   },
 });

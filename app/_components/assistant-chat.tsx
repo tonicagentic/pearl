@@ -5,7 +5,6 @@ import {
   useEveError,
   useEveSession,
 } from "@assistant-ui/eve";
-import { createChatMessageReducer } from "@/lib/chat/message-reducer";
 import { cn } from "@/lib/utils";
 import {
   CompositeAttachmentAdapter,
@@ -17,10 +16,9 @@ import {
 } from "@assistant-ui/react";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import type {
-  EveAgentStoreSnapshot,
-  EveMessageData,
+  SessionStoreSnapshot,
   ClientSessionState,
-  MessageStreamEvent,
+  SessionStreamEvent,
   PrepareSend,
 } from "eve/client";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -75,7 +73,7 @@ import { chatNeedsUserInput } from "@/lib/chat/events";
 import { createFallbackTitle } from "@/lib/chat/title";
 import type { ActiveChat, StorageMode } from "@/lib/chat/types";
 
-const EMPTY_EVENTS: readonly MessageStreamEvent[] = [];
+const EMPTY_EVENTS: readonly SessionStreamEvent[] = [];
 
 // Stream-event persistence flush cadence in database mode: events buffer
 // client-side and land in one batched server action per interval instead of
@@ -318,7 +316,7 @@ export function AssistantChatSurface({
   const savedEventCountRef = useRef(activeChat?.events.length ?? 0);
   const currentTitleRef = useRef(activeChat?.title ?? "New chat");
   const eventBufferRef = useRef<
-    { event: MessageStreamEvent; eventIndex: number }[]
+    { event: SessionStreamEvent; eventIndex: number }[]
   >([]);
   const eventFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const projectPickWaiterRef = useRef<{
@@ -348,7 +346,7 @@ export function AssistantChatSurface({
   );
 
   const persistStreamEvent = useCallback(
-    (event: MessageStreamEvent) => {
+    (event: SessionStreamEvent) => {
       const id = activeChatIdRef.current;
 
       if (!id) {
@@ -408,7 +406,7 @@ export function AssistantChatSurface({
   );
 
   const persistSnapshot = useCallback(
-    (snapshot: EveAgentStoreSnapshot<EveMessageData>) => {
+    (snapshot: SessionStoreSnapshot) => {
       const id = activeChatIdRef.current;
 
       if (!id) {
@@ -562,13 +560,6 @@ export function AssistantChatSurface({
     ],
   );
 
-  // eve's default reducer leaves a failed turn's assistant message with
-  // metadata.status "streaming", which the message converter maps to
-  // cancelled-with-empty-text: the failure renders as a blank bubble. Our
-  // reducer marks turn.failed as status "failed" so the error-state banner
-  // renders. useEveAgentRuntime's options type omits `reducer`, but it
-  // forwards unknown options to useEveAgent, which accepts it — hence the
-  // cast.
   const runtimeOptions = {
     adapters: {
       // Composer attachments: images and text via the built-in adapters, PDFs
@@ -594,11 +585,8 @@ export function AssistantChatSurface({
     onSessionChange: persistSessionChange,
     prepareSend,
     isDisabled,
-    reducer: createChatMessageReducer(),
   };
-  const runtime = useEveAgentRuntime(
-    runtimeOptions as Parameters<typeof useEveAgentRuntime>[0],
-  );
+  const runtime = useEveAgentRuntime(runtimeOptions);
 
   const thread = runtime.thread;
   useEffect(() => {

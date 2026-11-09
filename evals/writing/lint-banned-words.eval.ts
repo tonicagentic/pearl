@@ -26,14 +26,13 @@ export default defineEval({
     t.succeeded();
     t.calledTool("lint_against_style");
 
-    const reply = turn.message ?? "";
+    const reply = turn.reply ?? "";
     t.check(
       reply.length,
       satisfies((length: number) => length > 100, "the reply reports the violations"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply names the specific banned words found in the draft (game-changer, empower, unlock, seamless, revolutionary — or a subset) and points at where they appear. It does not silently rewrite the draft into a polished version unasked, and it does not claim the draft is clean.",
         { on: reply },
       )

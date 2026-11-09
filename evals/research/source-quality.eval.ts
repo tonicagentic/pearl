@@ -15,13 +15,12 @@ export default defineEval({
     t.succeeded();
     // The path to the primary source is the agent's choice: searching for it
     // or fetching react.dev directly are both legitimate.
-    t.noFailedActions();
+    t.noFailedCalls();
     t.messageIncludes("react.dev");
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The answer reflects what react.dev actually documents about the `use` hook with Context (it can be used to read context values like useContext, with the benefit that it can be called conditionally and inside loops), and the reply cites the official React documentation (react.dev) rather than only third-party tutorials or content farms.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
   },

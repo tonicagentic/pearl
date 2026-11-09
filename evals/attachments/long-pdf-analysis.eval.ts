@@ -16,10 +16,10 @@ export default defineEval({
   tags: ["smoke", "multimodal"],
   timeoutMs: 300_000,
   async test(t) {
-    await t.send("Hello! One moment please.");
+    const session = await t.session();
+    await session.send("Hello! One moment please.");
 
-    const sessionId = t.sessionId;
-    if (!sessionId) throw new Error("Eval session did not start.");
+    const sessionId = session.id;
 
     const seeded = await seedPdfAttachment(
       "evals/attachments/fixtures/short-digest.pdf",
@@ -29,7 +29,7 @@ export default defineEval({
       ? `It has ${seeded.pageCount} pages.`
       : "";
 
-    const turn = await t.send(
+    const turn = await session.send(
       `I attached our weekly engineering digest (attachment ${seeded.attachmentId}). ${pageHint} Two questions: (1) What is the integration token for the staging ledger? (2) What is the confirmed date and window for the storage migration cutover? Read the relevant pages before answering.`,
     );
 
@@ -42,10 +42,9 @@ export default defineEval({
     );
     t.check(usedReader, booleanGate("used-read-attachment"));
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply answers both questions with the exact values from the digest: the staging ledger integration token is OTTER-7391-DELTA, and the storage migration cutover is November 3, 2026 in the 02:00-04:00 UTC window. Invented or approximated values fail.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
   },

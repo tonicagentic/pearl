@@ -9,27 +9,23 @@ import { connectionTokenParams } from "@/lib/connections/oauth-scopes";
 // MCP OAuth connector (not the managed GitHub App). Create against the
 // readonly MCP URL with userAuthorization + GitHub OAuth discovery — a bare
 // clientId/clientSecret create does not support user grants.
-export default defineDynamic({
-  events: {
-    "turn.started": (_event, ctx) => {
-      const connector = process.env.GITHUB_CONNECTOR?.trim();
-      if (!connector || !isBetterAuthUserPrincipal(ctx.session.auth.current)) {
-        return null;
-      }
+export default defineDynamic((ctx) => {
+  const connector = process.env.GITHUB_CONNECTOR?.trim();
+  if (!connector || !isBetterAuthUserPrincipal(ctx.session.auth.current)) {
+    return null;
+  }
 
-      return defineMcpClientConnection({
-        url: "https://api.githubcopilot.com/mcp/readonly",
-        description:
-          "Read the signed-in user's GitHub repositories, files, issues, and pull requests; no writes.",
-        instanceKey: `github:${connector}:readonly`,
-        auth: connect({
-          connector,
-          autoProvision: false,
-          tokenParams: connectionTokenParams("github"),
-        }),
-        headers: { "X-MCP-Toolsets": "repos,issues,pull_requests" },
-        tools: { allow: [...CONNECTION_READONLY_ALLOWLISTS.github] },
-      });
-    },
-  },
+  return defineMcpClientConnection({
+    url: "https://api.githubcopilot.com/mcp/readonly",
+    description:
+      "Read the signed-in user's GitHub repositories, files, issues, and pull requests; no writes.",
+    instanceKey: `github:${connector}:readonly`,
+    auth: connect({
+      connector,
+      autoProvision: false,
+      tokenParams: connectionTokenParams("github"),
+    }),
+    headers: { "X-MCP-Toolsets": "repos,issues,pull_requests" },
+    tools: { allow: [...CONNECTION_READONLY_ALLOWLISTS.github] },
+  });
 });

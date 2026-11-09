@@ -17,7 +17,7 @@ Rules:
 - Write or update the plan with save_plan. That is the only write allowed.
 - Do not build, code, ship, capture issues, edit sandbox files, send
   notifications, or mutate skills. A request to do those becomes a plan, not
-  a builder call or a mutating tool call.
+  a coding delegation or a mutating tool call.
 - Reply with a short summary and the plan title. Do not paste the whole plan
   body back into the chat — the document on the project page is the review
   surface.
@@ -27,15 +27,11 @@ Rules:
   overwrite edits the user made in the editor.
 `;
 
-export default defineDynamic({
-  events: {
-    "turn.started": (_event, ctx) => {
-      const intent = syncTurnClientIntent(ctx.messages);
-      if (intent.mode !== "plan") return null;
-      return defineInstructions({
-        content: PLAN_MODE_INSTRUCTIONS,
-        role: "system",
-      });
-    },
-  },
+export default defineDynamic(async (ctx) => {
+  const intent = syncTurnClientIntent(await ctx.messages());
+  if (intent.mode !== "plan") return null;
+  return defineInstructions({
+    content: PLAN_MODE_INSTRUCTIONS,
+    role: "system",
+  });
 });

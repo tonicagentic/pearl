@@ -45,15 +45,13 @@ export default defineEval({
       satisfies(Boolean, "the thread reply stays shorter than the artifact"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reorganized draft leads with the export feature being shipped (the key news), groups related points together (permissions detail with the feature, coffee machine aside separated or dropped), and preserves every factual claim from the original (csv/json support, pdf not started, three accounts asking since January, two blocking renewal, ~5 hours weekly support savings, ping sam for bugs).",
         { on: fileContent },
       )
       .atLeast(0.8);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reorganization did not invent new facts, feature details, or claims that were not in the original draft.",
         { on: fileContent },
       )

@@ -36,23 +36,22 @@ const needle = defineEval({
   tags: ["reliability", "nightly"],
   timeoutMs: 240_000,
   async test(t) {
-    await t.send(s.needle.constraint);
-    await t.send(s.needle.newer_wrong);
+    const session = await t.session();
+    await session.send(s.needle.constraint);
+    await session.send(s.needle.newer_wrong);
 
-    const first = await t.send(s.needle.probe);
+    const first = await session.send(s.needle.probe);
 
     // Correct behavior on the contradiction is to flag it and ask. Resolve
     // the park with the older constraint (the newer message was a mistake),
     // then request the draft again.
-    let turn = await settleParked(
-      t,
-      first,
+    let turn = await settleParked(first,
       "The $5,000 message was a mistake — the $500 cap stands and still applies to this project.",
     );
 
-    if (turn.inputRequests.length === 0 && !turn.message?.match(/500/)) {
+    if (turn.interactions.length === 0 && !turn.reply?.match(/500/)) {
       // The agent did not flag the conflict; ask once more for the draft.
-      turn = await t.send(s.needle.probe);
+      turn = await session.send(s.needle.probe);
     }
 
     t.succeeded();
@@ -61,7 +60,7 @@ const needle = defineEval({
     // never be ADOPTED as the spendable amount. Flagging the conflict may
     // quote it; adopting it (as the budget to spend) fails. The judge scores
     // the rest.
-    const reply = turn.message ?? "";
+    const reply = turn.reply ?? "";
     t.check(
       reply,
       satisfies(
@@ -70,8 +69,7 @@ const needle = defineEval({
       ),
     );
 
-    t.judge.autoevals
-      .closedQA(rubric("context_rot.needle"), { on: reply })
+    t.judge(rubric("context_rot.needle"), { on: reply })
       .atLeast(0.8);
   },
 });
@@ -86,17 +84,18 @@ const drowning = CONTEXT_LENGTHS.map((length) =>
     tags: ["reliability", "nightly"],
     timeoutMs: 240_000,
     async test(t) {
+      const session = await t.session();
       const filler = s.drowning.filler.replace(
         "{NOTES}",
         makeNotes(length),
       );
 
-      await t.send(`${s.drowning.rule}\n\n${filler}`);
+      await session.send(`${s.drowning.rule}\n\n${filler}`);
 
-      const turn = await t.send(s.drowning.probe);
+      const turn = await session.send(s.drowning.probe);
       t.succeeded();
 
-      const bullets = (turn.message ?? "").match(/^\s*[-*]\s+/gm)?.length ?? 0;
+      const bullets = (turn.reply ?? "").match(/^\s*[-*]\s+/gm)?.length ?? 0;
       t.check(
         bullets,
         satisfies(

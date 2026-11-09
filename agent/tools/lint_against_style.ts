@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { houseLint } from "../lib/house-lint.js";
-import { SURFACES } from "../lib/surfaces.generated.js";
+import { BANNED_WORDS, SURFACES } from "../lib/surfaces.generated.js";
 
 /**
  * Escape regular-expression metacharacters so a banned word is matched literally.
@@ -54,15 +54,6 @@ const bannedWordMatcher = (word: string): RegExp => {
 const MAX_TEXT_LENGTH = 100_000;
 
 /**
- * Schema for a `banned-words.json` file: a flat array of strings.
- *
- * @remarks
- * Parsed content that does not match (a non-array, or non-string elements) is rejected and
- * treated as an empty list rather than trusted.
- */
-const BANNED_WORDS_SCHEMA = z.array(z.string());
-
-/**
  * Result shape: whether the draft is clean, and a human-readable note per banned word found.
  *
  * @remarks
@@ -78,10 +69,10 @@ const OUTPUT_SCHEMA = z.object({
  *
  * @remarks
  * The banned-words list lives in the matching style skill at `references/banned-words.json`
- * and is read at runtime through the skill handle. The `surface` input is constrained to a
- * fixed enum, so the resolved skill id and file path can never be influenced by the caller.
- * Any failure to resolve, read, parse, or validate the list is treated as "no banned words"
- * rather than failing the check. Run it before proposing a draft to the writer.
+ * and is bundled into `lib/surfaces.generated.ts` by `pnpm sync:shared`, because tool
+ * contexts no longer expose skill files. The `surface` input is constrained to a fixed enum,
+ * so the list can never be influenced by the caller. Run it before proposing a draft to the
+ * writer.
  */
 export default defineTool({
   description:
@@ -95,26 +86,12 @@ export default defineTool({
    * @param input.surface - Optional content surface whose style skill supplies
    * the banned-words list.
    * @param input.text - Draft text to scan.
-   * @param ctx - Tool runtime context, used to read the skill's reference files.
    * @returns `ok` (true when no violations) and human-readable `violations`.
    */
-  async execute({ surface, text }, ctx) {
-    let banned: string[] = [];
-
-    if (surface) {
-      try {
-        const raw = await ctx
-          .getSkill(`${surface}-style`)
-          .file("references/banned-words.json")
-          .text();
-        const parsed = BANNED_WORDS_SCHEMA.safeParse(JSON.parse(raw));
-        if (parsed.success) {
-          banned = [...new Set(parsed.data.map((w) => w.trim()).filter(Boolean))];
-        }
-      } catch {
-        banned = [];
-      }
-    }
+  execute({ surface, text }) {
+    const banned = surface
+      ? [...new Set(BANNED_WORDS[surface].map((w) => w.trim()).filter(Boolean))]
+      : [];
 
     const hits = banned.filter((w) => bannedWordMatcher(w).test(text));
     // House-level mechanical rules always apply; the surface's banned-words

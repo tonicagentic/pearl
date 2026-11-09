@@ -12,26 +12,25 @@ export default defineEval({
   tags: ["smoke", "multimodal"],
   timeoutMs: 240_000,
   async test(t) {
-    await t.send("Hello! One moment please.");
+    const session = await t.session();
+    await session.send("Hello! One moment please.");
 
-    const sessionId = t.sessionId;
-    if (!sessionId) throw new Error("Eval session did not start.");
+    const sessionId = session.id;
 
     const seeded = await seedPdfAttachment(
       "evals/attachments/fixtures/scanned-compliance.pdf",
       sessionId,
     );
 
-    const turn = await t.send(
+    const turn = await session.send(
       `I scanned our compliance summary and attached it (attachment ${seeded.attachmentId}). What is the retention schedule and who approved it?`,
     );
 
     turn.expectOk();
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply acknowledges that the attached scanned PDF cannot be read (no text layer / OCR is not supported), and either asks the user for the details in another form or offers alternatives (e.g., typing out the relevant section). It must NOT fabricate a retention schedule or an approver.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
   },

@@ -7,9 +7,7 @@ import { isBetterAuthUserPrincipal } from "../lib/user-connection.js";
 // DRIVE_CONNECTOR is the Vercel Connect UID for the Drive Workspace MCP
 // OAuth connector. Create with:
 //   vercel connect create https://drivemcp.googleapis.com/mcp/v1 --name drive
-export default defineDynamic({
-  events: {
-    "turn.started": (_event, ctx) => {
+export default defineDynamic((ctx) => {
       const connector = process.env.DRIVE_CONNECTOR?.trim();
       if (!connector || !isBetterAuthUserPrincipal(ctx.session.auth.current)) {
         return null;
@@ -23,6 +21,4 @@ export default defineDynamic({
         auth: connect({ connector, autoProvision: false }),
         tools: { allow: [...CONNECTION_READONLY_ALLOWLISTS.drive] },
       });
-    },
-  },
 });

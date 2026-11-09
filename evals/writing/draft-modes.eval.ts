@@ -19,26 +19,26 @@ export default defineEval({
   // Two turns plus a file write: the default 120s budget is not enough.
   timeoutMs: 300_000,
   async test(t) {
-    const sketch = await t.send(
+    const session = await t.session();
+    const sketch = await session.send(
       `Give me a rough sketch of this section so I have something to react against — " +
         "don't polish it, I want material to push around first:\n\n${TOPIC_NOTES}`,
     );
 
     t.succeeded();
-    const sketchText = sketch.message ?? "";
+    const sketchText = sketch.reply ?? "";
     t.check(
       sketchText.length,
       satisfies((length: number) => length > 150, "the sketch carries real material"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply is explicitly rough working material, not a finished section: it may include placeholders, loose ordering, notes-to-self, open questions, or unpolished phrasing, and it frames itself as a draft to react against. A polished, publication-ready section with smooth transitions and finished prose fails — the author asked for something to push around, not the final version.",
         { on: sketchText },
       )
       .atLeast(0.8);
 
-    const finish = await t.send(
+    const finish = await session.send(
       "Good, that structure works. Now write the finished version of this section — polished, ready to publish.",
     );
 
@@ -56,8 +56,7 @@ export default defineEval({
       satisfies((length: number) => length > 150, "the finished section is delivered"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The finished version is genuinely polished and publication-ready: complete sentences, clear flow, no placeholders or notes-to-self, and it preserves the sketch's substance (the 8% memory utilization, backup and failover inherited from Postgres, the LRU read-through pattern, the feature-flag rollback). It must follow house style: no em dashes, no hype vocabulary (revolutionary, game-changing, seamless, unlock, leverage).",
         { on: finishMaterial },
       )

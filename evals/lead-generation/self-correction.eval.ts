@@ -37,9 +37,9 @@ export default defineEval({
       gateAssertion("exa-run-landed", (value) => (value === true ? 1 : 0)),
     );
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       "The answer presents developer-tools-for-AI-agents companies with websites and short product descriptions.",
-      { on: turn.message },
+      { on: turn.reply },
     );
   },
 });

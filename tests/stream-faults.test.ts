@@ -1,125 +1,154 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { MessageStreamEvent } from "eve/client";
-import { createChatMessageReducer } from "../lib/chat/message-reducer.ts";
+import { conversationOf, type ConversationState, type SessionStreamEvent } from "eve/client";
+import { failure } from "eve/events";
 import { isChatTurnSettledEvent } from "../lib/chat/events.ts";
 
 // Part 5 (fault injection, streaming): these tests inject stream faults at
-// the app's real boundary — lib/chat/message-reducer.ts + lib/chat/events.ts,
+// the app's real boundary — eve's conversation projection + lib/chat/events.ts,
 // the code that decides what the UI treats as a complete response. The
 // framework (eve's durable stream) is not mocked; we cut the event sequence
 // the way a dropped connection or a gateway token cap would.
 
-const meta = { at: new Date().toISOString(), id: "evt_probe" } as never;
+type RawEvent = {
+  readonly type: string;
+  readonly scope?: Record<string, string>;
+  readonly data: Record<string, unknown>;
+};
 
 function feed(
-  // Fault injection feeds deliberately malformed/truncated event sequences,
-  // so the entries are untyped and cast at the boundary.
-  events: readonly Record<string, unknown>[],
-): ReturnType<ReturnType<typeof createChatMessageReducer>["initial"]> {
-  const reducer = createChatMessageReducer();
-  let data = reducer.initial();
-
-  for (const event of events) {
-    data = reducer.reduce(
-      data,
-      { meta, ...event } as unknown as MessageStreamEvent,
-    );
-  }
-
-  return data;
+  // Fault injection feeds deliberately truncated event sequences, so the
+  // entries are untyped and cast at the boundary.
+  events: readonly RawEvent[],
+): ConversationState {
+  return conversationOf(
+    events.map((event, line) => ({
+      ...event,
+      meta: { at: new Date().toISOString(), position: { index: 0, line } },
+    })) as unknown as SessionStreamEvent[],
+  );
 }
 
-const appended = (delta: string, soFar: string, sequence: number, turnId: string) => ({
-  type: "message.appended",
-  data: { messageDelta: delta, messageSoFar: soFar, sequence, stepIndex: 0, turnId },
-});
-
-const toolInput = (callId: string, delta: string, offset: number, turnId: string) => ({
-  type: "action.input.appended",
-  data: {
-    callId,
-    inputTextDelta: delta,
-    inputTextOffset: offset,
-    sequence: 10,
-    stepIndex: 0,
-    toolName: "get_weather",
-    turnId,
-  },
-});
-
 const TURN = "turn_fault";
+const RUN = "run_fault";
+const turnScope = { turnId: TURN };
+const runScope = { runId: RUN, turnId: TURN };
+
+const turnStart = (): RawEvent[] => [
+  { type: "session.started", data: {} },
+  { type: "delivery.admitted", data: { deliveryId: "d1" } },
+  {
+    type: "delivery.consumed",
+    scope: turnScope,
+    data: { deliveryId: "d1", turnId: TURN, parts: [{ kind: "text", text: "q" }] },
+  },
+  {
+    type: "turn.started",
+    scope: turnScope,
+    data: { turnId: TURN, cause: { deliveryId: "d1" }, follows: null },
+  },
+  { type: "model.requested", scope: turnScope, data: { runId: RUN, owner: { turnId: TURN } } },
+  {
+    type: "model.started",
+    scope: runScope,
+    data: { runId: RUN, modelId: "test-model", attempt: 0 },
+  },
+];
+
+const textDelta = (delta: string, first = false): RawEvent => ({
+  type: "content.delta",
+  scope: runScope,
+  data: { partId: "p1", delta, ...(first ? { kind: "text" } : {}) },
+});
+
+const toolInput = (callId: string, delta: string, first = false): RawEvent => ({
+  type: "call.input",
+  scope: runScope,
+  data: { callId, delta, ...(first ? { kind: "tool", name: "get_weather" } : {}) },
+});
+
+const assistantOf = (data: ConversationState) =>
+  data.messages.find((message) => message.role === "assistant");
 
 test("mid-stream connection drop: partial text stays streaming, never presented as complete", () => {
   const data = feed([
-    { type: "message.received", data: { messageId: "m1", text: "q", turnId: TURN } },
-    appended("The answer is ", "The answer is ", 1, TURN),
-    appended("definitely", "The answer is definitely", 2, TURN),
-    // …connection drops: no turn.completed, no session settle event.
+    ...turnStart(),
+    textDelta("The answer is ", true),
+    textDelta("definitely"),
+    // …connection drops: no turn.settled, no session.ended.
   ]);
 
-  const assistant = data.messages.find((m) => m.role === "assistant");
-  const textPart = assistant?.parts.find((p) => p.type === "text") as
-    | { state?: string; text?: string }
-    | undefined;
+  const assistant = assistantOf(data);
+  const textPart = assistant?.parts.find((p) => p.type === "text");
 
-  assert.ok(textPart, "partial text is retained for resumption");
+  assert.ok(textPart && textPart.type === "text", "partial text is retained for resumption");
   assert.equal(textPart.state, "streaming", "partial text must stay in streaming state");
   assert.equal(textPart.text, "The answer is definitely");
+  assert.equal(assistant?.metadata?.status, "streaming");
   assert.equal(
-    isChatTurnSettledEvent({ type: "message.appended" } as MessageStreamEvent),
+    isChatTurnSettledEvent({ type: "content.delta" } as SessionStreamEvent),
     false,
     "a truncated stream is not a settled turn",
   );
 });
 
 test("mid-stream connection drop: truncated tool-call arguments are not executed", () => {
-  const data = feed([
-    { type: "message.received", data: { messageId: "m1", text: "q", turnId: TURN } },
-    toolInput("c1", '{"city": "Bro', 0, TURN),
-  ]);
+  const data = feed([...turnStart(), toolInput("c1", '{"city": "Bro', true)]);
 
-  const assistant = data.messages.find((m) => m.role === "assistant");
-  const toolPart = assistant?.parts.find((p) => p.type === "dynamic-tool") as
-    | { state?: string; inputText?: string; toolName?: string }
-    | undefined;
+  const toolPart = assistantOf(data)?.parts.find((p) => p.type === "tool");
 
-  assert.ok(toolPart, "the in-flight tool call is retained");
-  assert.equal(toolPart.state, "input-streaming");
+  assert.ok(toolPart && toolPart.type === "tool", "the in-flight tool call is retained");
+  assert.equal(toolPart.state, "streaming");
   assert.equal(toolPart.inputText, '{"city": "Bro');
-  // No input-parsed/executed state may exist for a truncated argument blob.
   assert.equal(
-    isChatTurnSettledEvent({ type: "action.input.appended" } as MessageStreamEvent),
+    isChatTurnSettledEvent({ type: "call.input" } as SessionStreamEvent),
     false,
   );
 });
 
-test("gateway token cap: turn.failed finalizes text and marks the message failed — the truncated tool call is never promoted to executed", () => {
-  const data = feed([
-    { type: "message.received", data: { messageId: "m1", text: "q", turnId: TURN } },
-    appended("Working on it", "Working on it", 1, TURN),
-    toolInput("c2", '{"city": "Auckla', 0, TURN),
-    { type: "turn.failed", data: { turnId: TURN, error: { message: "max tokens exceeded" } } },
-  ]);
+test("gateway token cap: a failed turn is never presented as a complete answer — the truncated tool call is never promoted to executed", () => {
+  const events = [
+    ...turnStart(),
+    textDelta("Working on it", true),
+    toolInput("c2", '{"city": "Auckla', true),
+    {
+      type: "model.settled",
+      scope: runScope,
+      data: {
+        runId: RUN,
+        outcome: "failed",
+        error: { code: "max_tokens", message: "max tokens exceeded" },
+      },
+    },
+    {
+      type: "turn.settled",
+      scope: turnScope,
+      data: {
+        turnId: TURN,
+        outcome: "failed",
+        error: { code: "max_tokens", message: "max tokens exceeded" },
+      },
+    },
+  ];
+  const data = feed(events);
+  const assistant = assistantOf(data);
 
-  const assistant = data.messages.find((m) => m.role === "assistant");
+  // Nothing may be left streaming once the turn failed.
+  assert.notEqual(assistant?.metadata?.status, "streaming");
+  for (const part of assistant?.parts ?? []) {
+    if (part.type === "text" || part.type === "reasoning") {
+      assert.notEqual(part.state, "streaming");
+    }
+  }
 
-  // The failed turn must be presented as failed, never as a complete answer.
-  assert.equal(assistant?.metadata?.status, "failed");
-
-  const textPart = assistant?.parts.find((p) => p.type === "text") as
-    | { state?: string }
-    | undefined;
-  assert.equal(textPart?.state, "done", "the wrapper finalizes text on the failed-turn boundary");
+  // The failure stays readable from the session view, which drives the
+  // error banner.
+  assert.equal(failure(data.view, TURN)?.message, "max tokens exceeded");
 
   // Whatever happened to the in-flight tool part, nothing may appear as an
   // executed call from the truncated argument blob.
   const executedToolPart = assistant?.parts.find(
-    (p) =>
-      p.type === "dynamic-tool" &&
-      ["input-complete", "output-available"].includes(
-        (p as { state?: string }).state ?? "",
-      ),
+    (p) => p.type === "tool" && ["completed", "running"].includes(p.state),
   );
   assert.equal(
     executedToolPart,
@@ -127,11 +156,10 @@ test("gateway token cap: turn.failed finalizes text and marks the message failed
     "a truncated tool call must never be presented as executed",
   );
 
-  // The failed turn is not a settled session: the UI must not show success.
   assert.equal(
-    isChatTurnSettledEvent({ type: "turn.failed" } as MessageStreamEvent),
+    isChatTurnSettledEvent({ type: "model.settled" } as SessionStreamEvent),
     false,
-    "turn.failed is not a session settle event",
+    "a failed model run is not a settled turn",
   );
 });
 
@@ -159,22 +187,24 @@ test("truncated tool-call arguments fail the tool's input schema (zod boundary) 
 });
 
 test("mid-loop tool-call budget cutoff: events stop without a completed multi-step run", () => {
-  // Simulate the harness ending the turn after step 1 of a planned 4-step run
-  // (budget exhausted): the stream ends with a completed step, no turn
-  // boundary. Nothing may look settled.
+  // Simulate the harness ending the stream after step 1 of a planned 4-step
+  // run (budget exhausted): the model run settled, no turn boundary. Nothing
+  // may look settled.
   const data = feed([
-    { type: "message.received", data: { messageId: "m1", text: "q", turnId: TURN } },
-    appended("step 1 done", "step 1 done", 1, TURN),
-    { type: "step.completed", data: { stepIndex: 0, turnId: TURN } },
+    ...turnStart(),
+    textDelta("step 1 done", true),
+    { type: "model.settled", scope: runScope, data: { runId: RUN, outcome: "completed" } },
   ]);
 
   assert.equal(
-    isChatTurnSettledEvent({ type: "step.completed" } as MessageStreamEvent),
+    isChatTurnSettledEvent({ type: "model.settled" } as SessionStreamEvent),
     false,
-    "a completed step is not a settled session",
+    "a settled model run is not a settled turn",
   );
 
-  const assistant = data.messages.find((m) => m.role === "assistant");
-  const textPart = assistant?.parts.find((p) => p.type === "text") as { state?: string } | undefined;
-  assert.equal(textPart?.state, "streaming", "partial multi-step output stays streaming");
+  assert.notEqual(
+    assistantOf(data)?.metadata?.status,
+    "complete",
+    "partial multi-step output is not presented as complete",
+  );
 });

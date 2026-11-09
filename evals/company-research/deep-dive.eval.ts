@@ -22,14 +22,14 @@ export default defineEval({
 
     t.succeeded();
     t.calledTool("exa_agent_run");
-    t.noFailedActions();
+    t.noFailedCalls();
 
     const call = turn.requireToolCall("exa_agent_run");
     t.check(call.output, structuredResearch);
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       "The answer covers what Anthropic builds, a funding round, and at least one competitor, and cites or grounds the claims.",
-      { on: turn.message },
+      { on: turn.reply },
     );
   },
 });

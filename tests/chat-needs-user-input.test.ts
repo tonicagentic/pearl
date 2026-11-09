@@ -1,30 +1,29 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionStreamEvent } from "eve/client";
 import {
   chatNeedsAuthorization,
   chatNeedsUserInput,
 } from "../lib/chat/events.ts";
 
-const requested = (requestId: string, toolName = "confirm_step"): MessageStreamEvent =>
+const requested = (interactionId: string, toolName = "confirm_step"): SessionStreamEvent =>
   ({
-    type: "input.requested",
+    type: "interaction.opened",
     data: {
-      requests: [
-        {
-          requestId,
-          kind: "tool-approval",
-          action: { toolName, callId: "call_1" },
-        },
-      ],
+      interactionId,
+      subject: { callId: "call_1" },
+      request: {
+        kind: "approval",
+        prompt: `Allow ${toolName}?`,
+      },
     },
-  }) as unknown as MessageStreamEvent;
+  }) as unknown as SessionStreamEvent;
 
-const resolved = (requestId: string): MessageStreamEvent =>
+const resolved = (interactionId: string): SessionStreamEvent =>
   ({
-    type: "input.resolved",
-    data: { resolutions: [{ requestId }] },
-  }) as unknown as MessageStreamEvent;
+    type: "interaction.settled",
+    data: { interactionId, outcome: "accepted" },
+  }) as unknown as SessionStreamEvent;
 
 test("open tool approvals mark the chat as waiting for input", () => {
   assert.equal(chatNeedsUserInput([requested("a1")]), true);
@@ -34,31 +33,36 @@ test("resolved approvals clear the waiting signal", () => {
   assert.equal(chatNeedsUserInput([requested("a1"), resolved("a1")]), false);
 });
 
-test("failed turns drop unresolved parks", () => {
+test("settled turns drop unresolved parks", () => {
   assert.equal(
     chatNeedsUserInput([
       requested("a1"),
-      { type: "turn.failed", data: { turnId: "t1" } } as MessageStreamEvent,
+      {
+        type: "turn.settled",
+        data: { turnId: "t1", outcome: "failed" },
+      } as unknown as SessionStreamEvent,
     ]),
     false,
   );
 });
 
-test("authorization challenges wait until completed", () => {
+test("sign-in challenges wait until settled", () => {
   const required = {
-    type: "authorization.required",
-    data: { name: "github", description: "Connect", sequence: 1, stepIndex: 0, turnId: "t1" },
-  } as MessageStreamEvent;
-  const completed = {
-    type: "authorization.completed",
+    type: "interaction.opened",
     data: {
-      name: "github",
-      outcome: "authorized",
-      sequence: 2,
-      stepIndex: 0,
-      turnId: "t1",
+      interactionId: "i_auth",
+      subject: { callId: "call_1" },
+      request: {
+        kind: "sign-in",
+        prompt: "Connect GitHub",
+        signIn: { name: "github" },
+      },
     },
-  } as MessageStreamEvent;
+  } as unknown as SessionStreamEvent;
+  const completed = {
+    type: "interaction.settled",
+    data: { interactionId: "i_auth", outcome: "accepted" },
+  } as unknown as SessionStreamEvent;
   assert.equal(chatNeedsUserInput([required]), true);
   assert.equal(chatNeedsUserInput([required, completed]), false);
   assert.equal(chatNeedsAuthorization([required]), true);

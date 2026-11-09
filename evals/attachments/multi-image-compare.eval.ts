@@ -44,12 +44,11 @@ export default defineEval({
         return /green/i.test(msg) && /yellow/i.test(msg) ? 1 : 0;
       },
     );
-    t.check(turn.message, bothStatuses);
+    t.check(turn.reply, bothStatuses);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply attributes the FIRST attached dashboard as GREEN / eu-central-1 / 3 warnings and the SECOND as YELLOW / us-east-2 / 1 warning — statuses, regions, and warning counts are not mixed between the two images.",
-        { on: turn.message },
+        { on: turn.reply },
       )
       .atLeast(0.8);
   },

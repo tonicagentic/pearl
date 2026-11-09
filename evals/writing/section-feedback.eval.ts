@@ -23,21 +23,19 @@ export default defineEval({
 
     t.succeeded();
 
-    const reply = turn.message ?? "";
+    const reply = turn.reply ?? "";
     t.check(
       reply.length,
       satisfies((length: number) => length > 200, "the reply carries real feedback"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The feedback is specific and incremental: it identifies concrete weaknesses (for example the unquantified claims that need numbers or examples, the missing evidence, the flat list order) and pairs each with a suggested rewrite that quotes or closely tracks the draft. Generic advice like 'add more detail' or 'make it pop' fails.",
         { on: reply },
       )
       .atLeast(0.8);
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The feedback also names what works, offers suggestions rather than directives, and ends with a question or a next step rather than a verdict. It does not rewrite the whole section unprompted. Suggested lines keep the author's plain practitioner voice and follow house style: no em dashes, no hype vocabulary.",
         { on: reply },
       )

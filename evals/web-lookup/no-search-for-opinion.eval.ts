@@ -14,9 +14,9 @@ export default defineEval({
     t.notCalledTool("web_search");
     t.notCalledTool("exa_agent_run");
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       "The answer engages with the question conversationally and shares an actual opinion or playful take.",
-      { on: turn.message },
+      { on: turn.reply },
     );
   },
 });

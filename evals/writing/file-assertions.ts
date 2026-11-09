@@ -12,7 +12,7 @@ type ToolCallLike = {
 
 type TurnLike = {
   readonly toolCalls: readonly ToolCallLike[];
-  readonly message?: string | null;
+  readonly reply?: string | null;
 };
 
 type WriteFileInput = { content?: string };
@@ -87,7 +87,7 @@ export function threadDoesNotRepeatArtifact(
   turn: TurnLike,
   artifact: string,
 ): boolean {
-  const message = turn.message ?? "";
+  const message = turn.reply ?? "";
   const window = Math.min(120, Math.floor(artifact.length / 2));
   if (window < 20) {
     return true;

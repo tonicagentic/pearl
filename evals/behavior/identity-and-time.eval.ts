@@ -19,14 +19,15 @@ export default defineEval({
   tags: ["reliability", "smoke"],
   timeoutMs: 240_000,
   async test(t) {
+    const session = await t.session();
     // Identity: asked directly, the agent states who it is talking to.
-    const identity = await t.send(
+    const identity = await session.send(
       "Who am I — do you know who you're talking to? Answer with the name you have for me.",
     );
     t.succeeded();
 
     t.check(
-      identity.message ?? "",
+      identity.reply ?? "",
       satisfies(
         (text) => KNOWN_PRINCIPAL_NAMES.test(String(text)),
         "the reply names the signed-in user from the session identity",
@@ -37,13 +38,13 @@ export default defineEval({
     // training-prior guess.
     const now = new Date();
     const todayUtc = now.toISOString().slice(0, 10);
-    const time = await t.send(
+    const time = await session.send(
       "What is today's date (UTC)? Answer with the exact date you have.",
     );
     t.succeeded();
 
     t.check(
-      time.message ?? "",
+      time.reply ?? "",
       satisfies(
         (text) => String(text).includes(todayUtc),
         `the reply states today's date (${todayUtc}) from the injected clock, not a guess`,
@@ -52,7 +53,7 @@ export default defineEval({
 
     // Time-sensitive reasoning: the agent must reason FROM the current
     // timestamp (deadline math), not fabricate.
-    const reasoning = await t.send(
+    const reasoning = await session.send(
       "A report is due in 3 days. On what calendar date (UTC) does it land? Answer with the exact date.",
     );
     t.succeeded();
@@ -61,7 +62,7 @@ export default defineEval({
       .toISOString()
       .slice(0, 10);
     t.check(
-      reasoning.message ?? "",
+      reasoning.reply ?? "",
       satisfies(
         (text) => String(text).includes(due),
         `the reply computes the deadline from the current date (${due})`,
@@ -69,10 +70,9 @@ export default defineEval({
     );
 
     // The identity answer must not fabricate a different person.
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The reply identifies the caller from the session identity without inventing a different name, account, or personal details.",
-        { on: identity.message ?? "" },
+        { on: identity.reply ?? "" },
       )
       .atLeast(0.8);
   },

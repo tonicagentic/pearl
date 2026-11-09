@@ -17,14 +17,13 @@ export default defineEval({
     t.succeeded();
     t.calledTool("reviewer");
 
-    const reply = turn.message ?? "";
+    const reply = turn.reply ?? "";
     t.check(
       reply.length,
       satisfies((length: number) => length > 80, "the thread explains the review handoff"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The thread makes the handoff legible: it says the draft is being reviewed (by the reviewer/editor pass), what the review covers, and that the findings land in this thread when it finishes — so the wait is not silent. It does not claim the review already ran, and it does not paste a full review that was never produced.",
         { on: reply },
       )

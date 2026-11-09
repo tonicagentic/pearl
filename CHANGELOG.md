@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+- `coder` subagent for GitHub repos: draft PRs, user-scoped Vercel preview
+  and production deploys, Expo EAS iOS build/submit, and approval-gated
+  merge / env injection. Pearl routes coding requests to it from web, iOS,
+  and Slack.
+- Coder model router: Sol by default, Astra when the task is hard or checks
+  fail, with an AI Gateway Decision API cold-start when heuristics are
+  ambiguous. Stack skills for eve, AI SDK, Gateway, Better Auth/Connect, and
+  React/Next.
+- Vendored Vercel React/Next agent skills into the coder
+  (`vercel-react-best-practices`, composition, view-transitions, React Native,
+  web-design-guidelines, and Next.js cache/prefetch/bundle/dev-loop skills).
+- Vendored Emil design-eng + mobile, Expo mobile topic skills, Neon Postgres,
+  and obra superpowers plan skills (`brainstorming`, `writing-plans`,
+  `executing-plans`) into the coder.
+
+### Changed
+
+- Sidebar and mobile drawer list the signed-in user's GitHub repositories
+  (Repos) instead of Apps.
+
+### Removed
+
+- Builder subagent, fx agent, mini-app services, and `/apps` routes on web and
+  mobile. GitHub and Vercel user-token helpers moved to `lib/connections`.
+
 ## 0.1.0-alpha.5 - 2026-11-07
 
 ### Added

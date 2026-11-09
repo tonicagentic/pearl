@@ -16,14 +16,13 @@ export default defineEval({
     t.succeeded();
     t.calledTool("researcher");
 
-    const reply = turn.message ?? "";
+    const reply = turn.reply ?? "";
     t.check(
       reply.length,
       satisfies((length: number) => length > 80, "the thread explains the research handoff"),
     );
 
-    t.judge.autoevals
-      .closedQA(
+    t.judge(
         "The thread makes the research handoff legible: it says what is being gathered (real migration examples with numbers), frames the search so the findings will be verifiable, and says the results land in this thread. It does not fabricate examples or numbers inline instead of delegating, and it does not claim the research is already done.",
         { on: reply },
       )

@@ -49,9 +49,10 @@ export default defineEval({
   tags: ["writing", "nightly"],
   timeoutMs: 240_000,
   async test(t) {
+    const session = await t.session();
     // Establish the idea in the same session, then request the draft with
     // explicit constraints (the natural conversational flow).
-    await t.send(
+    await session.send(
       [
         "I want to write a blog post about how we cut support response time",
         "from 14 minutes to 90 seconds. The change was giving our support",
@@ -60,7 +61,7 @@ export default defineEval({
       ].join(" "),
     );
 
-    const turn = await t.send(
+    const turn = await session.send(
       [
         "Draft the opening two paragraphs. Under 120 words.",
         "Include the 14 minutes and 90 seconds numbers.",
@@ -68,7 +69,7 @@ export default defineEval({
     );
     t.succeeded();
 
-    const message = turn.message ?? "";
+    const message = turn.reply ?? "";
 
     t.check(
       message,
@@ -101,8 +102,7 @@ export default defineEval({
 
     // Soft judge signal: the opening starts where the idea becomes
     // interesting instead of warming up on the page.
-    t.judge.autoevals
-      .closedQA(rubric("writing.opens_where_idea_becomes_interesting"), {
+    t.judge(rubric("writing.opens_where_idea_becomes_interesting"), {
         on: message,
       })
       .soft();
