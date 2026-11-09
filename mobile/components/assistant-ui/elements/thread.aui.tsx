@@ -35,9 +35,13 @@ import {
 } from "@/components/assistant-ui/elements/surfaces";
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback";
 import { TypingIndicator } from "@/components/assistant-ui/elements/typing-indicator";
+import { ThreadEdgeFades } from "@/components/assistant-ui/elements/thread-edge-fades";
 import { isTaskNotification } from "@/src/message-projection";
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
-import { registerComposerInputFocus } from "@/src/composer-input-focus";
+import {
+  focusComposerInput,
+  registerComposerInputFocus,
+} from "@/src/composer-input-focus";
 import { LiveSession } from "@/components/live-session";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -698,49 +702,57 @@ export const Thread: FC<ThreadProps> = ({
       </AuiIf>
       <AuiIf condition={(s) => s.thread.messages.length > 0 || !!notice}>
         {history?.isLoadingMore && <HistoryEdge />}
-        <ThreadPrimitive.MessagesFlatList
-          // Viewability props cannot change once a FlatList is mounted.
-          key={Rail ? "tracked" : "plain"}
-          ref={listRef}
-          autoScroll={!(followsKeyboard && isRunning)}
-          {...(followsKeyboard ? {
-            onScrollBeginDrag: onManualScrollStart,
-            onScrollEndDrag: onManualScrollEnd,
-            onMomentumScrollEnd: onManualScrollEnd,
-          } : {})}
-          className="aui-message-group flex-1"
-          contentContainerClassName={cn(
-            "gap-4 px-4 pt-4",
-            !floatsComposer && "pb-6",
-            Rail && "pl-10",
-          )}
-          contentContainerStyle={
-            floatsComposer
-              ? {
-                  // Resting messages clear the floating controls, but can scroll behind them.
-                  paddingTop: insets.top + 80,
-                  paddingBottom: composerOverlayHeight + 24,
-                }
-              : undefined
-          }
-          showsVerticalScrollIndicator={false}
-          keyboardDismissMode="interactive"
-          keyboardShouldPersistTaps="handled"
-          ListFooterComponent={notice ? <ThreadNotice {...notice} /> : null}
-          {...(Rail || followsKeyboard ? {
-            onContentSizeChange: onListContentSizeChange,
-            onLayout: onListLayout,
-            onScroll: onListScroll,
-          } : {})}
-          {...(Rail ? {
-            onScrollToIndexFailed,
-            onViewableItemsChanged,
-            viewabilityConfig: MESSAGE_VIEWABILITY,
-          } : {})}
-          {...(history ? { history } : {})}
-        >
-          {() => <ThreadMessage />}
-        </ThreadPrimitive.MessagesFlatList>
+        <View className="relative flex-1">
+          <ThreadPrimitive.MessagesFlatList
+            // Viewability props cannot change once a FlatList is mounted.
+            key={Rail ? "tracked" : "plain"}
+            ref={listRef}
+            autoScroll={!(followsKeyboard && isRunning)}
+            {...(followsKeyboard ? {
+              onScrollBeginDrag: onManualScrollStart,
+              onScrollEndDrag: onManualScrollEnd,
+              onMomentumScrollEnd: onManualScrollEnd,
+            } : {})}
+            className="aui-message-group flex-1"
+            contentContainerClassName={cn(
+              "gap-4 px-4 pt-4",
+              !floatsComposer && "pb-6",
+              Rail && "pl-10",
+            )}
+            contentContainerStyle={
+              floatsComposer
+                ? {
+                    // Resting messages clear the floating controls, but can scroll behind them.
+                    paddingTop: insets.top + 80,
+                    paddingBottom: composerOverlayHeight + 24,
+                  }
+                : undefined
+            }
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+            ListFooterComponent={notice ? <ThreadNotice {...notice} /> : null}
+            {...(Rail || followsKeyboard ? {
+              onContentSizeChange: onListContentSizeChange,
+              onLayout: onListLayout,
+              onScroll: onListScroll,
+            } : {})}
+            {...(Rail ? {
+              onScrollToIndexFailed,
+              onViewableItemsChanged,
+              viewabilityConfig: MESSAGE_VIEWABILITY,
+            } : {})}
+            {...(history ? { history } : {})}
+          >
+            {() => <ThreadMessage />}
+          </ThreadPrimitive.MessagesFlatList>
+          {floatsComposer ? (
+            <ThreadEdgeFades
+              topHeight={insets.top + 72}
+              bottomHeight={Math.max(48, Math.min(composerOverlayHeight, 140))}
+            />
+          ) : null}
+        </View>
       </AuiIf>
       <View
         pointerEvents={
@@ -1264,7 +1276,10 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
       value={value}
       style={iosPadStyle}
       onBlur={() => {
-        // Release any menu/focus sticky once the field is unselected.
+        // Keep expanded chrome while the keyboard is still up (shell taps
+        // that briefly resign the field). Collapse only after the keyboard
+        // is gone — interactive drag-dismiss owns the intentional collapse.
+        if (KeyboardController.isVisible()) return;
         chromeApi?.scheduleCollapse();
       }}
       onChangeText={(next) => {
@@ -1350,6 +1365,19 @@ const Composer: FC<{
   const showGlass = CAN_USE_LIQUID_GLASS && !reducedTransparency;
   const holdEnabled = Platform.OS === "ios" && motion;
 
+  // Outer chrome pulses slightly while expanded; never transform the TextInput.
+  const outerPressStyle = useAnimatedStyle(() => {
+    const progress = composerChromeProgress(
+      keyboardHeight?.value ?? 0,
+      chromeApi?.stickyExpanded.value ?? 0,
+    );
+    const bump =
+      holdEnabled && progress >= 0.5
+        ? interpolate(pressed.value, [0, 1], [1, 1.02])
+        : 1;
+    return { transform: [{ scale: bump }] };
+  });
+
   const shellStyle = useAnimatedStyle(() => {
     const progress =
       Platform.OS === "ios" && keyboardHeight
@@ -1358,8 +1386,7 @@ const Composer: FC<{
             chromeApi?.stickyExpanded.value ?? 0,
           )
         : 1;
-    // Hold scale only while collapsed — scaling the focused TextInput
-    // dismisses the keyboard and collapses the morph.
+    // Collapsed hold shrink only — scaling the focused field dismisses the keyboard.
     const holdScale =
       holdEnabled && progress < 0.5
         ? interpolate(pressed.value, [0, 1], [1, 0.975])
@@ -1472,10 +1499,17 @@ const Composer: FC<{
 
   const beginHold = useCallback(() => {
     if (!holdEnabled) return;
-    // Skip while expanded — scaling the focused field collapses the morph.
-    if (KeyboardController.isVisible()) return;
-    if ((chromeApi?.stickyExpanded.value ?? 0) > 0.5) return;
     if (holdTimer.current) clearTimeout(holdTimer.current);
+    // Keyboard up: light outer scale + refocus so shell taps do not collapse.
+    if (
+      KeyboardController.isVisible() ||
+      (chromeApi?.stickyExpanded.value ?? 0) > 0.5
+    ) {
+      holdActive.current = true;
+      pressed.value = withSpring(1, COMPOSER_HOLD_SPRING);
+      focusComposerInput();
+      return;
+    }
     holdTimer.current = setTimeout(() => {
       holdTimer.current = null;
       holdActive.current = true;
@@ -1549,51 +1583,56 @@ const Composer: FC<{
   return (
     <ComposerInputHeightContext.Provider value={expandedHeight}>
       <ComposerPrimitive.Root className="aui-composer-root w-full">
-        <Animated.View
-          className="aui-composer-shell relative"
-          style={[COMPOSER_SHELL_STYLE, shellStyle]}
-          onLayout={(event) => {
-            shellWidth.value = event.nativeEvent.layout.width;
-          }}
-          onTouchStart={holdEnabled ? beginHold : undefined}
-          onTouchEnd={holdEnabled ? clearHold : undefined}
-          onTouchCancel={holdEnabled ? clearHold : undefined}
-        >
-          {shellSurface}
-          <ComposerAttachments conversationId={conversationId} />
-          <View collapsable={false}>
-            <Animated.View pointerEvents="none" style={inputSpacerStyle} />
-            <Animated.View
-              className="aui-composer-action-wrapper flex-row items-center"
-              style={actionRowStyle}
-              onTouchStart={() => {
-                // Hold full chrome only when the keyboard is up — pin while
-                // collapsed would expand the morph under attachment/model sheets.
-                if (KeyboardController.isVisible()) chromeApi?.pinExpanded();
-              }}
-            >
-              <ComposerAddAttachment
-                preparing={preparingAttachment}
-                onPreparingChange={setPreparingAttachment}
-                conversationId={conversationId}
-              />
-              <Animated.View pointerEvents="none" style={miniTrackStyle} />
-              <Animated.View style={modelStyle} pointerEvents="box-none">
-                <View className="flex-row items-center gap-1">
-                  <ComposerModePicker disabled={preparingAttachment} />
-                  <ComposerModelPicker disabled={preparingAttachment} />
-                </View>
+        <Animated.View style={outerPressStyle}>
+          <Animated.View
+            className="aui-composer-shell relative"
+            style={[COMPOSER_SHELL_STYLE, shellStyle]}
+            onLayout={(event) => {
+              shellWidth.value = event.nativeEvent.layout.width;
+            }}
+            onTouchStart={holdEnabled ? beginHold : undefined}
+            onTouchEnd={holdEnabled ? clearHold : undefined}
+            onTouchCancel={holdEnabled ? clearHold : undefined}
+          >
+            {shellSurface}
+            <ComposerAttachments conversationId={conversationId} />
+            <View collapsable={false}>
+              <Animated.View pointerEvents="none" style={inputSpacerStyle} />
+              <Animated.View
+                className="aui-composer-action-wrapper flex-row items-center"
+                style={actionRowStyle}
+                onTouchStart={() => {
+                  // Hold full chrome only when the keyboard is up — pin while
+                  // collapsed would expand the morph under attachment/model sheets.
+                  if (KeyboardController.isVisible()) {
+                    chromeApi?.pinExpanded();
+                    focusComposerInput();
+                  }
+                }}
+              >
+                <ComposerAddAttachment
+                  preparing={preparingAttachment}
+                  onPreparingChange={setPreparingAttachment}
+                  conversationId={conversationId}
+                />
+                <Animated.View pointerEvents="none" style={miniTrackStyle} />
+                <Animated.View style={modelStyle} pointerEvents="box-none">
+                  <View className="flex-row items-center gap-1">
+                    <ComposerModePicker disabled={preparingAttachment} />
+                    <ComposerModelPicker disabled={preparingAttachment} />
+                  </View>
+                </Animated.View>
+                <Animated.View pointerEvents="none" style={endSpacerStyle} />
+                <ComposerTrailingControls
+                  preparingAttachment={preparingAttachment}
+                  onOpenLive={openLive}
+                />
               </Animated.View>
-              <Animated.View pointerEvents="none" style={endSpacerStyle} />
-              <ComposerTrailingControls
-                preparingAttachment={preparingAttachment}
-                onOpenLive={openLive}
-              />
-            </Animated.View>
-            <Animated.View style={inputFrameStyle}>
-              <ComposerInput key={focusNewChatKey} autoFocus={autoFocus} />
-            </Animated.View>
-          </View>
+              <Animated.View style={inputFrameStyle}>
+                <ComposerInput key={focusNewChatKey} autoFocus={autoFocus} />
+              </Animated.View>
+            </View>
+          </Animated.View>
         </Animated.View>
       </ComposerPrimitive.Root>
     </ComposerInputHeightContext.Provider>

@@ -306,6 +306,7 @@ class MarkdownRenderer extends Renderer {
               >
                 {ordered ? (
                   <Text
+                    selectable
                     style={{
                       color: textStyle?.color,
                       fontSize,

@@ -59,6 +59,8 @@ export function HistoryScreen({
   const iosSidebar = Platform.OS === "ios" && !!onClose;
   // Room for the morphing search glass above the home indicator.
   const iosSearchClearance = 52 + 24 + Math.max(insets.bottom, 12);
+  // Clear the floating Settings / New chat glass row at the top.
+  const iosTopClearance = insets.top > 0 ? 58 : 64;
   const contentMotion = useAnimatedStyle(() => {
     const open = progress?.value ?? 1;
     return {
@@ -127,9 +129,14 @@ export function HistoryScreen({
         ) : null}
         <FlatList
           className="flex-1"
-          contentContainerClassName={iosSidebar ? "px-5 pt-3" : "px-4 pb-8"}
+          contentContainerClassName={iosSidebar ? "px-5" : "px-4 pb-8"}
           contentContainerStyle={
-            iosSidebar ? { paddingBottom: iosSearchClearance + 16 } : undefined
+            iosSidebar
+              ? {
+                  paddingTop: iosTopClearance,
+                  paddingBottom: iosSearchClearance + 16,
+                }
+              : undefined
           }
           data={filteredChats}
           extraData={`${activeChatId}:${searchQuery}:${filteredChats.map((chat) => (chat.waitingForInput ? "1" : "0")).join("")}`}

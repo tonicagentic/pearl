@@ -9,10 +9,14 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
+import {
+  DESTINATION_TOP_CLEARANCE,
+  DestinationBackButton,
+} from "@/components/destination-back-button";
 import { revealChatThread } from "@/components/chat-history-push";
 import { setAgentMode } from "@/src/agent-mode";
 import { useChats } from "@/src/chat-context";
@@ -46,6 +50,7 @@ export function PlanEditorScreen({
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
+  const insets = useSafeAreaInsets();
 
   const reload = useCallback(async () => {
     try {
@@ -91,14 +96,18 @@ export function PlanEditorScreen({
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor }} edges={["left", "right"]}>
+      <DestinationBackButton />
       {plan === null && !error ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
         </View>
       ) : (
         <ScrollView
-          className="flex-1 px-4"
-          contentContainerClassName="pb-28 gap-4 pt-2"
+          className="flex-1 px-5"
+          contentContainerClassName="pb-28 gap-4"
+          contentContainerStyle={{
+            paddingTop: insets.top + DESTINATION_TOP_CLEARANCE,
+          }}
           keyboardShouldPersistTaps="handled"
         >
           {error ? (

@@ -9,9 +9,13 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
+import {
+  DESTINATION_TOP_CLEARANCE,
+  DestinationBackButton,
+} from "@/components/destination-back-button";
 import {
   createProjectRequest,
   fetchProjects,
@@ -26,6 +30,7 @@ export function ProjectsScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
+  const insets = useSafeAreaInsets();
 
   const reload = useCallback(async () => {
     try {
@@ -64,19 +69,26 @@ export function ProjectsScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor }} edges={["left", "right"]}>
-      <View className="flex-row items-center justify-between px-4 pb-2 pt-2">
-        <Text className="text-xl font-semibold text-foreground">Projects</Text>
+      <DestinationBackButton />
+      <View
+        className="flex-row items-center justify-between px-5 pb-2"
+        style={{ paddingTop: insets.top + DESTINATION_TOP_CLEARANCE }}
+      >
+        <Text className="text-[28px] font-semibold tracking-tight text-foreground">
+          Projects
+        </Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="New project"
+          className="min-h-11 justify-center px-1"
           onPress={() => setShowForm(true)}
         >
-          <Text className="text-sm font-medium text-foreground">New</Text>
+          <Text className="text-[16px] font-medium text-foreground">New</Text>
         </Pressable>
       </View>
 
       {error ? (
-        <Pressable className="px-4 py-3" onPress={() => void reload()}>
+        <Pressable className="px-5 py-3" onPress={() => void reload()}>
           <Text className="text-sm text-destructive">
             {error} Tap to retry.
           </Text>
@@ -88,7 +100,7 @@ export function ProjectsScreen() {
           <ActivityIndicator />
         </View>
       ) : (
-        <ScrollView className="flex-1 px-4" contentContainerClassName="pb-24">
+        <ScrollView className="flex-1 px-5" contentContainerClassName="pb-24">
           {(projects ?? []).length === 0 ? (
             <View className="py-8">
               <Text className="text-base font-medium text-foreground">

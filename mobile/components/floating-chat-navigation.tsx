@@ -9,8 +9,8 @@ import {
 } from "react-native";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
 import {
+  ChevronLeftIcon,
   EllipsisIcon,
-  HouseIcon,
   Settings2Icon,
   SquarePenIcon,
 } from "lucide-react-native";
@@ -30,18 +30,19 @@ const CAN_USE_LIQUID_GLASS =
   Platform.OS === "ios" &&
   isGlassEffectAPIAvailable() &&
   isLiquidGlassAvailable();
+const GLASS_RADIUS = 28;
 const surfaceStyle = {
   position: "absolute",
   top: 0,
   right: 0,
   bottom: 0,
   left: 0,
-  borderRadius: 28,
+  borderRadius: GLASS_RADIUS,
 } as const;
 
 /**
  * Floating iOS controls that morph with history openProgress:
- * chat: Home left, New chat + ⋯ right; history: Settings left, New chat right.
+ * chat: back chevron left, New chat + ⋯ right; history: Settings left, New chat right.
  */
 export function FloatingChatNavigation({
   openProgress,
@@ -90,22 +91,26 @@ export function FloatingChatNavigation({
   }, []);
 
   const glass = CAN_USE_LIQUID_GLASS && !reducedTransparency;
-  const surface = () =>
+  const surface = (roundedFull: boolean) =>
     glass ? (
       <GlassView
         pointerEvents="none"
         glassEffectStyle="regular"
-        style={surfaceStyle}
+        style={[
+          surfaceStyle,
+          roundedFull ? { borderRadius: GLASS_RADIUS } : null,
+        ]}
       />
     ) : (
       <View
         pointerEvents="none"
-        className="absolute inset-0 rounded-full border border-border/60 bg-card"
+        className="absolute inset-0 border border-border/60 bg-card"
+        style={{ borderRadius: GLASS_RADIUS }}
       />
     );
 
-  // Left host: Home ↔ Settings on the same glass circle.
-  const homeIconStyle = useAnimatedStyle(() => ({
+  // Left host: Back ↔ Settings on the same glass circle.
+  const backIconStyle = useAnimatedStyle(() => ({
     opacity: interpolate(openProgress.value, [0, 0.45, 1], [1, 0.2, 0]),
     transform: [
       { scale: interpolate(openProgress.value, [0, 1], [1, 0.85]) },
@@ -122,11 +127,9 @@ export function FloatingChatNavigation({
   const chatPillStyle = useAnimatedStyle(() => {
     const history = openProgress.value;
     const msg = reveal.value;
-    // Collapse width toward a single circle as history opens; expand with messages on chat.
     const chatWidth = 56 + 56 * msg;
     return {
       width: interpolate(history, [0, 1], [chatWidth, 48]),
-      opacity: interpolate(history, [0, 0.35, 1], [1, 1, 1]),
     };
   });
   const chatNewStyle = useAnimatedStyle(() => ({
@@ -155,7 +158,6 @@ export function FloatingChatNavigation({
       { scale: interpolate(openProgress.value, [0.45, 1], [0.85, 1]) },
     ],
   }));
-  // Keep a hit target on the right when history is open even with no messages.
   const rightVisibleStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
       openProgress.value,
@@ -187,10 +189,10 @@ export function FloatingChatNavigation({
       style={[styles.row, { top: insets.top + 10 }]}
     >
       <View style={styles.circle}>
-        {surface()}
+        {surface(true)}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={historyOpen ? "Settings" : "Home"}
+          accessibilityLabel={historyOpen ? "Settings" : "Back"}
           accessibilityHint={
             historyOpen
               ? "Opens settings"
@@ -199,8 +201,8 @@ export function FloatingChatNavigation({
           onPress={onLeftPress}
           style={styles.circleButton}
         >
-          <Animated.View style={[styles.iconLayer, homeIconStyle]}>
-            <Icon as={HouseIcon} className="size-6 text-foreground" />
+          <Animated.View style={[styles.iconLayer, backIconStyle]}>
+            <Icon as={ChevronLeftIcon} className="size-6 text-foreground" />
           </Animated.View>
           <Animated.View style={[styles.iconLayer, settingsIconStyle]}>
             <Icon as={Settings2Icon} className="size-6 text-foreground" />
@@ -212,8 +214,7 @@ export function FloatingChatNavigation({
         style={[styles.pill, chatPillStyle, rightVisibleStyle]}
         pointerEvents={hasMessages || historyOpen ? "box-none" : "none"}
       >
-        {surface()}
-        {/* Chat-mode new chat (pill left segment) */}
+        {surface(true)}
         <Animated.View
           style={[styles.newChatAction, chatNewStyle]}
           pointerEvents={historyOpen || !hasMessages ? "none" : "auto"}
@@ -227,7 +228,6 @@ export function FloatingChatNavigation({
             <Icon as={SquarePenIcon} className="size-6 text-foreground" />
           </Pressable>
         </Animated.View>
-        {/* Chat-mode more */}
         <Animated.View
           style={[styles.moreAction, chatMoreStyle]}
           pointerEvents={historyOpen || !hasMessages ? "none" : "auto"}
@@ -242,7 +242,6 @@ export function FloatingChatNavigation({
             <Icon as={EllipsisIcon} className="size-6 text-foreground" />
           </Pressable>
         </Animated.View>
-        {/* History-mode new chat (fills the host) */}
         <Animated.View
           style={[styles.historyNewAction, historyNewStyle]}
           pointerEvents={historyOpen ? "auto" : "none"}
@@ -271,7 +270,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  circle: { width: 48, height: 48 },
+  circle: {
+    width: 48,
+    height: 48,
+    borderRadius: GLASS_RADIUS,
+    overflow: "hidden",
+  },
   circleButton: {
     width: 48,
     height: 48,
@@ -283,7 +287,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  pill: { height: 48, overflow: "hidden" },
+  pill: {
+    height: 48,
+    borderRadius: GLASS_RADIUS,
+    overflow: "hidden",
+  },
   pillButton: {
     width: 56,
     height: 48,

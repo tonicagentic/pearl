@@ -9,9 +9,13 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
+import {
+  DESTINATION_TOP_CLEARANCE,
+  DestinationBackButton,
+} from "@/components/destination-back-button";
 import { revealChatThread } from "@/components/chat-history-push";
 import { useChats } from "@/src/chat-context";
 import { createChat } from "@/src/chats-client";
@@ -43,6 +47,7 @@ export function ProjectDetailScreen({
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
+  const insets = useSafeAreaInsets();
 
   const reload = useCallback(async () => {
     try {
@@ -91,12 +96,19 @@ export function ProjectDetailScreen({
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor }} edges={["left", "right"]}>
+      <DestinationBackButton />
       {workspace === null && !error ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
         </View>
       ) : (
-        <ScrollView className="flex-1 px-4" contentContainerClassName="pb-24 gap-5">
+        <ScrollView
+          className="flex-1 px-5"
+          contentContainerClassName="pb-24 gap-5"
+          contentContainerStyle={{
+            paddingTop: insets.top + DESTINATION_TOP_CLEARANCE,
+          }}
+        >
           {error ? (
             <Pressable onPress={() => void reload()}>
               <Text className="text-sm text-destructive">
@@ -105,7 +117,7 @@ export function ProjectDetailScreen({
             </Pressable>
           ) : null}
 
-          <View className="gap-2 pt-2">
+          <View className="gap-2">
             <Text className="text-xs font-medium uppercase text-muted-foreground">
               Name
             </Text>

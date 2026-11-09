@@ -57,16 +57,22 @@ function AuthenticatedLayout() {
                     animation: Platform.OS === "ios" ? "slide_from_left" : "default",
                   }}
                 />
-                <Stack.Screen name="projects/index" options={{ title: "Projects" }} />
+                <Stack.Screen
+                  name="projects/index"
+                  options={{ title: "Projects", headerShown: false }}
+                />
                 <Stack.Screen
                   name="projects/[id]/index"
-                  options={{ title: "Project" }}
+                  options={{ title: "Project", headerShown: false }}
                 />
                 <Stack.Screen
                   name="projects/[id]/plans/[planId]"
-                  options={{ title: "Plan" }}
+                  options={{ title: "Plan", headerShown: false }}
                 />
-                <Stack.Screen name="issues" options={{ title: "Tasks" }} />
+                <Stack.Screen
+                  name="issues"
+                  options={{ title: "Tasks", headerShown: false }}
+                />
                 <Stack.Screen
                   name="settings"
                   options={{

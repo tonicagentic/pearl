@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import {
   type SharedValue,
   runOnJS,
+  useSharedValue,
   withSpring,
 } from "react-native-reanimated";
 import { Gesture } from "react-native-gesture-handler";
@@ -75,6 +76,7 @@ export function useChatHistoryPushGesture({
   settling: SharedValue<boolean>;
   width: number;
 }) {
+  const dismissedKeyboard = useSharedValue(false);
   return useMemo(
     () =>
       // Wide activeOffset so a long-press text selection is not claimed as a
@@ -86,12 +88,19 @@ export function useChatHistoryPushGesture({
           "worklet";
           settling.value = false;
           dragStartProgress.value = openProgress.value;
-          if (openProgress.value < 0.5) {
-            runOnJS(dismissKeyboard)();
-          }
+          dismissedKeyboard.value = false;
+          // Do not dismiss keyboard here — that interrupts text selection.
         })
         .onUpdate((event) => {
           "worklet";
+          if (
+            dismissedKeyboard.value === false &&
+            dragStartProgress.value < 0.5 &&
+            Math.abs(event.translationX) > 8
+          ) {
+            dismissedKeyboard.value = true;
+            runOnJS(dismissKeyboard)();
+          }
           const next = dragStartProgress.value + event.translationX / width;
           openProgress.value = Math.min(1, Math.max(0, next));
         })
@@ -123,7 +132,7 @@ export function useChatHistoryPushGesture({
             },
           );
         }),
-    [dragStartProgress, openProgress, settling, width],
+    [dismissedKeyboard, dragStartProgress, openProgress, settling, width],
   );
 }
 
