@@ -425,6 +425,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   );
 
   const newChat = useCallback(() => {
+    const priorChatId = activeChatIdRef.current;
     ++selectionGeneration.current;
     activeChatIdRef.current = null;
     setActiveChatId(null);
@@ -435,6 +436,13 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     setPendingMessage(null);
     setPersistenceError(null);
     setSelectionError(null);
+    // Drop durable composer attachments for the prior chat and the draft key.
+    void import("./pending-attachments").then(
+      ({ clearPendingAttachments, chatAttachmentKey, PENDING_ATTACHMENTS_DRAFT_KEY }) => {
+        clearPendingAttachments(chatAttachmentKey(priorChatId));
+        clearPendingAttachments(PENDING_ATTACHMENTS_DRAFT_KEY);
+      },
+    );
     const nextStore = buildStore(null);
     const prior = activeStoreRef.current;
     activeStoreRef.current = nextStore;

@@ -10,7 +10,13 @@ import { getSetupStatus } from "@/lib/setup";
 // policy (agent/channels/eve.ts).
 
 const MAX_BYTES = 10 * 1024 * 1024;
-const ALLOWED_MEDIA_TYPES = ["image/*", "text/*", "application/pdf"];
+const ALLOWED_MEDIA_TYPES = [
+  "image/*",
+  "text/*",
+  "application/pdf",
+  "application/json",
+  "application/csv",
+];
 const EXTRACTED_TEXT_LIMIT = 50_000;
 
 function mediaTypeAllowed(mediaType: string) {

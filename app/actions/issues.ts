@@ -6,6 +6,7 @@ import {
   createIssue,
   createArea,
   deleteAreaIfSettled,
+  deleteIssue,
   getIssue,
   getArea,
   findAreaByName,
@@ -168,6 +169,19 @@ export async function resolveIssueAction(id: string) {
 export async function reopenIssueAction(id: string) {
   const viewer = await requireViewer();
   await reopenIssue(viewer.id, id);
+  revalidateIssues();
+}
+
+export async function deleteIssueAction(id: string) {
+  const viewer = await requireViewer();
+
+  const issue = await getIssue(viewer.id, id);
+
+  if (!issue) {
+    throw new Error("Issue not found.");
+  }
+
+  await deleteIssue(viewer.id, id);
   revalidateIssues();
 }
 

@@ -1,8 +1,19 @@
+import { useMemo } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
-import { ChevronRightIcon, FolderGit2Icon, FolderIcon, InboxIcon, NetworkIcon, PlusIcon, Settings2Icon, SquarePenIcon } from "lucide-react-native";
-import Animated, { interpolate, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
+import {
+  ChevronRightIcon,
+  FolderIcon,
+  InboxIcon,
+  PlusIcon,
+  Settings2Icon,
+} from "lucide-react-native";
+import Animated, {
+  interpolate,
+  useAnimatedStyle,
+  type SharedValue,
+} from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
@@ -11,35 +22,55 @@ import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 
 /** Shared history content for the swipeable chat panel and direct-link screen. */
-export type SidebarDestination = "/areas" | "/projects" | "/issues" | "/repos" | "/settings";
+export type SidebarDestination = "/projects" | "/issues" | "/settings";
 
 export function HistoryScreen({
   onClose,
   onNavigate,
   visible = true,
   progress,
+  searchQuery = "",
 }: {
   onClose?: () => void;
   onNavigate?: (href: SidebarDestination) => void;
   visible?: boolean;
   /** Push open progress (0 closed → 1 open). Soft fade while scrubbing. */
   progress?: SharedValue<number>;
+  /** Filters recent chats by title (client-side). */
+  searchQuery?: string;
 }) {
   const { signedIn } = useAuth();
-  const { chats, activeChatId, chatsLoading, chatsError, hasMoreChats, loadMoreChats, reloadChats, selectChat, selectionError, newChat } = useChats();
-  const backgroundColor = useCSSVariable("--color-background") as string | undefined;
+  const {
+    chats,
+    activeChatId,
+    chatsLoading,
+    chatsError,
+    hasMoreChats,
+    loadMoreChats,
+    reloadChats,
+    selectChat,
+    selectionError,
+    newChat,
+  } = useChats();
+  const backgroundColor = useCSSVariable("--color-background") as
+    | string
+    | undefined;
   const insets = useSafeAreaInsets();
   const iosSidebar = Platform.OS === "ios" && !!onClose;
-  // Leave room for the floating Settings / New chat circles above the home indicator.
-  const iosFooterClearance = 48 + 40 + Math.max(insets.bottom, 12);
-  // Panel translate + blur are owned by the push layout; keep a light fade so
-  // content softens with the blur without going fully transparent mid-swipe.
+  // Room for the morphing search glass above the home indicator.
+  const iosSearchClearance = 52 + 24 + Math.max(insets.bottom, 12);
   const contentMotion = useAnimatedStyle(() => {
     const open = progress?.value ?? 1;
     return {
       opacity: interpolate(open, [0, 0.45, 1], [0.72, 0.9, 1]),
     };
   });
+
+  const filteredChats = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return chats;
+    return chats.filter((chat) => chat.title.toLowerCase().includes(q));
+  }, [chats, searchQuery]);
 
   const goToChat = () => {
     if (onClose) onClose();
@@ -49,7 +80,6 @@ export function HistoryScreen({
   const openDestination = (href: SidebarDestination) => {
     if (onNavigate) onNavigate(href);
     else if (href === "/settings") {
-      // Sheet covers history; don't close first.
       router.push(href);
     } else {
       onClose?.();
@@ -60,17 +90,31 @@ export function HistoryScreen({
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor }}
-      edges={iosSidebar ? ["top", "left", "right"] : onClose ? ["top", "left", "right", "bottom"] : ["left", "right", "bottom"]}
+      edges={
+        iosSidebar
+          ? ["top", "left", "right"]
+          : onClose
+            ? ["top", "left", "right", "bottom"]
+            : ["left", "right", "bottom"]
+      }
       accessibilityElementsHidden={!visible}
-      accessibilityActions={iosSidebar ? [{ name: "close", label: "Close sidebar" }] : undefined}
-      onAccessibilityAction={iosSidebar ? (event) => {
-        if (event.nativeEvent.actionName === "close") onClose?.();
-      } : undefined}
+      accessibilityActions={
+        iosSidebar ? [{ name: "close", label: "Close sidebar" }] : undefined
+      }
+      onAccessibilityAction={
+        iosSidebar
+          ? (event) => {
+              if (event.nativeEvent.actionName === "close") onClose?.();
+            }
+          : undefined
+      }
     >
       <Animated.View style={[{ flex: 1 }, contentMotion]}>
         {iosSidebar ? null : onClose ? (
           <View className="flex-row items-center justify-between px-4 py-2">
-            <Text className="text-lg font-semibold text-foreground">History</Text>
+            <Text className="text-lg font-semibold text-foreground">
+              History
+            </Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Back to chat"
@@ -84,9 +128,11 @@ export function HistoryScreen({
         <FlatList
           className="flex-1"
           contentContainerClassName={iosSidebar ? "px-5 pt-3" : "px-4 pb-8"}
-          contentContainerStyle={iosSidebar ? { paddingBottom: iosFooterClearance + 16 } : undefined}
-          data={chats}
-          extraData={`${activeChatId}:${chats.map((chat) => (chat.waitingForInput ? "1" : "0")).join("")}`}
+          contentContainerStyle={
+            iosSidebar ? { paddingBottom: iosSearchClearance + 16 } : undefined
+          }
+          data={filteredChats}
+          extraData={`${activeChatId}:${searchQuery}:${filteredChats.map((chat) => (chat.waitingForInput ? "1" : "0")).join("")}`}
           keyExtractor={(chat) => chat.id}
           renderItem={({ item: chat }) => (
             <Pressable
@@ -98,9 +144,18 @@ export function HistoryScreen({
                   : chat.title
               }
               className={`${iosSidebar ? "min-h-11 rounded-xl px-2.5" : "min-h-12 rounded-lg px-3"} flex-row items-center gap-2 ${activeChatId === chat.id ? "bg-muted/50" : ""}`}
-              onPress={() => { void selectChat(chat.id).then((selected) => { if (selected) goToChat(); }); }}
+              onPress={() => {
+                void selectChat(chat.id).then((selected) => {
+                  if (selected) goToChat();
+                });
+              }}
             >
-              <Text className={`${iosSidebar ? "text-[17px] font-normal text-foreground" : "text-base text-foreground"} flex-1`} numberOfLines={1}>{chat.title}</Text>
+              <Text
+                className={`${iosSidebar ? "text-[17px] font-normal text-foreground" : "text-base text-foreground"} flex-1`}
+                numberOfLines={1}
+              >
+                {chat.title}
+              </Text>
               {chat.waitingForInput ? (
                 <View
                   accessibilityElementsHidden
@@ -114,61 +169,92 @@ export function HistoryScreen({
             <>
               {iosSidebar ? (
                 <>
-                  <Pressable accessibilityRole="button" className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5" onPress={() => openDestination("/areas")}>
-                    <Icon as={NetworkIcon} className="size-5 text-foreground" />
-                    <Text className="text-[17px] font-normal text-foreground">Areas</Text>
-                  </Pressable>
-                  <Pressable accessibilityRole="button" className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5" onPress={() => openDestination("/projects")}>
+                  <Pressable
+                    accessibilityRole="button"
+                    className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5"
+                    onPress={() => openDestination("/projects")}
+                  >
                     <Icon as={FolderIcon} className="size-5 text-foreground" />
-                    <Text className="text-[17px] font-normal text-foreground">Projects</Text>
+                    <Text className="text-[17px] font-normal text-foreground">
+                      Projects
+                    </Text>
                   </Pressable>
-                  <Pressable accessibilityRole="button" className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5" onPress={() => openDestination("/issues")}>
+                  <Pressable
+                    accessibilityRole="button"
+                    className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5"
+                    onPress={() => openDestination("/issues")}
+                  >
                     <Icon as={InboxIcon} className="size-5 text-foreground" />
-                    <Text className="text-[17px] font-normal text-foreground">Issues</Text>
+                    <Text className="text-[17px] font-normal text-foreground">
+                      Tasks
+                    </Text>
                   </Pressable>
-                  <Pressable accessibilityRole="button" className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5" onPress={() => openDestination("/repos")}>
-                    <Icon as={FolderGit2Icon} className="size-5 text-foreground" />
-                    <Text className="text-[17px] font-normal text-foreground">Repos</Text>
-                  </Pressable>
-                  <Text className="px-2.5 pb-2 pt-7 text-[15px] font-normal text-muted-foreground">Recents</Text>
+                  <Text className="px-2.5 pb-2 pt-7 text-[15px] font-normal text-muted-foreground">
+                    Recents
+                  </Text>
                 </>
               ) : (
                 <>
-                  <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/settings")}>
-                    <Icon as={Settings2Icon} className="size-5 text-foreground" />
+                  <Pressable
+                    accessibilityRole="button"
+                    className="min-h-12 flex-row items-center gap-3 rounded-lg px-3"
+                    onPress={() => openDestination("/settings")}
+                  >
+                    <Icon
+                      as={Settings2Icon}
+                      className="size-5 text-foreground"
+                    />
                     <Text className="text-base text-foreground">Settings</Text>
                   </Pressable>
-                  <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => { newChat(); goToChat(); }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    className="min-h-12 flex-row items-center gap-3 rounded-lg px-3"
+                    onPress={() => {
+                      newChat();
+                      goToChat();
+                    }}
+                  >
                     <Icon as={PlusIcon} className="size-5 text-foreground" />
                     <Text className="text-base text-foreground">New chat</Text>
                   </Pressable>
-                  <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/areas")}>
-                    <Icon as={NetworkIcon} className="size-5 text-foreground" />
-                    <Text className="text-base text-foreground">Areas</Text>
-                  </Pressable>
-                  <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/projects")}>
+                  <Pressable
+                    accessibilityRole="button"
+                    className="min-h-12 flex-row items-center gap-3 rounded-lg px-3"
+                    onPress={() => openDestination("/projects")}
+                  >
                     <Icon as={FolderIcon} className="size-5 text-foreground" />
                     <Text className="text-base text-foreground">Projects</Text>
                   </Pressable>
-                  <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/issues")}>
+                  <Pressable
+                    accessibilityRole="button"
+                    className="min-h-12 flex-row items-center gap-3 rounded-lg px-3"
+                    onPress={() => openDestination("/issues")}
+                  >
                     <Icon as={InboxIcon} className="size-5 text-foreground" />
-                    <Text className="text-base text-foreground">Issues</Text>
+                    <Text className="text-base text-foreground">Tasks</Text>
                   </Pressable>
-                  <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/repos")}>
-                    <Icon as={FolderGit2Icon} className="size-5 text-foreground" />
-                    <Text className="text-base text-foreground">Repos</Text>
-                  </Pressable>
-                  <Text className="px-3 pb-2 pt-5 text-xs font-medium uppercase text-muted-foreground">Chats</Text>
+                  <Text className="px-3 pb-2 pt-5 text-xs font-medium uppercase text-muted-foreground">
+                    Chats
+                  </Text>
                 </>
               )}
-              {selectionError ? <Text className="px-3 py-2 text-sm text-destructive" accessibilityRole="alert">{selectionError}</Text> : null}
+              {selectionError ? (
+                <Text
+                  className="px-3 py-2 text-sm text-destructive"
+                  accessibilityRole="alert"
+                >
+                  {selectionError}
+                </Text>
+              ) : null}
               {chatsError && chats.length > 0 ? (
                 <Pressable
                   accessibilityRole="button"
                   className={`${iosSidebar ? "px-2.5" : "px-3"} min-h-12 justify-center`}
                   onPress={() => void reloadChats()}
                 >
-                  <Text className="text-sm text-destructive">{chatsError} Tap to retry.</Text>
+                  <Text className="text-sm text-destructive">
+                    {chatsError} Tap to retry.
+                  </Text>
                 </Pressable>
               ) : null}
             </>
@@ -183,13 +269,17 @@ export function HistoryScreen({
                   ? "Loading history"
                   : chatsError
                     ? "Could not load history"
-                    : signedIn
-                      ? "No chats yet"
-                      : "Sign in to see your chats"
+                    : searchQuery.trim()
+                      ? "No chats match your search"
+                      : signedIn
+                        ? "No chats yet"
+                        : "Sign in to see your chats"
               }
             >
               {chatsLoading ? (
-                <Text className="text-muted-foreground text-sm">Loading history…</Text>
+                <Text className="text-muted-foreground text-sm">
+                  Loading history…
+                </Text>
               ) : chatsError ? (
                 <>
                   <Text
@@ -206,8 +296,21 @@ export function HistoryScreen({
                     className="mt-4 min-h-11 justify-center self-start"
                     onPress={() => void reloadChats()}
                   >
-                    <Text className="text-sm font-medium text-foreground">Try again</Text>
+                    <Text className="text-sm font-medium text-foreground">
+                      Try again
+                    </Text>
                   </Pressable>
+                </>
+              ) : searchQuery.trim() ? (
+                <>
+                  <Text
+                    className={`${iosSidebar ? "text-[17px]" : "text-base"} font-medium text-foreground`}
+                  >
+                    No matches
+                  </Text>
+                  <Text className="text-muted-foreground mt-1.5 text-sm leading-5">
+                    Try a different search.
+                  </Text>
                 </>
               ) : (
                 <>
@@ -225,59 +328,21 @@ export function HistoryScreen({
               )}
             </View>
           }
-          ListFooterComponent={hasMoreChats ? (
-            <Pressable accessibilityRole="button" className="min-h-12 justify-center rounded-lg px-3" disabled={chatsLoading} onPress={() => void loadMoreChats()}>
-              <Text className="text-sm text-muted-foreground">{chatsLoading ? "Loading…" : "Load more"}</Text>
-            </Pressable>
-          ) : null}
-        />
-        {iosSidebar ? (
-          <>
-            <View
-              pointerEvents="box-none"
-              style={{ position: "absolute", top: 12, right: 20, zIndex: 20 }}
-            >
+          ListFooterComponent={
+            hasMoreChats && !searchQuery.trim() ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Back to chat"
-                className="h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card active:bg-muted/60"
-                onPress={onClose}
+                className="min-h-12 justify-center rounded-lg px-3"
+                disabled={chatsLoading}
+                onPress={() => void loadMoreChats()}
               >
-                <Icon as={ChevronRightIcon} className="size-6 text-foreground" />
+                <Text className="text-sm text-muted-foreground">
+                  {chatsLoading ? "Loading…" : "Load more"}
+                </Text>
               </Pressable>
-            </View>
-            <View
-              pointerEvents="box-none"
-              className="absolute right-0 bottom-0 left-0"
-              style={{ paddingBottom: Math.max(insets.bottom, 12), backgroundColor, zIndex: 20 }}
-            >
-              <View
-                pointerEvents="box-none"
-                className="flex-row items-center justify-between px-5 pt-3"
-              >
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Settings"
-                  className="h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card active:bg-muted/60"
-                  onPress={() => openDestination("/settings")}
-                >
-                  <Icon as={Settings2Icon} className="size-6 text-foreground" />
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="New chat"
-                  className="h-12 w-12 items-center justify-center rounded-full bg-foreground active:opacity-80"
-                  onPress={() => { newChat(); goToChat(); }}
-                >
-                  <SquarePenIcon
-                    className="size-6 text-background"
-                    color={backgroundColor}
-                  />
-                </Pressable>
-              </View>
-            </View>
-          </>
-        ) : null}
+            ) : null
+          }
+        />
       </Animated.View>
     </SafeAreaView>
   );

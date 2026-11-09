@@ -77,7 +77,7 @@ const TOOL_PRESENTATION: Record<string, ToolPresentation> = {
   grep: { label: "Search files", icon: TextSearchIcon },
   todo: { label: "To-dos", icon: ListChecksIcon },
   task_cancel: { label: "Cancel task", icon: BanIcon },
-  load_skill: { label: "Load skill", icon: SparklesIcon },
+  load_skill: { label: "Skill", icon: SparklesIcon },
   file__save_memory: { label: "Remember", icon: BrainIcon },
   file__remove_memory: { label: "Forget", icon: BrainIcon },
   get_surface_rubric: { label: "Get rubric", icon: ClipboardCheckIcon },

@@ -160,18 +160,35 @@ test("completed turns with an open approval stay action-required", () => {
 test("stale approvals on failed turns cannot block the next send", () => {
   const old = assistant([openApproval({ interactionId: "a1" })], "failed");
   assert.equal(hasPendingAction({ messages: [old] }), false);
-  assert.deepEqual(toThreadMessages({ messages: [old] })[0].status, { type: "incomplete", reason: "error" });
+  // Historical failures render as complete so old chats do not show a live error banner.
+  assert.deepEqual(toThreadMessages({ messages: [old] })[0].status, { type: "complete", reason: "stop" });
 });
 
-test("failed assistant messages keep their error status without a client reducer", () => {
+test("ended sessions with store error do not paint a live failure on history", () => {
   const data = {
     messages: [
       user,
-      assistant([{ type: "text", text: "Working", state: "done" }], "failed"),
+      assistant([{ type: "text", text: "Working", state: "done" }], "complete"),
     ],
   };
-  assert.deepEqual(toThreadMessages(data)[1].status, { type: "incomplete", reason: "error" });
-  assert.equal(toThreadMessages(data)[1].content[0].text, "Working");
+  assert.deepEqual(
+    toThreadMessages(data, { hasError: true })[1].status,
+    { type: "complete", reason: "stop" },
+  );
+  assert.equal(toThreadMessages(data, { hasError: true })[1].content[0].text, "Working");
+});
+
+test("live streaming failures still surface incomplete error status", () => {
+  const data = {
+    messages: [
+      user,
+      assistant([{ type: "text", text: "Working", state: "streaming" }], "streaming"),
+    ],
+  };
+  assert.deepEqual(
+    toThreadMessages(data, { isRunning: true, hasError: true })[1].status,
+    { type: "incomplete", reason: "error" },
+  );
 });
 
 test("hides only eve background notifications, not normal user text", () => {

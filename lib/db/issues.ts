@@ -561,3 +561,12 @@ export async function reopenIssue(userId: string, id: string) {
     .set({ status: "open", resolvedAt: null })
     .where(and(eq(issue.userId, userId), eq(issue.id, id)));
 }
+
+export async function deleteIssue(userId: string, id: string): Promise<boolean> {
+  const deleted = await db
+    .delete(issue)
+    .where(and(eq(issue.userId, userId), eq(issue.id, id)))
+    .returning({ id: issue.id });
+
+  return deleted.length > 0;
+}

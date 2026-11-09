@@ -9,23 +9,43 @@ import {
   useAuiState,
 } from "@assistant-ui/react-native";
 import * as DocumentPicker from "expo-document-picker";
-import { File } from "expo-file-system";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import { XIcon } from "lucide-react-native";
-import type { FC } from "react";
-import { Alert, Image, Platform, View } from "react-native";
+import { FileIcon, XIcon } from "lucide-react-native";
+import { useEffect, useRef, useState, type FC } from "react";
+import {
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCSSVariable } from "uniwind";
+
 import { uploadImageAttachment } from "@/src/image-attachment";
 import { uploadPdfAttachment } from "@/src/pdf-attachment";
+import {
+  isSupportedAttachment,
+  uploadFileAttachment,
+} from "@/src/file-attachment";
+import {
+  appendPendingAttachment,
+  chatAttachmentKey,
+  clearPendingAttachments,
+  getPendingAttachments,
+  setPendingAttachments,
+  type PendingAttachmentDraft,
+} from "@/src/pending-attachments";
 
 // Match live-camera sizing so photo turns stay under the gateway body cap.
-// Oversized inline data URLs were causing prepareSend to stick with
-// "Delivery not confirmed" after the eve turn POST failed.
 const MAX_IMAGE_EDGE = 1280;
 const MAX_IMAGES = 4;
 const MAX_IMAGE_BYTES = 1 * 1024 * 1024;
 const JPEG_QUALITY = 0.65;
-const MAX_TEXT_BYTES = 16 * 1024;
 
 const encodeJpeg = async (asset: ImagePicker.ImagePickerAsset) => {
   const context = ImageManipulator.manipulate(asset.uri);
@@ -69,6 +89,117 @@ const useAttachmentImageUri = () =>
     return part?.type === "image" ? part.image : undefined;
   });
 
+const useAttachmentTextPreview = () =>
+  useAuiState((s) => {
+    const part = s.attachment.content?.find((c) => c.type === "text");
+    return part?.type === "text" ? part.text : undefined;
+  });
+
+const useAttachmentMeta = () =>
+  useAuiState((s) => ({
+    name: s.attachment.name,
+    contentType: s.attachment.contentType,
+    type: s.attachment.type,
+  }));
+
+function AttachmentPreviewSheet({
+  open,
+  onClose,
+  name,
+  contentType,
+  imageUri,
+  text,
+}: {
+  readonly open: boolean;
+  readonly onClose: () => void;
+  readonly name: string;
+  readonly contentType: string;
+  readonly imageUri?: string;
+  readonly text?: string;
+}) {
+  const insets = useSafeAreaInsets();
+  const backgroundColor = useCSSVariable("--color-background") as
+    | string
+    | undefined;
+
+  return (
+    <Modal
+      visible={open}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <View className="flex-1 justify-end">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss"
+          className="absolute inset-0 bg-foreground/50"
+          onPress={onClose}
+        />
+        <View
+          style={{
+            backgroundColor,
+            paddingBottom: Math.max(insets.bottom, 16),
+          }}
+          className="max-h-[88%] rounded-t-3xl border-t border-border/60"
+        >
+          <View className="items-center pt-2.5 pb-1">
+            <View className="h-1 w-9 rounded-full bg-border" />
+          </View>
+          <View className="flex-row items-center justify-between px-5 pb-3">
+            <View className="min-w-0 flex-1 pr-3">
+              <Text
+                className="text-[17px] font-semibold text-foreground"
+                numberOfLines={2}
+              >
+                {name}
+              </Text>
+              <Text className="mt-0.5 text-[12px] text-muted-foreground">
+                {contentType}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              className="min-h-9 justify-center px-1"
+              onPress={onClose}
+            >
+              <Text className="text-[16px] text-muted-foreground">Done</Text>
+            </Pressable>
+          </View>
+          <ScrollView
+            className="px-5"
+            contentContainerClassName="pb-6"
+            bounces={false}
+          >
+            {imageUri ? (
+              <Image
+                source={{ uri: imageUri }}
+                className="w-full rounded-2xl bg-muted"
+                style={{ aspectRatio: 1, maxHeight: 420 }}
+                resizeMode="contain"
+                accessibilityLabel={name}
+              />
+            ) : (
+              <View className="rounded-2xl bg-muted/40 px-4 py-4">
+                <View className="mb-3 flex-row items-center gap-2">
+                  <Icon as={FileIcon} className="size-5 text-foreground" />
+                  <Text className="text-[15px] font-medium text-foreground">
+                    Document
+                  </Text>
+                </View>
+                <Text selectable className="text-[14px] leading-5 text-foreground">
+                  {text?.slice(0, 8_000) || "No preview available."}
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const AttachmentName: FC = () => (
   <View className="aui-attachment-file bg-muted border-border h-14 max-w-40 justify-center rounded-xl border px-3">
     <AttachmentPrimitive.Name
@@ -80,18 +211,27 @@ const AttachmentName: FC = () => (
 
 const ComposerAttachment: FC = () => {
   const uri = useAttachmentImageUri();
+  const text = useAttachmentTextPreview();
+  const meta = useAttachmentMeta();
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   return (
     <AttachmentPrimitive.Root className="aui-composer-attachment-root relative">
-      {uri ? (
-        <Image
-          source={{ uri }}
-          className="aui-composer-attachment-image bg-muted size-14 rounded-xl"
-          resizeMode="cover"
-        />
-      ) : (
-        <AttachmentName />
-      )}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`View ${meta.name}`}
+        onPress={() => setPreviewOpen(true)}
+      >
+        {uri ? (
+          <Image
+            source={{ uri }}
+            className="aui-composer-attachment-image bg-muted size-14 rounded-xl"
+            resizeMode="cover"
+          />
+        ) : (
+          <AttachmentName />
+        )}
+      </Pressable>
       <AttachmentPrimitive.Remove
         className="aui-composer-attachment-remove bg-foreground absolute -top-1.5 -right-1.5 size-5 items-center justify-center rounded-full"
         hitSlop={removeHitSlop}
@@ -99,42 +239,111 @@ const ComposerAttachment: FC = () => {
       >
         <Icon as={XIcon} className="text-background size-3" />
       </AttachmentPrimitive.Remove>
+      <AttachmentPreviewSheet
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        name={meta.name}
+        contentType={meta.contentType ?? "application/octet-stream"}
+        imageUri={uri}
+        text={text}
+      />
     </AttachmentPrimitive.Root>
   );
 };
 
-// Hit slop never extends past the parent view, so the badge grows into the 56dp
-// thumbnail root instead of outward: the thumbnail has no tap of its own, and the
-// top right of it removing the attachment is the price of a reachable target.
 const removeHitSlop = { top: 0, right: 0, bottom: 34, left: 34 };
 
-export const ComposerAttachments: FC = () => (
-  <AuiIf condition={(s) => s.composer.attachments.length > 0}>
-    <View className="aui-composer-attachments flex-row flex-wrap gap-2 px-1 pt-1">
-      <ComposerPrimitive.Attachments>
-        {() => <ComposerAttachment />}
-      </ComposerPrimitive.Attachments>
-    </View>
-  </AuiIf>
-);
+function PendingAttachmentsSync({ chatKey }: { readonly chatKey: string }) {
+  const attachments = useAuiState((s) => s.composer.attachments);
+  const seenComposerAttachments = useRef(false);
+  useEffect(() => {
+    const drafts: PendingAttachmentDraft[] = attachments.map((attachment) => ({
+      name: attachment.name,
+      contentType: attachment.contentType ?? "application/octet-stream",
+      type: attachment.type === "image" ? "image" : "document",
+      content: [...(attachment.content ?? [])] as PendingAttachmentDraft["content"],
+    }));
+    if (drafts.length > 0) {
+      seenComposerAttachments.current = true;
+      setPendingAttachments(chatKey, drafts);
+      return;
+    }
+    // Empty after the composer previously held attachments = user removed them.
+    // Empty on first paint = remount; keep the durable store for restore.
+    if (seenComposerAttachments.current) {
+      clearPendingAttachments(chatKey);
+    }
+  }, [attachments, chatKey]);
+  return null;
+}
+
+export const ComposerAttachments: FC<{
+  conversationId?: string | null;
+}> = ({ conversationId = null }) => {
+  const chatKey = chatAttachmentKey(conversationId);
+  return (
+    <>
+      <PendingAttachmentsSync chatKey={chatKey} />
+      <AuiIf condition={(s) => s.composer.attachments.length > 0}>
+        <View className="aui-composer-attachments flex-row flex-wrap gap-2 px-1 pt-1">
+          <ComposerPrimitive.Attachments>
+            {() => <ComposerAttachment />}
+          </ComposerPrimitive.Attachments>
+        </View>
+      </AuiIf>
+    </>
+  );
+};
 
 export const ComposerAddAttachment: FC<{
   preparing: boolean;
   onPreparingChange: (preparing: boolean) => void;
-}> = ({ preparing, onPreparingChange }) => {
+  conversationId?: string | null;
+}> = ({ preparing, onPreparingChange, conversationId = null }) => {
   const aui = useAui();
   const canAttach = useAuiState((s) => s.composer.isEditing);
-  const imageCount = useAuiState((s) => s.composer.attachments.filter((a) => a.type === "image").length);
+  const attachmentCount = useAuiState((s) => s.composer.attachments.length);
+  const imageCount = useAuiState(
+    (s) => s.composer.attachments.filter((a) => a.type === "image").length,
+  );
+  const chatKey = chatAttachmentKey(conversationId);
+  const restoringRef = useRef(false);
+
+  // Rehydrate after remounts that cleared composer state but left the store.
+  useEffect(() => {
+    if (attachmentCount > 0 || restoringRef.current) return;
+    const pending = getPendingAttachments(chatKey);
+    if (pending.length === 0) return;
+    restoringRef.current = true;
+    void (async () => {
+      try {
+        for (const draft of pending) {
+          await aui.composer.addAttachment({
+            name: draft.name,
+            contentType: draft.contentType,
+            type: draft.type,
+            content: draft.content,
+          });
+        }
+      } catch {
+        // Keep the durable store; the next mount can retry.
+      } finally {
+        restoringRef.current = false;
+      }
+    })();
+  }, [attachmentCount, aui, chatKey]);
+
+  const remember = (draft: PendingAttachmentDraft) => {
+    appendPendingAttachment(chatKey, draft);
+  };
 
   const addImageAsset = async (asset: ImagePicker.ImagePickerAsset) => {
     const base64 = await encodeJpeg(asset);
-    if (!base64 || Math.ceil(base64.length * 3 / 4) > MAX_IMAGE_BYTES) {
+    if (!base64 || Math.ceil((base64.length * 3) / 4) > MAX_IMAGE_BYTES) {
       throw new Error("Photo is too large after resizing (1 MB limit).");
     }
     const name = `${(asset.fileName ?? "photo").replace(/\.[^.]+$/, "")}.jpg`;
     const bytes = base64ToBytes(base64);
-    // Prefer a public Blob URL so the eve turn JSON stays small. Fall back to
-    // an inline data URL only when Blob is unavailable (local without store).
     let imageUri: string;
     try {
       imageUri = await uploadImageAttachment({
@@ -150,18 +359,24 @@ export const ComposerAddAttachment: FC<{
         throw cause;
       }
     }
-    await aui.composer.addAttachment({
+    const draft: PendingAttachmentDraft = {
       name,
       contentType: "image/jpeg",
       type: "image",
       content: [{ type: "image", image: imageUri }],
+    };
+    remember(draft);
+    await aui.composer.addAttachment({
+      name: draft.name,
+      contentType: draft.contentType,
+      type: draft.type,
+      content: draft.content,
     });
   };
 
   const takePhoto = async () => {
-    if (imageCount >= MAX_IMAGES) throw new Error(`You can attach up to ${MAX_IMAGES} photos.`);
-    // The browser camera must open in the same turn as the tap. Native asks
-    // first; that dialog is itself the user gesture.
+    if (imageCount >= MAX_IMAGES)
+      throw new Error(`You can attach up to ${MAX_IMAGES} photos.`);
     if (Platform.OS !== "web") {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
@@ -179,7 +394,8 @@ export const ComposerAddAttachment: FC<{
   };
 
   const pickImages = async () => {
-    if (imageCount >= MAX_IMAGES) throw new Error(`You can attach up to ${MAX_IMAGES} photos.`);
+    if (imageCount >= MAX_IMAGES)
+      throw new Error(`You can attach up to ${MAX_IMAGES} photos.`);
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
@@ -193,52 +409,80 @@ export const ComposerAddAttachment: FC<{
 
   const pickFile = async () => {
     const result = await DocumentPicker.getDocumentAsync({
-      type: ["application/pdf", "text/plain", "text/markdown"],
+      type: [
+        "application/pdf",
+        "text/*",
+        "text/csv",
+        "text/plain",
+        "text/markdown",
+        "application/json",
+        "application/csv",
+        "public.comma-separated-values-text",
+      ],
       copyToCacheDirectory: true,
     });
     if (result.canceled) return;
     const asset = result.assets[0];
     if (!asset) return;
+    if (!isSupportedAttachment(asset.name, asset.mimeType ?? undefined)) {
+      throw new Error("Choose a PDF, CSV, text, Markdown, or JSON file.");
+    }
+
     if (/\.pdf$/i.test(asset.name) || asset.mimeType === "application/pdf") {
       const summary = await uploadPdfAttachment({
         uri: asset.uri,
         name: asset.name,
-        // iOS often reports UTIs like public.data; keep the name-based PDF
-        // signal and let the upload helper normalize the media type.
         mimeType: asset.mimeType ?? "application/pdf",
         size: asset.size,
       });
-      await aui.composer.addAttachment({
+      const draft: PendingAttachmentDraft = {
         name: asset.name,
         contentType: "application/pdf",
         type: "document",
         content: [{ type: "text", text: summary }],
+      };
+      remember(draft);
+      await aui.composer.addAttachment({
+        name: draft.name,
+        contentType: draft.contentType,
+        type: draft.type,
+        content: draft.content,
       });
       return;
     }
-    if (!/\.(txt|md)$/i.test(asset.name) && !asset.mimeType?.startsWith("text/")) {
-      throw new Error("Choose a PDF, TXT, or Markdown file.");
-    }
-    const file = new File(asset.uri);
-    if ((asset.size ?? file.size) > MAX_TEXT_BYTES) {
-      throw new Error("Text files must be 16 KB or smaller.");
-    }
-    const text = await file.text();
-    if (text.length > MAX_TEXT_BYTES) throw new Error("Text file is too large.");
-    await aui.composer.addAttachment({
+
+    const uploaded = await uploadFileAttachment({
+      uri: asset.uri,
       name: asset.name,
-      contentType: asset.mimeType ?? "text/plain",
+      mimeType: asset.mimeType ?? undefined,
+      size: asset.size,
+    });
+    const draft: PendingAttachmentDraft = {
+      name: asset.name,
+      contentType: uploaded.mediaType,
       type: "document",
-      content: [{ type: "text", text: `[Attached text file: ${asset.name}]\n${text}` }],
+      content: [{ type: "text", text: uploaded.summary }],
+    };
+    remember(draft);
+    await aui.composer.addAttachment({
+      name: draft.name,
+      contentType: draft.contentType,
+      type: draft.type,
+      content: draft.content,
     });
   };
 
   const runPicker = (picker: () => Promise<void>) => {
     if (preparing || !canAttach) return;
     onPreparingChange(true);
-    void picker().catch((cause) => {
-      Alert.alert("Could not attach file", cause instanceof Error ? cause.message : "Try again.");
-    }).finally(() => onPreparingChange(false));
+    void picker()
+      .catch((cause) => {
+        Alert.alert(
+          "Could not attach file",
+          cause instanceof Error ? cause.message : "Try again.",
+        );
+      })
+      .finally(() => onPreparingChange(false));
   };
 
   return (
@@ -251,16 +495,43 @@ export const ComposerAddAttachment: FC<{
   );
 };
 
+/** Clear durable pending attachments after a successful send or new chat. */
+export function discardPendingAttachments(conversationId: string | null) {
+  clearPendingAttachments(chatAttachmentKey(conversationId));
+}
+
 const UserMessageAttachment: FC = () => {
   const uri = useAttachmentImageUri();
-  if (!uri) return <AttachmentName />;
+  const text = useAttachmentTextPreview();
+  const meta = useAttachmentMeta();
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   return (
-    <Image
-      source={{ uri }}
-      className="aui-user-message-attachment-image bg-muted size-[200px] rounded-2xl"
-      resizeMode="cover"
-    />
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`View ${meta.name}`}
+        onPress={() => setPreviewOpen(true)}
+      >
+        {uri ? (
+          <Image
+            source={{ uri }}
+            className="aui-user-message-attachment-image bg-muted size-[200px] rounded-2xl"
+            resizeMode="cover"
+          />
+        ) : (
+          <AttachmentName />
+        )}
+      </Pressable>
+      <AttachmentPreviewSheet
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        name={meta.name}
+        contentType={meta.contentType ?? "application/octet-stream"}
+        imageUri={uri}
+        text={text}
+      />
+    </>
   );
 };
 

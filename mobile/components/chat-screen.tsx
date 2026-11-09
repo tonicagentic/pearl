@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
-  ActionSheetIOS,
   Alert,
   Platform,
   Pressable,
@@ -43,6 +42,8 @@ import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
 import { FloatingChatNavigation } from "@/components/floating-chat-navigation";
+import { HistorySearchBar } from "@/components/history-search-bar";
+import { ThreadActionsDrawer } from "@/components/thread-actions-drawer";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { WorkspaceScreen } from "@/components/workspace-screen";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
@@ -118,6 +119,8 @@ export function ChatScreen({
   const autoSentPendingFor = useRef<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   // A new chat chosen from History should focus only after the drawer settles.
   const [drawerFocusEntry, setDrawerFocusEntry] = useState(newChatEntry);
@@ -136,6 +139,7 @@ export function ChatScreen({
     if (settledOpen.current === open) return;
     settledOpen.current = open;
     if (open) setDrawerFocusEntry(newChatEntry);
+    else setHistorySearch("");
     setDrawerOpen(open);
   }, [newChatEntry, settling]);
 
@@ -201,38 +205,18 @@ export function ChatScreen({
 
   const openThreadActions = useCallback(() => {
     dismissKeyboard();
-    const canDelete = Boolean(activeChatId);
-    if (Platform.OS === "ios") {
-      const options = canDelete
-        ? ["Cost", "Delete", "Cancel"]
-        : ["Cost", "Cancel"];
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          title: activeTitle === "New chat" ? undefined : activeTitle,
-          options,
-          cancelButtonIndex: options.length - 1,
-          destructiveButtonIndex: canDelete ? 1 : undefined,
-        },
-        (index) => {
-          if (index === 0) openCost();
-          if (canDelete && index === 1) confirmDelete();
-        },
-      );
-      return;
-    }
+    setActionsOpen(true);
+  }, []);
 
-    Alert.alert(
-      activeTitle === "New chat" ? "Thread" : activeTitle,
-      undefined,
-      [
-        { text: "Cost", onPress: openCost },
-        ...(canDelete
-          ? [{ text: "Delete", style: "destructive" as const, onPress: confirmDelete }]
-          : []),
-        { text: "Cancel", style: "cancel" as const },
-      ],
-    );
-  }, [activeChatId, activeTitle, confirmDelete, openCost]);
+  const openSettings = useCallback(() => {
+    dismissKeyboard();
+    router.push("/settings");
+  }, []);
+
+  const handleNewChatFromHistory = useCallback(() => {
+    newChat();
+    closeHistory();
+  }, [closeHistory, newChat]);
 
   const navigateFromHistory = useCallback((href: SidebarDestination) => {
     // Keep the history panel open underneath so Back returns to home, not
@@ -402,7 +386,13 @@ export function ChatScreen({
             else next.set(store, { ...preview, phase: "uncertain" });
             return next;
           });
-          if (!accepted) {
+          if (accepted) {
+            void import("@/src/pending-attachments").then(
+              ({ clearPendingAttachments, chatAttachmentKey }) => {
+                clearPendingAttachments(chatAttachmentKey(activeChatId));
+              },
+            );
+          } else {
             const detail = store.snapshot.error?.message?.trim();
             setSendError({
               store,
@@ -472,6 +462,7 @@ export function ChatScreen({
       wasSendPrepared,
       localSend,
       pendingMessage,
+      activeChatId,
       activeProjectId,
       ensureProjectForPlanMode,
       setActiveProjectId,
@@ -574,6 +565,7 @@ export function ChatScreen({
                 onNavigate={navigateFromHistory}
                 visible={drawerOpen}
                 progress={openProgress}
+                searchQuery={historySearch}
               />
               <AnimatedBlurView
                 pointerEvents="none"
@@ -640,24 +632,40 @@ export function ChatScreen({
             </Animated.View>
           </View>
         </GestureDetector>
-        {/* Outside the pan detector so menu/new-chat presses are not delayed. */}
+        {/* Outside the pan detector so menu/new-chat/search presses are not delayed. */}
         {Platform.OS === "ios" && chromeRevealed ? (
-          <Animated.View
-            pointerEvents="box-none"
-            style={[StyleSheet.absoluteFill, chatStyle]}
-          >
+          <>
             <FloatingChatNavigation
-              title={activeTitle}
+              openProgress={openProgress}
               hasMessages={projectedMessages.length > 0}
-              canDelete={Boolean(activeChatId)}
               onOpenHistory={openHistory}
-              onNewChat={newChat}
-              onOpenCost={openCost}
-              onDeleteChat={performDelete}
-              disabled={drawerOpen}
+              onOpenSettings={openSettings}
+              onNewChat={drawerOpen ? handleNewChatFromHistory : newChat}
+              onOpenThreadActions={openThreadActions}
+              historyOpen={drawerOpen}
             />
-          </Animated.View>
+            <HistorySearchBar
+              openProgress={openProgress}
+              value={historySearch}
+              onChangeText={setHistorySearch}
+              active={drawerOpen}
+            />
+          </>
         ) : null}
+        <ThreadActionsDrawer
+          open={actionsOpen}
+          title={activeTitle}
+          canDelete={Boolean(activeChatId)}
+          onClose={() => setActionsOpen(false)}
+          onOpenCost={() => {
+            setActionsOpen(false);
+            openCost();
+          }}
+          onDelete={() => {
+            setActionsOpen(false);
+            confirmDelete();
+          }}
+        />
         <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
         <WorkspaceScreen />
         <ProjectPickerModal

@@ -77,9 +77,11 @@ export function useChatHistoryPushGesture({
 }) {
   return useMemo(
     () =>
+      // Wide activeOffset so a long-press text selection is not claimed as a
+      // horizontal history swipe; vertical fail keeps scroll/selection free.
       Gesture.Pan()
-        .activeOffsetX([-24, 24])
-        .failOffsetY([-16, 16])
+        .activeOffsetX([-36, 36])
+        .failOffsetY([-12, 12])
         .onBegin(() => {
           "worklet";
           settling.value = false;

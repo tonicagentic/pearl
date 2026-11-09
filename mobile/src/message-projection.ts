@@ -324,10 +324,17 @@ export function toThreadMessages(
         !hasError &&
         message.metadata?.status !== "failed" &&
         hasOpenAuthorization(message);
+      // Only surface a live failure for the active turn. Stale store.error or
+      // historical metadata.status === "failed" on ended sessions must not
+      // paint "An error occurred" into old transcripts.
+      const liveFailure =
+        last &&
+        (isRunning || message.metadata?.status === "streaming") &&
+        (hasError || message.metadata?.status === "failed");
       const status: NonNullable<ThreadMessageLike["status"]> = pendingApproval
         ? { type: "requires-action", reason: "tool-calls" }
         : pendingAuth ? { type: "requires-action", reason: "interrupt" }
-        : message.metadata?.status === "failed" || (hasError && last)
+        : liveFailure
           ? { type: "incomplete", reason: "error" }
           : isRunning && last ? { type: "running" }
           : message.metadata?.status === "streaming" ? { type: "incomplete", reason: "cancelled" }

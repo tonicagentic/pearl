@@ -34,6 +34,9 @@ export interface TimelineStep {
   detail?: string;
   /** The file this step touched; set when the chip opens the canvas. */
   filePath?: string;
+  /** Distinct presentation for load_skill rows. */
+  kind?: "skill";
+  failed?: boolean;
 }
 
 export interface TimelineStat {
@@ -124,12 +127,31 @@ function StepRow({
           {label}
         </ShimmerLabel>
         {showChip ? (
-          <Text
-            numberOfLines={1}
-            className={cn(threadMeta, "min-w-0 flex-shrink leading-6")}
-          >
-            {step.chip}
-          </Text>
+          step.kind === "skill" ? (
+            <View
+              className={cn(
+                "max-w-[70%] rounded-full px-2.5 py-0.5",
+                step.failed ? "bg-destructive/15" : "bg-muted/80",
+              )}
+            >
+              <Text
+                numberOfLines={1}
+                className={cn(
+                  "text-[13px] leading-5",
+                  step.failed ? "text-destructive" : "text-foreground",
+                )}
+              >
+                {step.chip}
+              </Text>
+            </View>
+          ) : (
+            <Text
+              numberOfLines={1}
+              className={cn(threadMeta, "min-w-0 flex-shrink leading-6")}
+            >
+              {step.chip}
+            </Text>
+          )
         ) : null}
         {expandable ? <MetaChevron open={expanded} /> : null}
       </Pressable>

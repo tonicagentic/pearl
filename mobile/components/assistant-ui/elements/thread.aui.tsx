@@ -764,6 +764,7 @@ export const Thread: FC<ThreadProps> = ({
           waitingAction={waitingAction}
           autoFocus={autoFocus && chromeRevealed}
           focusNewChatKey={chromeRevealed ? focusNewChatKey : -1}
+          conversationId={conversationId}
         />
       </View>
       {Rail && (
@@ -804,7 +805,8 @@ const ComposerDock: FC<{
   waitingAction: ThreadProps["waitingAction"];
   autoFocus?: boolean;
   focusNewChatKey: number;
-}> = ({ floats, waitingAction, autoFocus, focusNewChatKey }) => {
+  conversationId?: string | null;
+}> = ({ floats, waitingAction, autoFocus, focusNewChatKey, conversationId }) => {
   const insets = useSafeAreaInsets();
   const keyboardHeight = useContext(KeyboardHeightContext);
   const chromeApi = useContext(ComposerChromeContext);
@@ -852,7 +854,11 @@ const ComposerDock: FC<{
       style={dockStyle}
     >
       {waitingAction ? <WaitingActionCard action={waitingAction} /> : null}
-      <Composer autoFocus={autoFocus} focusNewChatKey={focusNewChatKey} />
+      <Composer
+        autoFocus={autoFocus}
+        focusNewChatKey={focusNewChatKey}
+        conversationId={conversationId}
+      />
     </Animated.View>
   );
 };
@@ -1029,6 +1035,7 @@ const SpokenText: TextMessagePartComponent = ({ text }) => (
   <Text
     className="aui-spoken-message-text text-foreground text-sm leading-relaxed"
     selectable
+    selectionColor="rgba(127, 127, 127, 0.35)"
   >
     {text}
   </Text>
@@ -1286,7 +1293,11 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
 };
 
 
-const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFocus, focusNewChatKey }) => {
+const Composer: FC<{
+  autoFocus?: boolean;
+  focusNewChatKey: number;
+  conversationId?: string | null;
+}> = ({ autoFocus, focusNewChatKey, conversationId = null }) => {
   const { ComposerInput = DefaultComposerInput } = useContext(
     ThreadComponentsContext,
   );
@@ -1511,13 +1522,14 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
           style={COMPOSER_SHELL_STYLE}
         >
           {shellSurface}
-          <ComposerAttachments />
+          <ComposerAttachments conversationId={conversationId} />
           <ComposerInput key={focusNewChatKey} autoFocus={autoFocus} />
           <View className="aui-composer-action-wrapper flex-row items-center justify-between">
             <View className="flex-row items-center gap-1">
               <ComposerAddAttachment
                 preparing={preparingAttachment}
                 onPreparingChange={setPreparingAttachment}
+                conversationId={conversationId}
               />
               <ComposerModePicker disabled={preparingAttachment} />
               <ComposerModelPicker disabled={preparingAttachment} />
@@ -1548,7 +1560,7 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
           onTouchCancel={holdEnabled ? clearHold : undefined}
         >
           {shellSurface}
-          <ComposerAttachments />
+          <ComposerAttachments conversationId={conversationId} />
           <View collapsable={false}>
             <Animated.View pointerEvents="none" style={inputSpacerStyle} />
             <Animated.View
@@ -1563,6 +1575,7 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
               <ComposerAddAttachment
                 preparing={preparingAttachment}
                 onPreparingChange={setPreparingAttachment}
+                conversationId={conversationId}
               />
               <Animated.View pointerEvents="none" style={miniTrackStyle} />
               <Animated.View style={modelStyle} pointerEvents="box-none">
@@ -1712,24 +1725,41 @@ const ComposerTrailingControls: FC<{
 const AssistantFailure: FC = () => {
   const failed = useAuiState((s) => s.message.status?.type === "incomplete" && s.message.status.reason === "error");
   if (!failed) return null;
-  return <Text className="text-destructive py-2 text-sm" accessibilityRole="alert">
-    This response failed. Check the chat before sending again.
-  </Text>;
+  return (
+    <Text
+      className="text-destructive py-2 text-sm"
+      accessibilityRole="alert"
+      selectable
+    >
+      This response failed. Check the chat before sending again.
+    </Text>
+  );
 };
 
-const MessageError: FC = () => (
-  <ErrorPrimitive.Root className="aui-message-error-root border-destructive bg-destructive/10 dark:bg-destructive/5 mt-2 rounded-md border p-3">
-    <ErrorPrimitive.Message
-      className="aui-message-error-message text-destructive text-sm"
-      numberOfLines={2}
-    />
-  </ErrorPrimitive.Root>
-);
+const MessageError: FC = () => {
+  // RN assistant-ui has no MessagePrimitive.Error; only render when this
+  // message is a live incomplete failure (projection suppresses historical ones).
+  const failed = useAuiState(
+    (s) =>
+      s.message.status?.type === "incomplete" &&
+      s.message.status.reason === "error",
+  );
+  if (!failed) return null;
+  return (
+    <ErrorPrimitive.Root className="aui-message-error-root mt-2 rounded-2xl bg-destructive/10 px-3.5 py-2.5">
+      <ErrorPrimitive.Message
+        className="aui-message-error-message text-destructive text-sm"
+        selectable
+      />
+    </ErrorPrimitive.Root>
+  );
+};
 
 const UserText: TextMessagePartComponent = ({ text }) => (
   <Text
     className="aui-user-message-text text-foreground text-[17px] leading-[26px]"
     selectable
+    selectionColor="rgba(127, 127, 127, 0.35)"
   >
     {text}
   </Text>

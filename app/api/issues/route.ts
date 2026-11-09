@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   createIssue,
   createArea,
+  deleteIssue,
   ensureUserForPrincipal,
   findAreaByName,
   flattenAreaOptions,
@@ -199,6 +200,18 @@ export async function POST(request: Request) {
       const issue = await getIssue(viewer.id, id);
 
       return NextResponse.json({ issue: issue ? { ...issue, state: issueState(issue) } : null });
+    }
+
+    if (op === "delete") {
+      const id = typeof body.id === "string" ? body.id : "";
+
+      if (!id || !(await getIssue(viewer.id, id))) {
+        return NextResponse.json({ error: "Issue not found." }, { status: 404 });
+      }
+
+      await deleteIssue(viewer.id, id);
+
+      return NextResponse.json({ deleted: true, id });
     }
 
     return NextResponse.json({ error: `Unknown op: ${String(op)}` }, { status: 400 });

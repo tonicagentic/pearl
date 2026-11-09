@@ -103,6 +103,7 @@ function chipFor(part: ToolCallState): string {
 function toStep(part: TimelinePart): TimelineStep {
   const args = (part.type === "tool-call" ? (part.args ?? {}) : {}) as {
     filePath?: unknown;
+    skill?: unknown;
   };
   const filePath =
     typeof args.filePath === "string" ? args.filePath : undefined;
@@ -116,6 +117,27 @@ function toStep(part: TimelinePart): TimelineStep {
     };
   }
   const meta = TOOL_META[part.toolName];
+  if (part.toolName === "load_skill") {
+    const skillName =
+      typeof args.skill === "string" && args.skill.trim()
+        ? args.skill.trim()
+        : chipFor(part);
+    const failed =
+      part.result !== undefined &&
+      typeof part.result === "object" &&
+      part.result !== null &&
+      "error" in (part.result as object);
+    return {
+      verb: failed ? "Skill failed" : "Skill",
+      chip: skillName.slice(0, 200),
+      detail: failed
+        ? String((part.result as { error?: unknown }).error ?? "Could not load skill")
+        : `Loaded ${skillName}`,
+      filePath,
+      kind: "skill",
+      failed,
+    };
+  }
   return {
     verb: meta?.verb ?? part.toolName,
     chip: chipFor(part).slice(0, 200),
