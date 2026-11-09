@@ -27,7 +27,9 @@ Default product shape unless the user names something else:
 
 ## Skills to load next
 
-Load these when the task matches — do not paste their whole bodies into files:
+Load these when the task matches — do not paste their whole bodies into files.
+Read `references/` files from a loaded skill with `read_file` when you need a
+specific rule.
 
 | Topic | Load |
 | --- | --- |
@@ -35,8 +37,21 @@ Load these when the task matches — do not paste their whole bodies into files:
 | AI SDK streaming, tools, UI messages | `ai-sdk-patterns` |
 | Gateway model ids, fallbacks, decisions | `ai-gateway` |
 | Better Auth + Connect principals | `better-auth-connect` |
-| React / App Router quality bar | `react-next-practices` |
+| React / Next performance (Vercel rules) | `vercel-react-best-practices` |
+| React composition / compound components | `vercel-composition-patterns` |
+| View transitions / route animations | `vercel-react-view-transitions` |
+| Expo / React Native mobile | `vercel-react-native-skills` |
+| UI accessibility / UX audit | `web-design-guidelines` |
+| Verify change in running `next dev` | `next-dev-loop` |
+| Shrink client bundles | `next-bundle-optimizer` |
+| Adopt Cache Components | `next-cache-components-adoption` |
+| Grow instant static shells | `next-cache-components-optimizer` |
+| Adopt Partial Prefetching | `next-partial-prefetching-adoption` |
+| Optimize Partial Prefetch contracts | `next-partial-prefetching-optimizer` |
 | Shipping rules (PRs, HITL, secrets) | `coding-practices` |
+
+Upstream: `vercel-labs/agent-skills` and `vercel/next.js` skills (MIT), vendored
+under this folder with `rules/` / `reference/` normalized to eve `references/`.
 
 ## Do not invent
 

@@ -10,7 +10,8 @@ description: >
 
 - For a new app or non-trivial feature, load `pearl-vercel-stack` first, then
   the matching stack skills (`eve-agents`, `ai-sdk-patterns`, `ai-gateway`,
-  `better-auth-connect`, `react-next-practices`).
+  `better-auth-connect`, `vercel-react-best-practices`, and related React/Next
+  skills as needed).
 - Follow the repo's own `AGENTS.md` and package scripts before inventing a
   workflow.
 - Never commit secrets, `.env` files, or credentials.

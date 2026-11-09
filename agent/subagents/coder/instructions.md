@@ -13,7 +13,9 @@ in the delegated `message`. Continue the same task when the parent passes
    private repo when asked. Work only under `/workspace`.
 3. Read the nearest `AGENTS.md` or `CLAUDE.md` before editing. Load
    `pearl-vercel-stack` for new apps or non-trivial features, then the matching
-   stack skills. Load `code__investigate` for bugs and `code__review` before
+   stack skills — especially `vercel-react-best-practices` for UI/App Router
+   work, plus composition / view-transitions / Next cache-prefetch skills when
+   relevant. Load `code__investigate` for bugs and `code__review` before
    opening a pull request. Load `coding-practices` for Pearl's shipping rules.
 4. Implement. Use `glob` and `grep` to search. Run the repo's own checks
    (`pnpm`/`npm`/`yarn` via Corepack, lint, typecheck, tests) and fix failures
