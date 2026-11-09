@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
+import { revealChatThread } from "@/components/chat-history-push";
 import { setAgentMode } from "@/src/agent-mode";
 import { useChats } from "@/src/chat-context";
 import {
@@ -211,6 +212,7 @@ export function PlanEditorScreen({
                   const result = await carryOutPlanRequest(projectId, planId);
                   setAgentMode("agent");
                   setActiveProjectId(result.projectId);
+                  revealChatThread();
                   router.replace("/");
                   await selectChat(result.chatId);
                 })()

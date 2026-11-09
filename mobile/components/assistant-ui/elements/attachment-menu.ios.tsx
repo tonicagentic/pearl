@@ -3,6 +3,10 @@ import { accessibilityLabel, disabled as nativeDisabled } from "@expo/ui/swift-u
 import { PlusIcon } from "lucide-react-native";
 import { View } from "react-native";
 
+import {
+  pinComposerIfKeyboardVisible,
+  useComposerChrome,
+} from "@/components/assistant-ui/elements/composer-chrome";
 import { Icon } from "@/components/ui/icon";
 import type { AttachmentMenuProps } from "./attachment-menu";
 
@@ -13,12 +17,18 @@ export function AttachmentMenu({
   onChoosePhoto,
   onChooseFile,
 }: AttachmentMenuProps) {
+  const chrome = useComposerChrome();
   return (
     <Host style={{ width: 32, height: 32, backgroundColor: "transparent" }} ignoreSafeArea="keyboard">
       <Menu
         label={
           <RNHostView matchContents>
-            <View className="bg-muted size-8 items-center justify-center rounded-full">
+            <View
+              className="bg-muted size-8 items-center justify-center rounded-full"
+              // Host/Menu does not bubble touches to the action row — pin here
+              // before the menu resigns the field and drops the keyboard.
+              onTouchStart={() => pinComposerIfKeyboardVisible(chrome)}
+            >
               <Icon as={PlusIcon} size={14} className="text-foreground" />
             </View>
           </RNHostView>

@@ -6,6 +6,7 @@ import Animated, { interpolate, useAnimatedStyle, type SharedValue } from "react
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
+import { Icon } from "@/components/ui/icon";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 
@@ -76,7 +77,7 @@ export function HistoryScreen({
               className="h-11 w-11 items-center justify-center"
               onPress={onClose}
             >
-              <ChevronRightIcon className="size-5 text-foreground" />
+              <Icon as={ChevronRightIcon} className="size-5 text-foreground" />
             </Pressable>
           </View>
         ) : null}
@@ -114,19 +115,19 @@ export function HistoryScreen({
               {iosSidebar ? (
                 <>
                   <Pressable accessibilityRole="button" className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5" onPress={() => openDestination("/areas")}>
-                    <NetworkIcon className="size-5 text-foreground" />
+                    <Icon as={NetworkIcon} className="size-5 text-foreground" />
                     <Text className="text-[17px] font-normal text-foreground">Areas</Text>
                   </Pressable>
                   <Pressable accessibilityRole="button" className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5" onPress={() => openDestination("/projects")}>
-                    <FolderIcon className="size-5 text-foreground" />
+                    <Icon as={FolderIcon} className="size-5 text-foreground" />
                     <Text className="text-[17px] font-normal text-foreground">Projects</Text>
                   </Pressable>
                   <Pressable accessibilityRole="button" className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5" onPress={() => openDestination("/issues")}>
-                    <InboxIcon className="size-5 text-foreground" />
+                    <Icon as={InboxIcon} className="size-5 text-foreground" />
                     <Text className="text-[17px] font-normal text-foreground">Issues</Text>
                   </Pressable>
                   <Pressable accessibilityRole="button" className="min-h-11 flex-row items-center gap-3 rounded-xl px-2.5" onPress={() => openDestination("/repos")}>
-                    <FolderGit2Icon className="size-5 text-foreground" />
+                    <Icon as={FolderGit2Icon} className="size-5 text-foreground" />
                     <Text className="text-[17px] font-normal text-foreground">Repos</Text>
                   </Pressable>
                   <Text className="px-2.5 pb-2 pt-7 text-[15px] font-normal text-muted-foreground">Recents</Text>
@@ -134,27 +135,27 @@ export function HistoryScreen({
               ) : (
                 <>
                   <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/settings")}>
-                    <Settings2Icon className="size-5 text-foreground" />
+                    <Icon as={Settings2Icon} className="size-5 text-foreground" />
                     <Text className="text-base text-foreground">Settings</Text>
                   </Pressable>
                   <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => { newChat(); goToChat(); }}>
-                    <PlusIcon className="size-5 text-foreground" />
+                    <Icon as={PlusIcon} className="size-5 text-foreground" />
                     <Text className="text-base text-foreground">New chat</Text>
                   </Pressable>
                   <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/areas")}>
-                    <NetworkIcon className="size-5 text-foreground" />
+                    <Icon as={NetworkIcon} className="size-5 text-foreground" />
                     <Text className="text-base text-foreground">Areas</Text>
                   </Pressable>
                   <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/projects")}>
-                    <FolderIcon className="size-5 text-foreground" />
+                    <Icon as={FolderIcon} className="size-5 text-foreground" />
                     <Text className="text-base text-foreground">Projects</Text>
                   </Pressable>
                   <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/issues")}>
-                    <InboxIcon className="size-5 text-foreground" />
+                    <Icon as={InboxIcon} className="size-5 text-foreground" />
                     <Text className="text-base text-foreground">Issues</Text>
                   </Pressable>
                   <Pressable accessibilityRole="button" className="min-h-12 flex-row items-center gap-3 rounded-lg px-3" onPress={() => openDestination("/repos")}>
-                    <FolderGit2Icon className="size-5 text-foreground" />
+                    <Icon as={FolderGit2Icon} className="size-5 text-foreground" />
                     <Text className="text-base text-foreground">Repos</Text>
                   </Pressable>
                   <Text className="px-3 pb-2 pt-5 text-xs font-medium uppercase text-muted-foreground">Chats</Text>
@@ -242,7 +243,7 @@ export function HistoryScreen({
                 className="h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card active:bg-muted/60"
                 onPress={onClose}
               >
-                <ChevronRightIcon className="size-6 text-foreground" />
+                <Icon as={ChevronRightIcon} className="size-6 text-foreground" />
               </Pressable>
             </View>
             <View
@@ -260,7 +261,7 @@ export function HistoryScreen({
                   className="h-12 w-12 items-center justify-center rounded-full border border-border/40 bg-card active:bg-muted/60"
                   onPress={() => openDestination("/settings")}
                 >
-                  <Settings2Icon className="size-6 text-foreground" />
+                  <Icon as={Settings2Icon} className="size-6 text-foreground" />
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"

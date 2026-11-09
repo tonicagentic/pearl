@@ -5,6 +5,8 @@ import { EllipsisIcon, HouseIcon, SquarePenIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
+import { Icon } from "@/components/ui/icon";
+
 const CAN_USE_LIQUID_GLASS = Platform.OS === "ios" && isGlassEffectAPIAvailable() && isLiquidGlassAvailable();
 const surfaceStyle = {
   position: "absolute",
@@ -126,7 +128,7 @@ export function FloatingChatNavigation({
           onPress={onOpenHistory}
           style={styles.circleButton}
         >
-          <HouseIcon className="size-6 text-foreground" />
+          <Icon as={HouseIcon} className="size-6 text-foreground" />
         </Pressable>
       </View>
       {hasMessages ? (
@@ -141,7 +143,7 @@ export function FloatingChatNavigation({
               onPress={onNewChat}
               style={styles.pillButton}
             >
-              <SquarePenIcon className="size-6 text-foreground" />
+              <Icon as={SquarePenIcon} className="size-6 text-foreground" />
             </Pressable>
           </Animated.View>
           <Animated.View style={[styles.moreAction, moreStyle]}>
@@ -154,7 +156,7 @@ export function FloatingChatNavigation({
               onPress={openMore}
               style={styles.pillButton}
             >
-              <EllipsisIcon className="size-6 text-foreground" />
+              <Icon as={EllipsisIcon} className="size-6 text-foreground" />
             </Pressable>
           </Animated.View>
         </Animated.View>

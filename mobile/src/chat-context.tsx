@@ -11,15 +11,13 @@ import {
 } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import {
-  EveAgentStore,
+  SessionStore,
   type ClientSessionState,
-  type EveMessageData,
-  type MessageStreamEvent,
+  type SessionStreamEvent,
 } from "eve/client";
 
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
 import { traceStream } from "./stream-trace";
-import { createMobileMessageReducer } from "./message-reducer";
 import { pendingMessageLabel, hasPendingAction } from "./message-projection";
 import {
   appendChatEvents,
@@ -38,7 +36,7 @@ import { useAuth } from "./auth";
 
 type ChatsContextValue = {
   /** The active eve store: rebuilt whenever a different chat is selected. */
-  readonly store: EveAgentStore<EveMessageData>;
+  readonly store: SessionStore;
   readonly activeChatId: string | null;
   /** Project linked to the active chat (Plan mode / project chats). */
   readonly activeProjectId: string | null;
@@ -59,7 +57,7 @@ type ChatsContextValue = {
   readonly pendingMessage: string | null;
   readonly retrySync: () => Promise<void>;
   /** Whether the durable pending marker completed before this store's send. */
-  readonly wasSendPrepared: (source: EveAgentStore<EveMessageData>) => boolean;
+  readonly wasSendPrepared: (source: SessionStore) => boolean;
   /** Drop the active chat and start fresh (the row is created on first send). */
   readonly newChat: () => void;
   /** Delete a stored chat; opens a new chat when the deleted id is active. */
@@ -79,9 +77,11 @@ type ChatBinding = {
   /** Last event count written by a full snapshot; used to skip idle open/resume saves. */
   savedEventCount: number;
   queue: Promise<void>;
-  batch: { event: MessageStreamEvent; eventIndex: number }[];
+  batch: { event: SessionStreamEvent; eventIndex: number }[];
   timer: ReturnType<typeof setTimeout> | null;
   syncFailed: boolean;
+  /** Release SessionStore observation when the store is no longer mounted. */
+  stopObserving: (() => void) | null;
 };
 
 const traceSend = (binding: ChatBinding, stage: string) => {
@@ -95,11 +95,11 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const { signedIn } = useAuth();
   const activeChatIdRef = useRef<string | null>(null);
   const selectionGeneration = useRef(0);
-  const [bindings] = useState(() => new WeakMap<EveAgentStore<EveMessageData>, ChatBinding>());
+  const [bindings] = useState(() => new WeakMap<SessionStore, ChatBinding>());
   // Retain a store until its final checkpoint finishes; reselecting it must not
   // create a second writer for the same chat.
-  const [retainedStores] = useState(() => new Map<string, EveAgentStore<EveMessageData>>());
-  const activeStoreRef = useRef<EveAgentStore<EveMessageData> | null>(null);
+  const [retainedStores] = useState(() => new Map<string, SessionStore>());
+  const activeStoreRef = useRef<SessionStore | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectIdState] = useState<string | null>(null);
   const activeProjectIdRef = useRef<string | null>(null);
@@ -124,20 +124,16 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   }, [bindings]);
 
   const buildStore = useCallback((chat: ActiveChat | null) => {
-    const store = new EveAgentStore<EveMessageData>({
-      host: AGENT_URL,
+    // Do not replay saved pre-v27 events as initialEvents — open the stored
+    // session and resume() so the server upconverts older history.
+    const store = new SessionStore({
+      baseUrl: AGENT_URL,
       headers: () => {
         const credential = getAuthCookie();
         return credential ? { authorization: `Bearer ${credential}` } : ({} as Record<string, string>);
       },
-      reducer: createMobileMessageReducer(),
-      ...(chat
-        ? {
-            initialEvents: chat.events,
-            ...(chat.session
-              ? { initialSession: chat.session as ClientSessionState }
-              : {}),
-          }
+      ...(chat?.session
+        ? { initialSession: chat.session as ClientSessionState }
         : {}),
     });
     bindings.set(store, {
@@ -147,12 +143,13 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       pendingMessage: chat?.pendingUserMessage ?? null,
       sendPrepared: false,
       sendStartedAt: null,
-      eventIndex: store.snapshot.events.length,
-      savedEventCount: store.snapshot.events.length,
+      eventIndex: 0,
+      savedEventCount: 0,
       queue: Promise.resolve(),
       batch: [],
       timer: null,
       syncFailed: false,
+      stopObserving: null,
     });
     if (chat) retainedStores.set(chat.id, store);
     return store;
@@ -196,15 +193,17 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   // One store per active chat; rebuilt only when the selection changes.
   const [store, setStore] = useState(() => buildStore(null));
 
-  const pruneIdleStore = useCallback((prior: EveAgentStore<EveMessageData> | null) => {
+  const pruneIdleStore = useCallback((prior: SessionStore | null) => {
     if (!prior) return;
     const binding = bindings.get(prior);
     if (!binding?.id || binding.pendingMessage || binding.syncFailed) return;
     // Do not evict until all queued events and snapshots have settled.
     void binding.queue.then(() => {
-      if (activeStoreRef.current !== prior && prior.snapshot.status === "ready" &&
+      if (activeStoreRef.current !== prior && prior.snapshot.status === "idle" &&
           !binding.pendingMessage && !binding.syncFailed && binding.id &&
           retainedStores.get(binding.id) === prior) {
+        binding.stopObserving?.();
+        binding.stopObserving = null;
         retainedStores.delete(binding.id);
       }
     });
@@ -232,14 +231,17 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       }
     };
 
+    binding.stopObserving?.();
+    binding.stopObserving = store.observe();
     store.setCallbacks({
       onEvent: (event) => {
-        if (event.type === "message.appended") {
-          traceStream("delta", event.data.messageDelta.length);
+        if (event.type === "content.delta") {
+          const delta = event.data.delta;
+          if (typeof delta === "string") traceStream("delta", delta.length);
         }
         if (!binding.id) return;
         binding.batch.push({ event, eventIndex: binding.eventIndex++ });
-        if (event.type === "message.received") {
+        if (event.type === "delivery.consumed") {
           traceSend(binding, "eve accepted");
           binding.pendingMessage = null;
           if (activeStoreRef.current === store) setPendingMessage(null);
@@ -340,6 +342,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     if (store.snapshot.session) void store.resume();
     return () => {
       flush();
+      binding.stopObserving?.();
+      binding.stopObserving = null;
     };
   }, [store, reloadChats, bindings, retainedStores]);
 
@@ -451,7 +455,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   );
 
   const wasSendPrepared = useCallback(
-    (source: EveAgentStore<EveMessageData>) => bindings.get(source)?.sendPrepared ?? false,
+    (source: SessionStore) => bindings.get(source)?.sendPrepared ?? false,
     [bindings],
   );
 
@@ -490,7 +494,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     const chatId = activeChatId;
     if (!chatId) return;
     return store.subscribe(() => {
-      const waiting = hasPendingAction(store.snapshot.data);
+      const waiting = hasPendingAction(store.snapshot);
       setChats((current) => {
         const index = current.findIndex((chat) => chat.id === chatId);
         if (index < 0 || Boolean(current[index]?.waitingForInput) === waiting) {

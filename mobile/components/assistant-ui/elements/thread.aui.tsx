@@ -3,6 +3,10 @@ import {
   ComposerAttachments,
   UserMessageAttachments,
 } from "@/components/assistant-ui/elements/attachment.aui";
+import {
+  ComposerChromeContext,
+  type ComposerChromeApi,
+} from "@/components/assistant-ui/elements/composer-chrome";
 import { ComposerModePicker } from "@/components/mode-picker";
 import { ComposerModelPicker } from "@/components/model-picker";
 import {
@@ -267,26 +271,6 @@ const lightComposerImpact = () => {
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 };
 const KeyboardHeightContext = createContext<SharedValue<number> | null>(null);
-
-type ComposerChromeApi = {
-  readonly stickyExpanded: SharedValue<number>;
-  /** 1 while a live call fills the composer — keeps dock inset expanded with no keyboard. */
-  readonly liveActive: SharedValue<number>;
-  /** Hold full chrome (focus or chrome-control tap before a native menu opens). */
-  readonly pinExpanded: () => void;
-  /** Collapse shortly after blur once the keyboard is gone (menus get a beat to open). */
-  readonly scheduleCollapse: () => void;
-  /** Collapse immediately (interactive dismiss, Live, etc.). */
-  readonly collapseNow: () => void;
-  readonly setLiveActive: (active: boolean) => void;
-};
-
-/**
- * Sticky full-chrome API. Native attachment/model menus resign the field and
- * drop the keyboard; pin + delayed collapse keeps the morph from jumping mid-tap
- * without leaving the composer stuck expanded after dismiss.
- */
-const ComposerChromeContext = createContext<ComposerChromeApi | null>(null);
 
 const ThreadComponentsContext =
   createContext<ThreadComponents>(EMPTY_COMPONENTS);
@@ -1363,12 +1347,17 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
             chromeApi?.stickyExpanded.value ?? 0,
           )
         : 1;
-    const holdScale = interpolate(pressed.value, [0, 1], [1, 0.975]);
+    // Hold scale only while collapsed — scaling the focused TextInput
+    // dismisses the keyboard and collapses the morph.
+    const holdScale =
+      holdEnabled && progress < 0.5
+        ? interpolate(pressed.value, [0, 1], [1, 0.975])
+        : 1;
     return {
       paddingTop: interpolate(progress, [0, 1], [6, 8]),
       paddingBottom: interpolate(progress, [0, 1], [6, 8]),
       paddingHorizontal: 8,
-      transform: [{ scale: holdEnabled ? holdScale : 1 }],
+      transform: [{ scale: holdScale }],
     };
   });
 
@@ -1472,6 +1461,9 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
 
   const beginHold = useCallback(() => {
     if (!holdEnabled) return;
+    // Skip while expanded — scaling the focused field collapses the morph.
+    if (KeyboardController.isVisible()) return;
+    if ((chromeApi?.stickyExpanded.value ?? 0) > 0.5) return;
     if (holdTimer.current) clearTimeout(holdTimer.current);
     holdTimer.current = setTimeout(() => {
       holdTimer.current = null;
@@ -1479,7 +1471,7 @@ const Composer: FC<{ autoFocus?: boolean; focusNewChatKey: number }> = ({ autoFo
       pressed.value = withSpring(1, COMPOSER_HOLD_SPRING);
       lightComposerImpact();
     }, 120);
-  }, [holdEnabled, pressed]);
+  }, [chromeApi, holdEnabled, pressed]);
 
   const shellSurface = showGlass ? (
     <GlassView

@@ -12,6 +12,7 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
+import { revealChatThread } from "@/components/chat-history-push";
 import { useChats } from "@/src/chat-context";
 import { createChat } from "@/src/chats-client";
 import {
@@ -267,6 +268,7 @@ export function ProjectDetailScreen({
                   void createChat(undefined, projectId)
                     .then(async (chat) => {
                       setActiveProjectId(projectId);
+                      revealChatThread();
                       router.replace("/");
                       await selectChat(chat.id);
                     })
@@ -297,6 +299,7 @@ export function ProjectDetailScreen({
                   className="min-h-11 justify-center border-b border-border/60 py-2.5"
                   onPress={() => {
                     setActiveProjectId(projectId);
+                    revealChatThread();
                     router.replace("/");
                     void selectChat(chat.id);
                   }}

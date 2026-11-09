@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import * as Haptics from "expo-haptics";
 import {
   type SharedValue,
   runOnJS,
@@ -16,6 +17,9 @@ type SettleHandler = (open: boolean) => void;
 // Module-level settle bridge so gesture worklets never close over React
 // components that import Keyboard (KeyboardImpl is not worklet-serializable).
 let settleHandler: SettleHandler | null = null;
+// External callers (project chat, notification tap) ask the mounted chat
+// screen to snap the panel closed onto the thread before navigating home.
+let revealThreadHandler: (() => void) | null = null;
 
 export function setChatHistoryPushSettleHandler(handler: SettleHandler | null) {
   settleHandler = handler;
@@ -25,12 +29,27 @@ function notifySettled(open: boolean) {
   settleHandler?.(open);
 }
 
+function tickSelectionHaptic() {
+  void Haptics.selectionAsync().catch(() => {});
+}
+
+/**
+ * Snap the chat panel closed so a later `router.replace("/")` lands on the
+ * thread rather than a history panel that was left open underneath.
+ */
+export function revealChatThread() {
+  revealThreadHandler?.();
+}
+
 /** Animate openProgress to 0 or 1, then notify JS when the spring finishes. */
 export function animateChatHistoryPush(
   openProgress: SharedValue<number>,
   settling: SharedValue<boolean>,
   open: boolean,
 ) {
+  // Called from JS (Home button / new chat). Tick when the destination changes.
+  const wasOpen = openProgress.value >= 0.5;
+  if (wasOpen !== open) tickSelectionHaptic();
   settling.value = true;
   openProgress.value = withSpring(open ? 1 : 0, PUSH_SPRING, (finished) => {
     if (finished) {
@@ -85,6 +104,10 @@ export function useChatHistoryPushGesture({
             : flingClose
               ? false
               : projected > 0.5;
+          const startedOpen = dragStartProgress.value >= 0.5;
+          if (startedOpen !== shouldOpen) {
+            runOnJS(tickSelectionHaptic)();
+          }
           settling.value = true;
           openProgress.value = withSpring(
             shouldOpen ? 1 : 0,
@@ -107,5 +130,15 @@ export function useChatHistoryPushSettle(handler: SettleHandler) {
   useEffect(() => {
     setChatHistoryPushSettleHandler(handler);
     return () => setChatHistoryPushSettleHandler(null);
+  }, [handler]);
+}
+
+/** Register the reveal-thread bridge for the lifetime of the chat screen. */
+export function useChatHistoryRevealThread(handler: () => void) {
+  useEffect(() => {
+    revealThreadHandler = handler;
+    return () => {
+      if (revealThreadHandler === handler) revealThreadHandler = null;
+    };
   }, [handler]);
 }

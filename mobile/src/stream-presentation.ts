@@ -90,7 +90,7 @@ export function shouldShowThinking(
   );
 }
 
-// eve creates its assistant row on step.started, after message.received. Until
+// eve creates its assistant row after delivery.consumed / model.started. Until
 // then, keep a display-only row at that same position; it is never persisted.
 // `awaitingReply` covers the optimistic preparing window before streaming
 // confirms the user turn, so Thinking can replace "Sending…".

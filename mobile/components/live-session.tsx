@@ -224,7 +224,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       return;
     }
     const status = store.snapshot.status;
-    if (status === "streaming" || status === "submitted" || status === "resuming") {
+    if (status === "busy" || status === "resuming") {
       endingRef.current = false;
       setHandoffError("This chat is still responding. Save the live conversation after it finishes.");
       return;

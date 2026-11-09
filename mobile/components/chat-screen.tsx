@@ -32,10 +32,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable, useUniwind } from "uniwind";
 
 import { HistoryScreen, type SidebarDestination } from "@/components/app-drawer";
+import { Icon } from "@/components/ui/icon";
 import {
   animateChatHistoryPush,
   useChatHistoryPushGesture,
   useChatHistoryPushSettle,
+  useChatHistoryRevealThread,
 } from "@/components/chat-history-push";
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
@@ -55,7 +57,7 @@ import {
 import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
 import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft, type LocalSend } from "@/src/send-feedback";
 import { useChats } from "@/src/chat-context";
-import { toThreadMessages, type SpikeState } from "@/src/eve-transport";
+import { toThreadMessages } from "@/src/eve-transport";
 
 const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
 /** Peak blur while scrubbing between recents and the thread. */
@@ -109,7 +111,6 @@ export function ChatScreen({
   const dragStartProgress = useSharedValue(0);
   const settling = useSharedValue(false);
   const settledOpen = useRef(false);
-  const pendingDestination = useRef<SidebarDestination | null>(null);
   const projectPickWaiter = useRef<{
     resolve: (projectId: string) => void;
     reject: (reason?: unknown) => void;
@@ -136,13 +137,6 @@ export function ChatScreen({
     settledOpen.current = open;
     if (open) setDrawerFocusEntry(newChatEntry);
     setDrawerOpen(open);
-    // A single tick at the end of the spring, not on every drag frame.
-    void Haptics.selectionAsync().catch(() => {});
-    if (!open && pendingDestination.current) {
-      const href = pendingDestination.current;
-      pendingDestination.current = null;
-      router.push(href);
-    }
   }, [newChatEntry, settling]);
 
   const settleRef = useRef(onDrawerSettled);
@@ -165,6 +159,17 @@ export function ChatScreen({
     dismissKeyboard();
     animateTo(true);
   }, [animateTo]);
+
+  // Project chats / notification taps replace onto `/` while the panel may
+  // still be open underneath — snap closed so they land on the thread.
+  const revealThread = useCallback(() => {
+    if (settledOpen.current === false && openProgress.value < 0.01) return;
+    settling.value = false;
+    openProgress.value = 0;
+    settledOpen.current = false;
+    setDrawerOpen(false);
+  }, [openProgress, settling]);
+  useChatHistoryRevealThread(revealThread);
 
   const openCost = useCallback(() => {
     dismissKeyboard();
@@ -230,16 +235,10 @@ export function ChatScreen({
   }, [activeChatId, activeTitle, confirmDelete, openCost]);
 
   const navigateFromHistory = useCallback((href: SidebarDestination) => {
-    // Form sheets should cover the open history panel — don't slide back to
-    // the thread first. Full-screen destinations still settle the drawer so
-    // dismiss lands on chat.
-    if (href === "/settings") {
-      router.push(href);
-      return;
-    }
-    pendingDestination.current = href;
-    closeHistory();
-  }, [closeHistory]);
+    // Keep the history panel open underneath so Back returns to home, not
+    // the thread. Settings (form sheet) already covered the open panel.
+    router.push(href);
+  }, []);
 
   const historyStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: (openProgress.value - 1) * width }],
@@ -282,35 +281,45 @@ export function ChatScreen({
   const [sendError, setSendError] = useState<{ store: object; message: string } | null>(null);
   const [localSends, setLocalSends] = useState<Map<object, LocalSend>>(() => new Map());
   const localSend = localSends.get(store) ?? null;
-  const state = useSyncExternalStore<SpikeState>(
+  const messages = useSyncExternalStore(
     (cb) => store.subscribe(cb),
-    () => store.snapshot.data,
+    () => store.snapshot.messages,
   );
-  const status = useSyncExternalStore<string>(
+  const status = useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.snapshot.status,
+  );
+  const storeError = useSyncExternalStore(
+    (cb) => store.subscribe(cb),
+    () => store.snapshot.error,
   );
   const events = useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.snapshot.events,
   );
+  const conversation = useMemo(() => ({ messages }), [messages]);
+  const isBusy = status === "busy";
+  const hasError = Boolean(storeError);
   const confirmed = localSend ? hasConfirmedSend(events, localSend) : false;
-  const waitingForAction = hasPendingAction(state);
-  const pendingApprovals = useMemo(() => getPendingApprovals(state), [state]);
+  const waitingForAction = hasPendingAction(conversation);
+  const pendingApprovals = useMemo(
+    () => getPendingApprovals(conversation),
+    [conversation],
+  );
   const projectedMessages = useMemo(
     () => withPendingAssistant(
       projectSendMessages(
-        toThreadMessages(state, { isRunning: status === "streaming", hasError: status === "error" }),
-        state.messages,
-        confirmed ? null : status === "error" && localSend
+        toThreadMessages(conversation, { isRunning: isBusy, hasError }),
+        messages,
+        confirmed ? null : hasError && localSend
           ? { ...localSend, phase: "uncertain" }
           : localSend,
       ),
-      state.messages,
-      status === "streaming",
+      messages,
+      isBusy,
       Boolean(localSend && localSend.phase === "preparing" && !confirmed),
     ),
-    [state, localSend, confirmed, status],
+    [conversation, messages, localSend, confirmed, isBusy, hasError],
   );
 
   // Rebuilt when the store instance changes (chat selection): the adapter
@@ -325,8 +334,8 @@ export function ChatScreen({
       // positional fallback ids (the projection omits ids on purpose) and
       // honors the per-message status it carries.
       convertMessage: (message: ThreadMessageLike) => message,
-      isRunning: status === "streaming",
-      isDisabled: status === "resuming" || status === "submitted",
+      isRunning: isBusy,
+      isDisabled: status === "resuming",
       isSendDisabled: waitingForAction,
       onNew: async (message: AppendMessage) => {
         setSendError(null);
@@ -364,7 +373,7 @@ export function ChatScreen({
         // This row is display-only; Eve still waits for prepareSend to persist it.
         const preview = createLocalSend(
           store,
-          store.snapshot.data.messages.length,
+          store.snapshot.messages.length,
           store.snapshot.events.length,
           message,
         );
@@ -373,16 +382,19 @@ export function ChatScreen({
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         try {
           // Mode, project, and model ride the turn as ephemeral clientContext.
-          await store.send({
+          // send() resolves with a Delivery once the server accepts the turn.
+          const delivery = await store.send({
             message: outgoing,
             clientContext: buildTurnClientContext(projectIdForTurn),
           });
-          // Eve reports prepareSend failures through status/onError, not by
+          // Eve reports prepareSend failures through error/onError, not by
           // rejecting send(). Nothing went to Eve if the durable mark failed.
-          if (shouldRestoreUnsentDraft(store.snapshot.status, wasSendPrepared(store))) {
+          if (shouldRestoreUnsentDraft(store.snapshot.error, wasSendPrepared(store))) {
             throw new Error("Pending message was not saved.");
           }
-          const accepted = hasConfirmedSend(store.snapshot.events, preview);
+          const accepted =
+            Boolean(delivery?.deliveryId) ||
+            hasConfirmedSend(store.snapshot.events, preview);
           setLocalSends((current) => {
             if (current.get(store)?.preview !== preview.preview) return current;
             const next = new Map(current);
@@ -411,7 +423,7 @@ export function ChatScreen({
             setSendError({ store, message: reason });
             throw new MessageNotSentError(reason);
           }
-          // After the durable mark, only Eve's receive event proves acceptance.
+          // After the durable mark, only delivery.consumed proves acceptance.
           // A transport error without it is ambiguous; never resend automatically.
           const accepted = hasConfirmedSend(store.snapshot.events, preview);
           setLocalSends((current) => {
@@ -434,14 +446,13 @@ export function ChatScreen({
         await store.cancel();
       },
       onRespondToToolApproval: async (response: { approvalId: string; optionId?: string; approved?: boolean; text?: string }) => {
-        const requestId = response.approvalId;
         const optionId =
           response.optionId ??
           (response.approved ? "approve" : "cancel");
         await store.send({
-          inputResponses: [
+          answers: [
             {
-              requestId,
+              interactionId: response.approvalId,
               optionId,
               ...(response.text ? { text: response.text } : {}),
             },
@@ -456,6 +467,7 @@ export function ChatScreen({
       store,
       projectedMessages,
       status,
+      isBusy,
       waitingForAction,
       wasSendPrepared,
       localSend,
@@ -471,7 +483,7 @@ export function ChatScreen({
   // uncertain mid-send recoveries that already have stream events.
   useEffect(() => {
     if (!pendingMessage || !activeChatId) return;
-    if (status === "streaming" || status === "submitted" || status === "resuming") {
+    if (status === "busy" || status === "resuming") {
       return;
     }
     if (store.snapshot.events.length > 0) return;
@@ -490,7 +502,7 @@ export function ChatScreen({
       ? { text: "Could not save this chat.", actionLabel: "Retry save", onAction: () => void retrySync() }
       : pendingMessage && !localSend
         ? { text: "Delivery not confirmed. Check this chat before sending again." }
-        : status === "error" && !localSend
+        : hasError && !localSend
           ? { text: "Connection interrupted. Check this chat before sending again." }
           : null;
 
@@ -510,7 +522,7 @@ export function ChatScreen({
             accessibilityLabel={drawerOpen ? "Back to chat" : "Home"}
             accessibilityState={{ expanded: drawerOpen }}
           >
-            <HouseIcon className="size-5 text-foreground" />
+            <Icon as={HouseIcon} className="size-5 text-foreground" />
           </Pressable>
         ),
         headerRight: () => (
@@ -524,7 +536,7 @@ export function ChatScreen({
                 accessibilityLabel="Thread actions"
                 accessibilityState={{ disabled: drawerOpen }}
               >
-                <EllipsisIcon className="size-5 text-foreground" />
+                <Icon as={EllipsisIcon} className="size-5 text-foreground" />
               </Pressable>
             ) : null}
             <Pressable
@@ -535,7 +547,7 @@ export function ChatScreen({
               accessibilityLabel="New chat"
               accessibilityState={{ disabled: drawerOpen }}
             >
-              <SquarePenIcon className="size-5 text-foreground" />
+              <Icon as={SquarePenIcon} className="size-5 text-foreground" />
             </Pressable>
           </View>
         ),
@@ -598,9 +610,9 @@ export function ChatScreen({
                           options: pendingApprovals[0].options,
                           onRespond: async (optionId) => {
                             await store.send({
-                              inputResponses: [
+                              answers: [
                                 {
-                                  requestId: pendingApprovals[0]!.requestId,
+                                  interactionId: pendingApprovals[0]!.requestId,
                                   optionId,
                                 },
                               ],

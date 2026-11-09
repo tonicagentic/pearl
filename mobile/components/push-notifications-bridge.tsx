@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 
+import { revealChatThread } from "@/components/chat-history-push";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import {
@@ -52,6 +53,7 @@ export function PushNotificationsBridge() {
       }
       const opened = await selectChatRef.current(chatId);
       if (opened) {
+        revealChatThread();
         router.navigate("/");
       }
     }

@@ -187,7 +187,7 @@ export function SessionTimeline() {
         data?: { turnId?: unknown };
         meta?: { at?: unknown };
       };
-      if (raw?.type === "message.received") continue; // user-side marker
+      if (raw?.type === "message.received" || raw?.type === "delivery.consumed") continue; // user-side marker
       if (raw.data?.turnId !== turnId) continue;
       const at = raw.meta?.at;
       const ts = typeof at === "string" ? Date.parse(at) : NaN;

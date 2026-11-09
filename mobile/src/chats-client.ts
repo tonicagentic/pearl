@@ -2,7 +2,7 @@
 // app shows, over the web app's REST surface, with the better-auth session
 // credential from the eve transport.
 
-import type { ClientSessionState, MessageStreamEvent } from 'eve/client';
+import type { ClientSessionState, SessionStreamEvent } from 'eve/client';
 
 import { AGENT_URL, getAuthCookie } from './eve-transport';
 import { sessionInvalid } from './session-store';
@@ -16,7 +16,7 @@ export type ChatListItem = {
 };
 
 export type ActiveChat = {
-  readonly events: readonly MessageStreamEvent[];
+  readonly events: readonly SessionStreamEvent[];
   readonly id: string;
   readonly pendingUserMessage: string | null;
   readonly projectId: string | null;
@@ -150,7 +150,7 @@ export async function attachChatToProject(
 
 export async function appendChatEvents(
   chatId: string,
-  events: readonly { readonly event: MessageStreamEvent; readonly eventIndex: number }[],
+  events: readonly { readonly event: SessionStreamEvent; readonly eventIndex: number }[],
 ): Promise<void> {
   if (events.length === 0) return;
   const response = await fetch(`${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/sync`, {
@@ -178,7 +178,7 @@ export async function markPendingChatMessage(chatId: string, message: string): P
 
 export async function saveChatSnapshot(
   chatId: string,
-  events: readonly MessageStreamEvent[],
+  events: readonly SessionStreamEvent[],
   session: ClientSessionState | undefined,
 ): Promise<void> {
   const response = await fetch(

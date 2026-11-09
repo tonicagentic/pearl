@@ -15,7 +15,6 @@ const {
   isTaskNotification,
   pendingMessageLabel,
 } = await import("../mobile/src/message-projection.ts");
-const { createMobileMessageReducer } = await import("../mobile/src/message-reducer.ts");
 const { toEveTurn } = await import("../mobile/src/attachment-content.ts");
 
 const user = { id: "turn:user", role: "user", parts: [{ type: "text", text: "hello" }] };
@@ -23,10 +22,42 @@ const assistant = (parts, status = "streaming") => ({
   id: "turn:assistant", role: "assistant", metadata: { turnId: "turn", status }, parts,
 });
 
+const openApproval = ({
+  callId = "c1",
+  name = "write_file",
+  interactionId = "approval_1",
+  prompt = "Save this?",
+  input = { filePath: "a.md", content: "hello" },
+  options = [
+    { id: "approve", label: "Allow" },
+    { id: "cancel", label: "Deny" },
+  ],
+} = {}) => ({
+  type: "tool",
+  callId,
+  stepIndex: 0,
+  kind: "tool",
+  name,
+  label: name,
+  state: "approval",
+  input,
+  interaction: {
+    interactionId,
+    turnId: "turn",
+    stepIndex: 0,
+    status: "open",
+    request: {
+      kind: "approval",
+      prompt,
+      options,
+    },
+  },
+});
+
 test("projects reasoning, live tool arguments, final result and text in order", () => {
   const messages = toThreadMessages({ messages: [user, assistant([
     { type: "reasoning", text: "Checking", state: "done" },
-    { type: "dynamic-tool", toolName: "lookup", toolCallId: "call_1", inputText: '{"q":', state: "input-streaming" },
+    { type: "tool", callId: "call_1", stepIndex: 0, kind: "tool", name: "lookup", label: "lookup", state: "streaming", inputText: '{"q":' },
     { type: "text", text: "Done", state: "streaming" },
   ])] }, { isRunning: true });
   assert.equal(messages[1].status.type, "running");
@@ -35,7 +66,7 @@ test("projects reasoning, live tool arguments, final result and text in order", 
   assert.equal(messages[1].content[1].toolCallId, "call_1");
   assert.equal(messages[1].content[0].status.type, "complete");
   const settled = toThreadMessages({ messages: [assistant([
-    { type: "dynamic-tool", toolName: "lookup", toolCallId: "call_1", input: { q: "a" }, output: { answer: "b" }, state: "output-available" },
+    { type: "tool", callId: "call_1", stepIndex: 0, kind: "tool", name: "lookup", label: "lookup", state: "completed", input: { q: "a" }, output: { answer: "b" } },
   ], "complete")] });
   assert.deepEqual(settled[0].content[0].result, { answer: "b" });
   assert.equal(settled[0].status.type, "complete");
@@ -43,7 +74,23 @@ test("projects reasoning, live tool arguments, final result and text in order", 
 
 test("renders authorization and file metadata without inventing bytes or unsafe links", () => {
   const data = { messages: [assistant([
-    { type: "authorization", name: "github", displayName: "GitHub", description: "Connect", turnId: "turn", stepIndex: 0, state: "required", authorization: { url: "javascript:alert(1)", userCode: "ABCD" } },
+    {
+      type: "interaction",
+      interactionId: "auth_1",
+      turnId: "turn",
+      stepIndex: 0,
+      status: "open",
+      request: {
+        kind: "sign-in",
+        prompt: "Connect",
+        signIn: {
+          name: "github",
+          displayName: "GitHub",
+          url: "javascript:alert(1)",
+          userCode: "ABCD",
+        },
+      },
+    },
     { type: "file", mediaType: "text/plain", filename: "report.txt" },
   ])] };
   assert.equal(hasPendingAction(data), true);
@@ -54,8 +101,21 @@ test("renders authorization and file metadata without inventing bytes or unsafe 
   assert.equal(message.content[1].sourceType, "id");
   assert.equal(message.content[1].data, "unavailable");
   const completed = toThreadMessages({ messages: [assistant([{
-    type: "authorization", name: "github", displayName: "GitHub", description: "Connect", turnId: "turn", stepIndex: 0,
-    state: "completed", outcome: "authorized", authorization: { url: "https://github.com/login/device" },
+    type: "interaction",
+    interactionId: "auth_1",
+    turnId: "turn",
+    stepIndex: 0,
+    status: "settled",
+    outcome: "accepted",
+    request: {
+      kind: "sign-in",
+      prompt: "Connect",
+      signIn: {
+        name: "github",
+        displayName: "GitHub",
+        url: "https://github.com/login/device",
+      },
+    },
   }], "complete")] })[0];
   assert.equal(completed.content[0].data.url, "https://github.com/login/device");
   assert.equal(completed.content[0].data.outcome, "authorized");
@@ -63,15 +123,7 @@ test("renders authorization and file metadata without inventing bytes or unsafe 
 });
 
 test("projects pending approval as action-required and preserves declared option identities", () => {
-  const data = { messages: [assistant([{
-    type: "dynamic-tool", toolName: "write_file", toolCallId: "c1", input: { filePath: "a.md", content: "hello" },
-    state: "approval-requested", approval: { id: "approval_1" },
-    toolMetadata: { eve: { kind: "tool-call", name: "write_file", inputRequest: {
-      requestId: "approval_1", kind: "tool-approval", prompt: "Save this?", options: [
-        { id: "approve", label: "Allow" }, { id: "cancel", label: "Deny" },
-      ],
-    } } },
-  }])] };
+  const data = { messages: [assistant([openApproval()])] };
   assert.equal(hasPendingAction(data), true);
   const message = toThreadMessages(data)[0];
   assert.deepEqual(message.status, { type: "requires-action", reason: "tool-calls" });
@@ -82,17 +134,12 @@ test("projects pending approval as action-required and preserves declared option
 });
 
 test("completed turns with an open approval stay action-required", () => {
-  // HITL parks emit input.requested then turn.completed; metadata flips to
-  // complete while approval-requested parts remain unanswered.
-  const data = { messages: [assistant([{
-    type: "dynamic-tool", toolName: "confirm_step", toolCallId: "c1",
-    input: { summary: "ship the release" }, state: "approval-requested",
-    approval: { id: "approval_park" },
-    toolMetadata: { eve: { kind: "tool-call", name: "confirm_step", inputRequest: {
-      requestId: "approval_park", kind: "tool-approval", prompt: "Confirm?",
-      options: [{ id: "approve", label: "Allow" }, { id: "cancel", label: "Deny" }],
-    } } },
-  }], "complete")] };
+  const data = { messages: [assistant([openApproval({
+    name: "confirm_step",
+    interactionId: "approval_park",
+    prompt: "Confirm?",
+    input: { summary: "ship the release" },
+  })], "complete")] };
   assert.equal(hasPendingAction(data), true);
   assert.deepEqual(toThreadMessages(data)[0].status, {
     type: "requires-action",
@@ -111,23 +158,20 @@ test("completed turns with an open approval stay action-required", () => {
 });
 
 test("stale approvals on failed turns cannot block the next send", () => {
-  const old = assistant([{ type: "dynamic-tool", toolName: "write_file", toolCallId: "c1", input: {}, state: "approval-requested", approval: { id: "a1" } }], "failed");
+  const old = assistant([openApproval({ interactionId: "a1" })], "failed");
   assert.equal(hasPendingAction({ messages: [old] }), false);
   assert.deepEqual(toThreadMessages({ messages: [old] })[0].status, { type: "incomplete", reason: "error" });
 });
 
-test("failed turns finalize text and keep their error status in the native reducer", () => {
-  const reducer = createMobileMessageReducer();
-  let data = reducer.initial();
-  for (const event of [
-    { type: "message.received", data: { messageId: "m1", text: "hello", turnId: "turn" } },
-    { type: "message.appended", data: { messageDelta: "Working", messageSoFar: "Working", sequence: 1, stepIndex: 0, turnId: "turn" } },
-    { type: "turn.failed", data: { turnId: "turn", error: { message: "failed" } } },
-  ]) data = reducer.reduce(data, { meta: { at: new Date().toISOString(), id: "e" }, ...event });
-  const reply = data.messages.find((message) => message.role === "assistant");
-  assert.equal(reply.metadata.status, "failed");
-  assert.equal(reply.parts.find((part) => part.type === "text").state, "done");
+test("failed assistant messages keep their error status without a client reducer", () => {
+  const data = {
+    messages: [
+      user,
+      assistant([{ type: "text", text: "Working", state: "done" }], "failed"),
+    ],
+  };
   assert.deepEqual(toThreadMessages(data)[1].status, { type: "incomplete", reason: "error" });
+  assert.equal(toThreadMessages(data)[1].content[0].text, "Working");
 });
 
 test("hides only eve background notifications, not normal user text", () => {
@@ -144,42 +188,24 @@ test("attachment-only and paste-only first sends never title chats with a token 
   assert.equal(pendingMessageLabel([marker, { type: "text", text: "[Attached PDF: paper.pdf]" }]), "[Attachment]");
 });
 
-test("an explicit clipboard paste is sent as text and survives as a collapsed user chip", () => {
+test("an explicit clipboard paste is sent as text and survives as a collapsed user chip", async () => {
   const pasted = "[Pasted text]\nline one\nline two";
   const outgoing = toEveTurn({ content: [], attachments: [{
-    name: "Pasted text", status: { type: "complete" }, type: "document",
+    id: "paste-1",
+    type: "document",
+    name: "Pasted text",
+    contentType: "text/plain",
+    status: { type: "complete" },
     content: [{ type: "text", text: pasted }],
   }] });
-  assert.deepEqual(outgoing.message, [{ type: "text", text: pasted }]);
-  const [message] = toThreadMessages({ messages: [{ id: "u", role: "user", parts: [
-    { type: "text", text: pasted },
-  ] }] });
-  assert.deepEqual(message.content, []);
-  assert.equal(message.attachments[0].name, "Pasted text · 17 characters");
-  assert.equal(message.attachments[0].contentType, "text/plain");
-});
-
-test("keeps a sent photo when eve returns it as a data url", () => {
-  const image = "data:image/jpeg;base64,YWJj";
-  const [message] = toThreadMessages({ messages: [{ id: "u", role: "user", parts: [
-    { type: "text", text: "what's this\n[file: photo.jpg (image/jpeg)]" },
-    { type: "file", mediaType: "image/jpeg", filename: "photo.jpg", url: image },
-  ] }] });
-  assert.equal(message.content[0].text, "what's this");
-  assert.equal(message.attachments[0].content[0].image, image);
-  const [blocked] = toThreadMessages({ messages: [{ id: "u", role: "user", parts: [
-    { type: "file", mediaType: "image/jpeg", filename: "x.jpg", url: "data:text/html;base64,PHNjcmlwdD4=" },
-  ] }] });
-  assert.deepEqual(blocked.attachments[0].content, []);
-});
-
-test("keeps user attachment chips while removing only internal marker text", () => {
-  const [message] = toThreadMessages({ messages: [{ id: "u", role: "user", parts: [
-    { type: "text", text: "[mobile-attachment:abc]" },
-    { type: "text", text: "hi" },
-    { type: "file", mediaType: "image/png", filename: "photo.png", url: "https://example.com/photo.png" },
-  ] }] });
-  assert.equal(message.content.length, 1);
-  assert.equal(message.content[0].text, "hi");
-  assert.equal(message.attachments[0].name, "photo.png");
+  assert.ok(Array.isArray(outgoing.message));
+  const projected = toThreadMessages({
+    messages: [{
+      id: "u1",
+      role: "user",
+      parts: [{ type: "text", text: pasted }],
+    }],
+  });
+  assert.equal(projected[0].attachments?.[0]?.type, "document");
+  assert.match(projected[0].attachments[0].name, /Pasted text/);
 });

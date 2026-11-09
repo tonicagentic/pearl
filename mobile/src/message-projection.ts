@@ -1,8 +1,12 @@
-import type { EveMessageData, EveMessagePart } from "eve/client";
+import type { EveMessage, EveMessagePart, EveToolPart } from "eve/client";
 import type { ThreadMessageLike } from "@assistant-ui/react-native";
 import { isAttachmentMarker } from "./attachment-content";
 
 type Part = Exclude<ThreadMessageLike["content"], string>[number];
+
+type ConversationMessages = {
+  readonly messages: readonly EveMessage[];
+};
 
 const safeUrl = (value?: string) => value && /^https:\/\//i.test(value) ? value : undefined;
 // Sent photos come back as data URLs. https stays allowed; other data URLs do not.
@@ -28,6 +32,88 @@ const argsText = (value: unknown) => {
   try { return JSON.stringify(value ?? {}) ?? "{}"; } catch { return "{}"; }
 };
 
+function toolApprovalFromInteraction(
+  interaction: NonNullable<EveToolPart["interaction"]>,
+): NonNullable<Extract<Part, { type: "tool-call" }>["approval"]> {
+  const request = interaction.request;
+  const options = request.options?.map((option) => ({
+    id: option.id,
+    kind: option.id === "approve" ? "allow-once" as const
+      : option.id === "cancel" || option.id === "deny" ? "reject-once" as const
+      : `_${option.id}`,
+    label: option.label,
+    ...(option.description ? { description: option.description } : {}),
+  }));
+  const settled = interaction.status === "settled";
+  const approved =
+    interaction.outcome === "accepted"
+      ? true
+      : interaction.outcome === "declined"
+        ? false
+        : undefined;
+  return {
+    id: interaction.interactionId,
+    prompt: request.prompt,
+    display:
+      request.display === "confirmation"
+        ? "decision"
+        : request.display === "select"
+          ? "select"
+          : request.display === "text"
+            ? "text"
+            : request.kind === "approval"
+              ? "decision"
+              : request.options?.length
+                ? "select"
+                : "text",
+    ...(request.allowFreeform || request.display === "text" ? { allowFreeform: true } : {}),
+    ...(settled && approved !== undefined ? { approved } : {}),
+    ...(interaction.reason ? { reason: interaction.reason } : {}),
+    ...(options?.length ? { options } : {}),
+  };
+}
+
+function convertToolPart(part: EveToolPart): Part {
+  const toolCall = {
+    type: "tool-call" as const,
+    toolCallId: part.callId,
+    toolName: part.name,
+    args: part.state === "streaming" ? {} : argsObject(part.input),
+    argsText:
+      part.state === "streaming" ? part.inputText : argsText(part.input),
+    ...(part.interaction
+      ? { approval: toolApprovalFromInteraction(part.interaction) }
+      : {}),
+  };
+  switch (part.state) {
+    case "completed":
+      return { ...toolCall, result: part.output } as Part;
+    case "failed":
+    case "rejected":
+    case "cancelled":
+      return {
+        ...toolCall,
+        result: {
+          error:
+            part.error?.message ??
+            part.interaction?.reason ??
+            (part.state === "rejected"
+              ? "Tool approval denied"
+              : part.state === "cancelled"
+                ? "Tool call cancelled"
+                : "Tool call failed"),
+        },
+        isError: true,
+      } as Part;
+    default:
+      return (
+        part.output === undefined
+          ? toolCall
+          : { ...toolCall, result: part.output, isPreliminary: true }
+      ) as Part;
+  }
+}
+
 function assistantPart(part: EveMessagePart): Part | null {
   switch (part.type) {
     case "text":
@@ -36,50 +122,55 @@ function assistantPart(part: EveMessagePart): Part | null {
         type: part.type, text: typeof part.text === "string" ? part.text : "",
         ...(part.state === "done" ? { status: { type: "complete" as const } } : {}),
       };
-    case "dynamic-tool": {
-      const request = part.toolMetadata?.eve?.inputRequest;
-      const approval = part.approval;
-      const options = request?.options?.map((option) => ({
-        id: option.id,
-        kind: option.id === "approve" ? "allow-once" as const
-          : option.id === "cancel" ? "reject-once" as const : `_${option.id}`,
-        label: option.label,
-        ...(option.description ? { description: option.description } : {}),
-      }));
+    case "tool":
+      return convertToolPart(part);
+    case "interaction": {
+      if (part.request.kind === "sign-in") {
+        const signIn = part.request.signIn;
+        const url = safeUrl(signIn?.url);
+        return {
+          type: "data",
+          name: "authorization",
+          data: {
+            state: part.status === "open" ? "required" : "completed",
+            name: signIn?.name ?? part.request.title ?? "sign-in",
+            ...(signIn?.displayName ? { displayName: signIn.displayName } : {}),
+            description: part.request.prompt,
+            ...(signIn?.instructions ? { instructions: signIn.instructions } : {}),
+            ...(signIn?.userCode ? { userCode: signIn.userCode } : {}),
+            ...(url ? { url } : {}),
+            ...(part.status === "settled"
+              ? {
+                  outcome:
+                    part.outcome === "accepted"
+                      ? "authorized"
+                      : part.outcome === "declined" || part.outcome === "invalid"
+                        ? "declined"
+                        : part.outcome === "expired"
+                          ? "timed-out"
+                          : part.outcome === "failed"
+                            ? "failed"
+                            : "cancelled",
+                  reason: part.reason,
+                }
+              : {}),
+          },
+        };
+      }
       return {
-        type: "tool-call", toolCallId: part.toolCallId, toolName: part.toolName,
-        args: argsObject(part.input),
-        argsText: part.state === "input-streaming" ? part.inputText : argsText(part.input),
-        ...(approval ? { approval: {
-          id: approval.id,
-          ...(approval.approved !== undefined ? { approved: approval.approved } : {}),
-          ...(approval.reason ? { reason: approval.reason } : {}),
-          ...(request ? {
-            prompt: request.prompt,
-            display: request.display ?? "confirmation",
-            ...(request.allowFreeform ? { allowFreeform: true } : {}),
-            ...(options?.length ? { options } : {}),
-          } : {}),
-        } } : {}),
-        ...(part.state === "output-available" ? {
-          result: part.output, ...(part.partial ? { isPreliminary: true } : {}),
-        } : {}),
-        ...(part.state === "output-error" || part.state === "output-denied" ? {
-          result: { error: part.state === "output-error" ? part.errorText : part.approval.reason ?? "Tool approval denied" },
-          isError: true,
-        } : {}),
+        type: "tool-call",
+        toolCallId: part.interactionId,
+        toolName: part.call?.name ?? part.request.kind,
+        args: argsObject(part.call?.input),
+        argsText: argsText(part.call?.input),
+        approval: toolApprovalFromInteraction(part),
+        ...(part.status === "settled"
+          ? {
+              result: part.answer ?? { outcome: part.outcome, reason: part.reason },
+              ...(part.outcome !== "accepted" ? { isError: true } : {}),
+            }
+          : {}),
       } as Part;
-    }
-    case "authorization": {
-      const url = safeUrl(part.authorization?.url);
-      return { type: "data", name: "authorization", data: {
-        state: part.state, name: part.name, displayName: part.displayName,
-        description: part.description,
-        ...(part.authorization?.instructions ? { instructions: part.authorization.instructions } : {}),
-        ...(part.authorization?.userCode ? { userCode: part.authorization.userCode } : {}),
-        ...(url ? { url } : {}),
-        ...(part.state === "completed" ? { outcome: part.outcome, reason: part.reason } : {}),
-      } };
     }
     case "file": {
       const url = displayImageUrl(part.url);
@@ -91,7 +182,8 @@ function assistantPart(part: EveMessagePart): Part | null {
         mimeType: part.mediaType, filename: part.filename,
       };
     }
-    case "step-start": return null;
+    default:
+      return null;
   }
 }
 
@@ -114,22 +206,34 @@ export function pendingMessageLabel(content: string | readonly { type: string; t
   return content.length > 0 ? "[Attachment]" : "";
 }
 
-function hasOpenApproval(message: EveMessageData["messages"][number]): boolean {
-  return message.parts.some(
-    (part) => part.type === "dynamic-tool" && part.state === "approval-requested",
+function openInteractions(message: EveMessage) {
+  return message.parts.flatMap((part) =>
+    part.type === "interaction"
+      ? [part]
+      : part.type === "tool" && part.interaction
+        ? [part.interaction]
+        : [],
   );
 }
 
-function hasOpenAuthorization(message: EveMessageData["messages"][number]): boolean {
-  return message.parts.some(
-    (part) => part.type === "authorization" && part.state === "required",
+function hasOpenApproval(message: EveMessage): boolean {
+  return openInteractions(message).some(
+    (interaction) =>
+      interaction.status === "open" && interaction.request.kind !== "sign-in",
+  );
+}
+
+function hasOpenAuthorization(message: EveMessage): boolean {
+  return openInteractions(message).some(
+    (interaction) =>
+      interaction.status === "open" && interaction.request.kind === "sign-in",
   );
 }
 
 /** True when the latest assistant turn is parked on approval or authorization.
- * Approvals survive turn.completed (metadata.status becomes "complete"); failed
+ * Approvals survive turn settlement (metadata.status becomes "complete"); failed
  * turns never block the next send. */
-export function hasPendingAction(data: EveMessageData): boolean {
+export function hasPendingAction(data: ConversationMessages): boolean {
   const message = data.messages.at(-1);
   if (message?.role !== "assistant") return false;
   if (message.metadata?.status === "failed") return false;
@@ -145,27 +249,37 @@ export type PendingApproval = {
 };
 
 /** Open tool-approval parks on the latest assistant turn, for the composer card. */
-export function getPendingApprovals(data: EveMessageData): readonly PendingApproval[] {
+export function getPendingApprovals(data: ConversationMessages): readonly PendingApproval[] {
   const message = data.messages.at(-1);
   if (message?.role !== "assistant") return [];
   if (message.metadata?.status === "failed") return [];
 
   return message.parts.flatMap((part) => {
-    if (part.type !== "dynamic-tool" || part.state !== "approval-requested") {
-      return [];
-    }
-    const request = part.toolMetadata?.eve?.inputRequest;
-    const requestId = request?.requestId ?? part.approval.id;
-    const options = (request?.options?.length
+    const interaction =
+      part.type === "tool" && part.interaction?.status === "open"
+        ? part.interaction
+        : part.type === "interaction" &&
+            part.status === "open" &&
+            part.request.kind !== "sign-in"
+          ? part
+          : null;
+    if (!interaction) return [];
+    const request = interaction.request;
+    const options = (request.options?.length
       ? request.options
       : [
           { id: "approve", label: "Approve" },
           { id: "cancel", label: "Cancel" },
         ]
     ).map((option) => ({ id: option.id, label: option.label }));
+    const toolInput =
+      part.type === "tool" && part.state !== "streaming" ? part.input : undefined;
+    const interactionInput =
+      part.type === "interaction" ? part.call?.input : undefined;
+    const rawInput = toolInput ?? interactionInput;
     const input =
-      part.input && typeof part.input === "object" && !Array.isArray(part.input)
-        ? (part.input as Record<string, unknown>)
+      rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
+        ? (rawInput as Record<string, unknown>)
         : null;
     const summary =
       typeof input?.summary === "string"
@@ -173,11 +287,17 @@ export function getPendingApprovals(data: EveMessageData): readonly PendingAppro
         : typeof input?.filePath === "string"
           ? input.filePath
           : undefined;
+    const toolName =
+      part.type === "tool"
+        ? part.name
+        : part.type === "interaction"
+          ? part.call?.name ?? request.kind
+          : request.kind;
     return [
       {
-        requestId,
-        toolName: part.toolName,
-        prompt: request?.prompt ?? `Approve tool call: ${part.toolName}`,
+        requestId: interaction.interactionId,
+        toolName,
+        prompt: request.prompt ?? `Approve tool call: ${toolName}`,
         ...(summary ? { detail: summary } : {}),
         options,
       },
@@ -188,14 +308,12 @@ export function getPendingApprovals(data: EveMessageData): readonly PendingAppro
 // Omit the message id: eve replaces the optimistic user id on acceptance, and
 // this external-store runtime would otherwise retain an extra sibling branch.
 export function toThreadMessages(
-  state: EveMessageData,
+  state: ConversationMessages,
   { isRunning = false, hasError = false }: { isRunning?: boolean; hasError?: boolean } = {},
 ): ThreadMessageLike[] {
   return state.messages.map((message, index) => {
     if (message.role === "assistant") {
       const last = index === state.messages.length - 1;
-      // HITL parks emit input.requested then turn.completed, so approval-
-      // requested parts remain after metadata.status flips to "complete".
       const pendingApproval =
         last &&
         !hasError &&

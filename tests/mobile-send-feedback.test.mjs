@@ -1,23 +1,26 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { EveAgentStore, defaultMessageReducer } from "eve/client";
+import { SessionStore } from "eve/client";
 import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft } from "../mobile/src/send-feedback.ts";
 
 const user = (text) => ({ role: "user", content: [{ type: "text", text }] });
 
-test("eve resolves failed preparation without dispatching; the draft must return", async () => {
-  const store = new EveAgentStore({
-    host: "http://127.0.0.1:1",
-    reducer: defaultMessageReducer(),
+test("eve rejects failed preparation; the draft must return", async () => {
+  const store = new SessionStore({
+    baseUrl: "http://127.0.0.1:1",
   });
   store.setCallbacks({
     prepareSend: async () => { throw new Error("Could not save pending marker"); },
   });
-  await store.send({ message: "local-only test" });
-  assert.equal(store.snapshot.status, "error");
+  await assert.rejects(
+    () => store.send({ message: "local-only test" }),
+    /Could not save pending marker/,
+  );
+  assert.equal(store.snapshot.status, "idle");
   assert.equal(store.snapshot.events.length, 0);
-  assert.equal(shouldRestoreUnsentDraft(store.snapshot.status, false), true);
-  assert.equal(shouldRestoreUnsentDraft(store.snapshot.status, true), false);
+  assert.equal(Boolean(store.snapshot.error), true);
+  assert.equal(shouldRestoreUnsentDraft(store.snapshot.error, false), true);
+  assert.equal(shouldRestoreUnsentDraft(store.snapshot.error, true), false);
 });
 
 test("local user row appears before eve accepts an identical follow-up", () => {
@@ -30,8 +33,8 @@ test("local user row appears before eve accepts an identical follow-up", () => {
   assert.equal(during.length, 3);
   assert.equal(during[2].metadata.custom.mobileSendState, "preparing");
   assert.equal(during[2].id, undefined);
-  assert.equal(hasConfirmedSend([{ type: "message.received" }, { type: "message.appended" }], pending), false);
-  assert.equal(hasConfirmedSend([{ type: "message.received" }, { type: "message.appended" }, { type: "step.started" }, { type: "message.received" }], pending), true);
+  assert.equal(hasConfirmedSend([{ type: "delivery.consumed" }, { type: "content.delta" }], pending), false);
+  assert.equal(hasConfirmedSend([{ type: "delivery.consumed" }, { type: "content.delta" }, { type: "model.started" }, { type: "delivery.consumed" }], pending), true);
   const optimistic = projectSendMessages([...during.slice(0, 2), user("same words")], [prior, { role: "assistant" }, { role: "user" }], pending);
   assert.equal(optimistic.length, 3);
   assert.equal(optimistic[2].metadata.custom.mobileSendState, "preparing");
@@ -43,7 +46,7 @@ test("local user row appears before eve accepts an identical follow-up", () => {
 test("unresolved turns cannot be overwritten before confirmation", () => {
   const pending = createLocalSend({}, 0, 0, { content: [{ type: "text", text: "first" }], attachments: [] });
   assert.equal(hasUnresolvedSend([], pending, null), true);
-  assert.equal(hasUnresolvedSend([{ type: "message.received" }], pending, "first"), false);
+  assert.equal(hasUnresolvedSend([{ type: "delivery.consumed" }], pending, "first"), false);
   assert.equal(hasUnresolvedSend([], null, "first"), true);
   assert.equal(hasUnresolvedSend([], null, null), false);
 });

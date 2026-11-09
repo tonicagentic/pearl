@@ -33,6 +33,10 @@ import {
 import { KeyboardController } from "react-native-keyboard-controller";
 import { useCSSVariable } from "uniwind";
 
+import {
+  pinComposerIfKeyboardVisible,
+  useComposerChrome,
+} from "@/components/assistant-ui/elements/composer-chrome";
 import { focusComposerInput } from "@/src/composer-input-focus";
 import {
   COMPOSER_MODELS,
@@ -53,6 +57,7 @@ function estimateChipWidth(label: string): number {
 export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const restoreKeyboard = useRef(false);
+  const chrome = useComposerChrome();
   const selectedKey = useSyncExternalStore(
     subscribeModelSelection,
     getModelSelection,
@@ -77,6 +82,7 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
   };
 
   const openSheet = () => {
+    pinComposerIfKeyboardVisible(chrome);
     // Remember whether the composer had the keyboard so we can bring it back.
     restoreKeyboard.current = KeyboardController.isVisible();
     setOpen(true);

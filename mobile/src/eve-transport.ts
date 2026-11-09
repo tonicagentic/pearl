@@ -1,32 +1,29 @@
-// Runtime bridge: eve's framework-agnostic EveAgentStore drives
+// Runtime bridge: eve's framework-agnostic SessionStore drives
 // @assistant-ui/react-native's external-store runtime. The web template's
 // useEveAgentRuntime is web-only (imports @assistant-ui/react), so this file
 // re-implements the thin mapping:
 //
-//   EveAgentStore snapshot -> ThreadMessageLike[] + isRunning -> adapter
+//   SessionStore snapshot -> ThreadMessageLike[] + isRunning -> adapter
 //
-// The projection uses eve's own defaultMessageReducer (the same UIMessage-
-// shaped projection the web template renders): it keeps the optimistic user
-// message alive across the handoff to the authoritative server stream
-// (message.received) and tracks per-message streaming status. A hand-rolled
-// reducer that ignores message.received drops the user message the moment the
-// server events arrive, leaving the response as a dangling generation.
+// Messages come from SessionStore's conversation projection. Delivery is
+// confirmed with delivery.consumed (stream v27), not the removed
+// message.received event.
 
-import { EveAgentStore, defaultMessageReducer, type EveMessageData } from 'eve/client';
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
-export { toThreadMessages } from './message-projection';
+import { SessionStore } from "eve/client";
+import Constants from "expo-constants";
+import { Platform } from "react-native";
+export { toThreadMessages } from "./message-projection";
 
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
-const DEFAULT_AGENT_URL = 'https://my-agent-pi-eight.vercel.app';
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const DEFAULT_AGENT_URL = "https://my-agent-pi-eight.vercel.app";
 
 function metroLanHostname(): string | null {
   const hostUri =
     Constants.expoConfig?.hostUri ??
-    Constants.experienceUrl?.replace(/^[a-z]+:\/\//, '') ??
+    Constants.experienceUrl?.replace(/^[a-z]+:\/\//, "") ??
     null;
   if (!hostUri) return null;
-  const host = hostUri.split('/')[0]?.split(':')[0]?.trim();
+  const host = hostUri.split("/")[0]?.split(":")[0]?.trim();
   if (!host || LOOPBACK_HOSTS.has(host)) return null;
   return host;
 }
@@ -37,17 +34,19 @@ function metroLanHostname(): string | null {
  * On a physical device, `127.0.0.1` is the phone — rewrite loopback agent URLs
  * to Metro's LAN host so local Next stays reachable without editing .env.
  */
-export function resolveAgentUrl(configured = process.env.EXPO_PUBLIC_AGENT_URL ?? DEFAULT_AGENT_URL): string {
+export function resolveAgentUrl(
+  configured = process.env.EXPO_PUBLIC_AGENT_URL ?? DEFAULT_AGENT_URL,
+): string {
   if (
-    Platform.OS === 'web' &&
+    Platform.OS === "web" &&
     __DEV__ &&
-    typeof window !== 'undefined' &&
+    typeof window !== "undefined" &&
     LOOPBACK_HOSTS.has(window.location.hostname)
   ) {
     return `${window.location.origin}/__pearl_api`;
   }
 
-  if (Platform.OS === 'web' || !__DEV__) return configured;
+  if (Platform.OS === "web" || !__DEV__) return configured;
 
   try {
     const url = new URL(configured);
@@ -55,7 +54,7 @@ export function resolveAgentUrl(configured = process.env.EXPO_PUBLIC_AGENT_URL ?
     const lanHost = metroLanHostname();
     if (!lanHost) return configured;
     url.hostname = lanHost;
-    return url.toString().replace(/\/$/, '');
+    return url.toString().replace(/\/$/, "");
   } catch {
     return configured;
   }
@@ -80,19 +79,16 @@ export function getAuthCookie(): string | null {
   return authCookie;
 }
 
-export type SpikeState = EveMessageData;
+let store: SessionStore | null = null;
 
-let store: EveAgentStore<SpikeState> | null = null;
-
-export function getStore(): EveAgentStore<SpikeState> {
+export function getStore(): SessionStore {
   if (!store) {
-    store = new EveAgentStore<SpikeState>({
-      host: AGENT_URL,
+    store = new SessionStore({
+      baseUrl: AGENT_URL,
       headers: () =>
         authCookie
           ? { authorization: `Bearer ${authCookie}` }
           : ({} as Record<string, string>),
-      reducer: defaultMessageReducer(),
     });
   }
   return store;

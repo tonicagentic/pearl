@@ -29,16 +29,25 @@ export function createLocalSend(
 }
 
 /** Eve resolves send() even when prepareSend failed before network dispatch. */
-export function shouldRestoreUnsentDraft(status: string, sendPrepared: boolean): boolean {
-  return status === "error" && !sendPrepared;
+export function shouldRestoreUnsentDraft(
+  error: Error | undefined,
+  sendPrepared: boolean,
+): boolean {
+  return Boolean(error) && !sendPrepared;
 }
 
-/** Only this event proves Eve accepted the turn; an optimistic row alone does not. */
+/**
+ * Only delivery.consumed proves eve accepted the turn (stream v27). An
+ * optimistic row or a resolved Delivery from send() also counts when the
+ * caller already holds a deliveryId.
+ */
 export function hasConfirmedSend(
   events: readonly { readonly type: string }[],
   pending: LocalSend,
 ): boolean {
-  return events.slice(pending.eventBaseline).some((event) => event.type === "message.received");
+  return events
+    .slice(pending.eventBaseline)
+    .some((event) => event.type === "delivery.consumed");
 }
 
 /** Do not replace an unconfirmed turn's recovery state with a later send. */
@@ -69,7 +78,7 @@ function stripFilePlaceholders(text: string): string {
 
 function withoutFilePlaceholders(content: ThreadMessageLike["content"]): ThreadMessageLike["content"] {
   const source = typeof content === "string" ? [{ type: "text" as const, text: content }] : content;
-  const parts: Array<Exclude<ThreadMessageLike["content"], string>[number]> = [];
+  const parts: Exclude<ThreadMessageLike["content"], string>[number][] = [];
   for (const part of source) {
     if (part.type !== "text") {
       parts.push(part);
@@ -118,7 +127,10 @@ export function projectSendMessages(
     ...row,
     metadata: {
       ...row.metadata,
-      custom: { ...row.metadata?.custom, mobileSendState: pending.phase },
+      custom: {
+        ...row.metadata?.custom,
+        mobileSendState: pending.phase,
+      },
     },
   };
   return next;

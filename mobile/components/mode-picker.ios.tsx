@@ -27,6 +27,11 @@ import { KeyboardController } from "react-native-keyboard-controller";
 import { useCSSVariable } from "uniwind";
 import { ListTodoIcon, SparklesIcon } from "lucide-react-native";
 
+import {
+  pinComposerIfKeyboardVisible,
+  useComposerChrome,
+} from "@/components/assistant-ui/elements/composer-chrome";
+import { Icon } from "@/components/ui/icon";
 import { focusComposerInput } from "@/src/composer-input-focus";
 import {
   getAgentMode,
@@ -62,6 +67,7 @@ function estimateChipWidth(label: string): number {
 export function ComposerModePicker({ disabled = false }: { disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const restoreKeyboard = useRef(false);
+  const chrome = useComposerChrome();
   const selectedKey = useSyncExternalStore(
     subscribeAgentMode,
     getAgentMode,
@@ -85,6 +91,7 @@ export function ComposerModePicker({ disabled = false }: { disabled?: boolean })
   };
 
   const openSheet = () => {
+    pinComposerIfKeyboardVisible(chrome);
     restoreKeyboard.current = KeyboardController.isVisible();
     setOpen(true);
   };
@@ -119,7 +126,7 @@ export function ComposerModePicker({ disabled = false }: { disabled?: boolean })
               className="h-8 flex-row items-center gap-1 rounded-full px-2.5"
               style={disabled ? { opacity: 0.5 } : undefined}
             >
-              <ChipIcon className="size-3.5 text-foreground" />
+              <Icon as={ChipIcon} className="size-3.5 text-foreground" />
               <View>
                 <Text
                   className="text-foreground text-[15px] font-medium"
