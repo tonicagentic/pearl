@@ -1,5 +1,5 @@
 ---
-description: Phone / device EAS builds must be standalone — never require Metro or a local dig server.
+description: Phone / device EAS builds must be standalone — never require Metro or a local dev server.
 globs: mobile/eas.json,mobile/app.json,mobile/AGENTS.md,mobile/**/*
 alwaysApply: false
 ---
