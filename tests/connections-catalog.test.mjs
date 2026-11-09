@@ -1,10 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  CONNECTION_COMPOSE_ALLOWLISTS,
   CONNECTION_READONLY_ALLOWLISTS,
+  CONNECTION_SHEETS_ALLOWLIST,
+  CONNECTION_TEMPO_ALLOWLIST,
   CONNECTION_WRITE_BLOCKLISTS,
+  CONNECTION_WRITE_TOOLS,
+  TEMPO_ALLOWLIST,
+  TEMPO_READ_TOOLS,
+  TEMPO_WRITE_TOOLS,
   looksLikeWriteOrLogTool,
 } from "../agent/lib/connection-allowlists.ts";
+import {
+  bareConnectionToolName,
+  writeToolApproval,
+} from "../agent/lib/connection-approval.ts";
 import {
   CONNECTION_IDS,
   connectionConfiguration,
@@ -13,7 +24,10 @@ import {
 } from "../lib/connections/catalog.ts";
 import {
   GITHUB_OAUTH_SCOPES,
+  GMAIL_OAUTH_SCOPES,
+  SHEETS_OAUTH_SCOPES,
   XERO_OAUTH_SCOPES,
+  connectionTokenParams,
 } from "../lib/connections/oauth-scopes.ts";
 
 test("only fixed provider ids are accepted", () => {
@@ -24,6 +38,8 @@ test("only fixed provider ids are accepted", () => {
     "github",
     "vercel",
     "xero",
+    "tempo",
+    "sheets",
     "notion",
     "linear",
     "sentry",
@@ -86,6 +102,18 @@ test("opt-in Google, GitHub, Vercel, and Xero need connector env vars", () => {
       .connector,
     "xero/pearl-xero",
   );
+  assert.equal(connectionConfiguration("tempo", {}).connector, null);
+  assert.equal(
+    connectionConfiguration("tempo", { TEMPO_CONNECTOR: "tempo/crm" })
+      .connector,
+    "tempo/crm",
+  );
+  assert.equal(connectionConfiguration("sheets", {}).connector, null);
+  assert.equal(
+    connectionConfiguration("sheets", { SHEETS_CONNECTOR: "sheets/test" })
+      .connector,
+    "sheets/test",
+  );
 });
 
 test("existing eve connections use their current connector names", () => {
@@ -116,6 +144,77 @@ test("read-only allowlists exclude write and log tools", () => {
   assert.equal(looksLikeWriteOrLogTool("buy_domain"), true);
   assert.equal(looksLikeWriteOrLogTool("list_deployments"), false);
   assert.equal(looksLikeWriteOrLogTool("list-profit-and-loss"), false);
+});
+
+test("read-only Gmail allowlist stays free of create_draft; compose list adds only it", () => {
+  assert.equal(
+    CONNECTION_READONLY_ALLOWLISTS.gmail.includes("create_draft"),
+    false,
+  );
+  assert.deepEqual(
+    CONNECTION_COMPOSE_ALLOWLISTS.gmail.filter(
+      (name) => !CONNECTION_READONLY_ALLOWLISTS.gmail.includes(name),
+    ),
+    ["create_draft"],
+  );
+  assert.equal(CONNECTION_WRITE_TOOLS.gmail.includes("send_message"), false);
+});
+
+test("Sheets and Tempo write tools are the ones that need approval", () => {
+  for (const name of CONNECTION_WRITE_TOOLS.sheets) {
+    assert.ok(CONNECTION_SHEETS_ALLOWLIST.includes(name), name);
+  }
+  for (const name of CONNECTION_READONLY_ALLOWLISTS.sheets) {
+    assert.equal(CONNECTION_WRITE_TOOLS.sheets.includes(name), false, name);
+  }
+  assert.ok(TEMPO_ALLOWLIST.includes("search"));
+  assert.ok(TEMPO_ALLOWLIST.includes("upsert_company"));
+  assert.equal(TEMPO_ALLOWLIST.includes("dispatch_due_tasks"), false);
+  assert.equal(TEMPO_ALLOWLIST.includes("finish_agent_task"), false);
+  assert.deepEqual(CONNECTION_TEMPO_ALLOWLIST, TEMPO_ALLOWLIST);
+  // Every non-read Tempo tool must be classed as a write, and vice versa.
+  for (const name of TEMPO_READ_TOOLS) {
+    assert.equal(TEMPO_WRITE_TOOLS.includes(name), false, name);
+  }
+  for (const name of TEMPO_ALLOWLIST) {
+    const isRead = TEMPO_READ_TOOLS.includes(name);
+    const looksWrite =
+      looksLikeWriteOrLogTool(name) ||
+      /^(upsert|import|link|unlink|attach|answer|enqueue|record|replace|research|schedule|write)_/.test(
+        name,
+      );
+    assert.equal(isRead, !looksWrite, `${name} is misclassified`);
+  }
+});
+
+test("write approval asks for writes, denies in plan mode, passes reads", () => {
+  const ctx = (toolName) => ({ toolName });
+  const agentMode = writeToolApproval(TEMPO_WRITE_TOOLS, {
+    planMode: () => false,
+  });
+  assert.equal(agentMode(ctx("tempo__upsert_company")), "user-approval");
+  assert.equal(agentMode(ctx("create_task")), "user-approval");
+  assert.equal(agentMode(ctx("tempo__search")), "not-applicable");
+  assert.equal(agentMode(ctx("tempo__list_meetings")), "not-applicable");
+
+  const planMode = writeToolApproval(TEMPO_WRITE_TOOLS, {
+    planMode: () => true,
+  });
+  assert.equal(planMode(ctx("tempo__upsert_company")).type, "denied");
+  assert.equal(planMode(ctx("tempo__search")), "not-applicable");
+  assert.equal(bareConnectionToolName("gmail__create_draft"), "create_draft");
+});
+
+test("Gmail and Sheets token params request granular Google scopes", () => {
+  assert.ok(GMAIL_OAUTH_SCOPES.includes("https://www.googleapis.com/auth/gmail.readonly"));
+  assert.ok(GMAIL_OAUTH_SCOPES.includes("https://www.googleapis.com/auth/gmail.compose"));
+  assert.equal(
+    GMAIL_OAUTH_SCOPES.some((scope) => scope.endsWith("/mail.google.com/")),
+    false,
+  );
+  assert.deepEqual(connectionTokenParams("gmail").scopes, [...GMAIL_OAUTH_SCOPES]);
+  assert.deepEqual(connectionTokenParams("sheets").scopes, [...SHEETS_OAUTH_SCOPES]);
+  assert.deepEqual(connectionTokenParams("tempo"), {});
 });
 
 test("Xero write blocklist only contains write tools", () => {

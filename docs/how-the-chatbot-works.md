@@ -580,7 +580,8 @@ enabledConnections = { notion: true, linear: true, sentry: true }
 This toggle does not provision, create, or revoke a Vercel Connect connector. It
 only controls per-turn agent intent for those three connections.
 
-User-scoped Google (Gmail, Calendar, Drive), GitHub, Vercel, and Xero grants
+User-scoped Google (Gmail, Calendar, Drive, Sheets), GitHub, Vercel, Xero, and
+Tempo grants
 are managed from Settings on web (`/settings/connections`) and mobile. Those
 connections register dynamically when their connector env vars are set and the
 eve session is a Better Auth user principal. Authorization is stored by Vercel
@@ -588,13 +589,18 @@ Connect under the same subject eve uses (`user` id + `issuer: better-auth`).
 Shared-password and local-dev principals cannot use those grants.
 
 The MCP connectors live in `agent/connections/*.ts`. Notion, Linear, and
-Sentry are static definitions. Gmail, Calendar, Drive, GitHub, Vercel, and
-Xero use `defineDynamic` and read-only tool allowlists. For production, set
-`NOTION_CONNECTOR`, `LINEAR_CONNECTOR`, `SENTRY_CONNECTOR`, and the opt-in
-`GMAIL_CONNECTOR`, `CALENDAR_CONNECTOR`, `DRIVE_CONNECTOR`, `GITHUB_CONNECTOR`,
-`VERCEL_CONNECTOR`, and `XERO_CONNECTOR` env vars to the returned Vercel
-Connect connector UIDs. See `docs/setup-and-deploy.md` for create/attach
-commands.
+Sentry are static definitions. Calendar, Drive, GitHub, Vercel, and Xero use
+`defineDynamic` and read-only tool allowlists. Gmail, Sheets, and Tempo also use
+`defineDynamic`, but add write tools (`create_draft`, Sheets updates, Tempo
+upserts and logging) behind `writeToolApproval` in
+`agent/lib/connection-approval.ts`: a person approves each write and plan mode
+denies it. Sending email is the first-party `send_gmail_message` tool
+(`approval` plus the execution ledger), because Gmail's MCP server cannot send.
+For production, set `NOTION_CONNECTOR`, `LINEAR_CONNECTOR`, `SENTRY_CONNECTOR`,
+and the opt-in `GMAIL_CONNECTOR`, `CALENDAR_CONNECTOR`, `DRIVE_CONNECTOR`,
+`SHEETS_CONNECTOR`, `GITHUB_CONNECTOR`, `VERCEL_CONNECTOR`, `XERO_CONNECTOR`,
+and `TEMPO_CONNECTOR` env vars to the returned Vercel Connect connector UIDs.
+See `docs/setup-and-deploy.md` for create/attach commands.
 
 ## Auth
 

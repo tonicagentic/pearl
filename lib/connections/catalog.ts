@@ -7,6 +7,8 @@ export const CONNECTION_IDS = [
   "github",
   "vercel",
   "xero",
+  "tempo",
+  "sheets",
   "notion",
   "linear",
   "sentry",
@@ -42,6 +44,8 @@ const LABELS: Record<ConnectionId, string> = {
   github: "GitHub",
   vercel: "Vercel",
   xero: "Xero",
+  tempo: "Tempo",
+  sheets: "Google Sheets",
   notion: "Notion",
   linear: "Linear",
   sentry: "Sentry",
@@ -54,6 +58,8 @@ const OPT_IN_ENV: Partial<Record<ConnectionId, string>> = {
   github: "GITHUB_CONNECTOR",
   vercel: "VERCEL_CONNECTOR",
   xero: "XERO_CONNECTOR",
+  tempo: "TEMPO_CONNECTOR",
+  sheets: "SHEETS_CONNECTOR",
 };
 
 export function connectionConfiguration(

@@ -80,6 +80,19 @@ export async function completeExecution(
     .where(and(eq(agentToolExecution.executionKey, key), eq(agentToolExecution.status, "pending")));
 }
 
+/** Moves a `failed` row back to `pending` so an explicit retry can complete it. */
+export async function reopenExecution(key: string): Promise<void> {
+  await db
+    .update(agentToolExecution)
+    .set({ status: "pending", updatedAt: new Date() })
+    .where(
+      and(
+        eq(agentToolExecution.executionKey, key),
+        eq(agentToolExecution.status, "failed"),
+      ),
+    );
+}
+
 export async function failExecution(
   key: string,
   detail: string,

@@ -249,7 +249,7 @@ Open the matching local URL and make sure the Vercel App contains the same callb
 
 ## Optional Vercel Connect Integrations
 
-Slack, Notion, Linear, and Sentry are optional and are not part of the required deploy button flow. Gmail, Google Calendar, Google Drive, GitHub, Vercel, and Xero MCP are also optional and are user-scoped: each signed-in person authorizes their own account from Settings (web or mobile) or through the in-chat Connect card.
+Slack, Notion, Linear, and Sentry are optional and are not part of the required deploy button flow. Gmail, Google Calendar, Google Drive, Google Sheets, GitHub, Vercel, Xero, and Tempo MCP are also optional and are user-scoped: each signed-in person authorizes their own account from Settings (web or mobile) or through the in-chat Connect card.
 
 Create any connectors you want to use:
 
@@ -270,6 +270,19 @@ vercel connect create https://mcp.sentry.dev/mcp --name sentry
 vercel connect create https://gmailmcp.googleapis.com/mcp/v1 --name gmail
 vercel connect create https://calendarmcp.googleapis.com/mcp/v1 --name calendar
 vercel connect create https://drivemcp.googleapis.com/mcp/v1 --name drive
+
+# Google Sheets MCP (developer preview, same Google Cloud project and OAuth
+# client as above). Also enable the Google Sheets API and the Google Sheets MCP
+# API (sheetsmcp.googleapis.com). Override the endpoint with SHEETS_MCP_URL if
+# Google moves it. The server has no create-spreadsheet tool; Pearl reads and
+# edits sheets you already have. Writes need approval each call.
+vercel connect create https://sheetsmcp.googleapis.com/mcp/v1 --name sheets
+
+# Tempo (company CRM) MCP: Streamable HTTP with OAuth through Better Auth's mcp
+# plugin on the CRM app. Defaults to https://crm.tonicagentic.com/api/mcp; set
+# TEMPO_MCP_URL to point at a local or preview Tempo instead, and use the same
+# URL here. Tempo writes (upserts, meetings, tasks, proposals) need approval.
+vercel connect create "${TEMPO_MCP_URL:-https://crm.tonicagentic.com/api/mcp}" --name tempo
 
 # User-scoped GitHub hosted MCP (OAuth bearer accepted by the readonly server;
 # do not use the managed GitHub App installation method). A bare
@@ -324,6 +337,11 @@ printf '%s' "<connector-uid>" | vercel env add DRIVE_CONNECTOR production previe
 printf '%s' "<connector-uid>" | vercel env add GITHUB_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add VERCEL_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add XERO_CONNECTOR production preview development
+printf '%s' "<connector-uid>" | vercel env add SHEETS_CONNECTOR production preview development
+printf '%s' "<connector-uid>" | vercel env add TEMPO_CONNECTOR production preview development
+# Optional endpoint overrides (omit to use the defaults above):
+printf '%s' "https://crm.tonicagentic.com/api/mcp" | vercel env add TEMPO_MCP_URL production preview development
+printf '%s' "https://sheetsmcp.googleapis.com/mcp/v1" | vercel env add SHEETS_MCP_URL production preview development
 ```
 
 Refresh local values without overwriting local-only secrets: a full
@@ -332,9 +350,26 @@ merge only the desired lines. Restart local dev or redeploy after changes.
 
 For local development, Notion, Linear, Sentry, and Slack fall back to
 `notion`, `linear`, `sentry`, and `slack/eve-chat-template` when their env
-vars are unset. Gmail, Calendar, Drive, GitHub, Vercel, and Xero stay
-unavailable until their connector env vars are set and the connectors are
+vars are unset. Gmail, Calendar, Drive, Sheets, GitHub, Vercel, Xero, and Tempo
+stay unavailable until their connector env vars are set and the connectors are
 attached.
+
+### Gmail compose and send
+
+Gmail's MCP server reads mail and creates drafts (`create_draft`, approved per
+call) but cannot send. Sending is Pearl's own `send_gmail_message` tool: it
+calls the Gmail REST API with the user's Connect token, always asks for
+approval, and is recorded in the execution ledger so a replay never re-sends.
+
+Both need the `gmail.compose` scope in addition to `gmail.readonly` (see
+`GMAIL_OAUTH_SCOPES` in `lib/connections/oauth-scopes.ts`):
+
+- Add `https://www.googleapis.com/auth/gmail.compose` to the OAuth consent
+  screen's scopes in Google Cloud, and confirm the Connect connector allows it.
+- Anyone who connected Gmail before this change holds a read-only grant. Their
+  status shows Not connected until they Disconnect and Connect Gmail again in
+  Settings to consent to compose.
+- A send that fails with 403 means the grant is still read-only.
 
 Until those env vars are set, Settings shows Unavailable for that service and
 the agent does not register the connection. Shared-password and local
@@ -349,7 +384,7 @@ card in the chat UI.
 
 The composer hammer menu still only toggles Notion, Linear, and Sentry for
 the current turn. It is not the grant store for Google, GitHub, Vercel, or
-Xero.
+Xero, Sheets, or Tempo.
 
 See [Deploy Button integrations](https://vercel.com/docs/integrations/deploy-button/integrations) for how storage products are declared in the deploy URL.
 

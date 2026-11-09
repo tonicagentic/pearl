@@ -23,6 +23,24 @@ export async function getGithubUserToken(userId: string): Promise<string> {
   });
 }
 
+/**
+ * Resolve the signed-in user's Gmail OAuth bearer via Vercel Connect, for the
+ * REST send call. Requests gmail.compose; grants that only carry
+ * gmail.readonly throw until the user re-authorizes in Settings.
+ */
+export async function getGmailUserToken(userId: string): Promise<string> {
+  const connector = connectionConfiguration("gmail").connector;
+  if (!connector) {
+    throw new Error(
+      "Gmail is not configured. Attach GMAIL_CONNECTOR, then connect Gmail in Settings.",
+    );
+  }
+  return getToken(connector, {
+    subject: connectionSubjectForUser(userId),
+    ...connectionTokenParams("gmail"),
+  });
+}
+
 /** Resolve the signed-in user's Vercel OAuth bearer via Vercel Connect. */
 export async function getVercelUserToken(userId: string): Promise<string> {
   const connector = connectionConfiguration("vercel").connector;

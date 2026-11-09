@@ -80,6 +80,45 @@ const LOGOS: Record<ConnectionId, LogoSpec> = {
       </>
     ),
   },
+  tempo: {
+    background: "#EEF2FF",
+    foreground: "#4F46E5",
+    render: (color) => (
+      <>
+        <Circle
+          cx="12"
+          cy="12"
+          r="8.5"
+          fill="none"
+          stroke={color}
+          strokeWidth={2}
+        />
+        <Path
+          d="M12 7.5V12l3 2"
+          fill="none"
+          stroke={color}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </>
+    ),
+  },
+  sheets: {
+    background: "#E6F4EA",
+    foreground: "#0F9D58",
+    render: (color) => (
+      <>
+        <Rect x="5" y="3.5" width="14" height="17" rx="2" fill={color} />
+        <Path
+          d="M8 9h8M8 12.5h8M8 16h8M12 9v7"
+          stroke="#fff"
+          strokeWidth={1.4}
+          strokeLinecap="round"
+        />
+      </>
+    ),
+  },
   notion: {
     background: "#F1F1EF",
     foreground: "#000000",

@@ -12,6 +12,8 @@ export type ConnectionId =
   | "github"
   | "vercel"
   | "xero"
+  | "tempo"
+  | "sheets"
   | "notion"
   | "linear"
   | "sentry";

@@ -70,6 +70,37 @@ const LOGOS: Record<ConnectionId, LogoSpec> = {
       </>
     ),
   },
+  tempo: {
+    background: "#EEF2FF",
+    mark: (
+      <>
+        <circle cx="12" cy="12" r="8.5" fill="none" stroke="#4F46E5" strokeWidth="2" />
+        <path
+          d="M12 7.5V12l3 2"
+          fill="none"
+          stroke="#4F46E5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="2"
+        />
+      </>
+    ),
+  },
+  sheets: {
+    background: "#E6F4EA",
+    mark: (
+      <>
+        <rect x="5" y="3.5" width="14" height="17" rx="2" fill="#0F9D58" />
+        <path
+          d="M8 9h8M8 12.5h8M8 16h8M12 9v7"
+          fill="none"
+          stroke="#fff"
+          strokeLinecap="round"
+          strokeWidth="1.4"
+        />
+      </>
+    ),
+  },
   notion: {
     background: "#F1F1EF",
     mark: (
