@@ -24,7 +24,6 @@ import { useCSSVariable } from "uniwind";
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
-import { StreamProbe } from "@/components/stream-probe";
 import {
   ChatFilesSegment,
   type MainTab,
@@ -521,58 +520,55 @@ export function ChatScreen({
               visible={mainTab === "computer"}
             />
           ) : (
-            <>
-              <Thread
-                autoFocus={
-                  Platform.OS === "ios" &&
-                  activeChatId === null &&
-                  chromeRevealed
-                }
-                chromeRevealed={chromeRevealed}
-                conversationId={activeChatId}
-                focusNewChatKey={newChatEntry}
-                notice={notice}
-                waitingAction={
-                  pendingApprovals[0]
+            <Thread
+              autoFocus={
+                Platform.OS === "ios" &&
+                activeChatId === null &&
+                chromeRevealed
+              }
+              chromeRevealed={chromeRevealed}
+              conversationId={activeChatId}
+              focusNewChatKey={newChatEntry}
+              notice={notice}
+              waitingAction={
+                pendingApprovals[0]
+                  ? {
+                      kind: pendingApprovals[0].kind,
+                      title:
+                        pendingApprovals[0].kind === "question"
+                          ? "The agent is paused until you answer."
+                          : "The agent is paused until you respond.",
+                      prompt: pendingApprovals[0].prompt,
+                      detail: pendingApprovals[0].detail,
+                      options: pendingApprovals[0].options,
+                      allowFreeform: pendingApprovals[0].allowFreeform,
+                      onRespond: async (response) => {
+                        const pending = pendingApprovals[0]!;
+                        await store.send({
+                          answers: [
+                            {
+                              interactionId: pending.requestId,
+                              ...(response.optionId
+                                ? { optionId: response.optionId }
+                                : {}),
+                              ...(response.text !== undefined
+                                ? { text: response.text }
+                                : {}),
+                            },
+                          ],
+                          clientContext: buildTurnClientContext(activeProjectId),
+                        });
+                      },
+                    }
+                  : waitingForAction
                     ? {
-                        kind: pendingApprovals[0].kind,
+                        kind: "authorization" as const,
                         title:
-                          pendingApprovals[0].kind === "question"
-                            ? "The agent is paused until you answer."
-                            : "The agent is paused until you respond.",
-                        prompt: pendingApprovals[0].prompt,
-                        detail: pendingApprovals[0].detail,
-                        options: pendingApprovals[0].options,
-                        allowFreeform: pendingApprovals[0].allowFreeform,
-                        onRespond: async (response) => {
-                          const pending = pendingApprovals[0]!;
-                          await store.send({
-                            answers: [
-                              {
-                                interactionId: pending.requestId,
-                                ...(response.optionId
-                                  ? { optionId: response.optionId }
-                                  : {}),
-                                ...(response.text !== undefined
-                                  ? { text: response.text }
-                                  : {}),
-                              },
-                            ],
-                            clientContext: buildTurnClientContext(activeProjectId),
-                          });
-                        },
+                          "The agent is paused on a question or approval above — reply to continue.",
                       }
-                    : waitingForAction
-                      ? {
-                          kind: "authorization" as const,
-                          title:
-                            "The agent is paused on a question or approval above — reply to continue.",
-                        }
-                      : null
-                }
-              />
-              <StreamProbe messages={projectedMessages} isRunning={isBusy} />
-            </>
+                    : null
+              }
+            />
           )}
         </AssistantRuntimeProvider>
         <ThreadActionsDrawer

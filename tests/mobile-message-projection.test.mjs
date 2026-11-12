@@ -358,3 +358,33 @@ test("settled prefix messages keep identity across streaming updates to the tail
   assert.notEqual(second[2], first[2]);
   assert.equal(second[2].content[0].text, "Hello");
 });
+
+test("prefix identity holds across a multi-delta streaming sequence", () => {
+  const prior = {
+    id: "a1",
+    role: "assistant",
+    metadata: { turnId: "t0", status: "complete" },
+    parts: [{ type: "text", text: "Earlier.", state: "done" }],
+  };
+  const chunks = ["H", "Hi", "Hi ", "Hi t", "Hi th", "Hi there"];
+  let previous = null;
+  for (const text of chunks) {
+    const live = {
+      id: "a2",
+      role: "assistant",
+      metadata: { turnId: "t1", status: "streaming" },
+      parts: [{ type: "text", text, state: "streaming" }],
+    };
+    const projected = toThreadMessages(
+      { messages: [user, prior, live] },
+      { isRunning: true },
+    );
+    if (previous) {
+      assert.equal(projected[0], previous[0]);
+      assert.equal(projected[1], previous[1]);
+      assert.notEqual(projected[2], previous[2]);
+    }
+    assert.equal(projected[2].content[0].text, text);
+    previous = projected;
+  }
+});

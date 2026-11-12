@@ -134,3 +134,28 @@ test("sticky awaitingReply keeps Thinking after localSend clears before busy", (
   assert.equal(projected.length, 2);
   assert.deepEqual(projected[1], { role: "assistant", content: [], status: { type: "running" } });
 });
+
+test("accepted send with sticky awaitingReply keeps Thinking while user is still submitted", () => {
+  // Mirrors chat-screen after deliveryId clears localSend: no preparing phase,
+  // store not busy yet, eve user row not complete — sticky flag alone must hold.
+  const user = { role: "user", content: [{ type: "text", text: "Hi there Pearl" }] };
+  const withoutSticky = withPendingAssistant(
+    [user],
+    [{ role: "user", metadata: { status: "submitted" } }],
+    false,
+    false,
+  );
+  assert.equal(withoutSticky.length, 1);
+  const withSticky = withPendingAssistant(
+    [user],
+    [{ role: "user", metadata: { status: "submitted" } }],
+    false,
+    true,
+  );
+  assert.equal(withSticky.length, 2);
+  assert.deepEqual(withSticky[1], {
+    role: "assistant",
+    content: [],
+    status: { type: "running" },
+  });
+});

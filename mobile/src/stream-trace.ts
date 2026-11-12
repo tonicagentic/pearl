@@ -1,5 +1,13 @@
-// Opt-in, development-only stream diagnostics. Log timing and lengths, never
-// message text, attachment names, credentials, or event payloads.
+// Opt-in Metro stream diagnostics. Set EXPO_PUBLIC_STREAM_TRACE=1 in
+// mobile/.env.local (dev only) to log timing and lengths — never message text,
+// attachment names, credentials, or event payloads.
+
+import {
+  createStreamTurnTrace,
+  firstDeltaMs,
+  firstPaintMs,
+  type StreamTurnTrace,
+} from "./stream-contract";
 
 export type StreamTraceStage =
   | "send"
@@ -8,18 +16,7 @@ export type StreamTraceStage =
   | "paint"
   | "settled";
 
-type TurnTrace = {
-  id: string;
-  startedAt: number;
-  firstDeltaAt: number | null;
-  lastDeltaAt: number | null;
-  deltaCount: number;
-  deltaChars: number;
-  firstPaintAt: number | null;
-  lastGapMs: number | null;
-};
-
-let turn: TurnTrace | null = null;
+let turn: StreamTurnTrace | null = null;
 let seq = 0;
 
 function enabled(): boolean {
@@ -46,16 +43,9 @@ export function beginStreamTrace(label = "turn"): string {
   if (!enabled()) return "";
   seq += 1;
   const id = `${label}-${seq}`;
-  turn = {
-    id,
-    startedAt: now(),
-    firstDeltaAt: null,
-    lastDeltaAt: null,
-    deltaCount: 0,
-    deltaChars: 0,
-    firstPaintAt: null,
-    lastGapMs: null,
-  };
+  const startedAt = now();
+  turn = createStreamTurnTrace(id, startedAt);
+  turn.send(startedAt);
   log("send", { id, t: 0 });
   return id;
 }
@@ -69,7 +59,7 @@ export function traceStream(
   const t = now();
   const id = turn?.id ?? "idle";
   const sinceSend =
-    turn !== null ? Math.round(t - turn.startedAt) : Math.round(t);
+    turn !== null ? Math.round(t - turn.snapshot().startedAt) : Math.round(t);
 
   if (stage === "send") {
     if (!turn) beginStreamTrace();
@@ -77,73 +67,63 @@ export function traceStream(
     return;
   }
 
-  if (stage === "delta" && turn) {
-    const gap =
-      turn.lastDeltaAt !== null ? Math.round(t - turn.lastDeltaAt) : null;
-    if (turn.firstDeltaAt === null) {
-      turn.firstDeltaAt = t;
-      log("delta", {
-        id,
-        t: sinceSend,
-        chars: length,
-        first: 1,
-        gapMs: null,
-      });
-    } else {
-      log("delta", {
-        id,
-        t: sinceSend,
-        chars: length,
-        gapMs: gap,
-      });
-    }
-    turn.lastDeltaAt = t;
-    turn.lastGapMs = gap;
-    turn.deltaCount += 1;
-    turn.deltaChars += length;
+  if (!turn) {
+    log(stage, { id, t: sinceSend, chars: length, pending });
     return;
   }
 
-  if (stage === "paint" && turn && turn.firstPaintAt === null) {
-    turn.firstPaintAt = t;
-    log("paint", {
+  if (stage === "delta") {
+    const before = turn.snapshot();
+    turn.delta(length, t);
+    const after = turn.snapshot();
+    log("delta", {
       id,
       t: sinceSend,
       chars: length,
-      pending,
-      first: 1,
-      sinceFirstDeltaMs:
-        turn.firstDeltaAt !== null
-          ? Math.round(t - turn.firstDeltaAt)
-          : null,
+      ...(before.firstDeltaAt === null ? { first: 1, gapMs: null } : { gapMs: after.lastGapMs }),
     });
     return;
   }
 
-  if (stage === "settled" && turn) {
+  if (stage === "paint") {
+    const before = turn.snapshot();
+    turn.paint(length, t);
+    if (before.firstPaintAt === null) {
+      log("paint", {
+        id,
+        t: sinceSend,
+        chars: length,
+        pending,
+        first: 1,
+        sinceFirstDeltaMs:
+          before.firstDeltaAt !== null
+            ? Math.round(t - before.firstDeltaAt)
+            : null,
+      });
+    } else {
+      log("paint", { id, t: sinceSend, chars: length, pending });
+    }
+    return;
+  }
+
+  if (stage === "source") {
+    turn.source(length, t);
+    log("source", { id, t: sinceSend, chars: length, pending });
+    return;
+  }
+
+  if (stage === "settled") {
+    const snapshot = turn.settled(t);
     log("settled", {
       id,
       t: sinceSend,
-      deltas: turn.deltaCount,
-      chars: turn.deltaChars,
-      firstDeltaMs:
-        turn.firstDeltaAt !== null
-          ? Math.round(turn.firstDeltaAt - turn.startedAt)
-          : null,
-      firstPaintMs:
-        turn.firstPaintAt !== null
-          ? Math.round(turn.firstPaintAt - turn.startedAt)
-          : null,
-      lastGapMs: turn.lastGapMs,
+      deltas: snapshot.deltaCount,
+      chars: snapshot.deltaChars,
+      firstDeltaMs: firstDeltaMs(snapshot),
+      firstPaintMs: firstPaintMs(snapshot),
+      lastGapMs: snapshot.lastGapMs,
     });
     turn = null;
     return;
   }
-
-  log(stage, { id, t: sinceSend, chars: length, pending });
-}
-
-/** True when the raw plain-text stream probe overlay should mount. */
-export function isStreamProbeEnabled(): boolean {
-  return __DEV__ && process.env.EXPO_PUBLIC_STREAM_PROBE === "1";
 }
