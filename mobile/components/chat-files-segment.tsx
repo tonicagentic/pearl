@@ -6,11 +6,11 @@ export type MainTab = "chat" | "computer";
 
 const OPTIONS: readonly { readonly id: MainTab; readonly label: string }[] = [
   { id: "chat", label: "Chat" },
-  { id: "computer", label: "Computer" },
+  { id: "computer", label: "View" },
 ];
 
 /**
- * Center Chat | Computer control for the chat header (iOS floating + Android stack).
+ * Center Chat | View control for the chat header (iOS floating + Android stack).
  */
 export function ChatFilesSegment({
   value,
@@ -21,7 +21,7 @@ export function ChatFilesSegment({
   readonly value: MainTab;
   readonly onChange: (tab: MainTab) => void;
   readonly disabled?: boolean;
-  /** Soft cue that Computer has open work while Chat is selected. */
+  /** Soft cue that View has open work while Chat is selected. */
   readonly computerBadge?: boolean;
 }) {
   return (
@@ -42,7 +42,7 @@ export function ChatFilesSegment({
             accessibilityState={{ selected: active, disabled }}
             accessibilityLabel={
               option.id === "computer" && computerBadge && !active
-                ? "Computer, open activity available"
+                ? "View, open activity available"
                 : option.label
             }
             className={cn(
