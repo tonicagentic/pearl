@@ -47,7 +47,7 @@ test("Tempo, Sheets, and Gmail compose connections are registered", async () => 
   assert.match(catalog, /SHEETS_CONNECTOR/);
 
   const tempo = await readFile("agent/connections/tempo.ts", "utf8");
-  assert.match(tempo, /crm\.tonicagentic\.com\/api\/mcp/);
+  assert.match(tempo, /TEMPO_MCP_URL/);
   assert.match(tempo, /TEMPO_WRITE_TOOLS/);
   assert.match(tempo, /writeToolApproval/);
 

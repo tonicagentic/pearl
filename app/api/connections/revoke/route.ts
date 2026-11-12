@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     );
   }
   const setup = await getSetupStatus();
-  const viewer = await getServerViewer(setup);
+  const viewer = await getServerViewer(setup, request.headers);
   if (!viewer) {
     return NextResponse.json(
       { error: "Sign in required." },

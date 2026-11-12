@@ -1,29 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { PluginLogo } from "@/components/connections/plugin-logo";
-import type { ConnectionId, ConnectionStatus } from "@/lib/connections/catalog";
-
-const LABELS: Record<ConnectionStatus["status"], string> = {
-  unavailable: "Unavailable",
-  available: "Available · not checked",
-  unknown: "Unable to verify",
-  connected: "Connected",
-  "not-connected": "Not connected",
-};
+import type { ConnectionStatus } from "@/lib/connections/catalog";
+import {
+  ACCOUNT_PLUGINS,
+  BUILTIN_PLUGINS,
+  COMING_SOON_PLUGINS,
+  TONIC_PLUGINS,
+  type PluginCatalogEntry,
+  type PluginMarkId,
+  type ResolvedPlugin,
+} from "@/lib/plugins/catalog";
 
 export function ConnectionsSettings() {
   const [connections, setConnections] = useState<ConnectionStatus[] | null>(
     null,
   );
   const [loading, setLoading] = useState(true);
-  const [checking, setChecking] = useState<ConnectionId | null>(null);
-  const [connecting, setConnecting] = useState<ConnectionId | null>(null);
-  const [disconnecting, setDisconnecting] = useState<ConnectionId | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const busy =
-    loading || checking !== null || connecting !== null || disconnecting !== null;
+  const statusById = new Map(
+    (connections ?? []).map((item) => [item.id, item] as const),
+  );
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -57,108 +57,20 @@ export function ConnectionsSettings() {
     return () => controller.abort();
   }, [load]);
 
-  const check = async (id: ConnectionId) => {
-    if (busy) return;
-    setChecking(id);
-    setError(null);
-    try {
-      const response = await fetch("/api/connections/status", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      if (!response.ok) {
-        throw new Error(`Could not check connection (${response.status}).`);
-      }
-      const data = (await response.json()) as { connection: ConnectionStatus };
-      setConnections(
-        (current) =>
-          current?.map((item) => (item.id === id ? data.connection : item)) ?? [
-            data.connection,
-          ],
-      );
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Could not check connection.",
-      );
-    } finally {
-      setChecking(null);
-    }
-  };
-
-  const connect = async (id: ConnectionId) => {
-    if (busy) return;
-    setConnecting(id);
-    setError(null);
-    try {
-      const response = await fetch("/api/connections/authorize", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      if (!response.ok) {
-        throw new Error(`Could not start authorization (${response.status}).`);
-      }
-      const data = (await response.json()) as { url: string };
-      const url = new URL(data.url);
-      if (url.protocol !== "https:" || url.username || url.password) {
-        throw new Error("Unsafe authorization URL.");
-      }
-      window.location.assign(url.href);
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not start authorization.",
-      );
-      setConnecting(null);
-    }
-  };
-
-  const disconnect = async (id: ConnectionId) => {
-    if (busy) return;
-    setDisconnecting(id);
-    setError(null);
-    try {
-      const response = await fetch("/api/connections/revoke", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      if (!response.ok) {
-        throw new Error(`Could not disconnect (${response.status}).`);
-      }
-      const data = (await response.json()) as { connection: ConnectionStatus };
-      setConnections(
-        (current) =>
-          current?.map((item) => (item.id === id ? data.connection : item)) ?? [
-            data.connection,
-          ],
-      );
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Could not disconnect.",
-      );
-    } finally {
-      setDisconnecting(null);
-    }
-  };
-
   return (
-    <section className="flex flex-col gap-4" aria-label="Plugin status">
+    <section className="flex flex-col gap-8" aria-label="Plugin catalog">
       <p className="text-sm text-muted-foreground">
-        Available means the connector is attached to this app; it does not mean
-        you have authorized it. Your authorization is stored by Vercel Connect,
-        not in this browser. Checking status may refresh a token but never
-        grants access.
+        Connect accounts Pearl can use, and see built-in tools from Pearl and
+        Tonic Agentic. Open a plugin for details and connection actions.
       </p>
+
       <button
         type="button"
         className="min-h-11 self-start rounded-lg border px-3 text-sm hover:bg-muted disabled:opacity-50"
-        disabled={busy}
+        disabled={loading}
         onClick={() => void load()}
       >
-        {loading ? "Loading…" : "Refresh list"}
+        {loading ? "Loading…" : "Refresh accounts"}
       </button>
       {error ? (
         <p role="alert" className="text-sm text-destructive">
@@ -168,67 +80,101 @@ export function ConnectionsSettings() {
       {loading && !connections ? (
         <p className="text-sm text-muted-foreground">Checking availability…</p>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2">
-        {connections?.map((item) => (
-          <article
-            className="flex flex-col gap-2 rounded-xl border bg-card p-4"
-            key={item.id}
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-3">
-                <PluginLogo id={item.id} />
-                <h2 className="font-medium">{item.label}</h2>
-              </div>
-              <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-                {LABELS[item.status]}
-              </span>
-            </div>
-            <p className="min-h-10 text-sm text-muted-foreground">
-              {item.detail}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {item.status === "not-connected" ||
-              item.status === "available" ||
-              item.status === "unknown" ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="min-h-11 rounded-lg bg-foreground px-4 text-sm text-background disabled:opacity-50"
-                  onClick={() => void connect(item.id)}
-                >
-                  {connecting === item.id
-                    ? "Connecting…"
-                    : `Connect ${item.label}`}
-                </button>
-              ) : null}
-              {item.status === "connected" || item.status === "unknown" ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="min-h-11 rounded-lg border px-4 text-sm text-destructive hover:bg-muted disabled:opacity-50"
-                  onClick={() => void disconnect(item.id)}
-                >
-                  {disconnecting === item.id
-                    ? "Disconnecting…"
-                    : "Disconnect"}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                disabled={busy || item.status === "unavailable"}
-                className="min-h-11 rounded-lg border px-3 text-sm hover:bg-muted disabled:opacity-50"
-                onClick={() => void check(item.id)}
-              >
-                {checking === item.id ? "Checking…" : "Check my status"}
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
-      <p className="text-xs text-muted-foreground">
-        If a plugin needs authorization, Pearl will also show a sign-in
-        challenge when you use it in chat.
-      </p>
+
+      <PluginSection title="Accounts">
+        <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
+          {ACCOUNT_PLUGINS.map((plugin) => (
+            <CatalogLink
+              key={plugin.id}
+              plugin={plugin}
+              trailing={trailingForStatus(statusById.get(plugin.connectionId))}
+            />
+          ))}
+        </ul>
+      </PluginSection>
+
+      <PluginSection title="Tonic Agentic">
+        <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
+          {TONIC_PLUGINS.map((plugin) => (
+            <CatalogLink
+              key={plugin.id}
+              plugin={plugin}
+              trailing={trailingForStatus(statusById.get(plugin.connectionId))}
+            />
+          ))}
+        </ul>
+      </PluginSection>
+
+      <PluginSection title="Built-in">
+        <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
+          {BUILTIN_PLUGINS.map((plugin) => (
+            <CatalogLink key={plugin.id} plugin={plugin} trailing="Enabled" />
+          ))}
+        </ul>
+      </PluginSection>
+
+      <PluginSection title="Coming soon">
+        <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
+          {COMING_SOON_PLUGINS.map((plugin) => (
+            <CatalogLink
+              key={plugin.id}
+              plugin={plugin}
+              trailing="Coming soon"
+            />
+          ))}
+        </ul>
+      </PluginSection>
     </section>
+  );
+}
+
+function trailingForStatus(status: ConnectionStatus | undefined): string {
+  if (!status) return "…";
+  if (status.status === "connected") {
+    return status.accountLabel?.trim() || "Connected";
+  }
+  if (status.status === "unavailable") return "Unavailable";
+  return "Connect";
+}
+
+function PluginSection({
+  title,
+  children,
+}: {
+  readonly title: string;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <h2 className="text-sm font-medium text-muted-foreground">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+function CatalogLink({
+  plugin,
+  trailing,
+}: {
+  readonly plugin: ResolvedPlugin | PluginCatalogEntry;
+  readonly trailing: string;
+}) {
+  return (
+    <li>
+      <Link
+        href={`/settings/connections/${plugin.id}`}
+        className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/50"
+      >
+        <PluginLogo id={plugin.id as PluginMarkId} />
+        <div className="min-w-0 flex-1">
+          <h3 className="font-medium leading-snug">{plugin.label}</h3>
+          <p className="text-sm text-muted-foreground">{plugin.detail}</p>
+        </div>
+        <span className="text-sm text-muted-foreground">{trailing}</span>
+        <span className="text-muted-foreground/50" aria-hidden>
+          ›
+        </span>
+      </Link>
+    </li>
   );
 }

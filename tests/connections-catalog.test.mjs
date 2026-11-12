@@ -40,14 +40,11 @@ test("only fixed provider ids are accepted", () => {
     "xero",
     "tempo",
     "sheets",
-    "notion",
-    "linear",
-    "sentry",
   ]);
   assert.equal(isConnectionId("github"), true);
   assert.equal(isConnectionId("gmail"), true);
   assert.equal(isConnectionId("xero"), true);
-  assert.equal(isConnectionId("notion"), true);
+  assert.equal(isConnectionId("notion"), false);
   assert.equal(isConnectionId("other"), false);
   assert.equal(isConnectionId({ id: "github" }), false);
 });
@@ -114,16 +111,6 @@ test("opt-in Google, GitHub, Vercel, and Xero need connector env vars", () => {
       .connector,
     "sheets/test",
   );
-});
-
-test("existing eve connections use their current connector names", () => {
-  assert.equal(connectionConfiguration("notion", {}).connector, "notion");
-  assert.equal(
-    connectionConfiguration("linear", { LINEAR_CONNECTOR: "linear/team" })
-      .connector,
-    "linear/team",
-  );
-  assert.equal(connectionConfiguration("sentry", {}).label, "Sentry");
 });
 
 test("read-only allowlists exclude write and log tools", () => {

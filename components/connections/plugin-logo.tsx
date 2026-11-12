@@ -1,13 +1,31 @@
 import type { ReactNode } from "react";
-import type { ConnectionId } from "@/lib/connections/catalog";
+import {
+  BarChart3Icon,
+  Code2Icon,
+  FolderKanbanIcon,
+  GlobeIcon,
+  ListTodoIcon,
+  PaletteIcon,
+  SearchIcon,
+  WalletIcon,
+  type LucideIcon,
+} from "lucide-react";
+
+import type { PluginMarkId } from "@/lib/plugins/catalog";
 import { cn } from "@/lib/utils";
 
-type LogoSpec = {
+type BrandSpec = {
   readonly background: string;
   readonly mark: ReactNode;
 };
 
-const LOGOS: Record<ConnectionId, LogoSpec> = {
+type BuiltinSpec = {
+  readonly background: string;
+  readonly color: string;
+  readonly icon: LucideIcon;
+};
+
+const BRAND_LOGOS: Partial<Record<PluginMarkId, BrandSpec>> = {
   gmail: {
     background: "#FCE8E6",
     mark: (
@@ -22,7 +40,15 @@ const LOGOS: Record<ConnectionId, LogoSpec> = {
     mark: (
       <>
         <rect x="4" y="5" width="16" height="15" rx="2" fill="#1A73E8" />
-        <rect x="4" y="5" width="16" height="4" rx="2" fill="#1A73E8" opacity="0.35" />
+        <rect
+          x="4"
+          y="5"
+          width="16"
+          height="4"
+          rx="2"
+          fill="#1A73E8"
+          opacity="0.35"
+        />
         <path
           d="M8 3.5v3M16 3.5v3M8 13h3M13 13h3M8 16.5h3M13 16.5h3"
           fill="none"
@@ -34,12 +60,13 @@ const LOGOS: Record<ConnectionId, LogoSpec> = {
     ),
   },
   drive: {
-    background: "#E6F4EA",
+    background: "#E8F0FE",
     mark: (
-      <path
-        d="M8.2 4.5h7.6L22 16.5h-7.6L8.2 4.5Zm-1.4 1.1L2 16.5h7.2l4.8-8.3-6.2-2.6Zm.6 12.4L12 11.2l4.6 6.8H7.4Z"
-        fill="#0F9D58"
-      />
+      <>
+        <path d="M8.2 4.5h7.6L22 16.5h-7.6L8.2 4.5Z" fill="#4285F4" />
+        <path d="M6.8 5.6 2 16.5h7.2l4.8-8.3-7.2-2.6Z" fill="#0F9D58" />
+        <path d="M7.4 18.5 12 11.2l4.6 7.3H7.4Z" fill="#F4B400" />
+      </>
     ),
   },
   github: {
@@ -74,7 +101,14 @@ const LOGOS: Record<ConnectionId, LogoSpec> = {
     background: "#EEF2FF",
     mark: (
       <>
-        <circle cx="12" cy="12" r="8.5" fill="none" stroke="#4F46E5" strokeWidth="2" />
+        <circle
+          cx="12"
+          cy="12"
+          r="8.5"
+          fill="none"
+          stroke="#4F46E5"
+          strokeWidth="2"
+        />
         <path
           d="M12 7.5V12l3 2"
           fill="none"
@@ -101,56 +135,89 @@ const LOGOS: Record<ConnectionId, LogoSpec> = {
       </>
     ),
   },
-  notion: {
-    background: "#F1F1EF",
+  expo: {
+    background: "#1A1A1A",
     mark: (
       <path
-        d="M6.2 4.8h10.2l1.4 1.2v12.4l-2.1 1.3H6.8L5.2 18.2V6.2l1-1.4Zm1.1 1.5v11.2l.9.6h7.7l1.1-.7V6.9l-.8-.6H7.3Zm2 1.6h1.5l3.6 8.4h-1.6l-.8-2H9.7l-.7 2H7.5l3.3-8.4h.5Zm1.2 1.7-.9 3.2h2.2l-1-3.2h-.3Z"
-        fill="#000"
+        d="M12 3.5c-2.2 3.8-6.5 9.2-6.5 12.2a6.5 6.5 0 0 0 13 0c0-3-4.3-8.4-6.5-12.2Z"
+        fill="#fff"
       />
     ),
   },
-  linear: {
-    background: "#EEE9FF",
+  shopify: {
+    background: "#E8F8F0",
     mark: (
       <path
-        d="M4.8 14.7 14.7 4.8A7.2 7.2 0 0 0 4.8 14.7Zm1.7 3A7.2 7.2 0 0 0 17.7 6.5L6.5 17.7Zm3.1 1.5A7.2 7.2 0 0 0 19.2 9.6L9.6 19.2Z"
-        fill="#5E6AD2"
+        d="M16.6 6.2c-.1 0-.3 0-.4.1l-.3-1c0-.1-.1-.1-.2-.1l-1.1.2c-.2-.5-.5-1-1-1.4-.7-.6-1.6-.8-2.5-.6-.3.1-.6.2-.8.4L8.6 3.4c-.1 0-.2 0-.2.1L8 4.6l-1.3.3c-.2 0-.3.2-.3.4L5.2 18c0 .2.1.3.3.4l10.2 2c.1 0 .1 0 .2 0 .1 0 .2-.1.2-.2l1.7-13.3c0-.2-.1-.4-.2-.5l-1-.2Zm-5.3-.8c.3 0 .5.1.7.2l-1.1.2.4-1.5c.3.2.5.6.5 1.1h-.5Zm1.8.4c0 .2 0 .3-.1.5l-1.5.3.5-1.8c.5.2.9.6 1.1 1Zm-4.4 2.2 1-.2.5 3.4c0 .1.1.1.2.1h.1c.1 0 .1-.1.1-.1l.5-2.4 1.1-.2-.6 3.2c-.1.3-.3.5-.6.5-.4.1-.7-.1-.8-.4l-.7-3.7-1.1.2.3-1.4c0-.1.1-.2.2-.2Zm7.2 8.5L8.8 17l.4-2.9 7.1 1.4-.4 1.8Z"
+        fill="#95BF47"
       />
     ),
   },
-  sentry: {
-    background: "#FCE8E6",
+  stripe: {
+    background: "#E8F0FE",
     mark: (
       <path
-        d="M13.9 4.4c.4-.7 1.1-1.1 1.9-1.1h2.2L12 14.2 6 3.3h2.2c.8 0 1.5.4 1.9 1.1L12 8l1.9-3.6ZM4.7 6.2 12 19.3 19.3 6.2h-2.5L12 14.2 7.2 6.2H4.7Z"
-        fill="#362D59"
+        d="M12.4 9.3c-.9-.4-1.4-.6-1.4-1.1 0-.4.4-.7 1-.7.8 0 1.6.3 2.3.8V5.8A7.6 7.6 0 0 0 12 5.3c-2.5 0-4.2 1.3-4.2 3.5 0 2.7 3.5 3 3.5 4.5 0 .6-.5.9-1.2.9-1 0-2-.4-2.8-1v2.6c.9.4 1.9.6 2.9.6 2.6 0 4.4-1.3 4.4-3.5 0-2.9-3.6-3.1-3.6-4.6Z"
+        fill="#635BFF"
       />
     ),
   },
 };
 
-/** Brand mark for a connection/plugin card. */
+const BUILTIN_TILES: Partial<Record<PluginMarkId, BuiltinSpec>> = {
+  browser: { background: "#E8F0FE", icon: GlobeIcon, color: "#1A73E8" },
+  search: { background: "#F3E8FF", icon: SearchIcon, color: "#7C3AED" },
+  coder: { background: "#ECFDF5", icon: Code2Icon, color: "#059669" },
+  projects: {
+    background: "#FFF7ED",
+    icon: FolderKanbanIcon,
+    color: "#EA580C",
+  },
+  researcher: { background: "#EEF2FF", icon: SearchIcon, color: "#4F46E5" },
+  analyst: { background: "#ECFEFF", icon: BarChart3Icon, color: "#0891B2" },
+  designer: { background: "#FDF2F8", icon: PaletteIcon, color: "#DB2777" },
+  plan: { background: "#F0FDF4", icon: ListTodoIcon, color: "#16A34A" },
+  tax: { background: "#FEF3C7", icon: WalletIcon, color: "#D97706" },
+};
+
+/** Brand or built-in mark for a plugin row. */
 export function PluginLogo({
   id,
   className,
 }: {
-  readonly id: ConnectionId;
+  readonly id: PluginMarkId;
   readonly className?: string;
 }) {
-  const spec = LOGOS[id];
+  const brand = BRAND_LOGOS[id];
+  const builtin = BUILTIN_TILES[id];
+
+  if (builtin) {
+    const Lucide = builtin.icon;
+    return (
+      <span
+        aria-hidden
+        className={cn(
+          "inline-flex size-10 shrink-0 items-center justify-center rounded-[11px]",
+          className,
+        )}
+        style={{ backgroundColor: builtin.background }}
+      >
+        <Lucide className="size-5" style={{ color: builtin.color }} />
+      </span>
+    );
+  }
 
   return (
     <span
       aria-hidden
       className={cn(
-        "inline-flex size-9 shrink-0 items-center justify-center rounded-[10px]",
+        "inline-flex size-10 shrink-0 items-center justify-center rounded-[11px] bg-muted",
         className,
       )}
-      style={{ backgroundColor: spec.background }}
+      style={brand ? { backgroundColor: brand.background } : undefined}
     >
       <svg className="size-[22px]" viewBox="0 0 24 24">
-        {spec.mark}
+        {brand?.mark}
       </svg>
     </span>
   );

@@ -2,16 +2,34 @@ import type { ReactNode } from "react";
 import { View } from "react-native";
 import Svg, { Path, Circle, Rect } from "react-native-svg";
 import { useCSSVariable } from "uniwind";
+import {
+  BarChart3Icon,
+  Code2Icon,
+  FolderKanbanIcon,
+  GlobeIcon,
+  ListTodoIcon,
+  PaletteIcon,
+  SearchIcon,
+  WalletIcon,
+  type LucideIcon,
+} from "lucide-react-native";
 
-import type { ConnectionId } from "@/src/connections-client";
+import { Icon } from "@/components/ui/icon";
+import type { PluginMarkId } from "../../lib/plugins/catalog";
 
-type LogoSpec = {
+type BrandSpec = {
   readonly background: string;
   readonly foreground: string;
   readonly render: (color: string) => ReactNode;
 };
 
-const LOGOS: Record<ConnectionId, LogoSpec> = {
+type BuiltinSpec = {
+  readonly background: string;
+  readonly color: string;
+  readonly icon: LucideIcon;
+};
+
+const BRAND_LOGOS: Partial<Record<PluginMarkId, BrandSpec>> = {
   gmail: {
     background: "#FCE8E6",
     foreground: "#EA4335",
@@ -28,7 +46,15 @@ const LOGOS: Record<ConnectionId, LogoSpec> = {
     render: (color) => (
       <>
         <Rect x="4" y="5" width="16" height="15" rx="2" fill={color} />
-        <Rect x="4" y="5" width="16" height="4" rx="2" fill={color} opacity={0.35} />
+        <Rect
+          x="4"
+          y="5"
+          width="16"
+          height="4"
+          rx="2"
+          fill={color}
+          opacity={0.35}
+        />
         <Path
           d="M8 3.5v3M16 3.5v3M8 13h3M13 13h3M8 16.5h3M13 16.5h3"
           stroke="#fff"
@@ -39,13 +65,14 @@ const LOGOS: Record<ConnectionId, LogoSpec> = {
     ),
   },
   drive: {
-    background: "#E6F4EA",
-    foreground: "#0F9D58",
-    render: (color) => (
-      <Path
-        d="M8.2 4.5h7.6L22 16.5h-7.6L8.2 4.5Zm-1.4 1.1L2 16.5h7.2l4.8-8.3-6.2-2.6Zm.6 12.4L12 11.2l4.6 6.8H7.4Z"
-        fill={color}
-      />
+    background: "#E8F0FE",
+    foreground: "#4285F4",
+    render: () => (
+      <>
+        <Path d="M8.2 4.5h7.6L22 16.5h-7.6L8.2 4.5Z" fill="#4285F4" />
+        <Path d="M6.8 5.6 2 16.5h7.2l4.8-8.3-7.2-2.6Z" fill="#0F9D58" />
+        <Path d="M7.4 18.5 12 11.2l4.6 7.3H7.4Z" fill="#F4B400" />
+      </>
     ),
   },
   github: {
@@ -61,9 +88,7 @@ const LOGOS: Record<ConnectionId, LogoSpec> = {
   vercel: {
     background: "#F4F4F5",
     foreground: "#000000",
-    render: (color) => (
-      <Path d="M12 4.5 21 19.5H3L12 4.5Z" fill={color} />
-    ),
+    render: (color) => <Path d="M12 4.5 21 19.5H3L12 4.5Z" fill={color} />,
   },
   xero: {
     background: "#E8F7F4",
@@ -119,49 +144,86 @@ const LOGOS: Record<ConnectionId, LogoSpec> = {
       </>
     ),
   },
-  notion: {
-    background: "#F1F1EF",
-    foreground: "#000000",
+  expo: {
+    background: "#1A1A1A",
+    foreground: "#FFFFFF",
     render: (color) => (
       <Path
-        d="M6.2 4.8h10.2l1.4 1.2v12.4l-2.1 1.3H6.8L5.2 18.2V6.2l1-1.4Zm1.1 1.5v11.2l.9.6h7.7l1.1-.7V6.9l-.8-.6H7.3Zm2 1.6h1.5l3.6 8.4h-1.6l-.8-2H9.7l-.7 2H7.5l3.3-8.4h.5Zm1.2 1.7-.9 3.2h2.2l-1-3.2h-.3Z"
+        d="M12 3.5c-2.2 3.8-6.5 9.2-6.5 12.2a6.5 6.5 0 0 0 13 0c0-3-4.3-8.4-6.5-12.2Z"
         fill={color}
       />
     ),
   },
-  linear: {
-    background: "#EEE9FF",
-    foreground: "#5E6AD2",
+  shopify: {
+    background: "#E8F8F0",
+    foreground: "#95BF47",
     render: (color) => (
       <Path
-        d="M4.8 14.7 14.7 4.8A7.2 7.2 0 0 0 4.8 14.7Zm1.7 3A7.2 7.2 0 0 0 17.7 6.5L6.5 17.7Zm3.1 1.5A7.2 7.2 0 0 0 19.2 9.6L9.6 19.2Z"
+        d="M16.6 6.2c-.1 0-.3 0-.4.1l-.3-1c0-.1-.1-.1-.2-.1l-1.1.2c-.2-.5-.5-1-1-1.4-.7-.6-1.6-.8-2.5-.6-.3.1-.6.2-.8.4L8.6 3.4c-.1 0-.2 0-.2.1L8 4.6l-1.3.3c-.2 0-.3.2-.3.4L5.2 18c0 .2.1.3.3.4l10.2 2c.1 0 .1 0 .2 0 .1 0 .2-.1.2-.2l1.7-13.3c0-.2-.1-.4-.2-.5l-1-.2Zm-5.3-.8c.3 0 .5.1.7.2l-1.1.2.4-1.5c.3.2.5.6.5 1.1h-.5Zm1.8.4c0 .2 0 .3-.1.5l-1.5.3.5-1.8c.5.2.9.6 1.1 1Zm-4.4 2.2 1-.2.5 3.4c0 .1.1.1.2.1h.1c.1 0 .1-.1.1-.1l.5-2.4 1.1-.2-.6 3.2c-.1.3-.3.5-.6.5-.4.1-.7-.1-.8-.4l-.7-3.7-1.1.2.3-1.4c0-.1.1-.2.2-.2Zm7.2 8.5L8.8 17l.4-2.9 7.1 1.4-.4 1.8Z"
         fill={color}
       />
     ),
   },
-  sentry: {
-    background: "#FCE8E6",
-    foreground: "#362D59",
+  stripe: {
+    background: "#E8F0FE",
+    foreground: "#635BFF",
     render: (color) => (
       <Path
-        d="M13.9 4.4c.4-.7 1.1-1.1 1.9-1.1h2.2L12 14.2 6 3.3h2.2c.8 0 1.5.4 1.9 1.1L12 8l1.9-3.6ZM4.7 6.2 12 19.3 19.3 6.2h-2.5L12 14.2 7.2 6.2H4.7Z"
+        d="M12.4 9.3c-.9-.4-1.4-.6-1.4-1.1 0-.4.4-.7 1-.7.8 0 1.6.3 2.3.8V5.8A7.6 7.6 0 0 0 12 5.3c-2.5 0-4.2 1.3-4.2 3.5 0 2.7 3.5 3 3.5 4.5 0 .6-.5.9-1.2.9-1 0-2-.4-2.8-1v2.6c.9.4 1.9.6 2.9.6 2.6 0 4.4-1.3 4.4-3.5 0-2.9-3.6-3.1-3.6-4.6Z"
         fill={color}
       />
     ),
   },
 };
 
-/** Brand mark for a connection/plugin row. */
+const BUILTIN_TILES: Partial<Record<PluginMarkId, BuiltinSpec>> = {
+  browser: { background: "#E8F0FE", icon: GlobeIcon, color: "#1A73E8" },
+  search: { background: "#F3E8FF", icon: SearchIcon, color: "#7C3AED" },
+  coder: { background: "#ECFDF5", icon: Code2Icon, color: "#059669" },
+  projects: {
+    background: "#FFF7ED",
+    icon: FolderKanbanIcon,
+    color: "#EA580C",
+  },
+  researcher: { background: "#EEF2FF", icon: SearchIcon, color: "#4F46E5" },
+  analyst: { background: "#ECFEFF", icon: BarChart3Icon, color: "#0891B2" },
+  designer: { background: "#FDF2F8", icon: PaletteIcon, color: "#DB2777" },
+  plan: { background: "#F0FDF4", icon: ListTodoIcon, color: "#16A34A" },
+  tax: { background: "#FEF3C7", icon: WalletIcon, color: "#D97706" },
+};
+
+/** Brand or built-in mark for a plugin row. */
 export function PluginLogo({
   id,
-  size = 36,
+  size = 40,
 }: {
-  readonly id: ConnectionId;
+  readonly id: PluginMarkId;
   readonly size?: number;
 }) {
-  const spec = LOGOS[id];
+  const brand = BRAND_LOGOS[id];
+  const builtin = BUILTIN_TILES[id];
   const fallbackBg = useCSSVariable("--color-muted") as string | undefined;
   const fallbackFg = useCSSVariable("--color-foreground") as string | undefined;
+
+  if (builtin) {
+    return (
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size * 0.28,
+          backgroundColor: builtin.background,
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+        }}
+      >
+        <Icon as={builtin.icon} size={size * 0.48} color={builtin.color} />
+      </View>
+    );
+  }
 
   return (
     <View
@@ -171,23 +233,18 @@ export function PluginLogo({
         width: size,
         height: size,
         borderRadius: size * 0.28,
-        backgroundColor: spec?.background ?? fallbackBg,
+        backgroundColor: brand?.background ?? fallbackBg,
         alignItems: "center",
         justifyContent: "center",
         overflow: "hidden",
       }}
     >
       <Svg width={size * 0.62} height={size * 0.62} viewBox="0 0 24 24">
-        {spec
-          ? spec.render(spec.foreground)
-          : (
-              <Circle
-                cx="12"
-                cy="12"
-                r="8"
-                fill={fallbackFg}
-              />
-            )}
+        {brand ? (
+          brand.render(brand.foreground)
+        ) : (
+          <Circle cx="12" cy="12" r="8" fill={fallbackFg} />
+        )}
       </Svg>
     </View>
   );

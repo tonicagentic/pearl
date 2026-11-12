@@ -13,9 +13,9 @@ import { getSetupStatus } from "@/lib/setup";
 
 const PRIVATE = { "Cache-Control": "private, no-store" };
 
-export async function GET() {
+export async function GET(request: Request) {
   const setup = await getSetupStatus();
-  const viewer = await getServerViewer(setup);
+  const viewer = await getServerViewer(setup, request.headers);
   if (!viewer) {
     return NextResponse.json(
       { error: "Sign in required." },
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     );
   }
   const setup = await getSetupStatus();
-  const viewer = await getServerViewer(setup);
+  const viewer = await getServerViewer(setup, request.headers);
   if (!viewer) {
     return NextResponse.json(
       { error: "Sign in required." },

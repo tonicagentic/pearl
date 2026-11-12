@@ -9,9 +9,6 @@ export const CONNECTION_IDS = [
   "xero",
   "tempo",
   "sheets",
-  "notion",
-  "linear",
-  "sentry",
 ] as const;
 
 export type ConnectionId = (typeof CONNECTION_IDS)[number];
@@ -28,6 +25,8 @@ export type ConnectionStatus = {
   readonly label: string;
   readonly status: ConnectionState;
   readonly detail?: string;
+  /** Safe display name for the linked provider account (email, login, …). */
+  readonly accountLabel?: string;
 };
 
 export type ConnectionConfiguration = {
@@ -46,12 +45,9 @@ const LABELS: Record<ConnectionId, string> = {
   xero: "Xero",
   tempo: "Tempo",
   sheets: "Google Sheets",
-  notion: "Notion",
-  linear: "Linear",
-  sentry: "Sentry",
 };
 
-const OPT_IN_ENV: Partial<Record<ConnectionId, string>> = {
+const OPT_IN_ENV: Record<ConnectionId, string> = {
   gmail: "GMAIL_CONNECTOR",
   calendar: "CALENDAR_CONNECTOR",
   drive: "DRIVE_CONNECTOR",
@@ -67,20 +63,8 @@ export function connectionConfiguration(
   env: NodeJS.ProcessEnv = process.env,
 ): ConnectionConfiguration {
   const label = LABELS[id];
-
-  if (id === "notion" || id === "linear" || id === "sentry") {
-    // Match the existing static eve definitions' fallback connector names.
-    const connector = env[`${id.toUpperCase()}_CONNECTOR`]?.trim() || id;
-    return {
-      id,
-      label,
-      connector,
-      reason: "Connector is not attached to this project.",
-    };
-  }
-
   const envKey = OPT_IN_ENV[id];
-  const connector = envKey ? env[envKey]?.trim() || null : null;
+  const connector = env[envKey]?.trim() || null;
   return {
     id,
     label,

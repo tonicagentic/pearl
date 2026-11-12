@@ -64,6 +64,32 @@ Once all production environment variables are present, production mode takes pre
 vercel env run -e production -- pnpm db:migrate
 ```
 
+## Hosted billing
+
+The hosted production app bills new accounts by default: **$10/month** subscription via Stripe Checkout, plus metered usage (models, Exa research, sandboxes, images) invoiced through Metronome onto the same Stripe customer. New accounts start with a **$50/month usage spend cap** they can raise in Settings.
+
+Required production env vars (see [.env.example](../.env.example)):
+
+```bash
+STRIPE_SECRET_KEY=
+STRIPE_PRICE_ID=
+STRIPE_WEBHOOK_SECRET=
+METRONOME_API_TOKEN=
+METRONOME_RATE_CARD_ID=
+```
+
+Point the Stripe webhook at `https://<your-production-host>/api/billing/webhook` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.*`, `invoice.paid`, `invoice.payment_failed`, `charge.dispute.created`, `charge.refunded`, and `radar.early_fraud_warning.created`.
+
+The migration that adds billing marks every existing `user` row as `billing_exempt` (a free pass: no Checkout, no invoices, no cap). New signups are billed. Spend for free-pass accounts is still written to the local ledger and never ingested to Metronome.
+
+Self-hosted production installs that should not charge anyone set:
+
+```bash
+PEARL_BILLING=off
+```
+
+Starter mode, the shared password, and local development never bill.
+
 ## Local Project Link
 
 Create or select the Vercel project that will run this template:
@@ -249,7 +275,7 @@ Open the matching local URL and make sure the Vercel App contains the same callb
 
 ## Optional Vercel Connect Integrations
 
-Slack, Notion, Linear, and Sentry are optional and are not part of the required deploy button flow. Gmail, Google Calendar, Google Drive, Google Sheets, GitHub, Vercel, Xero, and Tempo MCP are also optional and are user-scoped: each signed-in person authorizes their own account from Settings (web or mobile) or through the in-chat Connect card.
+Slack is optional and is not part of the required deploy button flow. Gmail, Google Calendar, Google Drive, Google Sheets, GitHub, Vercel, Xero, and Tempo MCP are optional and user-scoped: each signed-in person authorizes their own account from Settings (web or mobile) or through the in-chat Connect card. Public multi-tenant deploys need Better Auth (`email` / `vercel`), not shared-password mode, for per-user plugins.
 
 Create any connectors you want to use:
 
@@ -257,11 +283,6 @@ Create any connectors you want to use:
 # Slack channel
 vercel connect create slack --name eve-chat-template --triggers
 vercel connect attach <slack-connector-uid> --triggers --trigger-path /eve/v1/slack --yes
-
-# Existing workspace MCP connections
-vercel connect create mcp.notion.com --name notion
-vercel connect create https://mcp.linear.app/mcp --name linear
-vercel connect create https://mcp.sentry.dev/mcp --name sentry
 
 # User-scoped Google Workspace MCP (developer preview). Enable the Gmail,
 # Calendar, and Drive MCP APIs in Google Cloud, create a Web OAuth client
@@ -279,10 +300,9 @@ vercel connect create https://drivemcp.googleapis.com/mcp/v1 --name drive
 vercel connect create https://sheetsmcp.googleapis.com/mcp/v1 --name sheets
 
 # Tempo (company CRM) MCP: Streamable HTTP with OAuth through Better Auth's mcp
-# plugin on the CRM app. Defaults to https://crm.tonicagentic.com/api/mcp; set
-# TEMPO_MCP_URL to point at a local or preview Tempo instead, and use the same
-# URL here. Tempo writes (upserts, meetings, tasks, proposals) need approval.
-vercel connect create "${TEMPO_MCP_URL:-https://crm.tonicagentic.com/api/mcp}" --name tempo
+# plugin on the CRM app. Set TEMPO_MCP_URL to your Tempo MCP endpoint and use
+# the same URL here. Tempo writes need approval.
+vercel connect create "$TEMPO_MCP_URL" --name tempo
 
 # User-scoped GitHub hosted MCP (OAuth bearer accepted by the readonly server;
 # do not use the managed GitHub App installation method). A bare
@@ -328,9 +348,6 @@ Set the matching environment variable to each connector UID (never put provider 
 
 ```bash
 printf '%s' "<slack-connector-uid>" | vercel env add SLACK_CONNECTOR production preview development
-printf '%s' "<connector-uid>" | vercel env add NOTION_CONNECTOR production preview development
-printf '%s' "<connector-uid>" | vercel env add LINEAR_CONNECTOR production preview development
-printf '%s' "<connector-uid>" | vercel env add SENTRY_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add GMAIL_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add CALENDAR_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add DRIVE_CONNECTOR production preview development
@@ -339,8 +356,9 @@ printf '%s' "<connector-uid>" | vercel env add VERCEL_CONNECTOR production previ
 printf '%s' "<connector-uid>" | vercel env add XERO_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add SHEETS_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add TEMPO_CONNECTOR production preview development
-# Optional endpoint overrides (omit to use the defaults above):
-printf '%s' "https://crm.tonicagentic.com/api/mcp" | vercel env add TEMPO_MCP_URL production preview development
+# Required when TEMPO_CONNECTOR is set:
+printf '%s' "https://your-tempo.example/api/mcp" | vercel env add TEMPO_MCP_URL production preview development
+# Optional Sheets MCP endpoint override:
 printf '%s' "https://sheetsmcp.googleapis.com/mcp/v1" | vercel env add SHEETS_MCP_URL production preview development
 ```
 
@@ -348,11 +366,9 @@ Refresh local values without overwriting local-only secrets: a full
 `vercel env pull .env.local` can erase them, so pull to a temporary file and
 merge only the desired lines. Restart local dev or redeploy after changes.
 
-For local development, Notion, Linear, Sentry, and Slack fall back to
-`notion`, `linear`, `sentry`, and `slack/eve-chat-template` when their env
-vars are unset. Gmail, Calendar, Drive, Sheets, GitHub, Vercel, Xero, and Tempo
-stay unavailable until their connector env vars are set and the connectors are
-attached.
+Gmail, Calendar, Drive, Sheets, GitHub, Vercel, Xero, and Tempo stay unavailable
+until their connector env vars are set and the connectors are attached. Tempo
+also requires `TEMPO_MCP_URL`.
 
 ### Gmail compose and send
 
@@ -376,15 +392,12 @@ the agent does not register the connection. Shared-password and local
 development principals cannot authorize user-scoped grants; use a personal
 Better Auth account (email or Sign in with Vercel).
 
-Web Settings → Connections and mobile Settings list all configured
-connections. Users can Connect, Check status, and Disconnect. Connect owns
-the OAuth callback and stores the per-user grant; the app never receives
-provider tokens. If a chat requires MCP authorization first, use the Connect
-card in the chat UI.
-
-The composer hammer menu still only toggles Notion, Linear, and Sentry for
-the current turn. It is not the grant store for Google, GitHub, Vercel, or
-Xero, Sheets, or Tempo.
+Web Settings → Plugins and mobile Settings → Plugins list all configured
+account connections, plus built-in tools and Tonic Agentic agents. Users can
+Connect, Check status, and Disconnect accounts. Connect owns the OAuth
+callback and stores the per-user grant; the app never receives provider
+tokens. If a chat requires MCP authorization first, use the Connect card in
+the chat UI.
 
 See [Deploy Button integrations](https://vercel.com/docs/integrations/deploy-button/integrations) for how storage products are declared in the deploy URL.
 
@@ -433,7 +446,9 @@ If `pnpm db:migrate` says `DATABASE_URL` is missing, either run `vercel env run 
 
 If rate limiting setup is missing, provision Upstash Redis and pull env vars again.
 
-If Notion tool calls fail, confirm that `NOTION_CONNECTOR` is set in Vercel, the connector is attached to the project, and local env vars have been pulled again.
+If a user-scoped plugin stays Unavailable, confirm the matching `*_CONNECTOR`
+env var is set, the connector is attached with user authorization, and local
+env vars have been pulled again. Tempo also needs `TEMPO_MCP_URL`.
 
 ## Useful Links
 

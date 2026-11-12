@@ -87,7 +87,7 @@ export function SelfHostScreen({
   return (
     <SafeAreaView
       style={[styles.root, { backgroundColor }]}
-      edges={["left", "right", "bottom"]}
+      edges={["top", "left", "right", "bottom"]}
     >
       <ScrollView
         className="flex-1"
@@ -95,7 +95,7 @@ export function SelfHostScreen({
           gap: 20,
           paddingHorizontal: 24,
           paddingBottom: 28,
-          paddingTop: Platform.OS === "ios" ? 12 : 16,
+          paddingTop: 16,
         }}
         keyboardShouldPersistTaps="handled"
       >

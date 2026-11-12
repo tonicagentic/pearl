@@ -13,10 +13,7 @@ export type ConnectionId =
   | "vercel"
   | "xero"
   | "tempo"
-  | "sheets"
-  | "notion"
-  | "linear"
-  | "sentry";
+  | "sheets";
 
 export type ConnectionStatus = {
   id: ConnectionId;
@@ -28,6 +25,8 @@ export type ConnectionStatus = {
     | "connected"
     | "not-connected";
   detail?: string;
+  /** Safe display name for the linked provider account (email, login, …). */
+  accountLabel?: string;
 };
 
 function authHeaders(): Record<string, string> {

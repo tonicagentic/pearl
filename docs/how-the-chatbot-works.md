@@ -26,10 +26,8 @@ Important files:
 | `agent/agent.ts` | Defines the eve agent and model. |
 | `agent/channels/eve.ts` | Configures the eve web channel and auth adapters. |
 | `agent/channels/slack.ts` | Configures the Slack channel route and Vercel Connect credentials. |
-| `agent/connections/notion.ts` | Defines the Notion MCP connection through Vercel Connect. |
-| `agent/connections/linear.ts` | Defines the Linear MCP connection through Vercel Connect. |
-| `agent/connections/sentry.ts` | Defines the Sentry MCP connection through Vercel Connect. |
-| `agent/connections/xero.ts` | Defines the user-scoped Xero Remote MCP connection (read-only spend/reporting). |
+| `agent/connections/gmail.ts` | User-scoped Gmail MCP (read + draft; send is first-party). |
+| `agent/connections/xero.ts` | User-scoped Xero Remote MCP (read-only spend/reporting). |
 | `agent/instructions.md` | Defines the agent's behavior and long-term-memory rules. |
 | `agent/memory/profile.ts` | Defines the per-principal long-term-memory slot. |
 | `next.config.ts` | Wraps the app with `withEve(nextConfig)`, which mounts the `/eve/v1/*` routes. |
@@ -170,7 +168,6 @@ State it owns:
 - viewer
 - setup status
 - auth modal state
-- enabled connection toggles
 
 The desktop open/closed state is persisted in a cookie:
 
@@ -565,42 +562,23 @@ Skip is a local way to end the authorization wait without connecting the service
 That means "skip" ends the current turn. The next normal user message should
 start a fresh turn with the updated context.
 
-## Connections Menu
-
-The composer footer contains `ComposerFooterControls`, which renders
-`IntegrationsMenu`.
-
-The composer toggles Notion, Linear, and Sentry for the current turn. That
-toggle state is kept in `AgentChatShell` as:
-
-```ts
-enabledConnections = { notion: true, linear: true, sentry: true }
-```
-
-This toggle does not provision, create, or revoke a Vercel Connect connector. It
-only controls per-turn agent intent for those three connections.
+## Connections / Plugins
 
 User-scoped Google (Gmail, Calendar, Drive, Sheets), GitHub, Vercel, Xero, and
-Tempo grants
-are managed from Settings on web (`/settings/connections`) and mobile. Those
-connections register dynamically when their connector env vars are set and the
-eve session is a Better Auth user principal. Authorization is stored by Vercel
-Connect under the same subject eve uses (`user` id + `issuer: better-auth`).
-Shared-password and local-dev principals cannot use those grants.
+Tempo grants are managed from Settings on web (`/settings/connections`) and
+mobile Plugins. Those connections register dynamically when their connector env
+vars are set and the eve session is a Better Auth user principal. Authorization
+is stored by Vercel Connect under the same subject eve uses (`user` id +
+`issuer: better-auth`). Shared-password and local-dev principals cannot use
+those grants.
 
-The MCP connectors live in `agent/connections/*.ts`. Notion, Linear, and
-Sentry are static definitions. Calendar, Drive, GitHub, Vercel, and Xero use
-`defineDynamic` and read-only tool allowlists. Gmail, Sheets, and Tempo also use
-`defineDynamic`, but add write tools (`create_draft`, Sheets updates, Tempo
-upserts and logging) behind `writeToolApproval` in
-`agent/lib/connection-approval.ts`: a person approves each write and plan mode
-denies it. Sending email is the first-party `send_gmail_message` tool
-(`approval` plus the execution ledger), because Gmail's MCP server cannot send.
-For production, set `NOTION_CONNECTOR`, `LINEAR_CONNECTOR`, `SENTRY_CONNECTOR`,
-and the opt-in `GMAIL_CONNECTOR`, `CALENDAR_CONNECTOR`, `DRIVE_CONNECTOR`,
-`SHEETS_CONNECTOR`, `GITHUB_CONNECTOR`, `VERCEL_CONNECTOR`, `XERO_CONNECTOR`,
-and `TEMPO_CONNECTOR` env vars to the returned Vercel Connect connector UIDs.
-See `docs/setup-and-deploy.md` for create/attach commands.
+The MCP connectors live in `agent/connections/*.ts` and all use `defineDynamic`
+with `autoProvision: false`. Calendar, Drive, GitHub, Vercel, and Xero use
+read-only tool allowlists. Gmail, Sheets, and Tempo add write tools behind
+`writeToolApproval` in `agent/lib/connection-approval.ts`. Sending email is the
+first-party `send_gmail_message` tool. Set the opt-in `*_CONNECTOR` env vars
+(and `TEMPO_MCP_URL` for Tempo) to connector UIDs — see
+`docs/setup-and-deploy.md`.
 
 ## Auth
 
@@ -865,11 +843,8 @@ To add another Vercel Connect-backed MCP connection:
    `connect({ connector, autoProvision: false })` for grants that must stay
    per-user.
 3. Add the id to `lib/connections/catalog.ts` and document create/attach steps
-   in `docs/setup-and-deploy.md`.
-4. For composer turn toggles only (Notion-style), extend `EnabledConnections`
-   and `IntegrationsMenu`. User-scoped Google/GitHub/Vercel/Xero-style grants
-   are managed from Settings instead.
-5. Verify auth-required events render correctly on web and mobile.
+   in `docs/setup-and-deploy.md`. User-scoped grants are managed from Settings.
+4. Verify auth-required events render correctly on web and mobile.
 
 Do not parse assistant text to detect auth requirements. Rely on
 `authorization.required` and `authorization.completed` events.

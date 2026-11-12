@@ -5,6 +5,7 @@ import {
   getTokenResponse,
   NoValidTokenError,
   UserAuthorizationRequiredError,
+  type ConnectTokenResponse,
 } from "@vercel/connect";
 import {
   CONNECTION_IDS,
@@ -84,7 +85,7 @@ export async function checkConnectionStatus(
   try {
     // Match lib/eve-auth.ts's principal id and issuer exactly so a status
     // check cannot accidentally inspect another principal's grant.
-    await getTokenResponse(
+    const token = await getTokenResponse(
       connector,
       {
         subject: connectionSubjectForUser(userId),
@@ -92,12 +93,15 @@ export async function checkConnectionStatus(
       },
       { forceRefresh },
     );
+    const accountLabel = accountLabelFromToken(token);
     return {
       id,
       label: available.label,
       status: "connected",
-      detail:
-        "Authorization is saved with Connect for your account. Tool access still depends on the provider.",
+      accountLabel,
+      detail: accountLabel
+        ? `Connected as ${accountLabel}.`
+        : `Connected to your ${available.label} account.`,
     };
   } catch (error) {
     if (
@@ -109,7 +113,7 @@ export async function checkConnectionStatus(
         label: available.label,
         status: "not-connected",
         detail:
-          "Not authorized for your account. You can connect here or authorize when eve needs it in chat.",
+          "Not authorized for your account. You can connect here or authorize when Pearl needs it in chat.",
       };
     }
     if (error instanceof ConnectorInstallationRequiredError) {
@@ -127,4 +131,53 @@ export async function checkConnectionStatus(
       detail: "Could not verify your authorization right now.",
     };
   }
+}
+
+/**
+ * Pick a safe display string from Connect metadata. Never returns tokens or
+ * raw claim bags — only a short identity label for the Settings UI.
+ */
+export function accountLabelFromToken(
+  token: Pick<
+    ConnectTokenResponse,
+    "name" | "externalSubject" | "claims" | "metadata"
+  >,
+): string | undefined {
+  const fromName = cleanLabel(token.name);
+  if (fromName) return fromName;
+
+  const claims = isRecord(token.claims) ? token.claims : null;
+  const metadata = isRecord(token.metadata) ? token.metadata : null;
+
+  for (const source of [claims, metadata]) {
+    if (!source) continue;
+    for (const key of [
+      "email",
+      "preferred_username",
+      "login",
+      "username",
+      "name",
+      "user",
+    ] as const) {
+      const value = cleanLabel(source[key]);
+      if (value) return value;
+    }
+  }
+
+  return cleanLabel(token.externalSubject);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function cleanLabel(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 120) return undefined;
+  // Reject anything that looks like a bearer/token id.
+  if (/^(ya29\.|gh[pousr]_|stk_|sk_|Bearer\s)/i.test(trimmed)) {
+    return undefined;
+  }
+  return trimmed;
 }

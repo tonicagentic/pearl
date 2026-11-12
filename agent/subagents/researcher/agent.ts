@@ -7,7 +7,7 @@ import { DEFAULT_MODEL, WORKFLOW_BATCHING } from "../../agent.ts";
  *
  * @remarks
  * A declared subagent — its `subagents/researcher/` location is what marks it as one — that the
- * root agent delegates to when a draft needs facts the Notion source material doesn't cover: a
+ * root agent delegates to when a draft needs facts the current sources don't cover: a
  * statistic, a competitor detail, a primary-source link, or a claim to verify. It runs in its own
  * child session with no shared history and, like every declared subagent, inherits none of the
  * root's skills, connections, or tools. It does, however, get the framework default harness —
@@ -30,7 +30,7 @@ export default defineAgent({
   experimental: WORKFLOW_BATCHING,
   description:
     "Research a topic on the open web for facts, statistics, primary sources, and links the " +
-    "writer needs but Notion doesn't cover. Runs refined searches against reliable sources and " +
+    "writer needs but current sources don't cover. Runs refined searches against reliable sources and " +
     "returns cited findings with confidence levels, plus the gaps it couldn't verify. The " +
     "caller passes the question and any known context in the message.",
   // Our OSS default (agent.ts DEFAULT_MODEL); see the reviewer note on model policy.

@@ -92,82 +92,35 @@ function AuthenticatedLayout() {
                 />
                 <Stack.Screen
                   name="settings"
-                  options={{
-                    title: "Settings",
-                    presentation: "formSheet",
-                    sheetAllowedDetents: [0.92],
-                    sheetGrabberVisible: true,
-                    sheetCornerRadius: 28,
-                    // Content owns the title — native headers overlap formSheet scroll views.
-                    headerShown: false,
-                  }}
+                  options={{ title: "Settings", headerShown: true }}
                 />
                 <Stack.Screen
                   name="skills"
-                  options={{
-                    title: "Skills",
-                    presentation: "formSheet",
-                    sheetAllowedDetents: [0.92],
-                    sheetGrabberVisible: true,
-                    sheetCornerRadius: 28,
-                    headerShown: false,
-                  }}
+                  options={{ title: "Skills", headerShown: true }}
                 />
                 <Stack.Screen
-                  name="plugins"
-                  options={{
-                    title: "Plugins",
-                    presentation: "formSheet",
-                    sheetAllowedDetents: [0.92],
-                    sheetGrabberVisible: true,
-                    sheetCornerRadius: 28,
-                    headerShown: false,
-                  }}
+                  name="plugins/index"
+                  options={{ title: "Plugins", headerShown: true }}
+                />
+                <Stack.Screen
+                  name="plugins/[id]"
+                  options={{ title: "Plugin", headerShown: true }}
                 />
                 <Stack.Screen
                   name="models"
-                  options={{
-                    title: "Models",
-                    presentation: "formSheet",
-                    sheetAllowedDetents: [0.62, 0.92],
-                    sheetInitialDetentIndex: 0,
-                    sheetGrabberVisible: true,
-                    sheetCornerRadius: 28,
-                    headerShown: false,
-                  }}
+                  options={{ title: "Models", headerShown: true }}
                 />
                 <Stack.Screen
                   name="identity"
-                  options={{
-                    title: "Identity",
-                    presentation: "formSheet",
-                    sheetAllowedDetents: [0.92],
-                    sheetGrabberVisible: true,
-                    sheetCornerRadius: 28,
-                    headerShown: false,
-                  }}
+                  options={{ title: "Identity", headerShown: true }}
                 />
                 <Stack.Screen
                   name="about"
-                  options={{
-                    title: "About",
-                    presentation: "formSheet",
-                    sheetAllowedDetents: [0.92],
-                    sheetGrabberVisible: true,
-                    sheetCornerRadius: 28,
-                    headerShown: false,
-                  }}
+                  options={{ title: "About", headerShown: true }}
                 />
                 <Stack.Screen
                   name="self-host"
-                  options={{
-                    title: "Self-host",
-                    presentation: "formSheet",
-                    sheetAllowedDetents: [0.92],
-                    sheetGrabberVisible: true,
-                    sheetCornerRadius: 28,
-                    headerShown: false,
-                  }}
+                  options={{ title: "Self-host", headerShown: true }}
                 />
                 <Stack.Screen
                   name="json-render-smoke"
