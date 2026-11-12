@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { Sandbox } from "@vercel/sandbox";
 
 import { getEffectiveAppUrl } from "@/lib/auth-url";
+import { noteSandboxOpened } from "@/lib/billing/sandbox-meter";
 import {
   getChatBrowserSession,
   setChatBrowserSession,
@@ -201,7 +202,7 @@ export type EnsureBrowserSessionDeps = {
  */
 export async function ensureBrowserSession(
   chatId: string,
-  deps: EnsureBrowserSessionDeps = {},
+  deps: EnsureBrowserSessionDeps & { readonly userId?: string | null } = {},
 ): Promise<BrowserSessionHandle> {
   const getRow = deps.getChatBrowserSession ?? getChatBrowserSession;
   const setRow = deps.setChatBrowserSession ?? setChatBrowserSession;
@@ -243,6 +244,15 @@ export async function ensureBrowserSession(
 
   if (created || !(await isControlUp(sandbox))) {
     await startControlServer(sandbox);
+  }
+
+  if (deps.userId) {
+    noteSandboxOpened({
+      sandboxId: name,
+      userId: deps.userId,
+      vcpus: 2,
+      label: "browser",
+    });
   }
 
   const baseUrl = sandbox.domain(BROWSER_CONTROL_PORT).replace(/\/$/, "");

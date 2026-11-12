@@ -23,6 +23,16 @@ export const environment = DefaultSandbox.environment();
 
 export default defineSandbox(async ({ session }) => {
   const sandbox = await environment.open();
+  const principalId = session.auth.current?.principalId;
+  if (principalId) {
+    const { noteSandboxOpened } = await import("@/lib/billing/sandbox-meter");
+    noteSandboxOpened({
+      sandboxId: `writing:${session.id}`,
+      userId: principalId,
+      vcpus: 2,
+      label: "writing",
+    });
+  }
   const restored = new Map<string, Date>();
 
   try {

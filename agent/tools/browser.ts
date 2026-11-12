@@ -82,7 +82,9 @@ export default defineTool({
     }
 
     try {
-      const handle = await ensureBrowserSession(chatLink.id);
+      const handle = await ensureBrowserSession(chatLink.id, {
+        userId: chatLink.userId,
+      });
 
       if (input.action === "tabs") {
         if (input.op === "list") {

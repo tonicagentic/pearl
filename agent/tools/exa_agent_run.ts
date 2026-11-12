@@ -1,6 +1,13 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
+import {
+  blockMessage,
+  DEFAULT_EXA_RESERVATION_CENTS,
+} from "@/lib/billing/config";
+import { assertCanSpend, recordUsage, usdToCents } from "@/lib/billing/ledger";
+import { principalIdFromAuth } from "@/lib/billing/principal";
+
 // Deep research and lead-list generation via the Exa Agent API
 // (https://api.exa.ai/agent/runs). Exa runs the multi-step search,
 // verification, and enrichment internally; this tool starts a run and polls
@@ -224,11 +231,37 @@ function toAgentRunResult(result: Record<string, unknown>): AgentRunResult {
   };
 }
 
+async function recordExaCost(
+  summary: AgentRunResult,
+  userId: string | null,
+  reservationId: string | null,
+): Promise<void> {
+  if (!userId || !summary.runId) {
+    return;
+  }
+  const costCents = usdToCents(summary.costDollars);
+  if (costCents <= 0) {
+    return;
+  }
+  try {
+    await recordUsage({
+      idempotencyKey: `exa_agent:${summary.runId}`,
+      userId,
+      source: "exa_agent",
+      costCents,
+      reservationId,
+      metadata: { runId: summary.runId, status: summary.status },
+    });
+  } catch (error) {
+    console.error("[exa_agent_run] billing", error);
+  }
+}
+
 export default defineTool({
   description:
     "Deep company research and lead-list generation backed by the Exa Agent API. Exa decomposes the query, searches, verifies, enriches, and returns structured output with citations. Use for company deep dives, competitor analysis, ICP-based lead lists, and market research. For quick single lookups prefer web_search instead.",
   inputSchema,
-  async execute(input) {
+  async execute(input, ctx) {
     // Coerce nulls to undefined, then guard.
     const query = input.query ?? undefined;
     const runId = input.runId ?? undefined;
@@ -251,6 +284,35 @@ export default defineTool({
       } satisfies AgentRunResult;
     }
 
+    const userId = principalIdFromAuth(
+      (
+        ctx as {
+          session?: {
+            auth?: {
+              current?: { principalId?: string };
+              initiator?: { principalId?: string };
+            };
+          };
+        }
+      ).session?.auth,
+    );
+
+    let reservationId: string | null = null;
+    if (userId && !runId) {
+      const gate = await assertCanSpend({
+        userId,
+        cents: DEFAULT_EXA_RESERVATION_CENTS,
+        reason: "exa_agent_run",
+      });
+      if (!gate.ok) {
+        return {
+          status: "error",
+          error: blockMessage(gate.reason),
+        } satisfies AgentRunResult;
+      }
+      reservationId = gate.reservationId;
+    }
+
     const startedAt = Date.now();
 
     // Polling an in-progress run when a runId is present; otherwise start.
@@ -265,6 +327,7 @@ export default defineTool({
           status === "failed" ||
           status === "cancelled"
         ) {
+          await recordExaCost(summary, userId, null);
           return summary;
         }
 
@@ -352,7 +415,9 @@ export default defineTool({
       createdStatus === "failed" ||
       createdStatus === "cancelled"
     ) {
-      return toAgentRunResult(created);
+      const summary = toAgentRunResult(created);
+      await recordExaCost(summary, userId, reservationId);
+      return summary;
     }
 
     for (;;) {
@@ -365,6 +430,7 @@ export default defineTool({
         status === "failed" ||
         status === "cancelled"
       ) {
+        await recordExaCost(summary, userId, reservationId);
         return summary;
       }
 

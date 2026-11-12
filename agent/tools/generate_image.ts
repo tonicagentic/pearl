@@ -3,6 +3,12 @@ import { generateImage } from "ai";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
+import {
+  blockMessage,
+  IMAGE_FALLBACK_CENTS,
+} from "@/lib/billing/config";
+import { assertCanSpend, recordUsage, usdToCents } from "@/lib/billing/ledger";
+import { principalIdFromAuth } from "@/lib/billing/principal";
 import { GATEWAY_PROVIDER_OPTIONS } from "../agent.ts";
 import {
   currentImageModelId,
@@ -26,7 +32,7 @@ export default defineTool({
     "loading graphic-design (or another design skill). Geometric marks and " +
     "type-led posters should be SVG via write_file instead. The image model " +
     "comes from Models settings, not from this tool's arguments.",
-  async execute(input) {
+  async execute(input, ctx) {
     if (isPlanMode()) {
       return {
         success: false,
@@ -36,6 +42,39 @@ export default defineTool({
         model: "",
         prompt: input.prompt,
       };
+    }
+
+    const userId = principalIdFromAuth(
+      (
+        ctx as {
+          session?: {
+            auth?: {
+              current?: { principalId?: string };
+              initiator?: { principalId?: string };
+            };
+          };
+        }
+      ).session?.auth,
+    );
+
+    let reservationId: string | null = null;
+    if (userId) {
+      const gate = await assertCanSpend({
+        userId,
+        cents: IMAGE_FALLBACK_CENTS,
+        reason: "generate_image",
+      });
+      if (!gate.ok) {
+        return {
+          success: false,
+          error: blockMessage(gate.reason),
+          url: "",
+          downloadUrl: "",
+          model: "",
+          prompt: input.prompt,
+        };
+      }
+      reservationId = gate.reservationId;
     }
 
     const model = currentImageModelId();
@@ -74,6 +113,27 @@ export default defineTool({
         addRandomSuffix: true,
         contentType,
       });
+
+      if (userId) {
+        const usage = (result as unknown as { usage?: { costUsd?: number } })
+          .usage;
+        const providerCost =
+          typeof usage?.costUsd === "number" ? usage.costUsd : null;
+        const costCents =
+          usdToCents(providerCost) || IMAGE_FALLBACK_CENTS;
+        try {
+          await recordUsage({
+            idempotencyKey: `image:${blob.pathname}`,
+            userId,
+            source: "image",
+            costCents,
+            reservationId,
+            metadata: { model, pathname: blob.pathname },
+          });
+        } catch (error) {
+          console.error("[generate_image] billing", error);
+        }
+      }
 
       return {
         success: true,

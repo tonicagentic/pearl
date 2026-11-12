@@ -25,10 +25,21 @@ export const environment = VercelSandbox.environment({
   },
 });
 
-export default defineSandbox(() =>
-  environment.open({
+export default defineSandbox(async ({ session }) => {
+  const sandbox = await environment.open({
     networkPolicy: CODER_BASELINE_NETWORK_POLICY,
     resources: { vcpus: 4 },
     timeout: 45 * 60 * 1000,
-  }),
-);
+  });
+  const principalId = session.auth.current?.principalId;
+  if (principalId) {
+    const { noteSandboxOpened } = await import("@/lib/billing/sandbox-meter");
+    noteSandboxOpened({
+      sandboxId: `coder:${session.id}`,
+      userId: principalId,
+      vcpus: 4,
+      label: "coder",
+    });
+  }
+  return sandbox;
+});

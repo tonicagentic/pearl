@@ -8,6 +8,7 @@ import {
   Loader2Icon,
 } from "lucide-react";
 
+import { BillingPanel } from "@/components/billing/billing-panel";
 import { getUserUsageRows } from "@/lib/db/queries";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
@@ -62,10 +63,12 @@ async function ResolvedUsage() {
       <header>
         <h1 className="text-lg font-semibold">Usage</h1>
         <p className="text-sm text-muted-foreground">
-          Model usage across your chats, from the per-call usage eve reports
-          on every completed model call.
+          Metered spend for this billing period, plus the chat event log
+          summary below.
         </p>
       </header>
+
+      <BillingPanel />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile

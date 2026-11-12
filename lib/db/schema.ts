@@ -20,6 +20,10 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
+  // Free pass: no Stripe subscription, no usage invoice, no spend cap.
+  // Backfilled true for every row that existed when billing shipped; new
+  // accounts default false and must subscribe.
+  billingExempt: boolean("billing_exempt").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -510,6 +514,116 @@ export const pushDelivery = pgTable(
 );
 
 export type PushDelivery = typeof pushDelivery.$inferSelect;
+
+/**
+ * Paying-user billing state. Free-pass users have no row here. Access to the
+ * agent for a non-exempt user requires status "active" (or "trialing").
+ */
+export const billingAccount = pgTable(
+  "billing_account",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => user.id, { onDelete: "cascade" }),
+    stripeCustomerId: text("stripe_customer_id").notNull(),
+    stripeSubscriptionId: text("stripe_subscription_id"),
+    status: text("status").notNull().default("incomplete"),
+    periodStart: timestamp("period_start"),
+    periodEnd: timestamp("period_end"),
+    usageCapCents: integer("usage_cap_cents").notNull().default(5000),
+    metronomeCustomerId: text("metronome_customer_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_billing_account_stripe_customer").on(
+      table.stripeCustomerId,
+    ),
+    uniqueIndex("idx_billing_account_stripe_subscription").on(
+      table.stripeSubscriptionId,
+    ),
+  ],
+);
+
+export type BillingAccount = typeof billingAccount.$inferSelect;
+
+export type UsageEventSource =
+  | "model"
+  | "exa_agent"
+  | "web_search"
+  | "sandbox"
+  | "image";
+
+/**
+ * Append-only usage ledger. Cap enforcement and the Usage page read this
+ * table. Metronome ingest uses the same idempotency key as transaction_id.
+ * Free-pass rows stay local (billable=false) and are never ingested.
+ */
+export const usageEvent = pgTable(
+  "usage_event",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    idempotencyKey: text("idempotency_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    periodStart: timestamp("period_start").notNull(),
+    source: text("source").notNull(),
+    costCents: integer("cost_cents").notNull(),
+    billable: boolean("billable").notNull().default(true),
+    ingestedAt: timestamp("ingested_at"),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_usage_event_idempotency").on(table.idempotencyKey),
+    index("idx_usage_event_user_period").on(
+      table.userId,
+      table.periodStart,
+      table.createdAt,
+    ),
+    index("idx_usage_event_pending_ingest").on(
+      table.billable,
+      table.ingestedAt,
+    ),
+  ],
+);
+
+export type UsageEvent = typeof usageEvent.$inferSelect;
+
+/**
+ * In-flight spend reservations so two concurrent turns cannot both clear a
+ * near-cap check. Released (deleted or zeroed) when the real cost lands.
+ */
+export const usageReservation = pgTable(
+  "usage_reservation",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    periodStart: timestamp("period_start").notNull(),
+    cents: integer("cents").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at").notNull(),
+  },
+  (table) => [
+    index("idx_usage_reservation_user_period").on(
+      table.userId,
+      table.periodStart,
+    ),
+  ],
+);
+
+export type UsageReservation = typeof usageReservation.$inferSelect;
 
 /** Nearby term and how this concept differs from it. */
 export type ConceptSchemaDistinction = {
