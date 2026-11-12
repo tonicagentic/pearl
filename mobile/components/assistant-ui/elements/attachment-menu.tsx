@@ -1,5 +1,5 @@
 import { ComposerPrimitive } from "@assistant-ui/react-native";
-import { PlusIcon } from "lucide-react-native";
+import { PaperclipIcon } from "lucide-react-native";
 import { Alert, View } from "react-native";
 
 import { Icon } from "@/components/ui/icon";
@@ -33,7 +33,7 @@ export function AttachmentMenu({
         hitSlop={iconButtonHitSlop}
         accessibilityLabel="Add attachment"
       >
-        <Icon as={PlusIcon} className="text-muted-foreground size-5" />
+        <Icon as={PaperclipIcon} className="text-muted-foreground size-5" />
       </ComposerPrimitive.AddAttachment>
     </View>
   );

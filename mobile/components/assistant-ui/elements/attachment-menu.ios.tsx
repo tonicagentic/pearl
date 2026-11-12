@@ -1,6 +1,6 @@
 import { Button, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
 import { accessibilityLabel, disabled as nativeDisabled } from "@expo/ui/swift-ui/modifiers";
-import { PlusIcon } from "lucide-react-native";
+import { PaperclipIcon } from "lucide-react-native";
 import { View } from "react-native";
 
 import {
@@ -29,7 +29,7 @@ export function AttachmentMenu({
               // before the menu resigns the field and drops the keyboard.
               onTouchStart={() => pinComposerIfKeyboardVisible(chrome)}
             >
-              <Icon as={PlusIcon} size={14} className="text-foreground" />
+              <Icon as={PaperclipIcon} size={14} className="text-foreground" />
             </View>
           </RNHostView>
         }

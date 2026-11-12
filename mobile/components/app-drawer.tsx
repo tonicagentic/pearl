@@ -1,12 +1,7 @@
 import { Platform, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
-import {
-  FolderIcon,
-  InboxIcon,
-  PlusIcon,
-  Settings2Icon,
-} from "lucide-react-native";
+import { FolderIcon, InboxIcon, PlusIcon } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
@@ -24,8 +19,9 @@ import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
 export type { HistoryChatActionHandlers, SidebarDestination };
 
 /**
- * Home list: Projects, Tasks, Settings, and recent chats.
+ * Home list: Projects, Tasks, and recent chats.
  * Selecting a chat or New chat opens the nested `/chat` route.
+ * Settings lives in the native stack header.
  */
 export function HistoryScreen({
   onOpenChat,
@@ -154,14 +150,6 @@ function HistoryListAndroid({
               >
                 <Icon as={InboxIcon} className="size-5 text-foreground" />
                 <Text className="text-base text-foreground">Tasks</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                className="min-h-12 flex-row items-center gap-3 rounded-lg px-3"
-                onPress={() => onNavigate("/settings")}
-              >
-                <Icon as={Settings2Icon} className="size-5 text-foreground" />
-                <Text className="text-base text-foreground">Settings</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"

@@ -133,12 +133,6 @@ export function HistoryListIOS({
               onPress={() => onNavigate("/issues")}
               modifiers={[buttonStyle("plain"), ...rowChrome]}
             />
-            <Button
-              label="Settings"
-              systemImage="slider.horizontal.3"
-              onPress={() => onNavigate("/settings")}
-              modifiers={[buttonStyle("plain"), ...rowChrome]}
-            />
           </Section>
 
           <Section title="Recents">

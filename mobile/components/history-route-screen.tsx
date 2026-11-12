@@ -17,6 +17,7 @@ import type { ChatListItem } from "@/src/chats-client";
 
 /**
  * Home (Stack root): recents + Projects/Tasks entry points.
+ * Settings and New chat sit in the native stack header.
  * Chat is a nested `/chat` route opened via New chat or selecting a recent.
  */
 export function HistoryRouteScreen() {
@@ -177,13 +178,22 @@ export function HistoryRouteScreen() {
         }}
       />
       {!searchOpen ? (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon="square.and.pencil"
-            accessibilityLabel="New chat"
-            onPress={handleNewChat}
-          />
-        </Stack.Toolbar>
+        <>
+          <Stack.Toolbar placement="left">
+            <Stack.Toolbar.Button
+              icon="gearshape"
+              accessibilityLabel="Settings"
+              onPress={() => router.push("/settings")}
+            />
+          </Stack.Toolbar>
+          <Stack.Toolbar placement="right">
+            <Stack.Toolbar.Button
+              icon="square.and.pencil"
+              accessibilityLabel="New chat"
+              onPress={handleNewChat}
+            />
+          </Stack.Toolbar>
+        </>
       ) : null}
       <HistoryScreen
         onOpenChat={openChat}

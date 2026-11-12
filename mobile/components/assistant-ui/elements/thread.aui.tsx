@@ -7,8 +7,7 @@ import {
   ComposerChromeContext,
   type ComposerChromeApi,
 } from "@/components/assistant-ui/elements/composer-chrome";
-import { ComposerModePicker } from "@/components/mode-picker";
-import { ComposerModelPicker } from "@/components/model-picker";
+import { ComposerModeModelPicker } from "@/components/mode-model-picker";
 import {
   groupedIconButtonHitSlop,
   iconButtonClassName,
@@ -1445,7 +1444,7 @@ const Composer: FC<{
     );
     return {
       opacity: progress,
-      maxWidth: interpolate(progress, [0, 1], [0, 220]),
+      maxWidth: interpolate(progress, [0, 1], [0, COMPOSER_CHIP]),
       marginLeft: interpolate(progress, [0, 1], [0, COMPOSER_ROW_GAP]),
       overflow: "hidden" as const,
     };
@@ -1568,8 +1567,7 @@ const Composer: FC<{
                 onPreparingChange={setPreparingAttachment}
                 conversationId={conversationId}
               />
-              <ComposerModePicker disabled={preparingAttachment} />
-              <ComposerModelPicker disabled={preparingAttachment} />
+              <ComposerModeModelPicker disabled={preparingAttachment} />
             </View>
             <ComposerTrailingControls
               preparingAttachment={preparingAttachment}
@@ -1620,10 +1618,7 @@ const Composer: FC<{
                 />
                 <Animated.View pointerEvents="none" style={miniTrackStyle} />
                 <Animated.View style={modelStyle} pointerEvents="box-none">
-                  <View className="flex-row items-center gap-1">
-                    <ComposerModePicker disabled={preparingAttachment} />
-                    <ComposerModelPicker disabled={preparingAttachment} />
-                  </View>
+                  <ComposerModeModelPicker disabled={preparingAttachment} />
                 </Animated.View>
                 <Animated.View pointerEvents="none" style={endSpacerStyle} />
                 <ComposerTrailingControls

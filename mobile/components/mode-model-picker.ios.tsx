@@ -1,11 +1,10 @@
 import {
-  BottomSheet,
   Button,
-  Group,
   Host,
   HStack,
   Image,
   List,
+  Popover,
   RNHostView,
   Section,
   Spacer,
@@ -15,29 +14,32 @@ import {
 import {
   background,
   buttonStyle,
+  disabled as nativeDisabled,
   font,
   foregroundStyle,
+  frame,
   padding,
-  presentationDragIndicator,
   shapes,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import {
-  Alert,
-  Pressable,
-  Text,
-  View,
-  type LayoutChangeEvent,
-} from "react-native";
+import { useRef, useState, useSyncExternalStore } from "react";
+import { Alert, Pressable } from "react-native";
 import { KeyboardController } from "react-native-keyboard-controller";
 import { useCSSVariable } from "uniwind";
+import { BrainIcon } from "lucide-react-native";
 
 import {
   pinComposerIfKeyboardVisible,
   useComposerChrome,
 } from "@/components/assistant-ui/elements/composer-chrome";
+import { Icon } from "@/components/ui/icon";
 import { focusComposerInput } from "@/src/composer-input-focus";
+import {
+  getAgentMode,
+  setAgentMode,
+  subscribeAgentMode,
+  type AgentMode,
+} from "@/src/agent-mode";
 import {
   COMPOSER_MODELS,
   COMPOSER_MODEL_SECTIONS,
@@ -46,95 +48,151 @@ import {
   subscribeModelSelection,
 } from "@/src/model-selection";
 
-const CHIP_HEIGHT = 32;
+const BUTTON_SIZE = 32;
 
-/** Approximate capsule width until onLayout measures. */
-function estimateChipWidth(label: string): number {
-  return Math.ceil(20 + label.length * 8);
-}
+const MODES: readonly {
+  readonly key: AgentMode;
+  readonly label: string;
+  readonly description: string;
+}[] = [
+  {
+    key: "agent",
+    label: "Agent",
+    description: "Research and carry out the work",
+  },
+  {
+    key: "plan",
+    label: "Plan",
+    description: "Draft a plan without acting",
+  },
+];
 
-/** Native bottom-sheet model picker on iOS; other platforms use model-picker.tsx. */
-export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }) {
+/** Combined mode + model picker as a native SwiftUI popover on iOS. */
+export function ComposerModeModelPicker({
+  disabled = false,
+}: {
+  disabled?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const restoreKeyboard = useRef(false);
   const chrome = useComposerChrome();
-  const selectedKey = useSyncExternalStore(
+  const selectedModeKey = useSyncExternalStore(
+    subscribeAgentMode,
+    getAgentMode,
+    getAgentMode,
+  );
+  const selectedModelKey = useSyncExternalStore(
     subscribeModelSelection,
     getModelSelection,
     getModelSelection,
   );
-  const selected =
-    COMPOSER_MODELS.find((model) => model.key === selectedKey) ??
+  const selectedMode =
+    MODES.find((mode) => mode.key === selectedModeKey) ?? MODES[0];
+  const selectedModel =
+    COMPOSER_MODELS.find((model) => model.key === selectedModelKey) ??
     COMPOSER_MODELS[0];
   const primaryColor =
     (useCSSVariable("--color-primary") as string | undefined) ?? "#007AFF";
-  const [hostWidth, setHostWidth] = useState(() =>
-    estimateChipWidth(selected.label),
-  );
 
-  useEffect(() => {
-    setHostWidth(estimateChipWidth(selected.label));
-  }, [selected.label]);
-
-  const onChipLayout = (event: LayoutChangeEvent) => {
-    const next = Math.ceil(event.nativeEvent.layout.width);
-    setHostWidth((current) => (current === next ? current : next));
-  };
-
-  const openSheet = () => {
+  const openPopover = () => {
+    if (disabled) return;
     pinComposerIfKeyboardVisible(chrome);
-    // Remember whether the composer had the keyboard so we can bring it back.
     restoreKeyboard.current = KeyboardController.isVisible();
     setOpen(true);
   };
 
-  const select = (key: string) => {
+  const closeAndRestore = () => {
+    setOpen(false);
+    if (!restoreKeyboard.current) return;
+    restoreKeyboard.current = false;
+    setTimeout(() => focusComposerInput(), 60);
+  };
+
+  const selectMode = (key: AgentMode) => {
+    setAgentMode(key);
+    closeAndRestore();
+  };
+
+  const selectModel = (key: string) => {
     void setModelSelection(key).catch(() =>
       Alert.alert("Could not save model choice", "Try selecting the model again."),
     );
-    setOpen(false);
+    closeAndRestore();
   };
 
   return (
-    <Host style={{ width: hostWidth, height: CHIP_HEIGHT }} ignoreSafeArea="keyboard">
-      <BottomSheet
+    <Host
+      style={{ width: BUTTON_SIZE, height: BUTTON_SIZE, backgroundColor: "transparent" }}
+      ignoreSafeArea="keyboard"
+    >
+      <Popover
         isPresented={open}
         onIsPresentedChange={(presented) => {
-          if (!presented || !disabled) setOpen(presented);
+          if (presented) {
+            if (!disabled) setOpen(true);
+            return;
+          }
+          if (!open) return;
+          closeAndRestore();
         }}
-        onDismiss={() => {
-          if (!restoreKeyboard.current) return;
-          restoreKeyboard.current = false;
-          // Wait a beat after the sheet finishes dismissing so focus sticks.
-          setTimeout(() => focusComposerInput(), 60);
-        }}
-        fitToContents
-        anchor={
+        attachmentAnchor="top"
+        arrowEdge="bottom"
+        modifiers={[nativeDisabled(disabled)]}
+      >
+        <Popover.Trigger>
           <RNHostView matchContents>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Model: ${selected.label}`}
+              accessibilityLabel={`Mode and model: ${selectedMode.label}, ${selectedModel.label}`}
               accessibilityState={{ expanded: open, disabled }}
               disabled={disabled}
-              onPress={openSheet}
-              onLayout={onChipLayout}
-              className="h-8 flex-row items-center rounded-full px-2.5"
+              onPress={openPopover}
+              onTouchStart={() => pinComposerIfKeyboardVisible(chrome)}
+              className="bg-muted size-8 items-center justify-center rounded-full"
               style={disabled ? { opacity: 0.5 } : undefined}
             >
-              <View>
-                <Text
-                  className="text-foreground text-[15px] font-medium"
-                  numberOfLines={1}
-                >
-                  {selected.label}
-                </Text>
-              </View>
+              <Icon as={BrainIcon} size={14} className="text-foreground" />
             </Pressable>
           </RNHostView>
-        }
-      >
-        <Group modifiers={[presentationDragIndicator("visible")]}>
-          <List>
+        </Popover.Trigger>
+        <Popover.Content>
+          <List modifiers={[frame({ width: 280 })]}>
+            <Section title="Mode">
+              {MODES.map((mode) => {
+                const isSelected = mode.key === selectedMode.key;
+                return (
+                  <Button
+                    key={mode.key}
+                    onPress={() => selectMode(mode.key)}
+                    modifiers={[buttonStyle("plain")]}
+                  >
+                    <HStack spacing={12} alignment="center">
+                      <VStack spacing={4} alignment="leading">
+                        <SwiftText>{mode.label}</SwiftText>
+                        <SwiftText
+                          modifiers={[
+                            foregroundStyle({
+                              type: "hierarchical",
+                              style: "secondary",
+                            }),
+                          ]}
+                        >
+                          {mode.description}
+                        </SwiftText>
+                      </VStack>
+                      <Spacer />
+                      {isSelected ? (
+                        <Image
+                          systemName="checkmark"
+                          size={14}
+                          modifiers={[tint(primaryColor)]}
+                        />
+                      ) : null}
+                    </HStack>
+                  </Button>
+                );
+              })}
+            </Section>
             {COMPOSER_MODEL_SECTIONS.map((section) => (
               <Section
                 key={section.id}
@@ -146,11 +204,11 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
                 }
               >
                 {section.models.map((model) => {
-                  const isSelected = model.key === selected.key;
+                  const isSelected = model.key === selectedModel.key;
                   return (
                     <Button
                       key={model.key}
-                      onPress={() => select(model.key)}
+                      onPress={() => selectModel(model.key)}
                       modifiers={[buttonStyle("plain")]}
                     >
                       <HStack spacing={12} alignment="center">
@@ -198,8 +256,8 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
               </Section>
             ))}
           </List>
-        </Group>
-      </BottomSheet>
+        </Popover.Content>
+      </Popover>
     </Host>
   );
 }

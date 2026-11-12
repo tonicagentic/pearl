@@ -7,10 +7,22 @@ import {
   View,
   type PressableProps,
 } from "react-native";
-import { CheckIcon, ChevronDownIcon } from "lucide-react-native";
+import {
+  BrainIcon,
+  CheckIcon,
+  ListTodoIcon,
+  SparklesIcon,
+} from "lucide-react-native";
 import { useState, useSyncExternalStore } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Icon } from "@/components/ui/icon";
+import {
+  getAgentMode,
+  setAgentMode,
+  subscribeAgentMode,
+  type AgentMode,
+} from "@/src/agent-mode";
 import {
   COMPOSER_MODELS,
   COMPOSER_MODEL_SECTIONS,
@@ -20,40 +32,73 @@ import {
   type ComposerModel,
 } from "@/src/model-selection";
 
-/** Modal model picker for Android and web; iOS uses model-picker.ios.tsx. */
-export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }) {
+const MODES: readonly {
+  readonly key: AgentMode;
+  readonly label: string;
+  readonly description: string;
+  readonly Icon: typeof SparklesIcon;
+}[] = [
+  {
+    key: "agent",
+    label: "Agent",
+    description: "Research and carry out the work",
+    Icon: SparklesIcon,
+  },
+  {
+    key: "plan",
+    label: "Plan",
+    description: "Draft a plan without acting",
+    Icon: ListTodoIcon,
+  },
+];
+
+/** Combined mode + model picker for Android and web; iOS uses the .ios variant. */
+export function ComposerModeModelPicker({
+  disabled = false,
+}: {
+  disabled?: boolean;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const selectedKey = useSyncExternalStore(
+  const selectedModeKey = useSyncExternalStore(
+    subscribeAgentMode,
+    getAgentMode,
+    getAgentMode,
+  );
+  const selectedModelKey = useSyncExternalStore(
     subscribeModelSelection,
     getModelSelection,
     getModelSelection,
   );
-
-  const selected =
-    COMPOSER_MODELS.find((model) => model.key === selectedKey) ??
+  const selectedMode =
+    MODES.find((mode) => mode.key === selectedModeKey) ?? MODES[0];
+  const selectedModel =
+    COMPOSER_MODELS.find((model) => model.key === selectedModelKey) ??
     COMPOSER_MODELS[0];
 
   return (
     <View>
       <Pressable
-        accessibilityLabel={`Model: ${selected.label}`}
+        accessibilityLabel={`Mode and model: ${selectedMode.label}, ${selectedModel.label}`}
         accessibilityRole="button"
         accessibilityState={{ expanded: menuOpen, disabled }}
-        className="min-h-11 flex-row items-center gap-1 rounded-full px-3 active:opacity-70"
+        className="bg-muted active:bg-muted/80 size-11 items-center justify-center rounded-full"
         disabled={disabled}
         onPress={() => setMenuOpen(true)}
+        style={disabled ? { opacity: 0.5 } : undefined}
       >
-        <Text className="text-xs font-medium text-muted-foreground">
-          {selected.label}
-        </Text>
-        <ChevronDownIcon className="size-3 text-muted-foreground" />
+        <Icon as={BrainIcon} className="text-muted-foreground size-5" />
       </Pressable>
 
-      <ModelMenu
+      <ModeModelMenu
         open={menuOpen}
-        selectedKey={selected.key}
+        selectedModeKey={selectedMode.key}
+        selectedModelKey={selectedModel.key}
         onClose={() => setMenuOpen(false)}
-        onSelect={(key) => {
+        onSelectMode={(key) => {
+          setAgentMode(key);
+          setMenuOpen(false);
+        }}
+        onSelectModel={(key) => {
           void setModelSelection(key).catch(() =>
             Alert.alert(
               "Could not save model choice",
@@ -67,16 +112,20 @@ export function ComposerModelPicker({ disabled = false }: { disabled?: boolean }
   );
 }
 
-function ModelMenu({
+function ModeModelMenu({
   open,
-  selectedKey,
+  selectedModeKey,
+  selectedModelKey,
   onClose,
-  onSelect,
+  onSelectMode,
+  onSelectModel,
 }: {
   readonly open: boolean;
-  readonly selectedKey: string;
+  readonly selectedModeKey: AgentMode;
+  readonly selectedModelKey: string;
   readonly onClose: () => void;
-  readonly onSelect: (key: string) => void;
+  readonly onSelectMode: (key: AgentMode) => void;
+  readonly onSelectModel: (key: string) => void;
 }) {
   const insets = useSafeAreaInsets();
 
@@ -89,7 +138,7 @@ function ModelMenu({
       <View className="flex-1 justify-end bg-foreground/50">
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Close model menu"
+          accessibilityLabel="Close mode and model menu"
           className="flex-1"
           onPress={onClose}
         />
@@ -105,6 +154,23 @@ function ModelMenu({
             contentContainerClassName="gap-5 pb-2"
             keyboardShouldPersistTaps="handled"
           >
+            <View className="gap-2">
+              <View className="px-1">
+                <Text className="text-[13px] font-normal uppercase tracking-[0.04em] text-muted-foreground">
+                  Mode
+                </Text>
+              </View>
+              <View className="overflow-hidden rounded-xl border border-border/60 bg-popover p-1">
+                {MODES.map((mode) => (
+                  <ModeOption
+                    key={mode.key}
+                    mode={mode}
+                    isSelected={mode.key === selectedModeKey}
+                    onPress={() => onSelectMode(mode.key)}
+                  />
+                ))}
+              </View>
+            </View>
             {COMPOSER_MODEL_SECTIONS.map((section) => (
               <View key={section.id} className="gap-2">
                 <View className="px-1">
@@ -122,8 +188,8 @@ function ModelMenu({
                     <ModelOption
                       key={model.key}
                       model={model}
-                      isSelected={model.key === selectedKey}
-                      onPress={() => onSelect(model.key)}
+                      isSelected={model.key === selectedModelKey}
+                      onPress={() => onSelectModel(model.key)}
                     />
                   ))}
                 </View>
@@ -133,6 +199,39 @@ function ModelMenu({
         </View>
       </View>
     </Modal>
+  );
+}
+
+function ModeOption({
+  mode,
+  isSelected,
+  onPress,
+}: {
+  readonly mode: (typeof MODES)[number];
+  readonly isSelected: boolean;
+  readonly onPress: PressableProps["onPress"];
+}) {
+  const ModeIcon = mode.Icon;
+  return (
+    <Pressable
+      accessibilityRole="menuitem"
+      accessibilityState={{ selected: isSelected }}
+      className={`min-h-12 flex-row items-center justify-between gap-2 rounded-lg px-3 ${isSelected ? "bg-accent/60" : ""}`}
+      onPress={onPress}
+    >
+      <View className="min-w-0 flex-1 flex-row items-center gap-3">
+        <ModeIcon className="size-4 text-foreground" />
+        <View className="min-w-0 flex-1 gap-0.5">
+          <Text className="text-sm font-medium text-foreground">
+            {mode.label}
+          </Text>
+          <Text className="text-xs text-muted-foreground">
+            {mode.description}
+          </Text>
+        </View>
+      </View>
+      {isSelected ? <CheckIcon className="size-3.5 text-foreground" /> : null}
+    </Pressable>
   );
 }
 
