@@ -38,14 +38,20 @@ export function VercelIcon({ className }: { readonly className?: string }) {
   );
 }
 
-/** Pearl's mark: a solid disk with three pearl cutouts in the lower right. */
+/** Pearl's mark: a scallop shell. */
 export function PearlIcon({ className }: { readonly className?: string }) {
   return (
-    <svg aria-hidden="true" className={className} fill="currentColor" viewBox="0 0 24 24">
-      <path
-        d="M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0M11.15 17.4a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M13.65 14.9a2.3 2.3 0 1 0 4.6 0a2.3 2.3 0 1 0-4.6 0M16.8 11.35a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0-2.5 0"
-        fillRule="evenodd"
-      />
+    <svg aria-hidden="true" className={className} fill="currentColor" viewBox="0 0 100 100">
+      <g transform="translate(50 80)">
+        <path d="M-3.2 -73.5 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -72.5 Z" />
+        <path transform="rotate(-15.5)" d="M-3.2 -72 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -71 Z" />
+        <path transform="rotate(15.5)" d="M-3.2 -72 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -71 Z" />
+        <path transform="rotate(-31)" d="M-3.2 -69 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -68 Z" />
+        <path transform="rotate(31)" d="M-3.2 -69 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -68 Z" />
+        <path transform="rotate(-46.5)" d="M-3.2 -64.5 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -63.5 Z" />
+        <path transform="rotate(46.5)" d="M-3.2 -64.5 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -63.5 Z" />
+        <ellipse cx="0" cy="0.5" rx="12.5" ry="7" />
+      </g>
     </svg>
   );
 }
