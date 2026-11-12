@@ -17,7 +17,7 @@ import {
 } from "eve/client";
 
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
-import { traceStream } from "./stream-trace";
+import { beginStreamTrace, traceStream } from "./stream-trace";
 import { pendingMessageLabel, hasPendingAction } from "./message-projection";
 import {
   appendChatEvents,
@@ -308,6 +308,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         if (event.type === "content.delta") {
           const delta = event.data.delta;
           if (typeof delta === "string") traceStream("delta", delta.length);
+        } else if (event.type === "turn.settled") {
+          traceStream("settled");
         }
         if (!binding.id) return;
         binding.batch.push({ event, eventIndex: binding.eventIndex++ });
@@ -370,6 +372,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       prepareSend: async (input) => {
         binding.sendPrepared = false;
         binding.sendStartedAt = performance.now();
+        beginStreamTrace("send");
         // An attachment-only turn uses a safe title/marker. Neither a
         // correlation token nor pasted document text belongs in chat metadata.
         const message = pendingMessageLabel(input.message);

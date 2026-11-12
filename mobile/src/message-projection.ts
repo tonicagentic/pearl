@@ -352,83 +352,151 @@ export function getPendingApprovals(data: ConversationMessages): readonly Pendin
   });
 }
 
+type ProjectionCacheEntry = {
+  fingerprint: string;
+  projected: ThreadMessageLike;
+};
+
+/** Reuse settled ThreadMessageLike refs across stream ticks so assistant-ui
+ *  does not reconvert the entire history on every content.delta. */
+const projectionCache = new Map<string, ProjectionCacheEntry>();
+
+function messageFingerprint(
+  message: EveMessage,
+  {
+    last,
+    isRunning,
+    hasError,
+  }: { last: boolean; isRunning: boolean; hasError: boolean },
+): string {
+  let partsKey = "";
+  for (const part of message.parts) {
+    if (part.type === "text" || part.type === "reasoning") {
+      partsKey += `${part.type}:${part.text.length};`;
+    } else if (part.type === "tool") {
+      partsKey += `tool:${part.callId}:${part.state}:${part.interaction?.status ?? ""};`;
+    } else if (part.type === "file") {
+      partsKey += `file:${part.url?.length ?? 0};`;
+    } else if (part.type === "interaction") {
+      partsKey += `interaction:${part.interactionId}:${part.status};`;
+    } else {
+      partsKey += `${(part as { type: string }).type};`;
+    }
+  }
+  return [
+    message.role,
+    message.metadata?.status ?? "",
+    message.metadata?.turnId ?? "",
+    last ? "1" : "0",
+    isRunning ? "1" : "0",
+    hasError ? "1" : "0",
+    partsKey,
+  ].join("|");
+}
+
+function projectAssistantMessage(
+  message: EveMessage,
+  {
+    last,
+    isRunning,
+    hasError,
+  }: { last: boolean; isRunning: boolean; hasError: boolean },
+): ThreadMessageLike {
+  const pendingApproval =
+    last &&
+    !hasError &&
+    message.metadata?.status !== "failed" &&
+    hasOpenApproval(message);
+  const pendingAuth =
+    last &&
+    !hasError &&
+    message.metadata?.status !== "failed" &&
+    hasOpenAuthorization(message);
+  // Only surface a live failure for the active turn. Stale store.error or
+  // historical metadata.status === "failed" on ended sessions must not
+  // paint "An error occurred" into old transcripts.
+  const liveFailure =
+    last &&
+    (isRunning || message.metadata?.status === "streaming") &&
+    (hasError || message.metadata?.status === "failed");
+  const status: NonNullable<ThreadMessageLike["status"]> = pendingApproval
+    ? { type: "requires-action", reason: "tool-calls" }
+    : pendingAuth ? { type: "requires-action", reason: "interrupt" }
+    : liveFailure
+      ? { type: "incomplete", reason: "error" }
+      : isRunning && last ? { type: "running" }
+      : message.metadata?.status === "streaming" ? { type: "incomplete", reason: "cancelled" }
+      : { type: "complete", reason: "stop" };
+  return {
+    role: "assistant", status,
+    content: message.parts.map(assistantPart).filter((p): p is Part => p !== null),
+    metadata: { custom: { turnId: message.metadata?.turnId } },
+  };
+}
+
+function projectUserMessage(message: EveMessage): ThreadMessageLike {
+  const documentParts = message.parts.filter((part): part is Extract<EveMessagePart, { type: "text" }> =>
+    part.type === "text" && typeof part.text === "string" &&
+    (part.text.startsWith("[Attached PDF: ") || part.text.startsWith("[Attached text file: ") ||
+      part.text.startsWith("[Pasted text]\n")),
+  );
+  const attachments = message.parts.filter((part): part is Extract<EveMessagePart, { type: "file" }> => part.type === "file")
+    .map((part, fileIndex) => {
+      const image = part.mediaType.startsWith("image/") ? displayImageUrl(part.url) : undefined;
+      return {
+        id: `${message.id}:file:${fileIndex}`,
+        type: (part.mediaType.startsWith("image/") ? "image" : "document") as "image" | "document",
+        name: part.filename ?? "Attachment", contentType: part.mediaType,
+        status: { type: "complete" as const },
+        content: image ? [{ type: "image" as const, image }] : [],
+      };
+    }).concat(documentParts.map((part, fileIndex) => ({
+      id: `${message.id}:document:${fileIndex}`,
+      type: "document" as const,
+      name: part.text.startsWith("[Pasted text]\n")
+        ? `Pasted text · ${(part.text.length - "[Pasted text]\n".length).toLocaleString("en-US")} characters`
+        : part.text.startsWith("[Attached PDF: ")
+          ? part.text.slice("[Attached PDF: ".length).split(" — ")[0]
+          : part.text.slice("[Attached text file: ".length).split("]")[0],
+      contentType: part.text.startsWith("[Attached PDF: ") ? "application/pdf" : "text/plain",
+      status: { type: "complete" as const }, content: [],
+    })));
+  const hasImage = attachments.some((attachment) => attachment.type === "image" && attachment.content.length > 0);
+  return {
+    role: "user",
+    content: message.parts.filter((part): part is Extract<EveMessagePart, { type: "text" }> =>
+      part.type === "text" && typeof part.text === "string" &&
+      !documentParts.includes(part) && !isAttachmentMarker(part.text),
+    ).flatMap((part) => {
+      const text = hasImage ? stripFilePlaceholders(part.text) : part.text;
+      return text ? [{ type: "text" as const, text }] : [];
+    }),
+    ...(attachments.length ? { attachments } : {}),
+  };
+}
+
 // Omit the message id: eve replaces the optimistic user id on acceptance, and
 // this external-store runtime would otherwise retain an extra sibling branch.
 export function toThreadMessages(
   state: ConversationMessages,
   { isRunning = false, hasError = false }: { isRunning?: boolean; hasError?: boolean } = {},
 ): ThreadMessageLike[] {
-  return state.messages.map((message, index) => {
-    if (message.role === "assistant") {
-      const last = index === state.messages.length - 1;
-      const pendingApproval =
-        last &&
-        !hasError &&
-        message.metadata?.status !== "failed" &&
-        hasOpenApproval(message);
-      const pendingAuth =
-        last &&
-        !hasError &&
-        message.metadata?.status !== "failed" &&
-        hasOpenAuthorization(message);
-      // Only surface a live failure for the active turn. Stale store.error or
-      // historical metadata.status === "failed" on ended sessions must not
-      // paint "An error occurred" into old transcripts.
-      const liveFailure =
-        last &&
-        (isRunning || message.metadata?.status === "streaming") &&
-        (hasError || message.metadata?.status === "failed");
-      const status: NonNullable<ThreadMessageLike["status"]> = pendingApproval
-        ? { type: "requires-action", reason: "tool-calls" }
-        : pendingAuth ? { type: "requires-action", reason: "interrupt" }
-        : liveFailure
-          ? { type: "incomplete", reason: "error" }
-          : isRunning && last ? { type: "running" }
-          : message.metadata?.status === "streaming" ? { type: "incomplete", reason: "cancelled" }
-          : { type: "complete", reason: "stop" };
-      return {
-        role: "assistant", status,
-        content: message.parts.map(assistantPart).filter((p): p is Part => p !== null),
-        metadata: { custom: { turnId: message.metadata?.turnId } },
-      };
-    }
-    const documentParts = message.parts.filter((part): part is Extract<EveMessagePart, { type: "text" }> =>
-      part.type === "text" && typeof part.text === "string" &&
-      (part.text.startsWith("[Attached PDF: ") || part.text.startsWith("[Attached text file: ") ||
-        part.text.startsWith("[Pasted text]\n")),
-    );
-    const attachments = message.parts.filter((part): part is Extract<EveMessagePart, { type: "file" }> => part.type === "file")
-      .map((part, fileIndex) => {
-        const image = part.mediaType.startsWith("image/") ? displayImageUrl(part.url) : undefined;
-        return {
-          id: `${message.id}:file:${fileIndex}`,
-          type: (part.mediaType.startsWith("image/") ? "image" : "document") as "image" | "document",
-          name: part.filename ?? "Attachment", contentType: part.mediaType,
-          status: { type: "complete" as const },
-          content: image ? [{ type: "image" as const, image }] : [],
-        };
-      }).concat(documentParts.map((part, fileIndex) => ({
-        id: `${message.id}:document:${fileIndex}`,
-        type: "document" as const,
-        name: part.text.startsWith("[Pasted text]\n")
-          ? `Pasted text · ${(part.text.length - "[Pasted text]\n".length).toLocaleString("en-US")} characters`
-          : part.text.startsWith("[Attached PDF: ")
-            ? part.text.slice("[Attached PDF: ".length).split(" — ")[0]
-            : part.text.slice("[Attached text file: ".length).split("]")[0],
-        contentType: part.text.startsWith("[Attached PDF: ") ? "application/pdf" : "text/plain",
-        status: { type: "complete" as const }, content: [],
-      })));
-    const hasImage = attachments.some((attachment) => attachment.type === "image" && attachment.content.length > 0);
-    return {
-      role: "user",
-      content: message.parts.filter((part): part is Extract<EveMessagePart, { type: "text" }> =>
-        part.type === "text" && typeof part.text === "string" &&
-        !documentParts.includes(part) && !isAttachmentMarker(part.text),
-      ).flatMap((part) => {
-        const text = hasImage ? stripFilePlaceholders(part.text) : part.text;
-        return text ? [{ type: "text" as const, text }] : [];
-      }),
-      ...(attachments.length ? { attachments } : {}),
-    };
+  const seen = new Set<string>();
+  const projected = state.messages.map((message, index) => {
+    const last = index === state.messages.length - 1;
+    const fingerprint = messageFingerprint(message, { last, isRunning, hasError });
+    seen.add(message.id);
+    const cached = projectionCache.get(message.id);
+    if (cached && cached.fingerprint === fingerprint) return cached.projected;
+    const next =
+      message.role === "assistant"
+        ? projectAssistantMessage(message, { last, isRunning, hasError })
+        : projectUserMessage(message);
+    projectionCache.set(message.id, { fingerprint, projected: next });
+    return next;
   });
+  for (const id of projectionCache.keys()) {
+    if (!seen.has(id)) projectionCache.delete(id);
+  }
+  return projected;
 }

@@ -1,21 +1,22 @@
-import {
-  createContext,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useContext, useMemo, useState } from "react";
 import { useAuiState } from "@assistant-ui/react-native";
 
 import { useEveEvents } from "@/src/chat-context";
+import { formatDurationMs, turnEventSpan } from "@/src/turn-duration";
 import { DELEGATION_TOOLS } from "./task-card.aui";
 import { getToolPresentation } from "./tool-presentation";
+import { TimelineDurationEventsContext } from "./timeline-duration-events";
 import {
   ToolTimeline,
   type TimelineStat,
   type TimelineStep,
 } from "./tool-timeline";
-import { useElapsedLabel } from "./use-elapsed-label";
+import { useTurnElapsed } from "./turn-elapsed";
+
+export {
+  TimelineDurationEventsContext,
+  TimelineDurationEventsProvider,
+} from "./timeline-duration-events";
 
 // RN port of the web session-timeline element: a whole working turn
 // summarized as one collapsed line (verb + chip per tool step), with the
@@ -226,33 +227,23 @@ function formatDuration(ms: number): string {
   return `${Math.round(hours)}h ${minutes % 60}m`;
 }
 
-/**
- * Dev/sample override for Worked-for duration. When set, SessionTimeline
- * reads these instead of the live chat event log so fixtures never persist.
- */
-export const TimelineDurationEventsContext = createContext<
-  readonly unknown[] | null
->(null);
-
-export function TimelineDurationEventsProvider({
-  events,
-  children,
-}: {
-  readonly events: readonly unknown[];
-  readonly children: ReactNode;
-}) {
-  return (
-    <TimelineDurationEventsContext.Provider value={events}>
-      {children}
-    </TimelineDurationEventsContext.Provider>
-  );
+// Prefer compact mm/hh labels for multi-minute turns; fall back to plain Ns.
+function formatSettledDuration(ms: number): string {
+  if (ms < 60_000) return formatDurationMs(ms);
+  return formatDuration(ms);
 }
 
 // A whole working turn summarized as one collapsed line. Rendered beside the
 // message parts; the covered tool parts render null so nothing shows twice.
 export function SessionTimeline() {
-  const [userOpen, setUserOpen] = useState<boolean | null>(null);
-  const streaming = useAuiState((s) => s.message.status?.type === "running");
+  const overrideEvents = useContext(TimelineDurationEventsContext);
+  // Fixture turns (sample screen) start expanded so every step is visible.
+  const [userOpen, setUserOpen] = useState<boolean | null>(
+    () => (overrideEvents != null ? true : null),
+  );
+  const statusType = useAuiState((s) => s.message.status?.type);
+  const streaming = statusType === "running";
+  const awaitingInput = statusType === "requires-action";
   const turnId = useAuiState(
     (s) => s.message.metadata?.custom?.turnId as string | undefined,
   );
@@ -273,39 +264,25 @@ export function SessionTimeline() {
   // last event timestamp for this turn (each event carries meta.at and
   // data.turnId). Survives reloads — no wall clock at render.
   const liveEvents = useEveEvents();
-  const overrideEvents = useContext(TimelineDurationEventsContext);
   const events = overrideEvents ?? liveEvents;
   const settledDuration = useMemo(() => {
-    if (streaming || !turnId) return undefined;
-    let start: number | undefined;
-    let end: number | undefined;
-    for (const event of events) {
-      const raw = event as {
-        type?: string;
-        data?: { turnId?: unknown };
-        meta?: { at?: unknown };
-      };
-      if (raw?.type === "message.received" || raw?.type === "delivery.consumed") continue; // user-side marker
-      if (raw.data?.turnId !== turnId) continue;
-      const at = raw.meta?.at;
-      const ts = typeof at === "string" ? Date.parse(at) : NaN;
-      if (!Number.isFinite(ts)) continue;
-      start ??= ts;
-      end = ts;
-    }
-    if (start === undefined || end === undefined) return undefined;
-    return formatDuration(end - start);
-  }, [events, streaming, turnId]);
+    if (streaming || awaitingInput || !turnId) return undefined;
+    const span = turnEventSpan(events, turnId);
+    if (!span) return undefined;
+    return formatSettledDuration(span.endMs - span.startMs);
+  }, [events, streaming, awaitingInput, turnId]);
 
-  // Live tick while streaming; the settled badge comes from the event log.
-  const liveElapsed = useElapsedLabel(streaming);
+  // Shared with AssistantThinking so the number does not restart at handoff.
+  const liveElapsed = useTurnElapsed();
 
   const steps = toolCalls.map(toStep);
   const stats = toStats(toolCalls);
 
   if (steps.length === 0) return null;
 
-  const duration = streaming ? liveElapsed : settledDuration;
+  // Keep "Working Ns" through HITL pause; only flip to "Worked for" when settled.
+  const showLive = streaming || awaitingInput;
+  const duration = showLive ? liveElapsed : settledDuration;
   const restingLabel = settledDuration
     ? `Worked for ${settledDuration}`
     : `${steps.length} step${steps.length === 1 ? "" : "s"}${
@@ -318,7 +295,7 @@ export function SessionTimeline() {
     <ToolTimeline
       steps={steps}
       visibleSteps={steps.length}
-      streaming={streaming}
+      streaming={showLive}
       open={userOpen ?? streaming}
       onOpenChange={setUserOpen}
       restingLabel={restingLabel}

@@ -120,3 +120,17 @@ test("an optimistic preparing turn gets a Thinking placeholder before streaming"
   assert.deepEqual(projected[1], { role: "assistant", content: [], status: { type: "running" } });
   assert.deepEqual(withPendingAssistant([user], [{ role: "user", metadata: { status: "submitted" } }], false, false), [user]);
 });
+
+test("sticky awaitingReply keeps Thinking after localSend clears before busy", () => {
+  const user = { role: "user", content: [{ type: "text", text: "Hello" }] };
+  // deliveryId accepted: not streaming yet, user may still be submitted, but
+  // chat-screen keeps awaitingReply until an assistant row exists.
+  const projected = withPendingAssistant(
+    [user],
+    [{ role: "user", metadata: { status: "submitted" } }],
+    false,
+    true,
+  );
+  assert.equal(projected.length, 2);
+  assert.deepEqual(projected[1], { role: "assistant", content: [], status: { type: "running" } });
+});

@@ -26,6 +26,7 @@ import {
 import { SessionTodoList } from "@/components/assistant-ui/elements/todo-list";
 import { TaskGroup, DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
 import { AssistantThinking } from "@/components/assistant-ui/elements/assistant-thinking";
+import { TurnElapsedProvider } from "@/components/assistant-ui/elements/turn-elapsed";
 import { MessageSources } from "@/components/assistant-ui/elements/citation";
 import {
   ShimmerLabel,
@@ -1734,8 +1735,10 @@ const AssistantMessage: FC = () => {
   return (
     <MessagePrimitive.Root className="aui-assistant-message-root">
       <View className="aui-assistant-message-content gap-2">
-        <AssistantThinking />
-        <SessionTimeline />
+        <TurnElapsedProvider>
+          <AssistantThinking />
+          <SessionTimeline />
+        </TurnElapsedProvider>
         <SessionTodoList />
         <MessageError />
         <AssistantFailure />

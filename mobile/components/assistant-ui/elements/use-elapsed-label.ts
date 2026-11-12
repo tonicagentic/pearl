@@ -1,22 +1,74 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-// Live elapsed badge for a streaming view (docs: elements/thinking-indicator —
-// there is no runtime selector for "seconds so far": metadata.timing only
-// finalizes once the message stops streaming, so a live badge needs its own
-// timer). Starts when `active` flips true, resets when it flips false. The
-// effect keeps the Cache Components shell deterministic (no wall clock at
-// render).
-export function useElapsedLabel(active: boolean) {
+export type ElapsedOptions = {
+  /** Freeze the displayed seconds without clearing (HITL / requires-action). */
+  readonly paused?: boolean;
+  /**
+   * Absolute epoch ms for the turn start (first turn-scoped event). When set,
+   * elapsed tracks wall time from that anchor so live matches settled duration.
+   */
+  readonly sinceMs?: number | null;
+};
+
+function formatSeconds(ms: number): string {
+  return `${Math.max(0, Math.round(ms / 1000))}s`;
+}
+
+/**
+ * Live elapsed badge for a streaming view. Starts when `active` flips true,
+ * clears when it flips false. With `paused`, keeps the last label. With
+ * `sinceMs`, measures from that event timestamp instead of mount time.
+ */
+export function useElapsedLabel(
+  active: boolean,
+  options: ElapsedOptions = {},
+): string | undefined {
+  const { paused = false, sinceMs = null } = options;
   const [label, setLabel] = useState<string | undefined>(undefined);
+  const fallbackStartRef = useRef<number | null>(null);
+  const frozenMsRef = useRef<number | null>(null);
+
   useEffect(() => {
-    if (!active) return;
-    const start = Date.now();
+    if (!active) {
+      setLabel(undefined);
+      fallbackStartRef.current = null;
+      frozenMsRef.current = null;
+      return;
+    }
+
+    const elapsedMs = (): number => {
+      if (frozenMsRef.current !== null && paused) return frozenMsRef.current;
+      if (sinceMs != null && Number.isFinite(sinceMs)) {
+        return Math.max(0, Date.now() - sinceMs);
+      }
+      if (fallbackStartRef.current === null) {
+        fallbackStartRef.current = Date.now();
+      }
+      return Math.max(0, Date.now() - fallbackStartRef.current);
+    };
+
+    if (paused) {
+      frozenMsRef.current = elapsedMs();
+      setLabel(formatSeconds(frozenMsRef.current));
+      return;
+    }
+
+    frozenMsRef.current = null;
+    // Prefer event anchor when it arrives mid-turn (drops preparing-only time).
+    if (sinceMs != null && Number.isFinite(sinceMs)) {
+      fallbackStartRef.current = null;
+    } else if (fallbackStartRef.current === null) {
+      fallbackStartRef.current = Date.now();
+    }
+
+    setLabel(formatSeconds(elapsedMs()));
     const id = setInterval(() => {
-      setLabel(`${Math.round((Date.now() - start) / 1000)}s`);
+      setLabel(formatSeconds(elapsedMs()));
     }, 1000);
     return () => clearInterval(id);
-  }, [active]);
+  }, [active, paused, sinceMs]);
+
   return active ? label ?? "0s" : undefined;
 }

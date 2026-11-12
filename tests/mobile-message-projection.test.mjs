@@ -327,3 +327,34 @@ test("an explicit clipboard paste is sent as text and survives as a collapsed us
   assert.equal(projected[0].attachments?.[0]?.type, "document");
   assert.match(projected[0].attachments[0].name, /Pasted text/);
 });
+
+test("settled prefix messages keep identity across streaming updates to the tail", () => {
+  const firstAssistant = {
+    id: "a1",
+    role: "assistant",
+    metadata: { turnId: "t0", status: "complete" },
+    parts: [{ type: "text", text: "Done.", state: "done" }],
+  };
+  const live = {
+    id: "a2",
+    role: "assistant",
+    metadata: { turnId: "t1", status: "streaming" },
+    parts: [{ type: "text", text: "Hel", state: "streaming" }],
+  };
+  const first = toThreadMessages(
+    { messages: [user, firstAssistant, live] },
+    { isRunning: true },
+  );
+  const nextLive = {
+    ...live,
+    parts: [{ type: "text", text: "Hello", state: "streaming" }],
+  };
+  const second = toThreadMessages(
+    { messages: [user, firstAssistant, nextLive] },
+    { isRunning: true },
+  );
+  assert.equal(second[0], first[0]);
+  assert.equal(second[1], first[1]);
+  assert.notEqual(second[2], first[2]);
+  assert.equal(second[2].content[0].text, "Hello");
+});

@@ -1,8 +1,8 @@
 import { useAuiState } from "@assistant-ui/react-native";
 
 import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
-import { useElapsedLabel } from "@/components/assistant-ui/elements/use-elapsed-label";
 import { isTimelineToolCall } from "@/components/assistant-ui/elements/session-timeline";
+import { useTurnElapsed } from "@/components/assistant-ui/elements/turn-elapsed";
 
 const STALL_WARNING_S = 45;
 const STALL_LABEL = "Still working — the model may be slow or unreachable.";
@@ -37,7 +37,8 @@ export function AssistantThinking() {
     );
   });
 
-  const elapsed = useElapsedLabel(label !== undefined);
+  // Same clock as SessionTimeline — avoids Thinking 8s → Working 6s on handoff.
+  const elapsed = useTurnElapsed();
   if (label === undefined) return null;
 
   const seconds = Number.parseInt(elapsed ?? "0", 10);

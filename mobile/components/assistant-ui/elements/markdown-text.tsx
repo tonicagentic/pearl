@@ -7,6 +7,7 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { openWebUrl } from "@/src/open-web-url";
 import { useWorkspaceOptional } from "@/src/workspace-context";
+import { traceStream } from "@/src/stream-trace";
 import type { TextMessagePartProps } from "@assistant-ui/react-native";
 import * as Clipboard from "expo-clipboard";
 import { CheckIcon, CopyIcon } from "lucide-react-native";
@@ -110,6 +111,7 @@ const useThrottledMarkdownText = (text: string, streaming: boolean): string => {
     const elapsed = now - lastFlushRef.current;
     if (elapsed >= STREAM_PARSE_MS) {
       lastFlushRef.current = now;
+      traceStream("paint", text.length);
       setParsedText(text);
       return;
     }
@@ -117,7 +119,9 @@ const useThrottledMarkdownText = (text: string, streaming: boolean): string => {
     timerRef.current = setTimeout(() => {
       timerRef.current = undefined;
       lastFlushRef.current = Date.now();
-      setParsedText(pendingRef.current);
+      const next = pendingRef.current;
+      traceStream("paint", next.length);
+      setParsedText(next);
     }, STREAM_PARSE_MS - elapsed);
   }, [text, streaming]);
 

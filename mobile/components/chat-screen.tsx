@@ -24,6 +24,7 @@ import { useCSSVariable } from "uniwind";
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
+import { StreamProbe } from "@/components/stream-probe";
 import {
   ChatFilesSegment,
   type MainTab,
@@ -154,7 +155,13 @@ export function ChatScreen({
 
   const [sendError, setSendError] = useState<{ store: object; message: string } | null>(null);
   const [localSends, setLocalSends] = useState<Map<object, LocalSend>>(() => new Map());
+  // Sticky until eve publishes an assistant row — survives clearing localSend
+  // on deliveryId so Thinking does not blank mid-send.
+  const [expectingAssistantByStore, setExpectingAssistantByStore] = useState(
+    () => new Map<object, boolean>(),
+  );
   const localSend = localSends.get(store) ?? null;
+  const expectingAssistant = expectingAssistantByStore.get(store) ?? false;
   const messages = useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.snapshot.messages,
@@ -180,6 +187,10 @@ export function ChatScreen({
     () => getPendingApprovals(conversation),
     [conversation],
   );
+  const awaitingReply = Boolean(
+    expectingAssistant
+      || (localSend && localSend.phase === "preparing" && !confirmed),
+  );
   const projectedMessages = useMemo(
     () => withPendingAssistant(
       projectSendMessages(
@@ -191,10 +202,33 @@ export function ChatScreen({
       ),
       messages,
       isBusy,
-      Boolean(localSend && localSend.phase === "preparing" && !confirmed),
+      awaitingReply,
     ),
-    [conversation, messages, localSend, confirmed, isBusy, hasError],
+    [conversation, messages, localSend, confirmed, isBusy, hasError, awaitingReply],
   );
+
+  useEffect(() => {
+    if (!expectingAssistant) return;
+    if (messages[messages.length - 1]?.role === "assistant") {
+      setExpectingAssistantByStore((current) => {
+        if (!current.has(store)) return current;
+        const next = new Map(current);
+        next.delete(store);
+        return next;
+      });
+      return;
+    }
+    // Uncertain delivery with an idle store: stop expecting so Thinking
+    // does not stick forever after a failed send.
+    if (localSend?.phase === "uncertain" && !isBusy) {
+      setExpectingAssistantByStore((current) => {
+        if (!current.has(store)) return current;
+        const next = new Map(current);
+        next.delete(store);
+        return next;
+      });
+    }
+  }, [expectingAssistant, messages, store, localSend, isBusy]);
 
   // Rebuilt when the store instance changes (chat selection): the adapter
   // closes over the current store, and the runtime core re-syncs on the new
@@ -252,6 +286,7 @@ export function ChatScreen({
           message,
         );
         setLocalSends((current) => new Map(current).set(store, preview));
+        setExpectingAssistantByStore((current) => new Map(current).set(store, true));
         // Light tick as the bubble appears; skip validation failures above.
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         const sendPayload = {
@@ -335,6 +370,12 @@ export function ChatScreen({
           if (!wasSendPrepared(store)) {
             setLocalSends((current) => {
               if (current.get(store)?.preview !== preview.preview) return current;
+              const next = new Map(current);
+              next.delete(store);
+              return next;
+            });
+            setExpectingAssistantByStore((current) => {
+              if (!current.has(store)) return current;
               const next = new Map(current);
               next.delete(store);
               return next;
@@ -480,55 +521,58 @@ export function ChatScreen({
               visible={mainTab === "computer"}
             />
           ) : (
-            <Thread
-              autoFocus={
-                Platform.OS === "ios" &&
-                activeChatId === null &&
-                chromeRevealed
-              }
-              chromeRevealed={chromeRevealed}
-              conversationId={activeChatId}
-              focusNewChatKey={newChatEntry}
-              notice={notice}
-              waitingAction={
-                pendingApprovals[0]
-                  ? {
-                      kind: pendingApprovals[0].kind,
-                      title:
-                        pendingApprovals[0].kind === "question"
-                          ? "The agent is paused until you answer."
-                          : "The agent is paused until you respond.",
-                      prompt: pendingApprovals[0].prompt,
-                      detail: pendingApprovals[0].detail,
-                      options: pendingApprovals[0].options,
-                      allowFreeform: pendingApprovals[0].allowFreeform,
-                      onRespond: async (response) => {
-                        const pending = pendingApprovals[0]!;
-                        await store.send({
-                          answers: [
-                            {
-                              interactionId: pending.requestId,
-                              ...(response.optionId
-                                ? { optionId: response.optionId }
-                                : {}),
-                              ...(response.text !== undefined
-                                ? { text: response.text }
-                                : {}),
-                            },
-                          ],
-                          clientContext: buildTurnClientContext(activeProjectId),
-                        });
-                      },
-                    }
-                  : waitingForAction
+            <>
+              <Thread
+                autoFocus={
+                  Platform.OS === "ios" &&
+                  activeChatId === null &&
+                  chromeRevealed
+                }
+                chromeRevealed={chromeRevealed}
+                conversationId={activeChatId}
+                focusNewChatKey={newChatEntry}
+                notice={notice}
+                waitingAction={
+                  pendingApprovals[0]
                     ? {
-                        kind: "authorization" as const,
+                        kind: pendingApprovals[0].kind,
                         title:
-                          "The agent is paused on a question or approval above — reply to continue.",
+                          pendingApprovals[0].kind === "question"
+                            ? "The agent is paused until you answer."
+                            : "The agent is paused until you respond.",
+                        prompt: pendingApprovals[0].prompt,
+                        detail: pendingApprovals[0].detail,
+                        options: pendingApprovals[0].options,
+                        allowFreeform: pendingApprovals[0].allowFreeform,
+                        onRespond: async (response) => {
+                          const pending = pendingApprovals[0]!;
+                          await store.send({
+                            answers: [
+                              {
+                                interactionId: pending.requestId,
+                                ...(response.optionId
+                                  ? { optionId: response.optionId }
+                                  : {}),
+                                ...(response.text !== undefined
+                                  ? { text: response.text }
+                                  : {}),
+                              },
+                            ],
+                            clientContext: buildTurnClientContext(activeProjectId),
+                          });
+                        },
                       }
-                    : null
-              }
-            />
+                    : waitingForAction
+                      ? {
+                          kind: "authorization" as const,
+                          title:
+                            "The agent is paused on a question or approval above — reply to continue.",
+                        }
+                      : null
+                }
+              />
+              <StreamProbe messages={projectedMessages} isRunning={isBusy} />
+            </>
           )}
         </AssistantRuntimeProvider>
         <ThreadActionsDrawer

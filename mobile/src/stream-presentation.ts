@@ -92,8 +92,8 @@ export function shouldShowThinking(
 
 // eve creates its assistant row after delivery.consumed / model.started. Until
 // then, keep a display-only row at that same position; it is never persisted.
-// `awaitingReply` covers the optimistic preparing window before streaming
-// confirms the user turn, so Thinking can replace "Sending…".
+// `awaitingReply` covers prepare + the gap after deliveryId clears localSend
+// but before eve publishes an assistant, so Thinking does not blank mid-send.
 export function withPendingAssistant(
   messages: readonly ThreadMessageLike[],
   source: readonly { role: string; metadata?: { status?: string } }[],
