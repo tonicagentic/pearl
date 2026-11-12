@@ -33,6 +33,23 @@ export type ActiveChat = {
   readonly title: string;
 };
 
+export type AgentFileMeta = {
+  readonly id: string;
+  readonly path: string;
+  readonly byteLength: number;
+  readonly version: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+};
+
+/** Aggregate Computer-tab snapshot (no browser mint / secrets). */
+export type ComputerState = {
+  readonly session: ClientSessionState | null;
+  readonly waitingForInput: boolean;
+  readonly files: readonly AgentFileMeta[];
+  readonly browser: { readonly active: boolean };
+};
+
 function authHeaders(): Record<string, string> {
   const credential = getAuthCookie();
 
@@ -124,6 +141,32 @@ export async function getChat(id: string): Promise<ActiveChat | null> {
   const data = (await response.json()) as { chat: ActiveChat | null };
 
   return data.chat;
+}
+
+/** Durable session cursor, files, and browser-active flag for the Computer tab. */
+export async function fetchComputerState(
+  chatId: string,
+): Promise<ComputerState> {
+  const response = await fetch(
+    `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/computer`,
+    {
+      headers: authHeaders(),
+      redirect: "manual",
+    },
+  );
+
+  if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
+    throw new Error(`Failed to load computer state (redirect ${response.status}).`);
+  }
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
+    throw new Error(`Failed to load computer state (${response.status}).`);
+  }
+
+  return (await response.json()) as ComputerState;
 }
 
 export async function createChat(

@@ -19,6 +19,8 @@
     "../lib/json-render/**/*.ts",
     "../lib/agent-todos.ts",
     "../lib/agent-mode-context.ts",
-    "../lib/design/preview-kind.ts"
+    "../lib/design/preview-kind.ts",
+    "../lib/chat/events.ts"
   ]
 }
+

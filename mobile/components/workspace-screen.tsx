@@ -81,8 +81,8 @@ function SvgFilePreview({
 }
 
 /**
- * In-place Files pane: workspace file/page tabs + preview body.
- * Used by the Chat | Files switcher (not a full-screen overlay).
+ * In-place workspace pane: file/page tabs + preview body.
+ * Used as Computer detail drill-in (not a full-screen overlay).
  */
 export function WorkspacePanel({
   topInset = 0,
@@ -308,7 +308,7 @@ export function WorkspacePanel({
 }
 
 /**
- * @deprecated Prefer WorkspacePanel inside the Chat | Files switcher.
+ * @deprecated Prefer ComputerPanel / WorkspacePanel inside Chat | Computer.
  * Kept as a thin alias so older imports keep resolving during the migration.
  */
 export function WorkspaceScreen() {

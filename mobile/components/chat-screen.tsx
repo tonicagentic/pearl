@@ -30,7 +30,7 @@ import {
 } from "@/components/chat-files-segment";
 import { ThreadActionsDrawer } from "@/components/thread-actions-drawer";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
-import { WorkspacePanel } from "@/components/workspace-screen";
+import { ComputerPanel } from "@/components/computer-panel";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { getAgentMode } from "@/src/agent-mode";
 import { withPendingAssistant } from "@/src/stream-presentation";
@@ -68,7 +68,7 @@ export function ChatScreen({
     { backgroundColor },
   ];
   // Match Thread list clearance under the transparent iOS nav.
-  const filesTopInset =
+  const computerTopInset =
     Platform.OS === "ios" ? insets.top + 44 : 0;
   const {
     store,
@@ -91,11 +91,11 @@ export function ChatScreen({
     setChatId(activeChatId);
   }, [activeChatId, setChatId]);
 
-  // Auto-open Files when the agent opens the first tab; return to Chat when empty.
+  // Auto-open Computer when the agent opens the first tab; return to Chat when empty.
   useEffect(() => {
     const prev = tabCountRef.current;
     tabCountRef.current = tabs.length;
-    if (prev === 0 && tabs.length > 0) setMainTab("files");
+    if (prev === 0 && tabs.length > 0) setMainTab("computer");
     else if (tabs.length === 0 && prev > 0) setMainTab("chat");
   }, [tabs.length]);
 
@@ -403,7 +403,7 @@ export function ChatScreen({
             <ChatFilesSegment
               value={mainTab}
               onChange={setMainTab}
-              filesBadge={tabs.length > 0 && mainTab === "chat"}
+              computerBadge={tabs.length > 0 && mainTab === "chat"}
             />
           ),
           // Thread content draws under the bar and pads itself so the first
@@ -429,8 +429,11 @@ export function ChatScreen({
       <View style={{ flex: 1 }}>
         <AssistantRuntimeProvider runtime={runtime}>
           <EveAuthorization />
-          {mainTab === "files" ? (
-            <WorkspacePanel topInset={filesTopInset} />
+          {mainTab === "computer" ? (
+            <ComputerPanel
+              topInset={computerTopInset}
+              visible={mainTab === "computer"}
+            />
           ) : (
             <Thread
               autoFocus={

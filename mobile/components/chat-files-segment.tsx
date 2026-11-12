@@ -2,27 +2,27 @@ import { Pressable, Text, View } from "react-native";
 
 import { cn } from "@/lib/utils";
 
-export type MainTab = "chat" | "files";
+export type MainTab = "chat" | "computer";
 
 const OPTIONS: readonly { readonly id: MainTab; readonly label: string }[] = [
   { id: "chat", label: "Chat" },
-  { id: "files", label: "Files" },
+  { id: "computer", label: "Computer" },
 ];
 
 /**
- * Center Chat | Files control for the chat header (iOS floating + Android stack).
+ * Center Chat | Computer control for the chat header (iOS floating + Android stack).
  */
 export function ChatFilesSegment({
   value,
   onChange,
   disabled = false,
-  filesBadge = false,
+  computerBadge = false,
 }: {
   readonly value: MainTab;
   readonly onChange: (tab: MainTab) => void;
   readonly disabled?: boolean;
-  /** Soft cue that workspace tabs exist while Chat is selected. */
-  readonly filesBadge?: boolean;
+  /** Soft cue that Computer has open work while Chat is selected. */
+  readonly computerBadge?: boolean;
 }) {
   return (
     <View
@@ -41,8 +41,8 @@ export function ChatFilesSegment({
             accessibilityRole="tab"
             accessibilityState={{ selected: active, disabled }}
             accessibilityLabel={
-              option.id === "files" && filesBadge && !active
-                ? "Files, open tabs available"
+              option.id === "computer" && computerBadge && !active
+                ? "Computer, open activity available"
                 : option.label
             }
             className={cn(
@@ -62,7 +62,7 @@ export function ChatFilesSegment({
               >
                 {option.label}
               </Text>
-              {option.id === "files" && filesBadge && !active ? (
+              {option.id === "computer" && computerBadge && !active ? (
                 <View className="bg-primary size-1.5 rounded-full" />
               ) : null}
             </View>
