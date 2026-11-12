@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
@@ -32,15 +31,12 @@ export function HistoryScreen({
   onOpenChat,
   onNavigate,
   visible = true,
-  searchQuery = "",
   chatActions,
 }: {
   /** Called after selecting an existing chat (caller should push `/chat`). */
   onOpenChat?: () => void;
   onNavigate?: (href: SidebarDestination) => void;
   visible?: boolean;
-  /** Filters recent chats by title (client-side). */
-  searchQuery?: string;
   /** iOS swipe / context-menu handlers (required on iOS for row actions). */
   chatActions?: HistoryChatActionHandlers;
 }) {
@@ -68,7 +64,6 @@ export function HistoryScreen({
         accessibilityElementsHidden={!visible}
       >
         <HistoryListIOS
-          searchQuery={searchQuery}
           onOpenChat={openChatRoute}
           onNavigate={openDestination}
           actions={actions}
@@ -80,7 +75,6 @@ export function HistoryScreen({
   return (
     <HistoryListAndroid
       visible={visible}
-      searchQuery={searchQuery}
       onOpenChat={openChatRoute}
       onNavigate={openDestination}
     />
@@ -89,12 +83,10 @@ export function HistoryScreen({
 
 function HistoryListAndroid({
   visible,
-  searchQuery,
   onOpenChat,
   onNavigate,
 }: {
   readonly visible: boolean;
-  readonly searchQuery: string;
   readonly onOpenChat: () => void;
   readonly onNavigate: (href: SidebarDestination) => void;
 }) {
@@ -117,12 +109,6 @@ function HistoryListAndroid({
   const mutedDot =
     (useCSSVariable("--color-border") as string | undefined) ?? "#3A3A3C";
 
-  const filteredChats = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return chats;
-    return chats.filter((chat) => chat.title.toLowerCase().includes(q));
-  }, [chats, searchQuery]);
-
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor }}
@@ -133,8 +119,8 @@ function HistoryListAndroid({
         <FlatList
           className="flex-1"
           contentContainerClassName="px-4 pb-8 pt-2"
-          data={filteredChats}
-          extraData={`${activeChatId}:${searchQuery}:${filteredChats.map((chat) => (chat.waitingForInput ? "1" : "0")).join("")}`}
+          data={chats}
+          extraData={`${activeChatId}:${chats.map((chat) => (chat.waitingForInput ? "1" : "0")).join("")}`}
           keyExtractor={(chat) => chat.id}
           ItemSeparatorComponent={() => (
             <View className="ml-7 border-b border-border/60" />
@@ -222,11 +208,9 @@ function HistoryListAndroid({
                   ? "Loading history"
                   : chatsError
                     ? "Could not load history"
-                    : searchQuery.trim()
-                      ? "No chats match your search"
-                      : signedIn
-                        ? "No chats yet"
-                        : "Sign in to see your chats"
+                    : signedIn
+                      ? "No chats yet"
+                      : "Sign in to see your chats"
               }
             >
               {chatsLoading ? (
@@ -252,15 +236,6 @@ function HistoryListAndroid({
                     </Text>
                   </Pressable>
                 </>
-              ) : searchQuery.trim() ? (
-                <>
-                  <Text className="text-base font-medium text-foreground">
-                    No matches
-                  </Text>
-                  <Text className="text-muted-foreground mt-1.5 text-sm leading-5">
-                    Try a different search.
-                  </Text>
-                </>
               ) : (
                 <>
                   <Text className="text-base font-medium text-foreground">
@@ -276,7 +251,7 @@ function HistoryListAndroid({
             </View>
           }
           ListFooterComponent={
-            hasMoreChats && !searchQuery.trim() ? (
+            hasMoreChats ? (
               <Pressable
                 accessibilityRole="button"
                 className="min-h-12 justify-center rounded-lg px-3"

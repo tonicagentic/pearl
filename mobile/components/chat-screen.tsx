@@ -15,7 +15,10 @@ import {
   type AppendMessage,
   type ThreadMessageLike,
 } from "@assistant-ui/react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
@@ -55,6 +58,7 @@ export function ChatScreen({
   // The safe-area container is a native codegen view, so uniwind's className
   // binding cannot reach it; paint the theme background through style instead
   // so the color extends under the status bar.
+  const insets = useSafeAreaInsets();
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -63,6 +67,9 @@ export function ChatScreen({
     { flex: 1 },
     { backgroundColor },
   ];
+  // Match Thread list clearance under the transparent iOS nav.
+  const filesTopInset =
+    Platform.OS === "ios" ? insets.top + 44 : 0;
   const {
     store,
     activeChatId,
@@ -399,6 +406,9 @@ export function ChatScreen({
               filesBadge={tabs.length > 0 && mainTab === "chat"}
             />
           ),
+          // Thread content draws under the bar and pads itself so the first
+          // message rests below the nav; scrolling can fade under it.
+          headerTransparent: Platform.OS === "ios",
           headerStyle: Platform.OS === "web" ? { backgroundColor } : undefined,
           // Native needs this too — without it the system back item can flash
           // the default (light) tint for a frame on push.
@@ -420,7 +430,7 @@ export function ChatScreen({
         <AssistantRuntimeProvider runtime={runtime}>
           <EveAuthorization />
           {mainTab === "files" ? (
-            <WorkspacePanel />
+            <WorkspacePanel topInset={filesTopInset} />
           ) : (
             <Thread
               autoFocus={

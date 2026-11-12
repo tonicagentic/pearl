@@ -13,7 +13,6 @@ export type HistoryChatActionHandlers = {
 
 /** Android / web stub — iOS uses `history-list.ios.tsx`. */
 export function HistoryListIOS(_props: {
-  readonly searchQuery?: string;
   readonly onOpenChat: () => void;
   readonly onNavigate: (href: SidebarDestination) => void;
   readonly actions: HistoryChatActionHandlers;

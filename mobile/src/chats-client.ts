@@ -15,6 +15,15 @@ export type ChatListItem = {
   readonly waitingForInput?: boolean;
 };
 
+export type ChatSearchHit = {
+  readonly id: string;
+  readonly title: string;
+  readonly updatedAt: string;
+  readonly projectId: string | null;
+  readonly waitingForInput: boolean;
+  readonly snippet: string | null;
+};
+
 export type ActiveChat = {
   readonly events: readonly SessionStreamEvent[];
   readonly id: string;
@@ -63,6 +72,36 @@ export async function listChats(
     chats: ChatListItem[];
     nextCursor: string | null;
   };
+}
+
+/** Search all chats by title or message/event text. */
+export async function searchChats(
+  query: string,
+): Promise<readonly ChatSearchHit[]> {
+  const q = query.trim();
+  if (!q) return [];
+
+  const response = await fetch(
+    `${AGENT_URL}/api/chats/search?q=${encodeURIComponent(q)}`,
+    {
+      headers: authHeaders(),
+      redirect: "manual",
+    },
+  );
+
+  if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
+    throw new Error(`Failed to search chats (redirect ${response.status}).`);
+  }
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
+    throw new Error(`Failed to search chats (${response.status}).`);
+  }
+
+  const data = (await response.json()) as { chats?: ChatSearchHit[] };
+  return data.chats ?? [];
 }
 
 export async function getChat(id: string): Promise<ActiveChat | null> {

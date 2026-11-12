@@ -3,7 +3,12 @@ import { get } from "@vercel/blob";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import type { ClientSessionState, SessionStreamEvent } from "eve/client";
 import { chatNeedsUserInput, isChatTurnSettledEvent } from "@/lib/chat/events";
-import type { ActiveChat, ChatListItem, ChatListPage } from "@/lib/chat/types";
+import type {
+  ActiveChat,
+  ChatListItem,
+  ChatListPage,
+  ChatSearchHit,
+} from "@/lib/chat/types";
 import { createFallbackTitle, DEFAULT_CHAT_TITLE } from "@/lib/chat/title";
 import {
   chat,
@@ -15,6 +20,32 @@ import {
 import { db } from "@/lib/db/client";
 
 const CHAT_HISTORY_PAGE_SIZE = 20;
+const CHAT_SEARCH_LIMIT = 40;
+
+function escapeIlikePattern(input: string): string {
+  return input.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+function makeSearchSnippet(haystack: string, query: string, max = 88): string {
+  const cleaned = haystack
+    .replace(/\\[ntr]/g, " ")
+    .replace(/[{}\[\]"\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return "";
+  const lower = cleaned.toLowerCase();
+  const q = query.toLowerCase();
+  const idx = lower.indexOf(q);
+  if (idx < 0) {
+    return cleaned.length > max ? `${cleaned.slice(0, max - 1).trimEnd()}…` : cleaned;
+  }
+  const start = Math.max(0, idx - 24);
+  const end = Math.min(cleaned.length, idx + q.length + 48);
+  let snippet = cleaned.slice(start, end).trim();
+  if (start > 0) snippet = `…${snippet}`;
+  if (end < cleaned.length) snippet = `${snippet}…`;
+  return snippet.length > max ? `${snippet.slice(0, max - 1).trimEnd()}…` : snippet;
+}
 
 function encodeChatCursor(updatedAt: Date, id: string) {
   return `${updatedAt.toISOString()}::${id}`;
@@ -526,6 +557,98 @@ export async function saveChatSnapshot({
 
 export async function deleteChatForUser(chatId: string, userId: string) {
   await db.delete(chat).where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
+}
+
+/**
+ * Search all of a user's chats by title or durable event text.
+ * Returns newest matches first (deduped), with an optional snippet.
+ */
+export async function searchChatsForUser(
+  userId: string,
+  query: string,
+): Promise<readonly ChatSearchHit[]> {
+  const trimmed = query.replace(/\s+/g, " ").trim();
+  if (!trimmed) return [];
+
+  const pattern = `%${escapeIlikePattern(trimmed)}%`;
+
+  const rows = await db
+    .select({
+      id: chat.id,
+      title: chat.title,
+      updatedAt: chat.updatedAt,
+      projectId: chat.projectId,
+      eventText: sql<string | null>`${chatEvent.event}::text`,
+      titleMatched: sql<boolean>`${chat.title} ilike ${pattern} escape '\\'`,
+    })
+    .from(chat)
+    .leftJoin(
+      chatEvent,
+      and(
+        eq(chatEvent.chatId, chat.id),
+        sql`${chatEvent.event}::text ilike ${pattern} escape '\\'`,
+      ),
+    )
+    .where(
+      and(
+        eq(chat.userId, userId),
+        or(
+          sql`${chat.title} ilike ${pattern} escape '\\'`,
+          sql`${chatEvent.event}::text ilike ${pattern} escape '\\'`,
+        ),
+      ),
+    )
+    .orderBy(desc(chat.updatedAt), desc(chat.id))
+    .limit(CHAT_SEARCH_LIMIT * 4);
+
+  const byId = new Map<
+    string,
+    {
+      id: string;
+      title: string;
+      updatedAt: Date;
+      projectId: string | null;
+      titleMatched: boolean;
+      eventText: string | null;
+    }
+  >();
+
+  for (const row of rows) {
+    const existing = byId.get(row.id);
+    if (existing) {
+      if (!existing.eventText && row.eventText) {
+        existing.eventText = row.eventText;
+      }
+      continue;
+    }
+    byId.set(row.id, {
+      id: row.id,
+      title: row.title,
+      updatedAt: row.updatedAt,
+      projectId: row.projectId ?? null,
+      titleMatched: Boolean(row.titleMatched),
+      eventText: row.eventText,
+    });
+    if (byId.size >= CHAT_SEARCH_LIMIT) break;
+  }
+
+  const page = [...byId.values()];
+  const waitingByChatId = await waitingForInputByChatIds(page.map((row) => row.id));
+
+  return page.map((row) => {
+    const snippet =
+      row.titleMatched || !row.eventText
+        ? null
+        : makeSearchSnippet(row.eventText, trimmed) || null;
+    return {
+      id: row.id,
+      title: row.title,
+      updatedAt: row.updatedAt.toISOString(),
+      projectId: row.projectId,
+      waitingForInput: waitingByChatId.get(row.id) ?? false,
+      snippet,
+    };
+  });
 }
 
 /** Rename a chat the viewer owns. Empty titles are rejected. */

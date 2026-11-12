@@ -64,6 +64,7 @@ function AuthenticatedLayout() {
                     // Set here (not only in ChatScreen) so the push animation
                     // never paints the default back control before minimal applies.
                     headerBackButtonDisplayMode: "minimal",
+                    headerTransparent: Platform.OS === "ios",
                   }}
                 />
                 <Stack.Screen

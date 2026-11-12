@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { View } from "react-native";
 import {
   Button,
@@ -44,12 +44,10 @@ export type { HistoryChatActionHandlers, SidebarDestination } from "@/components
  * iOS home: native inset-grouped List with swipe delete + context menu actions.
  */
 export function HistoryListIOS({
-  searchQuery = "",
   onOpenChat,
   onNavigate,
   actions,
 }: {
-  readonly searchQuery?: string;
   readonly onOpenChat: () => void;
   readonly onNavigate: (href: SidebarDestination) => void;
   readonly actions: HistoryChatActionHandlers;
@@ -84,12 +82,6 @@ export function HistoryListIOS({
     listRowInsets({ top: 14, bottom: 14, leading: 16, trailing: 16 }),
   ];
 
-  const filteredChats = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return chats;
-    return chats.filter((chat) => chat.title.toLowerCase().includes(q));
-  }, [chats, searchQuery]);
-
   const openChat = useCallback(
     (chatId: string) => {
       void selectChat(chatId).then((selected) => {
@@ -103,11 +95,9 @@ export function HistoryListIOS({
     ? "Loading history…"
     : chatsError
       ? "Couldn’t load history"
-      : searchQuery.trim()
-        ? "No matches"
-        : signedIn
-          ? "No chats yet"
-          : "Sign in to see chats";
+      : signedIn
+        ? "No chats yet"
+        : "Sign in to see chats";
 
   return (
     <View
@@ -171,7 +161,7 @@ export function HistoryListIOS({
               />
             ) : null}
 
-            {filteredChats.length === 0 ? (
+            {chats.length === 0 ? (
               <SwiftText
                 modifiers={[
                   foregroundStyle({ type: "hierarchical", style: "secondary" }),
@@ -183,7 +173,7 @@ export function HistoryListIOS({
               </SwiftText>
             ) : (
               <List.ForEach
-                data={filteredChats}
+                data={chats}
                 keyExtractor={(chat) => chat.id}
                 estimatedItemSize={64}
               >
@@ -200,7 +190,7 @@ export function HistoryListIOS({
               </List.ForEach>
             )}
 
-            {hasMoreChats && !searchQuery.trim() ? (
+            {hasMoreChats ? (
               <Button
                 label={chatsLoading ? "Loading…" : "Load more"}
                 onPress={() => void loadMoreChats()}

@@ -9,6 +9,7 @@ import {
   type SidebarDestination,
 } from "@/components/app-drawer";
 import { HistorySearchBar } from "@/components/history-search-bar";
+import { HistorySearchScreen } from "@/components/history-search-screen";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { useChats } from "@/src/chat-context";
@@ -32,6 +33,7 @@ export function HistoryRouteScreen() {
     setChatProject,
     selectChat,
   } = useChats();
+  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [costOpen, setCostOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
@@ -49,6 +51,11 @@ export function HistoryRouteScreen() {
     newChat();
     router.push("/chat");
   }, [newChat]);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery("");
+  }, []);
 
   const promptRename = useCallback(
     (chat: ChatListItem) => {
@@ -161,7 +168,7 @@ export function HistoryRouteScreen() {
     <View style={{ flex: 1, backgroundColor }}>
       <Stack.Screen
         options={{
-          headerShown: true,
+          headerShown: !searchOpen,
           title: "",
           // Content draws under the bar; HistoryScreen pads by header height.
           headerTransparent: true,
@@ -169,25 +176,36 @@ export function HistoryRouteScreen() {
           headerTintColor: foregroundColor,
         }}
       />
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
-          icon="square.and.pencil"
-          accessibilityLabel="New chat"
-          onPress={handleNewChat}
-        />
-      </Stack.Toolbar>
+      {!searchOpen ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon="square.and.pencil"
+            accessibilityLabel="New chat"
+            onPress={handleNewChat}
+          />
+        </Stack.Toolbar>
+      ) : null}
       <HistoryScreen
         onOpenChat={openChat}
         onNavigate={openDestination}
-        searchQuery={searchQuery}
         chatActions={chatActions}
+        visible={!searchOpen}
       />
-      {Platform.OS === "ios" ? (
-        <HistorySearchBar
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      ) : null}
+      <HistorySearchScreen
+        visible={searchOpen}
+        query={searchQuery}
+        onClose={closeSearch}
+        onOpenChat={() => {
+          router.push("/chat");
+        }}
+      />
+      <HistorySearchBar
+        active={searchOpen}
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        onActivate={() => setSearchOpen(true)}
+        onClose={closeSearch}
+      />
       <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
       <ProjectPickerModal
         open={projectPickerOpen}

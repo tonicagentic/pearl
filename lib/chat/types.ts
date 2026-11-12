@@ -24,6 +24,17 @@ export type ChatListPage = {
   readonly nextCursor: string | null;
 };
 
+/** Result row from full chat history search (title and/or event text). */
+export type ChatSearchHit = {
+  readonly id: string;
+  readonly title: string;
+  readonly updatedAt: string;
+  readonly projectId: string | null;
+  readonly waitingForInput: boolean;
+  /** Short match excerpt when the hit came from event text rather than title. */
+  readonly snippet: string | null;
+};
+
 export type ActiveChat = {
   readonly events: readonly SessionStreamEvent[];
   readonly id: string;

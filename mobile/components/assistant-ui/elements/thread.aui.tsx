@@ -716,16 +716,17 @@ export const Thread: FC<ThreadProps> = ({
             } : {})}
             className="aui-message-group flex-1"
             contentContainerClassName={cn(
-              "gap-4 px-4 pt-4",
-              !floatsComposer && "pb-6",
+              "gap-4 px-4",
+              !floatsComposer && "pt-4 pb-6",
               Rail && "pl-10",
             )}
             contentContainerStyle={
               floatsComposer
                 ? {
-                    // Resting messages clear the floating controls, but can scroll behind them.
-                    // Native stack header already clears the status bar.
-                    paddingTop: 16,
+                    // Rest under the transparent nav; scroll may fade behind it.
+                    // 44 ≈ native stack bar height below the status bar inset.
+                    paddingTop: insets.top + 44 + 16,
+                    // Resting messages clear the floating composer, but can scroll behind it.
                     paddingBottom: composerOverlayHeight + 24,
                   }
                 : undefined
