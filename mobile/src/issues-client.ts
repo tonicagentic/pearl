@@ -86,6 +86,19 @@ export type CreateIssueInput = {
   readonly reviewDate?: string | null;
 };
 
+export async function fetchIssueRequest(id: string): Promise<IssueDto> {
+  const { response, json } = await postIssueOp({
+    op: 'get',
+    id,
+  });
+
+  if (!response.ok || !json.issue) {
+    throw new Error(json.error ?? `Failed to load the task (${response.status}).`);
+  }
+
+  return json.issue;
+}
+
 export async function createIssueRequest(input: CreateIssueInput): Promise<IssueDto> {
   const { response, json } = await postIssueOp({
     op: 'create',

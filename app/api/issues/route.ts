@@ -144,6 +144,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ issue: { ...issue, state: issueState(issue) } });
     }
 
+    if (op === "get") {
+      const id = typeof body.id === "string" ? body.id : "";
+
+      if (!id) {
+        return NextResponse.json({ error: "Issue id is required." }, { status: 400 });
+      }
+
+      const issue = await getIssue(viewer.id, id);
+
+      if (!issue) {
+        return NextResponse.json({ error: "Issue not found." }, { status: 404 });
+      }
+
+      return NextResponse.json({
+        issue: {
+          ...issue,
+          state: issueState(issue),
+          dueSoon:
+            issue.status === "open" &&
+            issue.dueDate !== null &&
+            issue.dueDate <= todayIso(),
+        },
+      });
+    }
+
     if (op === "resolve" || op === "reopen") {
       const id = typeof body.id === "string" ? body.id : "";
 

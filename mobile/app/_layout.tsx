@@ -80,15 +80,27 @@ function AuthenticatedLayout() {
                 />
                 <Stack.Screen
                   name="projects/[id]/index"
-                  options={{ title: "Project", headerShown: true }}
+                  options={{
+                    title: "Project",
+                    headerShown: true,
+                    headerBackButtonDisplayMode: "minimal",
+                  }}
                 />
                 <Stack.Screen
                   name="projects/[id]/plans/[planId]"
                   options={{ title: "Plan", headerShown: true }}
                 />
                 <Stack.Screen
-                  name="issues"
+                  name="issues/index"
                   options={{ title: "Tasks", headerShown: true }}
+                />
+                <Stack.Screen
+                  name="issues/[id]"
+                  options={{
+                    title: "Task",
+                    headerShown: true,
+                    headerBackButtonDisplayMode: "minimal",
+                  }}
                 />
                 <Stack.Screen
                   name="settings"

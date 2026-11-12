@@ -1,22 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { PlusIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
-import {
-  createProjectRequest,
-  fetchProjects,
-  type ProjectDto,
-} from "@/src/projects-client";
+import { CreateProjectModal } from "@/components/create-project-modal";
+import { ProjectMark } from "@/components/project-mark";
+import { Icon } from "@/components/ui/icon";
+import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 
 /** Projects list: create a project or open its detail. */
 export function ProjectsScreen() {
@@ -24,6 +23,9 @@ export function ProjectsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const backgroundColor = useCSSVariable("--color-background") as
+    | string
+    | undefined;
+  const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
 
@@ -63,20 +65,39 @@ export function ProjectsScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor }} edges={["left", "right"]}>
-      <View className="flex-row items-center justify-between px-5 pb-2 pt-4">
-        <Text className="text-[28px] font-semibold tracking-tight text-foreground">
-          Projects
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="New project"
-          className="min-h-11 justify-center px-1"
-          onPress={() => setShowForm(true)}
-        >
-          <Text className="text-[16px] font-medium text-foreground">New</Text>
-        </Pressable>
-      </View>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor }}
+      edges={["left", "right"]}
+    >
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: "Projects",
+          headerTintColor: foregroundColor,
+          headerRight:
+            Platform.OS === "ios"
+              ? undefined
+              : () => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="New project"
+                    className="h-10 w-10 items-center justify-center"
+                    onPress={() => setShowForm(true)}
+                  >
+                    <Icon as={PlusIcon} className="size-5 text-foreground" />
+                  </Pressable>
+                ),
+        }}
+      />
+      {Platform.OS === "ios" ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon="plus"
+            accessibilityLabel="New project"
+            onPress={() => setShowForm(true)}
+          />
+        </Stack.Toolbar>
+      ) : null}
 
       {error ? (
         <Pressable className="px-5 py-3" onPress={() => void reload()}>
@@ -91,7 +112,11 @@ export function ProjectsScreen() {
           <ActivityIndicator />
         </View>
       ) : (
-        <ScrollView className="flex-1 px-5" contentContainerClassName="pb-24">
+        <ScrollView
+          className="flex-1 px-5"
+          contentContainerClassName="pb-24 pt-4"
+          contentInsetAdjustmentBehavior="automatic"
+        >
           {(projects ?? []).length === 0 ? (
             <View className="py-8">
               <Text className="text-base font-medium text-foreground">
@@ -106,22 +131,28 @@ export function ProjectsScreen() {
               <Pressable
                 key={project.id}
                 accessibilityRole="button"
-                className="min-h-12 justify-center border-b border-border/60 py-3"
+                className="min-h-12 flex-row items-center gap-3 py-3 active:opacity-80"
                 onPress={() =>
                   router.push(`/projects/${encodeURIComponent(project.id)}`)
                 }
               >
-                <Text className="text-base font-medium text-foreground">
-                  {project.name}
-                </Text>
-                {project.instructions.trim() ? (
+                <ProjectMark name={project.name} />
+                <View className="min-w-0 flex-1">
                   <Text
-                    className="text-muted-foreground mt-0.5 text-sm"
-                    numberOfLines={2}
+                    className="text-[16px] font-medium text-foreground"
+                    numberOfLines={1}
                   >
-                    {project.instructions}
+                    {project.name}
                   </Text>
-                ) : null}
+                  {project.instructions.trim() ? (
+                    <Text
+                      className="mt-0.5 text-[13px] text-muted-foreground"
+                      numberOfLines={1}
+                    >
+                      {project.instructions.trim()}
+                    </Text>
+                  ) : null}
+                </View>
               </Pressable>
             ))
           )}
@@ -144,100 +175,5 @@ export function ProjectsScreen() {
         }}
       />
     </SafeAreaView>
-  );
-}
-
-function CreateProjectModal({
-  open,
-  onClose,
-  onCreated,
-}: {
-  readonly open: boolean;
-  readonly onClose: () => void;
-  readonly onCreated: (project: ProjectDto) => void;
-}) {
-  const [name, setName] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const placeholderColor = useCSSVariable("--color-muted-foreground") as
-    | string
-    | undefined;
-
-  useEffect(() => {
-    if (!open) return;
-    setName("");
-    setInstructions("");
-    setError(null);
-    setBusy(false);
-  }, [open]);
-
-  if (!open) return null;
-
-  return (
-    <Modal transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end bg-foreground/50">
-        <Pressable className="flex-1" onPress={onClose} />
-        <View
-          className="gap-3 rounded-t-2xl border-t border-border px-4 pb-8 pt-4"
-          style={{ backgroundColor }}
-        >
-          <Text className="text-lg font-semibold text-foreground">
-            New project
-          </Text>
-          {error ? (
-            <Text className="text-sm text-destructive">{error}</Text>
-          ) : null}
-          <TextInput
-            accessibilityLabel="Project name"
-            className="min-h-11 rounded-lg border border-border px-3 text-base text-foreground"
-            maxLength={120}
-            onChangeText={setName}
-            placeholder="Name"
-            placeholderTextColor={placeholderColor}
-            value={name}
-          />
-          <TextInput
-            accessibilityLabel="Project instructions"
-            className="min-h-24 rounded-lg border border-border px-3 py-2 text-base text-foreground"
-            multiline
-            onChangeText={setInstructions}
-            placeholder="Optional instructions"
-            placeholderTextColor={placeholderColor}
-            textAlignVertical="top"
-            value={instructions}
-          />
-          <Pressable
-            accessibilityRole="button"
-            className="min-h-11 items-center justify-center rounded-lg bg-primary"
-            disabled={busy || !name.trim()}
-            onPress={() => {
-              setBusy(true);
-              setError(null);
-              void createProjectRequest({
-                name: name.trim(),
-                instructions: instructions.trim() || undefined,
-              })
-                .then(onCreated)
-                .catch((cause) => {
-                  setError(
-                    cause instanceof Error
-                      ? cause.message
-                      : "Could not create the project.",
-                  );
-                  setBusy(false);
-                });
-            }}
-          >
-            <Text className="text-sm font-medium text-primary-foreground">
-              {busy ? "Creating…" : "Create"}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
   );
 }
