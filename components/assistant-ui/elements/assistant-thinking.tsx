@@ -4,7 +4,7 @@ import { useAuiState } from "@assistant-ui/react";
 import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
 import { useElapsedLabel } from "@/components/assistant-ui/elements/use-elapsed-label";
 
-import { TIMELINE_TOOLS } from "./session-timeline";
+import { isTimelineToolCall } from "./session-timeline";
 
 // In-thread agent status, following the assistant-ui thinking-indicator
 // runtime recipe (assistant-ui.com/elements/thinking-indicator): the label is
@@ -60,9 +60,7 @@ export function AssistantThinking() {
   const timelineLive = useAuiState((s) => {
     if (s.message.status?.type !== "running") return false;
     return s.message.parts.some(
-      (part) =>
-        part.type === "reasoning" ||
-        (part.type === "tool-call" && TIMELINE_TOOLS.has(part.toolName)),
+      (part) => part.type === "reasoning" || isTimelineToolCall(part),
     );
   });
 

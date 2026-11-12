@@ -1,7 +1,7 @@
 import type { ChatListItem } from "@/src/chats-client";
 
 /** Destinations opened from home. */
-export type SidebarDestination = "/projects" | "/issues";
+export type SidebarDestination = "/projects" | "/issues" | "/thread-samples";
 
 export type HistoryChatActionHandlers = {
   readonly onRename: (chat: ChatListItem) => void;

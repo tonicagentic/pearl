@@ -9,7 +9,8 @@ import { File } from "@/components/assistant-ui/elements/file";
 import { AssistantThinking } from "@/components/assistant-ui/elements/assistant-thinking";
 import {
   SessionTimeline,
-  TIMELINE_TOOLS,
+  isTimelineCoveredPart,
+  isTimelineToolCall,
 } from "@/components/assistant-ui/elements/session-timeline";
 import { SessionTodoList } from "@/components/assistant-ui/elements/todo-list";
 import { useLargePasteComposer, useHeldLargePastes } from "@/app/_components/large-paste";
@@ -26,11 +27,6 @@ import {
 } from "@/components/assistant-ui/elements/citation";
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback.aui";
 import { DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
-import {
-  ToolGroupContent,
-  ToolGroupRoot,
-  ToolGroupTrigger,
-} from "@/components/assistant-ui/elements/tool-group.aui";
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -86,7 +82,6 @@ import {
   type ComponentType,
   type FC,
   type KeyboardEvent,
-  type PropsWithChildren,
   useEffect,
   useRef,
 } from "react";
@@ -231,9 +226,6 @@ export type ThreadComponents = {
   AssistantMessage?: ComponentType | undefined;
   Welcome?: ComponentType | undefined;
   ToolFallback?: ToolCallMessagePartComponent | undefined;
-  ToolGroup?:
-    | ComponentType<PropsWithChildren<{ group: ThreadGroupPart }>>
-    | undefined;
   TaskGroup?:
     | ComponentType<{ group: ThreadGroupPart }>
     | undefined;
@@ -793,25 +785,14 @@ const MessageError: FC = () => {
 const AssistantMessage: FC = () => {
   const {
     ToolFallback: ToolFallbackComponent = ToolFallback,
-    ToolGroup,
     TaskGroup,
   } = useContext(ThreadComponentsContext);
 
   const messageParts = useAuiState((s) => s.message.parts);
-  // Match mobile: a parked HITL tool must leave the timeline so ToolFallback
-  // mounts Allow/Deny. Settled timeline tools still collapse.
-  const isTimelineCovered = (index: number) => {
-    const part = messageParts[index] as
-      | { toolName?: string; type?: string; status?: { type: string } }
-      | undefined;
-    return (
-      part?.type === "reasoning" ||
-      (part?.status?.type !== "requires-action" &&
-        part?.toolName !== "write_file" &&
-        (part?.toolName === "todo" ||
-          TIMELINE_TOOLS.has(part?.toolName ?? "")))
-    );
-  };
+  // A parked HITL tool must leave the timeline so ToolFallback mounts
+  // Allow/Deny. Settled timeline tools collapse into the session timeline.
+  const isTimelineCovered = (index: number) =>
+    isTimelineCoveredPart(messageParts[index]);
 
   const ACTION_BAR_PT = "pt-1.5";
   // Keep the action bar inside the contained root's paint box, then cancel its reserved space in flow.
@@ -867,22 +848,12 @@ const AssistantMessage: FC = () => {
                   );
                 if (isDelegationGroup) {
                   // Delegated tasks render as task cards (docs:
-                  // elements/task-card) instead of the tool group.
+                  // elements/task-card) instead of a tool group.
                   if (TaskGroup) return <TaskGroup group={part} />;
                   return null;
                 }
-                if (ToolGroup) {
-                  return <ToolGroup group={part}>{children}</ToolGroup>;
-                }
-                return (
-                  <ToolGroupRoot variant="ghost">
-                    <ToolGroupTrigger
-                      count={part.indices.length}
-                      active={part.status.type === "running"}
-                    />
-                    <ToolGroupContent>{children}</ToolGroupContent>
-                  </ToolGroupRoot>
-                );
+                // Approvals and other non-timeline tools render inline.
+                return <>{children}</>;
               }
               case "group-reasoning":
                 // Reasoning is summarized by the timeline.
@@ -896,11 +867,7 @@ const AssistantMessage: FC = () => {
                 return null;
               case "tool-call":
                 if (part.toolName === "todo") return null;
-                if (
-                  TIMELINE_TOOLS.has(part.toolName) &&
-                  part.status.type !== "requires-action" &&
-                  part.toolName !== "write_file"
-                ) {
+                if (isTimelineToolCall(part)) {
                   // Summarized by the timeline above; edit_file's renderer
                   // still mounts through its tool UI for the canvas mirror.
                   return part.toolName === "edit_file" ? part.toolUI : null;

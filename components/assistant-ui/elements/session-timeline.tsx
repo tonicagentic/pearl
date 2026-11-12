@@ -1,27 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  BanIcon,
-  BrainIcon,
-  EyeIcon,
-  FileSearchIcon,
-  FolderSearchIcon,
-  GlobeIcon,
-  GraduationCapIcon,
-  HeartIcon,
-  PaperclipIcon,
-  PenLineIcon,
-  SearchIcon,
-  SendIcon,
-  TerminalIcon,
-  WrenchIcon,
-  type LucideIcon,
-} from "lucide-react";
 import { useAuiState } from "@assistant-ui/react";
 import { useEveEvents } from "@assistant-ui/eve";
 
 import { useCanvas } from "@/components/assistant-ui/elements/canvas-context";
+import { DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
 
 import {
   ToolTimeline,
@@ -38,6 +22,7 @@ type ToolCallState = {
   readonly args?: unknown;
   readonly result?: unknown;
   readonly toolCallId?: string;
+  readonly status?: { readonly type?: string };
 };
 
 type ReasoningState = {
@@ -47,36 +32,12 @@ type ReasoningState = {
 
 type TimelinePart = ToolCallState | ReasoningState;
 
-// Tools summarized by the timeline (docs: elements/tool-timeline — with a
-// runtime you derive the steps from the message's own tool-call parts).
-// write_file stays an artifact card (it owns the canvas entry point),
-// ask_question stays an interactive card (human input), and delegated
-// subagent tasks render as task cards (elements/task-card); everything else
-// collapses into verbs, targets, and file stats.
-export const TIMELINE_TOOLS = new Set([
-  "edit_file",
-  "read_file",
-  "web_search",
-  "web_fetch",
-  "exa_agent_run",
-  "file__save_memory",
-  "file__remove_memory",
-  "load_skill",
-  "get_weather",
-  "get_profile",
-  "bash",
-  "glob",
-  "grep",
-  "task_cancel",
-  "send_notification",
-  "read_attachment",
-]);
-
 const TOOL_META: Record<string, { verb: string }> = {
   edit_file: { verb: "Edited" },
   read_file: { verb: "Read" },
   web_search: { verb: "Searched" },
-  web_fetch: { verb: "Fetched" },
+  web_fetch: { verb: "Opened" },
+  browser: { verb: "Browsed" },
   exa_agent_run: { verb: "Researched" },
   file__save_memory: { verb: "Remembered" },
   file__remove_memory: { verb: "Forgot" },
@@ -89,18 +50,86 @@ const TOOL_META: Record<string, { verb: string }> = {
   task_cancel: { verb: "Cancelled" },
   send_notification: { verb: "Notified" },
   read_attachment: { verb: "Read attachment" },
-  coder: { verb: "Delegated to coder" },
+  create_issue: { verb: "Create issue" },
+  list_issues: { verb: "List issues" },
+  resolve_issue: { verb: "Resolve issue" },
   deploy_vercel: { verb: "Deployed" },
   merge_pr: { verb: "Merged" },
   eas_build: { verb: "Started EAS build" },
   eas_submit: { verb: "Submitted to EAS" },
   run_with_env: { verb: "Ran with env" },
   preview_check: { verb: "Checked preview" },
-  deployment_logs: { verb: "Fetched logs" },
+  deployment_logs: { verb: "Opened logs" },
 };
+
+/** Tools that keep their own card instead of a timeline step. */
+export function isStandaloneTool(toolName: string): boolean {
+  return (
+    toolName === "todo" ||
+    toolName === "write_file" ||
+    DELEGATION_TOOLS.has(toolName)
+  );
+}
+
+/**
+ * Whether a message part is summarized by the session timeline (and should
+ * render nothing in the grouped parts body).
+ */
+export function isTimelineCoveredPart(part: {
+  readonly type?: string;
+  readonly toolName?: string;
+  readonly status?: { readonly type?: string };
+} | null | undefined): boolean {
+  if (!part) return false;
+  if (part.type === "reasoning") return true;
+  if (part.type !== "tool-call") return false;
+  if (part.status?.type === "requires-action") return false;
+  if (!part.toolName) return false;
+  if (part.toolName === "todo") return true;
+  if (isStandaloneTool(part.toolName)) return false;
+  return true;
+}
+
+/** Whether this tool call appears as a timeline step. */
+export function isTimelineToolCall(part: {
+  readonly type?: string;
+  readonly toolName?: string;
+  readonly status?: { readonly type?: string };
+}): boolean {
+  return (
+    part.type === "tool-call" &&
+    !!part.toolName &&
+    !isStandaloneTool(part.toolName) &&
+    part.status?.type !== "requires-action"
+  );
+}
+
+function humanizeToolName(toolName: string): string {
+  const bare = toolName.includes("__")
+    ? (toolName.split("__").pop() ?? toolName)
+    : toolName;
+  const spaced = bare.replace(/[_-]+/g, " ").trim();
+  if (!spaced) return toolName;
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
 
 function basename(path: string): string {
   return path.split("/").pop() || path;
+}
+
+/** Hostname (+ useful path) for a page URL; empty when the value is not a URL. */
+function siteChip(raw: string): string {
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.replace(/^www\./, "");
+    const path = url.pathname === "/" ? "" : url.pathname.replace(/\/$/, "");
+    if (!path) return host;
+    const clipped =
+      path.length > 48 ? `${path.slice(0, 45).replace(/\/?$/, "")}…` : path;
+    return `${host}${clipped}`;
+  } catch {
+    return "";
+  }
 }
 
 function chipFor(part: ToolCallState): string {
@@ -113,15 +142,22 @@ function chipFor(part: ToolCallState): string {
   if (typeof args.recipient === "string") return args.recipient;
   if (typeof args.attachmentId === "string") return args.attachmentId;
   if (typeof args.taskId === "string") return args.taskId;
+  if (typeof args.url === "string") {
+    const site = siteChip(args.url);
+    if (site) return site;
+  }
   if (typeof args.message === "string") {
     return args.message.split("\n")[0].slice(0, 200);
   }
-  return part.toolName;
+  if (typeof args.title === "string") return args.title;
+  if (typeof args.name === "string") return args.name;
+  return humanizeToolName(part.toolName);
 }
 
 function toStep(part: TimelinePart): TimelineStep {
   const args = (part.type === "tool-call" ? (part.args ?? {}) : {}) as {
     filePath?: unknown;
+    skill?: unknown;
   };
   const filePath =
     typeof args.filePath === "string" ? args.filePath : undefined;
@@ -135,8 +171,29 @@ function toStep(part: TimelinePart): TimelineStep {
     };
   }
   const meta = TOOL_META[part.toolName];
+  if (part.toolName === "load_skill") {
+    const skillName =
+      typeof args.skill === "string" && args.skill.trim()
+        ? args.skill.trim()
+        : chipFor(part);
+    const failed =
+      part.result !== undefined &&
+      typeof part.result === "object" &&
+      part.result !== null &&
+      "error" in (part.result as object);
+    return {
+      verb: failed ? "Skill failed" : "Skill",
+      chip: skillName.slice(0, 200),
+      detail: failed
+        ? String(
+            (part.result as { error?: unknown }).error ?? "Could not load skill",
+          )
+        : `Loaded ${skillName}`,
+      filePath,
+    };
+  }
   return {
-    verb: meta?.verb ?? part.toolName,
+    verb: meta?.verb ?? humanizeToolName(part.toolName),
     chip: chipFor(part).slice(0, 200),
     filePath,
   };
@@ -180,14 +237,16 @@ export function SessionTimeline() {
   );
   const toolCalls = (
     useAuiState((s) => s.message.parts) as readonly unknown[]
-  ).filter(
-    (part): part is TimelinePart =>
-      typeof part === "object" &&
-      part !== null &&
-      ((part as { type?: string }).type === "reasoning" ||
-        ((part as { type?: string }).type === "tool-call" &&
-          TIMELINE_TOOLS.has((part as { toolName?: string }).toolName ?? ""))),
-  );
+  ).filter((part): part is TimelinePart => {
+    if (typeof part !== "object" || part === null) return false;
+    const typed = part as {
+      type?: string;
+      toolName?: string;
+      status?: { type?: string };
+    };
+    if (typed.type === "reasoning") return true;
+    return isTimelineToolCall(typed);
+  });
 
   // Durable turn duration, derived from the persisted event log: first to
   // last assistant-role event timestamp for this turn (each event carries
@@ -257,4 +316,3 @@ function formatDuration(ms: number): string {
   const hours = Math.floor(minutes / 60);
   return `${Math.round(hours)}h ${minutes % 60}m`;
 }
-

@@ -18,10 +18,13 @@ import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/fo
 import { Image } from "@/components/assistant-ui/elements/image";
 import { AssistantInlineText } from "@/components/json-render/chat-json-render";
 import { proseFromMessageText } from "../../../../lib/json-render/inline-spec";
-import { SessionTimeline, TIMELINE_TOOLS } from "@/components/assistant-ui/elements/session-timeline";
+import {
+  SessionTimeline,
+  isTimelineCoveredPart,
+  isTimelineToolCall,
+} from "@/components/assistant-ui/elements/session-timeline";
 import { SessionTodoList } from "@/components/assistant-ui/elements/todo-list";
 import { TaskGroup, DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
-import { ToolGroup } from "@/components/assistant-ui/elements/tool-group";
 import { AssistantThinking } from "@/components/assistant-ui/elements/assistant-thinking";
 import { MessageSources } from "@/components/assistant-ui/elements/citation";
 import {
@@ -1725,15 +1728,8 @@ const AssistantMessage: FC = () => {
   const groupBy = taskAwareGroupBy;
 
   const messageParts = useAuiState((s) => s.message.parts);
-  const isTimelineCovered = (index: number) => {
-    const part = messageParts[index] as
-      | { toolName?: string; type?: string; status?: { type: string } }
-      | undefined;
-    return (
-      part?.type === "reasoning" ||
-      (part?.status?.type !== "requires-action" && part?.toolName !== "write_file" && (part?.toolName === "todo" || TIMELINE_TOOLS.has(part?.toolName ?? "")))
-    );
-  };
+  const isTimelineCovered = (index: number) =>
+    isTimelineCoveredPart(messageParts[index]);
 
   return (
     <MessagePrimitive.Root className="aui-assistant-message-root">
@@ -1769,52 +1765,12 @@ const AssistantMessage: FC = () => {
                   );
                 if (isDelegationGroup) {
                   // Delegated tasks render as task cards (docs:
-                  // elements/task-card) instead of the tool group.
+                  // elements/task-card) instead of a tool group.
                   if (TaskGroupComponent) return <TaskGroupComponent group={part} />;
                   return null;
                 }
-                const toolParts = groupParts.filter(
-                  (
-                    groupPart,
-                  ): groupPart is Extract<
-                    (typeof groupParts)[number],
-                    { type: "tool-call" }
-                  > => groupPart?.type === "tool-call",
-                );
-                const needsApproval = toolParts.some(
-                  (groupPart) => groupPart.status?.type === "requires-action",
-                );
-                const approved = toolParts.some(
-                  (groupPart) => groupPart.approval?.approved === true,
-                );
-                const denied = toolParts.some(
-                  (groupPart) =>
-                    groupPart.approval?.approved === false ||
-                    groupPart.approval?.resolution === "cancelled" ||
-                    groupPart.approval?.resolution === "expired",
-                );
-                const statusHint = needsApproval
-                  ? "Waiting"
-                  : denied
-                    ? "Cancelled"
-                    : approved
-                      ? "Approved"
-                      : undefined;
-                // A solo tool (common for approvals) should name itself instead
-                // of reading as the generic "1 tool call".
-                const toolName =
-                  toolParts.length === 1 ? toolParts[0]?.toolName : undefined;
-                return (
-                  <ToolGroup
-                    count={part.indices.length}
-                    toolName={toolName}
-                    active={part.status.type === "running"}
-                    defaultOpen={needsApproval}
-                    statusHint={statusHint}
-                  >
-                    {children}
-                  </ToolGroup>
-                );
+                // Approvals and other non-timeline tools render inline.
+                return children;
               }
               case "group-task":
                 return TaskGroupComponent ? (
@@ -1834,7 +1790,7 @@ const AssistantMessage: FC = () => {
                 return null;
               case "tool-call":
                 if (part.toolName === "todo") return null;
-                if (TIMELINE_TOOLS.has(part.toolName) && part.status.type !== "requires-action" && part.toolName !== "write_file") {
+                if (isTimelineToolCall(part)) {
                   // Summarized by the timeline above.
                   return null;
                 }

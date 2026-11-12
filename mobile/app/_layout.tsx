@@ -139,6 +139,10 @@ function AuthenticatedLayout() {
                   options={{ title: "json-render smoke" }}
                 />
                 <Stack.Screen
+                  name="thread-samples"
+                  options={{ title: "Thread samples" }}
+                />
+                <Stack.Screen
                   name="browser"
                   options={{
                     title: "Browser",

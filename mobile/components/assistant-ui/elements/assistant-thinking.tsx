@@ -2,7 +2,7 @@ import { useAuiState } from "@assistant-ui/react-native";
 
 import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
 import { useElapsedLabel } from "@/components/assistant-ui/elements/use-elapsed-label";
-import { TIMELINE_TOOLS } from "@/components/assistant-ui/elements/session-timeline";
+import { isTimelineToolCall } from "@/components/assistant-ui/elements/session-timeline";
 
 const STALL_WARNING_S = 45;
 const STALL_LABEL = "Still working — the model may be slow or unreachable.";
@@ -33,8 +33,7 @@ export function AssistantThinking() {
     if (s.message.status?.type !== "running") return false;
     return s.message.parts.some(
       (part) =>
-        part.type === "reasoning"
-        || (part.type === "tool-call" && TIMELINE_TOOLS.has(part.toolName)),
+        part.type === "reasoning" || isTimelineToolCall(part),
     );
   });
 

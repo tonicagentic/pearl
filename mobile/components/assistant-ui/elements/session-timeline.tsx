@@ -1,7 +1,15 @@
-import { useMemo, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { useAuiState } from "@assistant-ui/react-native";
 
 import { useEveEvents } from "@/src/chat-context";
+import { DELEGATION_TOOLS } from "./task-card.aui";
+import { getToolPresentation } from "./tool-presentation";
 import {
   ToolTimeline,
   type TimelineStat,
@@ -19,6 +27,7 @@ type ToolCallState = {
   readonly args?: unknown;
   readonly result?: unknown;
   readonly toolCallId?: string;
+  readonly status?: { readonly type?: string };
 };
 
 type ReasoningState = {
@@ -28,35 +37,11 @@ type ReasoningState = {
 
 type TimelinePart = ToolCallState | ReasoningState;
 
-// Tools summarized by the timeline (docs: elements/tool-timeline).
-// write_file stays an artifact card on the web, ask_question stays an
-// interactive card, and delegated subagent tasks render as task cards;
-// everything else collapses into verbs, targets, and file stats.
-export const TIMELINE_TOOLS = new Set([
-  "edit_file",
-  "read_file",
-  "web_search",
-  "web_fetch",
-  "browser",
-  "exa_agent_run",
-  "file__save_memory",
-  "file__remove_memory",
-  "load_skill",
-  "get_weather",
-  "get_profile",
-  "bash",
-  "glob",
-  "grep",
-  "task_cancel",
-  "send_notification",
-  "read_attachment",
-]);
-
 const TOOL_META: Record<string, { verb: string }> = {
   edit_file: { verb: "Edited" },
   read_file: { verb: "Read" },
   web_search: { verb: "Searched" },
-  web_fetch: { verb: "Fetched" },
+  web_fetch: { verb: "Opened" },
   browser: { verb: "Browsed" },
   exa_agent_run: { verb: "Researched" },
   file__save_memory: { verb: "Remembered" },
@@ -70,18 +55,76 @@ const TOOL_META: Record<string, { verb: string }> = {
   task_cancel: { verb: "Cancelled" },
   send_notification: { verb: "Notified" },
   read_attachment: { verb: "Read attachment" },
-  coder: { verb: "Delegated to coder" },
   deploy_vercel: { verb: "Deployed" },
   merge_pr: { verb: "Merged" },
   eas_build: { verb: "Started EAS build" },
   eas_submit: { verb: "Submitted to EAS" },
   run_with_env: { verb: "Ran with env" },
   preview_check: { verb: "Checked preview" },
-  deployment_logs: { verb: "Fetched logs" },
+  deployment_logs: { verb: "Opened logs" },
 };
+
+/** Tools that keep their own card instead of a timeline step. */
+export function isStandaloneTool(toolName: string): boolean {
+  return (
+    toolName === "todo" ||
+    toolName === "write_file" ||
+    DELEGATION_TOOLS.has(toolName)
+  );
+}
+
+/**
+ * Whether a message part is summarized by the session timeline (and should
+ * render nothing in the grouped parts body). Reasoning and every tool call
+ * except standalones / parked approvals are covered.
+ */
+export function isTimelineCoveredPart(part: {
+  readonly type?: string;
+  readonly toolName?: string;
+  readonly status?: { readonly type?: string };
+} | null | undefined): boolean {
+  if (!part) return false;
+  if (part.type === "reasoning") return true;
+  if (part.type !== "tool-call") return false;
+  if (part.status?.type === "requires-action") return false;
+  if (!part.toolName) return false;
+  if (part.toolName === "todo") return true;
+  if (isStandaloneTool(part.toolName)) return false;
+  return true;
+}
+
+/** Whether this tool call appears as a timeline step. */
+export function isTimelineToolCall(part: {
+  readonly type?: string;
+  readonly toolName?: string;
+  readonly status?: { readonly type?: string };
+}): boolean {
+  return (
+    part.type === "tool-call" &&
+    !!part.toolName &&
+    !isStandaloneTool(part.toolName) &&
+    part.status?.type !== "requires-action"
+  );
+}
 
 function basename(path: string): string {
   return path.split("/").pop() || path;
+}
+
+/** Hostname (+ useful path) for a page URL; empty when the value is not a URL. */
+function siteChip(raw: string): string {
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.replace(/^www\./, "");
+    const path = url.pathname === "/" ? "" : url.pathname.replace(/\/$/, "");
+    if (!path) return host;
+    // Keep short paths that disambiguate; truncate long ones.
+    const clipped =
+      path.length > 48 ? `${path.slice(0, 45).replace(/\/?$/, "")}…` : path;
+    return `${host}${clipped}`;
+  } catch {
+    return "";
+  }
 }
 
 function chipFor(part: ToolCallState): string {
@@ -94,10 +137,17 @@ function chipFor(part: ToolCallState): string {
   if (typeof args.recipient === "string") return args.recipient;
   if (typeof args.attachmentId === "string") return args.attachmentId;
   if (typeof args.taskId === "string") return args.taskId;
+  if (typeof args.url === "string") {
+    const site = siteChip(args.url);
+    if (site) return site;
+  }
   if (typeof args.message === "string") {
     return args.message.split("\n")[0].slice(0, 200);
   }
-  return part.toolName;
+  if (typeof args.title === "string") return args.title;
+  if (typeof args.name === "string") return args.name;
+  // Prefer a human label over the raw tool id when nothing else is useful.
+  return getToolPresentation(part.toolName).label;
 }
 
 function toStep(part: TimelinePart): TimelineStep {
@@ -139,7 +189,7 @@ function toStep(part: TimelinePart): TimelineStep {
     };
   }
   return {
-    verb: meta?.verb ?? part.toolName,
+    verb: meta?.verb ?? getToolPresentation(part.toolName).label,
     chip: chipFor(part).slice(0, 200),
     filePath,
   };
@@ -176,6 +226,28 @@ function formatDuration(ms: number): string {
   return `${Math.round(hours)}h ${minutes % 60}m`;
 }
 
+/**
+ * Dev/sample override for Worked-for duration. When set, SessionTimeline
+ * reads these instead of the live chat event log so fixtures never persist.
+ */
+export const TimelineDurationEventsContext = createContext<
+  readonly unknown[] | null
+>(null);
+
+export function TimelineDurationEventsProvider({
+  events,
+  children,
+}: {
+  readonly events: readonly unknown[];
+  readonly children: ReactNode;
+}) {
+  return (
+    <TimelineDurationEventsContext.Provider value={events}>
+      {children}
+    </TimelineDurationEventsContext.Provider>
+  );
+}
+
 // A whole working turn summarized as one collapsed line. Rendered beside the
 // message parts; the covered tool parts render null so nothing shows twice.
 export function SessionTimeline() {
@@ -186,19 +258,23 @@ export function SessionTimeline() {
   );
   const toolCalls = (
     useAuiState((s) => s.message.parts) as readonly unknown[]
-  ).filter(
-    (part): part is TimelinePart =>
-      typeof part === "object" &&
-      part !== null &&
-      ((part as { type?: string }).type === "reasoning" ||
-        ((part as { type?: string }).type === "tool-call" &&
-          TIMELINE_TOOLS.has((part as { toolName?: string }).toolName ?? ""))),
-  );
+  ).filter((part): part is TimelinePart => {
+    if (typeof part !== "object" || part === null) return false;
+    const typed = part as {
+      type?: string;
+      toolName?: string;
+      status?: { type?: string };
+    };
+    if (typed.type === "reasoning") return true;
+    return isTimelineToolCall(typed);
+  });
 
   // Durable turn duration, derived from the persisted event log: first to
   // last event timestamp for this turn (each event carries meta.at and
   // data.turnId). Survives reloads — no wall clock at render.
-  const events = useEveEvents();
+  const liveEvents = useEveEvents();
+  const overrideEvents = useContext(TimelineDurationEventsContext);
+  const events = overrideEvents ?? liveEvents;
   const settledDuration = useMemo(() => {
     if (streaming || !turnId) return undefined;
     let start: number | undefined;
