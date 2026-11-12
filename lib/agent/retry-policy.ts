@@ -50,6 +50,12 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     1,
     "External side effect; retries require a delivery status check via the execution ledger, never a blind re-send.",
   ),
+  send_gmail_message: policy(
+    false,
+    [],
+    1,
+    "Sends real email after approval; a retry must status check the execution ledger first — never blind re-send.",
+  ),
   exa_agent_run: policy(
     false,
     [],
@@ -257,6 +263,22 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     ["network", "timeout"],
     2,
     "DB read of the caller's own identity profile, no side effect.",
+  ),
+  // Opt-in HITL question (eve ask_question). Parks; no durable write.
+  ask_question: policy(
+    true,
+    ["timeout"],
+    2,
+    "Parks for a user answer with no side effect; an identical retry reopens the same question.",
+  ),
+  // Dynamic concept-schema tool map (search_schemas / get_schema / propose_schema).
+  // File-level policy: reads are idempotent; propose_schema is approval-gated
+  // and must status-check before any blind rewrite.
+  schemas: policy(
+    false,
+    [],
+    1,
+    "propose_schema writes account definitions after approval; a retry must re-read the current schema first — never blind-overwrite again.",
   ),
   // Declared subagents (agent/subagents/<name>/): the delegation call itself
   // is a background task spawn.

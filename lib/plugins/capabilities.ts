@@ -1,10 +1,15 @@
 /**
- * User-facing capability copy for marketplace connectable plugins.
- * Aligned with agent connection allowlists; not a security boundary.
+ * User-facing capability copy for marketplace plugins.
+ * Aligned with agent connection allowlists and built-in tools; not a security boundary.
  */
 
 import type { ConnectionId } from "../connections/catalog";
-import type { AccountPluginId, TonicPluginId } from "./catalog";
+import type {
+  AccountPluginId,
+  BuiltinPluginId,
+  MarketplacePluginId,
+  TonicPluginId,
+} from "./catalog";
 
 export type PluginCapabilities = {
   readonly canDo: readonly string[];
@@ -13,16 +18,17 @@ export type PluginCapabilities = {
 
 type MarketplaceConnectionId = AccountPluginId | TonicPluginId;
 
-const CAPABILITIES: Record<MarketplaceConnectionId, PluginCapabilities> = {
+const CONNECTION_CAPABILITIES: Record<
+  MarketplaceConnectionId,
+  PluginCapabilities
+> = {
   gmail: {
     canDo: [
       "Search and read threads and messages in your Gmail",
       "List labels and drafts",
       "Create email drafts in your account",
     ],
-    needsApproval: [
-      "Send mail (always asks before sending)",
-    ],
+    needsApproval: ["Send mail (always asks before sending)"],
   },
   drive: {
     canDo: [
@@ -69,12 +75,40 @@ const CAPABILITIES: Record<MarketplaceConnectionId, PluginCapabilities> = {
   },
 };
 
+const BUILTIN_CAPABILITIES: Partial<
+  Record<BuiltinPluginId, PluginCapabilities>
+> = {
+  "schema-designer": {
+    canDo: [
+      "Search your saved concept schemas when a term must be unambiguous",
+      "Load a full definition (statement, includes, excludes, distinctions)",
+      "Interview you one question at a time to draft a precise schema",
+    ],
+    needsApproval: [
+      "Create, update, or retire a concept schema (always asks before saving)",
+    ],
+  },
+};
+
 /** Capabilities for a marketplace plugin / connection id. */
 export function capabilitiesForConnection(
   id: ConnectionId | MarketplaceConnectionId,
 ): PluginCapabilities | null {
-  if (id in CAPABILITIES) {
-    return CAPABILITIES[id as MarketplaceConnectionId];
+  if (id in CONNECTION_CAPABILITIES) {
+    return CONNECTION_CAPABILITIES[id as MarketplaceConnectionId];
+  }
+  return null;
+}
+
+/** Capabilities for any catalog plugin id (connectable or built-in). */
+export function capabilitiesForPlugin(
+  id: MarketplacePluginId | string,
+): PluginCapabilities | null {
+  if (id in CONNECTION_CAPABILITIES) {
+    return CONNECTION_CAPABILITIES[id as MarketplaceConnectionId];
+  }
+  if (id in BUILTIN_CAPABILITIES) {
+    return BUILTIN_CAPABILITIES[id as BuiltinPluginId] ?? null;
   }
   return null;
 }

@@ -12,7 +12,11 @@ import { Stack } from "expo-router";
 
 import { PluginLogo } from "@/components/plugin-logo";
 import { SheetScaffold } from "@/components/sheet-scaffold";
-import { capabilitiesForConnection } from "../../lib/plugins/capabilities";
+import {
+  capabilitiesForConnection,
+  capabilitiesForPlugin,
+  type PluginCapabilities,
+} from "../../lib/plugins/capabilities";
 import {
   isConnectablePlugin,
   type ResolvedPlugin,
@@ -55,6 +59,9 @@ export function PluginDetailScreen({
 }: {
   readonly plugin: ResolvedPlugin;
 }) {
+  const builtinCapabilities =
+    plugin.kind === "builtin" ? capabilitiesForPlugin(plugin.id) : null;
+
   return (
     <>
       <Stack.Screen options={{ title: plugin.label }} />
@@ -81,10 +88,18 @@ export function PluginDetailScreen({
             pluginLabel={plugin.label}
           />
         ) : plugin.kind === "builtin" ? (
-          <StatusCard
-            title="Enabled"
-            body="This capability ships with Pearl and does not need a separate account connection."
-          />
+          <>
+            <StatusCard
+              title="Enabled"
+              body="This capability ships with Pearl and does not need a separate account connection."
+            />
+            {builtinCapabilities ? (
+              <CapabilitiesCard
+                capabilities={builtinCapabilities}
+                heading="What Pearl can do"
+              />
+            ) : null}
+          </>
         ) : (
           <StatusCard
             title="Coming soon"
@@ -93,6 +108,29 @@ export function PluginDetailScreen({
         )}
       </SheetScaffold>
     </>
+  );
+}
+
+function CapabilitiesCard({
+  capabilities,
+  heading,
+}: {
+  readonly capabilities: PluginCapabilities;
+  readonly heading: string;
+}) {
+  return (
+    <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
+      <Text className="text-[17px] font-medium text-foreground">{heading}</Text>
+      <BulletList items={capabilities.canDo} />
+      {capabilities.needsApproval.length > 0 ? (
+        <View className="gap-2 pt-1">
+          <Text className="text-[15px] font-medium text-foreground">
+            Needs your approval
+          </Text>
+          <BulletList items={capabilities.needsApproval} />
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -343,22 +381,14 @@ function ConnectionPanel({
       </View>
 
       {capabilities ? (
-        <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-          <Text className="text-[17px] font-medium text-foreground">
-            {connected
+        <CapabilitiesCard
+          capabilities={capabilities}
+          heading={
+            connected
               ? "What Pearl can do"
-              : "What Pearl can do after you connect"}
-          </Text>
-          <BulletList items={capabilities.canDo} />
-          {capabilities.needsApproval.length > 0 ? (
-            <View className="gap-2 pt-1">
-              <Text className="text-[15px] font-medium text-foreground">
-                Needs your approval
-              </Text>
-              <BulletList items={capabilities.needsApproval} />
-            </View>
-          ) : null}
-        </View>
+              : "What Pearl can do after you connect"
+          }
+        />
       ) : null}
     </View>
   );

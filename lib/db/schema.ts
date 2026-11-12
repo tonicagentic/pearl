@@ -510,3 +510,117 @@ export const pushDelivery = pgTable(
 );
 
 export type PushDelivery = typeof pushDelivery.$inferSelect;
+
+/** Nearby term and how this concept differs from it. */
+export type ConceptSchemaDistinction = {
+  readonly term: string;
+  readonly difference: string;
+};
+
+export type ConceptSchemaStatus = "active" | "retired";
+
+/**
+ * Account-scoped concept definition. One current row per user + slug.
+ * Bodies are loaded on demand via schema tools — never injected every turn.
+ */
+export const conceptSchema = pgTable(
+  "concept_schema",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    statement: text("statement").notNull(),
+    includes: jsonb("includes")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    excludes: jsonb("excludes")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    distinctions: jsonb("distinctions")
+      .$type<ConceptSchemaDistinction[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    examples: jsonb("examples")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    nonExamples: jsonb("non_examples")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    status: text("status", { enum: ["active", "retired"] })
+      .notNull()
+      .default("active"),
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_concept_schema_user").on(table.userId),
+    uniqueIndex("idx_concept_schema_user_slug").on(table.userId, table.slug),
+    index("idx_concept_schema_user_status").on(table.userId, table.status),
+  ],
+);
+
+export type ConceptSchema = typeof conceptSchema.$inferSelect;
+
+/**
+ * Snapshot of a concept schema after an approved create or update.
+ * Retire records a revision with the last active body at that version.
+ */
+export const conceptSchemaRevision = pgTable(
+  "concept_schema_revision",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    schemaId: text("schema_id")
+      .notNull()
+      .references(() => conceptSchema.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    statement: text("statement").notNull(),
+    includes: jsonb("includes")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    excludes: jsonb("excludes")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    distinctions: jsonb("distinctions")
+      .$type<ConceptSchemaDistinction[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    examples: jsonb("examples")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    nonExamples: jsonb("non_examples")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    status: text("status", { enum: ["active", "retired"] }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_concept_schema_revision_schema").on(table.schemaId),
+    uniqueIndex("idx_concept_schema_revision_schema_version").on(
+      table.schemaId,
+      table.version,
+    ),
+  ],
+);
+
+export type ConceptSchemaRevision = typeof conceptSchemaRevision.$inferSelect;

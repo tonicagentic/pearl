@@ -25,6 +25,11 @@
     "../lib/plugins/catalog.ts",
     "../lib/plugins/capabilities.ts",
     "../lib/connections/catalog.ts"
+  ],
+  "exclude": [
+    "**/__tests__/**",
+    "jest.setup.ts",
+    "node_modules"
   ]
 }
 

@@ -240,15 +240,38 @@ export function hasPendingAction(data: ConversationMessages): boolean {
   return hasOpenApproval(message) || hasOpenAuthorization(message);
 }
 
+export type PendingInteractionKind = "approval" | "question";
+
 export type PendingApproval = {
   readonly requestId: string;
   readonly toolName: string;
+  readonly kind: PendingInteractionKind;
+  /** How the composer should present the request. */
+  readonly display: "decision" | "select" | "text";
   readonly prompt: string;
   readonly detail?: string;
   readonly options: readonly { readonly id: string; readonly label: string }[];
+  /** True when the user may type a free-form answer (questions). */
+  readonly allowFreeform: boolean;
 };
 
-/** Open tool-approval parks on the latest assistant turn, for the composer card. */
+function pendingDisplay(
+  request: {
+    readonly kind: string;
+    readonly display?: string;
+    readonly options?: readonly unknown[];
+    readonly allowFreeform?: boolean;
+  },
+): PendingApproval["display"] {
+  if (request.display === "confirmation") return "decision";
+  if (request.display === "select") return "select";
+  if (request.display === "text") return "text";
+  if (request.kind === "approval") return "decision";
+  if (request.options && request.options.length > 0) return "select";
+  return "text";
+}
+
+/** Open approval / question parks on the latest assistant turn, for the composer card. */
 export function getPendingApprovals(data: ConversationMessages): readonly PendingApproval[] {
   const message = data.messages.at(-1);
   if (message?.role !== "assistant") return [];
@@ -265,13 +288,28 @@ export function getPendingApprovals(data: ConversationMessages): readonly Pendin
           : null;
     if (!interaction) return [];
     const request = interaction.request;
-    const options = (request.options?.length
-      ? request.options
-      : [
-          { id: "approve", label: "Approve" },
-          { id: "cancel", label: "Cancel" },
-        ]
+    const kind: PendingInteractionKind =
+      request.kind === "question" ? "question" : "approval";
+    const display = pendingDisplay(request);
+    const allowFreeform =
+      kind === "question" &&
+      (request.allowFreeform === true ||
+        display === "text" ||
+        !request.options?.length);
+
+    // Approvals without declared options get Approve/Cancel. Questions keep
+    // only their real options (or none, for free-text).
+    const options = (
+      request.options?.length
+        ? request.options
+        : kind === "approval"
+          ? [
+              { id: "approve", label: "Approve" },
+              { id: "cancel", label: "Cancel" },
+            ]
+          : []
     ).map((option) => ({ id: option.id, label: option.label }));
+
     const toolInput =
       part.type === "tool" && part.state !== "streaming" ? part.input : undefined;
     const interactionInput =
@@ -286,20 +324,29 @@ export function getPendingApprovals(data: ConversationMessages): readonly Pendin
         ? input.summary
         : typeof input?.filePath === "string"
           ? input.filePath
-          : undefined;
+          : typeof input?.statement === "string"
+            ? input.statement
+            : undefined;
     const toolName =
       part.type === "tool"
         ? part.name
         : part.type === "interaction"
           ? part.call?.name ?? request.kind
           : request.kind;
+    const defaultPrompt =
+      kind === "question"
+        ? "Answer the question to continue."
+        : `Approve tool call: ${toolName}`;
     return [
       {
         requestId: interaction.interactionId,
         toolName,
-        prompt: request.prompt ?? `Approve tool call: ${toolName}`,
+        kind,
+        display,
+        prompt: request.prompt ?? defaultPrompt,
         ...(summary ? { detail: summary } : {}),
         options,
+        allowFreeform,
       },
     ];
   });

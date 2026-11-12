@@ -22,6 +22,7 @@ export type BuiltinPluginId =
   | "researcher"
   | "analyst"
   | "designer"
+  | "schema-designer"
   | "plan"
   | "tax";
 
@@ -181,6 +182,14 @@ export const BUILTIN_PLUGINS: readonly BuiltinPluginEntry[] = [
     detail: "Layouts, visuals, and design critique",
     description:
       "Support for layout ideas, visual direction, and design critique. Pearl can help refine UI copy, structure screens, and generate images when that capability is available.",
+  },
+  {
+    id: "schema-designer",
+    kind: "builtin",
+    label: "Schema Designer",
+    detail: "Precise concept definitions for unambiguous language",
+    description:
+      "Save concept schemas on your account when a term must be unambiguous — software meaning, claims, policies, distinctions. Pearl looks them up when precision matters, and designs new ones through a short interview. Saving or changing a schema always asks for your approval first.",
   },
   {
     id: "plan",

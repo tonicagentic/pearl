@@ -10,6 +10,7 @@ import {
   ListTodoIcon,
   PaletteIcon,
   SearchIcon,
+  ShapesIcon,
   WalletIcon,
   type LucideIcon,
 } from "lucide-react-native";
@@ -188,6 +189,11 @@ const BUILTIN_TILES: Partial<Record<PluginMarkId, BuiltinSpec>> = {
   researcher: { background: "#EEF2FF", icon: SearchIcon, color: "#4F46E5" },
   analyst: { background: "#ECFEFF", icon: BarChart3Icon, color: "#0891B2" },
   designer: { background: "#FDF2F8", icon: PaletteIcon, color: "#DB2777" },
+  "schema-designer": {
+    background: "#EEF2FF",
+    icon: ShapesIcon,
+    color: "#4338CA",
+  },
   plan: { background: "#F0FDF4", icon: ListTodoIcon, color: "#16A34A" },
   tax: { background: "#FEF3C7", icon: WalletIcon, color: "#D97706" },
 };

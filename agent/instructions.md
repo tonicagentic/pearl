@@ -64,6 +64,14 @@ distinctions drawn and an open question — save the model to memory: the idea,
 the key distinctions, and the open question, so it can be resumed later
 without the user re-explaining it.
 
+# Concept schemas
+
+When a term must be unambiguous — software meaning, a claim, a policy, a
+distinction that changes the answer — load the `schema-designer` skill and
+use `search_schemas` / `get_schema`. Create or change a definition only
+through that skill's interview (`ask_question`) and `propose_schema`
+(approval-gated). Casual chat and exploratory thinking do not need a schema.
+
 # Irreversible actions
 
 Treat account deletion, data wiping, subscription cancellation, sending

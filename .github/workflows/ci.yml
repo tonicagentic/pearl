@@ -24,6 +24,11 @@ jobs:
           # Ledger tests need a real Postgres schema. When this secret is unset
           # they skip; set secrets.DATABASE_URL to a migrated Neon URL to run them.
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Mobile HITL interaction tests
+        working-directory: mobile
+        run: |
+          npm ci
+          npm test
 
   eval-smoke:
     # Tier 2 smoke subset (tagged smoke): real agent runs on the dev server.

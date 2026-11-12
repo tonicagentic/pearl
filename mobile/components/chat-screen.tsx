@@ -366,15 +366,18 @@ export function ChatScreen({
         await store.cancel();
       },
       onRespondToToolApproval: async (response: { approvalId: string; optionId?: string; approved?: boolean; text?: string }) => {
-        const optionId =
-          response.optionId ??
-          (response.approved ? "approve" : "cancel");
+        const hasDecision =
+          response.optionId !== undefined || response.approved !== undefined;
+        const optionId = hasDecision
+          ? (response.optionId ??
+            (response.approved ? "approve" : "cancel"))
+          : undefined;
         await store.send({
           answers: [
             {
               interactionId: response.approvalId,
-              optionId,
-              ...(response.text ? { text: response.text } : {}),
+              ...(optionId !== undefined ? { optionId } : {}),
+              ...(response.text !== undefined ? { text: response.text } : {}),
             },
           ],
           clientContext: buildTurnClientContext(activeProjectId),
@@ -490,17 +493,27 @@ export function ChatScreen({
               waitingAction={
                 pendingApprovals[0]
                   ? {
-                      kind: "approval" as const,
-                      title: "The agent is paused until you respond.",
+                      kind: pendingApprovals[0].kind,
+                      title:
+                        pendingApprovals[0].kind === "question"
+                          ? "The agent is paused until you answer."
+                          : "The agent is paused until you respond.",
                       prompt: pendingApprovals[0].prompt,
                       detail: pendingApprovals[0].detail,
                       options: pendingApprovals[0].options,
-                      onRespond: async (optionId) => {
+                      allowFreeform: pendingApprovals[0].allowFreeform,
+                      onRespond: async (response) => {
+                        const pending = pendingApprovals[0]!;
                         await store.send({
                           answers: [
                             {
-                              interactionId: pendingApprovals[0]!.requestId,
-                              optionId,
+                              interactionId: pending.requestId,
+                              ...(response.optionId
+                                ? { optionId: response.optionId }
+                                : {}),
+                              ...(response.text !== undefined
+                                ? { text: response.text }
+                                : {}),
                             },
                           ],
                           clientContext: buildTurnClientContext(activeProjectId),

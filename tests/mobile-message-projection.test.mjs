@@ -148,13 +148,114 @@ test("completed turns with an open approval stay action-required", () => {
   assert.deepEqual(getPendingApprovals(data), [{
     requestId: "approval_park",
     toolName: "confirm_step",
+    kind: "approval",
+    display: "decision",
     prompt: "Confirm?",
     detail: "ship the release",
     options: [
       { id: "approve", label: "Allow" },
       { id: "cancel", label: "Deny" },
     ],
+    allowFreeform: false,
   }]);
+});
+
+test("free-text schema question has no synthetic Approve/Cancel", () => {
+  const data = {
+    messages: [
+      assistant(
+        [
+          {
+            type: "interaction",
+            interactionId: "q1",
+            turnId: "turn",
+            stepIndex: 0,
+            status: "open",
+            request: {
+              kind: "question",
+              display: "text",
+              prompt: "What should count as inside this concept?",
+              allowFreeform: true,
+            },
+            call: { name: "ask_question" },
+          },
+        ],
+        "complete",
+      ),
+    ],
+  };
+  const pending = getPendingApprovals(data);
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].kind, "question");
+  assert.equal(pending[0].display, "text");
+  assert.equal(pending[0].allowFreeform, true);
+  assert.deepEqual(pending[0].options, []);
+});
+
+test("choice schema question keeps real option ids", () => {
+  const data = {
+    messages: [
+      assistant(
+        [
+          {
+            type: "interaction",
+            interactionId: "q2",
+            turnId: "turn",
+            stepIndex: 0,
+            status: "open",
+            request: {
+              kind: "question",
+              display: "select",
+              prompt: "Does a handshake count?",
+              options: [
+                { id: "yes", label: "Yes, it counts" },
+                { id: "no", label: "No, spoken only" },
+              ],
+            },
+            call: { name: "ask_question" },
+          },
+        ],
+        "complete",
+      ),
+    ],
+  };
+  const pending = getPendingApprovals(data);
+  assert.deepEqual(
+    pending[0].options.map((option) => option.id),
+    ["yes", "no"],
+  );
+  assert.equal(pending[0].kind, "question");
+});
+
+test("propose_schema approval surfaces statement detail and Allow/Deny", () => {
+  const data = {
+    messages: [
+      assistant(
+        [
+          openApproval({
+            name: "propose_schema",
+            interactionId: "schema_save",
+            prompt:
+              "Save schema: Commitment (commitment)\nA promise the speaker intends to keep.",
+            input: {
+              action: "create",
+              slug: "commitment",
+              statement: "A promise the speaker intends to keep.",
+            },
+          }),
+        ],
+        "complete",
+      ),
+    ],
+  };
+  const pending = getPendingApprovals(data);
+  assert.equal(pending[0].kind, "approval");
+  assert.equal(pending[0].toolName, "propose_schema");
+  assert.equal(pending[0].detail, "A promise the speaker intends to keep.");
+  assert.deepEqual(
+    pending[0].options.map((option) => option.id),
+    ["approve", "cancel"],
+  );
 });
 
 test("stale approvals on failed turns cannot block the next send", () => {

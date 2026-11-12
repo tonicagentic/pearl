@@ -4,7 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { PluginLogo } from "@/components/connections/plugin-logo";
 import type { ConnectionId, ConnectionStatus } from "@/lib/connections/catalog";
-import { capabilitiesForConnection } from "@/lib/plugins/capabilities";
+import {
+  capabilitiesForConnection,
+  capabilitiesForPlugin,
+  type PluginCapabilities,
+} from "@/lib/plugins/capabilities";
 import {
   isConnectablePlugin,
   type ResolvedPlugin,
@@ -23,6 +27,9 @@ export function PluginDetailClient({
 }: {
   readonly plugin: ResolvedPlugin;
 }) {
+  const builtinCapabilities =
+    plugin.kind === "builtin" ? capabilitiesForPlugin(plugin.id) : null;
+
   return (
     <div className="flex flex-col gap-6">
       <p className="text-sm">
@@ -52,16 +59,55 @@ export function PluginDetailClient({
           pluginLabel={plugin.label}
         />
       ) : plugin.kind === "builtin" ? (
-        <StatusCard
-          title="Enabled"
-          body="This capability ships with Pearl and does not need a separate account connection."
-        />
+        <>
+          <StatusCard
+            title="Enabled"
+            body="This capability ships with Pearl and does not need a separate account connection."
+          />
+          {builtinCapabilities ? (
+            <CapabilitiesCard
+              capabilities={builtinCapabilities}
+              heading="What Pearl can do"
+            />
+          ) : null}
+        </>
       ) : (
         <StatusCard
           title="Coming soon"
           body="This plugin is listed for the catalog preview. Connect will appear here when the connector ships."
         />
       )}
+    </div>
+  );
+}
+
+function CapabilitiesCard({
+  capabilities,
+  heading,
+}: {
+  readonly capabilities: PluginCapabilities;
+  readonly heading: string;
+}) {
+  return (
+    <div className="rounded-2xl border bg-card p-4">
+      <h2 className="font-medium">{heading}</h2>
+      <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
+        {capabilities.canDo.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+      {capabilities.needsApproval.length > 0 ? (
+        <>
+          <h3 className="mt-4 text-sm font-medium text-foreground">
+            Needs your approval
+          </h3>
+          <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
+            {capabilities.needsApproval.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -293,30 +339,14 @@ function ConnectionPanel({
       </div>
 
       {capabilities ? (
-        <div className="rounded-2xl border bg-card p-4">
-          <h2 className="font-medium">
-            {connected
+        <CapabilitiesCard
+          capabilities={capabilities}
+          heading={
+            connected
               ? "What Pearl can do"
-              : "What Pearl can do after you connect"}
-          </h2>
-          <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
-            {capabilities.canDo.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-          {capabilities.needsApproval.length > 0 ? (
-            <>
-              <h3 className="mt-4 text-sm font-medium text-foreground">
-                Needs your approval
-              </h3>
-              <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
-                {capabilities.needsApproval.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-        </div>
+              : "What Pearl can do after you connect"
+          }
+        />
       ) : null}
     </div>
   );
