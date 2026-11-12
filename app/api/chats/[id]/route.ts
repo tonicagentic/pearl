@@ -115,7 +115,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { readonly params: Promise<{ readonly id: string }> },
 ) {
   const setupStatus = await getSetupStatus();
@@ -137,7 +137,9 @@ export async function DELETE(
     return NextResponse.json({ ok: false }, { status: 404 });
   }
 
-  await deleteChatForUser(id, viewer.id);
+  await deleteChatForUser(id, viewer.id, {
+    requestHeaders: request.headers,
+  });
 
   return NextResponse.json({ ok: true });
 }

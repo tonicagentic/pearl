@@ -47,6 +47,17 @@ export function createLocalChat(pendingUserMessage?: string) {
 }
 
 export function deleteLocalChat(chatId: string) {
+  const existing = readState().chats.find((chat) => chat.id === chatId);
+  const sessionId = existing?.session?.sessionId;
+  if (sessionId && typeof fetch === "function") {
+    // Best-effort same-origin end; never blocks local delete.
+    void fetch(`/eve/v1/session/${encodeURIComponent(sessionId)}/end`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason: "chat_deleted" }),
+    }).catch(() => {});
+  }
   updateState((chats) => chats.filter((chat) => chat.id !== chatId));
 }
 

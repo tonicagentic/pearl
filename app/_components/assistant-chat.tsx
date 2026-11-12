@@ -5,6 +5,10 @@ import {
   useEveError,
   useEveSession,
 } from "@assistant-ui/eve";
+import {
+  isEveSessionInactive,
+  mergeEventsForSnapshot,
+} from "@/lib/chat/eve-session-recovery";
 import { cn } from "@/lib/utils";
 import {
   CompositeAttachmentAdapter,
@@ -298,14 +302,69 @@ type AssistantChatSurfaceProps = {
   readonly onActiveChatUpdated?: (chat: ActiveChat) => void;
 };
 
-export function AssistantChatSurface({
+/**
+ * Outer shell remounts the runtime after a dead-session recovery so Pearl UI
+ * history (initialEvents) stays visible while eve starts a fresh session.
+ */
+export function AssistantChatSurface(props: AssistantChatSurfaceProps) {
+  const [sessionEpoch, setSessionEpoch] = useState(0);
+  const [freshSession, setFreshSession] = useState(false);
+  const [retryMessage, setRetryMessage] = useState<string | null>(null);
+  const archivedEventsRef = useRef<readonly SessionStreamEvent[]>(
+    props.activeChat?.events ?? EMPTY_EVENTS,
+  );
+  const recoveryAttemptedRef = useRef(false);
+
+  useEffect(() => {
+    archivedEventsRef.current = props.activeChat?.events ?? EMPTY_EVENTS;
+    recoveryAttemptedRef.current = false;
+    setFreshSession(false);
+    setRetryMessage(null);
+    setSessionEpoch(0);
+  }, [props.chatId, props.activeChat?.id]);
+
+  return (
+    <AssistantChatSurfaceInner
+      key={`${props.chatId ?? "new"}:${sessionEpoch}`}
+      {...props}
+      freshSession={freshSession}
+      retryMessage={retryMessage}
+      seedEvents={archivedEventsRef.current}
+      onRetryConsumed={() => setRetryMessage(null)}
+      onDeadSession={(message, events) => {
+        if (recoveryAttemptedRef.current) return;
+        recoveryAttemptedRef.current = true;
+        archivedEventsRef.current = events;
+        setFreshSession(true);
+        setRetryMessage(message);
+        setSessionEpoch((epoch) => epoch + 1);
+      }}
+    />
+  );
+}
+
+function AssistantChatSurfaceInner({
   chatId,
   activeChat,
   pendingUserMessage = null,
   onChatCreated,
   onPendingUserMessageSettled,
   onActiveChatUpdated,
-}: AssistantChatSurfaceProps) {
+  freshSession,
+  retryMessage,
+  seedEvents,
+  onRetryConsumed,
+  onDeadSession,
+}: AssistantChatSurfaceProps & {
+  readonly freshSession: boolean;
+  readonly retryMessage: string | null;
+  readonly seedEvents: readonly SessionStreamEvent[];
+  readonly onRetryConsumed: () => void;
+  readonly onDeadSession: (
+    message: string,
+    events: readonly SessionStreamEvent[],
+  ) => void;
+}) {
   const { requestSignIn, setActiveChatId, setupStatus, touchChat, viewer } =
     useChatShell();
   const storageMode = setupStatus.storageMode;
@@ -315,8 +374,14 @@ export function AssistantChatSurface({
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const activeChatIdRef = useRef<string | null>(chatId);
   const projectIdRef = useRef<string | null>(activeChat?.projectId ?? null);
-  const eventIndexRef = useRef(activeChat?.events.length ?? 0);
-  const savedEventCountRef = useRef(activeChat?.events.length ?? 0);
+  const eventIndexRef = useRef(
+    Math.max(seedEvents.length, activeChat?.events.length ?? 0),
+  );
+  const savedEventCountRef = useRef(
+    Math.max(seedEvents.length, activeChat?.events.length ?? 0),
+  );
+  const archivedEventsRef = useRef<readonly SessionStreamEvent[]>(seedEvents);
+  const lastOutgoingMessageRef = useRef<string | null>(null);
   const currentTitleRef = useRef(activeChat?.title ?? "New chat");
   const eventBufferRef = useRef<
     { event: SessionStreamEvent; eventIndex: number }[]
@@ -418,13 +483,20 @@ export function AssistantChatSurface({
 
       void (async () => {
         try {
-          const events = snapshot.events;
+          const events = mergeEventsForSnapshot(
+            archivedEventsRef.current,
+            snapshot.events,
+          );
           const session = snapshot.session;
 
           // eve fires onFinish even when a mount/resume found nothing new.
           // Only treat the snapshot as an update when the event stream
           // actually changed, so idle opens do not reorder the sidebar.
-          if (events.length === savedEventCountRef.current) {
+          // Skip empty post-newSession finishes that would truncate history.
+          if (
+            snapshot.events.length === 0 ||
+            events.length === savedEventCountRef.current
+          ) {
             onPendingUserMessageSettled?.();
             return;
           }
@@ -434,6 +506,7 @@ export function AssistantChatSurface({
             events,
             session,
           });
+          archivedEventsRef.current = events;
           eventIndexRef.current = events.length;
           savedEventCountRef.current = events.length;
           touchChat({
@@ -516,6 +589,7 @@ export function AssistantChatSurface({
 
       if (messageText) {
         currentTitleRef.current = createFallbackTitle(messageText);
+        lastOutgoingMessageRef.current = messageText;
       }
 
       // Large pastes travel attachment-style: limits, title, and the pending
@@ -549,9 +623,11 @@ export function AssistantChatSurface({
         if (selectedVector && selectedVector.key !== DEFAULT_VECTOR_MODEL_KEY) {
           clientContext.eveVectorModelSelection = selectedVector.key;
         }
+        const expanded = expandHeldPastes(input.message).text;
+        lastOutgoingMessageRef.current = expanded;
         return {
           ...input,
-          message: expandHeldPastes(input.message).text,
+          message: expanded,
           clientContext,
         } as Parameters<PrepareSend>[0];
       }
@@ -583,15 +659,26 @@ export function AssistantChatSurface({
         new PdfAttachmentAdapter(),
       ]),
     },
-    resume: Boolean(activeChat?.session),
-    initialEvents: activeChat?.events ?? EMPTY_EVENTS,
-    initialSession: activeChat?.session,
+    resume: freshSession ? false : Boolean(activeChat?.session),
+    initialEvents:
+      seedEvents.length > 0 ? seedEvents : (activeChat?.events ?? EMPTY_EVENTS),
+    initialSession: freshSession ? undefined : activeChat?.session,
     onEvent: persistStreamEvent,
     onFinish: persistSnapshot,
     // Persist the session cursor the moment eve returns it — waiting for the
     // settle snapshot leaves the chat row unlinked for the whole first turn,
     // which breaks features keyed on the eve session id (agent files).
     onSessionChange: persistSessionChange,
+    onError: (error: Error) => {
+      if (!isEveSessionInactive(error)) return;
+      const message = lastOutgoingMessageRef.current?.trim();
+      if (!message) return;
+      const events = mergeEventsForSnapshot(
+        archivedEventsRef.current,
+        activeChat?.events ?? EMPTY_EVENTS,
+      );
+      onDeadSession(message, events);
+    },
     prepareSend,
     isDisabled,
   };
@@ -618,6 +705,16 @@ export function AssistantChatSurface({
     pendingUserMessage,
     thread,
   ]);
+
+  // Seamless dead-session recovery: remounted runtime retries the same message.
+  useEffect(() => {
+    if (isDisabled || isRunning || !retryMessage) {
+      return;
+    }
+    const message = retryMessage;
+    onRetryConsumed();
+    thread.append(message);
+  }, [isDisabled, isRunning, onRetryConsumed, retryMessage, thread]);
 
   const toastError =
     clientError !== null && dismissedError !== clientError ? clientError : null;
@@ -909,6 +1006,11 @@ function EveErrorToast() {
   useEffect(() => {
     setDismissed(null);
   }, [eveError]);
+
+  // Dead-session recovery remounts silently — don't flash the inactive error.
+  if (isEveSessionInactive(eveError)) {
+    return null;
+  }
 
   const message = eveError?.message ?? null;
 

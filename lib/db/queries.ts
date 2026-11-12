@@ -555,7 +555,29 @@ export async function saveChatSnapshot({
     .where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
 }
 
-export async function deleteChatForUser(chatId: string, userId: string) {
+export async function deleteChatForUser(
+  chatId: string,
+  userId: string,
+  options?: {
+    readonly requestHeaders?: Headers | HeadersInit;
+  },
+) {
+  const [row] = await db
+    .select({ eveSession: chat.eveSession })
+    .from(chat)
+    .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
+    .limit(1);
+
+  const sessionId = row?.eveSession?.sessionId;
+  if (sessionId) {
+    const { bestEffortEndEveSession } = await import("@/lib/eve/end-session");
+    await bestEffortEndEveSession({
+      sessionId,
+      requestHeaders: options?.requestHeaders,
+      reason: "chat_deleted",
+    });
+  }
+
   await db.delete(chat).where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
 }
 

@@ -44,6 +44,7 @@ import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
 import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft, type LocalSend } from "@/src/send-feedback";
 import { useChats } from "@/src/chat-context";
 import { toThreadMessages } from "@/src/eve-transport";
+import { isEveSessionInactive } from "../../lib/chat/eve-session-recovery";
 
 /**
  * Nested chat thread (route `/chat`): assistant-ui Thread over the eve session.
@@ -82,6 +83,7 @@ export function ChatScreen({
     pendingMessage,
     deleteChat,
     wasSendPrepared,
+    recoverDeadSession,
   } = useChats();
   const { setChatId, tabs } = useWorkspace();
   const [mainTab, setMainTab] = useState<MainTab>("chat");
@@ -252,13 +254,21 @@ export function ChatScreen({
         setLocalSends((current) => new Map(current).set(store, preview));
         // Light tick as the bubble appears; skip validation failures above.
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        const sendPayload = {
+          message: outgoing,
+          clientContext: buildTurnClientContext(projectIdForTurn),
+        };
         try {
           // Mode, project, and model ride the turn as ephemeral clientContext.
           // send() resolves with a Delivery once the server accepts the turn.
-          const delivery = await store.send({
-            message: outgoing,
-            clientContext: buildTurnClientContext(projectIdForTurn),
-          });
+          let delivery = await store.send(sendPayload);
+          // Dead eve session: start a fresh session on the same chat and retry once.
+          if (
+            isEveSessionInactive(store.snapshot.error) &&
+            recoverDeadSession(store)
+          ) {
+            delivery = await store.send(sendPayload);
+          }
           // Eve reports prepareSend failures through error/onError, not by
           // rejecting send(). Nothing went to Eve if the durable mark failed.
           if (shouldRestoreUnsentDraft(store.snapshot.error, wasSendPrepared(store))) {
@@ -290,6 +300,38 @@ export function ChatScreen({
             });
           }
         } catch (cause) {
+          if (
+            (isEveSessionInactive(cause) ||
+              isEveSessionInactive(store.snapshot.error)) &&
+            recoverDeadSession(store)
+          ) {
+            try {
+              const delivery = await store.send(sendPayload);
+              if (shouldRestoreUnsentDraft(store.snapshot.error, wasSendPrepared(store))) {
+                throw new Error("Pending message was not saved.");
+              }
+              const accepted =
+                Boolean(delivery?.deliveryId) ||
+                hasConfirmedSend(store.snapshot.events, preview);
+              setLocalSends((current) => {
+                if (current.get(store)?.preview !== preview.preview) return current;
+                const next = new Map(current);
+                if (accepted) next.delete(store);
+                else next.set(store, { ...preview, phase: "uncertain" });
+                return next;
+              });
+              if (accepted) {
+                void import("@/src/pending-attachments").then(
+                  ({ clearPendingAttachments, chatAttachmentKey }) => {
+                    clearPendingAttachments(chatAttachmentKey(activeChatId));
+                  },
+                );
+                return;
+              }
+            } catch {
+              // Fall through to the normal uncertain-delivery path.
+            }
+          }
           if (!wasSendPrepared(store)) {
             setLocalSends((current) => {
               if (current.get(store)?.preview !== preview.preview) return current;

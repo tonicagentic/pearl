@@ -34,6 +34,7 @@ import {
   type ActiveChat,
   type ChatListItem,
 } from "./chats-client";
+import { mergeEventsForSnapshot } from "../../lib/chat/eve-session-recovery";
 import { useAuth } from "./auth";
 
 /** Keep this many recently opened SessionStores warm for instant re-open. */
@@ -63,6 +64,11 @@ type ChatsContextValue = {
   readonly retrySync: () => Promise<void>;
   /** Whether the durable pending marker completed before this store's send. */
   readonly wasSendPrepared: (source: SessionStore) => boolean;
+  /**
+   * Archive Pearl events and call `newSession()` once when the eve session is
+   * inactive. Returns false if recovery was already attempted for this store.
+   */
+  readonly recoverDeadSession: (source: SessionStore) => boolean;
   /** Drop the active chat and start fresh (the row is created on first send). */
   readonly newChat: () => void;
   /** Delete a stored chat; opens a new chat when the deleted id is active. */
@@ -88,6 +94,13 @@ type ChatBinding = {
   eventIndex: number;
   /** Last event count written by a full snapshot; used to skip idle open/resume saves. */
   savedEventCount: number;
+  /**
+   * Pearl UI events retained across `newSession()` so snapshots cannot wipe
+   * history when the live store only holds the new session’s stream.
+   */
+  archivedEvents: SessionStreamEvent[];
+  /** Guards a single seamless dead-session recovery per send attempt. */
+  sessionRecoveryAttempted: boolean;
   queue: Promise<void>;
   batch: { event: SessionStreamEvent; eventIndex: number }[];
   timer: ReturnType<typeof setTimeout> | null;
@@ -209,8 +222,10 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       pendingMessage: chat?.pendingUserMessage ?? null,
       sendPrepared: false,
       sendStartedAt: null,
-      eventIndex: 0,
-      savedEventCount: 0,
+      eventIndex: chat?.events.length ?? 0,
+      savedEventCount: chat?.events.length ?? 0,
+      archivedEvents: chat?.events ? [...chat.events] : [],
+      sessionRecoveryAttempted: false,
       queue: Promise.resolve(),
       batch: [],
       timer: null,
@@ -318,16 +333,26 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         }
         if (!binding.id || binding.pendingMessage) return;
         const id = binding.id;
+        const events = mergeEventsForSnapshot(
+          binding.archivedEvents,
+          snapshot.events,
+        );
         // eve fires onFinish on mount/resume even when nothing new arrived.
         // Skip the snapshot so idle opens do not bump Recents order.
-        if (snapshot.events.length === binding.savedEventCount) {
+        // Also skip empty post-newSession finishes that would truncate history.
+        if (
+          snapshot.events.length === 0 ||
+          events.length === binding.savedEventCount
+        ) {
           // Idle finish may unblock LRU eviction of this (or older) stores.
           evictRetainedOverflow();
           return;
         }
         enqueue(async () => {
-          await saveChatSnapshot(id, snapshot.events, snapshot.session);
-          binding.savedEventCount = snapshot.events.length;
+          await saveChatSnapshot(id, events, snapshot.session);
+          binding.archivedEvents = [...events];
+          binding.savedEventCount = events.length;
+          binding.eventIndex = Math.max(binding.eventIndex, events.length);
           traceSend(binding, "snapshot saved");
           binding.syncFailed = false;
           if (activeStoreRef.current === store) setPersistenceError(null);
@@ -576,6 +601,27 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     [bindings],
   );
 
+  const recoverDeadSession = useCallback(
+    (source: SessionStore) => {
+      const binding = bindings.get(source);
+      if (!binding || binding.sessionRecoveryAttempted) return false;
+      binding.sessionRecoveryAttempted = true;
+      binding.archivedEvents = [
+        ...mergeEventsForSnapshot(
+          binding.archivedEvents,
+          source.snapshot.events,
+        ),
+      ];
+      binding.eventIndex = Math.max(
+        binding.eventIndex,
+        binding.archivedEvents.length,
+      );
+      source.newSession();
+      return true;
+    },
+    [bindings],
+  );
+
   const retrySync = useCallback(async () => {
     const binding = bindings.get(store);
     if (!binding?.id) return;
@@ -588,8 +634,13 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         await appendChatEvents(id, snapshot.events.map((event, eventIndex) => ({ event, eventIndex })));
         if (snapshot.session) await saveChatSession(id, snapshot.session);
       } else {
-        await saveChatSnapshot(id, snapshot.events, snapshot.session);
-        binding.savedEventCount = snapshot.events.length;
+        const events = mergeEventsForSnapshot(
+          binding.archivedEvents,
+          snapshot.events,
+        );
+        await saveChatSnapshot(id, events, snapshot.session);
+        binding.archivedEvents = [...events];
+        binding.savedEventCount = events.length;
       }
     });
     binding.queue = attempt.catch(() => {
@@ -652,6 +703,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       pendingMessage,
       retrySync,
       wasSendPrepared,
+      recoverDeadSession,
       newChat,
       deleteChat,
       renameChat,
@@ -676,6 +728,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       pendingMessage,
       retrySync,
       wasSendPrepared,
+      recoverDeadSession,
       newChat,
       deleteChat,
       renameChat,

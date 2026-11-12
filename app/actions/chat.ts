@@ -183,8 +183,10 @@ export async function saveChatSessionStateAction(input: {
 
 export async function deleteChatAction(chatId: string) {
   const viewer = await requireViewer();
+  const { headers } = await import("next/headers");
+  const requestHeaders = await headers();
 
-  await deleteChatForUser(chatId, viewer.id);
+  await deleteChatForUser(chatId, viewer.id, { requestHeaders });
 
   return listChatsByUser(viewer.id);
 }
