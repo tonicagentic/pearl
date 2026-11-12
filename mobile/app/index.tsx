@@ -1,13 +1,32 @@
-import { StyleSheet, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Stack, router } from "expo-router";
 
-import { AuthToChatMorph } from "@/components/auth-to-chat-morph";
-import { ChatScreen } from "@/components/chat-screen";
+import { BillingGateScreen } from "@/components/billing-gate-screen";
+import { HistoryRouteScreen } from "@/components/history-route-screen";
 import { SignInScreen } from "@/components/sign-in-screen";
 import { useAuth } from "@/src/auth";
+import { useChats } from "@/src/chat-context";
 
-/** The chat route: the sign-in gate when signed out, the thread when in. */
+/**
+ * Stack root: sign-in / billing gates, then home (recents).
+ * After billing is ready, push a fresh `/chat` once so cold start lands on chat.
+ */
 export default function Index() {
-  const { signedIn, restoring, authHandOff, completeAuthHandOff } = useAuth();
+  const {
+    signedIn,
+    restoring,
+    billingReady,
+    markBillingReady,
+  } = useAuth();
+  const { newChat } = useChats();
+  const bootedChat = useRef(false);
+
+  useEffect(() => {
+    if (!signedIn || !billingReady || bootedChat.current) return;
+    bootedChat.current = true;
+    newChat();
+    router.push("/chat");
+  }, [signedIn, billingReady, newChat]);
 
   if (restoring) {
     // Keychain session check in flight: render nothing rather than flashing
@@ -16,23 +35,22 @@ export default function Index() {
   }
 
   if (!signedIn) {
-    return <SignInScreen />;
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <SignInScreen />
+      </>
+    );
   }
 
-  return (
-    <View style={styles.fill}>
-      {/* Hide welcome/composer while the CTA morph overlay owns the transition. */}
-      <ChatScreen chromeRevealed={!authHandOff} />
-      {authHandOff ? (
-        <AuthToChatMorph
-          from={authHandOff.from}
-          onComplete={completeAuthHandOff}
-        />
-      ) : null}
-    </View>
-  );
-}
+  if (!billingReady) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <BillingGateScreen onReady={markBillingReady} />
+      </>
+    );
+  }
 
-const styles = StyleSheet.create({
-  fill: { flex: 1 },
-});
+  return <HistoryRouteScreen />;
+}

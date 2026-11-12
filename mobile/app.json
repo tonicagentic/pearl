@@ -79,7 +79,8 @@
       ],
       "./plugins/with-live-audio-session.js",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      "expo-sharing"
     ],
     "scheme": "pearl",
     "extra": {

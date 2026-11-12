@@ -10,11 +10,6 @@ import {
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SearchIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, {
-  interpolate,
-  type SharedValue,
-  useAnimatedStyle,
-} from "react-native-reanimated";
 import { useCSSVariable } from "uniwind";
 
 import { Icon } from "@/components/ui/icon";
@@ -29,21 +24,13 @@ const COMPOSER_EDGE = 16;
 const COMPOSER_SHELL_RADIUS = 26;
 const SEARCH_SHELL_HEIGHT = 52;
 
-/**
- * Bottom glass search field that morphs in with history openProgress,
- * standing in for the composer shell on the navigation root.
- */
+/** Bottom glass search field for the /history route. */
 export function HistorySearchBar({
-  openProgress,
   value,
   onChangeText,
-  active,
 }: {
-  openProgress: SharedValue<number>;
-  value: string;
-  onChangeText: (text: string) => void;
-  /** Settled open — focus after the push settles. */
-  active: boolean;
+  readonly value: string;
+  readonly onChangeText: (text: string) => void;
 }) {
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInputInstance>(null);
@@ -72,43 +59,17 @@ export function HistorySearchBar({
     };
   }, []);
 
-  useEffect(() => {
-    if (!active) {
-      inputRef.current?.blur();
-      return;
-    }
-    const timer = setTimeout(() => {
-      // Soft focus after settle so the push spring is not fighting the keyboard.
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [active]);
-
   const glass = CAN_USE_LIQUID_GLASS && !reducedTransparency;
-  const dockStyle = useAnimatedStyle(() => {
-    const t = openProgress.value;
-    return {
-      opacity: interpolate(t, [0.35, 0.75, 1], [0, 0.55, 1]),
-      transform: [
-        {
-          translateY: interpolate(t, [0.35, 1], [24, 0]),
-        },
-        {
-          scale: interpolate(t, [0.35, 1], [0.96, 1]),
-        },
-      ],
-    };
-  });
 
   return (
-    <Animated.View
-      pointerEvents={active ? "box-none" : "none"}
+    <View
+      pointerEvents="box-none"
       style={[
         styles.dock,
         {
           paddingBottom: Math.max(insets.bottom, 12) + 4,
           paddingHorizontal: COMPOSER_EDGE,
         },
-        dockStyle,
       ]}
     >
       <View style={styles.shell}>
@@ -142,7 +103,7 @@ export function HistorySearchBar({
           />
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 

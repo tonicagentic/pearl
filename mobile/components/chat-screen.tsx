@@ -2,24 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import {
   Alert,
   Platform,
-  Pressable,
-  StyleSheet,
   View,
-  useWindowDimensions,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { BlurView } from "expo-blur";
-import Animated, {
-  interpolate,
-  useAnimatedProps,
-  useAnimatedStyle,
-  useSharedValue,
-} from "react-native-reanimated";
-import { Stack, router } from "expo-router";
+import { Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { GestureDetector } from "react-native-gesture-handler";
-import { ChevronLeftIcon, EllipsisIcon, HouseIcon, SquarePenIcon } from "lucide-react-native";
 import {
   AssistantRuntimeProvider,
   MessageNotSentError,
@@ -28,24 +16,18 @@ import {
   type ThreadMessageLike,
 } from "@assistant-ui/react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCSSVariable, useUniwind } from "uniwind";
+import { useCSSVariable } from "uniwind";
 
-import { HistoryScreen, type SidebarDestination } from "@/components/app-drawer";
-import { Icon } from "@/components/ui/icon";
-import {
-  animateChatHistoryPush,
-  useChatHistoryPushGesture,
-  useChatHistoryPushSettle,
-  useChatHistoryRevealThread,
-} from "@/components/chat-history-push";
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
-import { FloatingChatNavigation } from "@/components/floating-chat-navigation";
-import { HistorySearchBar } from "@/components/history-search-bar";
+import {
+  ChatFilesSegment,
+  type MainTab,
+} from "@/components/chat-files-segment";
 import { ThreadActionsDrawer } from "@/components/thread-actions-drawer";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
-import { WorkspaceScreen } from "@/components/workspace-screen";
+import { WorkspacePanel } from "@/components/workspace-screen";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { getAgentMode } from "@/src/agent-mode";
 import { withPendingAssistant } from "@/src/stream-presentation";
@@ -60,14 +42,9 @@ import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessag
 import { useChats } from "@/src/chat-context";
 import { toThreadMessages } from "@/src/eve-transport";
 
-const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
-/** Peak blur while scrubbing between recents and the thread. */
-const PUSH_BLUR_MAX = 48;
-
 /**
- * The chat screen: the assistant-ui native Thread wired to the eve session
- * protocol through the external-store runtime bridge. History and chat push
- * each other with a finger-tracked horizontal progress value.
+ * Nested chat thread (route `/chat`): assistant-ui Thread over the eve session.
+ * System back / swipe-pop returns to home.
  */
 export function ChatScreen({
   chromeRevealed = true,
@@ -96,34 +73,33 @@ export function ChatScreen({
     persistenceError,
     retrySync,
     pendingMessage,
-    newChat,
     deleteChat,
     wasSendPrepared,
   } = useChats();
-  const { setChatId } = useWorkspace();
-  const { width } = useWindowDimensions();
+  const { setChatId, tabs } = useWorkspace();
+  const [mainTab, setMainTab] = useState<MainTab>("chat");
+  const tabCountRef = useRef(tabs.length);
 
   useEffect(() => {
     setChatId(activeChatId);
   }, [activeChatId, setChatId]);
 
-  // 0 = chat full screen, 1 = history full screen; tracks the finger while dragging.
-  const openProgress = useSharedValue(0);
-  const dragStartProgress = useSharedValue(0);
-  const settling = useSharedValue(false);
-  const settledOpen = useRef(false);
+  // Auto-open Files when the agent opens the first tab; return to Chat when empty.
+  useEffect(() => {
+    const prev = tabCountRef.current;
+    tabCountRef.current = tabs.length;
+    if (prev === 0 && tabs.length > 0) setMainTab("files");
+    else if (tabs.length === 0 && prev > 0) setMainTab("chat");
+  }, [tabs.length]);
+
   const projectPickWaiter = useRef<{
     resolve: (projectId: string) => void;
     reject: (reason?: unknown) => void;
   } | null>(null);
   const autoSentPendingFor = useRef<string | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
-  const [historySearch, setHistorySearch] = useState("");
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
-  // A new chat chosen from History should focus only after the drawer settles.
-  const [drawerFocusEntry, setDrawerFocusEntry] = useState(newChatEntry);
 
   const ensureProjectForPlanMode = useCallback(async (): Promise<string | null> => {
     if (getAgentMode() !== "plan") return activeProjectId;
@@ -133,47 +109,6 @@ export function ChatScreen({
       setProjectPickerOpen(true);
     });
   }, [activeProjectId]);
-
-  const onDrawerSettled = useCallback((open: boolean) => {
-    settling.value = false;
-    if (settledOpen.current === open) return;
-    settledOpen.current = open;
-    if (open) setDrawerFocusEntry(newChatEntry);
-    else setHistorySearch("");
-    setDrawerOpen(open);
-  }, [newChatEntry, settling]);
-
-  const settleRef = useRef(onDrawerSettled);
-  settleRef.current = onDrawerSettled;
-  const settleFromGesture = useCallback((open: boolean) => {
-    settleRef.current(open);
-  }, []);
-  useChatHistoryPushSettle(settleFromGesture);
-
-  const animateTo = useCallback((open: boolean) => {
-    animateChatHistoryPush(openProgress, settling, open);
-  }, [openProgress, settling]);
-
-  const closeHistory = useCallback(() => {
-    if (settledOpen.current === false && openProgress.value < 0.01) return;
-    animateTo(false);
-  }, [animateTo, openProgress]);
-
-  const openHistory = useCallback(() => {
-    dismissKeyboard();
-    animateTo(true);
-  }, [animateTo]);
-
-  // Project chats / notification taps replace onto `/` while the panel may
-  // still be open underneath — snap closed so they land on the thread.
-  const revealThread = useCallback(() => {
-    if (settledOpen.current === false && openProgress.value < 0.01) return;
-    settling.value = false;
-    openProgress.value = 0;
-    settledOpen.current = false;
-    setDrawerOpen(false);
-  }, [openProgress, settling]);
-  useChatHistoryRevealThread(revealThread);
 
   const openCost = useCallback(() => {
     dismissKeyboard();
@@ -208,60 +143,6 @@ export function ChatScreen({
     setActionsOpen(true);
   }, []);
 
-  const openSettings = useCallback(() => {
-    dismissKeyboard();
-    router.push("/settings");
-  }, []);
-
-  const handleNewChatFromHistory = useCallback(() => {
-    newChat();
-    closeHistory();
-  }, [closeHistory, newChat]);
-
-  const navigateFromHistory = useCallback((href: SidebarDestination) => {
-    // Keep the history panel open underneath so Back returns to home, not
-    // the thread. Settings (form sheet) already covered the open panel.
-    router.push(href);
-  }, []);
-
-  const historyStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: (openProgress.value - 1) * width }],
-  }));
-  const chatStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: openProgress.value * width }],
-  }));
-  // Soft-focus each surface while it is mid-transition: the departing view
-  // blurs as it leaves, the arriving view sharpens as it settles. Opacity
-  // tracks intensity so a settled panel never keeps a frosted residue.
-  const historyBlurProps = useAnimatedProps(() => ({
-    intensity: interpolate(
-      openProgress.value,
-      [0, 1],
-      [PUSH_BLUR_MAX, 0],
-    ),
-  }));
-  const chatBlurProps = useAnimatedProps(() => ({
-    intensity: interpolate(
-      openProgress.value,
-      [0, 1],
-      [0, PUSH_BLUR_MAX],
-    ),
-  }));
-  const historyBlurStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(openProgress.value, [0, 1], [1, 0]),
-  }));
-  const chatBlurStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(openProgress.value, [0, 1], [0, 1]),
-  }));
-  const { theme } = useUniwind();
-  const blurTint = theme === "dark" ? "systemMaterialDark" : "systemMaterialLight";
-
-  const pushGesture = useChatHistoryPushGesture({
-    openProgress,
-    dragStartProgress,
-    settling,
-    width,
-  });
   const [sendError, setSendError] = useState<{ store: object; message: string } | null>(null);
   const [localSends, setLocalSends] = useState<Map<object, LocalSend>>(() => new Map());
   const localSend = localSends.get(store) ?? null;
@@ -506,159 +387,82 @@ export function ChatScreen({
 
   return (
     <SafeAreaView style={screenStyle} edges={["left", "right"]}>
-      <Stack.Screen options={{
-        headerShown: Platform.OS !== "ios",
-        title: activeTitle,
-        headerStyle: Platform.OS === "web" ? { backgroundColor } : undefined,
-        headerTintColor: Platform.OS === "web" ? foregroundColor : undefined,
-        headerTitleStyle: Platform.OS === "web" ? { color: foregroundColor } : undefined,
-        headerLeft: () => (
-          <Pressable
-            onPress={drawerOpen ? closeHistory : openHistory}
-            className="h-11 w-11 items-center justify-center"
-            accessibilityRole="button"
-            accessibilityLabel={drawerOpen ? "Back to chat" : "Back"}
-            accessibilityState={{ expanded: drawerOpen }}
-          >
-            <Icon as={drawerOpen ? HouseIcon : ChevronLeftIcon} className="size-5 text-foreground" />
-          </Pressable>
-        ),
-        headerRight: () => (
-          <View className="flex-row items-center">
-            {projectedMessages.length > 0 ? (
-              <Pressable
-                onPress={openThreadActions}
-                disabled={drawerOpen}
-                className="h-11 w-11 items-center justify-center disabled:opacity-40"
-                accessibilityRole="button"
-                accessibilityLabel="Thread actions"
-                accessibilityState={{ disabled: drawerOpen }}
-              >
-                <Icon as={EllipsisIcon} className="size-5 text-foreground" />
-              </Pressable>
-            ) : null}
-            <Pressable
-              onPress={newChat}
-              disabled={drawerOpen}
-              className="h-11 w-11 items-center justify-center disabled:opacity-40"
-              accessibilityRole="button"
-              accessibilityLabel="New chat"
-              accessibilityState={{ disabled: drawerOpen }}
-            >
-              <Icon as={SquarePenIcon} className="size-5 text-foreground" />
-            </Pressable>
-          </View>
-        ),
-      }} />
-      <View style={{ flex: 1, overflow: "hidden" }}>
-        <GestureDetector gesture={pushGesture}>
-          <View style={{ flex: 1 }}>
-            <Animated.View
-              pointerEvents={drawerOpen ? "auto" : "none"}
-              style={[
-                {
-                  position: "absolute",
-                  top: 0,
-                  bottom: 0,
-                  left: 0,
-                  width,
-                  backgroundColor,
-                },
-                historyStyle,
-              ]}
-            >
-              <HistoryScreen
-                onClose={closeHistory}
-                onNavigate={navigateFromHistory}
-                visible={drawerOpen}
-                progress={openProgress}
-                searchQuery={historySearch}
-              />
-              <AnimatedBlurView
-                pointerEvents="none"
-                tint={blurTint}
-                intensity={0}
-                animatedProps={historyBlurProps}
-                style={[StyleSheet.absoluteFill, historyBlurStyle]}
-              />
-            </Animated.View>
-            <Animated.View
-              style={[{ flex: 1, width, backgroundColor }, chatStyle]}
-              accessibilityElementsHidden={drawerOpen}
-            >
-              <AssistantRuntimeProvider runtime={runtime}>
-                <EveAuthorization />
-                <Thread
-                  autoFocus={
-                    Platform.OS === "ios" &&
-                    activeChatId === null &&
-                    !drawerOpen &&
-                    chromeRevealed
-                  }
-                  chromeRevealed={chromeRevealed}
-                  conversationId={activeChatId}
-                  focusNewChatKey={drawerOpen ? drawerFocusEntry : newChatEntry}
-                  notice={notice}
-                  waitingAction={
-                    pendingApprovals[0]
-                      ? {
-                          kind: "approval" as const,
-                          title: "The agent is paused until you respond.",
-                          prompt: pendingApprovals[0].prompt,
-                          detail: pendingApprovals[0].detail,
-                          options: pendingApprovals[0].options,
-                          onRespond: async (optionId) => {
-                            await store.send({
-                              answers: [
-                                {
-                                  interactionId: pendingApprovals[0]!.requestId,
-                                  optionId,
-                                },
-                              ],
-                              clientContext: buildTurnClientContext(activeProjectId),
-                            });
-                          },
-                        }
-                      : waitingForAction
-                        ? {
-                            kind: "authorization" as const,
-                            title:
-                              "The agent is paused on a question or approval above — reply to continue.",
-                          }
-                        : null
-                  }
-                />
-              </AssistantRuntimeProvider>
-              <AnimatedBlurView
-                pointerEvents="none"
-                tint={blurTint}
-                intensity={0}
-                animatedProps={chatBlurProps}
-                style={[StyleSheet.absoluteFill, chatBlurStyle]}
-              />
-            </Animated.View>
-          </View>
-        </GestureDetector>
-        {/* Outside the pan detector so menu/new-chat/search presses are not delayed. */}
-        {Platform.OS === "ios" && chromeRevealed ? (
-          <>
-            <FloatingChatNavigation
-              openProgress={openProgress}
-              hasMessages={projectedMessages.length > 0}
-              onOpenHistory={openHistory}
-              onOpenSettings={openSettings}
-              onNewChat={drawerOpen ? handleNewChatFromHistory : newChat}
-              onOpenThreadActions={openThreadActions}
-              historyOpen={drawerOpen}
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: activeTitle,
+          headerBackButtonDisplayMode: "minimal",
+          headerTitle: () => (
+            <ChatFilesSegment
+              value={mainTab}
+              onChange={setMainTab}
+              filesBadge={tabs.length > 0 && mainTab === "chat"}
             />
-            <HistorySearchBar
-              openProgress={openProgress}
-              value={historySearch}
-              onChangeText={setHistorySearch}
-              active={drawerOpen}
+          ),
+          headerStyle: Platform.OS === "web" ? { backgroundColor } : undefined,
+          // Native needs this too — without it the system back item can flash
+          // the default (light) tint for a frame on push.
+          headerTintColor: foregroundColor,
+          headerTitleStyle:
+            Platform.OS === "web" ? { color: foregroundColor } : undefined,
+        }}
+      />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          icon="ellipsis"
+          accessibilityLabel="Thread actions"
+          hidden={projectedMessages.length === 0}
+          onPress={openThreadActions}
+          tintColor={foregroundColor}
+        />
+      </Stack.Toolbar>
+      <View style={{ flex: 1 }}>
+        <AssistantRuntimeProvider runtime={runtime}>
+          <EveAuthorization />
+          {mainTab === "files" ? (
+            <WorkspacePanel />
+          ) : (
+            <Thread
+              autoFocus={
+                Platform.OS === "ios" &&
+                activeChatId === null &&
+                chromeRevealed
+              }
+              chromeRevealed={chromeRevealed}
+              conversationId={activeChatId}
+              focusNewChatKey={newChatEntry}
+              notice={notice}
+              waitingAction={
+                pendingApprovals[0]
+                  ? {
+                      kind: "approval" as const,
+                      title: "The agent is paused until you respond.",
+                      prompt: pendingApprovals[0].prompt,
+                      detail: pendingApprovals[0].detail,
+                      options: pendingApprovals[0].options,
+                      onRespond: async (optionId) => {
+                        await store.send({
+                          answers: [
+                            {
+                              interactionId: pendingApprovals[0]!.requestId,
+                              optionId,
+                            },
+                          ],
+                          clientContext: buildTurnClientContext(activeProjectId),
+                        });
+                      },
+                    }
+                  : waitingForAction
+                    ? {
+                        kind: "authorization" as const,
+                        title:
+                          "The agent is paused on a question or approval above — reply to continue.",
+                      }
+                    : null
+              }
             />
-          </>
-        ) : null}
+          )}
+        </AssistantRuntimeProvider>
         <ThreadActionsDrawer
           open={actionsOpen}
           title={activeTitle}
@@ -674,7 +478,6 @@ export function ChatScreen({
           }}
         />
         <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
-        <WorkspaceScreen />
         <ProjectPickerModal
           open={projectPickerOpen}
           onClose={() => {

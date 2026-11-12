@@ -27,15 +27,20 @@ import {
   getChat,
   listChats,
   markPendingChatMessage,
+  renameChat as renameChatRequest,
   saveChatSession,
   saveChatSnapshot,
+  setChatProject as setChatProjectRequest,
   type ActiveChat,
   type ChatListItem,
 } from "./chats-client";
 import { useAuth } from "./auth";
 
+/** Keep this many recently opened SessionStores warm for instant re-open. */
+const RETAINED_STORE_LIMIT = 10;
+
 type ChatsContextValue = {
-  /** The active eve store: rebuilt whenever a different chat is selected. */
+  /** The active eve store (one React-mounted store; others may be LRU-retained). */
   readonly store: SessionStore;
   readonly activeChatId: string | null;
   /** Project linked to the active chat (Plan mode / project chats). */
@@ -62,6 +67,13 @@ type ChatsContextValue = {
   readonly newChat: () => void;
   /** Delete a stored chat; opens a new chat when the deleted id is active. */
   readonly deleteChat: (chatId: string) => Promise<void>;
+  /** Rename a stored chat and refresh local list / active title. */
+  readonly renameChat: (chatId: string, title: string) => Promise<void>;
+  /** Attach or detach a chat from a project; updates list + active binding. */
+  readonly setChatProject: (
+    chatId: string,
+    projectId: string | null,
+  ) => Promise<void>;
 };
 
 const ChatsContext = createContext<ChatsContextValue | null>(null);
@@ -96,8 +108,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const activeChatIdRef = useRef<string | null>(null);
   const selectionGeneration = useRef(0);
   const [bindings] = useState(() => new WeakMap<SessionStore, ChatBinding>());
-  // Retain a store until its final checkpoint finishes; reselecting it must not
-  // create a second writer for the same chat.
+  // LRU of hydrated stores (Map insertion order = oldest → newest). Reselecting
+  // a retained id must not create a second writer for the same chat.
   const [retainedStores] = useState(() => new Map<string, SessionStore>());
   const activeStoreRef = useRef<SessionStore | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -122,6 +134,60 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       if (binding) binding.projectId = projectId;
     }
   }, [bindings]);
+
+  const releaseRetainedStore = useCallback(
+    (chatId: string, candidate: SessionStore) => {
+      const binding = bindings.get(candidate);
+      binding?.stopObserving?.();
+      if (binding) binding.stopObserving = null;
+      if (retainedStores.get(chatId) === candidate) {
+        retainedStores.delete(chatId);
+      }
+    },
+    [bindings, retainedStores],
+  );
+
+  /** Drop oldest safe stores until size ≤ RETAINED_STORE_LIMIT (or none are safe). */
+  const evictRetainedOverflow = useCallback(() => {
+    if (retainedStores.size <= RETAINED_STORE_LIMIT) return;
+    for (const [chatId, candidate] of retainedStores) {
+      if (activeStoreRef.current === candidate) continue;
+      const binding = bindings.get(candidate);
+      if (!binding?.id || binding.pendingMessage || binding.syncFailed) {
+        continue;
+      }
+      if (candidate.snapshot.status !== "idle") continue;
+      // Sync queue must be quiet; re-check after it settles.
+      void binding.queue.then(() => {
+        if (retainedStores.size <= RETAINED_STORE_LIMIT) return;
+        if (activeStoreRef.current === candidate) return;
+        if (binding.pendingMessage || binding.syncFailed) return;
+        if (candidate.snapshot.status !== "idle") return;
+        if (retainedStores.get(chatId) !== candidate) return;
+        releaseRetainedStore(chatId, candidate);
+        evictRetainedOverflow();
+      });
+      // One async candidate at a time (oldest safe); recurse after settle.
+      return;
+    }
+    // Nothing safe to drop — leave size > limit until a later idle finish.
+  }, [bindings, retainedStores, releaseRetainedStore]);
+
+  /** Mark chatId as most-recently used and evict overflow if needed. */
+  const touchRetained = useCallback(
+    (chatId: string, next: SessionStore) => {
+      const previous = retainedStores.get(chatId);
+      retainedStores.delete(chatId);
+      if (previous && previous !== next) {
+        const binding = bindings.get(previous);
+        binding?.stopObserving?.();
+        if (binding) binding.stopObserving = null;
+      }
+      retainedStores.set(chatId, next);
+      evictRetainedOverflow();
+    },
+    [bindings, retainedStores, evictRetainedOverflow],
+  );
 
   const buildStore = useCallback((chat: ActiveChat | null) => {
     // Do not replay saved pre-v27 events as initialEvents — open the stored
@@ -151,9 +217,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       syncFailed: false,
       stopObserving: null,
     });
-    if (chat) retainedStores.set(chat.id, store);
+    if (chat) touchRetained(chat.id, store);
     return store;
-  }, [bindings, retainedStores]);
+  }, [bindings, touchRetained]);
 
   const reloadChats = useCallback(async () => {
     setChatsLoading(true);
@@ -193,21 +259,10 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   // One store per active chat; rebuilt only when the selection changes.
   const [store, setStore] = useState(() => buildStore(null));
 
-  const pruneIdleStore = useCallback((prior: SessionStore | null) => {
-    if (!prior) return;
-    const binding = bindings.get(prior);
-    if (!binding?.id || binding.pendingMessage || binding.syncFailed) return;
-    // Do not evict until all queued events and snapshots have settled.
-    void binding.queue.then(() => {
-      if (activeStoreRef.current !== prior && prior.snapshot.status === "idle" &&
-          !binding.pendingMessage && !binding.syncFailed && binding.id &&
-          retainedStores.get(binding.id) === prior) {
-        binding.stopObserving?.();
-        binding.stopObserving = null;
-        retainedStores.delete(binding.id);
-      }
-    });
-  }, [bindings, retainedStores]);
+  /** After switching away from a store, only trim the LRU if over capacity. */
+  const pruneIdleStore = useCallback((_prior: SessionStore | null) => {
+    evictRetainedOverflow();
+  }, [evictRetainedOverflow]);
 
   // Each callback closes over its own binding. A stream finishing after a chat
   // switch must NEVER write its events into the newly selected chat.
@@ -266,9 +321,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         // eve fires onFinish on mount/resume even when nothing new arrived.
         // Skip the snapshot so idle opens do not bump Recents order.
         if (snapshot.events.length === binding.savedEventCount) {
-          if (activeStoreRef.current !== store && !binding.pendingMessage && retainedStores.get(id) === store) {
-            retainedStores.delete(id);
-          }
+          // Idle finish may unblock LRU eviction of this (or older) stores.
+          evictRetainedOverflow();
           return;
         }
         enqueue(async () => {
@@ -279,10 +333,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           if (activeStoreRef.current === store) setPersistenceError(null);
           // The next turn waits on this queue; history GET must not hold its durable mark.
           void reloadChats();
-          // Check after this queue item settles, not while its promise is pending.
-          if (activeStoreRef.current !== store && !binding.pendingMessage && retainedStores.get(id) === store) {
-            retainedStores.delete(id);
-          }
+          // Snapshot settled — retry overflow eviction now that this writer is idle.
+          evictRetainedOverflow();
         });
       },
       onError: () => {
@@ -332,7 +384,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         binding.pendingMessage = message || null;
         binding.sendPrepared = true;
         traceSend(binding, "pending marker saved");
-        if (binding.id) retainedStores.set(binding.id, store);
+        if (binding.id) touchRetained(binding.id, store);
         return input;
       },
     });
@@ -345,7 +397,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       binding.stopObserving?.();
       binding.stopObserving = null;
     };
-  }, [store, reloadChats, bindings, retainedStores]);
+  }, [store, reloadChats, bindings, touchRetained, evictRetainedOverflow]);
 
   // When iOS/Android returns the process to the foreground, catch up the
   // active chat from eve's durable stream without waiting for a banner tap.
@@ -393,6 +445,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         if (hasHistory) binding.pendingMessage = null;
         setPendingMessage(pending);
         setPersistenceError(binding.syncFailed ? "Save failed" : null);
+        touchRetained(chatId, retained);
         setStore(retained);
         pruneIdleStore(prior);
         return true;
@@ -434,7 +487,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         return false;
       }
     },
-    [buildStore, bindings, retainedStores, pruneIdleStore],
+    [buildStore, bindings, retainedStores, touchRetained, pruneIdleStore],
   );
 
   const newChat = useCallback(() => {
@@ -473,6 +526,49 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       }
     },
     [newChat, retainedStores],
+  );
+
+  const renameChat = useCallback(
+    async (chatId: string, title: string) => {
+      const renamed = await renameChatRequest(chatId, title);
+      setChats((current) =>
+        current.map((chat) =>
+          chat.id === chatId
+            ? { ...chat, title: renamed.title, updatedAt: renamed.updatedAt }
+            : chat,
+        ),
+      );
+      const retained = retainedStores.get(chatId);
+      if (retained) {
+        const binding = bindings.get(retained);
+        if (binding) binding.title = renamed.title;
+      }
+      if (activeChatIdRef.current === chatId) {
+        setActiveTitle(renamed.title);
+      }
+    },
+    [bindings, retainedStores],
+  );
+
+  const setChatProject = useCallback(
+    async (chatId: string, projectId: string | null) => {
+      await setChatProjectRequest(chatId, projectId);
+      setChats((current) =>
+        current.map((chat) =>
+          chat.id === chatId ? { ...chat, projectId } : chat,
+        ),
+      );
+      const retained = retainedStores.get(chatId);
+      if (retained) {
+        const binding = bindings.get(retained);
+        if (binding) binding.projectId = projectId;
+      }
+      if (activeChatIdRef.current === chatId) {
+        activeProjectIdRef.current = projectId;
+        setActiveProjectIdState(projectId);
+      }
+    },
+    [bindings, retainedStores],
   );
 
   const wasSendPrepared = useCallback(
@@ -558,6 +654,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       wasSendPrepared,
       newChat,
       deleteChat,
+      renameChat,
+      setChatProject,
     }),
     [
       store,
@@ -580,6 +678,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       wasSendPrepared,
       newChat,
       deleteChat,
+      renameChat,
+      setChatProject,
     ],
   );
 

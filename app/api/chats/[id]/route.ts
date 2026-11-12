@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { deleteChatForUser, getChatForUser } from "@/lib/db/queries";
+import {
+  deleteChatForUser,
+  getChatForUser,
+  updateChatTitleForUser,
+} from "@/lib/db/queries";
 import { setChatProject } from "@/lib/db/projects";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
@@ -30,7 +34,7 @@ export async function GET(
   return NextResponse.json({ chat });
 }
 
-/** Attach (or detach) a chat to a project. */
+/** Rename and/or attach (or detach) a chat to a project. */
 export async function PATCH(
   request: Request,
   { params }: { readonly params: Promise<{ readonly id: string }> },
@@ -56,24 +60,58 @@ export async function PATCH(
 
   const body = (await request.json().catch(() => ({}))) as {
     readonly projectId?: string | null;
+    readonly title?: string;
   };
 
-  if (body.projectId === undefined) {
+  const hasProject = body.projectId !== undefined;
+  const hasTitle = typeof body.title === "string";
+
+  if (!hasProject && !hasTitle) {
     return NextResponse.json(
-      { error: "projectId is required (string or null)." },
+      { error: "Provide title and/or projectId (string or null)." },
       { status: 400 },
     );
   }
 
-  const ok = await setChatProject(viewer.id, id, body.projectId);
-  if (!ok) {
-    return NextResponse.json(
-      { error: "Could not attach chat to project." },
-      { status: 400 },
-    );
+  let title: string | undefined;
+  let updatedAt: string | undefined;
+  let projectId: string | null | undefined;
+
+  if (hasTitle) {
+    try {
+      const renamed = await updateChatTitleForUser(id, viewer.id, body.title!);
+      if (!renamed) {
+        return NextResponse.json({ error: "Chat not found." }, { status: 404 });
+      }
+      title = renamed.title;
+      updatedAt = renamed.updatedAt;
+    } catch (cause) {
+      return NextResponse.json(
+        {
+          error:
+            cause instanceof Error ? cause.message : "Could not rename chat.",
+        },
+        { status: 400 },
+      );
+    }
   }
 
-  return NextResponse.json({ ok: true, projectId: body.projectId });
+  if (hasProject) {
+    const ok = await setChatProject(viewer.id, id, body.projectId!);
+    if (!ok) {
+      return NextResponse.json(
+        { error: "Could not attach chat to project." },
+        { status: 400 },
+      );
+    }
+    projectId = body.projectId!;
+  }
+
+  return NextResponse.json({
+    ok: true,
+    ...(title !== undefined ? { title, updatedAt } : {}),
+    ...(projectId !== undefined ? { projectId } : {}),
+  });
 }
 
 export async function DELETE(

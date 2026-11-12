@@ -122,10 +122,10 @@ export async function createChat(
   return data.chat;
 }
 
-/** Attach an existing chat to a project (Plan mode / project chats). */
-export async function attachChatToProject(
+/** Attach or detach an existing chat to/from a project. */
+export async function setChatProject(
   chatId: string,
-  projectId: string,
+  projectId: string | null,
 ): Promise<void> {
   const response = await fetch(
     `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}`,
@@ -144,9 +144,52 @@ export async function attachChatToProject(
       error?: string;
     };
     throw new Error(
-      body.error ?? `Failed to attach chat (${response.status}).`,
+      body.error ?? `Failed to update chat project (${response.status}).`,
     );
   }
+}
+
+/** Attach an existing chat to a project (Plan mode / project chats). */
+export async function attachChatToProject(
+  chatId: string,
+  projectId: string,
+): Promise<void> {
+  await setChatProject(chatId, projectId);
+}
+
+/** Rename a stored chat. */
+export async function renameChat(
+  chatId: string,
+  title: string,
+): Promise<{ readonly title: string; readonly updatedAt: string }> {
+  const response = await fetch(
+    `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}`,
+    {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({ title }),
+    },
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
+    const body = (await response.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    throw new Error(body.error ?? `Failed to rename chat (${response.status}).`);
+  }
+
+  const data = (await response.json()) as {
+    title?: string;
+    updatedAt?: string;
+  };
+
+  return {
+    title: data.title ?? title.trim(),
+    updatedAt: data.updatedAt ?? new Date().toISOString(),
+  };
 }
 
 export async function appendChatEvents(

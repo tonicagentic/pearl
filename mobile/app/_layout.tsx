@@ -28,7 +28,7 @@ import {
 } from "@/src/model-preferences";
 import { WorkspaceProvider } from "@/src/workspace-context";
 
-/** Keep the active chat mounted beneath pushed screens so its stream survives navigation. */
+/** Home is the Stack root; chat is pushed on top so streams survive while chatting. */
 export default function RootLayout() {
   return <AuthProvider><AuthenticatedLayout /></AuthProvider>;
 }
@@ -55,29 +55,39 @@ function AuthenticatedLayout() {
             <KeyboardProvider enabled={Platform.OS === "ios" && !Platform.isPad}>
               <StatusBar style="auto" />
               <Stack>
-                <Stack.Screen name="index" options={{ title: "Chat", headerShown: false }} />
+                <Stack.Screen name="index" options={{ title: "", headerShown: true }} />
+                <Stack.Screen
+                  name="chat"
+                  options={{
+                    title: "Chat",
+                    headerShown: true,
+                    // Set here (not only in ChatScreen) so the push animation
+                    // never paints the default back control before minimal applies.
+                    headerBackButtonDisplayMode: "minimal",
+                  }}
+                />
                 <Stack.Screen
                   name="history"
                   options={{
                     title: "History",
-                    animation: Platform.OS === "ios" ? "slide_from_left" : "default",
+                    headerShown: false,
                   }}
                 />
                 <Stack.Screen
                   name="projects/index"
-                  options={{ title: "Projects", headerShown: false }}
+                  options={{ title: "Projects", headerShown: true }}
                 />
                 <Stack.Screen
                   name="projects/[id]/index"
-                  options={{ title: "Project", headerShown: false }}
+                  options={{ title: "Project", headerShown: true }}
                 />
                 <Stack.Screen
                   name="projects/[id]/plans/[planId]"
-                  options={{ title: "Plan", headerShown: false }}
+                  options={{ title: "Plan", headerShown: true }}
                 />
                 <Stack.Screen
                   name="issues"
-                  options={{ title: "Tasks", headerShown: false }}
+                  options={{ title: "Tasks", headerShown: true }}
                 />
                 <Stack.Screen
                   name="settings"

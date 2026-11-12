@@ -1,17 +1,27 @@
-import { useEffect, useMemo, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
-import { FileTextIcon, GlobeIcon, XIcon } from "lucide-react-native";
+import {
+  FileTextIcon,
+  GlobeIcon,
+  ShareIcon,
+  XIcon,
+} from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { previewKindForPath } from "../../lib/design/preview-kind";
+import {
+  shareWorkspaceFile,
+  shareWorkspacePage,
+} from "@/src/share-workspace-file";
 import { useWorkspace } from "@/src/workspace-context";
 import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
 
@@ -71,12 +81,16 @@ function SvgFilePreview({
 }
 
 /**
- * Full-screen workspace overlay: file tabs + live browser WebView.
- * Presented over the chat when the agent opens a file or page.
+ * In-place Files pane: workspace file/page tabs + preview body.
+ * Used by the Chat | Files switcher (not a full-screen overlay).
  */
-export function WorkspaceScreen() {
+export function WorkspacePanel({
+  topInset = 0,
+}: {
+  /** Extra top padding under floating iOS chrome. */
+  readonly topInset?: number;
+}) {
   const {
-    open,
     tabs,
     activeTabId,
     viewUrl,
@@ -84,23 +98,20 @@ export function WorkspaceScreen() {
     chatId,
     selectWorkspaceTab,
     closeWorkspaceTab,
-    closeWorkspace,
     setControlMode,
     ensureViewUrl,
   } = useWorkspace();
-  const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const WebView = useMemo(() => loadWebView(), []);
+  const [sharing, setSharing] = useState(false);
 
   const active = tabs.find((tab) => tab.id === activeTabId) ?? null;
 
   useEffect(() => {
-    if (open && active?.kind === "page") {
+    if (active?.kind === "page") {
       void ensureViewUrl();
     }
-  }, [open, active?.kind, ensureViewUrl]);
-
-  if (!open) return null;
+  }, [active?.kind, ensureViewUrl]);
 
   const onSelect = (tabId: string) => {
     selectWorkspaceTab(tabId);
@@ -140,21 +151,33 @@ export function WorkspaceScreen() {
     ).catch(() => {});
   };
 
+  const onShare = () => {
+    if (!active || sharing) return;
+    setSharing(true);
+    const done = () => setSharing(false);
+    if (active.kind === "file") {
+      void shareWorkspaceFile({
+        path: active.path,
+        content: active.content,
+      }).finally(done);
+      return;
+    }
+    void shareWorkspacePage({
+      url: active.url,
+      title: active.title,
+    }).finally(done);
+  };
+
+  const canShare =
+    active?.kind === "file"
+      ? Boolean(active.content !== undefined)
+      : active?.kind === "page"
+        ? Boolean(active.url)
+        : false;
+
   return (
-    <View
-      className="bg-background absolute inset-0 z-50"
-      style={{ paddingTop: insets.top }}
-      accessibilityViewIsModal
-    >
+    <View className="bg-background flex-1" style={{ paddingTop: topInset }}>
       <View className="border-border/60 flex-row items-center gap-2 border-b px-2 py-2">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to chat"
-          className="min-h-11 justify-center px-2"
-          onPress={closeWorkspace}
-        >
-          <Text className="text-primary text-base">Chat</Text>
-        </Pressable>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -203,6 +226,22 @@ export function WorkspaceScreen() {
             );
           })}
         </ScrollView>
+        {canShare ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Share"
+            accessibilityState={{ disabled: sharing }}
+            disabled={sharing}
+            className="size-11 items-center justify-center disabled:opacity-40"
+            onPress={onShare}
+          >
+            {sharing ? (
+              <ActivityIndicator size="small" />
+            ) : (
+              <Icon as={ShareIcon} className="text-foreground size-5" />
+            )}
+          </Pressable>
+        ) : null}
         {active?.kind === "page" ? (
           <Pressable
             accessibilityRole="button"
@@ -219,7 +258,18 @@ export function WorkspaceScreen() {
       </View>
 
       <View style={{ flex: 1, minHeight: height * 0.5 }}>
-        {active?.kind === "page" ? (
+        {tabs.length === 0 ? (
+          <View className="flex-1 items-center justify-center px-8">
+            <Icon as={FileTextIcon} className="text-muted-foreground mb-3 size-8" />
+            <Text className="text-foreground mb-1 text-center text-base font-medium">
+              No open files
+            </Text>
+            <Text className="text-muted-foreground text-center text-sm leading-5">
+              Files and browser pages the agent opens will show up here. You can
+              preview, manage tabs, and share them.
+            </Text>
+          </View>
+        ) : active?.kind === "page" ? (
           viewUrl && WebView ? (
             <WebView
               source={{ uri: viewUrl }}
@@ -253,6 +303,25 @@ export function WorkspaceScreen() {
           )
         ) : null}
       </View>
+    </View>
+  );
+}
+
+/**
+ * @deprecated Prefer WorkspacePanel inside the Chat | Files switcher.
+ * Kept as a thin alias so older imports keep resolving during the migration.
+ */
+export function WorkspaceScreen() {
+  const insets = useSafeAreaInsets();
+  const { open } = useWorkspace();
+  if (!open) return null;
+  return (
+    <View
+      className="bg-background absolute inset-0 z-50"
+      style={{ paddingTop: insets.top }}
+      accessibilityViewIsModal
+    >
+      <WorkspacePanel />
     </View>
   );
 }

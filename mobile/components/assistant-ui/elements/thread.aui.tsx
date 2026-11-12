@@ -724,7 +724,8 @@ export const Thread: FC<ThreadProps> = ({
               floatsComposer
                 ? {
                     // Resting messages clear the floating controls, but can scroll behind them.
-                    paddingTop: insets.top + 80,
+                    // Native stack header already clears the status bar.
+                    paddingTop: 16,
                     paddingBottom: composerOverlayHeight + 24,
                   }
                 : undefined
@@ -749,7 +750,7 @@ export const Thread: FC<ThreadProps> = ({
           </ThreadPrimitive.MessagesFlatList>
           {floatsComposer ? (
             <ThreadEdgeFades
-              topHeight={insets.top + 72}
+              topHeight={48}
               bottomHeight={Math.max(48, Math.min(composerOverlayHeight, 140))}
             />
           ) : null}

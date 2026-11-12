@@ -14,14 +14,10 @@ import {
 } from "react-native";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import Animated, { FadeInDown, FadeOutUp, LinearTransition } from "react-native-reanimated";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { CheckIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
-import {
-  DESTINATION_TOP_CLEARANCE,
-  DestinationBackButton,
-} from "@/components/destination-back-button";
 import { Icon } from "@/components/ui/icon";
 import {
   createIssueRequest,
@@ -60,7 +56,6 @@ export function IssuesScreen() {
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
-  const insets = useSafeAreaInsets();
 
   const reload = useCallback(async () => {
     try {
@@ -214,13 +209,10 @@ export function IssuesScreen() {
       style={{ flex: 1, backgroundColor }}
       edges={["left", "right"]}
     >
-      <DestinationBackButton />
       <ScrollView
         className="flex-1"
         contentContainerClassName="px-5 pb-28"
-        contentContainerStyle={{
-          paddingTop: insets.top + DESTINATION_TOP_CLEARANCE,
-        }}
+        contentContainerStyle={{ paddingTop: 16 }}
       >
         <Text className="mb-1 text-[28px] font-semibold tracking-tight text-foreground">
           Tasks

@@ -528,6 +528,38 @@ export async function deleteChatForUser(chatId: string, userId: string) {
   await db.delete(chat).where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
 }
 
+/** Rename a chat the viewer owns. Empty titles are rejected. */
+export async function updateChatTitleForUser(
+  chatId: string,
+  userId: string,
+  title: string,
+): Promise<{ readonly id: string; readonly title: string; readonly updatedAt: string } | null> {
+  const nextTitle = title.replace(/\s+/g, " ").trim();
+  if (!nextTitle) {
+    throw new Error("Title cannot be empty.");
+  }
+  const capped =
+    nextTitle.length > 72 ? `${nextTitle.slice(0, 69).trimEnd()}...` : nextTitle;
+
+  const [row] = await db
+    .update(chat)
+    .set({ title: capped, updatedAt: new Date() })
+    .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
+    .returning({
+      id: chat.id,
+      title: chat.title,
+      updatedAt: chat.updatedAt,
+    });
+
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    title: row.title,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
 /**
  * Browser sandbox credentials for a chat. The control secret must never be
  * included in chat list or generic chat payloads — only browser routes and

@@ -9,13 +9,9 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
-import {
-  DESTINATION_TOP_CLEARANCE,
-  DestinationBackButton,
-} from "@/components/destination-back-button";
 import {
   createProjectRequest,
   fetchProjects,
@@ -30,7 +26,6 @@ export function ProjectsScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
-  const insets = useSafeAreaInsets();
 
   const reload = useCallback(async () => {
     try {
@@ -69,11 +64,7 @@ export function ProjectsScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor }} edges={["left", "right"]}>
-      <DestinationBackButton />
-      <View
-        className="flex-row items-center justify-between px-5 pb-2"
-        style={{ paddingTop: insets.top + DESTINATION_TOP_CLEARANCE }}
-      >
+      <View className="flex-row items-center justify-between px-5 pb-2 pt-4">
         <Text className="text-[28px] font-semibold tracking-tight text-foreground">
           Projects
         </Text>

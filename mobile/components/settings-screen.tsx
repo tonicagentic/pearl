@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 
+import { BillingSettingsSection } from "@/components/billing-settings-section";
 import { SheetScaffold } from "@/components/sheet-scaffold";
 import { useAuth } from "@/src/auth";
 import {
@@ -62,6 +63,7 @@ export function SettingsScreen() {
             </Text>
           </View>
         </View>
+        <BillingSettingsSection />
       </SettingsGroup>
 
       <SettingsGroup label="You">

@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import * as Notifications from "expo-notifications";
-import { useRouter } from "expo-router";
 
 import { revealChatThread } from "@/components/chat-history-push";
 import { useAuth } from "@/src/auth";
@@ -20,7 +19,6 @@ import {
 export function PushNotificationsBridge() {
   const { signedIn, restoring } = useAuth();
   const { activeChatId, selectChat } = useChats();
-  const router = useRouter();
   const selectChatRef = useRef(selectChat);
   selectChatRef.current = selectChat;
 
@@ -54,7 +52,6 @@ export function PushNotificationsBridge() {
       const opened = await selectChatRef.current(chatId);
       if (opened) {
         revealChatThread();
-        router.navigate("/");
       }
     }
 
@@ -73,7 +70,7 @@ export function PushNotificationsBridge() {
     return () => {
       subscription.remove();
     };
-  }, [restoring, router, signedIn]);
+  }, [restoring, signedIn]);
 
   return null;
 }

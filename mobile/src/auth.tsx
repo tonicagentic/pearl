@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { fetchBillingStatus } from "./billing-client";
 import { AGENT_URL, getAuthCookie, setAuthCookie } from "./eve-transport";
 import {
   clearSession,
@@ -38,6 +39,11 @@ type AuthContextValue = {
   /** True while the Keychain session is being restored on cold start. */
   readonly restoring: boolean;
   /**
+   * False until billing status says the user may chat (free pass, active
+   * subscription, or billing disabled on the deployment).
+   */
+  readonly billingReady: boolean;
+  /**
    * Set only after an interactive sign-in / sign-up so the gate can morph the
    * CTA into the composer. Cold-start restore never sets this.
    */
@@ -55,6 +61,7 @@ type AuthContextValue = {
     handOffFrom?: AuthCtaFrame | null,
   ) => Promise<void>;
   readonly completeAuthHandOff: () => void;
+  readonly markBillingReady: () => void;
   readonly signOut: () => void;
 };
 
@@ -73,9 +80,24 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   const [signedIn, setSignedIn] = useState(false);
   const [viewerEmail, setViewerEmail] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(true);
+  const [billingReady, setBillingReady] = useState(true);
   const [authHandOff, setAuthHandOff] = useState<AuthHandOff | null>(null);
   const [signInState, setSignInState] = useState<SignInState>("idle");
   const [signInError, setSignInError] = useState<string | null>(null);
+
+  const refreshBillingGate = useCallback(async () => {
+    try {
+      const status = await fetchBillingStatus();
+      if (!status || !status.enabled) {
+        setBillingReady(true);
+        return;
+      }
+      setBillingReady(Boolean(status.exempt || status.allowed));
+    } catch {
+      // If status cannot be loaded, let the server turn gate decide.
+      setBillingReady(true);
+    }
+  }, []);
 
   // Cold-start restore: pick the stored session back up before rendering the
   // gate, so a signed-in user lands straight in the chat.
@@ -83,7 +105,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     let cancelled = false;
 
     void loadSession()
-      .then((session) => {
+      .then(async (session) => {
         if (cancelled || !session) {
           return;
         }
@@ -91,6 +113,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         setAuthCookie(session.cookie);
         setViewerEmail(session.email || null);
         setSignedIn(true);
+        await refreshBillingGate();
       })
       .catch(() => {
         // Corrupt or unreadable storage: fall through to the sign-in screen.
@@ -104,7 +127,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshBillingGate]);
 
   const commitSession = useCallback(
     async (
@@ -116,12 +139,13 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       setAuthCookie(credential);
       setViewerEmail(email);
       setSignInState("idle");
+      await refreshBillingGate();
       if (handOffFrom) {
         setAuthHandOff({ from: handOffFrom });
       }
       setSignedIn(true);
     },
-    [],
+    [refreshBillingGate],
   );
 
   const requestToken = useCallback(
@@ -249,6 +273,10 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     setAuthHandOff(null);
   }, []);
 
+  const markBillingReady = useCallback(() => {
+    setBillingReady(true);
+  }, []);
+
   const signOut = useCallback(() => {
     const credential = getAuthCookie();
     void unregisterForPushNotifications(credential);
@@ -258,6 +286,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     setAuthHandOff(null);
     setSignInState("idle");
     setSignInError(null);
+    setBillingReady(true);
     setSignedIn(false);
   }, []);
   // Keep the invalidation listener in sync without writing to a ref in render.
@@ -268,24 +297,28 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       signedIn,
       viewerEmail,
       restoring,
+      billingReady,
       authHandOff,
       signInState,
       signInError,
       signIn,
       signUp,
       completeAuthHandOff,
+      markBillingReady,
       signOut,
     }),
     [
       signedIn,
       viewerEmail,
       restoring,
+      billingReady,
       authHandOff,
       signInState,
       signInError,
       signIn,
       signUp,
       completeAuthHandOff,
+      markBillingReady,
       signOut,
     ],
   );
