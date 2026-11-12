@@ -22,10 +22,13 @@ type AuthMode = "sign-in" | "sign-up";
 /** The sign-in / create-account gate: email/password through the agent's better-auth. */
 export function SignInScreen({
   onCtaFrame,
+  onBack,
   handOffActive = false,
 }: {
   /** Latest measured CTA frame for the composer morph. */
   onCtaFrame?: (frame: AuthCtaFrame) => void;
+  /** Return to the Pearl intro (signed-out start). */
+  onBack?: () => void;
   /** Hide interactive chrome while the morph overlay owns the transition. */
   handOffActive?: boolean;
 }) {
@@ -102,6 +105,26 @@ export function SignInScreen({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.flex}
       >
+        {onBack && !handOffActive ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to intro"
+            className="min-h-11 justify-center px-6"
+            disabled={busy}
+            onPress={onBack}
+          >
+            <Text
+              style={[
+                styles.backLabel,
+                hintColor ? { color: hintColor } : null,
+              ]}
+            >
+              ‹ Back
+            </Text>
+          </Pressable>
+        ) : (
+          <View style={styles.backSpacer} />
+        )}
         <View
           style={[
             styles.center,
@@ -235,6 +258,11 @@ export function SignInScreen({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  backSpacer: { minHeight: 44 },
+  backLabel: {
+    fontSize: 17,
+    fontWeight: "500",
+  },
   center: {
     flex: 1,
     justifyContent: "center",

@@ -12,10 +12,18 @@
 import { SessionStore } from "eve/client";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
+
+import {
+  clearSavedAgentUrl,
+  loadSavedAgentUrl,
+  saveAgentUrl,
+} from "./agent-url";
+import { clearSession, sessionInvalid } from "./session-store";
+
 export { toThreadMessages } from "./message-projection";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-const DEFAULT_AGENT_URL = "https://my-agent-pi-eight.vercel.app";
+export const DEFAULT_AGENT_URL = "https://my-agent-pi-eight.vercel.app";
 
 function metroLanHostname(): string | null {
   const hostUri =
@@ -28,6 +36,10 @@ function metroLanHostname(): string | null {
   return host;
 }
 
+function envOrDefaultAgentUrl(): string {
+  return process.env.EXPO_PUBLIC_AGENT_URL ?? DEFAULT_AGENT_URL;
+}
+
 /**
  * Resolve the agent API base URL.
  *
@@ -35,7 +47,7 @@ function metroLanHostname(): string | null {
  * to Metro's LAN host so local Next stays reachable without editing .env.
  */
 export function resolveAgentUrl(
-  configured = process.env.EXPO_PUBLIC_AGENT_URL ?? DEFAULT_AGENT_URL,
+  configured = envOrDefaultAgentUrl(),
 ): string {
   if (
     Platform.OS === "web" &&
@@ -60,11 +72,32 @@ export function resolveAgentUrl(
   }
 }
 
-// On local web dev, use Metro's loopback-only same-origin proxy so browser
-// requests keep production's CORS/CSRF protection intact. Native clients still
-// contact the configured agent directly; a deployed web build needs its own
-// same-origin API host. Set EXPO_PUBLIC_AGENT_URL for local backend testing.
-export const AGENT_URL = resolveAgentUrl();
+// Live binding: importers that read AGENT_URL at call time pick up overrides
+// after applyAgentUrl / resetAgentUrl. On local web dev, use Metro's
+// loopback-only same-origin proxy so browser requests keep production's
+// CORS/CSRF protection intact.
+export let AGENT_URL = resolveAgentUrl();
+
+const agentUrlListeners = new Set<() => void>();
+
+export function subscribeAgentUrlBinding(listener: () => void): () => void {
+  agentUrlListeners.add(listener);
+  return () => {
+    agentUrlListeners.delete(listener);
+  };
+}
+
+function notifyAgentUrlListeners() {
+  for (const listener of agentUrlListeners) listener();
+}
+
+export function getAgentUrl(): string {
+  return AGENT_URL;
+}
+
+export function isCustomAgentUrl(): boolean {
+  return AGENT_URL !== resolveAgentUrl(envOrDefaultAgentUrl());
+}
 
 // Session credential captured at sign-in (mirrored to SecureStore by
 // session-store). A better-auth bearer token from the sign-in response body
@@ -92,4 +125,50 @@ export function getStore(): SessionStore {
     });
   }
   return store;
+}
+
+function dropSessionStore() {
+  store = null;
+}
+
+async function clearAuthForHostSwitch() {
+  setAuthCookie(null);
+  dropSessionStore();
+  await clearSession();
+  // Notify AuthProvider so signed-in UI state resets (same path as a 401).
+  sessionInvalid();
+}
+
+/**
+ * Point the app at a custom eve deployment. Clears auth so credentials never
+ * cross hosts, persists the URL, and rebuilds the SessionStore on next use.
+ */
+export async function applyAgentUrl(url: string): Promise<string> {
+  await saveAgentUrl(url);
+  const next = resolveAgentUrl(url);
+  AGENT_URL = next;
+  await clearAuthForHostSwitch();
+  notifyAgentUrlListeners();
+  return next;
+}
+
+/** Restore the hosted / env default agent and clear any custom override. */
+export async function resetAgentUrl(): Promise<string> {
+  await clearSavedAgentUrl();
+  AGENT_URL = resolveAgentUrl(envOrDefaultAgentUrl());
+  await clearAuthForHostSwitch();
+  notifyAgentUrlListeners();
+  return AGENT_URL;
+}
+
+/**
+ * Cold-start: load a saved custom agent URL before the first API call.
+ * Does not clear auth — pair with session restore in AuthProvider.
+ */
+export async function restoreAgentUrl(): Promise<string> {
+  const saved = await loadSavedAgentUrl();
+  AGENT_URL = resolveAgentUrl(saved ?? envOrDefaultAgentUrl());
+  dropSessionStore();
+  notifyAgentUrlListeners();
+  return AGENT_URL;
 }

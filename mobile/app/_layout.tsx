@@ -148,6 +148,28 @@ function AuthenticatedLayout() {
                   }}
                 />
                 <Stack.Screen
+                  name="about"
+                  options={{
+                    title: "About",
+                    presentation: "formSheet",
+                    sheetAllowedDetents: [0.92],
+                    sheetGrabberVisible: true,
+                    sheetCornerRadius: 28,
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen
+                  name="self-host"
+                  options={{
+                    title: "Self-host",
+                    presentation: "formSheet",
+                    sheetAllowedDetents: [0.92],
+                    sheetGrabberVisible: true,
+                    sheetCornerRadius: 28,
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen
                   name="json-render-smoke"
                   options={{ title: "json-render smoke" }}
                 />

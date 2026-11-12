@@ -12,7 +12,12 @@ import { router } from "expo-router";
 
 import { BillingSettingsSection } from "@/components/billing-settings-section";
 import { SheetScaffold } from "@/components/sheet-scaffold";
+import { agentHostname } from "@/src/agent-url";
 import { useAuth } from "@/src/auth";
+import {
+  getAgentUrl,
+  subscribeAgentUrlBinding,
+} from "@/src/eve-transport";
 import {
   COMPOSER_MODELS,
   getModelSelection,
@@ -26,9 +31,15 @@ export function SettingsScreen() {
     getModelSelection,
     getModelSelection,
   );
+  const agentUrl = useSyncExternalStore(
+    subscribeAgentUrlBinding,
+    getAgentUrl,
+    getAgentUrl,
+  );
   const selectedLabel =
     COMPOSER_MODELS.find((model) => model.key === selectedKey)?.label ??
     selectedKey;
+  const agentHostLabel = agentHostname(agentUrl);
   const confirmSignOut = () => {
     const complete = () => {
       signOut();
@@ -91,10 +102,22 @@ export function SettingsScreen() {
           detail="Custom and published skills"
           label="Skills"
           onPress={() => router.push("/skills")}
+          showSeparator
+        />
+        <SettingsLink
+          detail={agentHostLabel}
+          label="Self-host"
+          onPress={() => router.push("/self-host")}
         />
       </SettingsGroup>
 
       <View className="overflow-hidden rounded-[10px] bg-card">
+        <SettingsLink
+          detail="What Pearl can do"
+          label="About Pearl"
+          onPress={() => router.push("/about")}
+          showSeparator
+        />
         <Pressable
           accessibilityRole="button"
           className="active:bg-muted/80"

@@ -9,7 +9,12 @@ import {
 } from "react";
 
 import { fetchBillingStatus } from "./billing-client";
-import { AGENT_URL, getAuthCookie, setAuthCookie } from "./eve-transport";
+import {
+  AGENT_URL,
+  getAuthCookie,
+  restoreAgentUrl,
+  setAuthCookie,
+} from "./eve-transport";
 import {
   clearSession,
   loadSession,
@@ -99,30 +104,29 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     }
   }, []);
 
-  // Cold-start restore: pick the stored session back up before rendering the
-  // gate, so a signed-in user lands straight in the chat.
+  // Cold-start restore: agent URL first (so API calls hit the right host),
+  // then the stored session, so a signed-in user lands straight in the chat.
   useEffect(() => {
     let cancelled = false;
 
-    void loadSession()
-      .then(async (session) => {
-        if (cancelled || !session) {
-          return;
-        }
-
+    void (async () => {
+      try {
+        await restoreAgentUrl();
+        if (cancelled) return;
+        const session = await loadSession();
+        if (cancelled || !session) return;
         setAuthCookie(session.cookie);
         setViewerEmail(session.email || null);
         setSignedIn(true);
         await refreshBillingGate();
-      })
-      .catch(() => {
+      } catch {
         // Corrupt or unreadable storage: fall through to the sign-in screen.
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setRestoring(false);
         }
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;

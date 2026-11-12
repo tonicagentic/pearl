@@ -29,6 +29,8 @@ config.resolver.extraNodeModules = {
     mobileNodeModules,
     "@json-render/react-native",
   ),
+  // Same hierarchical-lookup gap as @json-render: `../lib` imports `eve/client`.
+  eve: path.resolve(mobileNodeModules, "eve"),
 };
 
 // uniwind styles React Native components by redirecting every
