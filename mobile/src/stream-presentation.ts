@@ -1,4 +1,14 @@
-import type { ThreadMessageLike } from "@assistant-ui/react-native";
+/**
+ * Minimal message shape used by the pending-assistant helper. Avoid importing
+ * `@assistant-ui/react-native` here so root Next.js typecheck (which can still
+ * see this file via tests) does not need the mobile-only package.
+ */
+export type ThreadMessageLike = {
+  readonly role: string;
+  readonly content?: unknown;
+  readonly status?: { readonly type?: string };
+  readonly metadata?: { readonly status?: string };
+};
 
 /**
  * Live reveal: show every character the model has already produced.
