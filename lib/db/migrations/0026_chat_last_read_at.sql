@@ -1,0 +1,1 @@
+ALTER TABLE "chat" ADD COLUMN "last_read_at" timestamp DEFAULT now() NOT NULL;

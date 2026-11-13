@@ -10,6 +10,8 @@ export type Viewer = {
 export type AuthMode = "email" | "local-dev" | "password" | "unconfigured" | "vercel";
 export type StorageMode = "browser" | "database";
 
+export type ChatPresence = "working" | "waiting" | "unread" | "idle";
+
 export type ChatListItem = {
   readonly id: string;
   readonly title: string;
@@ -17,6 +19,8 @@ export type ChatListItem = {
   readonly projectId?: string | null;
   /** Parked on an approval, question, or authorization the user must answer. */
   readonly waitingForInput: boolean;
+  /** Home-list status: working / waiting / unread / idle. */
+  readonly presence: ChatPresence;
 };
 
 export type ChatListPage = {
@@ -31,6 +35,7 @@ export type ChatSearchHit = {
   readonly updatedAt: string;
   readonly projectId: string | null;
   readonly waitingForInput: boolean;
+  readonly presence: ChatPresence;
   /** Short match excerpt when the hit came from event text rather than title. */
   readonly snippet: string | null;
 };

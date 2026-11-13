@@ -26,6 +26,7 @@ import {
   deleteChat as deleteChatRequest,
   getChat,
   listChats,
+  markChatRead,
   markPendingChatMessage,
   renameChat as renameChatRequest,
   saveChatSession,
@@ -33,6 +34,7 @@ import {
   setChatProject as setChatProjectRequest,
   type ActiveChat,
   type ChatListItem,
+  type ChatPresence,
 } from "./chats-client";
 import { mergeEventsForSnapshot } from "../../lib/chat/eve-session-recovery";
 import { waitingLabelForText } from "../../lib/pearl-lane";
@@ -394,7 +396,11 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
             setActiveProjectIdState(binding.projectId);
           }
           setChats((current) => [
-            { ...created, waitingForInput: false },
+            {
+              ...created,
+              waitingForInput: false,
+              presence: "idle" as const,
+            },
             ...current.filter((chat) => chat.id !== created.id),
           ]);
         } else {
@@ -461,10 +467,57 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     };
   }, []);
 
+  const patchChatPresence = useCallback(
+    (chatId: string, presence: ChatPresence) => {
+      setChats((current) => {
+        const index = current.findIndex((chat) => chat.id === chatId);
+        if (index < 0) return current;
+        const existing = current[index]!;
+        if (
+          existing.presence === presence &&
+          Boolean(existing.waitingForInput) === (presence === "waiting")
+        ) {
+          return current;
+        }
+        const next = [...current];
+        next[index] = {
+          ...existing,
+          presence,
+          waitingForInput: presence === "waiting",
+        };
+        return next;
+      });
+    },
+    [],
+  );
+
+  const markActiveChatRead = useCallback((chatId: string) => {
+    // Optimistic: opening clears unread; waiting/working stay visible.
+    setChats((current) => {
+      const index = current.findIndex((chat) => chat.id === chatId);
+      if (index < 0) return current;
+      const existing = current[index]!;
+      if (existing.presence !== "unread") return current;
+      const next = [...current];
+      next[index] = {
+        ...existing,
+        presence: "idle",
+        waitingForInput: false,
+      };
+      return next;
+    });
+    void markChatRead(chatId).catch(() => {
+      // List will reconcile on the next reload.
+    });
+  }, []);
+
   const selectChat = useCallback(
     async (chatId: string): Promise<boolean> => {
       const generation = ++selectionGeneration.current;
-      if (chatId === activeChatIdRef.current) return true;
+      if (chatId === activeChatIdRef.current) {
+        markActiveChatRead(chatId);
+        return true;
+      }
       setSelectionError(null);
       const retained = retainedStores.get(chatId);
       if (retained) {
@@ -489,6 +542,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         touchRetained(chatId, retained);
         setStore(retained);
         pruneIdleStore(prior);
+        markActiveChatRead(chatId);
         return true;
       }
       try {
@@ -520,6 +574,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         setPersistenceError(null);
         setStore(nextStore);
         pruneIdleStore(prior);
+        markActiveChatRead(chat.id);
         return true;
       } catch {
         if (generation === selectionGeneration.current) {
@@ -528,7 +583,14 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         return false;
       }
     },
-    [buildStore, bindings, retainedStores, touchRetained, pruneIdleStore],
+    [
+      buildStore,
+      bindings,
+      retainedStores,
+      touchRetained,
+      pruneIdleStore,
+      markActiveChatRead,
+    ],
   );
 
   const newChat = useCallback(() => {
@@ -673,23 +735,32 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     }
   }, [store, reloadChats, bindings]);
 
-  // Keep the Recents "needs you" dot in sync with the open chat's HITL park.
+  // Keep the Recents presence mark in sync with the open chat's live store.
   useEffect(() => {
     const chatId = activeChatId;
     if (!chatId) return;
-    return store.subscribe(() => {
+    let wasBusy =
+      store.snapshot.status === "busy" || store.snapshot.status === "resuming";
+    const syncPresence = () => {
       const waiting = hasPendingAction(store.snapshot);
-      setChats((current) => {
-        const index = current.findIndex((chat) => chat.id === chatId);
-        if (index < 0 || Boolean(current[index]?.waitingForInput) === waiting) {
-          return current;
-        }
-        const next = [...current];
-        next[index] = { ...next[index]!, waitingForInput: waiting };
-        return next;
-      });
-    });
-  }, [store, activeChatId]);
+      const busy =
+        store.snapshot.status === "busy" ||
+        store.snapshot.status === "resuming";
+      const presence: ChatPresence = waiting
+        ? "waiting"
+        : busy
+          ? "working"
+          : "idle";
+      // A turn that just finished while this chat is open stays read.
+      if (wasBusy && !busy && !waiting) {
+        void markChatRead(chatId).catch(() => {});
+      }
+      wasBusy = busy;
+      patchChatPresence(chatId, presence);
+    };
+    syncPresence();
+    return store.subscribe(syncPresence);
+  }, [store, activeChatId, patchChatPresence]);
 
   // The auth provider restores the bearer asynchronously; load when signed in.
   useEffect(() => {

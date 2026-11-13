@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 import { get } from "@vercel/blob";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import type { ClientSessionState, SessionStreamEvent } from "eve/client";
-import { chatNeedsUserInput, isChatTurnSettledEvent } from "@/lib/chat/events";
+import {
+  chatPresence,
+  isChatTurnSettledEvent,
+  type ChatPresence,
+} from "@/lib/chat/events";
 import type {
   ActiveChat,
   ChatListItem,
@@ -85,6 +89,7 @@ export async function listChatsPageByUser(
       title: chat.title,
       updatedAt: chat.updatedAt,
       projectId: chat.projectId,
+      lastReadAt: chat.lastReadAt,
     })
     .from(chat)
     .where(
@@ -104,35 +109,53 @@ export async function listChatsPageByUser(
   const hasMore = rows.length > CHAT_HISTORY_PAGE_SIZE;
   const pageRows = hasMore ? rows.slice(0, CHAT_HISTORY_PAGE_SIZE) : rows;
   const last = pageRows[pageRows.length - 1];
-  const waitingByChatId = await waitingForInputByChatIds(
-    pageRows.map((row) => row.id),
+  const presenceByChatId = await presenceByChatIds(
+    pageRows.map((row) => ({
+      id: row.id,
+      lastReadAt: row.lastReadAt,
+    })),
   );
 
   return {
-    items: pageRows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      updatedAt: row.updatedAt.toISOString(),
-      projectId: row.projectId ?? null,
-      waitingForInput: waitingByChatId.get(row.id) ?? false,
-    })),
+    items: pageRows.map((row) => {
+      const presence = presenceByChatId.get(row.id) ?? "idle";
+      return {
+        id: row.id,
+        title: row.title,
+        updatedAt: row.updatedAt.toISOString(),
+        projectId: row.projectId ?? null,
+        waitingForInput: presence === "waiting",
+        presence,
+      };
+    }),
     nextCursor: hasMore && last ? encodeChatCursor(last.updatedAt, last.id) : null,
   };
 }
 
-/** Batch-compute HITL parks for a page of chats from their durable event logs. */
-async function waitingForInputByChatIds(
-  chatIds: readonly string[],
-): Promise<Map<string, boolean>> {
-  const waiting = new Map<string, boolean>();
-  for (const id of chatIds) waiting.set(id, false);
-  if (chatIds.length === 0) return waiting;
+type PresenceChatRef = {
+  readonly id: string;
+  readonly lastReadAt: Date | null;
+};
+
+/** Batch-compute home-list presence from durable event logs. */
+async function presenceByChatIds(
+  chats: readonly PresenceChatRef[],
+): Promise<Map<string, ChatPresence>> {
+  const presence = new Map<string, ChatPresence>();
+  for (const item of chats) presence.set(item.id, "idle");
+  if (chats.length === 0) return presence;
+
+  const chatIds = chats.map((item) => item.id);
+  const lastReadById = new Map(
+    chats.map((item) => [item.id, item.lastReadAt] as const),
+  );
 
   const rows = await db
     .select({
       chatId: chatEvent.chatId,
       event: chatEvent.event,
       eventIndex: chatEvent.eventIndex,
+      createdAt: chatEvent.createdAt,
     })
     .from(chatEvent)
     .where(
@@ -141,7 +164,10 @@ async function waitingForInputByChatIds(
         sql`${chatEvent.event} ->> 'type' in (
           'interaction.opened',
           'interaction.settled',
+          'turn.started',
+          'turn.paused',
           'turn.settled',
+          'delivery.consumed',
           'session.ended'
         )`,
       ),
@@ -149,17 +175,28 @@ async function waitingForInputByChatIds(
     .orderBy(asc(chatEvent.chatId), asc(chatEvent.eventIndex));
 
   const eventsByChat = new Map<string, SessionStreamEvent[]>();
+  const timesByChat = new Map<string, Date[]>();
   for (const row of rows) {
     const list = eventsByChat.get(row.chatId) ?? [];
     list.push(row.event);
     eventsByChat.set(row.chatId, list);
+    const times = timesByChat.get(row.chatId) ?? [];
+    times.push(row.createdAt);
+    timesByChat.set(row.chatId, times);
   }
 
-  for (const [id, events] of eventsByChat) {
-    waiting.set(id, chatNeedsUserInput(events));
+  for (const id of chatIds) {
+    const events = eventsByChat.get(id) ?? [];
+    presence.set(
+      id,
+      chatPresence(events, {
+        lastReadAt: lastReadById.get(id) ?? null,
+        eventTimes: timesByChat.get(id),
+      }),
+    );
   }
 
-  return waiting;
+  return presence;
 }
 
 export async function createChat(
@@ -201,7 +238,28 @@ export async function createChat(
     updatedAt: row.updatedAt.toISOString(),
     projectId: row.projectId ?? null,
     waitingForInput: false,
+    presence: "idle" as const,
   };
+}
+
+/** Stamp the chat as read so home-list unread clears. */
+export async function markChatRead({
+  chatId,
+  userId,
+  readAt = new Date(),
+}: {
+  readonly chatId: string;
+  readonly userId: string;
+  readonly readAt?: Date;
+}): Promise<{ readonly lastReadAt: string } | null> {
+  const [row] = await db
+    .update(chat)
+    .set({ lastReadAt: readAt })
+    .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
+    .returning({ lastReadAt: chat.lastReadAt });
+
+  if (!row) return null;
+  return { lastReadAt: row.lastReadAt.toISOString() };
 }
 
 export async function getChatForUser(chatId: string, userId: string): Promise<ActiveChat | null> {
@@ -600,6 +658,7 @@ export async function searchChatsForUser(
       title: chat.title,
       updatedAt: chat.updatedAt,
       projectId: chat.projectId,
+      lastReadAt: chat.lastReadAt,
       eventText: sql<string | null>`${chatEvent.event}::text`,
       titleMatched: sql<boolean>`${chat.title} ilike ${pattern} escape '\\'`,
     })
@@ -630,6 +689,7 @@ export async function searchChatsForUser(
       title: string;
       updatedAt: Date;
       projectId: string | null;
+      lastReadAt: Date | null;
       titleMatched: boolean;
       eventText: string | null;
     }
@@ -648,6 +708,7 @@ export async function searchChatsForUser(
       title: row.title,
       updatedAt: row.updatedAt,
       projectId: row.projectId ?? null,
+      lastReadAt: row.lastReadAt,
       titleMatched: Boolean(row.titleMatched),
       eventText: row.eventText,
     });
@@ -655,19 +716,23 @@ export async function searchChatsForUser(
   }
 
   const page = [...byId.values()];
-  const waitingByChatId = await waitingForInputByChatIds(page.map((row) => row.id));
+  const presenceByChatId = await presenceByChatIds(
+    page.map((row) => ({ id: row.id, lastReadAt: row.lastReadAt })),
+  );
 
   return page.map((row) => {
     const snippet =
       row.titleMatched || !row.eventText
         ? null
         : makeSearchSnippet(row.eventText, trimmed) || null;
+    const presence = presenceByChatId.get(row.id) ?? "idle";
     return {
       id: row.id,
       title: row.title,
       updatedAt: row.updatedAt.toISOString(),
       projectId: row.projectId,
-      waitingForInput: waitingByChatId.get(row.id) ?? false,
+      waitingForInput: presence === "waiting",
+      presence,
       snippet,
     };
   });

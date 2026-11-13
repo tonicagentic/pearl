@@ -99,6 +99,8 @@ export function AgentChatShell({
   const touchChat = useCallback((chat: ChatListItem) => {
     setHistory((items) => {
       const current = items.find((item) => item.id === chat.id);
+      const presence =
+        chat.presence ?? current?.presence ?? "idle";
 
       return [
         {
@@ -106,7 +108,10 @@ export function AgentChatShell({
           title: chat.title || current?.title || "New chat",
           updatedAt: chat.updatedAt,
           waitingForInput:
-            chat.waitingForInput ?? current?.waitingForInput ?? false,
+            chat.waitingForInput ??
+            current?.waitingForInput ??
+            presence === "waiting",
+          presence,
         },
         ...items.filter((item) => item.id !== chat.id),
       ];
@@ -116,7 +121,14 @@ export function AgentChatShell({
   const updateChatTitle = useCallback((chatId: string, title: string) => {
     setHistory((items) =>
       items.map((item) =>
-        item.id === chatId ? { ...item, title, waitingForInput: item.waitingForInput } : item,
+        item.id === chatId
+          ? {
+              ...item,
+              title,
+              waitingForInput: item.waitingForInput,
+              presence: item.presence,
+            }
+          : item,
       ),
     );
   }, []);

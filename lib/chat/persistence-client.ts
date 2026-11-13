@@ -9,6 +9,7 @@ import {
   createChatAction,
   deleteChatAction,
   markChatPendingMessageAction,
+  markChatReadAction,
   saveChatSessionStateAction,
   saveChatSnapshotAction,
   skipChatAuthorizationAction,
@@ -21,6 +22,7 @@ import {
   getLocalChat,
   listLocalChats,
   markLocalChatPendingMessage,
+  markLocalChatRead,
   saveLocalChatSession,
   saveLocalChatSnapshot,
   skipLocalChatAuthorization,
@@ -179,4 +181,15 @@ export async function skipClientChatAuthorization(
   return storageMode === "browser"
     ? skipLocalChatAuthorization(input)
     : skipChatAuthorizationAction(input);
+}
+
+export async function markClientChatRead(
+  storageMode: StorageMode,
+  chatId: string,
+) {
+  if (storageMode === "browser") {
+    markLocalChatRead(chatId);
+    return { lastReadAt: new Date().toISOString() };
+  }
+  return markChatReadAction(chatId);
 }

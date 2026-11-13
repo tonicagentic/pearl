@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import {
   Button,
   ContextMenu,
@@ -7,6 +7,7 @@ import {
   HStack,
   Image,
   List,
+  RNHostView,
   Section,
   Spacer,
   SwipeActions,
@@ -31,6 +32,11 @@ import { useCSSVariable } from "uniwind";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
+import {
+  CHAT_PRESENCE_AMBER,
+  CHAT_PRESENCE_BLUE,
+  chatListPresence,
+} from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
 
 import type {
@@ -72,7 +78,6 @@ export function HistoryListIOS({
   const mutedColor =
     (useCSSVariable("--color-muted-foreground") as string | undefined) ??
     "#8E8E93";
-  const amberColor = "#F59E0B";
   const listTopClearance = insets.top + 44;
   const iosSearchClearance = 52 + 24 + Math.max(insets.bottom, 12);
   const rowChrome = [
@@ -179,7 +184,6 @@ export function HistoryListIOS({
                   <RecentChatRow
                     chat={chat}
                     mutedColor={mutedColor}
-                    amberColor={amberColor}
                     rowBackground={rowBackground}
                     onOpen={() => openChat(chat.id)}
                     actions={actions}
@@ -205,21 +209,39 @@ export function HistoryListIOS({
 function RecentChatRow({
   chat,
   mutedColor,
-  amberColor,
   rowBackground,
   onOpen,
   actions,
 }: {
   readonly chat: ChatListItem;
   readonly mutedColor: string;
-  readonly amberColor: string;
   readonly rowBackground: string;
   readonly onOpen: () => void;
   readonly actions: HistoryChatActionHandlers;
 }) {
-  const waiting = Boolean(chat.waitingForInput);
+  const presence = chatListPresence(chat);
   const when = formatChatUpdatedAt(chat.updatedAt);
   const projectId = chat.projectId ?? null;
+  const markTint =
+    presence === "waiting"
+      ? CHAT_PRESENCE_AMBER
+      : presence === "unread"
+        ? CHAT_PRESENCE_BLUE
+        : mutedColor;
+  const statusMark =
+    presence === "working" ? (
+      <RNHostView matchContents>
+        <View style={{ width: 12, height: 12, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="small" color={mutedColor} style={{ transform: [{ scale: 0.55 }] }} />
+        </View>
+      </RNHostView>
+    ) : (
+      <Image
+        systemName="circle.fill"
+        size={8}
+        modifiers={[tint(markTint)]}
+      />
+    );
   const row = (
     <Button onPress={onOpen} modifiers={[buttonStyle("plain")]}>
       <HStack
@@ -227,11 +249,7 @@ function RecentChatRow({
         alignment="center"
         modifiers={[padding({ vertical: 6 })]}
       >
-        <Image
-          systemName="circle.fill"
-          size={8}
-          modifiers={[tint(waiting ? amberColor : mutedColor)]}
-        />
+        {statusMark}
         <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
           {chat.title}
         </SwiftText>

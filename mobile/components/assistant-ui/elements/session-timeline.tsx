@@ -2,6 +2,7 @@ import { useContext, useMemo, useState, type FC } from "react";
 import { useAuiState } from "@assistant-ui/react-native";
 
 import {
+  hasOpenQuestion,
   isTimelineToolCall,
   type AssistantMessagePart,
 } from "@/src/assistant-blocks";
@@ -22,6 +23,7 @@ export {
 } from "./timeline-duration-events";
 
 export {
+  hasOpenQuestion,
   isContentBlockPart,
   isStandaloneTool,
   isTimelineCoveredPart,
@@ -344,6 +346,9 @@ export const SessionTimelineSegment: FC<{
     (s) => s.message.metadata?.custom?.turnId as string | undefined,
   );
   const messageParts = useAuiState((s) => s.message.parts) as readonly unknown[];
+  const askingQuestions = useAuiState((s) =>
+    hasOpenQuestion(s.message.parts as readonly AssistantMessagePart[]),
+  );
   const toolCalls = useMemo(
     () => asTimelineParts(messageParts, indices),
     [messageParts, indices],
@@ -351,7 +356,10 @@ export const SessionTimelineSegment: FC<{
 
   const liveEvents = useEveEvents();
   const events = overrideEvents ?? liveEvents;
-  const showLive = live && (streaming || awaitingInput);
+  // Questions own the status line ("Asking questions"); fold the timeline.
+  // Approvals / sign-in keep the live shimmer until the user answers.
+  const showLive =
+    live && (streaming || (awaitingInput && !askingQuestions));
   // Event-log span once the turn settles; while the answer is still printing
   // we reuse the frozen live clock from TurnElapsedProvider instead.
   const settledDuration = useMemo(() => {

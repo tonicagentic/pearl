@@ -1,4 +1,4 @@
-import { Platform, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
 import {
@@ -18,6 +18,12 @@ import {
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
+import {
+  CHAT_PRESENCE_AMBER,
+  CHAT_PRESENCE_BLUE,
+  chatListPresence,
+  chatPresenceAccessibilityLabel,
+} from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
 
 export type { HistoryChatActionHandlers, SidebarDestination };
@@ -120,7 +126,7 @@ function HistoryListAndroid({
           className="flex-1"
           contentContainerClassName="px-4 pb-8 pt-2"
           data={chats}
-          extraData={`${activeChatId}:${chats.map((chat) => (chat.waitingForInput ? "1" : "0")).join("")}`}
+          extraData={`${activeChatId}:${chats.map((chat) => chat.presence ?? (chat.waitingForInput ? "waiting" : "idle")).join("")}`}
           keyExtractor={(chat) => chat.id}
           ItemSeparatorComponent={() => (
             <View className="ml-7 border-b border-border/60" />
@@ -273,27 +279,39 @@ function RecentChatRowAndroid({
   readonly mutedDot: string;
   readonly onPress: () => void;
 }) {
-  const waiting = Boolean(chat.waitingForInput);
+  const presence = chatListPresence(chat);
   const when = formatChatUpdatedAt(chat.updatedAt);
+  const markColor =
+    presence === "waiting"
+      ? CHAT_PRESENCE_AMBER
+      : presence === "unread"
+        ? CHAT_PRESENCE_BLUE
+        : mutedDot;
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      accessibilityLabel={
-        waiting
-          ? `${chat.title}, waiting for your reply`
-          : chat.title
-      }
+      accessibilityLabel={chatPresenceAccessibilityLabel(chat.title, presence)}
       className={`min-h-12 flex-row items-center gap-2.5 rounded-lg px-3 ${selected ? "bg-muted/50" : ""}`}
       onPress={onPress}
     >
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no"
-        className="h-2 w-2 shrink-0 rounded-full"
-        style={{ backgroundColor: waiting ? "#F59E0B" : mutedDot }}
-      />
+      {presence === "working" ? (
+        <ActivityIndicator
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          size="small"
+          color={mutedDot}
+          style={{ width: 8, height: 8, transform: [{ scale: 0.55 }] }}
+        />
+      ) : (
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          className="h-2 w-2 shrink-0 rounded-full"
+          style={{ backgroundColor: markColor }}
+        />
+      )}
       <Text
         className="flex-1 text-base text-foreground"
         numberOfLines={1}

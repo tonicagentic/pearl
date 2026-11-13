@@ -106,6 +106,8 @@ export const chat = pgTable(
       >()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    // Last time the owner opened this chat (unread = settle after this).
+    lastReadAt: timestamp("last_read_at").notNull().defaultNow(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

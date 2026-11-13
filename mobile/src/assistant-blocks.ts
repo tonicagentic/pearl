@@ -12,6 +12,10 @@ export type AssistantMessagePart = {
   readonly text?: string;
   readonly toolName?: string;
   readonly status?: { readonly type?: string };
+  readonly approval?: {
+    readonly display?: string;
+    readonly approved?: boolean;
+  };
 };
 
 export type AssistantTimelineBlock = {
@@ -153,4 +157,25 @@ export function isTrailingContentPhase(
 ): boolean {
   if (blocks.length === 0) return false;
   return blocks[blocks.length - 1]?.kind === "content";
+}
+
+/**
+ * True when the assistant turn is parked on an unanswered ask_question
+ * (select / free-text). Approvals and sign-in are not questions.
+ */
+export function hasOpenQuestion(
+  parts: readonly AssistantMessagePart[],
+): boolean {
+  return parts.some((part) => {
+    if (part.type !== "tool-call") return false;
+    if (part.toolName === "ask_question") {
+      return (
+        part.status?.type === "requires-action" ||
+        (part.approval != null && part.approval.approved === undefined)
+      );
+    }
+    const display = part.approval?.display;
+    if (display !== "select" && display !== "text") return false;
+    return part.approval?.approved === undefined;
+  });
 }

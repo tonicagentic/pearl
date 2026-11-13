@@ -7,12 +7,15 @@ import type { ClientSessionState, SessionStreamEvent } from 'eve/client';
 import { AGENT_URL, getAuthCookie } from './eve-transport';
 import { sessionInvalid } from './session-store';
 
+export type ChatPresence = "working" | "waiting" | "unread" | "idle";
+
 export type ChatListItem = {
   readonly id: string;
   readonly title: string;
   readonly updatedAt: string;
   readonly projectId?: string | null;
   readonly waitingForInput?: boolean;
+  readonly presence?: ChatPresence;
 };
 
 export type ChatSearchHit = {
@@ -21,6 +24,7 @@ export type ChatSearchHit = {
   readonly updatedAt: string;
   readonly projectId: string | null;
   readonly waitingForInput: boolean;
+  readonly presence: ChatPresence;
   readonly snippet: string | null;
 };
 
@@ -307,6 +311,22 @@ export async function markPendingChatMessage(chatId: string, message: string): P
   if (!response.ok) {
     if (response.status === 401) sessionInvalid();
     throw new Error(`Failed to save pending message (${response.status}).`);
+  }
+}
+
+/** Stamp the chat as read so home-list unread clears across devices. */
+export async function markChatRead(chatId: string): Promise<void> {
+  const response = await fetch(
+    `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/sync`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ markRead: true }),
+    },
+  );
+  if (!response.ok) {
+    if (response.status === 401) sessionInvalid();
+    throw new Error(`Failed to mark chat read (${response.status}).`);
   }
 }
 

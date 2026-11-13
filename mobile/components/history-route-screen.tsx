@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
-import { Alert, Platform, View } from "react-native";
-import { Stack, router } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, AppState, Platform, View } from "react-native";
+import { Stack, router, useFocusEffect } from "expo-router";
 import { useCSSVariable } from "uniwind";
 
 import {
@@ -14,6 +14,8 @@ import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
+
+const HOME_PRESENCE_POLL_MS = 5_000;
 
 /**
  * Home (Stack root): recents + Projects/Tasks entry points.
@@ -33,12 +35,41 @@ export function HistoryRouteScreen() {
     renameChat,
     setChatProject,
     selectChat,
+    reloadChats,
   } = useChats();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [costOpen, setCostOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectTargetId, setProjectTargetId] = useState<string | null>(null);
+  const homeFocusedRef = useRef(false);
+
+  // While home is focused and the app is active, refresh presence so off-screen
+  // turns move the working / waiting / unread marks without opening each chat.
+  useFocusEffect(
+    useCallback(() => {
+      homeFocusedRef.current = true;
+      void reloadChats();
+      const timer = setInterval(() => {
+        if (AppState.currentState !== "active") return;
+        void reloadChats();
+      }, HOME_PRESENCE_POLL_MS);
+      return () => {
+        homeFocusedRef.current = false;
+        clearInterval(timer);
+      };
+    }, [reloadChats]),
+  );
+
+  useEffect(() => {
+    const onChange = (next: string) => {
+      if (next === "active" && homeFocusedRef.current) {
+        void reloadChats();
+      }
+    };
+    const subscription = AppState.addEventListener("change", onChange);
+    return () => subscription.remove();
+  }, [reloadChats]);
 
   const openDestination = useCallback((href: SidebarDestination) => {
     router.push(href);

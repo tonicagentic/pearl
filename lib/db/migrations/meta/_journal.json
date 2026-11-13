@@ -169,6 +169,13 @@
       "when": 1794561062347,
       "tag": "0025_sturdy_manta",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794603704086,
+      "tag": "0026_chat_last_read_at",
+      "breakpoints": true
     }
   ]
 }

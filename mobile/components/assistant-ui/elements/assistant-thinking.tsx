@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 
 import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
 import {
+  hasOpenQuestion,
   isTimelineToolCall,
   isTrailingContentPhase,
   splitAssistantBlocks,
@@ -16,13 +17,16 @@ import {
 
 const STALL_WARNING_S = 45;
 const STALL_LABEL = "Still working — the model may be slow or unreachable.";
+const ASKING_QUESTIONS_LABEL = "Asking questions";
 /** Selector sentinel — must stay a stable primitive for useAuiState. */
 const WAITING_PHASE = "waiting";
+const ASKING_PHASE = "asking";
 
 /**
- * Bottom status for pre-content / uncovered tools. Hidden while the answer
- * streams (timeline already shows Worked for) and while a trailing timeline
- * owns live Working — except stall warnings during active work.
+ * Bottom status for pre-content / uncovered tools / open questions. Hidden
+ * while the answer streams (timeline already shows Worked for) and while a
+ * trailing timeline owns live Working — except stall warnings during active
+ * work, and "Asking questions" while a question parks the turn.
  */
 export function AssistantThinking() {
   const waitingLabel = useSyncExternalStore(
@@ -32,8 +36,14 @@ export function AssistantThinking() {
   );
   // useAuiState compares with Object.is — return strings/undefined only.
   const phase = useAuiState((s) => {
-    if (s.message.status?.type !== "running") return undefined;
+    const statusType = s.message.status?.type;
     const parts = s.message.parts as readonly AssistantMessagePart[];
+
+    if (statusType === "requires-action" && hasOpenQuestion(parts)) {
+      return ASKING_PHASE;
+    }
+
+    if (statusType !== "running") return undefined;
     // Final (or mid-turn) prose / cards are on screen — no bottom spinner.
     if (isTrailingContentPhase(splitAssistantBlocks(parts))) return undefined;
 
@@ -63,7 +73,11 @@ export function AssistantThinking() {
   });
 
   const label =
-    phase === WAITING_PHASE ? waitingLabel : phase;
+    phase === ASKING_PHASE
+      ? ASKING_QUESTIONS_LABEL
+      : phase === WAITING_PHASE
+        ? waitingLabel
+        : phase;
 
   const answerPhase = useAuiState((s) => {
     if (s.message.status?.type !== "running") return false;
@@ -79,19 +93,20 @@ export function AssistantThinking() {
     return blocks.length > 0 && blocks[blocks.length - 1]?.kind === "timeline";
   });
 
+  const askingQuestions = phase === ASKING_PHASE;
   const elapsed = useTurnElapsed();
   const seconds = Number.parseInt(elapsed ?? "0", 10);
   const stalled = Number.isFinite(seconds) && seconds > STALL_WARNING_S;
 
   // Answer text is the status; don't put Working/stall under it.
   if (answerPhase) return null;
-  if (trailingTimelineLive && !stalled) return null;
+  if (trailingTimelineLive && !stalled && !askingQuestions) return null;
   if (label === undefined && !stalled) return null;
 
   return (
     <ThinkingIndicator
-      label={stalled ? STALL_LABEL : (label ?? "Thinking…")}
-      elapsed={elapsed}
+      label={stalled && !askingQuestions ? STALL_LABEL : (label ?? "Thinking…")}
+      elapsed={askingQuestions ? undefined : elapsed}
     />
   );
 }

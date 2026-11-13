@@ -18,6 +18,7 @@ import {
 import {
   createClientChat,
   getClientChat,
+  markClientChatRead,
 } from "@/lib/chat/persistence-client";
 import type { ActiveChat } from "@/lib/chat/types";
 
@@ -204,6 +205,9 @@ export function SessionChatPage({
           clearPendingChatMessage(chatId);
         }
         setClientError(null);
+        void markClientChatRead(setupStatus.storageMode, chatId).catch(() => {
+          // Unread will clear on the next successful open.
+        });
       } catch (error) {
         if (!cancelled && !abortController.signal.aborted) {
           setClientError(

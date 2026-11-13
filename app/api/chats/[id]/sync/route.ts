@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   appendChatEventsAction,
   markChatPendingMessageAction,
+  markChatReadAction,
   saveChatSessionStateAction,
   saveChatSnapshotAction,
 } from "@/app/actions/chat";
@@ -21,11 +22,17 @@ export async function POST(
     readonly append?: readonly { readonly event: unknown; readonly eventIndex: number }[];
     readonly pendingUserMessage?: string;
     readonly session?: unknown;
+    readonly markRead?: boolean;
   };
 
   const { id: chatId } = await params;
 
   try {
+    if (body.markRead === true) {
+      const result = await markChatReadAction(chatId);
+      return NextResponse.json(result);
+    }
+
     if (body.append !== undefined) {
       if (!Array.isArray(body.append) || body.append.some(
         (entry) => !Number.isSafeInteger(entry?.eventIndex) || entry.eventIndex < 0 ||

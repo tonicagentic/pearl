@@ -28,6 +28,11 @@ import {
   type ChatListItem,
   type ChatSearchHit,
 } from "@/src/chats-client";
+import {
+  chatListPresence,
+  chatPresenceAccessibilityLabel,
+  type ChatPresence,
+} from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
 
 const DEBOUNCE_MS = 250;
@@ -205,7 +210,7 @@ export function HistorySearchScreen({
                 key={chat.id}
                 title={chat.title}
                 subtitle={formatChatUpdatedAt(chat.updatedAt)}
-                waiting={Boolean(chat.waitingForInput)}
+                presence={chatListPresence(chat)}
                 cardColor={cardColor}
                 borderColor={borderColor}
                 foregroundColor={foregroundColor}
@@ -236,7 +241,7 @@ export function HistorySearchScreen({
                   subtitle={
                     snippet?.trim() || formatChatUpdatedAt(chat.updatedAt)
                   }
-                  waiting={Boolean(chat.waitingForInput)}
+                  presence={chatListPresence(chat)}
                   cardColor={cardColor}
                   borderColor={borderColor}
                   foregroundColor={foregroundColor}
@@ -255,7 +260,7 @@ export function HistorySearchScreen({
 function SearchPill({
   title,
   subtitle,
-  waiting,
+  presence,
   cardColor,
   borderColor,
   foregroundColor,
@@ -264,19 +269,24 @@ function SearchPill({
 }: {
   readonly title: string;
   readonly subtitle: string;
-  readonly waiting: boolean;
+  readonly presence: ChatPresence;
   readonly cardColor: string | undefined;
   readonly borderColor: string | undefined;
   readonly foregroundColor: string | undefined;
   readonly mutedColor: string | undefined;
   readonly onPress: () => void;
 }) {
+  const thumbBg =
+    presence === "waiting"
+      ? "rgba(245,158,11,0.2)"
+      : presence === "unread"
+        ? "rgba(59,130,246,0.2)"
+        : "rgba(127,127,127,0.18)";
+
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={
-        waiting ? `${title}, waiting for your reply` : title
-      }
+      accessibilityLabel={chatPresenceAccessibilityLabel(title, presence)}
       onPress={onPress}
       style={[
         styles.pill,
@@ -286,22 +296,21 @@ function SearchPill({
         },
       ]}
     >
-      <View
-        style={[
-          styles.thumb,
-          {
-            backgroundColor: waiting
-              ? "rgba(245,158,11,0.2)"
-              : "rgba(127,127,127,0.18)",
-          },
-        ]}
-      >
-        <Icon
-          as={MessageSquareIcon}
-          className={
-            waiting ? "size-5 text-amber-500" : "size-5 text-muted-foreground"
-          }
-        />
+      <View style={[styles.thumb, { backgroundColor: thumbBg }]}>
+        {presence === "working" ? (
+          <ActivityIndicator size="small" color={mutedColor} />
+        ) : (
+          <Icon
+            as={MessageSquareIcon}
+            className={
+              presence === "waiting"
+                ? "size-5 text-amber-500"
+                : presence === "unread"
+                  ? "size-5 text-blue-500"
+                  : "size-5 text-muted-foreground"
+            }
+          />
+        )}
       </View>
       <View style={styles.pillText}>
         <Text

@@ -1,16 +1,17 @@
 "use client";
 
 import type { ClientSessionState, SessionStreamEvent } from "eve/client";
-import { chatNeedsUserInput } from "@/lib/chat/events";
+import { chatPresence } from "@/lib/chat/events";
 import { createFallbackTitle, DEFAULT_CHAT_TITLE } from "@/lib/chat/title";
 import type { ActiveChat, ChatListItem } from "@/lib/chat/types";
 
 const STORAGE_KEY = "eve-chat-template:chats";
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 const MAX_STORED_CHATS = 50;
 
 type StoredChat = ActiveChat & {
   readonly updatedAt: string;
+  readonly lastReadAt: string;
 };
 
 type StoredChatState = {
@@ -39,11 +40,20 @@ export function createLocalChat(pendingUserMessage?: string) {
     session: undefined,
     title: pendingMessage ? createFallbackTitle(pendingMessage) : DEFAULT_CHAT_TITLE,
     updatedAt: now,
+    lastReadAt: now,
   };
 
   updateState((chats) => [chat, ...chats]);
 
   return toListItem(chat);
+}
+
+export function markLocalChatRead(chatId: string, readAt = new Date()) {
+  const iso = readAt.toISOString();
+  return updateChat(chatId, (chat) => ({
+    ...chat,
+    lastReadAt: iso,
+  }));
 }
 
 export function deleteLocalChat(chatId: string) {
@@ -238,11 +248,15 @@ function toActiveChat(chat: StoredChat): ActiveChat {
 }
 
 function toListItem(chat: StoredChat): ChatListItem {
+  const presence = chatPresence(chat.events, {
+    lastReadAt: chat.lastReadAt,
+  });
   return {
     id: chat.id,
     title: chat.title,
     updatedAt: chat.updatedAt,
-    waitingForInput: chatNeedsUserInput(chat.events),
+    waitingForInput: presence === "waiting",
+    presence,
   };
 }
 

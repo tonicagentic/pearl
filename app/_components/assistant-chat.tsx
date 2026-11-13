@@ -75,10 +75,11 @@ import {
   appendClientChatEvents,
   checkClientSendLimit,
   createClientChat,
+  markClientChatRead,
   saveClientChatSession,
   saveClientChatSnapshot,
 } from "@/lib/chat/persistence-client";
-import { chatNeedsUserInput } from "@/lib/chat/events";
+import { chatPresence } from "@/lib/chat/events";
 import { createFallbackTitle } from "@/lib/chat/title";
 import type { ActiveChat, StorageMode } from "@/lib/chat/types";
 
@@ -511,12 +512,17 @@ function AssistantChatSurfaceInner({
           archivedEventsRef.current = events;
           eventIndexRef.current = events.length;
           savedEventCountRef.current = events.length;
+          const presence = chatPresence(events, {
+            lastReadAt: new Date().toISOString(),
+          });
           touchChat({
             id,
             title: currentTitleRef.current,
             updatedAt: new Date().toISOString(),
-            waitingForInput: chatNeedsUserInput(events),
+            waitingForInput: presence === "waiting",
+            presence: presence === "unread" ? "idle" : presence,
           });
+          void markClientChatRead(storageMode, id).catch(() => {});
           onActiveChatUpdated?.({
             id,
             events,

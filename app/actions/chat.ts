@@ -9,6 +9,7 @@ import {
   deleteChatForUser,
   listChatsByUser,
   markChatPendingMessage,
+  markChatRead,
   saveChatSnapshot,
   saveChatSessionState,
   skipChatAuthorization,
@@ -114,6 +115,15 @@ export async function clearChatPendingMessageAction(chatId: string) {
   });
 
   return { ok: true };
+}
+
+export async function markChatReadAction(chatId: string) {
+  const viewer = await requireViewer();
+  const result = await markChatRead({ chatId, userId: viewer.id });
+  if (!result) {
+    throw new Error("Chat not found.");
+  }
+  return result;
 }
 
 export async function skipChatAuthorizationAction(input: {
