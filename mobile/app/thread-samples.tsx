@@ -33,7 +33,7 @@ function SampleToolFallback(props: ToolCallMessagePartProps) {
  * or via pearl:///thread-samples. Never writes to /api/chats.
  */
 export default function ThreadSamplesScreen() {
-  const [sampleId, setSampleId] = useState<ThreadSampleId>("one-read");
+  const [sampleId, setSampleId] = useState<ThreadSampleId>("approve");
   const sample = threadSample(sampleId);
   const backgroundColor = useCSSVariable("--color-background") as
     | string
@@ -57,6 +57,25 @@ export default function ThreadSamplesScreen() {
   );
   const runtime = useExternalStoreRuntime(adapter);
 
+  const waitingAction = sample.waitingAction
+    ? sample.waitingAction.kind === "questions"
+      ? {
+          ...sample.waitingAction,
+          onRespond: async () => {
+            /* fixture — no session to continue */
+          },
+          onSkip: async () => {
+            /* fixture — local Skip still advances the pager */
+          },
+        }
+      : {
+          ...sample.waitingAction,
+          onRespond: async () => {
+            /* fixture — no session to continue */
+          },
+        }
+    : null;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor }} edges={["bottom"]}>
       <Stack.Screen
@@ -64,9 +83,21 @@ export default function ThreadSamplesScreen() {
           title: "Thread samples",
           headerShown: true,
           headerTintColor: foregroundColor,
+          headerStyle: backgroundColor
+            ? { backgroundColor }
+            : undefined,
         }}
       />
-      <View className="border-border/60 flex-row flex-wrap gap-2 border-b px-4 py-3">
+      {/* Solid bar so the thread list cannot steal taps from the mode chips. */}
+      <View
+        className="border-border/60 flex-row flex-wrap gap-2 border-b px-4 pb-3"
+        style={{
+          backgroundColor,
+          paddingTop: 12,
+          zIndex: 2,
+          elevation: 2,
+        }}
+      >
         {THREAD_SAMPLES.map((entry) => {
           const selected = entry.id === sampleId;
           return (
@@ -74,10 +105,11 @@ export default function ThreadSamplesScreen() {
               key={entry.id}
               accessibilityRole="button"
               accessibilityState={{ selected }}
+              hitSlop={8}
               className={
                 selected
-                  ? "bg-foreground rounded-full px-3.5 py-2"
-                  : "bg-muted rounded-full px-3.5 py-2"
+                  ? "bg-foreground rounded-full px-3.5 py-2.5"
+                  : "bg-muted rounded-full px-3.5 py-2.5"
               }
               onPress={() => setSampleId(entry.id)}
             >
@@ -99,8 +131,11 @@ export default function ThreadSamplesScreen() {
           <Thread
             autoFocus={false}
             chromeRevealed
+            // Samples sit under solid header + mode chips, not a transparent nav.
+            contentPaddingTop={16}
             conversationId={`sample:${sample.id}`}
             components={{ ToolFallback: SampleToolFallback }}
+            waitingAction={waitingAction}
           />
         </AssistantRuntimeProvider>
       </TimelineDurationEventsProvider>

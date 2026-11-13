@@ -12,6 +12,7 @@ const {
   toThreadMessages,
   hasPendingAction,
   getPendingApprovals,
+  composerWaitingQuestions,
   isTaskNotification,
   pendingMessageLabel,
 } = await import("../mobile/src/message-projection.ts");
@@ -225,6 +226,122 @@ test("choice schema question keeps real option ids", () => {
     ["yes", "no"],
   );
   assert.equal(pending[0].kind, "question");
+});
+
+test("multiple open questions return in order with skip option dismissible", () => {
+  const data = {
+    messages: [
+      assistant(
+        [
+          {
+            type: "interaction",
+            interactionId: "q-a",
+            turnId: "turn",
+            stepIndex: 0,
+            status: "open",
+            request: {
+              kind: "question",
+              display: "select",
+              prompt: "First?",
+              options: [
+                { id: "one", label: "One" },
+                { id: "skip", label: "Skip" },
+              ],
+            },
+            call: { name: "ask_question" },
+          },
+          {
+            type: "interaction",
+            interactionId: "q-b",
+            turnId: "turn",
+            stepIndex: 0,
+            status: "open",
+            request: {
+              kind: "question",
+              display: "select",
+              prompt: "Second?",
+              options: [
+                { id: "yes", label: "Yes" },
+                { id: "no", label: "No" },
+              ],
+            },
+            call: { name: "ask_question" },
+          },
+          {
+            type: "interaction",
+            interactionId: "q-c",
+            turnId: "turn",
+            stepIndex: 0,
+            status: "open",
+            request: {
+              kind: "question",
+              display: "text",
+              prompt: "Third?",
+              allowFreeform: true,
+            },
+            call: { name: "ask_question" },
+          },
+          {
+            type: "interaction",
+            interactionId: "q-d",
+            turnId: "turn",
+            stepIndex: 0,
+            status: "open",
+            request: {
+              kind: "question",
+              display: "text",
+              prompt: "Fourth beyond composer cap?",
+              allowFreeform: true,
+            },
+            call: { name: "ask_question" },
+          },
+        ],
+        "complete",
+      ),
+    ],
+  };
+  const pending = getPendingApprovals(data);
+  assert.equal(pending.length, 4);
+  assert.deepEqual(
+    pending.map((item) => item.requestId),
+    ["q-a", "q-b", "q-c", "q-d"],
+  );
+  assert.equal(pending[0].dismissible, true);
+  assert.equal(pending[0].skipOptionId, "skip");
+  assert.equal(pending[1].dismissible, undefined);
+  assert.deepEqual(
+    pending.filter((item) => item.kind === "question").slice(0, 3).map((item) => item.requestId),
+    ["q-a", "q-b", "q-c"],
+  );
+});
+
+test("composer waiting questions omit text-only stacks but keep mixed multi-ask", () => {
+  const textOnly = {
+    requestId: "t1",
+    toolName: "ask_question",
+    kind: "question",
+    display: "text",
+    prompt: "Anything else?",
+    options: [],
+    allowFreeform: true,
+  };
+  const choice = {
+    requestId: "c1",
+    toolName: "ask_question",
+    kind: "question",
+    display: "select",
+    prompt: "Pick one",
+    options: [
+      { id: "a", label: "A" },
+      { id: "b", label: "B" },
+    ],
+    allowFreeform: false,
+  };
+  assert.deepEqual(composerWaitingQuestions([textOnly]), []);
+  assert.deepEqual(
+    composerWaitingQuestions([choice, textOnly]).map((item) => item.requestId),
+    ["c1", "t1"],
+  );
 });
 
 test("propose_schema approval surfaces statement detail and Allow/Deny", () => {

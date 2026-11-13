@@ -253,7 +253,56 @@ export type PendingApproval = {
   readonly options: readonly { readonly id: string; readonly label: string }[];
   /** True when the user may type a free-form answer (questions). */
   readonly allowFreeform: boolean;
+  /**
+   * True when Skip may settle this question (request flag or a cancel-like
+   * option). Multi-question Skip can still navigate without this.
+   */
+  readonly dismissible?: boolean;
+  /** Option id to send when Skip dismisses (cancel / skip / deny / dismiss). */
+  readonly skipOptionId?: string;
 };
+
+const SKIP_OPTION_KEYS = new Set(["skip", "cancel", "deny", "dismiss"]);
+
+/** Choice / select question — belongs in the composer Questions card. */
+export function isChoicePendingQuestion(pending: PendingApproval): boolean {
+  return pending.kind === "question" && pending.options.length > 0;
+}
+
+/** Text-only ask — stays in the thread; answer via the normal composer. */
+export function isTextOnlyPendingQuestion(pending: PendingApproval): boolean {
+  return pending.kind === "question" && pending.options.length === 0;
+}
+
+/**
+ * Parks that should morph the composer. Text-only questions are omitted unless
+ * they ride along in a multi-ask stack that already has a choice question.
+ */
+export function composerWaitingQuestions(
+  pending: readonly PendingApproval[],
+): readonly PendingApproval[] {
+  const questions = pending.filter((item) => item.kind === "question");
+  if (!questions.some(isChoicePendingQuestion)) return [];
+  return questions.slice(0, 3);
+}
+
+/** Prefer an explicit cancel-like option for Skip dismiss. */
+export function pendingSkipOptionId(
+  options: readonly { readonly id: string; readonly label: string }[],
+): string | undefined {
+  const match = options.find((option) => {
+    const id = option.id.trim().toLowerCase();
+    const label = option.label.trim().toLowerCase();
+    return SKIP_OPTION_KEYS.has(id) || SKIP_OPTION_KEYS.has(label);
+  });
+  return match?.id;
+}
+
+function requestDismissible(request: {
+  readonly dismissible?: boolean;
+}): boolean {
+  return request.dismissible === true;
+}
 
 function pendingDisplay(
   request: {
@@ -337,6 +386,14 @@ export function getPendingApprovals(data: ConversationMessages): readonly Pendin
       kind === "question"
         ? "Answer the question to continue."
         : `Approve tool call: ${toolName}`;
+    const skipOptionId =
+      kind === "question" ? pendingSkipOptionId(options) : undefined;
+    const dismissible =
+      kind === "question" &&
+      (requestDismissible(
+        request as { readonly dismissible?: boolean },
+      ) ||
+        skipOptionId != null);
     return [
       {
         requestId: interaction.interactionId,
@@ -347,6 +404,8 @@ export function getPendingApprovals(data: ConversationMessages): readonly Pendin
         ...(summary ? { detail: summary } : {}),
         options,
         allowFreeform,
+        ...(dismissible ? { dismissible: true } : {}),
+        ...(skipOptionId ? { skipOptionId } : {}),
       },
     ];
   });

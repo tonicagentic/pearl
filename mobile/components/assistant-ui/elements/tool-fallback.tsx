@@ -25,6 +25,7 @@ import {
 import { getToolPresentation } from "./tool-presentation";
 import { formatUnknownValue } from "../utils/task";
 import { useWorkspaceOptional } from "@/src/workspace-context";
+import { useComposerOwnsHitl } from "@/components/assistant-ui/elements/composer-owns-hitl";
 
 function approvalDetail(args: Record<string, unknown> | undefined): string | null {
   if (!args) return null;
@@ -135,11 +136,15 @@ export const ToolFallbackApproval: FC<
   className,
 }) => {
   const hydrated = useHydrated();
+  const composerOwnsHitl = useComposerOwnsHitl();
   const [submitted, setSubmitted] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState<string | null>(null);
   useAnnounce(error ?? undefined);
+
+  // Composer shell owns interactive HITL while waitingAction is set.
+  if (composerOwnsHitl) return null;
 
   if (
     approval != null &&
@@ -541,6 +546,26 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
     result && typeof result === "object" && !Array.isArray(result) && typeof (result as { summary?: unknown }).summary === "string"
       ? (result as { summary: string }).summary
       : null;
+
+  // Text-only asks render like assistant prose; the normal composer answers.
+  const textOnlyQuestion =
+    isRequiresAction &&
+    isQuestion(approval) &&
+    (approval?.display === "text" ||
+      !approval?.options ||
+      approval.options.length === 0) &&
+    Boolean(approval?.prompt);
+
+  if (textOnlyQuestion) {
+    return (
+      <Text
+        className="text-foreground text-[15px] leading-snug"
+        testID="text-only-question-prompt"
+      >
+        {approval!.prompt}
+      </Text>
+    );
+  }
 
   return (
     <View className="aui-tool-fallback-root gap-2 py-0.5">

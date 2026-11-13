@@ -1,31 +1,52 @@
 import {
+  QuestionsCard,
+  type QuestionsWaitingAction,
+  type WaitingQuestionItem,
+} from "@/components/assistant-ui/elements/questions-card";
+import {
   inkButton,
   useAnnounce,
   useMotion,
 } from "@/components/assistant-ui/elements/surfaces";
 import { cn } from "@/lib/utils";
 import { type FC, useState, type ReactNode } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
-export type WaitingAction = {
-  readonly kind: "authorization" | "approval" | "question";
-  readonly title: string;
-  readonly detail?: string;
-  readonly prompt?: string;
-  readonly options?: readonly { readonly id: string; readonly label: string }[];
-  readonly allowFreeform?: boolean;
-  readonly onRespond?: (response: {
-    readonly optionId?: string;
-    readonly text?: string;
-  }) => void | Promise<void>;
+export type { QuestionsWaitingAction, WaitingQuestionItem };
+
+export type WaitingActionOption = {
+  readonly id: string;
+  readonly label: string;
 };
+
+/** Authorization or Allow/Deny approval — questions use `kind: "questions"`. */
+export type WaitingAction =
+  | {
+      readonly kind: "authorization";
+      readonly title: string;
+      readonly detail?: string;
+      readonly prompt?: string;
+    }
+  | {
+      readonly kind: "approval";
+      readonly title: string;
+      readonly detail?: string;
+      readonly prompt?: string;
+      readonly options?: readonly WaitingActionOption[];
+      readonly onRespond?: (response: {
+        readonly optionId?: string;
+        readonly text?: string;
+      }) => void | Promise<void>;
+    }
+  | QuestionsWaitingAction;
 
 type MotionBoxProps = {
   readonly children: ReactNode;
   readonly className?: string;
   readonly entering?: object;
   readonly accessibilityRole?: "alert";
+  readonly accessibilityLabel?: string;
   readonly testID?: string;
 };
 
@@ -47,32 +68,40 @@ const MotionBox: FC<MotionBoxProps & { readonly motion: boolean }> = ({
 };
 
 /**
- * Composer HITL card: authorization banner, approval buttons, choice
- * questions, or a free-text answer field.
+ * HITL response surface inside the composer shell (or a standalone card).
+ * Questions use the lettered multi-ask card; approvals keep Allow/Deny pills.
  */
 export const WaitingActionCard: FC<{
   readonly action: WaitingAction;
-}> = ({ action }) => {
+  readonly variant?: "composer" | "card";
+}> = ({ action, variant = "composer" }) => {
+  if (action.kind === "questions") {
+    return <QuestionsCard action={action} variant={variant} />;
+  }
+
+  return <ApprovalOrAuthCard action={action} variant={variant} />;
+};
+
+const ApprovalOrAuthCard: FC<{
+  readonly action: Exclude<WaitingAction, QuestionsWaitingAction>;
+  readonly variant: "composer" | "card";
+}> = ({ action, variant }) => {
   const motion = useMotion();
   const [submitting, setSubmitting] = useState<string | null>(null);
-  const [answer, setAnswer] = useState("");
   const [error, setError] = useState<string | null>(null);
   useAnnounce(error ?? undefined);
 
   const busy = submitting !== null;
   const showOptions =
-    (action.kind === "approval" || action.kind === "question") &&
+    action.kind === "approval" &&
     action.options &&
     action.options.length > 0;
-  const showTextField =
-    action.kind === "question" &&
-    (action.allowFreeform === true || !showOptions);
 
   const respond = (response: {
     readonly optionId?: string;
     readonly text?: string;
   }) => {
-    if (busy || !action.onRespond) return;
+    if (busy || action.kind !== "approval" || !action.onRespond) return;
     setSubmitting(response.optionId ?? "text");
     setError(null);
     void (async () => {
@@ -85,10 +114,7 @@ export const WaitingActionCard: FC<{
     })();
   };
 
-  const waitingLabel =
-    action.kind === "question"
-      ? "Waiting for your answer. "
-      : "Waiting for your confirmation. ";
+  const headline = action.prompt ?? action.title;
 
   return (
     <MotionBox
@@ -104,8 +130,14 @@ export const WaitingActionCard: FC<{
               })
           : undefined
       }
-      className="mb-2 overflow-hidden rounded-2xl border border-border/70 bg-card px-3.5 py-3 shadow-sm shadow-black/5"
+      className={cn(
+        "overflow-hidden",
+        variant === "card"
+          ? "mb-2 rounded-2xl border border-border/70 bg-card px-3.5 py-3 shadow-sm shadow-black/5"
+          : undefined,
+      )}
       accessibilityRole="alert"
+      accessibilityLabel={headline}
       testID="waiting-action-card"
     >
       <MotionBox
@@ -120,18 +152,12 @@ export const WaitingActionCard: FC<{
         }
         className="gap-1.5"
       >
-        <Text className="text-muted-foreground text-sm">
-          <Text className="text-foreground font-medium">{waitingLabel}</Text>
-          {action.title}
+        <Text
+          className="text-foreground text-sm font-medium leading-snug"
+          testID={action.prompt ? "waiting-action-prompt" : undefined}
+        >
+          {headline}
         </Text>
-        {action.prompt ? (
-          <Text
-            className="text-foreground text-sm font-medium leading-snug"
-            testID="waiting-action-prompt"
-          >
-            {action.prompt}
-          </Text>
-        ) : null}
         {action.detail ? (
           <Text
             className="text-muted-foreground text-xs leading-snug"
@@ -188,38 +214,6 @@ export const WaitingActionCard: FC<{
               </MotionBox>
             );
           })}
-        </View>
-      ) : null}
-      {showTextField ? (
-        <View className="mt-3 gap-2">
-          <TextInput
-            value={answer}
-            onChangeText={setAnswer}
-            editable={!busy}
-            multiline
-            textAlignVertical="top"
-            accessibilityLabel={action.prompt ?? "Answer"}
-            placeholder="Type your answer"
-            testID="waiting-action-answer"
-            className="text-foreground border-border/70 bg-background min-h-16 rounded-lg border px-2.5 py-2 text-sm"
-          />
-          <View className="flex-row flex-wrap items-center gap-2">
-            <Pressable
-              onPress={() => respond({ text: answer })}
-              disabled={busy}
-              accessibilityRole="button"
-              accessibilityLabel="Send"
-              testID="waiting-action-send"
-              className={cn(
-                "h-9 justify-center rounded-full px-4 active:opacity-80 disabled:opacity-50",
-                inkButton,
-              )}
-            >
-              <Text className="text-background text-sm font-medium">
-                {submitting === "text" ? "…" : "Send"}
-              </Text>
-            </Pressable>
-          </View>
         </View>
       ) : null}
       {error ? (

@@ -37,9 +37,13 @@ import { withPendingAssistant } from "@/src/stream-presentation";
 import { buildTurnClientContext } from "@/src/turn-client-context";
 import { useWorkspace } from "@/src/workspace-context";
 import {
+  composerWaitingQuestions,
   getPendingApprovals,
   hasPendingAction,
+  isTextOnlyPendingQuestion,
+  type PendingApproval,
 } from "@/src/message-projection";
+import type { WaitingAction } from "@/components/assistant-ui/elements/waiting-action-card";
 import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
 import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft, type LocalSend } from "@/src/send-feedback";
 import { useChats } from "@/src/chat-context";
@@ -186,6 +190,107 @@ export function ChatScreen({
     () => getPendingApprovals(conversation),
     [conversation],
   );
+
+  // Text-only asks answer through the normal composer; only choice (and mixed
+  // multi-ask) stacks morph the shell into the Questions card.
+  const onlyTextQuestionsPending =
+    pendingApprovals.length > 0 &&
+    pendingApprovals.every(isTextOnlyPendingQuestion);
+  const composerBlocked =
+    waitingForAction && !onlyTextQuestionsPending;
+
+  const waitingAction = useMemo((): WaitingAction | null => {
+    const questions = composerWaitingQuestions(pendingApprovals);
+    if (questions.length > 0) {
+      const sendAnswer = async (
+        pending: PendingApproval,
+        response: { readonly optionId?: string; readonly text?: string },
+      ) => {
+        await store.send({
+          answers: [
+            {
+              interactionId: pending.requestId,
+              ...(response.optionId ? { optionId: response.optionId } : {}),
+              ...(response.text !== undefined ? { text: response.text } : {}),
+            },
+          ],
+          clientContext: buildTurnClientContext(activeProjectId),
+        });
+      };
+      return {
+        kind: "questions",
+        items: questions.map((pending) => ({
+          id: pending.requestId,
+          prompt: pending.prompt,
+          ...(pending.detail ? { detail: pending.detail } : {}),
+          options: pending.options,
+          allowFreeform: pending.allowFreeform,
+          ...(pending.dismissible ? { dismissible: true } : {}),
+          ...(pending.skipOptionId
+            ? { skipOptionId: pending.skipOptionId }
+            : {}),
+        })),
+        onRespond: async (response) => {
+          const pending = questions.find(
+            (item) => item.requestId === response.interactionId,
+          );
+          if (!pending) return;
+          await sendAnswer(pending, response);
+        },
+        onSkip: async (itemId) => {
+          const pending = questions.find((item) => item.requestId === itemId);
+          if (!pending) return;
+          if (pending.skipOptionId) {
+            await sendAnswer(pending, { optionId: pending.skipOptionId });
+            return;
+          }
+          if (pending.dismissible && pending.allowFreeform) {
+            await sendAnswer(pending, { text: "" });
+          }
+        },
+      };
+    }
+
+    const approval = pendingApprovals.find(
+      (pending) => pending.kind === "approval",
+    );
+    if (approval) {
+      return {
+        kind: "approval",
+        title: "The agent is paused until you respond.",
+        prompt: approval.prompt,
+        detail: approval.detail,
+        options: approval.options,
+        onRespond: async (response) => {
+          await store.send({
+            answers: [
+              {
+                interactionId: approval.requestId,
+                ...(response.optionId ? { optionId: response.optionId } : {}),
+                ...(response.text !== undefined ? { text: response.text } : {}),
+              },
+            ],
+            clientContext: buildTurnClientContext(activeProjectId),
+          });
+        },
+      };
+    }
+
+    if (composerBlocked) {
+      return {
+        kind: "authorization",
+        title:
+          "The agent is paused on a question or approval above — reply to continue.",
+      };
+    }
+
+    return null;
+  }, [
+    pendingApprovals,
+    composerBlocked,
+    store,
+    activeProjectId,
+  ]);
   const awaitingReply = Boolean(
     expectingAssistant
       || (localSend && localSend.phase === "preparing" && !confirmed),
@@ -243,10 +348,14 @@ export function ChatScreen({
       convertMessage: (message: ThreadMessageLike) => message,
       isRunning: isBusy,
       isDisabled: status === "resuming",
-      isSendDisabled: waitingForAction,
+      isSendDisabled: composerBlocked,
       onNew: async (message: AppendMessage) => {
         setSendError(null);
-        if (waitingForAction) throw new MessageNotSentError("This chat is waiting for authorization or approval.");
+        if (composerBlocked) {
+          throw new MessageNotSentError(
+            "This chat is waiting for authorization or approval.",
+          );
+        }
         if (hasUnresolvedSend(store.snapshot.events, localSend, pendingMessage)) {
           const reason = "Check the previous message in this chat before sending another.";
           setSendError({ store, message: reason });
@@ -431,7 +540,7 @@ export function ChatScreen({
       projectedMessages,
       status,
       isBusy,
-      waitingForAction,
+      composerBlocked,
       wasSendPrepared,
       localSend,
       pendingMessage,
@@ -530,44 +639,7 @@ export function ChatScreen({
               conversationId={activeChatId}
               focusNewChatKey={newChatEntry}
               notice={notice}
-              waitingAction={
-                pendingApprovals[0]
-                  ? {
-                      kind: pendingApprovals[0].kind,
-                      title:
-                        pendingApprovals[0].kind === "question"
-                          ? "The agent is paused until you answer."
-                          : "The agent is paused until you respond.",
-                      prompt: pendingApprovals[0].prompt,
-                      detail: pendingApprovals[0].detail,
-                      options: pendingApprovals[0].options,
-                      allowFreeform: pendingApprovals[0].allowFreeform,
-                      onRespond: async (response) => {
-                        const pending = pendingApprovals[0]!;
-                        await store.send({
-                          answers: [
-                            {
-                              interactionId: pending.requestId,
-                              ...(response.optionId
-                                ? { optionId: response.optionId }
-                                : {}),
-                              ...(response.text !== undefined
-                                ? { text: response.text }
-                                : {}),
-                            },
-                          ],
-                          clientContext: buildTurnClientContext(activeProjectId),
-                        });
-                      },
-                    }
-                  : waitingForAction
-                    ? {
-                        kind: "authorization" as const,
-                        title:
-                          "The agent is paused on a question or approval above — reply to continue.",
-                      }
-                    : null
-              }
+              waitingAction={waitingAction}
             />
           )}
         </AssistantRuntimeProvider>

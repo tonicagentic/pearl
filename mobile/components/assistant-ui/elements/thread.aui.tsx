@@ -7,6 +7,7 @@ import {
   ComposerChromeContext,
   type ComposerChromeApi,
 } from "@/components/assistant-ui/elements/composer-chrome";
+import { ComposerOwnsHitlContext } from "@/components/assistant-ui/elements/composer-owns-hitl";
 import { ComposerModeModelPicker } from "@/components/mode-model-picker";
 import {
   groupedIconButtonHitSlop,
@@ -182,14 +183,20 @@ export type ThreadProps = {
    * to true for normal mounts and cold-start restore.
    */
   chromeRevealed?: boolean | undefined;
+  /**
+   * Override the floating-composer list top inset (defaults to status bar +
+   * nav height). Use a small value when the thread sits under solid chrome
+   * such as the Samples mode switcher.
+   */
+  contentPaddingTop?: number | undefined;
   components?: ThreadComponents | undefined;
   /** A windowed thread: the list asks for older messages when it reaches its start and shows the loading edge above them. */
   history?: ThreadHistory | undefined;
   /** Recovery belongs in the transcript, never in a bar that shifts the viewport. */
   notice?: { text: string; actionLabel?: string; onAction?: () => void } | null;
   /**
-   * HITL pause above the composer: authorization banner, approval buttons,
-   * choice-question buttons, or a free-text question field.
+   * HITL pause that morphs the composer shell into the response surface:
+   * authorization banner, approval buttons, choice options, or free-text.
    */
   waitingAction?: WaitingAction | null;
 };
@@ -348,6 +355,7 @@ export const Thread: FC<ThreadProps> = ({
   conversationId,
   focusNewChatKey = 0,
   chromeRevealed = true,
+  contentPaddingTop,
   components = EMPTY_COMPONENTS,
   history,
   notice,
@@ -610,7 +618,7 @@ export const Thread: FC<ThreadProps> = ({
                 ? {
                     // Rest under the transparent nav; scroll may fade behind it.
                     // 44 ≈ native stack bar height below the status bar inset.
-                    paddingTop: insets.top + 44 + 16,
+                    paddingTop: contentPaddingTop ?? insets.top + 44 + 16,
                     // Resting messages clear the floating composer, but can scroll behind it.
                     paddingBottom: composerOverlayHeight + 24,
                   }
@@ -680,21 +688,23 @@ export const Thread: FC<ThreadProps> = ({
 
   return (
     <ThreadComponentsContext.Provider value={components}>
-      <ThreadViewportContext.Provider value={viewport}>
-        <ThreadPrimitive.Root className="aui-root aui-thread-root bg-background flex-1">
-          {followsKeyboard ? (
-            <IosKeyboardLayout>{threadViewport}</IosKeyboardLayout>
-          ) : (
-            <KeyboardAvoidingView
-              className="flex-1"
-              behavior={Platform.OS === "ios" ? "padding" : undefined}
-              keyboardVerticalOffset={viewportTop - insets.bottom}
-            >
-              {threadViewport}
-            </KeyboardAvoidingView>
-          )}
-        </ThreadPrimitive.Root>
-      </ThreadViewportContext.Provider>
+      <ComposerOwnsHitlContext.Provider value={waitingAction != null}>
+        <ThreadViewportContext.Provider value={viewport}>
+          <ThreadPrimitive.Root className="aui-root aui-thread-root bg-background flex-1">
+            {followsKeyboard ? (
+              <IosKeyboardLayout>{threadViewport}</IosKeyboardLayout>
+            ) : (
+              <KeyboardAvoidingView
+                className="flex-1"
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
+                keyboardVerticalOffset={viewportTop - insets.bottom}
+              >
+                {threadViewport}
+              </KeyboardAvoidingView>
+            )}
+          </ThreadPrimitive.Root>
+        </ThreadViewportContext.Provider>
+      </ComposerOwnsHitlContext.Provider>
     </ThreadComponentsContext.Provider>
   );
 };
@@ -712,6 +722,7 @@ const ComposerDock: FC<{
   const chromeApi = useContext(ComposerChromeContext);
   const safeBottom = insets.bottom;
   const minimizedBottom = Math.max(COMPOSER_MINIMIZED_BOTTOM_GAP, safeBottom - 8);
+  const hitlActive = waitingAction != null;
   // Side inset follows chrome (sticky keeps full width while menus are open);
   // bottom pad still tracks the real keyboard so the dock sits correctly.
   const dockStyle = useAnimatedStyle(() => {
@@ -719,8 +730,8 @@ const ComposerDock: FC<{
       return { paddingBottom: safeBottom + 8 };
     }
     const live = chromeApi?.liveActive.value ?? 0;
-    if (live > 0.5) {
-      // Call bar keeps the expanded floating inset with the keyboard dismissed.
+    // Live call and HITL keep the expanded floating inset (no mini-player tuck).
+    if (live > 0.5 || hitlActive) {
       return {
         paddingHorizontal: COMPOSER_EDGE,
         paddingBottom: minimizedBottom,
@@ -753,11 +764,11 @@ const ComposerDock: FC<{
       }
       style={dockStyle}
     >
-      {waitingAction ? <WaitingActionCard action={waitingAction} /> : null}
       <Composer
         autoFocus={autoFocus}
         focusNewChatKey={focusNewChatKey}
         conversationId={conversationId}
+        waitingAction={waitingAction}
       />
     </Animated.View>
   );
@@ -1200,7 +1211,13 @@ const Composer: FC<{
   autoFocus?: boolean;
   focusNewChatKey: number;
   conversationId?: string | null;
-}> = ({ autoFocus, focusNewChatKey, conversationId = null }) => {
+  waitingAction?: WaitingAction | null;
+}> = ({
+  autoFocus,
+  focusNewChatKey,
+  conversationId = null,
+  waitingAction = null,
+}) => {
   const { ComposerInput = DefaultComposerInput } = useContext(
     ThreadComponentsContext,
   );
@@ -1431,6 +1448,22 @@ const Composer: FC<{
         >
           {shellSurface}
           <LiveSession onClose={closeLive} />
+        </View>
+      </ComposerPrimitive.Root>
+    );
+  }
+
+  // HITL morphs the same glass shell into the response surface (options / text).
+  // Attach, Ask anything, and voice stay hidden until the pause resolves.
+  if (waitingAction) {
+    return (
+      <ComposerPrimitive.Root className="aui-composer-root w-full">
+        <View
+          className="aui-composer-shell relative p-3"
+          style={COMPOSER_SHELL_STYLE}
+        >
+          {shellSurface}
+          <WaitingActionCard action={waitingAction} variant="composer" />
         </View>
       </ComposerPrimitive.Root>
     );
