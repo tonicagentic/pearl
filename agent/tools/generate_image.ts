@@ -1,6 +1,10 @@
 import { put } from "@vercel/blob";
 import { generateImage } from "ai";
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
+import {
+  imageSurfaceEnabled,
+  latestUserHint,
+} from "#lib/lane-state.js";
 import { z } from "zod";
 
 import {
@@ -25,7 +29,7 @@ import {
  * training. Fail closed when no compliant provider is available — do not
  * switch models silently.
  */
-export default defineTool({
+const tool = defineTool({
   description:
     "Generate a pictorial image for a design deliverable and return a public " +
     "Blob URL. Use for illustration, texture, or photographic work after " +
@@ -199,3 +203,8 @@ export default defineTool({
     height: z.number().optional(),
   }),
 });
+
+export default defineDynamic(async (ctx) =>
+  imageSurfaceEnabled(latestUserHint(await ctx.messages())) ? tool : null,
+);
+

@@ -1,8 +1,13 @@
 "use client";
 
 import { useAuiState } from "@assistant-ui/react";
+import { useSyncExternalStore } from "react";
 import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
 import { useElapsedLabel } from "@/components/assistant-ui/elements/use-elapsed-label";
+import {
+  getWaitingLabel,
+  subscribeWaitingLabel,
+} from "@/lib/waiting-label";
 
 import { isTimelineToolCall } from "./session-timeline";
 
@@ -32,9 +37,17 @@ import { isTimelineToolCall } from "./session-timeline";
 
 const STALL_WARNING_S = 45;
 const STALL_LABEL = "Still working — the model may be slow or unreachable.";
+/** Selector sentinel — must stay a stable primitive for useAuiState. */
+const WAITING_PHASE = "waiting";
 
 export function AssistantThinking() {
-  const label = useAuiState((s) => {
+  const waitingLabel = useSyncExternalStore(
+    subscribeWaitingLabel,
+    getWaitingLabel,
+    getWaitingLabel,
+  );
+  // useAuiState compares with Object.is — return strings/undefined only.
+  const phase = useAuiState((s) => {
     if (s.message.status?.type !== "running") return undefined;
     const pending = s.message.parts.find(
       (part) =>
@@ -42,7 +55,9 @@ export function AssistantThinking() {
         part.status.type === "running" &&
         part.toolName !== "todo",
     );
-    if (pending?.type === "tool-call") return `Running ${pending.toolName}`;
+    if (pending?.type === "tool-call") {
+      return `Running ${pending.toolName}`;
+    }
     // The runtime emits a placeholder "indicator" part while a message has no
     // content yet; only real content parts hand the row over to the message.
     const hasContent = s.message.parts.some(
@@ -53,7 +68,7 @@ export function AssistantThinking() {
         part.type === "file" ||
         part.type === "image",
     );
-    return hasContent ? undefined : "Thinking";
+    return hasContent ? undefined : WAITING_PHASE;
   });
 
   // Whether the timeline below is already carrying a live view of this turn.
@@ -63,6 +78,8 @@ export function AssistantThinking() {
       (part) => part.type === "reasoning" || isTimelineToolCall(part),
     );
   });
+
+  const label = phase === WAITING_PHASE ? waitingLabel : phase;
 
   const elapsed = useElapsedLabel(label !== undefined);
   if (label === undefined) return null;

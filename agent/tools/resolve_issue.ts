@@ -1,4 +1,5 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
+import { toolSurfaceEnabled } from "#lib/lane-state.js";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 import { ensureUserForPrincipal, listOpenIssues, resolveIssue } from "@/lib/db/issues";
@@ -13,7 +14,7 @@ import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
  * it is effectively irreversible from the active inbox and the model must never
  * settle something on a third-party claim alone.
  */
-export default defineTool({
+const tool = defineTool({
   description:
     "Mark one of the user's issues as resolved — the area is settled. Confirm with " +
     "the user first when the resolution was only implied (for example by a third party or an " +
@@ -65,3 +66,8 @@ export default defineTool({
     area: z.string().optional(),
   }),
 });
+
+export default defineDynamic(() =>
+  toolSurfaceEnabled() ? tool : null,
+);
+

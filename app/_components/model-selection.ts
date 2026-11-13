@@ -29,6 +29,13 @@ export interface ComposerModelSection {
 
 export const COMPOSER_MODEL_SECTIONS: readonly ComposerModelSection[] = [
   {
+    id: "auto",
+    title: "Auto",
+    description:
+      "Routes each turn for speed and cost: Sol for chat, specialists for tools and documents.",
+    models: [{ key: "auto", label: "Auto", company: "Pearl" }],
+  },
+  {
     id: "daily-driver",
     title: "Daily Driver",
     models: [

@@ -1,4 +1,5 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
+import { toolSurfaceEnabled } from "#lib/lane-state.js";
 import { z } from "zod";
 import {
   ensureUserForPrincipal,
@@ -17,7 +18,7 @@ import { issueState, todayIso } from "@/lib/issues";
  * (active/dormant/resolved) is derived from the review/due dates, never stored;
  * dormant issues are deliberately parked and only appear when asked for.
  */
-export default defineTool({
+const tool = defineTool({
   description:
     "List the user's issues: unresolved areas that need attention, each attached " +
     "to an area of area. Defaults to active issues (past their review date, due " +
@@ -106,6 +107,11 @@ export default defineTool({
     ),
   }),
 });
+
+export default defineDynamic(() =>
+  toolSurfaceEnabled() ? tool : null,
+);
+
 
 function* areaPaths(
   node: AreaNode,

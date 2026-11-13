@@ -6,6 +6,7 @@ import {
   CONNECTION_WRITE_TOOLS,
 } from "../lib/connection-allowlists.js";
 import { writeToolApproval } from "../lib/connection-approval.js";
+import { toolSurfaceEnabled } from "../lib/lane-state.js";
 import { isBetterAuthUserPrincipal } from "../lib/user-connection.js";
 import { connectionTokenParams } from "@/lib/connections/oauth-scopes";
 
@@ -21,7 +22,11 @@ const DEFAULT_SHEETS_MCP_URL = "https://sheetsmcp.googleapis.com/mcp/v1";
 
 export default defineDynamic((ctx) => {
   const connector = process.env.SHEETS_CONNECTOR?.trim();
-  if (!connector || !isBetterAuthUserPrincipal(ctx.session.auth.current)) {
+  if (
+    !connector ||
+    !toolSurfaceEnabled() ||
+    !isBetterAuthUserPrincipal(ctx.session.auth.current)
+  ) {
     return null;
   }
 

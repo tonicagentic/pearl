@@ -1,4 +1,5 @@
 import { useAuiState } from "@assistant-ui/react-native";
+import { useSyncExternalStore } from "react";
 
 import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
 import {
@@ -8,9 +9,15 @@ import {
   type AssistantMessagePart,
 } from "@/components/assistant-ui/elements/session-timeline";
 import { useTurnElapsed } from "@/components/assistant-ui/elements/turn-elapsed";
+import {
+  getWaitingLabel,
+  subscribeWaitingLabel,
+} from "../../../../lib/waiting-label";
 
 const STALL_WARNING_S = 45;
 const STALL_LABEL = "Still working — the model may be slow or unreachable.";
+/** Selector sentinel — must stay a stable primitive for useAuiState. */
+const WAITING_PHASE = "waiting";
 
 /**
  * Bottom status for pre-content / uncovered tools. Hidden while the answer
@@ -18,7 +25,13 @@ const STALL_LABEL = "Still working — the model may be slow or unreachable.";
  * owns live Working — except stall warnings during active work.
  */
 export function AssistantThinking() {
-  const label = useAuiState((s) => {
+  const waitingLabel = useSyncExternalStore(
+    subscribeWaitingLabel,
+    getWaitingLabel,
+    getWaitingLabel,
+  );
+  // useAuiState compares with Object.is — return strings/undefined only.
+  const phase = useAuiState((s) => {
     if (s.message.status?.type !== "running") return undefined;
     const parts = s.message.parts as readonly AssistantMessagePart[];
     // Final (or mid-turn) prose / cards are on screen — no bottom spinner.
@@ -46,8 +59,11 @@ export function AssistantThinking() {
           typeof part.text === "string" &&
           part.text.trim().length > 0),
     );
-    return hasWork ? undefined : "Thinking…";
+    return hasWork ? undefined : WAITING_PHASE;
   });
+
+  const label =
+    phase === WAITING_PHASE ? waitingLabel : phase;
 
   const answerPhase = useAuiState((s) => {
     if (s.message.status?.type !== "running") return false;

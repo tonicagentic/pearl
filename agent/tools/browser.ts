@@ -1,4 +1,5 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
+import { toolSurfaceEnabled } from "#lib/lane-state.js";
 import { z } from "zod";
 
 import { callBrowserAction } from "@/lib/browser/client";
@@ -46,7 +47,7 @@ const actionSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-export default defineTool({
+const tool = defineTool({
   description:
     "Drive a live collaborative browser the user can watch and take over. " +
     "Use when you and the user should look at a page together. Prefer web_fetch " +
@@ -150,3 +151,8 @@ export default defineTool({
     }
   },
 });
+
+export default defineDynamic(() =>
+  toolSurfaceEnabled() ? tool : null,
+);
+

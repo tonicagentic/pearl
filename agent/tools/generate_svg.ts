@@ -1,5 +1,9 @@
 import { generateText } from "ai";
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
+import {
+  imageSurfaceEnabled,
+  latestUserHint,
+} from "#lib/lane-state.js";
 import { writeFile } from "eve/tools/write_file";
 import { z } from "zod";
 
@@ -37,7 +41,7 @@ const SVG_SYSTEM_WRAPPER =
  * ZDR gateway provider, so those filters fail closed. Raster generate_image
  * keeps the full policy; this tool alone omits it.
  */
-export default defineTool({
+const tool = defineTool({
   description:
     "Generate an editable SVG with Quiver Arrow (text-to-SVG) and write it to " +
     "the workspace. Use after loading vector-graphics (or logo/icon/" +
@@ -139,3 +143,8 @@ export default defineTool({
     prompt: z.string(),
   }),
 });
+
+export default defineDynamic(async (ctx) =>
+  imageSurfaceEnabled(latestUserHint(await ctx.messages())) ? tool : null,
+);
+

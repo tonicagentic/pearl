@@ -2,6 +2,7 @@ import { connect } from "@vercel/connect/eve";
 import { defineDynamic, defineMcpClientConnection } from "eve/connections";
 
 import { CONNECTION_READONLY_ALLOWLISTS } from "../lib/connection-allowlists.js";
+import { toolSurfaceEnabled } from "../lib/lane-state.js";
 import { isBetterAuthUserPrincipal } from "../lib/user-connection.js";
 
 // CALENDAR_CONNECTOR is the Vercel Connect UID for the Calendar Workspace MCP
@@ -9,7 +10,11 @@ import { isBetterAuthUserPrincipal } from "../lib/user-connection.js";
 //   vercel connect create https://calendarmcp.googleapis.com/mcp/v1 --name calendar
 export default defineDynamic((ctx) => {
       const connector = process.env.CALENDAR_CONNECTOR?.trim();
-      if (!connector || !isBetterAuthUserPrincipal(ctx.session.auth.current)) {
+      if (
+        !connector ||
+        !toolSurfaceEnabled() ||
+        !isBetterAuthUserPrincipal(ctx.session.auth.current)
+      ) {
         return null;
       }
 

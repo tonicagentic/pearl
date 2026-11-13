@@ -46,6 +46,8 @@ import {
 import { ProjectPickerDialog } from "@/app/_components/project-picker-dialog";
 import { attachChatToProjectAction } from "@/app/actions/projects";
 import { MODE_MARKER, PROJECT_ID_MARKER } from "@/lib/agent-mode-context";
+import { waitingLabelForText } from "@/lib/pearl-lane";
+import { setWaitingLabel } from "@/lib/waiting-label";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import {
   EditFileToolUI,
@@ -568,6 +570,7 @@ function AssistantChatSurfaceInner({
       }
 
       if (!activeChatIdRef.current) {
+        // New chat needs an id before eve can start; keep this await.
         const created = await createClientChat(storageMode, {
           pendingUserMessage: messageText,
           projectId: projectIdRef.current,
@@ -581,7 +584,8 @@ function AssistantChatSurfaceInner({
         storageMode === "database" &&
         !activeChat?.projectId
       ) {
-        await attachChatToProjectAction({
+        // Project attach must not hold the first token.
+        void attachChatToProjectAction({
           chatId: activeChatIdRef.current,
           projectId: projectIdRef.current,
         });
@@ -590,6 +594,7 @@ function AssistantChatSurfaceInner({
       if (messageText) {
         currentTitleRef.current = createFallbackTitle(messageText);
         lastOutgoingMessageRef.current = messageText;
+        setWaitingLabel(waitingLabelForText(messageText));
       }
 
       // Large pastes travel attachment-style: limits, title, and the pending

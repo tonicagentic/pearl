@@ -17,7 +17,10 @@ import {
   resolveImageModelForTurn,
   resolveVectorModelForTurn,
 } from "../agent/model-selection.ts";
-import { resolveModelForStep } from "../agent/agent.ts";
+import { resolvePinnedModelForStep } from "../agent/model-router.ts";
+import {
+  AUTO_MODEL_KEY,
+} from "../agent/model-selection.ts";
 import {
   COMPOSER_MODELS as WEB_MODELS,
   COMPOSER_MODEL_SECTIONS as WEB_SECTIONS,
@@ -115,14 +118,16 @@ describe("readClientModelSelection", () => {
   });
 });
 
-describe("resolveModelForStep", () => {
+describe("resolvePinnedModelForStep", () => {
   const originalOverride = process.env.AGENT_MODEL_OVERRIDE;
 
   function clearOverride() {
     delete process.env.AGENT_MODEL_OVERRIDE;
   }
 
-  function gatewayOf(selection: ReturnType<typeof resolveModelForStep>) {
+  function gatewayOf(
+    selection: ReturnType<typeof resolvePinnedModelForStep>,
+  ) {
     return selection.modelOptions.providerOptions.gateway as unknown as {
       zeroDataRetention?: boolean;
       disallowPromptTraining?: boolean;
@@ -130,10 +135,10 @@ describe("resolveModelForStep", () => {
     };
   }
 
-  it("resolves GPT 6.1 Sol by default with the full policy", () => {
+  it("keeps DEFAULT_MODEL as Sol for subagents and the allowlist baseline", () => {
     clearOverride();
-    const selection = resolveModelForStep([]);
     assert.equal(DEFAULT_MODEL, "openai/gpt-6.1-sol");
+    const selection = resolvePinnedModelForStep([]);
     assert.equal(selection.model, DEFAULT_MODEL);
     assert.equal(gatewayOf(selection).zeroDataRetention, true);
     assert.equal(gatewayOf(selection).disallowPromptTraining, true);
@@ -143,7 +148,7 @@ describe("resolveModelForStep", () => {
   it("applies the full policy to every client choice", () => {
     clearOverride();
     for (const [key, model] of Object.entries(CLIENT_MODEL_KEYS)) {
-      const selection = resolveModelForStep([markerMessage(key)]);
+      const selection = resolvePinnedModelForStep([markerMessage(key)]);
       assert.equal(selection.model, model);
       assert.equal(gatewayOf(selection).zeroDataRetention, true);
       assert.equal(gatewayOf(selection).disallowPromptTraining, true);
@@ -153,7 +158,7 @@ describe("resolveModelForStep", () => {
 
   it("falls back to GPT 6.1 Sol when an old picker key is sent", () => {
     clearOverride();
-    const selection = resolveModelForStep([markerMessage("gpt-6-sol")]);
+    const selection = resolvePinnedModelForStep([markerMessage("gpt-6-sol")]);
     assert.equal(selection.model, DEFAULT_MODEL);
     assert.equal(gatewayOf(selection).zeroDataRetention, true);
   });
@@ -161,7 +166,9 @@ describe("resolveModelForStep", () => {
   it("lets AGENT_MODEL_OVERRIDE win over the client picker", () => {
     process.env.AGENT_MODEL_OVERRIDE = "openai/gpt-6-luna";
     try {
-      const selection = resolveModelForStep([markerMessage("muse-spark-open")]);
+      const selection = resolvePinnedModelForStep([
+        markerMessage("muse-spark-open"),
+      ]);
       assert.equal(selection.model, "openai/gpt-6-luna");
       assert.equal(gatewayOf(selection).zeroDataRetention, true);
     } finally {
@@ -176,20 +183,20 @@ describe("resolveModelForStep", () => {
 
 describe("composer model lists", () => {
   it("uses the same default and allowlisted options on web and mobile", () => {
-    assert.equal(WEB_DEFAULT_KEY, "gpt-6.1-sol");
+    assert.equal(WEB_DEFAULT_KEY, AUTO_MODEL_KEY);
     assert.equal(MOBILE_DEFAULT_KEY, WEB_DEFAULT_KEY);
     assert.deepEqual(MOBILE_MODELS, WEB_MODELS);
     assert.deepEqual(MOBILE_SECTIONS, WEB_SECTIONS);
-    assert.deepEqual(
-      WEB_MODELS.map((model) => model.key).sort(),
-      Object.keys(CLIENT_MODEL_KEYS).sort(),
+    const pinKeys = WEB_MODELS.map((model) => model.key).filter(
+      (key) => key !== AUTO_MODEL_KEY,
     );
+    assert.deepEqual(pinKeys.sort(), Object.keys(CLIENT_MODEL_KEYS).sort());
   });
 
-  it("groups daily drivers and frontier models with the frontier blurb", () => {
+  it("groups auto, daily drivers, and frontier models", () => {
     assert.deepEqual(
       WEB_SECTIONS.map((section) => section.id),
-      ["daily-driver", "frontier"],
+      ["auto", "daily-driver", "frontier"],
     );
     assert.equal(
       WEB_SECTIONS.find((section) => section.id === "frontier")?.description,

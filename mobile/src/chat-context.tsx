@@ -35,6 +35,8 @@ import {
   type ChatListItem,
 } from "./chats-client";
 import { mergeEventsForSnapshot } from "../../lib/chat/eve-session-recovery";
+import { waitingLabelForText } from "../../lib/pearl-lane";
+import { setWaitingLabel } from "../../lib/waiting-label";
 import { useAuth } from "./auth";
 
 /** Keep this many recently opened SessionStores warm for instant re-open. */
@@ -376,9 +378,11 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         // An attachment-only turn uses a safe title/marker. Neither a
         // correlation token nor pasted document text belongs in chat metadata.
         const message = pendingMessageLabel(input.message);
+        if (message) setWaitingLabel(waitingLabelForText(message));
         const projectId =
           binding.projectId ?? activeProjectIdRef.current ?? null;
         if (!binding.id) {
+          // New chat needs an id before eve can start; keep this await.
           const created = await createChat(message || undefined, projectId);
           binding.id = created.id;
           binding.projectId = created.projectId ?? projectId;
@@ -395,18 +399,27 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           ]);
         } else {
           if (projectId && !binding.projectId) {
-            await attachChatToProject(binding.id, projectId);
-            binding.projectId = projectId;
-            if (activeStoreRef.current === store) {
-              activeProjectIdRef.current = projectId;
-              setActiveProjectIdState(projectId);
-            }
+            const chatId = binding.id;
+            void attachChatToProject(chatId, projectId).then(() => {
+              binding.projectId = projectId;
+              if (activeStoreRef.current === store) {
+                activeProjectIdRef.current = projectId;
+                setActiveProjectIdState(projectId);
+              }
+            });
           }
           if (message) {
-            // A previous turn's snapshot clears pendingUserMessage. Wait for that
-            // checkpoint before marking the new turn, or it could erase our mark.
-            await binding.queue;
-            await markPendingChatMessage(binding.id, message);
+            // Do not block model dispatch on the pending mark. Still wait for
+            // the prior snapshot queue so a stale clear cannot erase this mark.
+            const chatId = binding.id;
+            const mark = binding.queue
+              .catch(() => undefined)
+              .then(() => markPendingChatMessage(chatId, message))
+              .catch(() => {
+                // Surface via onError paths if the turn also fails; a lone
+                // mark failure must not hold the first token.
+              });
+            void mark;
           }
         }
         binding.pendingMessage = message || null;

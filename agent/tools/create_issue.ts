@@ -1,4 +1,5 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
+import { toolSurfaceEnabled } from "#lib/lane-state.js";
 import { once } from "eve/tools/approval";
 import { z } from "zod";
 import {
@@ -22,7 +23,7 @@ import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
  * Areas resolve by name (case-insensitive); an unknown name creates
  * a matching area instead of failing, so a capture never dead-ends.
  */
-export default defineTool({
+const tool = defineTool({
   approval: once(),
   description:
     "Record something unresolved the user is holding in their head: an issue attached to an " +
@@ -121,3 +122,8 @@ export default defineTool({
     reviewDate: z.string().nullable().optional(),
   }),
 });
+
+export default defineDynamic(() =>
+  toolSurfaceEnabled() ? tool : null,
+);
+

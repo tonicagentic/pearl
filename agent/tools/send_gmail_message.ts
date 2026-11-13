@@ -1,4 +1,5 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
+import { toolSurfaceEnabled } from "#lib/lane-state.js";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 
@@ -49,7 +50,7 @@ const inputSchema = z.object({
     .describe("Optional stable key; retries with the same key never double-send."),
 });
 
-export default defineTool({
+const tool = defineTool({
   description:
     "Send an email from the signed-in user's Gmail. Irreversible and needs the user's approval every time. " +
     "Create a draft first and send only after the user explicitly confirms the exact recipient, subject, and body. " +
@@ -129,3 +130,8 @@ export default defineTool({
     });
   },
 });
+
+export default defineDynamic(() =>
+  toolSurfaceEnabled() ? tool : null,
+);
+

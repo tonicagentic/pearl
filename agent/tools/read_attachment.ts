@@ -1,4 +1,5 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
+import { analysisSurfaceEnabled } from "#lib/lane-state.js";
 import { z } from "zod";
 import {
   getAgentAttachmentPage,
@@ -13,7 +14,7 @@ import {
 //
 // Ownership: the attachment's uploader must match the user of the chat that
 // owns the current eve session.
-export default defineTool({
+const tool = defineTool({
   description:
     "Read pages of a PDF you (or the user) attached earlier in this conversation. Pass page to read one page; omit it to list the available pages.",
   inputSchema: z.object({
@@ -69,3 +70,8 @@ export default defineTool({
     };
   },
 });
+
+export default defineDynamic(() =>
+  analysisSurfaceEnabled() ? tool : null,
+);
+

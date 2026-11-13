@@ -1,4 +1,5 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
+import { analysisSurfaceEnabled } from "#lib/lane-state.js";
 import { z } from "zod";
 
 import {
@@ -257,7 +258,7 @@ async function recordExaCost(
   }
 }
 
-export default defineTool({
+const tool = defineTool({
   description:
     "Deep company research and lead-list generation backed by the Exa Agent API. Exa decomposes the query, searches, verifies, enriches, and returns structured output with citations. Use for company deep dives, competitor analysis, ICP-based lead lists, and market research. For quick single lookups prefer web_search instead.",
   inputSchema,
@@ -447,3 +448,8 @@ export default defineTool({
     }
   },
 });
+
+export default defineDynamic(() =>
+  analysisSurfaceEnabled() ? tool : null,
+);
+

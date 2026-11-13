@@ -19,6 +19,8 @@
     "../lib/json-render/**/*.ts",
     "../lib/agent-todos.ts",
     "../lib/agent-mode-context.ts",
+    "../lib/pearl-lane.ts",
+    "../lib/waiting-label.ts",
     "../lib/design/preview-kind.ts",
     "../lib/chat/events.ts",
     "../lib/chat/eve-session-recovery.ts",

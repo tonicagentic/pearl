@@ -1,9 +1,7 @@
 import { experimental_decide as decide, gateway } from "ai";
 import type { DynamicModelContext } from "eve/models";
 
-import {
-  GATEWAY_PROVIDER_OPTIONS,
-} from "../../agent.ts";
+import { GATEWAY_PROVIDER_OPTIONS } from "../../gateway-policy.ts";
 
 /**
  * Cost↔correctness router for the coder subagent.
@@ -19,15 +17,19 @@ export type CoderTier = "fast" | "frontier";
 
 export const CODER_TIERS = {
   fast: {
-    primary: "openai/gpt-6.1-sol",
+    primary: "callstack/apex",
     fallback: "zai/glm-5.3-flash",
+    // Apex's only gateway provider fails US/ZDR/no-training filters.
+    omitGatewayPolicy: true,
     profile:
-      "Routine coding: scaffolding, renames, docs, straightforward Next.js " +
-      "edits, green-loop fixups when the failure is clear.",
+      "Routine coding for this stack: scaffolding, renames, docs, " +
+      "straightforward Next.js and React Native / Expo edits, green-loop " +
+      "fixups when the failure is clear.",
   },
   frontier: {
     primary: "openai/gpt-6-astra",
     fallback: "spacexai/grok-4.7",
+    omitGatewayPolicy: false,
     profile:
       "Hard coding: races, auth, multi-package refactors, unclear bugs, " +
       "architecture, flaky CI, or synthesis across many constraints.",
@@ -195,12 +197,15 @@ function modelForTier(tier: CoderTier) {
   const configured = process.env[envKey]?.trim();
   const primary = configured || CODER_TIERS[tier].primary;
   const fallback = CODER_TIERS[tier].fallback;
+  const policy = CODER_TIERS[tier].omitGatewayPolicy
+    ? {}
+    : GATEWAY_PROVIDER_OPTIONS;
   return {
     model: primary,
     modelOptions: {
       providerOptions: {
         gateway: {
-          ...GATEWAY_PROVIDER_OPTIONS,
+          ...policy,
           models: [fallback],
           tags: ["agent:coder", `tier:${tier}`],
         },

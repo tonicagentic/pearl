@@ -11,6 +11,10 @@
 
 export const DEFAULT_MODEL = "openai/gpt-6.1-sol";
 
+// "auto" is the composer default: missing marker or the auto key both mean
+// the parent-agent lane router chooses the model (agent/model-router.ts).
+export const AUTO_MODEL_KEY = "auto";
+
 export const CLIENT_MODEL_KEYS = {
   "gpt-6.1-sol": "openai/gpt-6.1-sol",
   "glm-5.3-flash": "zai/glm-5.3-flash",
@@ -129,11 +133,24 @@ function readAllowlistedMarker(
 export function readClientModelSelection(
   messages: readonly ScannedMessage[],
 ): string | undefined {
-  return readAllowlistedMarker(
-    messages,
-    MODEL_SELECTION_MARKER,
-    CLIENT_MODEL_KEYS,
+  const markerPattern = new RegExp(
+    `"${MODEL_SELECTION_MARKER}"\\s*:\\s*"([^"]+)"`,
   );
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!isClientContextMessage(message)) continue;
+    const text = messageText(message.content);
+    if (!text) continue;
+    const match = text.match(markerPattern);
+    if (!match) continue;
+    const key = match[1];
+    // Auto is the default route — treat it like a missing marker.
+    if (key === AUTO_MODEL_KEY) return undefined;
+    if (key in CLIENT_MODEL_KEYS) {
+      return CLIENT_MODEL_KEYS[key as ClientModelKey];
+    }
+  }
+  return undefined;
 }
 
 /** Gateway image-model id from clientContext, or undefined when absent/unknown. */

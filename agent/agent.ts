@@ -1,38 +1,15 @@
 import { defineAgent } from "eve";
 import { defineDynamic } from "eve/models";
 
-import {
-  DEFAULT_MODEL,
-  readClientModelSelection,
-  type ScannedMessageLike,
-} from "./model-selection.ts";
+import { resolvePearlModel } from "./model-router.ts";
 
 export { DEFAULT_MODEL } from "./model-selection.ts";
+export { GATEWAY_PROVIDER_OPTIONS } from "./gateway-policy.ts";
 
 // AGENT_MODEL_OVERRIDE lets experiments (evals, model comparisons) swap the
-// model without editing the agent; production stays on the default. It wins
+// model without editing the agent; production stays on Auto routing. It wins
 // over the client picker so experiments stay pinned.
 // (Set in evals.config.ts or the shell when needed.)
-
-// Data-policy routing for the AI Gateway (docs: security-and-compliance).
-// Requests are routed only to providers that:
-// (a) run inference in a US data center (inferenceRegion pins the zone; the
-//     request fails rather than silently running elsewhere),
-// (b) have a zero-data-retention agreement with Vercel (provider deletes
-//     prompts/responses after the request), and
-// (c) disallow training on prompt data.
-// ZDR is a superset of no-training; both are set so the intent is explicit.
-// Filters compose with AND and also apply to every fallback provider. If no
-// provider qualifies, the request fails with `no_providers_available` instead
-// of routing to a non-compliant provider. Verified live against the gateway:
-// the glm-5.3-flash routing set narrows from 18 providers to the compliant
-// US subset (baseten → fireworks) with "ZDR requested: all 2 attempts support
-// ZDR" in routing.planningReasoning.
-export const GATEWAY_PROVIDER_OPTIONS = {
-  inferenceRegion: { scope: "zone", geoRegion: "us" },
-  zeroDataRetention: true,
-  disallowPromptTraining: true,
-} as const;
 
 // Checkpoint batching (docs: agent-config#workflow-checkpoint-batching): the
 // default of 1 checkpoints after every model call, which on Vercel Workflow
@@ -46,43 +23,11 @@ export const WORKFLOW_BATCHING = {
   workflow: { modelCallsPerStep: 4 },
 } as const;
 
-// The gateway data policy must ride each dynamic selection: dynamic model
-// agents cannot set a sibling top-level modelOptions (agent-config), so the
-// resolver returns it for every model. Default, client-picked, and experiment
-// override calls all use the same policy.
-
-// Model selection for one model call, in precedence order:
-// 1. AGENT_MODEL_OVERRIDE (experiments pin the model),
-// 2. the composer picker's clientContext marker, validated against the
-//    allowlist in model-selection.ts,
-// 3. the default (GPT 6.1 Sol).
-export function resolveModelForStep(messages: ScannedMessageLike) {
-  const override = process.env.AGENT_MODEL_OVERRIDE?.trim();
-  if (override) {
-    return {
-      model: override,
-      modelOptions: { providerOptions: { gateway: GATEWAY_PROVIDER_OPTIONS } },
-    };
-  }
-  const model = readClientModelSelection(messages) ?? DEFAULT_MODEL;
-  return {
-    model,
-    modelOptions: {
-      providerOptions: {
-        gateway: GATEWAY_PROVIDER_OPTIONS,
-      },
-    },
-  };
-}
-
 export default defineAgent({
-  // Resolution runs before every model call. The ephemeral clientContext is
-  // inserted into each model request for the turn, so it is visible in
-  // ctx.messages(). Per-call resolution is a cheap marker scan. Tradeoff:
-  // prompt caches are per model, so switching models mid-session re-ingests
-  // the conversation at uncached prices.
-  model: defineDynamic(async (ctx) =>
-    resolveModelForStep(await ctx.messages()),
-  ),
+  // Resolution runs before every model call. Auto (missing/auto marker) uses
+  // the lane router; a pinned picker key or AGENT_MODEL_OVERRIDE skips it.
+  // Tradeoff: prompt caches are per model, so switching lanes mid-session
+  // re-ingests the conversation at uncached prices.
+  model: defineDynamic(async (ctx) => resolvePearlModel(ctx)),
   experimental: WORKFLOW_BATCHING,
 });

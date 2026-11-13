@@ -6,6 +6,7 @@ import {
   TEMPO_WRITE_TOOLS,
 } from "../lib/connection-allowlists.js";
 import { writeToolApproval } from "../lib/connection-approval.js";
+import { toolSurfaceEnabled } from "../lib/lane-state.js";
 import { isBetterAuthUserPrincipal } from "../lib/user-connection.js";
 
 // TEMPO_CONNECTOR is the Vercel Connect UID for Tempo's MCP server (Streamable
@@ -21,6 +22,7 @@ export default defineDynamic((ctx) => {
   if (
     !connector ||
     !url ||
+    !toolSurfaceEnabled() ||
     !isBetterAuthUserPrincipal(ctx.session.auth.current)
   ) {
     return null;
