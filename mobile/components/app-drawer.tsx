@@ -1,4 +1,12 @@
-import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import { router } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
 import {
@@ -25,6 +33,7 @@ import {
   chatPresenceAccessibilityLabel,
 } from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
+import { fetchProjects } from "@/src/projects-client";
 
 export type { HistoryChatActionHandlers, SidebarDestination };
 
@@ -83,6 +92,7 @@ export function HistoryScreen({
       visible={visible}
       onOpenChat={openChatRoute}
       onNavigate={openDestination}
+      chatActions={chatActions}
     />
   );
 }
@@ -91,10 +101,12 @@ function HistoryListAndroid({
   visible,
   onOpenChat,
   onNavigate,
+  chatActions,
 }: {
   readonly visible: boolean;
   readonly onOpenChat: () => void;
   readonly onNavigate: (href: SidebarDestination) => void;
+  readonly chatActions?: HistoryChatActionHandlers;
 }) {
   const { signedIn } = useAuth();
   const {
@@ -109,11 +121,58 @@ function HistoryListAndroid({
     selectionError,
     newChat,
   } = useChats();
+  const [projectNames, setProjectNames] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
   const backgroundColor =
     (useCSSVariable("--color-muted") as string | undefined) ??
     (useCSSVariable("--color-background") as string | undefined);
   const mutedDot =
     (useCSSVariable("--color-border") as string | undefined) ?? "#3A3A3C";
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchProjects()
+      .then((projects) => {
+        if (cancelled) return;
+        setProjectNames(
+          new Map(projects.map((project) => [project.id, project.name])),
+        );
+      })
+      .catch(() => {
+        // Badges are best-effort; linking still works without names.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const openChatActions = (chat: ChatListItem) => {
+    if (!chatActions) return;
+    const projectId = chat.projectId ?? null;
+    Alert.alert(chat.title, undefined, [
+      { text: "Rename", onPress: () => chatActions.onRename(chat) },
+      { text: "View cost", onPress: () => chatActions.onViewCost(chat) },
+      {
+        text: projectId ? "Move to project" : "Add to project",
+        onPress: () => chatActions.onMoveToProject(chat),
+      },
+      ...(projectId
+        ? [
+            {
+              text: "Remove from project",
+              onPress: () => chatActions.onRemoveFromProject(chat),
+            },
+          ]
+        : []),
+      {
+        text: "Delete",
+        style: "destructive" as const,
+        onPress: () => chatActions.onDelete(chat),
+      },
+      { text: "Cancel", style: "cancel" as const },
+    ]);
+  };
 
   return (
     <SafeAreaView
@@ -136,11 +195,19 @@ function HistoryListAndroid({
               chat={chat}
               selected={activeChatId === chat.id}
               mutedDot={mutedDot}
+              projectName={
+                chat.projectId
+                  ? (projectNames.get(chat.projectId) ?? "Project")
+                  : null
+              }
               onPress={() => {
                 void selectChat(chat.id).then((selected) => {
                   if (selected) onOpenChat();
                 });
               }}
+              onLongPress={
+                chatActions ? () => openChatActions(chat) : undefined
+              }
             />
           )}
           ListHeaderComponent={
@@ -272,12 +339,16 @@ function RecentChatRowAndroid({
   chat,
   selected,
   mutedDot,
+  projectName,
   onPress,
+  onLongPress,
 }: {
   readonly chat: ChatListItem;
   readonly selected: boolean;
   readonly mutedDot: string;
+  readonly projectName: string | null;
   readonly onPress: () => void;
+  readonly onLongPress?: () => void;
 }) {
   const presence = chatListPresence(chat);
   const when = formatChatUpdatedAt(chat.updatedAt);
@@ -295,6 +366,8 @@ function RecentChatRowAndroid({
       accessibilityLabel={chatPresenceAccessibilityLabel(chat.title, presence)}
       className={`min-h-12 flex-row items-center gap-2.5 rounded-lg px-3 ${selected ? "bg-muted/50" : ""}`}
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={350}
     >
       {presence === "working" ? (
         <ActivityIndicator
@@ -312,12 +385,16 @@ function RecentChatRowAndroid({
           style={{ backgroundColor: markColor }}
         />
       )}
-      <Text
-        className="flex-1 text-base text-foreground"
-        numberOfLines={1}
-      >
-        {chat.title}
-      </Text>
+      <View className="min-w-0 flex-1">
+        <Text className="text-base text-foreground" numberOfLines={1}>
+          {chat.title}
+        </Text>
+        {projectName ? (
+          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+            {projectName}
+          </Text>
+        ) : null}
+      </View>
       {when ? (
         <Text className="shrink-0 text-xs text-muted-foreground">{when}</Text>
       ) : null}

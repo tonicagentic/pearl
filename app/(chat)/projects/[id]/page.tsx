@@ -9,6 +9,7 @@ import {
   listPlans,
   listProjectChats,
 } from "@/lib/db/projects";
+import { listProjectPins } from "@/lib/db/workbench-pins";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -65,9 +66,10 @@ async function ResolvedProject({
   const owned = await getProject(viewer.id, projectId);
   if (!owned) notFound();
 
-  const [plans, chats] = await Promise.all([
+  const [plans, chats, pins] = await Promise.all([
     listPlans(viewer.id, owned.id),
     listProjectChats(viewer.id, owned.id),
+    listProjectPins(viewer.id, owned.id),
   ]);
 
   return (
@@ -84,6 +86,11 @@ async function ResolvedProject({
           id: row.id,
           title: row.title,
           updatedAt: row.updatedAt.toISOString(),
+        }))}
+        pins={pins.map((pin) => ({
+          id: pin.id,
+          fullName: pin.fullName,
+          vercelProjectId: pin.vercelProjectId ?? null,
         }))}
         plans={plans.map((row) => ({
           id: row.id,

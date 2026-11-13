@@ -19,6 +19,12 @@ import {
 } from "@/lib/db/projects";
 import { createChat } from "@/lib/db/queries";
 import { ensureUserForPrincipal } from "@/lib/db/issues";
+import {
+  createWorkbenchPin,
+  linkPinToProject,
+  listProjectPins,
+  unlinkPinFromProject,
+} from "@/lib/db/workbench-pins";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -167,9 +173,60 @@ export async function loadProjectWorkspaceAction(input: {
   const viewer = await requireDatabaseViewer();
   const owned = await getProject(viewer.id, input.projectId);
   if (!owned) return null;
-  const [plans, chats] = await Promise.all([
+  const [plans, chats, pins] = await Promise.all([
     listPlans(viewer.id, owned.id),
     listProjectChats(viewer.id, owned.id),
+    listProjectPins(viewer.id, owned.id),
   ]);
-  return { project: owned, plans, chats };
+  return { project: owned, plans, chats, pins };
+}
+
+export async function linkProjectPinAction(input: {
+  readonly projectId: string;
+  readonly pinId?: string;
+  readonly owner?: string;
+  readonly name?: string;
+  readonly fullName?: string;
+  readonly vercelProjectId?: string | null;
+  readonly vercelTeamId?: string | null;
+  readonly expoProjectId?: string | null;
+  readonly expoUpdateChannel?: string | null;
+}) {
+  const viewer = await requireDatabaseViewer();
+  const owned = await getProject(viewer.id, input.projectId);
+  if (!owned) throw new Error("Unknown project.");
+
+  let pinId = input.pinId?.trim();
+  if (!pinId) {
+    const created = await createWorkbenchPin(viewer.id, {
+      owner: input.owner,
+      name: input.name,
+      fullName: input.fullName,
+      vercelProjectId: input.vercelProjectId,
+      vercelTeamId: input.vercelTeamId,
+      expoProjectId: input.expoProjectId,
+      expoUpdateChannel: input.expoUpdateChannel,
+    });
+    pinId = created.id;
+  }
+
+  const linked = await linkPinToProject(viewer.id, input.projectId, pinId);
+  if (!linked) throw new Error("Pin not found or could not be linked.");
+  revalidateProjectPaths(input.projectId);
+  return linked;
+}
+
+export async function unlinkProjectPinAction(input: {
+  readonly projectId: string;
+  readonly pinId: string;
+}) {
+  const viewer = await requireDatabaseViewer();
+  const unlinked = await unlinkPinFromProject(
+    viewer.id,
+    input.projectId,
+    input.pinId,
+  );
+  if (!unlinked) throw new Error("Pin not linked to this project.");
+  revalidateProjectPaths(input.projectId);
+  return { ok: true as const };
 }

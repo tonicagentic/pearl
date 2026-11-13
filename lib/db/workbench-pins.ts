@@ -1,14 +1,16 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, max } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
 import {
+  project,
+  projectPin,
   workbenchPin,
   type WorkbenchPinRow,
 } from "@/lib/db/schema";
 import { pinFullName, validatePinInput } from "@/lib/workbench/pins";
 import type { WorkbenchPin } from "@/lib/workbench/types";
 
-function toDto(row: WorkbenchPinRow): WorkbenchPin {
+export function toWorkbenchPinDto(row: WorkbenchPinRow): WorkbenchPin {
   return {
     id: row.id,
     userId: row.userId,
@@ -23,6 +25,8 @@ function toDto(row: WorkbenchPinRow): WorkbenchPin {
     updatedAt: row.updatedAt.toISOString(),
   };
 }
+
+const toDto = toWorkbenchPinDto;
 
 export async function listWorkbenchPins(
   userId: string,
@@ -125,5 +129,101 @@ export async function deleteWorkbenchPin(
     .delete(workbenchPin)
     .where(and(eq(workbenchPin.userId, userId), eq(workbenchPin.id, pinId)))
     .returning({ id: workbenchPin.id });
+  return deleted.length > 0;
+}
+
+/** Pins linked to a project, ordered by sort_order then owner/name. */
+export async function listProjectPins(
+  userId: string,
+  projectId: string,
+): Promise<readonly WorkbenchPin[]> {
+  const owned = await db
+    .select({ id: project.id })
+    .from(project)
+    .where(and(eq(project.userId, userId), eq(project.id, projectId)))
+    .limit(1);
+  if (!owned[0]) return [];
+
+  const rows = await db
+    .select({
+      pin: workbenchPin,
+      sortOrder: projectPin.sortOrder,
+    })
+    .from(projectPin)
+    .innerJoin(workbenchPin, eq(projectPin.pinId, workbenchPin.id))
+    .where(
+      and(
+        eq(projectPin.projectId, projectId),
+        eq(workbenchPin.userId, userId),
+      ),
+    )
+    .orderBy(
+      asc(projectPin.sortOrder),
+      asc(workbenchPin.owner),
+      asc(workbenchPin.name),
+    );
+
+  return rows.map((row) => toDto(row.pin));
+}
+
+export async function linkPinToProject(
+  userId: string,
+  projectId: string,
+  pinId: string,
+): Promise<WorkbenchPin | null> {
+  const [ownedProject] = await db
+    .select({ id: project.id })
+    .from(project)
+    .where(and(eq(project.userId, userId), eq(project.id, projectId)))
+    .limit(1);
+  if (!ownedProject) return null;
+
+  const pin = await getWorkbenchPin(userId, pinId);
+  if (!pin) return null;
+
+  const [existing] = await db
+    .select({ id: projectPin.id })
+    .from(projectPin)
+    .where(
+      and(eq(projectPin.projectId, projectId), eq(projectPin.pinId, pinId)),
+    )
+    .limit(1);
+  if (existing) return pin;
+
+  const [agg] = await db
+    .select({ maxOrder: max(projectPin.sortOrder) })
+    .from(projectPin)
+    .where(eq(projectPin.projectId, projectId));
+  const nextOrder = (agg?.maxOrder ?? -1) + 1;
+
+  await db.insert(projectPin).values({
+    projectId,
+    pinId,
+    sortOrder: nextOrder,
+  });
+  return pin;
+}
+
+export async function unlinkPinFromProject(
+  userId: string,
+  projectId: string,
+  pinId: string,
+): Promise<boolean> {
+  const [ownedProject] = await db
+    .select({ id: project.id })
+    .from(project)
+    .where(and(eq(project.userId, userId), eq(project.id, projectId)))
+    .limit(1);
+  if (!ownedProject) return false;
+
+  const pin = await getWorkbenchPin(userId, pinId);
+  if (!pin) return false;
+
+  const deleted = await db
+    .delete(projectPin)
+    .where(
+      and(eq(projectPin.projectId, projectId), eq(projectPin.pinId, pinId)),
+    )
+    .returning({ id: projectPin.id });
   return deleted.length > 0;
 }

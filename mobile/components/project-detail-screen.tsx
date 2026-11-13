@@ -23,9 +23,12 @@ import {
   createPlanRequest,
   deleteProjectRequest,
   fetchProjectWorkspace,
+  linkProjectPinRequest,
+  unlinkProjectPinRequest,
   updateProjectRequest,
   type ProjectWorkspaceDto,
 } from "@/src/projects-client";
+import { fetchWorkbenchPins } from "@/src/workbench-client";
 
 /** Project detail: edit metadata, plans, and project chats. */
 export function ProjectDetailScreen({
@@ -41,6 +44,7 @@ export function ProjectDetailScreen({
   const [saving, setSaving] = useState(false);
   const [creatingPlan, setCreatingPlan] = useState(false);
   const [creatingChat, setCreatingChat] = useState(false);
+  const [linkingPin, setLinkingPin] = useState(false);
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -184,6 +188,108 @@ export function ProjectDetailScreen({
     );
   }, [projectId]);
 
+  const linkExistingPin = useCallback(() => {
+    setLinkingPin(true);
+    setError(null);
+    void fetchWorkbenchPins()
+      .then(({ pins }) => {
+        const linkedIds = new Set((workspace?.pins ?? []).map((pin) => pin.id));
+        const available = pins.filter((pin) => !linkedIds.has(pin.id));
+        if (available.length === 0) {
+          Alert.alert(
+            "No pins to add",
+            "Pin a repo in Workbench first, or add by owner/name.",
+          );
+          return;
+        }
+        Alert.alert(
+          "Link repo",
+          undefined,
+          [
+            ...available.slice(0, 6).map((pin) => ({
+              text: pin.fullName,
+              onPress: () => {
+                setLinkingPin(true);
+                void linkProjectPinRequest(projectId, { pinId: pin.id })
+                  .then(() => reload())
+                  .catch((cause) => {
+                    setError(
+                      cause instanceof Error
+                        ? cause.message
+                        : "Could not link repo.",
+                    );
+                  })
+                  .finally(() => setLinkingPin(false));
+              },
+            })),
+            { text: "Cancel", style: "cancel" as const },
+          ],
+        );
+      })
+      .catch((cause) => {
+        setError(
+          cause instanceof Error ? cause.message : "Could not load pins.",
+        );
+      })
+      .finally(() => setLinkingPin(false));
+  }, [projectId, reload, workspace?.pins]);
+
+  const addRepoByName = useCallback(() => {
+    if (Platform.OS === "ios") {
+      Alert.prompt(
+        "Add repo",
+        "owner/name",
+        (value) => {
+          const trimmed = value?.trim() ?? "";
+          const [owner, name] = trimmed.split("/");
+          if (!owner || !name) {
+            setError("Use owner/name, e.g. vercel/next.js");
+            return;
+          }
+          setLinkingPin(true);
+          void linkProjectPinRequest(projectId, {
+            owner: owner.trim(),
+            name: name.trim(),
+            fullName: trimmed,
+          })
+            .then(() => reload())
+            .catch((cause) => {
+              setError(
+                cause instanceof Error
+                  ? cause.message
+                  : "Could not add repo.",
+              );
+            })
+            .finally(() => setLinkingPin(false));
+        },
+        "plain-text",
+      );
+      return;
+    }
+    Alert.alert(
+      "Add repo",
+      "On Android, link an existing Workbench pin, or pin the repo in Workbench first.",
+      [
+        { text: "Pick pin", onPress: linkExistingPin },
+        { text: "Cancel", style: "cancel" },
+      ],
+    );
+  }, [linkExistingPin, projectId, reload]);
+
+  const openReposMenu = useCallback(() => {
+    Alert.alert("Repos", undefined, [
+      {
+        text: linkingPin ? "Linking…" : "Link Workbench pin",
+        onPress: linkExistingPin,
+      },
+      {
+        text: "Add by owner/name",
+        onPress: addRepoByName,
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, [addRepoByName, linkExistingPin, linkingPin]);
+
   const openPlusMenu = useCallback(() => {
     Alert.alert("New", undefined, [
       {
@@ -194,9 +300,19 @@ export function ProjectDetailScreen({
         text: creatingChat ? "Starting chat…" : "New chat",
         onPress: createProjectChat,
       },
+      {
+        text: "Link repo",
+        onPress: openReposMenu,
+      },
       { text: "Cancel", style: "cancel" },
     ]);
-  }, [createPlan, createProjectChat, creatingChat, creatingPlan]);
+  }, [
+    createPlan,
+    createProjectChat,
+    creatingChat,
+    creatingPlan,
+    openReposMenu,
+  ]);
 
   const openOverflow = useCallback(() => {
     Alert.alert(name.trim() || "Project", undefined, [
@@ -315,6 +431,69 @@ export function ProjectDetailScreen({
             {saving ? (
               <Text className="text-xs text-muted-foreground">Saving…</Text>
             ) : null}
+          </View>
+
+          <View className="gap-2">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
+                Repos
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                disabled={linkingPin}
+                onPress={openReposMenu}
+              >
+                <Text className="text-sm font-medium text-foreground">
+                  {linkingPin ? "Linking…" : "Add"}
+                </Text>
+              </Pressable>
+            </View>
+            {(workspace?.pins ?? []).length === 0 ? (
+              <Text className="text-sm text-muted-foreground">
+                No repos linked yet. Add a Workbench pin to make this project
+                the coding workspace.
+              </Text>
+            ) : (
+              (workspace?.pins ?? []).map((pin) => (
+                <Pressable
+                  key={pin.id}
+                  accessibilityRole="button"
+                  className="min-h-11 justify-center border-b border-border/40 py-2.5"
+                  onLongPress={() => {
+                    Alert.alert(pin.fullName, undefined, [
+                      {
+                        text: "Unlink from project",
+                        style: "destructive",
+                        onPress: () => {
+                          void unlinkProjectPinRequest(projectId, pin.id)
+                            .then(() => reload())
+                            .catch((cause) => {
+                              setError(
+                                cause instanceof Error
+                                  ? cause.message
+                                  : "Could not unlink.",
+                              );
+                            });
+                        },
+                      },
+                      { text: "Cancel", style: "cancel" },
+                    ]);
+                  }}
+                  onPress={() =>
+                    router.push(`/workbench/${encodeURIComponent(pin.id)}`)
+                  }
+                >
+                  <Text className="text-base text-foreground">
+                    {pin.fullName}
+                  </Text>
+                  {pin.vercelProjectId ? (
+                    <Text className="text-xs text-muted-foreground">
+                      Vercel linked
+                    </Text>
+                  ) : null}
+                </Pressable>
+              ))
+            )}
           </View>
 
           <View className="gap-2">

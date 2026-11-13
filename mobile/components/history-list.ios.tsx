@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import {
   Button,
@@ -12,6 +12,7 @@ import {
   Spacer,
   SwipeActions,
   Text as SwiftText,
+  VStack,
 } from "@expo/ui/swift-ui";
 import {
   buttonStyle,
@@ -84,6 +85,26 @@ export function HistoryListIOS({
     listRowBackground(rowBackground),
     listRowInsets({ top: 14, bottom: 14, leading: 16, trailing: 16 }),
   ];
+
+  const [projectNames, setProjectNames] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void import("@/src/projects-client")
+      .then(({ fetchProjects }) => fetchProjects())
+      .then((projects) => {
+        if (cancelled) return;
+        setProjectNames(
+          new Map(projects.map((project) => [project.id, project.name])),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const openChat = useCallback(
     (chatId: string) => {
@@ -185,6 +206,11 @@ export function HistoryListIOS({
                     chat={chat}
                     mutedColor={mutedColor}
                     rowBackground={rowBackground}
+                    projectName={
+                      chat.projectId
+                        ? (projectNames.get(chat.projectId) ?? "Project")
+                        : null
+                    }
                     onOpen={() => openChat(chat.id)}
                     actions={actions}
                   />
@@ -210,12 +236,14 @@ function RecentChatRow({
   chat,
   mutedColor,
   rowBackground,
+  projectName,
   onOpen,
   actions,
 }: {
   readonly chat: ChatListItem;
   readonly mutedColor: string;
   readonly rowBackground: string;
+  readonly projectName: string | null;
   readonly onOpen: () => void;
   readonly actions: HistoryChatActionHandlers;
 }) {
@@ -250,9 +278,22 @@ function RecentChatRow({
         modifiers={[padding({ vertical: 6 })]}
       >
         {statusMark}
-        <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
-          {chat.title}
-        </SwiftText>
+        <VStack spacing={2} alignment="leading">
+          <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
+            {chat.title}
+          </SwiftText>
+          {projectName ? (
+            <SwiftText
+              modifiers={[
+                lineLimit(1),
+                font({ size: 12 }),
+                foregroundStyle({ type: "hierarchical", style: "secondary" }),
+              ]}
+            >
+              {projectName}
+            </SwiftText>
+          ) : null}
+        </VStack>
         <Spacer />
         {when ? (
           <SwiftText

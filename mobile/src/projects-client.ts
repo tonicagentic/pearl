@@ -35,10 +35,25 @@ export type ProjectChatDto = {
   readonly updatedAt: string;
 };
 
+export type ProjectPinDto = {
+  readonly id: string;
+  readonly userId: string;
+  readonly owner: string;
+  readonly name: string;
+  readonly fullName: string;
+  readonly vercelProjectId: string | null;
+  readonly vercelTeamId: string | null;
+  readonly expoProjectId: string | null;
+  readonly expoUpdateChannel: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+};
+
 export type ProjectWorkspaceDto = {
   readonly project: ProjectDto;
   readonly plans: readonly PlanSummaryDto[];
   readonly chats: readonly ProjectChatDto[];
+  readonly pins: readonly ProjectPinDto[];
 };
 
 function authHeaders(): Record<string, string> {
@@ -109,7 +124,11 @@ export async function fetchProjectWorkspace(
     throw new Error(await readError(response));
   }
 
-  return (await response.json()) as ProjectWorkspaceDto;
+  const data = (await response.json()) as ProjectWorkspaceDto;
+  return {
+    ...data,
+    pins: data.pins ?? [],
+  };
 }
 
 export async function updateProjectRequest(
@@ -252,4 +271,54 @@ export async function carryOutPlanRequest(
     chatId: string;
     projectId: string;
   };
+}
+
+export async function linkProjectPinRequest(
+  projectId: string,
+  input:
+    | { readonly pinId: string }
+    | {
+        readonly owner: string;
+        readonly name: string;
+        readonly fullName?: string;
+        readonly vercelProjectId?: string | null;
+        readonly vercelTeamId?: string | null;
+        readonly expoProjectId?: string | null;
+        readonly expoUpdateChannel?: string | null;
+      },
+): Promise<ProjectPinDto> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/pins`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(input),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+
+  const data = (await response.json()) as { pin: ProjectPinDto };
+  return data.pin;
+}
+
+export async function unlinkProjectPinRequest(
+  projectId: string,
+  pinId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/pins/${encodeURIComponent(pinId)}`,
+    {
+      method: "DELETE",
+      headers: authHeaders(),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
 }

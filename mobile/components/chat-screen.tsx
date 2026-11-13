@@ -91,6 +91,7 @@ export function ChatScreen({
     activeChatId,
     activeProjectId,
     setActiveProjectId,
+    setChatProject,
     newChatEntry,
     activeTitle,
     persistenceError,
@@ -124,6 +125,35 @@ export function ChatScreen({
   const [costOpen, setCostOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+
+  const [projectLabel, setProjectLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setProjectLabel(null);
+      return;
+    }
+    let cancelled = false;
+    void import("@/src/projects-client")
+      .then(({ fetchProjects }) => fetchProjects())
+      .then((projects) => {
+        if (cancelled) return;
+        setProjectLabel(
+          projects.find((project) => project.id === activeProjectId)?.name ??
+            "Project",
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setProjectLabel("Project");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectId]);
+
+  const openProjectPicker = useCallback(() => {
+    setProjectPickerOpen(true);
+  }, []);
 
   const ensureProjectForPlanMode = useCallback(async (): Promise<string | null> => {
     if (getAgentMode() !== "plan") return activeProjectId;
@@ -740,6 +770,14 @@ export function ChatScreen({
       />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button
+          icon="folder"
+          accessibilityLabel={
+            projectLabel ? `Project: ${projectLabel}` : "Choose project"
+          }
+          onPress={openProjectPicker}
+          tintColor={foregroundColor}
+        />
+        <Stack.Toolbar.Button
           icon="ellipsis"
           accessibilityLabel="Thread actions"
           hidden={projectedMessages.length === 0}
@@ -777,7 +815,23 @@ export function ChatScreen({
               open={actionsOpen}
               title={activeTitle}
               canDelete={Boolean(activeChatId)}
+              projectLabel={projectLabel}
               onClose={() => setActionsOpen(false)}
+              onOpenProject={() => {
+                setActionsOpen(false);
+                openProjectPicker();
+              }}
+              onClearProject={
+                activeProjectId
+                  ? () => {
+                      setActionsOpen(false);
+                      setActiveProjectId(null);
+                      if (activeChatId) {
+                        void setChatProject(activeChatId, null).catch(() => {});
+                      }
+                    }
+                  : undefined
+              }
               onOpenCost={() => {
                 setActionsOpen(false);
                 openCost();
@@ -798,6 +852,9 @@ export function ChatScreen({
               }}
               onSelect={(project) => {
                 setActiveProjectId(project.id);
+                if (activeChatId) {
+                  void setChatProject(activeChatId, project.id).catch(() => {});
+                }
                 const waiter = projectPickWaiter.current;
                 projectPickWaiter.current = null;
                 waiter?.resolve(project.id);

@@ -7,6 +7,7 @@ import {
   listProjectChats,
   updateProject,
 } from "@/lib/db/projects";
+import { listProjectPins } from "@/lib/db/workbench-pins";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -35,7 +36,7 @@ async function requireViewer() {
   return viewer;
 }
 
-/** Project detail: project + plans + chats. */
+/** Project detail: project + plans + chats + linked pins. */
 export async function GET(
   _request: Request,
   context: { readonly params: Promise<{ readonly id: string }> },
@@ -54,9 +55,10 @@ export async function GET(
     return NextResponse.json({ error: "Project not found." }, { status: 404 });
   }
 
-  const [plans, chats] = await Promise.all([
+  const [plans, chats, pins] = await Promise.all([
     listPlans(viewer.id, owned.id),
     listProjectChats(viewer.id, owned.id),
+    listProjectPins(viewer.id, owned.id),
   ]);
 
   return NextResponse.json({
@@ -71,6 +73,19 @@ export async function GET(
       id: row.id,
       title: row.title,
       updatedAt: row.updatedAt.toISOString(),
+    })),
+    pins: pins.map((pin) => ({
+      id: pin.id,
+      userId: pin.userId,
+      owner: pin.owner,
+      name: pin.name,
+      fullName: pin.fullName,
+      vercelProjectId: pin.vercelProjectId ?? null,
+      vercelTeamId: pin.vercelTeamId ?? null,
+      expoProjectId: pin.expoProjectId ?? null,
+      expoUpdateChannel: pin.expoUpdateChannel ?? null,
+      createdAt: pin.createdAt,
+      updatedAt: pin.updatedAt,
     })),
   });
 }

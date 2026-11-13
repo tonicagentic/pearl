@@ -2,13 +2,14 @@ import { defineDynamic, defineInstructions } from "eve/instructions";
 
 import { planMirrorPath } from "@/agent/lib/plan-mirror";
 import { getProject, listPlans } from "@/lib/db/projects";
+import { listProjectPins } from "@/lib/db/workbench-pins";
 
 import { requirePrincipalUser } from "../lib/principal.ts";
 import { syncTurnClientIntent } from "../lib/turn-context.ts";
 
 // When the turn is attached to a verified project, inject its name,
-// instructions, and plan index. Bodies stay out of the prompt — use
-// read_plan when a specific document is needed.
+// instructions, plan index, and linked repos. Bodies stay out of the
+// prompt — use read_plan when a specific document is needed.
 
 export default defineDynamic(async (ctx) => {
   const intent = syncTurnClientIntent(await ctx.messages());
@@ -20,13 +21,29 @@ export default defineDynamic(async (ctx) => {
   const owned = await getProject(userId, intent.projectId);
   if (!owned) return null;
 
-  const plans = await listPlans(userId, owned.id);
+  const [plans, pins] = await Promise.all([
+    listPlans(userId, owned.id),
+    listProjectPins(userId, owned.id),
+  ]);
   const planLines =
     plans.length === 0
       ? ["(no plans yet)"]
       : plans.map((row) => {
           const path = planMirrorPath(row.projectId, row.slug);
           return `- ${row.title} (slug: ${row.slug}, id: ${row.id}, path: ${path})`;
+        });
+
+  const repoLines =
+    pins.length === 0
+      ? ["(no repos linked yet)"]
+      : pins.map((pin) => {
+          const vercel = pin.vercelProjectId
+            ? `, vercelProjectId: ${pin.vercelProjectId}`
+            : "";
+          const expo = pin.expoProjectId
+            ? `, expoProjectId: ${pin.expoProjectId}`
+            : "";
+          return `- ${pin.fullName} (pin id: ${pin.id}${vercel}${expo})`;
         });
 
   const instructions = owned.instructions.trim();
@@ -48,6 +65,14 @@ export default defineDynamic(async (ctx) => {
     "source of truth). Mirror paths under /workspace/docs/plans/ are for",
     "sandbox/coder visibility; if they diverge, trust read_plan. Do not",
     "invent plans that are not listed.",
+    "",
+    "## Repos in this project",
+    "",
+    ...repoLines,
+    "",
+    "When building software for this project, prefer these linked repos for",
+    "`coder` unless the user names a different repo. Do not invent repos",
+    "that are not listed.",
   ];
 
   return defineInstructions({

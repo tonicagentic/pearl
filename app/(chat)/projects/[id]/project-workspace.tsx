@@ -7,7 +7,9 @@ import { useState, useTransition } from "react";
 import {
   createProjectChatAction,
   deleteProjectAction,
+  linkProjectPinAction,
   savePlanAction,
+  unlinkProjectPinAction,
   updateProjectAction,
 } from "@/app/actions/projects";
 import { Button } from "@/components/ui/button";
@@ -33,19 +35,28 @@ type ChatProps = {
   readonly updatedAt: string;
 };
 
+type PinProps = {
+  readonly id: string;
+  readonly fullName: string;
+  readonly vercelProjectId: string | null;
+};
+
 export function ProjectWorkspace({
   project,
   plans,
   chats,
+  pins,
 }: {
   readonly project: ProjectProps;
   readonly plans: readonly PlanProps[];
   readonly chats: readonly ChatProps[];
+  readonly pins: readonly PinProps[];
 }) {
   const router = useRouter();
   const [name, setName] = useState(project.name);
   const [instructions, setInstructions] = useState(project.instructions);
   const [planTitle, setPlanTitle] = useState("");
+  const [repoFullName, setRepoFullName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -149,6 +160,110 @@ export function ProjectWorkspace({
             Delete
           </Button>
         </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-medium">Repos</h2>
+        </div>
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const trimmed = repoFullName.trim();
+            const [owner, repoName] = trimmed.split("/");
+            if (!owner || !repoName) {
+              setError("Use owner/name, e.g. vercel/next.js");
+              return;
+            }
+            setError(null);
+            startTransition(async () => {
+              try {
+                await linkProjectPinAction({
+                  projectId: project.id,
+                  owner: owner.trim(),
+                  name: repoName.trim(),
+                  fullName: trimmed,
+                });
+                setRepoFullName("");
+                router.refresh();
+              } catch (cause) {
+                setError(
+                  cause instanceof Error
+                    ? cause.message
+                    : "Could not link the repo.",
+                );
+              }
+            });
+          }}
+        >
+          <Input
+            className="max-w-xs"
+            onChange={(event) => setRepoFullName(event.target.value)}
+            placeholder="owner/name"
+            required
+            value={repoFullName}
+          />
+          <Button
+            disabled={pending || !repoFullName.trim()}
+            size="sm"
+            type="submit"
+          >
+            Link repo
+          </Button>
+        </form>
+        {pins.length === 0 ? (
+          <p className="rounded-lg border bg-card px-3 py-4 text-sm text-muted-foreground">
+            No repos linked yet. Link a GitHub repo to make this project the
+            coding workspace.
+          </p>
+        ) : (
+          <ul className="divide-y rounded-lg border bg-card">
+            {pins.map((pin) => (
+              <li
+                className="flex items-center justify-between gap-3 px-3 py-3"
+                key={pin.id}
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">
+                    {pin.fullName}
+                  </div>
+                  {pin.vercelProjectId ? (
+                    <div className="truncate text-xs text-muted-foreground">
+                      Vercel linked
+                    </div>
+                  ) : null}
+                </div>
+                <Button
+                  disabled={pending}
+                  onClick={() => {
+                    setError(null);
+                    startTransition(async () => {
+                      try {
+                        await unlinkProjectPinAction({
+                          projectId: project.id,
+                          pinId: pin.id,
+                        });
+                        router.refresh();
+                      } catch (cause) {
+                        setError(
+                          cause instanceof Error
+                            ? cause.message
+                            : "Could not unlink the repo.",
+                        );
+                      }
+                    });
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  Unlink
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="flex flex-col gap-3">

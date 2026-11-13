@@ -756,7 +756,7 @@ export type ConceptSchemaRevision = typeof conceptSchemaRevision.$inferSelect;
 
 /**
  * GitHub repos the signed-in user pinned for the phone workbench.
- * Separate from `project` (planning containers).
+ * Linked onto projects via `project_pin` so a project can be a multi-repo workspace.
  */
 export const workbenchPin = pgTable(
   "workbench_pin",
@@ -787,3 +787,31 @@ export const workbenchPin = pgTable(
 );
 
 export type WorkbenchPinRow = typeof workbenchPin.$inferSelect;
+
+/**
+ * Links workbench pins onto a project. A pin may belong to multiple projects;
+ * a project may have many pins.
+ */
+export const projectPin = pgTable(
+  "project_pin",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    pinId: text("pin_id")
+      .notNull()
+      .references(() => workbenchPin.id, { onDelete: "cascade" }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_project_pin_project").on(table.projectId),
+    index("idx_project_pin_pin").on(table.pinId),
+    uniqueIndex("idx_project_pin_project_pin").on(table.projectId, table.pinId),
+  ],
+);
+
+export type ProjectPin = typeof projectPin.$inferSelect;
