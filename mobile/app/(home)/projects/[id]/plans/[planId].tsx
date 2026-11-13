@@ -19,7 +19,7 @@ export default function PlanEditor() {
   }
 
   if (!id || typeof id !== "string" || !planId || typeof planId !== "string") {
-    return <Redirect href="/projects" />;
+    return <Redirect href="/" />;
   }
 
   return <PlanEditorScreen projectId={id} planId={planId} />;

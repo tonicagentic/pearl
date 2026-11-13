@@ -1,14 +1,20 @@
-import { useCallback, useMemo, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
   LayoutAnimation,
-  Platform,
   Pressable,
   ScrollView,
   Text,
   UIManager,
   View,
+  Platform,
 } from "react-native";
 import { router, Stack, useFocusEffect } from "expo-router";
 import Animated, {
@@ -41,11 +47,20 @@ function animateList() {
   LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 }
 
+export type IssuesScreenHandle = {
+  readonly openComposer: () => void;
+};
+
 /**
- * Tasks inbox: elegant native list with opportunistic CRUD against /api/issues.
- * New tasks default to the Inbox area (areas stay in the DB, not the UI).
+ * Tasks inbox. When `embedded`, skips stack chrome for the Mail home shell.
  */
-export function IssuesScreen() {
+export const IssuesScreen = forwardRef<
+  IssuesScreenHandle,
+  {
+    readonly embedded?: boolean;
+    readonly bottomInset?: number;
+  }
+>(function IssuesScreen({ embedded = false, bottomInset = 0 }, ref) {
   const [payload, setPayload] = useState<IssuesPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -59,6 +74,14 @@ export function IssuesScreen() {
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      openComposer: () => setComposerOpen(true),
+    }),
+    [],
+  );
 
   const reload = useCallback(async () => {
     try {
@@ -209,49 +232,19 @@ export function IssuesScreen() {
     [issues],
   );
 
-  return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor }}
-      edges={["left", "right"]}
-    >
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: "Tasks",
-          headerTintColor: foregroundColor,
-          headerRight:
-            Platform.OS === "ios"
-              ? undefined
-              : () => (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="New task"
-                    className="h-10 w-10 items-center justify-center"
-                    onPress={() => setComposerOpen(true)}
-                  >
-                    <Icon as={PlusIcon} className="size-5 text-foreground" />
-                  </Pressable>
-                ),
-        }}
-      />
-      {Platform.OS === "ios" ? (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon="plus"
-            accessibilityLabel="New task"
-            onPress={() => setComposerOpen(true)}
-          />
-        </Stack.Toolbar>
-      ) : null}
-
+  const body = (
+    <>
       <ScrollView
         className="flex-1"
-        contentContainerClassName="px-5 pb-24 pt-4"
+        contentContainerClassName={embedded ? "px-5 pt-0" : "px-5 pt-2"}
+        contentContainerStyle={{ paddingBottom: 24 + bottomInset }}
         contentInsetAdjustmentBehavior="automatic"
       >
-        <Text className="mb-6 text-[15px] leading-5 text-muted-foreground">
-          Capture and clear open loops.
-        </Text>
+        {!embedded ? (
+          <Text className="mb-6 text-[15px] leading-5 text-muted-foreground">
+            Capture and clear open loops.
+          </Text>
+        ) : null}
 
         {error ? (
           <Pressable
@@ -322,9 +315,51 @@ export function IssuesScreen() {
           router.push(`/issues/${encodeURIComponent(created.id)}`);
         }}
       />
+    </>
+  );
+
+  if (embedded) {
+    return <View style={{ flex: 1, backgroundColor }}>{body}</View>;
+  }
+
+  return (
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor }}
+      edges={["left", "right"]}
+    >
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: "Tasks",
+          headerTintColor: foregroundColor,
+          headerRight:
+            Platform.OS === "ios"
+              ? undefined
+              : () => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="New task"
+                    className="h-10 w-10 items-center justify-center"
+                    onPress={() => setComposerOpen(true)}
+                  >
+                    <Icon as={PlusIcon} className="size-5 text-foreground" />
+                  </Pressable>
+                ),
+        }}
+      />
+      {Platform.OS === "ios" ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon="plus"
+            accessibilityLabel="New task"
+            onPress={() => setComposerOpen(true)}
+          />
+        </Stack.Toolbar>
+      ) : null}
+      {body}
     </SafeAreaView>
   );
-}
+});
 
 function TaskGroup({
   title,
@@ -410,7 +445,10 @@ function TaskRow({
         onPress={() => void onResolve(issue, !resolved)}
       >
         {busy ? (
-          <ActivityIndicator size="small" color={placeholderColor ?? undefined} />
+          <ActivityIndicator
+            size="small"
+            color={placeholderColor ?? undefined}
+          />
         ) : resolved ? (
           <Icon as={CheckIcon} className="size-4 text-foreground" />
         ) : null}
@@ -419,9 +457,7 @@ function TaskRow({
         accessibilityRole="button"
         accessibilityLabel={`Open ${issue.title}`}
         className="min-w-0 flex-1"
-        onPress={() =>
-          router.push(`/issues/${encodeURIComponent(issue.id)}`)
-        }
+        onPress={() => router.push(`/issues/${encodeURIComponent(issue.id)}`)}
         onLongPress={() => onDelete(issue)}
       >
         <Text

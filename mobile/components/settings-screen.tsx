@@ -13,8 +13,10 @@ import {
   BrainIcon,
   CircleUserIcon,
   CloudIcon,
+  FolderGit2Icon,
   InfoIcon,
   LogOutIcon,
+  NetworkIcon,
   PuzzleIcon,
   SparklesIcon,
   WalletIcon,
@@ -87,8 +89,8 @@ export function SettingsScreen() {
 
   const confirmSignOut = () => {
     const complete = () => {
+      // Stack.Protected redirects to /sign-in once the session clears.
       signOut();
-      router.replace("/");
     };
     if (Platform.OS === "web") {
       if (typeof window !== "undefined" && window.confirm("Sign out of Pearl?")) {
@@ -137,6 +139,24 @@ export function SettingsScreen() {
           label="Skills"
           detail="Custom and published"
           onPress={() => router.push("/skills")}
+        />
+      </SettingsCard>
+
+      <SettingsCard>
+        <SettingsRow
+          icon={
+            <Icon as={FolderGit2Icon} className="size-5 text-orange-500" />
+          }
+          label="Repos"
+          detail="Pinned GitHub / Vercel / Expo"
+          onPress={() => router.push("/workbench")}
+          showSeparator
+        />
+        <SettingsRow
+          icon={<Icon as={NetworkIcon} className="size-5 text-teal-500" />}
+          label="Areas"
+          detail="Life tree (read-only on mobile)"
+          onPress={() => router.push("/areas")}
         />
       </SettingsCard>
 

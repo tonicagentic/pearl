@@ -10,7 +10,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 import { MessageSquareIcon } from "lucide-react-native";
-import { KeyboardController, useKeyboardHandler } from "react-native-keyboard-controller";
+import {
+  KeyboardController,
+  useKeyboardHandler,
+} from "react-native-keyboard-controller";
 import Animated, {
   Easing,
   Extrapolation,
@@ -20,8 +23,8 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+import { HOME_DOCK_CLEARANCE } from "@/components/home-dock";
 import { Icon } from "@/components/ui/icon";
-import { HISTORY_SEARCH_DOCK_CLEARANCE } from "@/components/history-search-bar";
 import { useChats } from "@/src/chat-context";
 import {
   searchChats,
@@ -40,8 +43,7 @@ const SUGGESTION_COUNT = 8;
 const MORPH_MS = 280;
 
 /**
- * Search overlay content (result pills). The glass dock lives in
- * HistorySearchBar and stays mounted across idle/active.
+ * Chat search overlay. The floating dock owns the field; this paints results.
  */
 export function HistorySearchScreen({
   visible,
@@ -84,11 +86,6 @@ export function HistorySearchScreen({
       duration: MORPH_MS,
       easing: Easing.out(Easing.cubic),
     });
-    if (!visible) {
-      setResults([]);
-      setError(null);
-      setLoading(false);
-    }
   }, [visible, visibleProgress]);
 
   useKeyboardHandler({
@@ -110,20 +107,16 @@ export function HistorySearchScreen({
     },
   });
 
+  const trimmedQuery = query.trim();
+  const showSuggestions = trimmedQuery.length === 0;
+
   useEffect(() => {
-    if (!visible) return;
-    const q = query.trim();
-    if (!q) {
-      setResults([]);
-      setLoading(false);
-      setError(null);
-      return;
-    }
+    if (!visible || !trimmedQuery) return;
 
     const gen = ++requestGen.current;
-    setLoading(true);
     const timer = setTimeout(() => {
-      void searchChats(q)
+      setLoading(true);
+      void searchChats(trimmedQuery)
         .then((hits) => {
           if (gen !== requestGen.current) return;
           setResults(hits);
@@ -141,7 +134,7 @@ export function HistorySearchScreen({
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [query, visible]);
+  }, [trimmedQuery, visible]);
 
   const suggestions = useMemo(
     () => chats.slice(0, SUGGESTION_COUNT),
@@ -178,10 +171,10 @@ export function HistorySearchScreen({
   }));
 
   const listPadStyle = useAnimatedStyle(() => ({
-    paddingBottom: Math.max(keyboardHeight.value, restingPad) + 16,
+    paddingBottom:
+      Math.max(keyboardHeight.value, restingPad) + HOME_DOCK_CLEARANCE + 16,
   }));
 
-  const showSuggestions = query.trim().length === 0;
   const rows: readonly (ChatSearchHit | ChatListItem)[] = showSuggestions
     ? suggestions
     : results;
@@ -196,10 +189,7 @@ export function HistorySearchScreen({
           style={styles.flex}
           contentContainerStyle={[
             styles.listContent,
-            {
-              // Leave room under the top search dock so pills start below it.
-              paddingTop: insets.top + HISTORY_SEARCH_DOCK_CLEARANCE + 8,
-            },
+            { paddingTop: insets.top + 56 },
           ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
@@ -228,7 +218,7 @@ export function HistorySearchScreen({
             </Text>
           ) : rows.length === 0 ? (
             <Text style={[styles.statusText, { color: mutedColor }]}>
-              No chats match “{query.trim()}”.
+              No chats match “{trimmedQuery}”.
             </Text>
           ) : (
             rows.map((chat) => {

@@ -2,14 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   Pressable,
   Text,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { Stack, useIsFocused, useRouter } from "expo-router";
+import { ChevronLeftIcon } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
+import { Icon } from "@/components/ui/icon";
 import {
   createWorkbenchPin,
   fetchWorkbenchPins,
@@ -17,14 +20,26 @@ import {
   type WorkbenchPinDto,
 } from "@/src/workbench-client";
 
+function goHomeOrBack(router: ReturnType<typeof useRouter>) {
+  if (router.canGoBack()) {
+    router.back();
+    return;
+  }
+  router.replace("/");
+}
+
 /** Pinned repos for phone management of GitHub / Vercel / Expo. */
 export function WorkbenchScreen() {
   const router = useRouter();
+  const focused = useIsFocused();
   const [pins, setPins] = useState<WorkbenchPinDto[]>([]);
   const [suggested, setSuggested] = useState<SuggestedPinDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const backgroundColor = useCSSVariable("--color-background") as
+    | string
+    | undefined;
+  const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
 
@@ -43,8 +58,14 @@ export function WorkbenchScreen() {
   }, []);
 
   useEffect(() => {
+    // Stale `/repos` → `/workbench` redirects often leave this as the stack
+    // root with no back target. Bounce to Mail home instead of trapping here.
+    if (!router.canGoBack()) {
+      router.replace("/");
+      return;
+    }
     void reload();
-  }, [reload]);
+  }, [reload, router]);
 
   const pinSuggested = useCallback(async () => {
     if (!suggested) return;
@@ -57,13 +78,53 @@ export function WorkbenchScreen() {
   }, [reload, suggested]);
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor }}>
-      <View className="flex-row items-center justify-between px-4 pb-2 pt-2">
-        <Text className="text-xl font-semibold text-foreground">Repos</Text>
-        <Pressable accessibilityRole="button" onPress={() => void reload()}>
-          <Text className="text-sm text-muted-foreground">Refresh</Text>
-        </Pressable>
-      </View>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor }}
+      edges={["left", "right"]}
+    >
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: "Repos",
+          headerTintColor: foregroundColor,
+          headerBackVisible: false,
+          headerLeft: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              hitSlop={12}
+              className="h-10 w-10 items-center justify-center"
+              onPress={() => goHomeOrBack(router)}
+            >
+              <Icon as={ChevronLeftIcon} className="size-6 text-foreground" />
+            </Pressable>
+          ),
+          headerRight:
+            Platform.OS === "ios"
+              ? undefined
+              : () => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Refresh"
+                    className="min-h-11 justify-center px-2"
+                    onPress={() => void reload()}
+                  >
+                    <Text style={{ color: foregroundColor, fontSize: 17 }}>
+                      Refresh
+                    </Text>
+                  </Pressable>
+                ),
+        }}
+      />
+      {focused && Platform.OS === "ios" ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon="arrow.clockwise"
+            accessibilityLabel="Refresh"
+            onPress={() => void reload()}
+          />
+        </Stack.Toolbar>
+      ) : null}
 
       {error ? (
         <Pressable className="px-4 py-3" onPress={() => void reload()}>
@@ -95,6 +156,7 @@ export function WorkbenchScreen() {
         className="flex-1 px-4"
         data={pins}
         keyExtractor={(pin) => pin.id}
+        contentInsetAdjustmentBehavior="automatic"
         ListEmptyComponent={
           loading ? (
             <View className="py-8">

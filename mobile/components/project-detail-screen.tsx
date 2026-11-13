@@ -173,7 +173,7 @@ export function ProjectDetailScreen({
             void deleteProjectRequest(projectId)
               .then(() => {
                 if (router.canGoBack()) router.back();
-                else router.replace("/projects");
+                else router.replace("/");
               })
               .catch((cause) => {
                 setError(

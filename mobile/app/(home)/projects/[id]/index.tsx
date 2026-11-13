@@ -1,9 +1,9 @@
 import { Redirect, useLocalSearchParams } from "expo-router";
 
-import { TaskDetailScreen } from "@/components/task-detail-screen";
+import { ProjectDetailScreen } from "@/components/project-detail-screen";
 import { useAuth } from "@/src/auth";
 
-export default function IssueDetail() {
+export default function ProjectDetail() {
   const { signedIn, restoring } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -16,8 +16,8 @@ export default function IssueDetail() {
   }
 
   if (!id || typeof id !== "string") {
-    return <Redirect href="/issues" />;
+    return <Redirect href="/" />;
   }
 
-  return <TaskDetailScreen issueId={id} />;
+  return <ProjectDetailScreen projectId={id} />;
 }

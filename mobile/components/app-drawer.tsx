@@ -9,19 +9,12 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
-import {
-  FolderIcon,
-  InboxIcon,
-  PlusIcon,
-} from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
-import { Icon } from "@/components/ui/icon";
 import {
   HistoryListIOS,
   type HistoryChatActionHandlers,
-  type SidebarDestination,
 } from "@/components/history-list";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
@@ -35,34 +28,29 @@ import {
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
 import { fetchProjects } from "@/src/projects-client";
 
-export type { HistoryChatActionHandlers, SidebarDestination };
+export type { HistoryChatActionHandlers };
 
 /**
- * Home list: Projects, Tasks, and recent chats.
- * Selecting a chat or New chat opens the nested `/chat` route.
- * Settings lives in the native stack header.
+ * Home list: recent chats.
+ * Selecting a chat opens the nested `/chat` route.
+ * Settings and New chat live in the native stack header.
  */
 export function HistoryScreen({
   onOpenChat,
-  onNavigate,
   visible = true,
   chatActions,
+  bottomInset = 0,
 }: {
   /** Called after selecting an existing chat (caller should push `/chat`). */
   onOpenChat?: () => void;
-  onNavigate?: (href: SidebarDestination) => void;
   visible?: boolean;
   /** iOS swipe / context-menu handlers (required on iOS for row actions). */
   chatActions?: HistoryChatActionHandlers;
+  readonly bottomInset?: number;
 }) {
   const openChatRoute = () => {
     if (onOpenChat) onOpenChat();
     else router.push("/chat");
-  };
-
-  const openDestination = (href: SidebarDestination) => {
-    if (onNavigate) onNavigate(href);
-    else router.push(href);
   };
 
   if (Platform.OS === "ios") {
@@ -74,14 +62,11 @@ export function HistoryScreen({
       onDelete: () => {},
     };
     return (
-      <View
-        style={{ flex: 1 }}
-        accessibilityElementsHidden={!visible}
-      >
+      <View style={{ flex: 1 }} accessibilityElementsHidden={!visible}>
         <HistoryListIOS
           onOpenChat={openChatRoute}
-          onNavigate={openDestination}
           actions={actions}
+          bottomInset={bottomInset}
         />
       </View>
     );
@@ -91,8 +76,8 @@ export function HistoryScreen({
     <HistoryListAndroid
       visible={visible}
       onOpenChat={openChatRoute}
-      onNavigate={openDestination}
       chatActions={chatActions}
+      bottomInset={bottomInset}
     />
   );
 }
@@ -100,13 +85,13 @@ export function HistoryScreen({
 function HistoryListAndroid({
   visible,
   onOpenChat,
-  onNavigate,
   chatActions,
+  bottomInset = 0,
 }: {
   readonly visible: boolean;
   readonly onOpenChat: () => void;
-  readonly onNavigate: (href: SidebarDestination) => void;
   readonly chatActions?: HistoryChatActionHandlers;
+  readonly bottomInset?: number;
 }) {
   const { signedIn } = useAuth();
   const {
@@ -119,16 +104,16 @@ function HistoryListAndroid({
     reloadChats,
     selectChat,
     selectionError,
-    newChat,
   } = useChats();
   const [projectNames, setProjectNames] = useState<ReadonlyMap<string, string>>(
     () => new Map(),
   );
-  const backgroundColor =
-    (useCSSVariable("--color-muted") as string | undefined) ??
-    (useCSSVariable("--color-background") as string | undefined);
-  const mutedDot =
-    (useCSSVariable("--color-border") as string | undefined) ?? "#3A3A3C";
+  const pageBackground = useCSSVariable("--color-background") as
+    | string
+    | undefined;
+  const backgroundColor = pageBackground;
+  const borderColor = useCSSVariable("--color-border") as string | undefined;
+  const mutedDot = borderColor ?? "#3A3A3C";
 
   useEffect(() => {
     let cancelled = false;
@@ -183,7 +168,8 @@ function HistoryListAndroid({
       <View style={{ flex: 1 }}>
         <FlatList
           className="flex-1"
-          contentContainerClassName="px-4 pb-8 pt-2"
+          contentContainerClassName="px-4 pt-0"
+          contentContainerStyle={{ paddingBottom: 32 + bottomInset }}
           data={chats}
           extraData={`${activeChatId}:${chats.map((chat) => chat.presence ?? (chat.waitingForInput ? "waiting" : "idle")).join("")}`}
           keyExtractor={(chat) => chat.id}
@@ -212,36 +198,6 @@ function HistoryListAndroid({
           )}
           ListHeaderComponent={
             <>
-              <Pressable
-                accessibilityRole="button"
-                className="min-h-12 flex-row items-center gap-3 rounded-lg px-3"
-                onPress={() => onNavigate("/projects")}
-              >
-                <Icon as={FolderIcon} className="size-5 text-foreground" />
-                <Text className="text-base text-foreground">Projects</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                className="min-h-12 flex-row items-center gap-3 rounded-lg px-3"
-                onPress={() => onNavigate("/issues")}
-              >
-                <Icon as={InboxIcon} className="size-5 text-foreground" />
-                <Text className="text-base text-foreground">Tasks</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                className="min-h-12 flex-row items-center gap-3 rounded-lg px-3"
-                onPress={() => {
-                  newChat();
-                  onOpenChat();
-                }}
-              >
-                <Icon as={PlusIcon} className="size-5 text-foreground" />
-                <Text className="text-base text-foreground">New chat</Text>
-              </Pressable>
-              <Text className="px-3 pb-2 pt-5 text-xs font-medium uppercase text-muted-foreground">
-                Chats
-              </Text>
               {selectionError ? (
                 <Text
                   className="px-3 py-2 text-sm text-destructive"

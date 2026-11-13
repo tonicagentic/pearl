@@ -1,28 +1,40 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, AppState, Platform, View } from "react-native";
-import { Stack, router, useFocusEffect } from "expo-router";
+import { Alert, AppState, Platform, Pressable, View } from "react-native";
+import { Stack, router, useFocusEffect, useIsFocused } from "expo-router";
+import { PlusIcon, SettingsIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import {
   HistoryScreen,
   type HistoryChatActionHandlers,
-  type SidebarDestination,
 } from "@/components/app-drawer";
-import { HistorySearchBar } from "@/components/history-search-bar";
+import {
+  HomeCategoryPills,
+  type HomeCategory,
+} from "@/components/home-category-pills";
+import { HOME_DOCK_CLEARANCE, HomeDock } from "@/components/home-dock";
 import { HistorySearchScreen } from "@/components/history-search-screen";
+import {
+  IssuesScreen,
+  type IssuesScreenHandle,
+} from "@/components/issues-screen";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
+import {
+  ProjectsScreen,
+  type ProjectsScreenHandle,
+} from "@/components/projects-screen";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
+import { Icon } from "@/components/ui/icon";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
 
 const HOME_PRESENCE_POLL_MS = 5_000;
 
 /**
- * Home (Stack root): recents + Projects/Tasks entry points.
- * Settings and New chat sit in the native stack header.
- * Chat is a nested `/chat` route opened via New chat or selecting a recent.
+ * Mail-style home: stack Settings gear, category pills below, list + dock.
  */
-export function HistoryRouteScreen() {
+export function MailHomeScreen() {
+  const focused = useIsFocused();
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -37,15 +49,17 @@ export function HistoryRouteScreen() {
     selectChat,
     reloadChats,
   } = useChats();
+
+  const [category, setCategory] = useState<HomeCategory>("chats");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [costOpen, setCostOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectTargetId, setProjectTargetId] = useState<string | null>(null);
   const homeFocusedRef = useRef(false);
+  const tasksRef = useRef<IssuesScreenHandle>(null);
+  const projectsRef = useRef<ProjectsScreenHandle>(null);
 
-  // While home is focused and the app is active, refresh presence so off-screen
-  // turns move the working / waiting / unread marks without opening each chat.
   useFocusEffect(
     useCallback(() => {
       homeFocusedRef.current = true;
@@ -70,10 +84,6 @@ export function HistoryRouteScreen() {
     const subscription = AppState.addEventListener("change", onChange);
     return () => subscription.remove();
   }, [reloadChats]);
-
-  const openDestination = useCallback((href: SidebarDestination) => {
-    router.push(href);
-  }, []);
 
   const openChat = useCallback(() => {
     router.push("/chat");
@@ -123,25 +133,21 @@ export function HistoryRouteScreen() {
 
   const confirmDelete = useCallback(
     (chat: ChatListItem) => {
-      Alert.alert(
-        "Delete thread?",
-        "This cannot be undone.",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: () => {
-              void deleteChat(chat.id).catch(() => {
-                Alert.alert(
-                  "Could not delete",
-                  "Check your connection and try again.",
-                );
-              });
-            },
+      Alert.alert("Delete thread?", "This cannot be undone.", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void deleteChat(chat.id).catch(() => {
+              Alert.alert(
+                "Could not delete",
+                "Check your connection and try again.",
+              );
+            });
           },
-        ],
-      );
+        },
+      ]);
     },
     [deleteChat],
   );
@@ -196,19 +202,57 @@ export function HistoryRouteScreen() {
     ],
   );
 
+  const showCategoryCreate =
+    !searchOpen && (category === "tasks" || category === "projects");
+
+  const openCategoryCreate = useCallback(() => {
+    if (category === "tasks") tasksRef.current?.openComposer();
+    else if (category === "projects") projectsRef.current?.openComposer();
+  }, [category]);
+
   return (
     <View style={{ flex: 1, backgroundColor }}>
       <Stack.Screen
         options={{
           headerShown: !searchOpen,
           title: "",
-          // Content draws under the bar; HistoryScreen pads by header height.
-          headerTransparent: true,
           headerShadowVisible: false,
+          headerTransparent: false,
           headerTintColor: foregroundColor,
+          headerStyle: { backgroundColor },
+          // iOS: Stack.Toolbar owns the morphing glass gear — leave headerLeft
+          // unset so we don't get a second chrome button over the list.
+          headerLeft:
+            Platform.OS === "ios"
+              ? undefined
+              : () => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Settings"
+                    className="h-10 w-10 items-center justify-center"
+                    onPress={() => router.push("/settings")}
+                  >
+                    <Icon as={SettingsIcon} className="size-5 text-foreground" />
+                  </Pressable>
+                ),
+          headerRight:
+            Platform.OS === "ios" || !showCategoryCreate
+              ? undefined
+              : () => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      category === "tasks" ? "New task" : "New project"
+                    }
+                    className="h-10 w-10 items-center justify-center"
+                    onPress={openCategoryCreate}
+                  >
+                    <Icon as={PlusIcon} className="size-5 text-foreground" />
+                  </Pressable>
+                ),
         }}
       />
-      {!searchOpen ? (
+      {focused && !searchOpen && Platform.OS === "ios" ? (
         <>
           <Stack.Toolbar placement="left">
             <Stack.Toolbar.Button
@@ -217,21 +261,62 @@ export function HistoryRouteScreen() {
               onPress={() => router.push("/settings")}
             />
           </Stack.Toolbar>
-          <Stack.Toolbar placement="right">
-            <Stack.Toolbar.Button
-              icon="square.and.pencil"
-              accessibilityLabel="New chat"
-              onPress={handleNewChat}
-            />
-          </Stack.Toolbar>
+          {showCategoryCreate ? (
+            <Stack.Toolbar placement="right">
+              <Stack.Toolbar.Button
+                icon="plus"
+                accessibilityLabel={
+                  category === "tasks" ? "New task" : "New project"
+                }
+                onPress={openCategoryCreate}
+              />
+            </Stack.Toolbar>
+          ) : null}
         </>
       ) : null}
-      <HistoryScreen
-        onOpenChat={openChat}
-        onNavigate={openDestination}
-        chatActions={chatActions}
-        visible={!searchOpen}
-      />
+
+      {!searchOpen ? (
+        <View
+          style={{
+            zIndex: 2,
+            backgroundColor,
+            paddingHorizontal: 16,
+            paddingTop: 10,
+            paddingBottom: 8,
+          }}
+        >
+          <HomeCategoryPills value={category} onChange={setCategory} />
+        </View>
+      ) : null}
+
+      <View
+        style={{ flex: 1, zIndex: 0, overflow: "hidden" }}
+        accessibilityElementsHidden={searchOpen}
+      >
+        {category === "chats" ? (
+          <HistoryScreen
+            onOpenChat={openChat}
+            chatActions={chatActions}
+            visible={!searchOpen}
+            bottomInset={HOME_DOCK_CLEARANCE}
+          />
+        ) : null}
+        {category === "tasks" ? (
+          <IssuesScreen
+            ref={tasksRef}
+            embedded
+            bottomInset={HOME_DOCK_CLEARANCE}
+          />
+        ) : null}
+        {category === "projects" ? (
+          <ProjectsScreen
+            ref={projectsRef}
+            embedded
+            bottomInset={HOME_DOCK_CLEARANCE}
+          />
+        ) : null}
+      </View>
+
       <HistorySearchScreen
         visible={searchOpen}
         query={searchQuery}
@@ -240,13 +325,16 @@ export function HistoryRouteScreen() {
           router.push("/chat");
         }}
       />
-      <HistorySearchBar
-        active={searchOpen}
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        onActivate={() => setSearchOpen(true)}
-        onClose={closeSearch}
+
+      <HomeDock
+        searchActive={searchOpen}
+        searchValue={searchQuery}
+        onSearchChangeText={setSearchQuery}
+        onSearchActivate={() => setSearchOpen(true)}
+        onSearchClose={closeSearch}
+        onCompose={handleNewChat}
       />
+
       <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
       <ProjectPickerModal
         open={projectPickerOpen}

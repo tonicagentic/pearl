@@ -66,7 +66,7 @@ export function TaskDetailScreen({
       setError(message);
       if (message.toLowerCase().includes("not found")) {
         if (router.canGoBack()) router.back();
-        else router.replace("/issues");
+        else router.replace("/");
       }
     }
   }, [applyIssue, issueId]);
@@ -87,7 +87,7 @@ export function TaskDetailScreen({
         setError(message);
         if (message.toLowerCase().includes("not found")) {
           if (router.canGoBack()) router.back();
-          else router.replace("/issues");
+          else router.replace("/");
         }
       }
     })();
@@ -179,7 +179,7 @@ export function TaskDetailScreen({
           void deleteIssueRequest(issueId)
             .then(() => {
               if (router.canGoBack()) router.back();
-              else router.replace("/issues");
+              else router.replace("/");
             })
             .catch((cause) => {
               setError(

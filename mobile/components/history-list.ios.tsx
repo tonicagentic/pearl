@@ -27,7 +27,6 @@ import {
   scrollContentBackground,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { useAuth } from "@/src/auth";
@@ -40,24 +39,21 @@ import {
 } from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
 
-import type {
-  HistoryChatActionHandlers,
-  SidebarDestination,
-} from "@/components/history-list";
+import type { HistoryChatActionHandlers } from "@/components/history-list";
 
-export type { HistoryChatActionHandlers, SidebarDestination } from "@/components/history-list";
+export type { HistoryChatActionHandlers } from "@/components/history-list";
 
 /**
- * iOS home: native inset-grouped List with swipe delete + context menu actions.
+ * iOS home: plain List with swipe delete + context menu actions.
  */
 export function HistoryListIOS({
   onOpenChat,
-  onNavigate,
   actions,
+  bottomInset = 0,
 }: {
   readonly onOpenChat: () => void;
-  readonly onNavigate: (href: SidebarDestination) => void;
   readonly actions: HistoryChatActionHandlers;
+  readonly bottomInset?: number;
 }) {
   const { signedIn } = useAuth();
   const {
@@ -70,20 +66,18 @@ export function HistoryListIOS({
     selectChat,
     selectionError,
   } = useChats();
-  const insets = useSafeAreaInsets();
-  // Page and row surfaces share muted so the home list reads as one plane.
-  const backgroundColor =
-    (useCSSVariable("--color-muted") as string | undefined) ??
-    (useCSSVariable("--color-background") as string | undefined);
-  const rowBackground = backgroundColor ?? "#000000";
-  const mutedColor =
-    (useCSSVariable("--color-muted-foreground") as string | undefined) ??
-    "#8E8E93";
-  const listTopClearance = insets.top + 44;
-  const iosSearchClearance = 52 + 24 + Math.max(insets.bottom, 12);
+  const pageBackground = useCSSVariable("--color-background") as
+    | string
+    | undefined;
+  const backgroundColor = pageBackground ?? "#FFFFFF";
+  const rowBackground = backgroundColor;
+  const mutedForeground = useCSSVariable("--color-muted-foreground") as
+    | string
+    | undefined;
+  const mutedColor = mutedForeground ?? "#8E8E93";
   const rowChrome = [
     listRowBackground(rowBackground),
-    listRowInsets({ top: 14, bottom: 14, leading: 16, trailing: 16 }),
+    listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
   ];
 
   const [projectNames, setProjectNames] = useState<ReadonlyMap<string, string>>(
@@ -128,44 +122,21 @@ export function HistoryListIOS({
       style={{
         flex: 1,
         backgroundColor,
-        paddingTop: listTopClearance,
-        paddingBottom: iosSearchClearance,
+        paddingBottom: bottomInset,
+        // Keep SwiftUI List drawing inside this flex slot — viewport
+        // measurement made the Host paint over the pills / header above.
+        overflow: "hidden",
       }}
     >
-      <Host
-        style={{ flex: 1, backgroundColor }}
-        useViewportSizeMeasurement
-      >
+      <Host style={{ flex: 1, backgroundColor }}>
         <List
           modifiers={[
-            listStyle("insetGrouped"),
-            // Drop the system grouped fill so the page background shows through.
+            listStyle("plain"),
             scrollContentBackground("hidden"),
-            listRowSpacing(6),
+            listRowSpacing(0),
           ]}
         >
           <Section>
-            <Button
-              label="Projects"
-              systemImage="folder"
-              onPress={() => onNavigate("/projects")}
-              modifiers={[buttonStyle("plain"), ...rowChrome]}
-            />
-            <Button
-              label="Tasks"
-              systemImage="tray"
-              onPress={() => onNavigate("/issues")}
-              modifiers={[buttonStyle("plain"), ...rowChrome]}
-            />
-            <Button
-              label="Repos"
-              systemImage="chevron.left.forwardslash.chevron.right"
-              onPress={() => onNavigate("/workbench")}
-              modifiers={[buttonStyle("plain"), ...rowChrome]}
-            />
-          </Section>
-
-          <Section title="Recents">
             {selectionError ? (
               <SwiftText
                 modifiers={[
@@ -259,23 +230,30 @@ function RecentChatRow({
   const statusMark =
     presence === "working" ? (
       <RNHostView matchContents>
-        <View style={{ width: 12, height: 12, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="small" color={mutedColor} style={{ transform: [{ scale: 0.55 }] }} />
+        <View
+          style={{
+            width: 12,
+            height: 12,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <ActivityIndicator
+            size="small"
+            color={mutedColor}
+            style={{ transform: [{ scale: 0.55 }] }}
+          />
         </View>
       </RNHostView>
     ) : (
-      <Image
-        systemName="circle.fill"
-        size={8}
-        modifiers={[tint(markTint)]}
-      />
+      <Image systemName="circle.fill" size={8} modifiers={[tint(markTint)]} />
     );
   const row = (
     <Button onPress={onOpen} modifiers={[buttonStyle("plain")]}>
       <HStack
         spacing={12}
         alignment="center"
-        modifiers={[padding({ vertical: 6 })]}
+        modifiers={[padding({ vertical: 2 })]}
       >
         {statusMark}
         <VStack spacing={2} alignment="leading">
@@ -313,7 +291,7 @@ function RecentChatRow({
     <SwipeActions
       modifiers={[
         listRowBackground(rowBackground),
-        listRowInsets({ top: 12, bottom: 12, leading: 16, trailing: 16 }),
+        listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
       ]}
     >
       <ContextMenu>

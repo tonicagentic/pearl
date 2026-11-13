@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -17,8 +23,18 @@ import { ProjectMark } from "@/components/project-mark";
 import { Icon } from "@/components/ui/icon";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 
-/** Projects list: create a project or open its detail. */
-export function ProjectsScreen() {
+export type ProjectsScreenHandle = {
+  readonly openComposer: () => void;
+};
+
+/** Projects list. When `embedded`, skips stack chrome for the Mail home shell. */
+export const ProjectsScreen = forwardRef<
+  ProjectsScreenHandle,
+  {
+    readonly embedded?: boolean;
+    readonly bottomInset?: number;
+  }
+>(function ProjectsScreen({ embedded = false, bottomInset = 0 }, ref) {
   const [projects, setProjects] = useState<readonly ProjectDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -28,6 +44,14 @@ export function ProjectsScreen() {
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      openComposer: () => setShowForm(true),
+    }),
+    [],
+  );
 
   const reload = useCallback(async () => {
     try {
@@ -64,41 +88,8 @@ export function ProjectsScreen() {
     };
   }, []);
 
-  return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor }}
-      edges={["left", "right"]}
-    >
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: "Projects",
-          headerTintColor: foregroundColor,
-          headerRight:
-            Platform.OS === "ios"
-              ? undefined
-              : () => (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="New project"
-                    className="h-10 w-10 items-center justify-center"
-                    onPress={() => setShowForm(true)}
-                  >
-                    <Icon as={PlusIcon} className="size-5 text-foreground" />
-                  </Pressable>
-                ),
-        }}
-      />
-      {Platform.OS === "ios" ? (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon="plus"
-            accessibilityLabel="New project"
-            onPress={() => setShowForm(true)}
-          />
-        </Stack.Toolbar>
-      ) : null}
-
+  const body = (
+    <>
       {error ? (
         <Pressable className="px-5 py-3" onPress={() => void reload()}>
           <Text className="text-sm text-destructive">
@@ -114,7 +105,8 @@ export function ProjectsScreen() {
       ) : (
         <ScrollView
           className="flex-1 px-5"
-          contentContainerClassName="pb-24 pt-4"
+          contentContainerClassName={embedded ? "pt-0" : "pt-2"}
+          contentContainerStyle={{ paddingBottom: 24 + bottomInset }}
           contentInsetAdjustmentBehavior="automatic"
         >
           {(projects ?? []).length === 0 ? (
@@ -174,6 +166,48 @@ export function ProjectsScreen() {
           router.push(`/projects/${encodeURIComponent(project.id)}`);
         }}
       />
+    </>
+  );
+
+  if (embedded) {
+    return <View style={{ flex: 1, backgroundColor }}>{body}</View>;
+  }
+
+  return (
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor }}
+      edges={["left", "right"]}
+    >
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: "Projects",
+          headerTintColor: foregroundColor,
+          headerRight:
+            Platform.OS === "ios"
+              ? undefined
+              : () => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="New project"
+                    className="h-10 w-10 items-center justify-center"
+                    onPress={() => setShowForm(true)}
+                  >
+                    <Icon as={PlusIcon} className="size-5 text-foreground" />
+                  </Pressable>
+                ),
+        }}
+      />
+      {Platform.OS === "ios" ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon="plus"
+            accessibilityLabel="New project"
+            onPress={() => setShowForm(true)}
+          />
+        </Stack.Toolbar>
+      ) : null}
+      {body}
     </SafeAreaView>
   );
-}
+});

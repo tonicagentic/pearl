@@ -1,9 +1,20 @@
 import Constants from "expo-constants";
-import * as Updates from "expo-updates";
 
 type PearlExtra = {
   readonly pearlOta?: string;
 };
+
+type UpdatesModule = typeof import("expo-updates");
+
+/** Lazy-load so a missing ExpoUpdates native module does not crash Settings. */
+function loadUpdates(): UpdatesModule | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- sync; Settings reads this during render
+    return require("expo-updates") as UpdatesModule;
+  } catch {
+    return null;
+  }
+}
 
 /** Marketing / runtime version from the Expo config (e.g. `0.1.0-alpha.6`). */
 export function getAppVersion(): string {
@@ -31,8 +42,13 @@ export function getAppVersionDetail(): string {
   const parts = [version];
   if (ota) parts.push(`ota ${ota}`);
 
-  if (__DEV__ || !Updates.isEnabled) {
-    if (__DEV__) parts.push("dev");
+  if (__DEV__) {
+    parts.push("dev");
+    return parts.join(" · ");
+  }
+
+  const Updates = loadUpdates();
+  if (!Updates?.isEnabled) {
     return parts.join(" · ");
   }
 
