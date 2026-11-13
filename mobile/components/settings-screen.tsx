@@ -24,7 +24,7 @@ import { useCSSVariable } from "uniwind";
 import { SheetScaffold } from "@/components/sheet-scaffold";
 import { Icon } from "@/components/ui/icon";
 import { agentHostname } from "@/src/agent-url";
-import { getAppVersion, getAppVersionDetail } from "@/src/app-version";
+import { getAppVersionDetail } from "@/src/app-version";
 import { useAuth } from "@/src/auth";
 import {
   fetchBillingStatus,
@@ -165,7 +165,7 @@ export function SettingsScreen() {
       </SettingsCard>
 
       <Text className="px-1 pb-2 text-center text-[12px] text-muted-foreground/70">
-        Pearl {getAppVersion()}
+        Pearl {getAppVersionDetail()}
       </Text>
     </SheetScaffold>
   );

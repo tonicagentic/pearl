@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Stack, router } from "expo-router";
+import { useState } from "react";
+import { Stack } from "expo-router";
 
 import { BillingGateScreen } from "@/components/billing-gate-screen";
 import { HistoryRouteScreen } from "@/components/history-route-screen";
@@ -7,14 +7,13 @@ import { PearlIntroScreen } from "@/components/pearl-intro-screen";
 import { SelfHostScreen } from "@/components/self-host-screen";
 import { SignInScreen } from "@/components/sign-in-screen";
 import { useAuth } from "@/src/auth";
-import { useChats } from "@/src/chat-context";
 import { resetAgentUrl } from "@/src/eve-transport";
 
 type SignedOutStep = "intro" | "self-host" | "sign-in";
 
 /**
  * Stack root: intro / self-host / sign-in / billing gates, then home (recents).
- * After billing is ready, push a fresh `/chat` once so cold start lands on chat.
+ * Chat opens only when the user picks New chat or a recent thread.
  */
 export default function Index() {
   const {
@@ -23,16 +22,7 @@ export default function Index() {
     billingReady,
     markBillingReady,
   } = useAuth();
-  const { newChat } = useChats();
-  const bootedChat = useRef(false);
   const [signedOutStep, setSignedOutStep] = useState<SignedOutStep>("intro");
-
-  useEffect(() => {
-    if (!signedIn || !billingReady || bootedChat.current) return;
-    bootedChat.current = true;
-    newChat();
-    router.push("/chat");
-  }, [signedIn, billingReady, newChat]);
 
   if (restoring) {
     // Keychain session check in flight: render nothing rather than flashing

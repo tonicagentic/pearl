@@ -1,37 +1,28 @@
 import { useHydrated } from "@/components/assistant-ui/elements/surfaces";
 import {
-  CitationChip,
   isCitationLabel,
   linkChildrenToText,
 } from "@/components/assistant-ui/elements/citation";
-import { Icon } from "@/components/ui/icon";
 import { openWebUrl } from "@/src/open-web-url";
 import { useWorkspaceOptional } from "@/src/workspace-context";
 import { traceStream } from "@/src/stream-trace";
 import type { TextMessagePartProps } from "@assistant-ui/react-native";
-import * as Clipboard from "expo-clipboard";
-import { CheckIcon, CopyIcon } from "lucide-react-native";
 import {
   type FC,
-  isValidElement,
   memo,
   type ReactNode,
   useEffect,
   useMemo,
-  useRef,
-  useState,
 } from "react";
 import {
   Platform,
-  Pressable,
-  ScrollView,
   Text,
+  TextInput,
   type TextStyle,
   View,
   type ViewStyle,
 } from "react-native";
 import {
-  MarkedLexer,
   type MarkedStyles,
   MarkedTokenizer,
   Renderer,
@@ -50,9 +41,9 @@ const BODY_SIZE = 17;
 const BODY_LINE = 26;
 const MUTED_SIZE = 15;
 const MUTED_LINE = 24;
-const MARKER_COL = 24;
-const DISC_SIZE = 6;
-const TASK_BOX_RE = /^[☑☐]/;
+
+/** Match user/spoken selection highlight. */
+const SELECTION_COLOR = "rgba(127, 127, 127, 0.35)";
 
 /** Count single `*` markers that are not part of `**` (Hermes-safe). */
 function oddSingleAsterisks(text: string): boolean {
@@ -121,93 +112,6 @@ export class TaskListTokenizer extends MarkedTokenizer {
 
 const taskListTokenizer = new TaskListTokenizer();
 
-const firstTextContent = (node: ReactNode): string => {
-  if (node == null || typeof node === "boolean") return "";
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const text = firstTextContent(child);
-      if (text) return text;
-    }
-    return "";
-  }
-  if (isValidElement(node)) {
-    return firstTextContent(
-      (node.props as { children?: ReactNode }).children,
-    );
-  }
-  return "";
-};
-
-const CodeBlock: FC<{ code: string; language: string | undefined }> = ({
-  code,
-  language,
-}) => {
-  const [isCopied, setIsCopied] = useState(false);
-  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
-  const unmountedRef = useRef(false);
-
-  useEffect(() => {
-    unmountedRef.current = false;
-    return () => {
-      unmountedRef.current = true;
-      clearTimeout(resetTimerRef.current);
-      setIsCopied(false);
-    };
-  }, []);
-
-  const copy = async () => {
-    try {
-      await Clipboard.setStringAsync(code);
-    } catch {
-      return;
-    }
-    if (unmountedRef.current) return;
-    setIsCopied(true);
-    clearTimeout(resetTimerRef.current);
-    resetTimerRef.current = setTimeout(() => setIsCopied(false), 2000);
-  };
-
-  return (
-    <View className="aui-md-code-block border-border bg-muted/50 my-2 overflow-hidden rounded-xl border">
-      <View className="aui-md-code-header border-border/50 flex-row items-center justify-between border-b py-1 pr-1 pl-3.5">
-        <Text className="text-muted-foreground text-xs font-medium lowercase">
-          {language || "text"}
-        </Text>
-        <Pressable
-          onPress={copy}
-          className="active:bg-muted size-7 items-center justify-center rounded-md"
-          accessibilityRole="button"
-          accessibilityLabel="Copy code"
-        >
-          <Icon
-            as={isCopied ? CheckIcon : CopyIcon}
-            className="text-muted-foreground size-4"
-          />
-        </Pressable>
-      </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerClassName="px-3.5 py-3"
-      >
-        <Text
-          selectable
-          className="text-foreground text-[13px] leading-5"
-          style={{ fontFamily: MONOSPACE }}
-        >
-          {code}
-        </Text>
-      </ScrollView>
-    </View>
-  );
-};
-
-// One renderer per parse: the constructor takes the text it renders so the
-// memo that creates it stays keyed on that text under React Compiler, and the
-// key ordinal restarts with each instance.
 /** In-app opener for agent `file://` workspace links (matches web canvas). */
 function WorkspaceFileLink({
   href,
@@ -225,7 +129,6 @@ function WorkspaceFileLink({
 
   return (
     <Text
-      selectable
       accessibilityRole="link"
       accessibilityLabel={title || `Open ${path}`}
       onPress={() => {
@@ -238,20 +141,130 @@ function WorkspaceFileLink({
   );
 }
 
+/**
+ * Renders only Text-compatible nodes so the whole message can sit under one
+ * selectable parent (Text on Android, read-only TextInput on iOS). Native
+ * selection cannot cross View boundaries.
+ */
 class MarkdownRenderer extends Renderer {
   keyIndex = 0;
 
   constructor(_source: string) {
-    // Custom renderer ignores Markdown's selectable prop; set it here.
-    super({ selectable: true });
+    // Android Text.selectable; iOS uses UITextView via TextInput instead.
+    super({ selectable: Platform.OS !== "ios" });
   }
 
   override getKey(): string {
     return `md-${this.keyIndex++}`;
   }
 
-  override code(text: string, language?: string): ReactNode {
-    return <CodeBlock key={this.getKey()} code={text} language={language} />;
+  /** Paragraphs are nested Text, not Views — required for cross-block select. */
+  override paragraph(children: ReactNode[], styles?: ViewStyle): ReactNode {
+    return (
+      <Text key={this.getKey()} style={styles as TextStyle}>
+        {children}
+      </Text>
+    );
+  }
+
+  override listItem(children: ReactNode[], styles?: ViewStyle): ReactNode {
+    return (
+      <Text key={this.getKey()} style={styles as TextStyle}>
+        {children}
+      </Text>
+    );
+  }
+
+  override blockquote(children: ReactNode[], styles?: ViewStyle): ReactNode {
+    return (
+      <Text key={this.getKey()} style={[{ opacity: 0.9 }, styles as TextStyle]}>
+        {children}
+      </Text>
+    );
+  }
+
+  override hr(styles?: ViewStyle): ReactNode {
+    return (
+      <Text key={this.getKey()} style={styles as TextStyle}>
+        ———
+      </Text>
+    );
+  }
+
+  override code(
+    text: string,
+    _language?: string,
+    _containerStyle?: ViewStyle,
+    textStyle?: TextStyle,
+  ): ReactNode {
+    return (
+      <Text
+        key={this.getKey()}
+        style={[
+          { fontFamily: MONOSPACE, fontSize: 13, lineHeight: 20 },
+          textStyle,
+        ]}
+      >
+        {text}
+      </Text>
+    );
+  }
+
+  override image(
+    _uri: string,
+    alt?: string,
+    _style?: object,
+    title?: string,
+  ): ReactNode {
+    const label = (alt || title || "image").trim() || "image";
+    return <Text key={this.getKey()}>{`[${label}]`}</Text>;
+  }
+
+  override linkImage(
+    href: string,
+    _imageUrl: string,
+    alt?: string,
+    _style?: object,
+    title?: string,
+  ): ReactNode {
+    const label = (alt || title || "image").trim() || "image";
+    return (
+      <Text
+        key={this.getKey()}
+        accessibilityRole="link"
+        onPress={() => openWebUrl(href)}
+      >
+        {`[${label}]`}
+      </Text>
+    );
+  }
+
+  override table(
+    header: ReactNode[][],
+    rows: ReactNode[][][],
+    _tableStyle?: ViewStyle,
+    _rowStyle?: ViewStyle,
+    _cellStyle?: ViewStyle,
+  ): ReactNode {
+    const lineOf = (cells: ReactNode[][]) =>
+      cells.map((cell, index) => (
+        <Text key={`c-${index}`}>
+          {index > 0 ? " | " : ""}
+          {cell}
+        </Text>
+      ));
+    return (
+      <Text key={this.getKey()}>
+        {lineOf(header)}
+        {"\n"}
+        {rows.map((row, rowIndex) => (
+          <Text key={`r-${rowIndex}`}>
+            {rowIndex > 0 ? "\n" : ""}
+            {lineOf(row)}
+          </Text>
+        ))}
+      </Text>
+    );
   }
 
   override link(
@@ -262,21 +275,23 @@ class MarkdownRenderer extends Renderer {
   ): ReactNode {
     const label = linkChildrenToText(children);
     if (/^https?:\/\//i.test(href) && isCitationLabel(label)) {
+      const index = label.replace(/^\s*\[|\]\s*$/g, "");
       return (
-        <CitationChip
+        <Text
           key={this.getKey()}
-          index={label}
-          href={href}
-          title={title?.trim() || undefined}
-        />
+          accessibilityRole="link"
+          accessibilityLabel={`Source ${index}`}
+          onPress={() => openWebUrl(href)}
+          style={[{ fontWeight: "600" }, styles]}
+        >
+          {`[${index}]`}
+        </Text>
       );
     }
-    // Keep http(s) links in-app; react-native-marked's default opens Safari.
     if (/^https?:\/\//i.test(href)) {
       return (
         <Text
           key={this.getKey()}
-          selectable
           accessibilityRole="link"
           accessibilityLabel={title || "Link"}
           onPress={() => openWebUrl(href)}
@@ -286,8 +301,6 @@ class MarkdownRenderer extends Renderer {
         </Text>
       );
     }
-    // Agent deliverables use file:// (see agent/instructions.md); open in
-    // the mobile workspace instead of Linking.openURL (which does nothing).
     if (/^file:\/\//i.test(href)) {
       return (
         <WorkspaceFileLink
@@ -311,59 +324,16 @@ class MarkdownRenderer extends Renderer {
     startIndex = 1,
   ): ReactNode {
     const listKey = this.getKey();
-    const lineHeight =
-      typeof textStyle?.lineHeight === "number"
-        ? textStyle.lineHeight
-        : BODY_LINE;
-    const fontSize =
-      typeof textStyle?.fontSize === "number" ? textStyle.fontSize : BODY_SIZE;
-
     return (
-      <View key={listKey} style={{ marginVertical: 4 }}>
-        {li.map((item, index) => {
-          const isTask = TASK_BOX_RE.test(firstTextContent(item).trimStart());
-          return (
-            <View
-              key={`${listKey}-${index}`}
-              style={{
-                flexDirection: "row",
-                alignItems: "flex-start",
-                paddingVertical: 4,
-              }}
-            >
-              <View
-                style={{
-                  width: MARKER_COL,
-                  height: lineHeight,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {ordered ? (
-                  <Text
-                    selectable
-                    style={{
-                      color: textStyle?.color,
-                      fontSize,
-                      lineHeight,
-                      textAlign: "right",
-                      width: MARKER_COL,
-                    }}
-                  >
-                    {`${startIndex + index}.`}
-                  </Text>
-                ) : isTask ? null : (
-                  <View
-                    className="bg-foreground rounded-full"
-                    style={{ width: DISC_SIZE, height: DISC_SIZE }}
-                  />
-                )}
-              </View>
-              <View style={{ flex: 1, flexShrink: 1 }}>{item}</View>
-            </View>
-          );
-        })}
-      </View>
+      <Text key={listKey} style={textStyle}>
+        {li.map((item, index) => (
+          <Text key={`${listKey}-${index}`}>
+            {index > 0 ? "\n" : ""}
+            {ordered ? `${startIndex + index}. ` : "• "}
+            {item}
+          </Text>
+        ))}
+      </Text>
     );
   }
 }
@@ -410,7 +380,8 @@ const useMarkdownOptions = (
       strong: { ...bodyText, fontWeight: "600" },
       em: bodyText,
       strikethrough: bodyText,
-      paragraph: { paddingVertical: 0, marginBottom: 14 },
+      // Spacing between blocks comes from `\n\n` in the selectable tree.
+      paragraph: { paddingVertical: 0, marginBottom: 0 },
       li: bodyText,
       list: {},
       link: {
@@ -421,57 +392,18 @@ const useMarkdownOptions = (
       codespan: {
         fontFamily: MONOSPACE,
         fontSize: variant === "muted" ? 13 : 14,
-        borderRadius: 4,
-        paddingHorizontal: 4,
       },
       blockquote: {
-        borderLeftWidth: 2,
-        paddingLeft: 12,
-        marginVertical: 8,
-        opacity: 1,
+        opacity: 0.9,
       },
-      hr: { height: 1, marginVertical: 16, borderWidth: 0 },
-      h1: {
-        ...bodyText,
-        fontWeight: "600",
-        marginTop: 20,
-        marginBottom: 8,
-        paddingBottom: 0,
-        borderBottomWidth: 0,
-      },
-      h2: {
-        ...bodyText,
-        fontWeight: "600",
-        marginTop: 18,
-        marginBottom: 6,
-        paddingBottom: 0,
-        borderBottomWidth: 0,
-      },
-      h3: {
-        ...bodyText,
-        fontWeight: "600",
-        marginTop: 16,
-        marginBottom: 6,
-      },
-      h4: {
-        ...bodyText,
-        fontWeight: "600",
-        marginTop: 14,
-        marginBottom: 4,
-      },
-      h5: {
-        ...bodyText,
-        fontWeight: "600",
-        marginTop: 12,
-        marginBottom: 4,
-      },
-      h6: {
-        ...bodyText,
-        fontWeight: "600",
-        marginTop: 12,
-        marginBottom: 4,
-      },
-      tableCell: { paddingHorizontal: 8, paddingVertical: 6 },
+      hr: {},
+      h1: { ...bodyText, fontWeight: "600" },
+      h2: { ...bodyText, fontWeight: "600" },
+      h3: { ...bodyText, fontWeight: "600" },
+      h4: { ...bodyText, fontWeight: "600" },
+      h5: { ...bodyText, fontWeight: "600" },
+      h6: { ...bodyText, fontWeight: "600" },
+      tableCell: {},
     };
     const options: useMarkdownHookOptions = {
       colorScheme,
@@ -490,24 +422,6 @@ const useMarkdownOptions = (
     border,
   ]);
 };
-
-// Each top-level block is re-lexed on its own, so a streaming update re-renders
-// only the block it touched; reference-style link definitions therefore do not
-// resolve across blocks.
-const MarkdownBlock = memo(
-  ({ raw, options }: { raw: string; options: useMarkdownHookOptions }) => {
-    // A fresh renderer per parse keeps keys unique among siblings and identical
-    // across the re-parses of a streaming block instead of remounting it.
-    const renderer = useMemo(() => new MarkdownRenderer(raw), [raw]);
-    const blockOptions = useMemo(
-      () => ({ ...options, renderer }),
-      [options, renderer],
-    );
-    const elements = useMarkdown(raw, blockOptions);
-    return <>{elements}</>;
-  },
-);
-MarkdownBlock.displayName = "MarkdownBlock";
 
 type MarkdownTextProps = TextMessagePartProps & {
   variant?: MarkdownTextVariant;
@@ -528,42 +442,75 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
     () => (streaming ? stabilizeStreamingMarkdown(text) : text),
     [text, streaming],
   );
-  const options = useMarkdownOptions(variant);
+  const baseOptions = useMarkdownOptions(variant);
   const fallbackClass =
     variant === "muted"
       ? "text-muted-foreground text-[15px] leading-6"
       : "text-foreground text-[17px] leading-[26px]";
 
-  const blocks = useMemo(() => {
-    if (!displayText) return [];
-    try {
-      return MarkedLexer(displayText, { gfm: true }).filter(
-        (token) => token.type !== "space",
-      );
-    } catch {
-      return null;
-    }
-  }, [displayText]);
+  // One renderer + one parse for the full message so selection can span
+  // paragraphs, lists, and code as a single native range.
+  const renderer = useMemo(
+    () => new MarkdownRenderer(displayText),
+    [displayText],
+  );
+  const options = useMemo(
+    () => ({ ...baseOptions, renderer }),
+    [baseOptions, renderer],
+  );
+  const elements = useMarkdown(displayText || " ", options);
 
-  if (blocks === null) {
+  if (!displayText) {
+    return <View className="aui-md-root" />;
+  }
+
+  const document = elements.flatMap((element, index) =>
+    index === 0 ? [element] : ["\n\n", element],
+  );
+
+  // iOS Text.selectable is UILabel (whole-block Copy only). Multiline
+  // TextInput uses UITextView so partial selection matches native Notes.
+  if (Platform.OS === "ios") {
+    const inputStyle =
+      variant === "muted"
+        ? {
+            fontSize: MUTED_SIZE,
+            lineHeight: MUTED_LINE,
+            padding: 0,
+            margin: 0,
+          }
+        : {
+            fontSize: BODY_SIZE,
+            lineHeight: BODY_LINE,
+            padding: 0,
+            margin: 0,
+          };
     return (
       <View className="aui-md-root">
-        <Text selectable className={fallbackClass}>
-          {displayText}
-        </Text>
+        <TextInput
+          multiline
+          editable={false}
+          readOnly
+          scrollEnabled={false}
+          selectionColor={SELECTION_COLOR}
+          style={inputStyle}
+          className={fallbackClass}
+        >
+          {document}
+        </TextInput>
       </View>
     );
   }
 
   return (
     <View className="aui-md-root">
-      {blocks.map((token, index) => (
-        <MarkdownBlock
-          key={`b-${index}-${token.type}`}
-          raw={token.raw}
-          options={options}
-        />
-      ))}
+      <Text
+        selectable
+        selectionColor={SELECTION_COLOR}
+        className={fallbackClass}
+      >
+        {document}
+      </Text>
     </View>
   );
 };

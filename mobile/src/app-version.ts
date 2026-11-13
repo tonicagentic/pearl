@@ -1,6 +1,10 @@
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
 
+type PearlExtra = {
+  readonly pearlOta?: string;
+};
+
 /** Marketing / runtime version from the Expo config (e.g. `0.1.0-alpha.6`). */
 export function getAppVersion(): string {
   return (
@@ -10,19 +14,37 @@ export function getAppVersion(): string {
   );
 }
 
+/** OTA label from `expo.extra.pearlOta` — free to bump without a native rebuild. */
+export function getPearlOta(): string | null {
+  const extra = Constants.expoConfig?.extra as PearlExtra | undefined;
+  const value = extra?.pearlOta?.trim();
+  return value ? value : null;
+}
+
 /**
- * Short line for Settings: app version, plus channel / OTA id when updates
- * are enabled so you can confirm which bundle is running.
+ * Short line for Settings: app version, OTA label, channel, and update id /
+ * embedded so you can confirm which bundle is running.
  */
 export function getAppVersionDetail(): string {
   const version = getAppVersion();
-  if (__DEV__ || !Updates.isEnabled) return version;
+  const ota = getPearlOta();
+  const parts = [version];
+  if (ota) parts.push(`ota ${ota}`);
 
-  const channel = Updates.channel;
-  const updateId = Updates.updateId?.slice(0, 8);
-  if (Updates.isEmbeddedLaunch) {
-    return channel ? `${version} · ${channel}` : version;
+  if (__DEV__ || !Updates.isEnabled) {
+    if (__DEV__) parts.push("dev");
+    return parts.join(" · ");
   }
-  if (updateId) return `${version} · ${updateId}`;
-  return channel ? `${version} · ${channel}` : version;
+
+  const channel = Updates.channel?.trim();
+  if (channel) parts.push(channel);
+
+  if (Updates.isEmbeddedLaunch) {
+    parts.push("embedded");
+  } else {
+    const updateId = Updates.updateId?.slice(0, 8);
+    if (updateId) parts.push(updateId);
+  }
+
+  return parts.join(" · ");
 }
