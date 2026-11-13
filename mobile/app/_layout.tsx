@@ -140,7 +140,11 @@ function AuthenticatedLayout() {
                 />
                 <Stack.Screen
                   name="thread-samples"
-                  options={{ title: "Thread samples" }}
+                  options={{
+                    title: "Thread samples",
+                    headerShown: true,
+                    headerBackButtonDisplayMode: "minimal",
+                  }}
                 />
                 <Stack.Screen
                   name="browser"

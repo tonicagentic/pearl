@@ -392,6 +392,7 @@ export function ChatScreen({
           store.snapshot.messages.length,
           store.snapshot.events.length,
           message,
+          outgoing,
         );
         setLocalSends((current) => new Map(current).set(store, preview));
         setExpectingAssistantByStore((current) => new Map(current).set(store, true));
@@ -434,12 +435,10 @@ export function ChatScreen({
               },
             );
           } else {
-            const detail = store.snapshot.error?.message?.trim();
             setSendError({
               store,
-              message: detail
-                ? `Delivery not confirmed: ${detail}`
-                : "Delivery not confirmed. Check this chat before sending again.",
+              message:
+                "Couldn't confirm delivery. Your message is still here — resend when you're ready.",
             });
           }
         } catch (cause) {
@@ -488,7 +487,8 @@ export function ChatScreen({
               next.delete(store);
               return next;
             });
-            const reason = "Could not save the message before sending. Your draft is still here.";
+            const reason =
+              "Couldn't save before sending. Your message is still in the composer.";
             setSendError({ store, message: reason });
             throw new MessageNotSentError(reason);
           }
@@ -502,11 +502,12 @@ export function ChatScreen({
             else next.set(store, { ...preview, phase: "uncertain" });
             return next;
           });
-          const detail =
-            (cause instanceof Error && cause.message.trim()) ||
-            store.snapshot.error?.message?.trim();
-          if (!accepted && detail) {
-            setSendError({ store, message: `Delivery not confirmed: ${detail}` });
+          if (!accepted) {
+            setSendError({
+              store,
+              message:
+                "Connection dropped before delivery was confirmed. Your message is still here — resend when you're ready.",
+            });
           }
           throw cause;
         }
@@ -571,20 +572,102 @@ export function ChatScreen({
     });
   }, [pendingMessage, activeChatId, status, store, activeProjectId]);
 
+  const resendStoredMessage = useCallback(async () => {
+    if (!localSend?.outgoing) return;
+    const pending = localSend;
+    const payload = pending.outgoing;
+    setSendError(null);
+    setLocalSends((current) => {
+      const row = current.get(store);
+      if (!row) return current;
+      return new Map(current).set(store, { ...row, phase: "preparing" });
+    });
+    setExpectingAssistantByStore((current) => new Map(current).set(store, true));
+    try {
+      if (
+        isEveSessionInactive(store.snapshot.error) &&
+        recoverDeadSession(store)
+      ) {
+        // Fresh session on the same chat, then fall through to send.
+      }
+      const delivery = await store.send({
+        // Outgoing was built by toEveTurn for this same store.send shape.
+        message: payload as never,
+        clientContext: buildTurnClientContext(activeProjectId),
+      });
+      const accepted =
+        Boolean(delivery?.deliveryId) ||
+        hasConfirmedSend(store.snapshot.events, pending);
+      setLocalSends((current) => {
+        const row = current.get(store);
+        if (!row) return current;
+        const next = new Map(current);
+        if (accepted) next.delete(store);
+        else next.set(store, { ...row, phase: "uncertain" });
+        return next;
+      });
+      if (!accepted) {
+        setSendError({
+          store,
+          message:
+            "Still couldn't confirm delivery. Your message is kept — try Resend again.",
+        });
+      }
+    } catch {
+      setLocalSends((current) => {
+        const row = current.get(store);
+        if (!row) return current;
+        return new Map(current).set(store, { ...row, phase: "uncertain" });
+      });
+      setExpectingAssistantByStore((current) => {
+        if (!current.has(store)) return current;
+        const next = new Map(current);
+        next.delete(store);
+        return next;
+      });
+      setSendError({
+        store,
+        message:
+          "Couldn't reach Pearl. Your message is still here — tap Resend when the connection is back.",
+      });
+    }
+  }, [store, localSend, activeProjectId, recoverDeadSession]);
+
   const runtime = useExternalStoreRuntime(adapter);
   const hasLoadedHistory =
     store.snapshot.events.length > 0 ||
     store.snapshot.messages.length > 0 ||
     Boolean(store.snapshot.session);
-  const notice = sendError?.store === store
-    ? { text: sendError.message }
-    : persistenceError
-      ? { text: "Could not save this chat.", actionLabel: "Retry save", onAction: () => void retrySync() }
-      : pendingMessage && !localSend && !hasLoadedHistory
-        ? { text: "Delivery not confirmed. Check this chat before sending again." }
-        : hasError && !localSend
-          ? { text: "Connection interrupted. Check this chat before sending again." }
-          : null;
+  const canResend =
+    Boolean(localSend?.outgoing) &&
+    (localSend?.phase === "uncertain" ||
+      (sendError?.store === store && localSend != null));
+  const notice = persistenceError
+    ? {
+        text: "Could not save this chat.",
+        actionLabel: "Retry save",
+        onAction: () => void retrySync(),
+      }
+    : canResend
+      ? {
+          text:
+            sendError?.store === store
+              ? sendError.message
+              : "Couldn't confirm delivery. Your message is still here.",
+          actionLabel: "Resend",
+          onAction: () => void resendStoredMessage(),
+        }
+      : sendError?.store === store
+        ? { text: sendError.message }
+        : pendingMessage && !localSend && !hasLoadedHistory
+          ? {
+              text: "Couldn't confirm delivery. Open this chat again when you're online.",
+            }
+          : hasError && !localSend
+            ? {
+                text: "Connection lost while Pearl was replying. Your last message was saved — send a follow-up when you're ready.",
+              }
+            : null;
 
   return (
     <SafeAreaView style={screenStyle} edges={["left", "right"]}>

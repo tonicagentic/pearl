@@ -6,6 +6,11 @@ import {
 } from "react";
 import { useAuiState } from "@assistant-ui/react-native";
 
+import {
+  isTrailingContentPhase,
+  splitAssistantBlocks,
+  type AssistantMessagePart,
+} from "@/src/assistant-blocks";
 import { useEveEvents } from "@/src/chat-context";
 import { turnEventSpan } from "@/src/turn-duration";
 import { TimelineDurationEventsContext } from "./timeline-duration-events";
@@ -16,7 +21,8 @@ const TurnElapsedContext = createContext<string | undefined>(undefined);
 /**
  * One elapsed clock for Thinking + SessionTimeline on the same assistant
  * message. Anchors to the first turn-scoped event when available; pauses
- * across requires-action instead of resetting to 0s.
+ * across requires-action and while the final answer streams so “Worked for”
+ * freezes when prose starts.
  */
 export function TurnElapsedProvider({ children }: { readonly children: ReactNode }) {
   const overrideEvents = useContext(TimelineDurationEventsContext);
@@ -26,10 +32,17 @@ export function TurnElapsedProvider({ children }: { readonly children: ReactNode
   const turnId = useAuiState(
     (s) => s.message.metadata?.custom?.turnId as string | undefined,
   );
+  const answerPhase = useAuiState((s) => {
+    const parts = s.message.parts as readonly AssistantMessagePart[];
+    return isTrailingContentPhase(splitAssistantBlocks(parts));
+  });
 
   const running = statusType === "running";
-  const paused = statusType === "requires-action";
-  const active = running || paused;
+  const awaitingInput = statusType === "requires-action";
+  // Keep the provider active while answering so the frozen label stays available
+  // for “Worked for”, but pause the ticker once prose (or a card) is trailing.
+  const active = running || awaitingInput;
+  const paused = awaitingInput || (running && answerPhase);
 
   const sinceMs = useMemo(
     () => turnEventSpan(events, turnId)?.startMs ?? null,

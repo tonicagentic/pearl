@@ -20,9 +20,11 @@ import { Image } from "@/components/assistant-ui/elements/image";
 import { AssistantInlineText } from "@/components/json-render/chat-json-render";
 import { proseFromMessageText } from "../../../../lib/json-render/inline-spec";
 import {
-  SessionTimeline,
-  isTimelineCoveredPart,
+  SessionTimelineSegment,
   isTimelineToolCall,
+  lastTimelineBlockIndex,
+  splitAssistantBlocks,
+  type AssistantMessagePart,
 } from "@/components/assistant-ui/elements/session-timeline";
 import { SessionTodoList } from "@/components/assistant-ui/elements/todo-list";
 import { TaskGroup, DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
@@ -32,6 +34,7 @@ import { MessageSources } from "@/components/assistant-ui/elements/citation";
 import {
   ShimmerLabel,
   inkButton,
+  messageEnter,
   useAnnounce,
   useHydrated,
   useMotion,
@@ -59,15 +62,12 @@ import {
   type AssistantState,
   BranchPickerPrimitive,
   ComposerPrimitive,
-  ErrorPrimitive,
   MessagePrimitive,
   SuggestionPrimitive,
   ThreadPrimitive,
   type TextMessagePartComponent,
   type ThreadMessage as ThreadMessageType,
   type ToolCallMessagePartComponent,
-  type GroupByContext,
-  groupPartByType,
   useAui,
   useAuiState,
 } from "@assistant-ui/react-native";
@@ -128,7 +128,6 @@ import {
 } from "react-native-keyboard-controller";
 import Animated, {
   Extrapolation,
-  FadeInDown,
   interpolate,
   runOnJS,
   useAnimatedStyle,
@@ -1678,38 +1677,8 @@ const ComposerTrailingControls: FC<{
   );
 };
 
-const AssistantFailure: FC = () => {
-  const failed = useAuiState((s) => s.message.status?.type === "incomplete" && s.message.status.reason === "error");
-  if (!failed) return null;
-  return (
-    <Text
-      className="text-destructive py-2 text-sm"
-      accessibilityRole="alert"
-      selectable
-    >
-      This response failed. Check the chat before sending again.
-    </Text>
-  );
-};
-
-const MessageError: FC = () => {
-  // RN assistant-ui has no MessagePrimitive.Error; only render when this
-  // message is a live incomplete failure (projection suppresses historical ones).
-  const failed = useAuiState(
-    (s) =>
-      s.message.status?.type === "incomplete" &&
-      s.message.status.reason === "error",
-  );
-  if (!failed) return null;
-  return (
-    <ErrorPrimitive.Root className="aui-message-error-root mt-2 rounded-2xl bg-destructive/10 px-3.5 py-2.5">
-      <ErrorPrimitive.Message
-        className="aui-message-error-message text-destructive text-sm"
-        selectable
-      />
-    </ErrorPrimitive.Root>
-  );
-};
+// Connection / send failures are explained via ThreadNotice + Resend — never
+// as assistant chat copy (ErrorPrimitive / failure banners).
 
 const UserText: TextMessagePartComponent = ({ text }) => (
   <Text
@@ -1721,35 +1690,43 @@ const UserText: TextMessagePartComponent = ({ text }) => (
   </Text>
 );
 
-const messageGroupBy = groupPartByType({
-  reasoning: ["group-chainOfThought", "group-reasoning"],
-  "tool-call": ["group-chainOfThought", "group-tool"],
-  "standalone-tool-call": [],
-});
+function contentPartComponents(
+  index: number,
+  ToolFallbackComponent: ToolCallMessagePartComponent,
+  TaskGroupComponent: ComponentType<{ group: ThreadGroupPart }>,
+) {
+  const Fallback: ToolCallMessagePartComponent = (props) => {
+    if (props.toolName === "todo") return null;
+    if (isTimelineToolCall(props)) return null;
+    if (
+      DELEGATION_TOOLS.has(props.toolName) &&
+      props.messages !== undefined
+    ) {
+      const status = props.status ?? { type: "complete" as const };
+      const group: ThreadGroupPart = {
+        type: "group-task",
+        indices: [index],
+        status,
+        counts: {
+          running: status.type === "running" ? 1 : 0,
+          complete: status.type === "complete" ? 1 : 0,
+          incomplete: status.type === "incomplete" ? 1 : 0,
+          requiresAction: status.type === "requires-action" ? 1 : 0,
+        },
+      };
+      return <TaskGroupComponent group={group} />;
+    }
+    return <ToolFallbackComponent {...props} />;
+  };
 
-type ThreadGroupKey =
-  | "group-chainOfThought"
-  | "group-reasoning"
-  | "group-tool"
-  | "group-task";
-
-const TASK_GROUP_PATH: readonly ThreadGroupKey[] = [
-  "group-chainOfThought",
-  "group-task",
-];
-
-const taskAwareGroupBy = (
-  part: Parameters<typeof messageGroupBy>[0],
-  context?: GroupByContext,
-): readonly ThreadGroupKey[] => {
-  const path = messageGroupBy(part, context);
-  return part.type === "tool-call" &&
-    part.messages !== undefined &&
-    path.length > 0 &&
-    !context?.toolUIs?.[part.toolName]?.length
-    ? TASK_GROUP_PATH
-    : path;
-};
+  return {
+    Text: AssistantInlineText,
+    Image,
+    File,
+    Reasoning: () => null,
+    tools: { Fallback },
+  };
+}
 
 const AssistantMessage: FC = () => {
   const {
@@ -1757,92 +1734,60 @@ const AssistantMessage: FC = () => {
     TaskGroup: TaskGroupComponent = TaskGroup,
   } = useContext(ThreadComponentsContext);
   const ToolFallbackComponent = CustomToolFallback ?? ToolFallback;
-  // Delegations group into task cards; everything else falls through to the
-  // base grouping.
-  const groupBy = taskAwareGroupBy;
 
-  const messageParts = useAuiState((s) => s.message.parts);
-  const isTimelineCovered = (index: number) =>
-    isTimelineCoveredPart(messageParts[index]);
+  const motion = useMotion();
+  const messageParts = useAuiState(
+    (s) => s.message.parts,
+  ) as readonly AssistantMessagePart[];
+  const blocks = useMemo(
+    () => splitAssistantBlocks(messageParts),
+    [messageParts],
+  );
+  const lastTimeline = lastTimelineBlockIndex(blocks);
 
   return (
     <MessagePrimitive.Root className="aui-assistant-message-root">
       <View className="aui-assistant-message-content gap-2">
         <TurnElapsedProvider>
-          <AssistantThinking />
-          <SessionTimeline />
-        </TurnElapsedProvider>
-        <SessionTodoList />
-        <MessageError />
-        <AssistantFailure />
-        <MessagePrimitive.GroupedParts groupBy={groupBy}>
-          {({ part, children }) => {
-            switch (part.type) {
-              case "group-chainOfThought":
-                // Reasoning and timeline-covered tool steps render nothing
-                // here; a chain only shows children when it holds something
-                // the timeline does not summarize (a delegated task card).
-                if (part.indices.every(isTimelineCovered)) return null;
-                return children;
-              case "group-tool": {
-                if (part.indices.every(isTimelineCovered)) {
-                  // Every tool in the group is summarized by the timeline.
-                  return null;
-                }
-                const groupParts = part.indices.map(
-                  (index) => messageParts[index],
-                );
-                const isDelegationGroup =
-                  groupParts.length > 0 &&
-                  groupParts.every(
-                    (groupPart) =>
-                      groupPart?.type === "tool-call" &&
-                      DELEGATION_TOOLS.has(groupPart.toolName),
-                  );
-                if (isDelegationGroup) {
-                  // Delegated tasks render as task cards (docs:
-                  // elements/task-card) instead of a tool group.
-                  if (TaskGroupComponent) return <TaskGroupComponent group={part} />;
-                  return null;
-                }
-                // Approvals and other non-timeline tools render inline.
-                return children;
-              }
-              case "group-task":
-                return TaskGroupComponent ? (
-                  <TaskGroupComponent group={part} />
-                ) : null;
-              case "group-reasoning":
-                // Reasoning is summarized by the timeline.
-                return null;
-              case "text":
-                return <AssistantInlineText />;
-              case "image":
-                return <Image {...part} />;
-              case "file":
-                return <File {...part} />;
-              case "reasoning":
-                // Summarized by the timeline.
-                return null;
-              case "tool-call":
-                if (part.toolName === "todo") return null;
-                if (isTimelineToolCall(part)) {
-                  // Summarized by the timeline above.
-                  return null;
-                }
-                return part.toolUI ?? <ToolFallbackComponent {...part} />;
-              case "data":
-                return part.dataRendererUI;
-              case "indicator":
-                // AssistantThinking above owns the pre-content state.
-                return null;
-              default:
-                return null;
+          {blocks.map((block, blockIndex) => {
+            if (block.kind === "timeline") {
+              return (
+                <SessionTimelineSegment
+                  key={`timeline-${block.indices[0] ?? blockIndex}`}
+                  indices={block.indices}
+                  isLast={blockIndex === lastTimeline}
+                  live={
+                    blockIndex === lastTimeline &&
+                    lastTimeline === blocks.length - 1
+                  }
+                />
+              );
             }
-          }}
-        </MessagePrimitive.GroupedParts>
+            return (
+              // No cluster enter here — messageEnter FadeInDown was painting the
+              // whole answer as one rising block and masking streaming-text.
+              <View
+                key={`content-${block.indices[0] ?? blockIndex}`}
+                className="gap-2"
+              >
+                {block.indices.map((index) => (
+                  <MessagePrimitive.PartByIndex
+                    key={index}
+                    index={index}
+                    components={contentPartComponents(
+                      index,
+                      ToolFallbackComponent,
+                      TaskGroupComponent,
+                    )}
+                  />
+                ))}
+              </View>
+            );
+          })}
+          <SessionTodoList />
+          <AssistantThinking />
+        </TurnElapsedProvider>
         <MessageSources />
-        <MessageError />
       </View>
       <View className="aui-assistant-message-footer min-h-7 flex-row items-center pt-1.5">
         <BranchPicker />
@@ -1905,20 +1850,6 @@ const AssistantActionBar: FC = () => (
   </AuiIf>
 );
 
-const UserSendState: FC = () => {
-  const phase = useAuiState((s) => s.message.metadata?.custom?.mobileSendState);
-  // Preparing is silent: the pending assistant Thinking row covers that beat.
-  if (phase !== "uncertain") return null;
-  return (
-    <Text
-      className="text-muted-foreground text-xs"
-      accessibilityRole="alert"
-    >
-      Delivery not confirmed. Check before resending.
-    </Text>
-  );
-};
-
 const UserMessage: FC = () => {
   const motion = useMotion();
   const internalMessage = useAuiState((s) =>
@@ -1928,23 +1859,13 @@ const UserMessage: FC = () => {
   );
   if (internalMessage) return null;
   return (
-    <Animated.View
-      entering={
-        motion
-          ? FadeInDown.springify(220).damping(28).stiffness(280).withInitialValues({
-              opacity: 0,
-              transform: [{ translateY: 14 }],
-            })
-          : undefined
-      }
-    >
+    <Animated.View entering={motion ? messageEnter : undefined}>
       <MessagePrimitive.Root className="aui-user-message-root items-end gap-y-1.5">
         <UserMessageAttachments />
         <View className="aui-user-message-content bg-card max-w-[85%] rounded-2xl px-4 py-2.5">
           <MessagePrimitive.Parts components={{ Text: UserText, Image, File }} />
         </View>
         <View className="aui-user-message-footer flex-row items-center justify-end gap-2">
-          <UserSendState />
           <BranchPicker />
         </View>
       </MessagePrimitive.Root>

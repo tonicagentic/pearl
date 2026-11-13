@@ -1,18 +1,25 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDownIcon } from "lucide-react-native";
 import { Pressable, Text, View } from "react-native";
 import Animated, {
   FadeIn,
-  FadeInDown,
   FadeOut,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
 } from "react-native-reanimated";
 
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import {
+  COLLAPSE_MS,
+  CollapsePanel,
   ShimmerLabel,
   SwapLabel,
-  THINK_SWAP_MS,
+  collapseEase,
+  layoutTransition,
+  stepEnter,
+  thinkSwapEnter,
   threadDiffAdd,
   threadDiffRemove,
   threadMeta,
@@ -23,8 +30,6 @@ import {
 // RN port of the web tool-timeline: quiet meta rows, Worked-for header,
 // and inline edit stats — no mono chips.
 
-const STEP_ENTER_MS = 220;
-const STEP_ENTER_Y = 6;
 const DETAIL_MS = 180;
 
 export interface TimelineStep {
@@ -59,18 +64,33 @@ export interface ToolTimelineProps {
   readonly elapsed?: string;
 }
 
-/** ChevronDown points right when collapsed, down when open (native transform). */
+/** ChevronDown points right when collapsed, down when open. */
 function MetaChevron({ open }: { readonly open: boolean }) {
+  const motion = useMotion();
+  const rotation = useSharedValue(open ? 0 : -90);
+
+  useEffect(() => {
+    if (!motion) {
+      rotation.value = open ? 0 : -90;
+      return;
+    }
+    rotation.value = withTiming(open ? 0 : -90, {
+      duration: COLLAPSE_MS,
+      easing: collapseEase,
+    });
+  }, [open, motion, rotation]);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
   return (
-    <View
-      className="size-3.5 items-center justify-center"
-      style={{ transform: [{ rotate: open ? "0deg" : "-90deg" }] }}
-    >
+    <Animated.View className="size-3.5 items-center justify-center" style={style}>
       <Icon
         as={ChevronDownIcon}
         className="size-3.5 text-muted-foreground/55"
       />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -90,27 +110,22 @@ function StepRow({
 }) {
   const motion = useMotion();
   const expandable = typeof step.detail === "string" && step.detail.length > 0;
-  // Streaming steps read progressive ("Thinking"); settled ones past tense.
-  const verb = active && step.verb === "Thought" ? "Thinking" : step.verb;
+  // Live reasoning reads "Thinking…" like Cursor; settled stays "Thought".
+  const verb =
+    active && step.verb === "Thought" ? "Thinking…" : step.verb;
   const showChip = step.chip.length > 0;
-  // One text node keeps verb + duration on the same baseline.
+  // One text node keeps verb + duration on the same baseline ("Thought 2s").
   const label =
-    elapsed !== undefined ? `${verb} ${elapsed}` : verb;
+    elapsed !== undefined ? `${verb.replace(/…$/, "")} ${elapsed}` : verb;
 
   return (
     <Animated.View
-      entering={
-        motion
-          ? FadeInDown.duration(STEP_ENTER_MS).withInitialValues({
-              opacity: 0,
-              transform: [{ translateY: STEP_ENTER_Y }],
-            })
-          : undefined
-      }
+      entering={motion ? stepEnter : undefined}
+      layout={motion ? layoutTransition : undefined}
     >
       <Pressable
         className={cn(
-          "min-h-7 flex-row items-center gap-1.5 py-1",
+          "min-h-7 flex-row items-baseline gap-1.5 py-1.5",
           expandable && "active:opacity-70",
         )}
         disabled={!expandable}
@@ -159,9 +174,9 @@ function StepRow({
         <Animated.View
           entering={motion ? FadeIn.duration(DETAIL_MS) : undefined}
           exiting={motion ? FadeOut.duration(DETAIL_MS) : undefined}
-          className="ms-0.5 mt-1"
+          className="ms-0.5 mb-1 mt-0.5"
         >
-          <Text selectable className={cn(threadMeta, "leading-6")}>
+          <Text selectable className={cn(threadText, "text-foreground/90 leading-6")}>
             {step.detail}
           </Text>
         </Animated.View>
@@ -178,14 +193,18 @@ function StatLine({ stats }: { readonly stats: readonly TimelineStat[] }) {
     (sum, stat) => sum + (stat.removed ?? 0),
     0,
   );
-  const files = stats.length;
-  const summary = `Edited ${files} file${files === 1 ? "" : "s"}`;
+  const latest = stats[stats.length - 1];
+  // Cursor: "Editing file.tsx … +10" — prefer the latest file when present.
+  const summary =
+    stats.length === 1 && latest
+      ? `Editing ${latest.file}`
+      : `Edited ${stats.length} file${stats.length === 1 ? "" : "s"}`;
 
   return (
-    <View className="flex-row flex-wrap items-center gap-x-1.5 gap-y-0.5 py-0.5">
+    <View className="flex-row flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5">
       <Text className={cn(threadMeta, "leading-6")}>{summary}</Text>
       {totalAdded > 0 || totalRemoved > 0 ? (
-        <View className="flex-row items-center gap-1.5">
+        <View className="flex-row items-baseline gap-1.5">
           {totalAdded > 0 ? (
             <Text className={cn(threadText, threadDiffAdd, "tabular-nums leading-6")}>
               +{totalAdded}
@@ -193,7 +212,7 @@ function StatLine({ stats }: { readonly stats: readonly TimelineStat[] }) {
           ) : null}
           {totalRemoved > 0 ? (
             <Text className={cn(threadText, threadDiffRemove, "tabular-nums leading-6")}>
-              -{totalRemoved}
+              −{totalRemoved}
             </Text>
           ) : null}
         </View>
@@ -235,12 +254,7 @@ export function ToolTimeline({
     Math.max(0, Math.min(visibleSteps, steps.length)),
   );
 
-  const rootEntering = motion
-    ? FadeInDown.duration(THINK_SWAP_MS).withInitialValues({
-        opacity: 0,
-        transform: [{ translateY: STEP_ENTER_Y }],
-      })
-    : undefined;
+  const rootEntering = motion ? thinkSwapEnter : undefined;
 
   // A single step needs no collapse chrome: render it inline.
   if (steps.length === 1) {
@@ -272,26 +286,29 @@ export function ToolTimeline({
       className="w-full"
     >
       <Pressable
-        className="min-h-7 flex-row items-center gap-1.5 py-1"
+        className="min-h-7 flex-row items-baseline gap-1.5 py-1.5"
         accessibilityState={{ expanded: open }}
         onPress={() => onOpenChange(!open)}
       >
-        <SwapLabel active={streaming ? 0 : 1} className="text-start">
+        <SwapLabel active={streaming ? 0 : 1} className="min-w-0 flex-1 text-start">
           <ShimmerLabel
             active={streaming}
             className={cn(threadMeta, "leading-6")}
-            numberOfLines={1}
+            numberOfLines={2}
           >
-            {elapsed ? `${activeLabel} ${elapsed}` : activeLabel}
+            {elapsed ? `${activeLabel} · ${elapsed}` : activeLabel}
           </ShimmerLabel>
-          <Text className={cn(threadMeta, "leading-6")} numberOfLines={1}>
+          <Text className={cn(threadMeta, "leading-6")} numberOfLines={2}>
             {restingLabel}
           </Text>
         </SwapLabel>
         <MetaChevron open={open} />
       </Pressable>
-      {open ? (
-        <View className="flex-col gap-1 pb-1 pt-1.5">
+      <CollapsePanel open={open}>
+        <Animated.View
+          className="flex-col gap-0.5 pb-1 pt-1"
+          layout={motion ? layoutTransition : undefined}
+        >
           {shown.map((step, index) => (
             <StepRow
               key={`step-${index}-${step.verb}-${step.chip}`}
@@ -302,8 +319,8 @@ export function ToolTimeline({
             />
           ))}
           <StatLine stats={stats} />
-        </View>
-      ) : null}
+        </Animated.View>
+      </CollapsePanel>
     </Animated.View>
   );
 }

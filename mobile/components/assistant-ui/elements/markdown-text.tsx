@@ -52,8 +52,40 @@ const MUTED_SIZE = 15;
 const MUTED_LINE = 24;
 const MARKER_COL = 24;
 const DISC_SIZE = 6;
-const STREAM_PARSE_MS = 80;
 const TASK_BOX_RE = /^[☑☐]/;
+
+/** Count single `*` markers that are not part of `**` (Hermes-safe). */
+function oddSingleAsterisks(text: string): boolean {
+  let singles = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== "*") continue;
+    if (text[i + 1] === "*") {
+      i += 1;
+      continue;
+    }
+    singles += 1;
+  }
+  return (singles & 1) === 1;
+}
+
+/**
+ * Mid-stream the model often has an open `**` / `` ` ``. Closing those for
+ * display keeps Pearl painting rendered markdown instead of raw markers.
+ */
+function stabilizeStreamingMarkdown(text: string): string {
+  let out = text;
+  if (((out.match(/\*\*/g) ?? []).length & 1) === 1) out += "**";
+  if (oddSingleAsterisks(out)) out += "*";
+  if (((out.match(/__/g) ?? []).length & 1) === 1) out += "__";
+  if (((out.match(/`/g) ?? []).length & 1) === 1) out += "`";
+  // Unclosed fence: hide the incomplete fence rather than dump ```.
+  const fences = out.match(/^```/gm)?.length ?? 0;
+  if (fences & 1) {
+    const last = out.lastIndexOf("```");
+    if (last >= 0) out = out.slice(0, last).replace(/\s+$/, "");
+  }
+  return out;
+}
 
 type ListToken = NonNullable<ReturnType<MarkedTokenizer["list"]>>;
 type ListItemToken = ListToken["items"][number];
@@ -88,52 +120,6 @@ export class TaskListTokenizer extends MarkedTokenizer {
 }
 
 const taskListTokenizer = new TaskListTokenizer();
-
-// One-way throttle: props → local state only. Writing back into the message
-// store previously hit "Maximum update depth exceeded". Leading edge paints
-// the first chunk immediately; later chunks coalesce on ~80ms.
-const useThrottledMarkdownText = (text: string, streaming: boolean): string => {
-  const [parsedText, setParsedText] = useState(text);
-  const pendingRef = useRef(text);
-  const lastFlushRef = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  useEffect(() => {
-    pendingRef.current = text;
-    if (!streaming) {
-      clearTimeout(timerRef.current);
-      timerRef.current = undefined;
-      lastFlushRef.current = 0;
-      setParsedText(text);
-      return;
-    }
-    const now = Date.now();
-    const elapsed = now - lastFlushRef.current;
-    if (elapsed >= STREAM_PARSE_MS) {
-      lastFlushRef.current = now;
-      traceStream("paint", text.length);
-      setParsedText(text);
-      return;
-    }
-    if (timerRef.current !== undefined) return;
-    timerRef.current = setTimeout(() => {
-      timerRef.current = undefined;
-      lastFlushRef.current = Date.now();
-      const next = pendingRef.current;
-      traceStream("paint", next.length);
-      setParsedText(next);
-    }, STREAM_PARSE_MS - elapsed);
-  }, [text, streaming]);
-
-  useEffect(
-    () => () => {
-      clearTimeout(timerRef.current);
-    },
-    [],
-  );
-
-  return parsedText;
-};
 
 const firstTextContent = (node: ReactNode): string => {
   if (node == null || typeof node === "boolean") return "";
@@ -530,31 +516,40 @@ type MarkdownTextProps = TextMessagePartProps & {
 const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
   const statusType = status?.type ?? "running";
   const streaming = statusType === "running";
-  const displayedText = useThrottledMarkdownText(text, streaming);
+  // Paint wire text directly — setState throttles nested under
+  // NotificationManager hit max update depth; useDeferredValue starved
+  // and left the body blank until settle.
+  useEffect(() => {
+    if (!streaming) return;
+    traceStream("paint", text.length);
+  }, [streaming, text.length]);
+  // Close odd markers mid-stream so Marked can bold instead of showing `**`.
+  const displayText = useMemo(
+    () => (streaming ? stabilizeStreamingMarkdown(text) : text),
+    [text, streaming],
+  );
   const options = useMarkdownOptions(variant);
   const fallbackClass =
     variant === "muted"
       ? "text-muted-foreground text-[15px] leading-6"
       : "text-foreground text-[17px] leading-[26px]";
 
-  // Re-lexing every wire token stalls the JS thread; the throttle above keeps
-  // markdown current without parsing on each chunk.
   const blocks = useMemo(() => {
-    if (!displayedText) return [];
+    if (!displayText) return [];
     try {
-      return MarkedLexer(displayedText, { gfm: true }).filter(
+      return MarkedLexer(displayText, { gfm: true }).filter(
         (token) => token.type !== "space",
       );
     } catch {
       return null;
     }
-  }, [displayedText]);
+  }, [displayText]);
 
   if (blocks === null) {
     return (
       <View className="aui-md-root">
         <Text selectable className={fallbackClass}>
-          {displayedText}
+          {displayText}
         </Text>
       </View>
     );
@@ -563,7 +558,11 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
   return (
     <View className="aui-md-root">
       {blocks.map((token, index) => (
-        <MarkdownBlock key={index} raw={token.raw} options={options} />
+        <MarkdownBlock
+          key={`b-${index}-${token.type}`}
+          raw={token.raw}
+          options={options}
+        />
       ))}
     </View>
   );

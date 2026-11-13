@@ -1,16 +1,16 @@
 import { Text, View } from "react-native";
-import Animated, { FadeInDown, FadeOutUp } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 
 import { cn } from "@/lib/utils";
 import {
   ShimmerLabel,
-  THINK_SWAP_MS,
-  THINK_SWAP_Y,
+  thinkSwapEnter,
+  thinkSwapExit,
   threadMeta,
   useMotion,
 } from "./surfaces";
 
-/** Quiet shimmer + elapsed; label swaps with thinking-states exit/enter. */
+/** thinking-states: shimmer while held, swap with blur-rise on label change. */
 export function ThinkingIndicator({
   label,
   elapsed,
@@ -21,48 +21,30 @@ export function ThinkingIndicator({
   className?: string;
 }) {
   const motion = useMotion();
+  // Cursor uses an ellipsis on the live status ("Thinking…").
+  const display =
+    label === "Thinking" || label === "Working" ? "Thinking…" : label;
 
   return (
     <Animated.View
-      exiting={
-        motion
-          ? FadeOutUp.duration(THINK_SWAP_MS).withInitialValues({
-              opacity: 1,
-              transform: [{ translateY: 0 }],
-            })
-          : undefined
-      }
+      exiting={motion ? thinkSwapExit : undefined}
       accessibilityRole="text"
-      accessibilityLabel={elapsed ? `${label}, ${elapsed}` : label}
-      className={cn("flex-row items-center gap-1.5 py-0.5", className)}
+      accessibilityLabel={elapsed ? `${display}, ${elapsed}` : display}
+      className={cn("flex-row items-baseline gap-1.5 py-1.5", className)}
     >
-      <View className="min-h-[15px] justify-center overflow-hidden">
+      <View className="min-h-[15px] justify-center overflow-visible">
         <Animated.View
-          key={label}
-          entering={
-            motion
-              ? FadeInDown.duration(THINK_SWAP_MS).withInitialValues({
-                  opacity: 0,
-                  transform: [{ translateY: THINK_SWAP_Y }],
-                })
-              : undefined
-          }
-          exiting={
-            motion
-              ? FadeOutUp.duration(THINK_SWAP_MS).withInitialValues({
-                  opacity: 1,
-                  transform: [{ translateY: 0 }],
-                })
-              : undefined
-          }
+          key={display}
+          entering={motion ? thinkSwapEnter : undefined}
+          exiting={motion ? thinkSwapExit : undefined}
         >
-          <ShimmerLabel className={cn(threadMeta, "leading-none")}>
-            {label}
+          <ShimmerLabel active className={cn(threadMeta, "leading-6")}>
+            {display}
           </ShimmerLabel>
         </Animated.View>
       </View>
       {elapsed !== undefined ? (
-        <Text className={cn(threadMeta, "tabular-nums opacity-80")}>
+        <Text className={cn(threadMeta, "tabular-nums leading-6")}>
           {elapsed}
         </Text>
       ) : null}

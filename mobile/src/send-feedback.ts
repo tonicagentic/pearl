@@ -1,5 +1,8 @@
 import type { AppendMessage, ThreadMessageLike } from "@assistant-ui/react-native";
 
+/** Eve `store.send({ message })` payload kept so a failed turn can be resent. */
+export type LocalSendOutgoing = string | readonly Record<string, unknown>[];
+
 /** Display-only row while the durable pending marker is being written. */
 export type LocalSend = {
   readonly store: object;
@@ -7,6 +10,8 @@ export type LocalSend = {
   readonly eventBaseline: number;
   readonly preview: ThreadMessageLike;
   readonly phase: "preparing" | "uncertain";
+  /** Exact payload last passed to `store.send`, for an explicit Resend. */
+  readonly outgoing?: LocalSendOutgoing;
 };
 
 export function createLocalSend(
@@ -14,6 +19,7 @@ export function createLocalSend(
   baseline: number,
   eventBaseline: number,
   message: AppendMessage,
+  outgoing?: LocalSendOutgoing,
 ): LocalSend {
   return {
     store,
@@ -25,6 +31,7 @@ export function createLocalSend(
       content: message.content,
       ...(message.attachments?.length ? { attachments: message.attachments } : {}),
     },
+    ...(outgoing !== undefined ? { outgoing } : {}),
   };
 }
 

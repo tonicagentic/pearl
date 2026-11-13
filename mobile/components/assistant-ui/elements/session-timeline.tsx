@@ -1,9 +1,12 @@
-import { useContext, useMemo, useState } from "react";
+import { useContext, useMemo, useState, type FC } from "react";
 import { useAuiState } from "@assistant-ui/react-native";
 
+import {
+  isTimelineToolCall,
+  type AssistantMessagePart,
+} from "@/src/assistant-blocks";
 import { useEveEvents } from "@/src/chat-context";
 import { formatDurationMs, turnEventSpan } from "@/src/turn-duration";
-import { DELEGATION_TOOLS } from "./task-card.aui";
 import { getToolPresentation } from "./tool-presentation";
 import { TimelineDurationEventsContext } from "./timeline-duration-events";
 import {
@@ -18,9 +21,22 @@ export {
   TimelineDurationEventsProvider,
 } from "./timeline-duration-events";
 
-// RN port of the web session-timeline element: a whole working turn
-// summarized as one collapsed line (verb + chip per tool step), with the
-// covered tool/reasoning parts suppressed in the message parts.
+export {
+  isContentBlockPart,
+  isStandaloneTool,
+  isTimelineCoveredPart,
+  isTimelineToolCall,
+  isTrailingContentPhase,
+  lastTimelineBlockIndex,
+  splitAssistantBlocks,
+  type AssistantBlock,
+  type AssistantContentBlock,
+  type AssistantMessagePart,
+  type AssistantTimelineBlock,
+} from "@/src/assistant-blocks";
+
+// Timeline steps are split at visible content boundaries so earlier tools
+// stay above mid-turn text and live Working stays on the trailing segment.
 
 type ToolCallState = {
   readonly type: "tool-call";
@@ -65,61 +81,16 @@ const TOOL_META: Record<string, { verb: string }> = {
   deployment_logs: { verb: "Opened logs" },
 };
 
-/** Tools that keep their own card instead of a timeline step. */
-export function isStandaloneTool(toolName: string): boolean {
-  return (
-    toolName === "todo" ||
-    toolName === "write_file" ||
-    DELEGATION_TOOLS.has(toolName)
-  );
-}
-
-/**
- * Whether a message part is summarized by the session timeline (and should
- * render nothing in the grouped parts body). Reasoning and every tool call
- * except standalones / parked approvals are covered.
- */
-export function isTimelineCoveredPart(part: {
-  readonly type?: string;
-  readonly toolName?: string;
-  readonly status?: { readonly type?: string };
-} | null | undefined): boolean {
-  if (!part) return false;
-  if (part.type === "reasoning") return true;
-  if (part.type !== "tool-call") return false;
-  if (part.status?.type === "requires-action") return false;
-  if (!part.toolName) return false;
-  if (part.toolName === "todo") return true;
-  if (isStandaloneTool(part.toolName)) return false;
-  return true;
-}
-
-/** Whether this tool call appears as a timeline step. */
-export function isTimelineToolCall(part: {
-  readonly type?: string;
-  readonly toolName?: string;
-  readonly status?: { readonly type?: string };
-}): boolean {
-  return (
-    part.type === "tool-call" &&
-    !!part.toolName &&
-    !isStandaloneTool(part.toolName) &&
-    part.status?.type !== "requires-action"
-  );
-}
-
 function basename(path: string): string {
   return path.split("/").pop() || path;
 }
 
-/** Hostname (+ useful path) for a page URL; empty when the value is not a URL. */
 function siteChip(raw: string): string {
   try {
     const url = new URL(raw);
     const host = url.hostname.replace(/^www\./, "");
     const path = url.pathname === "/" ? "" : url.pathname.replace(/\/$/, "");
     if (!path) return host;
-    // Keep short paths that disambiguate; truncate long ones.
     const clipped =
       path.length > 48 ? `${path.slice(0, 45).replace(/\/?$/, "")}…` : path;
     return `${host}${clipped}`;
@@ -147,7 +118,6 @@ function chipFor(part: ToolCallState): string {
   }
   if (typeof args.title === "string") return args.title;
   if (typeof args.name === "string") return args.name;
-  // Prefer a human label over the raw tool id when nothing else is useful.
   return getToolPresentation(part.toolName).label;
 }
 
@@ -159,7 +129,6 @@ function toStep(part: TimelinePart): TimelineStep {
   const filePath =
     typeof args.filePath === "string" ? args.filePath : undefined;
   if (part.type === "reasoning") {
-    // Trace-style: title only. Prose stays behind expand, not in a chip.
     return {
       verb: "Thought",
       chip: "",
@@ -196,6 +165,12 @@ function toStep(part: TimelinePart): TimelineStep {
   };
 }
 
+function lineCount(text: string | undefined): number | undefined {
+  if (text === undefined) return undefined;
+  if (text.length === 0) return 0;
+  return text.split("\n").length;
+}
+
 function toStats(parts: readonly TimelinePart[]): TimelineStat[] {
   return parts
     .filter(
@@ -210,11 +185,107 @@ function toStats(parts: readonly TimelinePart[]): TimelineStat[] {
       };
       return {
         file: basename(args.filePath ?? "file"),
-        added: args.newText?.length,
-        removed: args.oldText?.length,
+        added: lineCount(args.newText),
+        removed: lineCount(args.oldText),
         filePath: args.filePath,
       };
     });
+}
+
+/** Cursor-style activity summaries: "Explored 2 files, ran 1 command." */
+function summarizeActivity(parts: readonly TimelinePart[]): {
+  readonly explored: number;
+  readonly ran: number;
+  readonly searched: number;
+  readonly edited: number;
+  readonly lastEditFile?: string;
+} {
+  let explored = 0;
+  let ran = 0;
+  let searched = 0;
+  let edited = 0;
+  let lastEditFile: string | undefined;
+  for (const part of parts) {
+    if (part.type !== "tool-call") continue;
+    switch (part.toolName) {
+      case "read_file":
+      case "glob":
+      case "read_attachment":
+        explored += 1;
+        break;
+      case "bash":
+      case "run_with_env":
+        ran += 1;
+        break;
+      case "grep":
+      case "web_search":
+      case "exa_agent_run":
+        searched += 1;
+        break;
+      case "edit_file": {
+        edited += 1;
+        const path = (part.args as { filePath?: unknown } | undefined)?.filePath;
+        if (typeof path === "string") lastEditFile = basename(path);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return { explored, ran, searched, edited, lastEditFile };
+}
+
+function formatActivitySummary(summary: ReturnType<typeof summarizeActivity>): string {
+  const bits: string[] = [];
+  if (summary.explored > 0) {
+    bits.push(
+      `Explored ${summary.explored} file${summary.explored === 1 ? "" : "s"}`,
+    );
+  }
+  if (summary.searched > 0) {
+    bits.push(
+      `searched ${summary.searched} time${summary.searched === 1 ? "" : "s"}`,
+    );
+  }
+  if (summary.ran > 0) {
+    bits.push(
+      `ran ${summary.ran} command${summary.ran === 1 ? "" : "s"}`,
+    );
+  }
+  if (summary.edited > 0 && !summary.lastEditFile) {
+    bits.push(
+      `edited ${summary.edited} file${summary.edited === 1 ? "" : "s"}`,
+    );
+  }
+  if (bits.length === 0) return "";
+  const [first, ...rest] = bits;
+  return `${first}${rest.length ? `, ${rest.join(", ")}` : ""}.`;
+}
+
+function liveActivityLabel(
+  parts: readonly TimelinePart[],
+  summary: ReturnType<typeof summarizeActivity>,
+): string {
+  const last = [...parts].reverse().find((part) => part.type === "tool-call");
+  if (last?.type === "tool-call" && last.toolName === "edit_file") {
+    const file =
+      summary.lastEditFile ??
+      chipFor(last) ??
+      "file";
+    const explored =
+      summary.explored > 0
+        ? `, explored ${summary.explored} file${summary.explored === 1 ? "" : "s"}`
+        : "";
+    return `Editing ${file}${explored}`;
+  }
+  const overview = formatActivitySummary(summary).replace(/\.$/, "");
+  if (overview) return overview;
+  if (last?.type === "tool-call") {
+    const meta = TOOL_META[last.toolName];
+    const chip = chipFor(last);
+    if (chip) return `${meta?.verb ?? "Running"} ${chip}`;
+  }
+  return "Thinking…";
 }
 
 function formatDuration(ms: number): string {
@@ -227,17 +298,42 @@ function formatDuration(ms: number): string {
   return `${Math.round(hours)}h ${minutes % 60}m`;
 }
 
-// Prefer compact mm/hh labels for multi-minute turns; fall back to plain Ns.
 function formatSettledDuration(ms: number): string {
   if (ms < 60_000) return formatDurationMs(ms);
   return formatDuration(ms);
 }
 
-// A whole working turn summarized as one collapsed line. Rendered beside the
-// message parts; the covered tool parts render null so nothing shows twice.
-export function SessionTimeline() {
+function asTimelineParts(
+  messageParts: readonly unknown[],
+  indices: readonly number[],
+): TimelinePart[] {
+  const out: TimelinePart[] = [];
+  for (const index of indices) {
+    const part = messageParts[index];
+    if (typeof part !== "object" || part === null) continue;
+    const typed = part as AssistantMessagePart & TimelinePart;
+    if (typed.type === "reasoning" || isTimelineToolCall(typed)) {
+      out.push(typed as TimelinePart);
+    }
+  }
+  return out;
+}
+
+/**
+ * One timeline segment for a contiguous slice of reasoning/tool parts.
+ * Only the last segment may shimmer Working / show Worked-for.
+ */
+export const SessionTimelineSegment: FC<{
+  readonly indices: readonly number[];
+  /** Last timeline segment in the turn (owns settled “Worked for”). */
+  readonly isLast: boolean;
+  /**
+   * Trailing work cluster — only this segment may shimmer Working.
+   * Defaults to `isLast` for the deprecated whole-turn SessionTimeline.
+   */
+  readonly live?: boolean;
+}> = ({ indices, isLast, live = isLast }) => {
   const overrideEvents = useContext(TimelineDurationEventsContext);
-  // Fixture turns (sample screen) start expanded so every step is visible.
   const [userOpen, setUserOpen] = useState<boolean | null>(
     () => (overrideEvents != null ? true : null),
   );
@@ -247,61 +343,75 @@ export function SessionTimeline() {
   const turnId = useAuiState(
     (s) => s.message.metadata?.custom?.turnId as string | undefined,
   );
-  const toolCalls = (
-    useAuiState((s) => s.message.parts) as readonly unknown[]
-  ).filter((part): part is TimelinePart => {
-    if (typeof part !== "object" || part === null) return false;
-    const typed = part as {
-      type?: string;
-      toolName?: string;
-      status?: { type?: string };
-    };
-    if (typed.type === "reasoning") return true;
-    return isTimelineToolCall(typed);
-  });
+  const messageParts = useAuiState((s) => s.message.parts) as readonly unknown[];
+  const toolCalls = useMemo(
+    () => asTimelineParts(messageParts, indices),
+    [messageParts, indices],
+  );
 
-  // Durable turn duration, derived from the persisted event log: first to
-  // last event timestamp for this turn (each event carries meta.at and
-  // data.turnId). Survives reloads — no wall clock at render.
   const liveEvents = useEveEvents();
   const events = overrideEvents ?? liveEvents;
+  const showLive = live && (streaming || awaitingInput);
+  // Event-log span once the turn settles; while the answer is still printing
+  // we reuse the frozen live clock from TurnElapsedProvider instead.
   const settledDuration = useMemo(() => {
-    if (streaming || awaitingInput || !turnId) return undefined;
+    if (!isLast || showLive || awaitingInput || streaming || !turnId) {
+      return undefined;
+    }
     const span = turnEventSpan(events, turnId);
     if (!span) return undefined;
     return formatSettledDuration(span.endMs - span.startMs);
-  }, [events, streaming, awaitingInput, turnId]);
+  }, [events, streaming, awaitingInput, turnId, isLast, showLive]);
 
-  // Shared with AssistantThinking so the number does not restart at handoff.
   const liveElapsed = useTurnElapsed();
-
   const steps = toolCalls.map(toStep);
   const stats = toStats(toolCalls);
+  const activity = useMemo(() => summarizeActivity(toolCalls), [toolCalls]);
 
   if (steps.length === 0) return null;
 
-  // Keep "Working Ns" through HITL pause; only flip to "Worked for" when settled.
-  const showLive = streaming || awaitingInput;
-  const duration = showLive ? liveElapsed : settledDuration;
-  const restingLabel = settledDuration
-    ? `Worked for ${settledDuration}`
-    : `${steps.length} step${steps.length === 1 ? "" : "s"}${
-        stats.length > 0
-          ? ` · ${stats.length} file change${stats.length === 1 ? "" : "s"}`
-          : ""
-      }`;
+  const workedFor =
+    isLast && !showLive
+      ? (settledDuration ?? (streaming ? liveElapsed : undefined))
+      : undefined;
+  const duration = showLive ? liveElapsed : workedFor;
+  const activitySummary = formatActivitySummary(activity);
+  const restingLabel = workedFor
+    ? activitySummary
+      ? `Thought ${workedFor} · ${activitySummary.replace(/\.$/, "")}`
+      : `Thought ${workedFor}`
+    : activitySummary ||
+      `${steps.length} step${steps.length === 1 ? "" : "s"}`;
 
   return (
     <ToolTimeline
       steps={steps}
       visibleSteps={steps.length}
       streaming={showLive}
-      open={userOpen ?? streaming}
+      open={userOpen ?? showLive}
       onOpenChange={setUserOpen}
       restingLabel={restingLabel}
-      activeLabel="Working"
-      elapsed={duration}
+      activeLabel={liveActivityLabel(toolCalls, activity)}
+      elapsed={showLive ? duration : undefined}
       stats={stats}
     />
   );
+};
+
+/** @deprecated Prefer interleaved SessionTimelineSegment blocks. */
+export function SessionTimeline() {
+  const messageParts = useAuiState(
+    (s) => s.message.parts,
+  ) as readonly AssistantMessagePart[];
+  const indices = useMemo(() => {
+    const out: number[] = [];
+    messageParts.forEach((part, index) => {
+      if (part.type === "reasoning" || isTimelineToolCall(part)) {
+        out.push(index);
+      }
+    });
+    return out;
+  }, [messageParts]);
+  if (indices.length === 0) return null;
+  return <SessionTimelineSegment indices={indices} isLast />;
 }

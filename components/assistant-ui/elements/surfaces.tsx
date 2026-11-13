@@ -75,13 +75,21 @@ export const threadDiffRemove = "text-red-600 dark:text-red-400";
 export function ShimmerLabel({
   active = true,
   className,
+  children,
   ...props
 }: ComponentProps<"span"> & { active?: boolean }) {
+  const label =
+    typeof children === "string" || typeof children === "number"
+      ? String(children)
+      : undefined;
   return (
     <span
-      className={cn(active && "shimmer motion-reduce:animate-none", className)}
+      className={cn(active && "t-shimmer", className)}
+      data-text={active ? label : undefined}
       {...props}
-    />
+    >
+      {children}
+    </span>
   );
 }
 

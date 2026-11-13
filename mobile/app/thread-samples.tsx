@@ -1,22 +1,29 @@
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import {
   AssistantRuntimeProvider,
   useExternalStoreRuntime,
   type ToolCallMessagePartProps,
 } from "@assistant-ui/react-native";
+import { ChevronLeftIcon } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback";
 import { TimelineDurationEventsProvider } from "@/components/assistant-ui/elements/session-timeline";
+import { Icon } from "@/components/ui/icon";
 import {
   THREAD_SAMPLES,
   threadSample,
   type ThreadSampleId,
 } from "@/src/thread-samples";
+
+function leaveSamples() {
+  if (router.canGoBack()) router.back();
+  else router.replace("/");
+}
 
 /** Dev-only ToolFallback that always offers Allow/Deny for parked fixtures. */
 function SampleToolFallback(props: ToolCallMessagePartProps) {
@@ -82,10 +89,23 @@ export default function ThreadSamplesScreen() {
         options={{
           title: "Thread samples",
           headerShown: true,
+          headerBackVisible: false,
           headerTintColor: foregroundColor,
           headerStyle: backgroundColor
             ? { backgroundColor }
             : undefined,
+          // Always show a back control — deep links / replace leave no stack history.
+          headerLeft: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              hitSlop={12}
+              onPress={leaveSamples}
+              className="size-10 items-center justify-center"
+            >
+              <Icon as={ChevronLeftIcon} className="size-6 text-foreground" />
+            </Pressable>
+          ),
         }}
       />
       {/* Solid bar so the thread list cannot steal taps from the mode chips. */}

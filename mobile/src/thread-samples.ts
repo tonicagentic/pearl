@@ -168,16 +168,24 @@ const TODOS = [
   },
 ];
 
+/** Tools → text → tools → text so the session timeline splits around prose. */
 const mixedContent = [
   {
     type: "reasoning" as const,
-    text: "Gather the timeline behavior, the React docs page, and open a tracking issue.",
+    text: "Gather the timeline behavior and the React docs page.",
   },
   toolCall("read_file", { filePath: "session-timeline.tsx" }),
   toolCall("web_fetch", {
     url: "https://react.dev/reference/rsc",
   }),
-  toolCall("web_search", { query: "react cache" }),
+  {
+    type: "text" as const,
+    text: "First pass: the timeline covers tools, and mid-turn prose should sit between tool clusters.",
+  },
+  {
+    type: "reasoning" as const,
+    text: "Run tests and file a tracking issue before wrapping up.",
+  },
   toolCall("bash", { command: "pnpm test" }),
   toolCall("create_issue", {
     title: "Timeline should default every tool",
@@ -185,7 +193,7 @@ const mixedContent = [
   }),
   {
     type: "text" as const,
-    text: "I checked the timeline, opened the React docs, ran the tests, and filed an issue.",
+    text: "Tests are green and the issue is filed — live work stays under the latest tool cluster.",
   },
 ];
 

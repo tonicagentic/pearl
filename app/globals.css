@@ -124,33 +124,51 @@ html[data-eve-chat-sidebar="closed"] [data-desktop-sidebar] {
   width: 0;
 }
 
+/* transitions.dev shimmer-text (also .t-shimmer) */
+.t-shimmer,
 .shimmer-text {
-  background: linear-gradient(
+  position: relative;
+  display: inline-block;
+  color: var(--muted-foreground, #7c7c7c);
+}
+
+.t-shimmer::before,
+.shimmer-text::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
     90deg,
-    var(--muted-foreground) 0%,
-    var(--foreground) 45%,
-    var(--muted-foreground) 90%
+    transparent 0%,
+    transparent 40%,
+    var(--foreground, #0d0d0d) 50%,
+    transparent 60%,
+    transparent 100%
   );
-  background-size: 220% 100%;
+  background-size: 400% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: shimmer-text 1.8s linear infinite;
+  -webkit-text-fill-color: transparent;
+  animation: t-shimmer 2000ms linear infinite;
   will-change: background-position;
 }
 
-@keyframes shimmer-text {
-  from {
-    background-position: 120% 0;
+@keyframes t-shimmer {
+  0% {
+    background-position: 100% 0;
   }
-
-  to {
-    background-position: -120% 0;
+  100% {
+    background-position: 0% 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shimmer-text {
-    animation: none;
+  .t-shimmer::before,
+  .shimmer-text::before {
+    animation: none !important;
   }
 }
 

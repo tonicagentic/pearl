@@ -10,6 +10,7 @@
     "@expo/ui": "~58.0.27",
     "@json-render/core": "^0.22.0",
     "@json-render/react-native": "^0.22.0",
+    "@react-native-masked-view/masked-view": "0.3.2",
     "ai": "^7.0.166",
     "assistant-stream": "^0.3.45",
     "clsx": "^2.1.1",
