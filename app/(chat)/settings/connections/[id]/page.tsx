@@ -14,6 +14,9 @@ type PageProps = {
   readonly params: Promise<{ id: string }>;
 };
 
+/** Plugin detail needs auth + dynamic id; do not require instant UI. */
+export const instant = false;
+
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
@@ -22,12 +25,7 @@ export async function generateMetadata({
   return { title: plugin?.label ?? "Plugin" };
 }
 
-export default async function PluginDetailPage({ params }: PageProps) {
-  const { id } = await params;
-  if (!isMarketplacePluginId(id)) notFound();
-  const plugin = getPluginById(id);
-  if (!plugin) notFound();
-
+export default function PluginDetailPage({ params }: PageProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="h-full overflow-y-auto px-4 pt-14 pb-8">
@@ -37,7 +35,7 @@ export default async function PluginDetailPage({ params }: PageProps) {
               <p className="text-sm text-muted-foreground">Loading plugin…</p>
             }
           >
-            <AuthenticatedPluginDetail plugin={plugin} />
+            <AuthenticatedPluginDetail params={params} />
           </Suspense>
         </div>
       </div>
@@ -46,10 +44,15 @@ export default async function PluginDetailPage({ params }: PageProps) {
 }
 
 async function AuthenticatedPluginDetail({
-  plugin,
+  params,
 }: {
-  readonly plugin: NonNullable<ReturnType<typeof getPluginById>>;
+  readonly params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
+  if (!isMarketplacePluginId(id)) notFound();
+  const plugin = getPluginById(id);
+  if (!plugin) notFound();
+
   const setup = await getSetupStatus();
   const viewer = await getServerViewer(setup);
   if (!viewer) {
