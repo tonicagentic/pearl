@@ -88,6 +88,16 @@ const BUILTIN_CAPABILITIES: Partial<
       "Create, update, or retire a concept schema (always asks before saving)",
     ],
   },
+  expo: {
+    canDo: [
+      "Start an Expo cloud iOS simulator and show the preview on Computer",
+      "Publish an EAS Update to a pinned app’s channel",
+      "Start an EAS iOS build and submit to TestFlight when asked",
+    ],
+    needsApproval: [
+      "Simulator start, EAS Update, EAS build, and EAS submit (always)",
+    ],
+  },
 };
 
 /** Capabilities for a marketplace plugin / connection id. */

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { chatNeedsUserInput } from "@/lib/chat/events";
+import { getChatPreviews } from "@/lib/db/chat-previews";
 import {
   getChatBrowserSession,
   getChatForUser,
@@ -37,9 +38,10 @@ export async function GET(
     return NextResponse.json({ error: "Chat not found" }, { status: 404 });
   }
 
-  const [files, browser] = await Promise.all([
+  const [files, browser, previews] = await Promise.all([
     listAgentFiles(id),
     getChatBrowserSession(id),
+    getChatPreviews(id),
   ]);
 
   return NextResponse.json({
@@ -47,5 +49,6 @@ export async function GET(
     waitingForInput: chatNeedsUserInput(chat.events),
     files,
     browser: { active: Boolean(browser?.browserSandboxName) },
+    previews,
   });
 }

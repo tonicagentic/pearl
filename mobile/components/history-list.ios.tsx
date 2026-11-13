@@ -64,13 +64,11 @@ export function HistoryListIOS({
     selectionError,
   } = useChats();
   const insets = useSafeAreaInsets();
-  const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const rowBackground =
-    (useCSSVariable("--color-card") as string | undefined) ??
-    backgroundColor ??
-    "#000000";
+  // Page and row surfaces share muted so the home list reads as one plane.
+  const backgroundColor =
+    (useCSSVariable("--color-muted") as string | undefined) ??
+    (useCSSVariable("--color-background") as string | undefined);
+  const rowBackground = backgroundColor ?? "#000000";
   const mutedColor =
     (useCSSVariable("--color-muted-foreground") as string | undefined) ??
     "#8E8E93";
@@ -133,14 +131,12 @@ export function HistoryListIOS({
               onPress={() => onNavigate("/issues")}
               modifiers={[buttonStyle("plain"), ...rowChrome]}
             />
-            {__DEV__ ? (
-              <Button
-                label="Samples"
-                systemImage="list.bullet.rectangle"
-                onPress={() => onNavigate("/thread-samples")}
-                modifiers={[buttonStyle("plain"), ...rowChrome]}
-              />
-            ) : null}
+            <Button
+              label="Repos"
+              systemImage="chevron.left.forwardslash.chevron.right"
+              onPress={() => onNavigate("/workbench")}
+              modifiers={[buttonStyle("plain"), ...rowChrome]}
+            />
           </Section>
 
           <Section title="Recents">

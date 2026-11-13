@@ -32,6 +32,7 @@ import {
   type ComputerState,
 } from "@/src/chats-client";
 import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
+import { openWebUrl } from "@/src/open-web-url";
 import { deriveSubagentRuns } from "@/src/subagent-runs";
 import { useWorkspace } from "@/src/workspace-context";
 
@@ -374,6 +375,35 @@ export function ComputerPanel({
             active={runningCoder}
             detail={runningCoder ? "Subagent running" : "Idle"}
           />
+        </Section>
+
+        <Section title="App previews">
+          {(remote?.previews?.length ?? 0) === 0 ? (
+            <Text className="text-muted-foreground text-sm">
+              No live sandbox or Expo simulator preview yet.
+            </Text>
+          ) : (
+            (remote?.previews ?? []).map((preview) => (
+              <Pressable
+                key={`${preview.kind}:${preview.url}`}
+                accessibilityRole="button"
+                className="border-border/50 mb-2 rounded-xl border px-3 py-3"
+                onPress={() => {
+                  openWebUrl(preview.url);
+                }}
+              >
+                <Text className="text-foreground text-sm font-medium">
+                  {preview.label}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  className="text-muted-foreground mt-1 text-xs"
+                >
+                  {preview.url}
+                </Text>
+              </Pressable>
+            ))
+          )}
         </Section>
 
         <Section title="Browsers">

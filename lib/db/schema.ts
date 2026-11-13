@@ -93,6 +93,19 @@ export const chat = pgTable(
     projectId: text("project_id").references((): AnyPgColumn => project.id, {
       onDelete: "set null",
     }),
+    // Live sandbox / Expo simulator preview URLs for the Computer tab.
+    // Shape: WorkbenchPreview[] from lib/workbench/types.
+    previews: jsonb("previews")
+      .$type<
+        Array<{
+          kind: "dev-server" | "expo-simulator";
+          url: string;
+          label: string;
+          repoFullName: string | null;
+        }>
+      >()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -738,3 +751,37 @@ export const conceptSchemaRevision = pgTable(
 );
 
 export type ConceptSchemaRevision = typeof conceptSchemaRevision.$inferSelect;
+
+/**
+ * GitHub repos the signed-in user pinned for the phone workbench.
+ * Separate from `project` (planning containers).
+ */
+export const workbenchPin = pgTable(
+  "workbench_pin",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    owner: text("owner").notNull(),
+    name: text("name").notNull(),
+    vercelProjectId: text("vercel_project_id"),
+    vercelTeamId: text("vercel_team_id"),
+    expoProjectId: text("expo_project_id"),
+    expoUpdateChannel: text("expo_update_channel"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_workbench_pin_user").on(table.userId),
+    uniqueIndex("idx_workbench_pin_user_owner_name").on(
+      table.userId,
+      table.owner,
+      table.name,
+    ),
+  ],
+);
+
+export type WorkbenchPinRow = typeof workbenchPin.$inferSelect;

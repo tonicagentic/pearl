@@ -103,6 +103,18 @@ function AuthenticatedLayout() {
                   }}
                 />
                 <Stack.Screen
+                  name="workbench/index"
+                  options={{ title: "Repos", headerShown: true }}
+                />
+                <Stack.Screen
+                  name="workbench/[id]"
+                  options={{
+                    title: "Repo",
+                    headerShown: true,
+                    headerBackButtonDisplayMode: "minimal",
+                  }}
+                />
+                <Stack.Screen
                   name="settings"
                   options={{ title: "Settings", headerShown: true }}
                 />

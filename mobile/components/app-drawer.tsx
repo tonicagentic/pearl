@@ -4,7 +4,6 @@ import { FlatList } from "react-native-gesture-handler";
 import {
   FolderIcon,
   InboxIcon,
-  ListChecksIcon,
   PlusIcon,
 } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -104,9 +103,9 @@ function HistoryListAndroid({
     selectionError,
     newChat,
   } = useChats();
-  const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
+  const backgroundColor =
+    (useCSSVariable("--color-muted") as string | undefined) ??
+    (useCSSVariable("--color-background") as string | undefined);
   const mutedDot =
     (useCSSVariable("--color-border") as string | undefined) ?? "#3A3A3C";
 
@@ -156,16 +155,6 @@ function HistoryListAndroid({
                 <Icon as={InboxIcon} className="size-5 text-foreground" />
                 <Text className="text-base text-foreground">Tasks</Text>
               </Pressable>
-              {__DEV__ ? (
-                <Pressable
-                  accessibilityRole="button"
-                  className="min-h-12 flex-row items-center gap-3 rounded-lg px-3"
-                  onPress={() => onNavigate("/thread-samples")}
-                >
-                  <Icon as={ListChecksIcon} className="size-5 text-foreground" />
-                  <Text className="text-base text-foreground">Samples</Text>
-                </Pressable>
-              ) : null}
               <Pressable
                 accessibilityRole="button"
                 className="min-h-12 flex-row items-center gap-3 rounded-lg px-3"

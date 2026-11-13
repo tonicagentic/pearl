@@ -9,6 +9,7 @@ import { always, never, once } from "eve/tools/approval";
 // fails the unit tier before it can ship.
 
 const AGENT_TOOLS_DIR = "agent/tools";
+const CODER_TOOLS_DIR = "agent/subagents/coder/tools";
 
 /** Minimal ApprovalContext stub: the policies under test only read toolName,
  * toolInput, approvedTools, and session identity; getSandbox/getSkill exist to
@@ -39,6 +40,18 @@ const DESTRUCTIVE_PATTERNS: readonly RegExp[] = [
   /^cancel_/,
   /^archive_/,
 ];
+
+/** Coder tools that must always park for approval (filename without .ts). */
+const CODER_ALWAYS_GATED = new Set([
+  "deploy_vercel",
+  "merge_pr",
+  "eas_build",
+  "eas_submit",
+  "eas_update",
+  "expo_simulator",
+  "run_with_env",
+  "gated_git",
+]);
 
 async function toolFiles(): Promise<string[]> {
   return (await readdir(AGENT_TOOLS_DIR)).filter((name) =>
@@ -85,6 +98,27 @@ test("every destructive-patterned tool file declares an approval gate", async ()
     const hasGate = /approval:\s*(always\(\)|once\(\)|\{)/.test(source);
     if (!hasGate) {
       findings.push(`${name}: destructive-patterned but has no approval gate`);
+    }
+  }
+
+  assert.deepEqual(findings, []);
+});
+
+test("coder shipping tools declare an approval gate", async () => {
+  const files = (await readdir(CODER_TOOLS_DIR)).filter((name) =>
+    name.endsWith(".ts"),
+  );
+  const findings: string[] = [];
+
+  for (const file of files) {
+    const name = file.replace(/\.ts$/, "");
+    if (!CODER_ALWAYS_GATED.has(name)) continue;
+    const source = await readFile(`${CODER_TOOLS_DIR}/${file}`, "utf8");
+    const hasGate =
+      /approval:\s*(always\(\)|once\(\)|async\s*\(|\{)/.test(source) ||
+      /return\s+"user-approval"/.test(source);
+    if (!hasGate) {
+      findings.push(`${name}: coder shipping tool without an approval gate`);
     }
   }
 

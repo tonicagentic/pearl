@@ -162,6 +162,13 @@
       "when": 1794267235106,
       "tag": "0022_billing_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794561062347,
+      "tag": "0025_sturdy_manta",
+      "breakpoints": true
     }
   ]
 }

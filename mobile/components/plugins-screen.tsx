@@ -5,10 +5,9 @@ import { router } from "expo-router";
 import { PluginLogo } from "@/components/plugin-logo";
 import { SheetScaffold } from "@/components/sheet-scaffold";
 import {
-  ACCOUNT_PLUGINS,
-  BUILTIN_PLUGINS,
-  COMING_SOON_PLUGINS,
-  TONIC_PLUGINS,
+  PLUGIN_SECTIONS,
+  isConnectablePlugin,
+  pluginsForSection,
   type PluginCatalogEntry,
   type PluginMarkId,
   type ResolvedPlugin,
@@ -80,59 +79,40 @@ export function PluginsScreen() {
         </Text>
       ) : null}
 
-      <PluginSection title="Accounts">
-        {ACCOUNT_PLUGINS.map((plugin, index) => (
-          <CatalogRow
-            key={plugin.id}
-            plugin={plugin}
-            trailing={trailingForStatus(statusById.get(plugin.connectionId))}
-            trailingAccent={
-              statusById.get(plugin.connectionId)?.status === "not-connected" ||
-              statusById.get(plugin.connectionId)?.status === "available"
-            }
-            showSeparator={index < ACCOUNT_PLUGINS.length - 1}
-          />
-        ))}
-      </PluginSection>
-
-      <PluginSection title="Tonic Agentic">
-        {TONIC_PLUGINS.map((plugin, index) => (
-          <CatalogRow
-            key={plugin.id}
-            plugin={plugin}
-            trailing={trailingForStatus(statusById.get(plugin.connectionId))}
-            trailingAccent={
-              statusById.get(plugin.connectionId)?.status === "not-connected" ||
-              statusById.get(plugin.connectionId)?.status === "available"
-            }
-            showSeparator={index < TONIC_PLUGINS.length - 1}
-          />
-        ))}
-      </PluginSection>
-
-      <PluginSection title="Built-in">
-        {BUILTIN_PLUGINS.map((plugin, index) => (
-          <CatalogRow
-            key={plugin.id}
-            plugin={plugin}
-            trailing="Enabled"
-            showSeparator={index < BUILTIN_PLUGINS.length - 1}
-          />
-        ))}
-      </PluginSection>
-
-      <PluginSection title="Coming soon">
-        {COMING_SOON_PLUGINS.map((plugin, index) => (
-          <CatalogRow
-            key={plugin.id}
-            plugin={plugin}
-            trailing="Coming soon"
-            showSeparator={index < COMING_SOON_PLUGINS.length - 1}
-          />
-        ))}
-      </PluginSection>
+      {PLUGIN_SECTIONS.map((section) => {
+        const plugins = pluginsForSection(section);
+        if (plugins.length === 0) return null;
+        return (
+          <PluginSection key={section.id} title={section.title}>
+            {plugins.map((plugin, index) => (
+              <CatalogRow
+                key={plugin.id}
+                plugin={plugin}
+                trailing={trailingForPlugin(plugin, statusById)}
+                trailingAccent={
+                  isConnectablePlugin(plugin) &&
+                  (statusById.get(plugin.connectionId)?.status ===
+                    "not-connected" ||
+                    statusById.get(plugin.connectionId)?.status ===
+                      "available")
+                }
+                showSeparator={index < plugins.length - 1}
+              />
+            ))}
+          </PluginSection>
+        );
+      })}
     </SheetScaffold>
   );
+}
+
+function trailingForPlugin(
+  plugin: ResolvedPlugin,
+  statusById: Map<string, ConnectionStatus>,
+): string {
+  if (plugin.kind === "coming_soon") return "Coming soon";
+  if (plugin.kind === "builtin") return "Enabled";
+  return trailingForStatus(statusById.get(plugin.connectionId));
 }
 
 function trailingForStatus(status: ConnectionStatus | undefined): string {

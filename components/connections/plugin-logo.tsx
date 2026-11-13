@@ -163,6 +163,75 @@ const BRAND_LOGOS: Partial<Record<PluginMarkId, BrandSpec>> = {
       />
     ),
   },
+  "icloud-calendar": {
+    background: "#E8F0FE",
+    mark: (
+      <>
+        <path
+          d="M8.2 9.2a4.2 4.2 0 0 1 7.7-1.5A3.6 3.6 0 0 1 18.5 14H8.8a3.3 3.3 0 0 1-.6-6.5Z"
+          fill="#007AFF"
+        />
+        <rect
+          x="7"
+          y="14.5"
+          width="10"
+          height="6"
+          rx="1.5"
+          fill="#007AFF"
+          opacity="0.85"
+        />
+      </>
+    ),
+  },
+  "icloud-drive": {
+    background: "#E8F0FE",
+    mark: (
+      <path
+        d="M8.2 10.2a4.2 4.2 0 0 1 7.7-1.5A3.6 3.6 0 0 1 18.5 15H8.8a3.3 3.3 0 0 1-.6-6.5Z"
+        fill="#007AFF"
+      />
+    ),
+  },
+  "pearl-cloud": {
+    background: "#F5F3FF",
+    mark: (
+      <path
+        d="M7.5 15.5a3.2 3.2 0 0 1 .4-6.3 4.4 4.4 0 0 1 8.3 1.2A3 3 0 0 1 17 15.5H7.5Z"
+        fill="#6D28D9"
+      />
+    ),
+  },
+  postgres: {
+    background: "#E8F0FE",
+    mark: (
+      <path
+        d="M12 3.5c-3.6 0-5.8 1.4-5.8 3.2v10.6c0 1.8 2.2 3.2 5.8 3.2s5.8-1.4 5.8-3.2V6.7c0-1.8-2.2-3.2-5.8-3.2Zm0 1.4c2.7 0 4.3.9 4.3 1.8S14.7 8.5 12 8.5 7.7 7.6 7.7 6.7 9.3 4.9 12 4.9Zm0 14.2c-2.7 0-4.3-.9-4.3-1.8v-1.2c1.1.7 2.7 1.1 4.3 1.1s3.2-.4 4.3-1.1v1.2c0 .9-1.6 1.8-4.3 1.8Z"
+        fill="#336791"
+      />
+    ),
+  },
+  neon: {
+    background: "#ECFDF5",
+    mark: <path d="M7 19.5 17 4.5v9.2L7 19.5Z" fill="#00E599" />,
+  },
+  betterstack: {
+    background: "#EEF2FF",
+    mark: (
+      <>
+        <path d="M5.5 16.5 12 5.5l6.5 11H5.5Z" fill="#4F46E5" />
+        <circle cx="12" cy="14.5" r="1.6" fill="#fff" />
+      </>
+    ),
+  },
+  brex: {
+    background: "#F4F4F5",
+    mark: (
+      <path
+        d="M6.5 6.5h6.2c2.4 0 4 1.4 4 3.4 0 1.4-.8 2.5-2.1 3l2.6 4.6h-3.1l-2.3-4.2H9.4v4.2H6.5V6.5Zm2.9 2.3v3.1h3c1.1 0 1.7-.5 1.7-1.5s-.6-1.6-1.7-1.6h-3Z"
+        fill="#18181B"
+      />
+    ),
+  },
 };
 
 const BUILTIN_TILES: Partial<Record<PluginMarkId, BuiltinSpec>> = {

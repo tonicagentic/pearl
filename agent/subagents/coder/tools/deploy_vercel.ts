@@ -6,6 +6,7 @@ import { z } from "zod";
 import { brokerVercelHeaders } from "@/lib/coder/network-policy";
 import { requireCoderUserId } from "@/lib/coder/principal";
 import { getVercelUserToken } from "@/lib/connections/tokens";
+import { buildApprovalCard } from "@/lib/workbench/approvals";
 import { environment } from "../sandbox.ts";
 
 export default defineTool({
@@ -13,12 +14,17 @@ export default defineTool({
   description:
     "Deploy the current sandbox checkout to the signed-in user's Vercel " +
     "account. Preview is the default; production only when target is " +
-    "production. Always needs approval — the card must name the target.",
+    "production. Always needs approval — the card must name owner/repo and " +
+    "the target. Production deploy and eas_update are always separate " +
+    "approvals. When owner/repo is Pearl (alex/my-agent), production warns " +
+    "that the phone API will change.",
   inputSchema: z.object({
     target: z
       .enum(["preview", "production"])
       .default("preview")
       .describe("preview (default) or production."),
+    owner: z.string().nullish().describe("GitHub owner for the approval card."),
+    repo: z.string().nullish().describe("GitHub repo for the approval card."),
     workingDirectory: z
       .string()
       .nullish()
@@ -64,10 +70,21 @@ export default defineTool({
     }
 
     const url = extractHttpsUrl(result.stdout) ?? extractHttpsUrl(result.stderr);
+    const owner = input.owner?.trim() || "repo";
+    const repo = input.repo?.trim() || "checkout";
+    const card = buildApprovalCard({
+      action:
+        input.target === "production" ? "production_deploy" : "preview_deploy",
+      owner,
+      repo,
+      target: input.target,
+    });
     return {
       status: "ok",
       target: input.target,
       url,
+      cardSummary: card.summary,
+      warnsPhoneApi: card.warnsPhoneApi,
       summary: truncate(result.stdout || "Deploy finished."),
     };
   },

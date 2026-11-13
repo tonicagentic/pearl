@@ -42,12 +42,20 @@ export type AgentFileMeta = {
   readonly updatedAt: string;
 };
 
+export type ComputerPreview = {
+  readonly kind: "dev-server" | "expo-simulator";
+  readonly url: string;
+  readonly label: string;
+  readonly repoFullName: string | null;
+};
+
 /** Aggregate Computer-tab snapshot (no browser mint / secrets). */
 export type ComputerState = {
   readonly session: ClientSessionState | null;
   readonly waitingForInput: boolean;
   readonly files: readonly AgentFileMeta[];
   readonly browser: { readonly active: boolean };
+  readonly previews?: readonly ComputerPreview[];
 };
 
 function authHeaders(): Record<string, string> {

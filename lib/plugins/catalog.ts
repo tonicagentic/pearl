@@ -18,6 +18,7 @@ export type BuiltinPluginId =
   | "browser"
   | "search"
   | "coder"
+  | "expo"
   | "projects"
   | "researcher"
   | "analyst"
@@ -26,7 +27,16 @@ export type BuiltinPluginId =
   | "plan"
   | "tax";
 
-export type ComingSoonPluginId = "expo" | "shopify" | "stripe";
+export type ComingSoonPluginId =
+  | "icloud-calendar"
+  | "icloud-drive"
+  | "pearl-cloud"
+  | "postgres"
+  | "neon"
+  | "betterstack"
+  | "shopify"
+  | "stripe"
+  | "brex";
 
 export type MarketplacePluginId =
   | AccountPluginId
@@ -64,6 +74,20 @@ export type ResolvedPlugin =
   | ConnectablePluginEntry
   | BuiltinPluginEntry
   | ComingSoonPluginEntry;
+
+export type PluginSectionId =
+  | "email"
+  | "calendar"
+  | "storage"
+  | "build"
+  | "small-business"
+  | "also-available";
+
+export type PluginSection = {
+  readonly id: PluginSectionId;
+  readonly title: string;
+  readonly pluginIds: readonly MarketplacePluginId[];
+};
 
 /** Accounts shown in Plugins + Settings (Sheets/Xero stay wired, hidden here). */
 export const ACCOUNT_PLUGINS: readonly ConnectablePluginEntry[] = [
@@ -152,6 +176,14 @@ export const BUILTIN_PLUGINS: readonly BuiltinPluginEntry[] = [
       "A specialized coding agent that can work in a sandbox, open PRs, deploy to Vercel, and kick off Expo/EAS builds. Pearl delegates here when you ask to build or ship software.",
   },
   {
+    id: "expo",
+    kind: "builtin",
+    label: "Expo",
+    detail: "Simulators, EAS Update, and iOS builds",
+    description:
+      "Pearl’s Coder can start Expo cloud iOS simulators, publish EAS Updates to a pin’s channel, and start EAS iOS builds with the server Expo token. Pin an Expo project id on a workbench repo to aim at that app.",
+  },
+  {
     id: "projects",
     kind: "builtin",
     label: "Projects",
@@ -211,12 +243,52 @@ export const BUILTIN_PLUGINS: readonly BuiltinPluginEntry[] = [
 
 export const COMING_SOON_PLUGINS: readonly ComingSoonPluginEntry[] = [
   {
-    id: "expo",
+    id: "icloud-calendar",
     kind: "coming_soon",
-    label: "Expo",
-    detail: "Mobile builds, EAS, and project tooling",
+    label: "iCloud Calendar",
+    detail: "Apple Calendar events and availability",
     description:
-      "A dedicated Expo connection for EAS builds and project tooling is coming soon. Today, mobile build work still goes through the Coder agent and your GitHub/Vercel accounts when those are connected.",
+      "iCloud Calendar will connect here so Pearl can read events and availability from Apple Calendar. Connect is not available yet.",
+  },
+  {
+    id: "icloud-drive",
+    kind: "coming_soon",
+    label: "iCloud Drive",
+    detail: "Files and folders in iCloud",
+    description:
+      "iCloud Drive will connect here for files and folders you keep in Apple’s cloud. Connect is not available yet.",
+  },
+  {
+    id: "pearl-cloud",
+    kind: "coming_soon",
+    label: "Pearl Cloud",
+    detail: "Pearl-hosted files and shared workspace storage",
+    description:
+      "Pearl Cloud will hold files and workspace artifacts Pearl creates with you. Connect and storage controls will appear here when the service ships.",
+  },
+  {
+    id: "postgres",
+    kind: "coming_soon",
+    label: "Postgres",
+    detail: "Query and inspect Postgres databases",
+    description:
+      "A dedicated Postgres connection for schema and query work is coming soon. Pearl can still reason about SQL you paste or attach today.",
+  },
+  {
+    id: "neon",
+    kind: "coming_soon",
+    label: "Neon",
+    detail: "Serverless Postgres branches and projects",
+    description:
+      "Neon project and branch tooling will connect here later for database work alongside the Coder agent.",
+  },
+  {
+    id: "betterstack",
+    kind: "coming_soon",
+    label: "BetterStack",
+    detail: "Uptime, logs, and incident context",
+    description:
+      "BetterStack uptime and log context will connect here later so Pearl can help investigate incidents with your production signals.",
   },
   {
     id: "shopify",
@@ -233,6 +305,65 @@ export const COMING_SOON_PLUGINS: readonly ComingSoonPluginEntry[] = [
     detail: "Payments, customers, and billing data",
     description:
       "Stripe payments and customer data will connect here later for account-scoped billing context. Pearl’s own app billing remains separate under Settings → Billing.",
+  },
+  {
+    id: "brex",
+    kind: "coming_soon",
+    label: "Brex",
+    detail: "Cards, spend, and company finances",
+    description:
+      "Brex cards and spend data will connect here later for small-business finance context. Connect is not available yet.",
+  },
+] as const;
+
+/**
+ * Marketplace layout. Order inside each section matches the product list.
+ * Built-ins that are not named in Email–Small Business stay under Also available.
+ */
+export const PLUGIN_SECTIONS: readonly PluginSection[] = [
+  { id: "email", title: "Email", pluginIds: ["gmail"] },
+  {
+    id: "calendar",
+    title: "Calendar",
+    pluginIds: ["calendar", "icloud-calendar"],
+  },
+  {
+    id: "storage",
+    title: "Storage",
+    pluginIds: ["drive", "icloud-drive", "pearl-cloud"],
+  },
+  {
+    id: "build",
+    title: "Build",
+    pluginIds: [
+      "github",
+      "vercel",
+      "postgres",
+      "neon",
+      "expo",
+      "betterstack",
+      "coder",
+      "designer",
+    ],
+  },
+  {
+    id: "small-business",
+    title: "Small Business",
+    pluginIds: ["tempo", "stripe", "shopify", "brex"],
+  },
+  {
+    id: "also-available",
+    title: "Also available",
+    pluginIds: [
+      "browser",
+      "search",
+      "projects",
+      "researcher",
+      "analyst",
+      "schema-designer",
+      "plan",
+      "tax",
+    ],
   },
 ] as const;
 
@@ -260,6 +391,14 @@ export function isMarketplacePluginId(
 
 export function getPluginById(id: string): ResolvedPlugin | null {
   return ALL_MARKETPLACE.find((plugin) => plugin.id === id) ?? null;
+}
+
+export function pluginsForSection(
+  section: PluginSection,
+): readonly ResolvedPlugin[] {
+  return section.pluginIds
+    .map((id) => getPluginById(id))
+    .filter((plugin): plugin is ResolvedPlugin => plugin != null);
 }
 
 export function isConnectablePlugin(

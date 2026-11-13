@@ -30,6 +30,8 @@ export default defineSandbox(async ({ session }) => {
     networkPolicy: CODER_BASELINE_NETWORK_POLICY,
     resources: { vcpus: 4 },
     timeout: 45 * 60 * 1000,
+    // Publish common web-dev ports so publish_dev_server can call domain(port).
+    ports: [3000, 3001, 4000, 5173, 8080],
   });
   const principalId = session.auth.current?.principalId;
   if (principalId) {

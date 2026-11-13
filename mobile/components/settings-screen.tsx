@@ -21,7 +21,6 @@ import {
 } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
-import { PluginLogo } from "@/components/plugin-logo";
 import { SheetScaffold } from "@/components/sheet-scaffold";
 import { Icon } from "@/components/ui/icon";
 import { agentHostname } from "@/src/agent-url";
@@ -31,10 +30,7 @@ import {
   startBillingCheckout,
   type MobileBillingStatus,
 } from "@/src/billing-client";
-import {
-  getConnections,
-  type ConnectionStatus,
-} from "@/src/connections-client";
+import { getConnections } from "@/src/connections-client";
 import {
   AGENT_URL,
   getAgentUrl,
@@ -46,14 +42,7 @@ import {
   getModelSelection,
   subscribeModelSelection,
 } from "@/src/model-selection";
-import {
-  ACCOUNT_PLUGINS,
-  MARKETPLACE_CONNECTION_IDS,
-  TONIC_PLUGINS,
-} from "../../lib/plugins/catalog";
 import * as Linking from "expo-linking";
-
-const MARKETPLACE_PLUGINS = [...ACCOUNT_PLUGINS, ...TONIC_PLUGINS];
 
 export function SettingsScreen() {
   const { viewerEmail, signOut } = useAuth();
@@ -71,15 +60,16 @@ export function SettingsScreen() {
     COMPOSER_MODELS.find((model) => model.key === selectedKey)?.label ??
     selectedKey;
   const agentHostLabel = agentHostname(agentUrl);
-  const [connections, setConnections] = useState<ConnectionStatus[] | null>(
-    null,
-  );
+  const [connectedCount, setConnectedCount] = useState<number | null>(null);
 
   const loadConnections = useCallback(async () => {
     try {
-      setConnections(await getConnections());
+      const connections = await getConnections();
+      setConnectedCount(
+        connections.filter((item) => item.status === "connected").length,
+      );
     } catch {
-      setConnections(null);
+      setConnectedCount(null);
     }
   }, []);
 
@@ -87,30 +77,12 @@ export function SettingsScreen() {
     void loadConnections();
   }, [loadConnections]);
 
-  const connectedCount =
-    connections?.filter((item) => item.status === "connected").length ?? 0;
   const pluginsDetail =
-    connections == null
+    connectedCount == null
       ? "Accounts, tools, agents"
       : connectedCount === 0
         ? "None connected"
         : `${connectedCount} connected`;
-
-  const accountRows = MARKETPLACE_CONNECTION_IDS.map((id) => {
-    const status = connections?.find((item) => item.id === id);
-    const plugin = MARKETPLACE_PLUGINS.find(
-      (entry) => entry.connectionId === id,
-    );
-    if (!status || !plugin) return null;
-    return { status, plugin };
-  }).filter(
-    (
-      item,
-    ): item is {
-      status: ConnectionStatus;
-      plugin: (typeof MARKETPLACE_PLUGINS)[number];
-    } => Boolean(item),
-  );
 
   const confirmSignOut = () => {
     const complete = () => {
@@ -167,25 +139,6 @@ export function SettingsScreen() {
         />
       </SettingsCard>
 
-      {accountRows.length > 0 ? (
-        <SettingsCard>
-          {accountRows.map(({ status, plugin }, index) => (
-            <SettingsRow
-              key={plugin.id}
-              icon={<PluginLogo id={plugin.id} size={28} />}
-              label={plugin.label}
-              detail={accountTrailing(status)}
-              detailAccent={
-                status.status === "not-connected" ||
-                status.status === "available"
-              }
-              onPress={() => router.push(`/plugins/${plugin.id}`)}
-              showSeparator={index < accountRows.length - 1}
-            />
-          ))}
-        </SettingsCard>
-      ) : null}
-
       <SettingsCard>
         <BillingRow />
         <SettingsRow
@@ -211,15 +164,6 @@ export function SettingsScreen() {
       </SettingsCard>
     </SheetScaffold>
   );
-}
-
-function accountTrailing(status: ConnectionStatus): string {
-  if (status.status === "connected") {
-    return status.accountLabel?.trim() || "Connected";
-  }
-  if (status.status === "unavailable") return "Unavailable";
-  if (status.status === "unknown") return "Check";
-  return "Connect";
 }
 
 function formatCents(cents: number | null | undefined): string {

@@ -5,10 +5,9 @@ import Link from "next/link";
 import { PluginLogo } from "@/components/connections/plugin-logo";
 import type { ConnectionStatus } from "@/lib/connections/catalog";
 import {
-  ACCOUNT_PLUGINS,
-  BUILTIN_PLUGINS,
-  COMING_SOON_PLUGINS,
-  TONIC_PLUGINS,
+  PLUGIN_SECTIONS,
+  isConnectablePlugin,
+  pluginsForSection,
   type PluginCatalogEntry,
   type PluginMarkId,
   type ResolvedPlugin,
@@ -81,51 +80,35 @@ export function ConnectionsSettings() {
         <p className="text-sm text-muted-foreground">Checking availability…</p>
       ) : null}
 
-      <PluginSection title="Accounts">
-        <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
-          {ACCOUNT_PLUGINS.map((plugin) => (
-            <CatalogLink
-              key={plugin.id}
-              plugin={plugin}
-              trailing={trailingForStatus(statusById.get(plugin.connectionId))}
-            />
-          ))}
-        </ul>
-      </PluginSection>
-
-      <PluginSection title="Tonic Agentic">
-        <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
-          {TONIC_PLUGINS.map((plugin) => (
-            <CatalogLink
-              key={plugin.id}
-              plugin={plugin}
-              trailing={trailingForStatus(statusById.get(plugin.connectionId))}
-            />
-          ))}
-        </ul>
-      </PluginSection>
-
-      <PluginSection title="Built-in">
-        <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
-          {BUILTIN_PLUGINS.map((plugin) => (
-            <CatalogLink key={plugin.id} plugin={plugin} trailing="Enabled" />
-          ))}
-        </ul>
-      </PluginSection>
-
-      <PluginSection title="Coming soon">
-        <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
-          {COMING_SOON_PLUGINS.map((plugin) => (
-            <CatalogLink
-              key={plugin.id}
-              plugin={plugin}
-              trailing="Coming soon"
-            />
-          ))}
-        </ul>
-      </PluginSection>
+      {PLUGIN_SECTIONS.map((section) => {
+        const plugins = pluginsForSection(section);
+        if (plugins.length === 0) return null;
+        return (
+          <PluginSection key={section.id} title={section.title}>
+            <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
+              {plugins.map((plugin) => (
+                <CatalogLink
+                  key={plugin.id}
+                  plugin={plugin}
+                  trailing={trailingForPlugin(plugin, statusById)}
+                />
+              ))}
+            </ul>
+          </PluginSection>
+        );
+      })}
     </section>
   );
+}
+
+function trailingForPlugin(
+  plugin: ResolvedPlugin,
+  statusById: Map<string, ConnectionStatus>,
+): string {
+  if (plugin.kind === "coming_soon") return "Coming soon";
+  if (plugin.kind === "builtin") return "Enabled";
+  if (!isConnectablePlugin(plugin)) return "…";
+  return trailingForStatus(statusById.get(plugin.connectionId));
 }
 
 function trailingForStatus(status: ConnectionStatus | undefined): string {

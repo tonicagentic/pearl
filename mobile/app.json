@@ -80,9 +80,16 @@
       "./plugins/with-live-audio-session.js",
       "expo-asset",
       "expo-font",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-updates"
     ],
     "scheme": "pearl",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/43ee6005-c5ac-4b8f-b463-5d910681956d"
+    },
     "extra": {
       "router": {},
       "eas": {

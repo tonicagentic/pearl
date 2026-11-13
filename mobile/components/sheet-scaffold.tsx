@@ -5,8 +5,8 @@ import { useCSSVariable } from "uniwind";
 
 /**
  * Scroll body for stack screens that use the native header for the title.
- * Top safe-area keeps content clear of the status bar / notch when the
- * header does not already consume it; extra paddingTop avoids a flush first row.
+ * The header already clears the status bar; keep a top pad so the first row
+ * is not flush, and let iOS adjust content insets automatically.
  */
 export function SheetScaffold({
   children,
@@ -24,11 +24,13 @@ export function SheetScaffold({
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor }}
-      edges={["top", "left", "right", "bottom"]}
+      edges={["left", "right", "bottom"]}
     >
       <ScrollView
         className="flex-1"
-        contentContainerClassName="gap-5 px-4 pb-10 pt-4"
+        contentContainerClassName="gap-5 px-4 pb-10"
+        contentContainerStyle={{ paddingTop: 12 }}
+        contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
       >
         {children}
