@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AppState, Platform, Pressable, View } from "react-native";
-import { Stack, router, useFocusEffect, useIsFocused } from "expo-router";
+import { Stack, router, useFocusEffect } from "expo-router";
 import { PlusIcon, SettingsIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
@@ -34,7 +34,6 @@ const HOME_PRESENCE_POLL_MS = 5_000;
  * Mail-style home: stack Settings gear, category pills below, list + dock.
  */
 export function MailHomeScreen() {
-  const focused = useIsFocused();
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -252,7 +251,8 @@ export function MailHomeScreen() {
                 ),
         }}
       />
-      {focused && !searchOpen && Platform.OS === "ios" ? (
+      {/* Keep mounted while blurred so the gear morphs into chat/settings. */}
+      {!searchOpen && Platform.OS === "ios" ? (
         <>
           <Stack.Toolbar placement="left">
             <Stack.Toolbar.Button

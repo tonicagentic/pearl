@@ -1,7 +1,9 @@
+import { Platform } from "react-native";
 import { Stack } from "expo-router";
 
 /**
- * Signed-in home stack: Mail-style index plus task/project detail pushes.
+ * Signed-in home stack: Mail home plus chat/settings/detail so the
+ * Settings gear shares one UINavigationBar and morphs natively.
  */
 export default function HomeLayout() {
   return (
@@ -12,6 +14,23 @@ export default function HomeLayout() {
           title: "",
           headerShown: true,
           headerShadowVisible: false,
+        }}
+      />
+      <Stack.Screen
+        name="chat"
+        options={{
+          title: "Chat",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+          headerTransparent: Platform.OS === "ios",
+        }}
+      />
+      <Stack.Screen
+        name="settings"
+        options={{
+          title: "Settings",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
         }}
       />
       <Stack.Screen

@@ -34,7 +34,7 @@ export const unstable_settings = {
   initialRouteName: "(home)",
 };
 
-/** Root stack: auth gates, then Mail-style home; chat and settings push on top. */
+/** Root stack: auth gates, then Mail-style home (chat/settings live inside). */
 export default function RootLayout() {
   return (
     <AuthProvider>
@@ -97,17 +97,6 @@ function AuthenticatedLayout() {
                       options={{ headerShown: false }}
                     />
                     <Stack.Screen
-                      name="chat"
-                      options={{
-                        title: "Chat",
-                        headerShown: true,
-                        // Set here (not only in ChatScreen) so the push animation
-                        // never paints the default back control before minimal applies.
-                        headerBackButtonDisplayMode: "minimal",
-                        headerTransparent: Platform.OS === "ios",
-                      }}
-                    />
-                    <Stack.Screen
                       name="history"
                       options={{
                         title: "History",
@@ -141,10 +130,6 @@ function AuthenticatedLayout() {
                         headerShown: true,
                         headerBackButtonDisplayMode: "minimal",
                       }}
-                    />
-                    <Stack.Screen
-                      name="settings"
-                      options={{ title: "Settings", headerShown: true }}
                     />
                     <Stack.Screen
                       name="skills"
