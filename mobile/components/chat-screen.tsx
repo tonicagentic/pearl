@@ -41,12 +41,23 @@ import {
   getPendingApprovals,
   hasPendingAction,
   isTextOnlyPendingQuestion,
+  pendingWaitKind,
   type PendingApproval,
 } from "@/src/message-projection";
 import type { WaitingAction } from "@/components/assistant-ui/elements/waiting-action-card";
+import { SubagentTranscriptSheet } from "@/components/assistant-ui/elements/subagent-transcript-sheet";
 import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
 import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft, type LocalSend } from "@/src/send-feedback";
 import { useChats } from "@/src/chat-context";
+import {
+  ConversationProvider,
+  agentForCall,
+  useChatConversation,
+} from "@/src/conversation-context";
+import {
+  SubagentInspectProvider,
+  useSubagentInspect,
+} from "@/src/subagent-inspect-context";
 import { toThreadMessages } from "@/src/eve-transport";
 import { isEveSessionInactive } from "../../lib/chat/eve-session-recovery";
 
@@ -181,7 +192,18 @@ export function ChatScreen({
     (cb) => store.subscribe(cb),
     () => store.snapshot.events,
   );
-  const conversation = useMemo(() => ({ messages }), [messages]);
+  const agents = useSyncExternalStore(
+    (cb) => store.subscribe(cb),
+    () => store.snapshot.agents,
+  );
+  const conversation = useMemo(
+    () => ({ messages, agents }),
+    [messages, agents],
+  );
+  const waitKind = useMemo(
+    () => pendingWaitKind(conversation),
+    [conversation],
+  );
   const isBusy = status === "busy";
   const hasError = Boolean(storeError);
   const confirmed = localSend ? hasConfirmedSend(events, localSend) : false;
@@ -189,6 +211,26 @@ export function ChatScreen({
   const pendingApprovals = useMemo(
     () => getPendingApprovals(conversation),
     [conversation],
+  );
+
+  const answerInteraction = useCallback(
+    async (response: {
+      readonly interactionId: string;
+      readonly optionId?: string;
+      readonly text?: string;
+    }) => {
+      await store.send({
+        answers: [
+          {
+            interactionId: response.interactionId,
+            ...(response.optionId ? { optionId: response.optionId } : {}),
+            ...(response.text !== undefined ? { text: response.text } : {}),
+          },
+        ],
+        clientContext: buildTurnClientContext(activeProjectId),
+      });
+    },
+    [store, activeProjectId],
   );
 
   // Text-only asks answer through the normal composer; only choice (and mixed
@@ -295,10 +337,12 @@ export function ChatScreen({
     expectingAssistant
       || (localSend && localSend.phase === "preparing" && !confirmed),
   );
+  // Parent transcript only — do not depend on `agents` / `conversation` or
+  // every followed-child delta rebuilds the assistant-ui adapter.
   const projectedMessages = useMemo(
     () => withPendingAssistant(
       projectSendMessages(
-        toThreadMessages(conversation, { isRunning: isBusy, hasError }),
+        toThreadMessages({ messages }, { isRunning: isBusy, hasError }),
         messages,
         confirmed ? null : hasError && localSend
           ? { ...localSend, phase: "uncertain" }
@@ -308,7 +352,7 @@ export function ChatScreen({
       isBusy,
       awaitingReply,
     ),
-    [conversation, messages, localSend, confirmed, isBusy, hasError, awaitingReply],
+    [messages, localSend, confirmed, isBusy, hasError, awaitingReply],
   );
 
   useEffect(() => {
@@ -704,59 +748,107 @@ export function ChatScreen({
         />
       </Stack.Toolbar>
       <View style={{ flex: 1 }}>
-        <AssistantRuntimeProvider runtime={runtime}>
-          <EveAuthorization />
-          {mainTab === "computer" ? (
-            <ComputerPanel
-              topInset={computerTopInset}
-              visible={mainTab === "computer"}
+        <ConversationProvider conversation={conversation} waitKind={waitKind}>
+          <SubagentInspectProvider>
+            <AssistantRuntimeProvider runtime={runtime}>
+              <EveAuthorization />
+              {mainTab === "computer" ? (
+                <ComputerPanel
+                  topInset={computerTopInset}
+                  visible={mainTab === "computer"}
+                />
+              ) : (
+                <Thread
+                  autoFocus={
+                    Platform.OS === "ios" &&
+                    activeChatId === null &&
+                    chromeRevealed
+                  }
+                  chromeRevealed={chromeRevealed}
+                  conversationId={activeChatId}
+                  focusNewChatKey={newChatEntry}
+                  notice={notice}
+                  waitingAction={waitingAction}
+                />
+              )}
+            </AssistantRuntimeProvider>
+            <SubagentInspectHost onAnswer={answerInteraction} />
+            <ThreadActionsDrawer
+              open={actionsOpen}
+              title={activeTitle}
+              canDelete={Boolean(activeChatId)}
+              onClose={() => setActionsOpen(false)}
+              onOpenCost={() => {
+                setActionsOpen(false);
+                openCost();
+              }}
+              onDelete={() => {
+                setActionsOpen(false);
+                confirmDelete();
+              }}
             />
-          ) : (
-            <Thread
-              autoFocus={
-                Platform.OS === "ios" &&
-                activeChatId === null &&
-                chromeRevealed
-              }
-              chromeRevealed={chromeRevealed}
-              conversationId={activeChatId}
-              focusNewChatKey={newChatEntry}
-              notice={notice}
-              waitingAction={waitingAction}
+            <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
+            <ProjectPickerModal
+              open={projectPickerOpen}
+              onClose={() => {
+                setProjectPickerOpen(false);
+                const waiter = projectPickWaiter.current;
+                projectPickWaiter.current = null;
+                waiter?.reject(new Error("Project picker closed."));
+              }}
+              onSelect={(project) => {
+                setActiveProjectId(project.id);
+                const waiter = projectPickWaiter.current;
+                projectPickWaiter.current = null;
+                waiter?.resolve(project.id);
+              }}
             />
-          )}
-        </AssistantRuntimeProvider>
-        <ThreadActionsDrawer
-          open={actionsOpen}
-          title={activeTitle}
-          canDelete={Boolean(activeChatId)}
-          onClose={() => setActionsOpen(false)}
-          onOpenCost={() => {
-            setActionsOpen(false);
-            openCost();
-          }}
-          onDelete={() => {
-            setActionsOpen(false);
-            confirmDelete();
-          }}
-        />
-        <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
-        <ProjectPickerModal
-          open={projectPickerOpen}
-          onClose={() => {
-            setProjectPickerOpen(false);
-            const waiter = projectPickWaiter.current;
-            projectPickWaiter.current = null;
-            waiter?.reject(new Error("Project picker closed."));
-          }}
-          onSelect={(project) => {
-            setActiveProjectId(project.id);
-            const waiter = projectPickWaiter.current;
-            projectPickWaiter.current = null;
-            waiter?.resolve(project.id);
-          }}
-        />
+          </SubagentInspectProvider>
+        </ConversationProvider>
       </View>
     </SafeAreaView>
+  );
+}
+
+function SubagentInspectHost({
+  onAnswer,
+}: {
+  readonly onAnswer: (response: {
+    readonly interactionId: string;
+    readonly optionId?: string;
+    readonly text?: string;
+  }) => Promise<void>;
+}) {
+  const { target, close } = useSubagentInspect();
+  const { conversation } = useChatConversation();
+  const liveTarget = useMemo(() => {
+    if (!target) return null;
+    const agent =
+      (target.callId
+        ? agentForCall(conversation.agents, target.callId)
+        : undefined) ??
+      (target.sessionId
+        ? conversation.agents?.[target.sessionId]
+        : undefined) ??
+      target.agent;
+    return { ...target, agent };
+  }, [target, conversation.agents]);
+  const handleAnswer = useCallback(
+    async (response: {
+      readonly interactionId: string;
+      readonly optionId?: string;
+      readonly text?: string;
+    }) => {
+      await onAnswer(response);
+      close();
+    },
+    [onAnswer, close],
+  );
+  return (
+    <SubagentTranscriptSheet
+      target={liveTarget}
+      onClose={close}
+      onAnswer={handleAnswer}
+    />
   );
 }

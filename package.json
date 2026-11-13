@@ -65,7 +65,7 @@
     "cmdk": "1.1.1",
     "cn": "^0.4.0",
     "drizzle-orm": "0.45.2",
-    "eve": "1.0.0-rc.6",
+    "eve": "1.0.0-rc.16",
     "just-bash": "^3.6.0",
     "lucide-react": "1.33.0",
     "mermaid": "^12.0.0",

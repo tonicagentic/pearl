@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Ban, CheckIcon, Loader2, XIcon } from "lucide-react-native";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import { cn } from "@/lib/utils";
 import { mono, paper } from "./surfaces";
@@ -31,7 +31,7 @@ export function TaskStateIcon({
   if (state === "cancelled") {
     return <Ban className={cn("size-3.5 shrink-0 text-foreground/35", className)} />;
   }
-  if (state === "working") {
+  if (state === "working" || state === "waiting") {
     return <Loader2 className={cn("size-3.5 shrink-0 animate-spin text-foreground/35", className)} />;
   }
   return (
@@ -49,6 +49,7 @@ export function TaskCard({
   elapsed,
   result,
   className,
+  onPress,
 }: {
   readonly label: string;
   readonly meta?: string | undefined;
@@ -56,16 +57,10 @@ export function TaskCard({
   readonly elapsed?: string | undefined;
   readonly result?: ReactNode | undefined;
   readonly className?: string;
+  readonly onPress?: () => void;
 }) {
-  return (
-    <View
-      className={cn(
-        paper,
-        "w-full flex-col overflow-hidden rounded-2xl",
-        state === "working" && "opacity-90",
-        className,
-      )}
-    >
+  const body = (
+    <>
       <View className="flex-row items-center gap-2.5 px-3.5 py-2.5">
         <TaskStateIcon state={state} />
         <Text
@@ -88,6 +83,28 @@ export function TaskCard({
           <Text className="text-xs leading-relaxed text-foreground/70">{result}</Text>
         </View>
       )}
-    </View>
+    </>
   );
+
+  const shellClass = cn(
+    paper,
+    "w-full flex-col overflow-hidden rounded-2xl",
+    (state === "working" || state === "waiting") && "opacity-90",
+    className,
+  );
+
+  if (onPress) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${meta ?? label} transcript`}
+        className={shellClass}
+        onPress={onPress}
+      >
+        {body}
+      </Pressable>
+    );
+  }
+
+  return <View className={shellClass}>{body}</View>;
 }

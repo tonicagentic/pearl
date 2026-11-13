@@ -1698,10 +1698,7 @@ function contentPartComponents(
   const Fallback: ToolCallMessagePartComponent = (props) => {
     if (props.toolName === "todo") return null;
     if (isTimelineToolCall(props)) return null;
-    if (
-      DELEGATION_TOOLS.has(props.toolName) &&
-      props.messages !== undefined
-    ) {
+    if (DELEGATION_TOOLS.has(props.toolName)) {
       const status = props.status ?? { type: "complete" as const };
       const group: ThreadGroupPart = {
         type: "group-task",

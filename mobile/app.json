@@ -88,7 +88,9 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/43ee6005-c5ac-4b8f-b463-5d910681956d"
+      "url": "https://u.expo.dev/43ee6005-c5ac-4b8f-b463-5d910681956d",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     },
     "extra": {
       "router": {},

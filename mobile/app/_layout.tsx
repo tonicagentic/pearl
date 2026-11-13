@@ -8,6 +8,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { SubagentRunsProvider } from "@/components/assistant-ui/elements/task-card.aui";
 import { PushNotificationsBridge } from "@/components/push-notifications-bridge";
+import { applyUpdatesOnLaunch } from "@/src/apply-updates";
 import { AuthProvider, useAuth } from "@/src/auth";
 import { ChatsProvider } from "@/src/chat-context";
 import {
@@ -42,6 +43,7 @@ function AuthenticatedLayout() {
     void restoreModelSelection(loadSavedModelSelection).catch(() => {});
     void restoreImageModelSelection(loadSavedImageModelSelection).catch(() => {});
     void restoreVectorModelSelection(loadSavedVectorModelSelection).catch(() => {});
+    void applyUpdatesOnLaunch();
   }, []);
   // Dispose in-memory chat state whenever an account signs out or changes.
   const accountKey = signedIn ? `account:${viewerEmail}` : "signed-out";

@@ -211,6 +211,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     // session and resume() so the server upconverts older history.
     const store = new SessionStore({
       baseUrl: AGENT_URL,
+      // Follow coder / researcher / etc. child sessions so their approvals and
+      // live transcripts reach the parent thread (bounded by eve's depth caps).
+      followAgents: true,
       headers: () => {
         const credential = getAuthCookie();
         return credential ? { authorization: `Bearer ${credential}` } : ({} as Record<string, string>);

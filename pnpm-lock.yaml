@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@assistant-ui/eve':
         specifier: ^0.0.25
-        version: 0.0.25(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@opentelemetry/api@1.9.0)(@types/react@19.2.18)(ai@7.0.166(zod@4.4.3))(eve@1.0.0-rc.6)(react@19.2.8)
+        version: 0.0.25(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@opentelemetry/api@1.9.0)(@types/react@19.2.18)(ai@7.0.166(zod@4.4.3))(eve@1.0.0-rc.16)(react@19.2.8)
       '@assistant-ui/next':
         specifier: ^0.0.25
         version: 0.0.25
@@ -67,7 +67,7 @@ importers:
         version: 2.8.0
       '@vercel/connect':
         specifier: 2.9.0
-        version: 2.9.0(ai@7.0.166(zod@4.4.3))(better-auth@1.7.1(@opentelemetry/api@1.9.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0)(sql.js@1.15.2))(mongodb@7.3.0(@mongodb-js/zstd@7.0.0))(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(eve@1.0.0-rc.6)
+        version: 2.9.0(ai@7.0.166(zod@4.4.3))(better-auth@1.7.1(@opentelemetry/api@1.9.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0)(sql.js@1.15.2))(mongodb@7.3.0(@mongodb-js/zstd@7.0.0))(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(eve@1.0.0-rc.16)
       '@vercel/sandbox':
         specifier: ^3.9.1
         version: 3.9.1
@@ -99,8 +99,8 @@ importers:
         specifier: 0.45.2
         version: 0.45.2(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0)(sql.js@1.15.2)
       eve:
-        specifier: 1.0.0-rc.6
-        version: 1.0.0-rc.6(@opentelemetry/api@1.9.0)(@vercel/connect@2.9.0)(ai@7.0.166(zod@4.4.3))(just-bash@3.6.0)(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+        specifier: 1.0.0-rc.16
+        version: 1.0.0-rc.16(@opentelemetry/api@1.9.0)(@vercel/connect@2.9.0)(ai@7.0.166(zod@4.4.3))(just-bash@3.6.0)(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
       just-bash:
         specifier: ^3.6.0
         version: 3.6.0
@@ -5044,8 +5044,8 @@ packages:
     resolution: {integrity: sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg==}
     engines: {node: '>= 0.6'}
 
-  eve@1.0.0-rc.6:
-    resolution: {integrity: sha512-4bThh+8nLvsROIpXW9n6prUnHRKha0T9fMvo30rase6XG6xGJ3IAYe5zI2PFSOxc5UooN4B5Vtj6WdOPNvkjpQ==}
+  eve@1.0.0-rc.16:
+    resolution: {integrity: sha512-31+wYr3slrfnrbWxdOsJTdzlX4ubn5ubhNfYib50j+yFMFWo5iIY3Inbq90VPGBZFxyMWOVaZGruCGGQcs0ccg==}
     engines: {node: '>=24'}
     hasBin: true
     peerDependencies:
@@ -5057,12 +5057,12 @@ packages:
       ai: ^7.0.137
       braintrust: ^3.0.0
       chat: ^4.42.0
-      dd-trace: ^6.13.0
+      dd-trace: ^6.20.1
       just-bash: ^3.6.0
       next: ^16.0.0
       react: ^19.0.0
       svelte: ^5.0.0
-      vite: ^8.3.1
+      vite: ^8.3.3
       vue: ^3.5.0
     peerDependenciesMeta:
       '@linqapp/sdk':
@@ -7076,12 +7076,12 @@ snapshots:
       - ioredis
       - redis
 
-  '@assistant-ui/eve@0.0.25(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@opentelemetry/api@1.9.0)(@types/react@19.2.18)(ai@7.0.166(zod@4.4.3))(eve@1.0.0-rc.6)(react@19.2.8)':
+  '@assistant-ui/eve@0.0.25(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@opentelemetry/api@1.9.0)(@types/react@19.2.18)(ai@7.0.166(zod@4.4.3))(eve@1.0.0-rc.16)(react@19.2.8)':
     dependencies:
       '@assistant-ui/core': 0.3.33(@assistant-ui/store@0.3.23(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@types/react@19.2.18)(react@19.2.8))(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@opentelemetry/api@1.9.0)(@types/react@19.2.18)(ai@7.0.166(zod@4.4.3))(react@19.2.8)
       '@assistant-ui/store': 0.3.23(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@types/react@19.2.18)(react@19.2.8)
       assistant-cloud: 0.2.0(@opentelemetry/api@1.9.0)
-      eve: 1.0.0-rc.6(@opentelemetry/api@1.9.0)(@vercel/connect@2.9.0)(ai@7.0.166(zod@4.4.3))(just-bash@3.6.0)(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+      eve: 1.0.0-rc.16(@opentelemetry/api@1.9.0)(@vercel/connect@2.9.0)(ai@7.0.166(zod@4.4.3))(just-bash@3.6.0)(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
       react: 19.2.8
     optionalDependencies:
       '@types/react': 19.2.18
@@ -10411,13 +10411,13 @@ snapshots:
     dependencies:
       execa: 5.1.1
 
-  '@vercel/connect@2.9.0(ai@7.0.166(zod@4.4.3))(better-auth@1.7.1(@opentelemetry/api@1.9.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0)(sql.js@1.15.2))(mongodb@7.3.0(@mongodb-js/zstd@7.0.0))(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(eve@1.0.0-rc.6)':
+  '@vercel/connect@2.9.0(ai@7.0.166(zod@4.4.3))(better-auth@1.7.1(@opentelemetry/api@1.9.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0)(sql.js@1.15.2))(mongodb@7.3.0(@mongodb-js/zstd@7.0.0))(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(eve@1.0.0-rc.16)':
     dependencies:
       '@vercel/oidc': 4.0.7
     optionalDependencies:
       ai: 7.0.166(zod@4.4.3)
       better-auth: 1.7.1(@opentelemetry/api@1.9.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0)(sql.js@1.15.2))(mongodb@7.3.0(@mongodb-js/zstd@7.0.0))(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      eve: 1.0.0-rc.6(@opentelemetry/api@1.9.0)(@vercel/connect@2.9.0)(ai@7.0.166(zod@4.4.3))(just-bash@3.6.0)(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+      eve: 1.0.0-rc.16(@opentelemetry/api@1.9.0)(@vercel/connect@2.9.0)(ai@7.0.166(zod@4.4.3))(just-bash@3.6.0)(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
 
   '@vercel/container@8.0.0(@vercel/build-utils@14.10.0)':
     dependencies:
@@ -11497,7 +11497,7 @@ snapshots:
 
   etag@1.8.1: {}
 
-  eve@1.0.0-rc.6(@opentelemetry/api@1.9.0)(@vercel/connect@2.9.0)(ai@7.0.166(zod@4.4.3))(just-bash@3.6.0)(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8):
+  eve@1.0.0-rc.16(@opentelemetry/api@1.9.0)(@vercel/connect@2.9.0)(ai@7.0.166(zod@4.4.3))(just-bash@3.6.0)(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8):
     dependencies:
       ai: 7.0.166(zod@4.4.3)
       nitro: 3.0.261103-rc
@@ -11505,7 +11505,7 @@ snapshots:
       undici: 8.12.3
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
-      '@vercel/connect': 2.9.0(ai@7.0.166(zod@4.4.3))(better-auth@1.7.1(@opentelemetry/api@1.9.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0)(sql.js@1.15.2))(mongodb@7.3.0(@mongodb-js/zstd@7.0.0))(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(eve@1.0.0-rc.6)
+      '@vercel/connect': 2.9.0(ai@7.0.166(zod@4.4.3))(better-auth@1.7.1(@opentelemetry/api@1.9.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.0)(@types/pg@8.23.1)(@upstash/redis@1.38.2)(kysely@0.29.5)(pg@8.23.0)(sql.js@1.15.2))(mongodb@7.3.0(@mongodb-js/zstd@7.0.0))(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(eve@1.0.0-rc.16)
       just-bash: 3.6.0
       next: 16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react: 19.2.8

@@ -9,7 +9,7 @@ import {
   useMotion,
 } from "@/components/assistant-ui/elements/surfaces";
 import { cn } from "@/lib/utils";
-import { type FC, useState, type ReactNode } from "react";
+import { type FC, useEffect, useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
@@ -91,6 +91,19 @@ const ApprovalOrAuthCard: FC<{
   const [error, setError] = useState<string | null>(null);
   useAnnounce(error ?? undefined);
 
+  const headline = action.prompt ?? action.title;
+  const optionKey =
+    action.kind === "approval"
+      ? (action.options ?? []).map((option) => option.id).join("\0")
+      : "";
+
+  // A re-opened or replaced wait must be tappable again even if the previous
+  // send resolved without clearing the open interaction.
+  useEffect(() => {
+    setSubmitting(null);
+    setError(null);
+  }, [headline, optionKey, action.kind]);
+
   const busy = submitting !== null;
   const showOptions =
     action.kind === "approval" &&
@@ -108,13 +121,12 @@ const ApprovalOrAuthCard: FC<{
       try {
         await action.onRespond!(response);
       } catch (cause) {
-        setSubmitting(null);
         setError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        setSubmitting(null);
       }
     })();
   };
-
-  const headline = action.prompt ?? action.title;
 
   return (
     <MotionBox

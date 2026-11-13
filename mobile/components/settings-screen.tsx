@@ -24,6 +24,7 @@ import { useCSSVariable } from "uniwind";
 import { SheetScaffold } from "@/components/sheet-scaffold";
 import { Icon } from "@/components/ui/icon";
 import { agentHostname } from "@/src/agent-url";
+import { getAppVersion, getAppVersionDetail } from "@/src/app-version";
 import { useAuth } from "@/src/auth";
 import {
   fetchBillingStatus,
@@ -151,7 +152,7 @@ export function SettingsScreen() {
         <SettingsRow
           icon={<Icon as={InfoIcon} className="size-5 text-muted-foreground" />}
           label="About Pearl"
-          detail="Intro"
+          detail={getAppVersionDetail()}
           onPress={() => router.push("/about")}
           showSeparator
         />
@@ -162,6 +163,10 @@ export function SettingsScreen() {
           onPress={confirmSignOut}
         />
       </SettingsCard>
+
+      <Text className="px-1 pb-2 text-center text-[12px] text-muted-foreground/70">
+        Pearl {getAppVersion()}
+      </Text>
     </SheetScaffold>
   );
 }

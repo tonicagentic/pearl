@@ -14,6 +14,13 @@ import {
   type SubagentRun,
 } from "@/src/subagent-runs";
 import { useEveEvents } from "@/src/chat-context";
+import {
+  agentForCall,
+  useChatConversation,
+} from "@/src/conversation-context";
+import { pendingForDelegation } from "@/src/message-projection";
+import { latestSubagentPreviewLine } from "@/src/subagent-preview";
+import { useSubagentInspect } from "@/src/subagent-inspect-context";
 import { TaskCard, type TaskCardState } from "./task-card";
 
 // Runtime binding for the task-card element (docs: elements/task-card) —
@@ -24,14 +31,28 @@ import { TaskCard, type TaskCardState } from "./task-card";
 // tool call completes immediately with a "working" receipt, so the part reads
 // "done" while the subagent still runs. The real lifecycle lives in the
 // persisted subagent event stream (subagent.called / subagent.completed),
-// derived into runs keyed by the delegation's call id.
+// derived into runs keyed by the delegation's call id. Open person-waits on
+// the tool part or a followed child override the card to "waiting".
 
 type TaskRuns = readonly SubagentRun[];
 
-const TaskRunsContext = createContext<TaskRuns>([]);
+type SubagentRunsContextValue = {
+  readonly runs: TaskRuns;
+  /** Shared 1 Hz clock while any run is undelivered / in-flight. */
+  readonly now: number;
+};
+
+const TaskRunsContext = createContext<SubagentRunsContextValue>({
+  runs: [],
+  now: 0,
+});
 
 export function useSubagentRuns(): TaskRuns {
-  return useContext(TaskRunsContext);
+  return useContext(TaskRunsContext).runs;
+}
+
+function useSubagentClock(): number {
+  return useContext(TaskRunsContext).now;
 }
 
 export function SubagentRunsProvider({ children }: { readonly children: ReactNode }) {
@@ -44,17 +65,21 @@ export function SubagentRunsProvider({ children }: { readonly children: ReactNod
   );
 
   // Tick while any run is undelivered (keying on the post-derivation state
-  // deadlocks — see the web element).
+  // deadlocks — see the web element). Also covers in-flight elapsed labels so
+  // TaskGroup does not need a second interval.
   const anyUndelivered = runs.some((run) => run.delivered === false);
+  const anyRunning = runs.some((run) => run.state === "running");
 
   useEffect(() => {
-    if (!anyUndelivered) return;
+    if (!anyUndelivered && !anyRunning) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [anyUndelivered]);
+  }, [anyUndelivered, anyRunning]);
+
+  const value = useMemo(() => ({ runs, now }), [runs, now]);
 
   return (
-    <TaskRunsContext.Provider value={runs}>{children}</TaskRunsContext.Provider>
+    <TaskRunsContext.Provider value={value}>{children}</TaskRunsContext.Provider>
   );
 }
 
@@ -104,7 +129,12 @@ function taskMeta(part: ToolCallPartState, run?: SubagentRun): string {
   return run?.name ?? part.toolName;
 }
 
-function taskState(part: ToolCallPartState, run?: SubagentRun): TaskCardState {
+function taskState(
+  part: ToolCallPartState,
+  run: SubagentRun | undefined,
+  waiting: boolean,
+): TaskCardState {
+  if (waiting) return "waiting";
   // The event stream is the source of truth for background runs; the part
   // status only covers delegations with no observed run (older threads).
   if (run) {
@@ -124,8 +154,10 @@ export function TaskGroup({
   readonly group: { readonly indices: readonly number[] };
 }) {
   const runs = useSubagentRuns();
+  const clock = useSubagentClock();
+  const { conversation } = useChatConversation();
+  const { open } = useSubagentInspect();
   const parts = useAuiState((s) => s.message.parts) as readonly unknown[];
-  const now = useNowWhileWorking(group, parts, runs);
 
   const delegations = group.indices
     .map((index) => parts[index])
@@ -136,53 +168,42 @@ export function TaskGroup({
     <View className="flex-col gap-2 px-2">
       {delegations.map((part) => {
         const run = runs.find((r) => r.callId === part.toolCallId);
-        const working = taskState(part, run) === "working";
+        const wait = pendingForDelegation(conversation, part.toolCallId);
+        const state = taskState(part, run, wait != null);
+        const working = state === "working";
         const elapsed =
-          run !== undefined
-            ? formatElapsed((now ?? run.at) - run.at)
+          run !== undefined && (working || state === "waiting")
+            ? formatElapsed((clock || run.at) - run.at)
             : undefined;
+        const agent = agentForCall(conversation.agents, part.toolCallId);
+        const livePreview = working ? latestSubagentPreviewLine(agent) : null;
         return (
           <TaskCard
             key={part.toolCallId}
             label={taskLabel(part)}
             meta={taskMeta(part, run)}
-            state={taskState(part, run)}
+            state={state}
             elapsed={elapsed}
-            // The transcript lives in the child session, not in this part;
-            // the card stays a compact status row with its result below.
+            onPress={() => {
+              open({
+                sessionId: agent?.sessionId ?? part.toolCallId ?? part.toolName,
+                name: taskMeta(part, run),
+                callId: part.toolCallId,
+                agent,
+              });
+            }}
             result={
-              run?.state === "failed"
-                ? "no result arrived — the run was likely interrupted; ask again"
-                : working
-                  ? `Waiting on ${taskMeta(part, run)}…`
-                  : undefined
+              wait
+                ? wait.prompt
+                : run?.state === "failed"
+                  ? "no result arrived — the run was likely interrupted; ask again"
+                  : working
+                    ? (livePreview ?? `Waiting on ${taskMeta(part, run)}…`)
+                    : undefined
             }
           />
         );
       })}
     </View>
   );
-}
-
-// Ticking clock for in-flight runs, shared by all cards in the lane.
-function useNowWhileWorking(
-  group: { readonly indices: readonly number[] },
-  parts: readonly unknown[],
-  runs: TaskRuns,
-): number | null {
-  const [now, setNow] = useState<number | null>(null);
-  const anyWorking = group.indices.some((index) => {
-    const part = parts[index];
-    if (!isDelegationPart(part)) return false;
-    const run = runs.find((r) => r.callId === part.toolCallId);
-    return taskState(part, run) === "working";
-  });
-
-  useEffect(() => {
-    if (!anyWorking) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [anyWorking]);
-
-  return now;
 }

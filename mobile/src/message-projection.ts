@@ -1,4 +1,9 @@
-import type { EveMessage, EveMessagePart, EveToolPart } from "eve/client";
+import type {
+  ConversationAgentSession,
+  EveMessage,
+  EveMessagePart,
+  EveToolPart,
+} from "eve/client";
 import type { ThreadMessageLike } from "@assistant-ui/react-native";
 import { isAttachmentMarker } from "./attachment-content";
 
@@ -6,6 +11,8 @@ type Part = Exclude<ThreadMessageLike["content"], string>[number];
 
 type ConversationMessages = {
   readonly messages: readonly EveMessage[];
+  /** Followed child sessions from SessionStore (`followAgents`). */
+  readonly agents?: Readonly<Record<string, ConversationAgentSession>>;
 };
 
 const safeUrl = (value?: string) => value && /^https:\/\//i.test(value) ? value : undefined;
@@ -206,38 +213,107 @@ export function pendingMessageLabel(content: string | readonly { type: string; t
   return content.length > 0 ? "[Attachment]" : "";
 }
 
-function openInteractions(message: EveMessage) {
-  return message.parts.flatMap((part) =>
-    part.type === "interaction"
-      ? [part]
-      : part.type === "tool" && part.interaction
-        ? [part.interaction]
-        : [],
-  );
+type OpenInteraction = NonNullable<EveToolPart["interaction"]>;
+
+type OpenPartHit = {
+  readonly interaction: OpenInteraction;
+  readonly part: EveMessagePart;
+};
+
+function openInteractions(message: EveMessage): readonly OpenInteraction[] {
+  return openPartHits(message).map((hit) => hit.interaction);
+}
+
+function openPartHits(message: EveMessage): readonly OpenPartHit[] {
+  if (message.role !== "assistant") return [];
+  if (message.metadata?.status === "failed") return [];
+  const hits: OpenPartHit[] = [];
+  for (const part of message.parts) {
+    if (part.type === "interaction" && part.status === "open") {
+      // EveInteractionPart extends Interaction with `type`; strip the discriminant.
+      const { type: _type, ...interaction } = part;
+      hits.push({ interaction, part });
+      continue;
+    }
+    if (part.type === "tool" && part.interaction?.status === "open") {
+      hits.push({ interaction: part.interaction, part });
+    }
+  }
+  return hits;
 }
 
 function hasOpenApproval(message: EveMessage): boolean {
   return openInteractions(message).some(
-    (interaction) =>
-      interaction.status === "open" && interaction.request.kind !== "sign-in",
+    (interaction) => interaction.request.kind !== "sign-in",
   );
 }
 
 function hasOpenAuthorization(message: EveMessage): boolean {
   return openInteractions(message).some(
-    (interaction) =>
-      interaction.status === "open" && interaction.request.kind === "sign-in",
+    (interaction) => interaction.request.kind === "sign-in",
   );
 }
 
-/** True when the latest assistant turn is parked on approval or authorization.
- * Approvals survive turn settlement (metadata.status becomes "complete"); failed
- * turns never block the next send. */
+/** Assistant messages newest-first, then followed child conversations. */
+function conversationMessageSources(
+  data: ConversationMessages,
+): readonly EveMessage[][] {
+  const sources: EveMessage[][] = [];
+  if (data.messages.length > 0) {
+    sources.push([...data.messages].reverse());
+  }
+  if (!data.agents) return sources;
+  for (const agent of Object.values(data.agents)) {
+    if (agent.observation.status === "not-followed") continue;
+    const childMessages = agent.observation.conversation.messages;
+    if (childMessages.length === 0) continue;
+    sources.push([...childMessages].reverse());
+  }
+  return sources;
+}
+
+/**
+ * True when any assistant turn (including followed subagents) is parked on
+ * approval, question, or authorization. Continues to block after the parent
+ * turn settles; failed turns never block the next send.
+ */
 export function hasPendingAction(data: ConversationMessages): boolean {
-  const message = data.messages.at(-1);
-  if (message?.role !== "assistant") return false;
-  if (message.metadata?.status === "failed") return false;
-  return hasOpenApproval(message) || hasOpenAuthorization(message);
+  for (const messages of conversationMessageSources(data)) {
+    for (const message of messages) {
+      if (hasOpenApproval(message) || hasOpenAuthorization(message)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Label for the bottom status while a person-wait owns the composer. */
+export type PendingWaitKind = "approval" | "question" | "authorization";
+
+export function pendingWaitKind(
+  data: ConversationMessages,
+): PendingWaitKind | null {
+  const approvals = getPendingApprovals(data);
+  if (approvals.some((item) => item.kind === "question")) return "question";
+  if (approvals.some((item) => item.kind === "approval")) return "approval";
+  for (const messages of conversationMessageSources(data)) {
+    for (const message of messages) {
+      if (hasOpenAuthorization(message)) return "authorization";
+    }
+  }
+  return null;
+}
+
+export function pendingWaitLabel(kind: PendingWaitKind): string {
+  switch (kind) {
+    case "question":
+      return "Asking questions";
+    case "authorization":
+      return "Sign in to continue";
+    case "approval":
+      return "Needs your approval";
+  }
 }
 
 export type PendingInteractionKind = "approval" | "question";
@@ -320,95 +396,153 @@ function pendingDisplay(
   return "text";
 }
 
-/** Open approval / question parks on the latest assistant turn, for the composer card. */
-export function getPendingApprovals(data: ConversationMessages): readonly PendingApproval[] {
-  const message = data.messages.at(-1);
-  if (message?.role !== "assistant") return [];
-  if (message.metadata?.status === "failed") return [];
+function pendingFromHit(hit: OpenPartHit): PendingApproval | null {
+  const { interaction, part } = hit;
+  const request = interaction.request;
+  if (request.kind === "sign-in") return null;
 
-  return message.parts.flatMap((part) => {
-    const interaction =
-      part.type === "tool" && part.interaction?.status === "open"
-        ? part.interaction
-        : part.type === "interaction" &&
-            part.status === "open" &&
-            part.request.kind !== "sign-in"
-          ? part
-          : null;
-    if (!interaction) return [];
-    const request = interaction.request;
-    const kind: PendingInteractionKind =
-      request.kind === "question" ? "question" : "approval";
-    const display = pendingDisplay(request);
-    const allowFreeform =
-      kind === "question" &&
-      (request.allowFreeform === true ||
-        display === "text" ||
-        !request.options?.length);
+  const kind: PendingInteractionKind =
+    request.kind === "question" ? "question" : "approval";
+  const display = pendingDisplay(request);
+  const allowFreeform =
+    kind === "question" &&
+    (request.allowFreeform === true ||
+      display === "text" ||
+      !request.options?.length);
 
-    // Approvals without declared options get Approve/Cancel. Questions keep
-    // only their real options (or none, for free-text).
-    const options = (
-      request.options?.length
-        ? request.options
-        : kind === "approval"
-          ? [
-              { id: "approve", label: "Approve" },
-              { id: "cancel", label: "Cancel" },
-            ]
-          : []
-    ).map((option) => ({ id: option.id, label: option.label }));
+  // Approvals without declared options get Approve/Cancel. Questions keep
+  // only their real options (or none, for free-text).
+  const options = (
+    request.options?.length
+      ? request.options
+      : kind === "approval"
+        ? [
+            { id: "approve", label: "Approve" },
+            { id: "cancel", label: "Cancel" },
+          ]
+        : []
+  ).map((option) => ({ id: option.id, label: option.label }));
 
-    const toolInput =
-      part.type === "tool" && part.state !== "streaming" ? part.input : undefined;
-    const interactionInput =
-      part.type === "interaction" ? part.call?.input : undefined;
-    const rawInput = toolInput ?? interactionInput;
-    const input =
-      rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
-        ? (rawInput as Record<string, unknown>)
-        : null;
-    const summary =
-      typeof input?.summary === "string"
-        ? input.summary
-        : typeof input?.filePath === "string"
-          ? input.filePath
-          : typeof input?.statement === "string"
-            ? input.statement
-            : undefined;
-    const toolName =
-      part.type === "tool"
-        ? part.name
-        : part.type === "interaction"
-          ? part.call?.name ?? request.kind
-          : request.kind;
-    const defaultPrompt =
-      kind === "question"
-        ? "Answer the question to continue."
-        : `Approve tool call: ${toolName}`;
-    const skipOptionId =
-      kind === "question" ? pendingSkipOptionId(options) : undefined;
-    const dismissible =
-      kind === "question" &&
-      (requestDismissible(
-        request as { readonly dismissible?: boolean },
-      ) ||
-        skipOptionId != null);
-    return [
-      {
-        requestId: interaction.interactionId,
-        toolName,
-        kind,
-        display,
-        prompt: request.prompt ?? defaultPrompt,
-        ...(summary ? { detail: summary } : {}),
-        options,
-        allowFreeform,
-        ...(dismissible ? { dismissible: true } : {}),
-        ...(skipOptionId ? { skipOptionId } : {}),
-      },
-    ];
-  });
+  const toolInput =
+    part.type === "tool" && part.state !== "streaming" ? part.input : undefined;
+  const interactionInput =
+    part.type === "interaction" ? part.call?.input : undefined;
+  const askedInput = interaction.call?.input;
+  const rawInput = toolInput ?? interactionInput ?? askedInput;
+  const input =
+    rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
+      ? (rawInput as Record<string, unknown>)
+      : null;
+  const summary =
+    typeof input?.summary === "string"
+      ? input.summary
+      : typeof input?.filePath === "string"
+        ? input.filePath
+        : typeof input?.statement === "string"
+          ? input.statement
+          : undefined;
+  const toolName =
+    part.type === "tool"
+      ? part.name
+      : part.type === "interaction"
+        ? part.call?.name ?? interaction.call?.name ?? request.kind
+        : interaction.call?.name ?? request.kind;
+  const defaultPrompt =
+    kind === "question"
+      ? "Answer the question to continue."
+      : `Approve tool call: ${toolName}`;
+  const skipOptionId =
+    kind === "question" ? pendingSkipOptionId(options) : undefined;
+  const dismissible =
+    kind === "question" &&
+    (requestDismissible(request as { readonly dismissible?: boolean }) ||
+      skipOptionId != null);
+  return {
+    requestId: interaction.interactionId,
+    toolName,
+    kind,
+    display,
+    prompt: request.prompt ?? defaultPrompt,
+    ...(summary ? { detail: summary } : {}),
+    options,
+    allowFreeform,
+    ...(dismissible ? { dismissible: true } : {}),
+    ...(skipOptionId ? { skipOptionId } : {}),
+  };
+}
+
+/**
+ * Open approval / question parks across the parent thread and followed
+ * subagents. Newest messages win; interaction ids are deduped so a child
+ * relay of the same wait does not double-card the composer.
+ */
+export function getPendingApprovals(
+  data: ConversationMessages,
+): readonly PendingApproval[] {
+  const seen = new Set<string>();
+  const pending: PendingApproval[] = [];
+  for (const messages of conversationMessageSources(data)) {
+    for (const message of messages) {
+      for (const hit of openPartHits(message)) {
+        if (seen.has(hit.interaction.interactionId)) continue;
+        const next = pendingFromHit(hit);
+        if (!next) continue;
+        seen.add(next.requestId);
+        pending.push(next);
+      }
+    }
+  }
+  return pending;
+}
+
+/** Open person-wait belonging to a specific tool call (delegation or tool). */
+export function pendingForToolCall(
+  data: ConversationMessages,
+  toolCallId: string,
+): PendingApproval | null {
+  for (const messages of conversationMessageSources(data)) {
+    for (const message of messages) {
+      for (const hit of openPartHits(message)) {
+        if (hit.part.type === "tool" && hit.part.callId === toolCallId) {
+          return pendingFromHit(hit);
+        }
+        if (
+          hit.part.type === "interaction" &&
+          (hit.part.call?.callId === toolCallId ||
+            hit.interaction.call?.callId === toolCallId)
+        ) {
+          return pendingFromHit(hit);
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Open wait for a delegation: the tool part itself, or a followed child
+ * conversation owned by that call.
+ */
+export function pendingForDelegation(
+  data: ConversationMessages,
+  toolCallId: string | undefined,
+): PendingApproval | null {
+  if (!toolCallId) return null;
+  const direct = pendingForToolCall(data, toolCallId);
+  if (direct) return direct;
+  if (!data.agents) return null;
+  for (const agent of Object.values(data.agents)) {
+    const ownsCall =
+      agent.callId === toolCallId ||
+      ("callId" in agent.owner && agent.owner.callId === toolCallId);
+    if (!ownsCall) continue;
+    if (agent.observation.status === "not-followed") continue;
+    const childPending = getPendingApprovals({
+      messages: agent.observation.conversation.messages,
+    });
+    if (childPending[0]) return childPending[0];
+  }
+  return null;
 }
 
 type ProjectionCacheEntry = {

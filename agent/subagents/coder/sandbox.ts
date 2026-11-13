@@ -12,10 +12,16 @@ export const environment = VercelSandbox.environment({
   prepare: async (sandbox) => {
     await installCodeTooling(sandbox, { vercel: true });
 
+    // Some Vercel sandbox base images ship Node without Corepack on PATH.
+    // Install it via npm when missing, then activate pnpm.
     const corepack = await sandbox.run({
       command:
-        "command -v node && command -v git && command -v python3 && " +
-        "corepack enable && corepack prepare pnpm@latest --activate",
+        "set -euo pipefail; " +
+        "command -v node; command -v git; command -v python3; " +
+        "if ! command -v corepack >/dev/null 2>&1; then npm install -g corepack; fi; " +
+        "corepack enable; " +
+        "corepack prepare pnpm@latest --activate; " +
+        "command -v pnpm",
     });
     if (corepack.exitCode !== 0) {
       throw new Error(
