@@ -76,15 +76,31 @@ export const normalizeArtifactSlug = (slug: string): string | null => {
 };
 
 /**
- * The basename of an artifact key — the default sandbox path it restores to.
+ * Sandbox path an artifact key restores to.
+ *
+ * @remarks
+ * Keys are `artifacts/<64-hex>/<relative>`. Flat files (`migration.md`) restore
+ * to `/workspace/migration.md`. Nested slugs (e.g. plan mirrors under
+ * `docs/plans/<projectId>/<slug>.md`) keep their relative path under
+ * `/workspace/` so directories survive restore.
  *
  * @param key - A scoped artifact Blob key, e.g. `artifacts/ab12…/x.md`.
- * @returns `/workspace/x.md`, or `null` when the key has no basename.
+ * @returns `/workspace/…` path, or `null` when the key has no relative slug.
  */
 export const artifactSandboxPath = (key: string): string | null => {
-  const suffix = key.slice(ARTIFACTS_PREFIX.length);
-  const base = suffix.split("/").pop();
-  return base ? `/workspace/${base}` : null;
+  if (!key.startsWith(ARTIFACTS_PREFIX)) {
+    return null;
+  }
+  const afterPrefix = key.slice(ARTIFACTS_PREFIX.length);
+  const slash = afterPrefix.indexOf("/");
+  if (slash === -1) {
+    return null;
+  }
+  const relative = afterPrefix.slice(slash + 1);
+  if (!relative || FORBIDDEN_SEGMENTS.test(relative)) {
+    return null;
+  }
+  return `/workspace/${relative}`;
 };
 
 /**

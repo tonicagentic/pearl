@@ -1,5 +1,6 @@
 import { defineDynamic, defineInstructions } from "eve/instructions";
 
+import { planMirrorPath } from "@/agent/lib/plan-mirror";
 import { getProject, listPlans } from "@/lib/db/projects";
 
 import { requirePrincipalUser } from "../lib/principal.ts";
@@ -23,9 +24,10 @@ export default defineDynamic(async (ctx) => {
   const planLines =
     plans.length === 0
       ? ["(no plans yet)"]
-      : plans.map(
-          (row) => `- ${row.title} (slug: ${row.slug}, id: ${row.id})`,
-        );
+      : plans.map((row) => {
+          const path = planMirrorPath(row.projectId, row.slug);
+          return `- ${row.title} (slug: ${row.slug}, id: ${row.id}, path: ${path})`;
+        });
 
   const instructions = owned.instructions.trim();
   const sections = [
@@ -42,7 +44,10 @@ export default defineDynamic(async (ctx) => {
     "",
     ...planLines,
     "",
-    "Call read_plan with a plan id or slug when you need a plan body. Do not invent plans that are not listed.",
+    "Call read_plan with a plan id or slug when you need a plan body (DB is",
+    "source of truth). Mirror paths under /workspace/docs/plans/ are for",
+    "sandbox/coder visibility; if they diverge, trust read_plan. Do not",
+    "invent plans that are not listed.",
   ];
 
   return defineInstructions({

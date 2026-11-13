@@ -10,10 +10,11 @@ import { artifactKey, artifactSandboxPath } from "#lib/artifacts.js";
  * New sessions start with artifacts restored automatically (the sandbox
  * definition pulls them in at session start); this tool covers the on-demand
  * case — the user asks for a specific earlier file, or the automatic restore
- * missed one. The destination defaults to the artifact's basename under
- * `/workspace`, so the canvas and the file tools work on it like any other
- * file. The Blob key resolves against the framework-resolved principal, so a
- * session can only restore its own artifacts.
+ * missed one. The destination defaults to the artifact's relative path under
+ * `/workspace` (nested slugs keep their directories), so the canvas and the
+ * file tools work on it like any other file. The Blob key resolves against
+ * the framework-resolved principal, so a session can only restore its own
+ * artifacts.
  */
 export default defineTool({
   description:

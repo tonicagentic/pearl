@@ -41,10 +41,8 @@ export default defineSandbox(async ({ session }) => {
     if (prefix) {
       const { blobs } = await list({ prefix });
       for (const blob of blobs) {
-        restored.set(
-          blob.pathname.slice(prefix.length).split("/").pop() ?? "",
-          blob.uploadedAt,
-        );
+        const relative = blob.pathname.slice(prefix.length);
+        restored.set(relative, blob.uploadedAt);
         const path = artifactSandboxPath(blob.pathname);
 
         if (!path) {
@@ -86,7 +84,8 @@ export default defineSandbox(async ({ session }) => {
       // Newer-wins: a Blob artifact restored above that is at least as
       // recent as this legacy row supersedes it — never let an older
       // chat-scoped copy clobber newer durable state.
-      const blobAt = restored.get(seed.path.split("/").pop() ?? "");
+      const seedRelative = seed.path.replace(/^\/workspace\//, "");
+      const blobAt = restored.get(seedRelative);
 
       if (blobAt && blobAt.getTime() >= seed.updatedAt.getTime()) {
         continue;

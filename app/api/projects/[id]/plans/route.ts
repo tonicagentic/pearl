@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { mirrorPlanMarkdown } from "@/agent/lib/plan-mirror";
 import { getProject, savePlan } from "@/lib/db/projects";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
@@ -57,6 +58,14 @@ export async function POST(
       title: body.title ?? "Untitled plan",
       markdown: body.markdown ?? "",
       slug: body.slug,
+    });
+    await mirrorPlanMarkdown({
+      userId: viewer.id,
+      projectId: plan.projectId,
+      planId: plan.id,
+      title: plan.title,
+      slug: plan.slug,
+      markdown: plan.markdown,
     });
     return NextResponse.json({ plan: serializePlan(plan) });
   } catch (error) {

@@ -57,5 +57,21 @@ export default defineEval({
     if (saveCalls.length === 0) {
       throw new Error("Expected at least one save_plan call.");
     }
+
+    const lastSave = saveCalls[saveCalls.length - 1];
+    const output = lastSave?.output as
+      | { readonly path?: string; readonly error?: string }
+      | undefined;
+    if (output?.error) {
+      throw new Error(`save_plan returned an error: ${output.error}`);
+    }
+    if (
+      typeof output?.path !== "string" ||
+      !output.path.startsWith("/workspace/docs/plans/")
+    ) {
+      throw new Error(
+        `Expected save_plan to return a /workspace/docs/plans/ path, got ${JSON.stringify(output)}`,
+      );
+    }
   },
 });

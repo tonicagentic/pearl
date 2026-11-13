@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { planMirrorPath } from "@/agent/lib/plan-mirror";
 import {
   createProject,
   deletePlan,
@@ -132,9 +133,11 @@ export async function carryOutPlanAction(input: {
   const owned = await getProject(viewer.id, existing.projectId);
   if (!owned) throw new Error("Unknown project.");
 
+  const mirrorPath = planMirrorPath(existing.projectId, existing.slug);
   const message =
-    `Carry out the plan "${existing.title}" (id: ${existing.id}). ` +
-    `Call read_plan first, then do what it says.`;
+    `Carry out the plan "${existing.title}" (id: ${existing.id}, ` +
+    `path: ${mirrorPath}). Call read_plan first (DB is source of truth), ` +
+    `then do what it says. The markdown mirror is at ${mirrorPath}.`;
 
   const created = await createChat(viewer.id, {
     pendingUserMessage: message,

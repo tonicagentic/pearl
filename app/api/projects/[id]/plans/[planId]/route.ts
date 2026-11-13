@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+import {
+  mirrorPlanMarkdown,
+  planMirrorPath,
+} from "@/agent/lib/plan-mirror";
 import { createChat } from "@/lib/db/queries";
 import {
   deletePlan,
@@ -106,6 +110,14 @@ export async function PATCH(
       markdown: body.markdown ?? loaded.plan.markdown,
       slug: body.slug,
     });
+    await mirrorPlanMarkdown({
+      userId: viewer.id,
+      projectId: plan.projectId,
+      planId: plan.id,
+      title: plan.title,
+      slug: plan.slug,
+      markdown: plan.markdown,
+    });
     return NextResponse.json({ plan: serializePlan(plan) });
   } catch (error) {
     return NextResponse.json(
@@ -173,9 +185,14 @@ export async function POST(
     );
   }
 
+  const mirrorPath = planMirrorPath(
+    loaded.plan.projectId,
+    loaded.plan.slug,
+  );
   const message =
-    `Carry out the plan "${loaded.plan.title}" (id: ${loaded.plan.id}). ` +
-    `Call read_plan first, then do what it says.`;
+    `Carry out the plan "${loaded.plan.title}" (id: ${loaded.plan.id}, ` +
+    `path: ${mirrorPath}). Call read_plan first (DB is source of truth), ` +
+    `then do what it says. The markdown mirror is at ${mirrorPath}.`;
 
   const created = await createChat(viewer.id, {
     pendingUserMessage: message,

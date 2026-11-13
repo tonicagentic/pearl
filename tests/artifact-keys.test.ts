@@ -56,12 +56,19 @@ describe("artifact key scheme", () => {
     assert.ok(key?.startsWith("artifacts/"));
   });
 
-  it("restores to the basename under /workspace by default", () => {
+  it("restores flat and nested slugs under /workspace", () => {
     assert.equal(
       artifactSandboxPath("artifacts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/migration.md"),
       "/workspace/migration.md",
     );
+    assert.equal(
+      artifactSandboxPath(
+        "artifacts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/docs/plans/proj/feature.md",
+      ),
+      "/workspace/docs/plans/proj/feature.md",
+    );
     assert.equal(artifactSandboxPath("artifacts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/"), null);
+    assert.equal(artifactSandboxPath("drafts/x.md"), null);
   });
 
   it("marks artifacts paths and URLs reserved for the generic asset tools", () => {

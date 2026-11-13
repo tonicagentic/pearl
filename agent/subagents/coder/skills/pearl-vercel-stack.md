@@ -79,11 +79,14 @@ specific rule.
 | Neon platform overview | `neon` |
 | Neon / Lakebase Postgres | `neon-postgres` |
 
-### Planning (obra/superpowers)
+### Planning
 
-Use when the user wants a design→plan→execute loop for a large feature. Pearl
-**Plan mode** still uses `save_plan` / project plans — do not replace that with
-these unless the user asks for a superpowers-style implementer plan.
+Pearl default: durable **project plans** via parent `save_plan` (DB source of
+truth) plus markdown mirrors at `/workspace/docs/plans/<projectId>/<slug>.md`.
+Use `read_plan` / `list_plans` to find prior work; DB wins if the mirror
+diverges. The obra/superpowers skills below are for implementer task
+breakdown — still persist through `save_plan`, not `docs/superpowers/plans/`,
+unless the user asks for a superpowers-style file-only ledger.
 
 | Topic | Load |
 | --- | --- |
