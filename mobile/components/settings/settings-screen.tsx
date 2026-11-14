@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { Alert, Platform, Text, View } from "react-native";
-import { router } from "expo-router";
+import { Alert, Platform, Text } from "react-native";
+import { router, useFocusEffect } from "expo-router";
 import {
   BrainIcon,
   CircleUserIcon,
@@ -9,6 +9,7 @@ import {
   InfoIcon,
   LogOutIcon,
   NetworkIcon,
+  NotebookPenIcon,
   PuzzleIcon,
   SparklesIcon,
   Trash2Icon,
@@ -28,6 +29,7 @@ import {
   type MobileBillingStatus,
 } from "@/src/billing-client";
 import { getConnections } from "@/src/connections-client";
+import { fetchMemories } from "@/src/memory-client";
 import {
   AGENT_URL,
   getAgentUrl,
@@ -59,6 +61,7 @@ export function SettingsScreen() {
     selectedKey;
   const agentHostLabel = agentHostname(agentUrl);
   const [connectedCount, setConnectedCount] = useState<number | null>(null);
+  const [memoryDetail, setMemoryDetail] = useState("Facts Pearl keeps");
 
   const loadConnections = useCallback(async () => {
     try {
@@ -74,6 +77,20 @@ export function SettingsScreen() {
   useEffect(() => {
     void loadConnections();
   }, [loadConnections]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void fetchMemories()
+        .then((snapshot) => {
+          if (!cancelled) setMemoryDetail(memoryCountLabel(snapshot.entries.length));
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   const pluginsDetail =
     connectedCount == null
@@ -161,6 +178,13 @@ export function SettingsScreen() {
           showSeparator
         />
         <SettingsRow
+          icon={<Icon as={NotebookPenIcon} className="size-5 text-rose-500" />}
+          label="Memory"
+          detail={memoryDetail}
+          onPress={() => router.push("/memory")}
+          showSeparator
+        />
+        <SettingsRow
           icon={<Icon as={SparklesIcon} className="size-5 text-violet-500" />}
           label="Models"
           detail={selectedLabel}
@@ -240,6 +264,12 @@ export function SettingsScreen() {
       </Text>
     </SheetScaffold>
   );
+}
+
+function memoryCountLabel(count: number): string {
+  if (count === 0) return "None yet";
+  if (count === 1) return "1 saved";
+  return `${count} saved`;
 }
 
 function formatCents(cents: number | null | undefined): string {

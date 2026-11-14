@@ -153,6 +153,10 @@ function AuthenticatedLayout() {
                       options={{ title: "Identity", headerShown: true }}
                     />
                     <Stack.Screen
+                      name="memory"
+                      options={{ title: "Memory", headerShown: true }}
+                    />
+                    <Stack.Screen
                       name="about"
                       options={{ title: "About", headerShown: true }}
                     />
