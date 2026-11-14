@@ -10,17 +10,17 @@ import {
 import * as Linking from "expo-linking";
 import { Stack } from "expo-router";
 
-import { PluginLogo } from "@/components/plugin-logo";
-import { SheetScaffold } from "@/components/sheet-scaffold";
+import { PluginLogo } from "@/components/settings/plugin-logo";
+import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import {
   capabilitiesForConnection,
   capabilitiesForPlugin,
   type PluginCapabilities,
-} from "../../lib/plugins/capabilities";
+} from "../../../lib/plugins/capabilities";
 import {
   isConnectablePlugin,
   type ResolvedPlugin,
-} from "../../lib/plugins/catalog";
+} from "../../../lib/plugins/catalog";
 import {
   authorizeConnection,
   getConnectionGrants,

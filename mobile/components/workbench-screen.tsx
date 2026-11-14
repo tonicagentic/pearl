@@ -9,10 +9,10 @@ import {
 } from "react-native";
 import { Stack, useIsFocused, useRouter } from "expo-router";
 import { ChevronLeftIcon } from "lucide-react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { Icon } from "@/components/ui/icon";
+import { StackScreen } from "@/components/ui/stack-screen";
 import {
   createWorkbenchPin,
   fetchWorkbenchPins,
@@ -36,9 +36,6 @@ export function WorkbenchScreen() {
   const [suggested, setSuggested] = useState<SuggestedPinDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
@@ -78,10 +75,7 @@ export function WorkbenchScreen() {
   }, [reload, suggested]);
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor }}
-      edges={["left", "right"]}
-    >
+    <StackScreen>
       <Stack.Screen
         options={{
           headerShown: true,
@@ -195,6 +189,6 @@ export function WorkbenchScreen() {
           </Pressable>
         )}
       />
-    </SafeAreaView>
+    </StackScreen>
   );
 }

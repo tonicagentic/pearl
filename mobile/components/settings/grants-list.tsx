@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 
-import { PluginLogo } from "@/components/plugin-logo";
+import { PluginLogo } from "@/components/settings/plugin-logo";
 import {
   authorizeConnection,
   getConnectionGrants,
@@ -17,7 +17,7 @@ import {
   type ConnectionGrantSummary,
   type ConnectionId,
 } from "@/src/connections-client";
-import type { PluginMarkId } from "../../lib/plugins/catalog";
+import type { PluginMarkId } from "../../../lib/plugins/catalog";
 
 function validatedHttpsUrl(value: unknown): string | null {
   if (typeof value !== "string" || value.trim() !== value) return null;

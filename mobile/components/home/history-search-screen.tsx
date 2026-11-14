@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,8 +24,12 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
-import { HOME_DOCK_CLEARANCE } from "@/components/home-dock";
+import { HOME_DOCK_CLEARANCE } from "@/components/home/home-dock";
 import { Icon } from "@/components/ui/icon";
+
+/** iOS uses the native bottom search toolbar; Android keeps the floating dock. */
+const SEARCH_FIELD_CLEARANCE =
+  Platform.OS === "ios" ? 56 : HOME_DOCK_CLEARANCE;
 import { useChats } from "@/src/chat-context";
 import {
   searchChats,
@@ -172,7 +177,7 @@ export function HistorySearchScreen({
 
   const listPadStyle = useAnimatedStyle(() => ({
     paddingBottom:
-      Math.max(keyboardHeight.value, restingPad) + HOME_DOCK_CLEARANCE + 16,
+      Math.max(keyboardHeight.value, restingPad) + SEARCH_FIELD_CLEARANCE + 16,
   }));
 
   const rows: readonly (ChatSearchHit | ChatListItem)[] = showSuggestions

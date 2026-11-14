@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
@@ -10,12 +9,13 @@ import {
   View,
 } from "react-native";
 import { router, Stack } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { CheckIcon, MoreHorizontalIcon, RotateCcwIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { TaskDateField } from "@/components/task-date-field";
 import { Icon } from "@/components/ui/icon";
+import { LoadingCenter } from "@/components/ui/loading-center";
+import { StackScreen } from "@/components/ui/stack-screen";
 import {
   deleteIssueRequest,
   fetchIssueRequest,
@@ -38,9 +38,6 @@ export function TaskDetailScreen({
   const [reviewDate, setReviewDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
-  const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
@@ -208,10 +205,7 @@ export function TaskDetailScreen({
   const headerTitle = issue?.title || "Task";
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor }}
-      edges={["left", "right"]}
-    >
+    <StackScreen>
       <Stack.Screen
         options={{
           headerShown: true,
@@ -269,9 +263,7 @@ export function TaskDetailScreen({
       ) : null}
 
       {issue === null && !error ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator />
-        </View>
+        <LoadingCenter />
       ) : (
         <ScrollView
           className="flex-1 px-5"
@@ -324,6 +316,6 @@ export function TaskDetailScreen({
           </View>
         </ScrollView>
       )}
-    </SafeAreaView>
+    </StackScreen>
   );
 }

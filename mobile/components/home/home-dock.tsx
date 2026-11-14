@@ -42,11 +42,12 @@ const COMPOSE_SIZE = 52;
 const GAP = 10;
 const MORPH_MS = 280;
 
+/** List padding so rows clear the floating dock (Android fallback). */
 export const HOME_DOCK_CLEARANCE = SEARCH_HEIGHT + 24;
 
 /**
- * Mail/Messages-style bottom dock: floating Search pill + compose circle.
- * When search is active the pill expands and an X splits off; compose hides.
+ * Android (and non–Liquid Glass) floating Search + compose dock.
+ * On iOS, Mail home uses Stack.SearchBar + bottom Toolbar instead.
  */
 export function HomeDock({
   searchActive,
@@ -282,7 +283,7 @@ export function HomeDock({
         >
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="New chat"
+            accessibilityLabel="Compose"
             onPress={onCompose}
           >
             <Shell round={COMPOSE_SIZE / 2}>

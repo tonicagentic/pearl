@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PlusIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
-import { CreateProjectModal } from "@/components/create-project-modal";
+import { CreateProjectModal } from "@/components/home/create-project-modal";
 import { ProjectMark } from "@/components/project-mark";
 import { Icon } from "@/components/ui/icon";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";

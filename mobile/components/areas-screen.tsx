@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { Stack } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
+import { StackScreen } from "@/components/ui/stack-screen";
 import { fetchIssues, type IssuesPayload } from "@/src/issues-client";
 
 /**
@@ -14,9 +14,6 @@ import { fetchIssues, type IssuesPayload } from "@/src/issues-client";
 export function AreasScreen() {
   const [payload, setPayload] = useState<IssuesPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
@@ -46,10 +43,7 @@ export function AreasScreen() {
   }, []);
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor }}
-      edges={["left", "right"]}
-    >
+    <StackScreen>
       <Stack.Screen
         options={{
           headerShown: true,
@@ -95,6 +89,6 @@ export function AreasScreen() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </StackScreen>
   );
 }

@@ -16,17 +16,16 @@ import {
   View,
   Platform,
 } from "react-native";
-import { router, Stack, useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import Animated, {
   FadeInDown,
   FadeOutUp,
   LinearTransition,
 } from "react-native-reanimated";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { CheckIcon, PlusIcon, Trash2Icon } from "lucide-react-native";
+import { CheckIcon, Trash2Icon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
-import { CreateTaskModal } from "@/components/create-task-modal";
+import { CreateTaskModal } from "@/components/home/create-task-modal";
 import { Icon } from "@/components/ui/icon";
 import {
   deleteIssueRequest,
@@ -51,24 +50,18 @@ export type IssuesScreenHandle = {
   readonly openComposer: () => void;
 };
 
-/**
- * Tasks inbox. When `embedded`, skips stack chrome for the Mail home shell.
- */
+/** Tasks inbox for the Mail home shell (Chats / Tasks / Projects). */
 export const IssuesScreen = forwardRef<
   IssuesScreenHandle,
   {
-    readonly embedded?: boolean;
     readonly bottomInset?: number;
   }
->(function IssuesScreen({ embedded = false, bottomInset = 0 }, ref) {
+>(function IssuesScreen({ bottomInset = 0 }, ref) {
   const [payload, setPayload] = useState<IssuesPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
@@ -232,20 +225,14 @@ export const IssuesScreen = forwardRef<
     [issues],
   );
 
-  const body = (
-    <>
+  return (
+    <View style={{ flex: 1, backgroundColor }}>
       <ScrollView
         className="flex-1"
-        contentContainerClassName={embedded ? "px-5 pt-0" : "px-5 pt-2"}
+        contentContainerClassName="px-5 pt-0"
         contentContainerStyle={{ paddingBottom: 24 + bottomInset }}
         contentInsetAdjustmentBehavior="automatic"
       >
-        {!embedded ? (
-          <Text className="mb-6 text-[15px] leading-5 text-muted-foreground">
-            Capture and clear open loops.
-          </Text>
-        ) : null}
-
         {error ? (
           <Pressable
             accessibilityRole="button"
@@ -315,49 +302,7 @@ export const IssuesScreen = forwardRef<
           router.push(`/issues/${encodeURIComponent(created.id)}`);
         }}
       />
-    </>
-  );
-
-  if (embedded) {
-    return <View style={{ flex: 1, backgroundColor }}>{body}</View>;
-  }
-
-  return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor }}
-      edges={["left", "right"]}
-    >
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: "Tasks",
-          headerTintColor: foregroundColor,
-          headerRight:
-            Platform.OS === "ios"
-              ? undefined
-              : () => (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="New task"
-                    className="h-10 w-10 items-center justify-center"
-                    onPress={() => setComposerOpen(true)}
-                  >
-                    <Icon as={PlusIcon} className="size-5 text-foreground" />
-                  </Pressable>
-                ),
-        }}
-      />
-      {Platform.OS === "ios" ? (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon="plus"
-            accessibilityLabel="New task"
-            onPress={() => setComposerOpen(true)}
-          />
-        </Stack.Toolbar>
-      ) : null}
-      {body}
-    </SafeAreaView>
+    </View>
   );
 });
 

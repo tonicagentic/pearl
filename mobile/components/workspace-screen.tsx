@@ -13,8 +13,6 @@ import {
   ShareIcon,
   XIcon,
 } from "lucide-react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { previewKindForPath } from "../../lib/design/preview-kind";
@@ -303,25 +301,6 @@ export function WorkspacePanel({
           )
         ) : null}
       </View>
-    </View>
-  );
-}
-
-/**
- * @deprecated Prefer ComputerPanel / WorkspacePanel inside Chat | Computer.
- * Kept as a thin alias so older imports keep resolving during the migration.
- */
-export function WorkspaceScreen() {
-  const insets = useSafeAreaInsets();
-  const { open } = useWorkspace();
-  if (!open) return null;
-  return (
-    <View
-      className="bg-background absolute inset-0 z-50"
-      style={{ paddingTop: insets.top }}
-      accessibilityViewIsModal
-    >
-      <WorkspacePanel />
     </View>
   );
 }

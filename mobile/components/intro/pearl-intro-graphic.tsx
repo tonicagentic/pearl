@@ -4,10 +4,10 @@ import { useCSSVariable } from "uniwind";
 import type {
   PearlIntroBubble,
   PearlIntroPanelId,
-} from "@/components/pearl-intro-panels";
-import { PEARL_INTRO_PANELS } from "@/components/pearl-intro-panels";
+} from "@/components/intro/pearl-intro-panels";
+import { PEARL_INTRO_PANELS } from "@/components/intro/pearl-intro-panels";
 
-const icon = require("../assets/icon.png");
+const icon = require("../../assets/icon.png");
 
 /** Decorative chat-bubble collage for one intro panel. */
 export function PearlIntroGraphic({

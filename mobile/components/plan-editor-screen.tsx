@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -9,11 +8,12 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
 import { revealChatThread } from "@/components/chat-history-push";
+import { LoadingCenter } from "@/components/ui/loading-center";
+import { StackScreen } from "@/components/ui/stack-screen";
 import { setAgentMode } from "@/src/agent-mode";
 import { useChats } from "@/src/chat-context";
 import {
@@ -40,9 +40,6 @@ export function PlanEditorScreen({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [carryingOut, setCarryingOut] = useState(false);
-  const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
@@ -90,11 +87,9 @@ export function PlanEditorScreen({
     (title.trim() !== plan.title || markdown !== plan.markdown);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor }} edges={["left", "right"]}>
+    <StackScreen>
       {plan === null && !error ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator />
-        </View>
+        <LoadingCenter />
       ) : (
         <ScrollView
           className="flex-1 px-5"
@@ -265,6 +260,6 @@ export function PlanEditorScreen({
           </View>
         </ScrollView>
       )}
-    </SafeAreaView>
+    </StackScreen>
   );
 }

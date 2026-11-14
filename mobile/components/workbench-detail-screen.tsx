@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCSSVariable } from "uniwind";
 
+import { LoadingCenter } from "@/components/ui/loading-center";
+import { StackScreen } from "@/components/ui/stack-screen";
 import { openWebUrlExternally } from "@/src/open-web-url";
 import {
   addPinDomain,
@@ -34,7 +36,7 @@ export function WorkbenchDetailScreen() {
   const [status, setStatus] = useState<PinStatusDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const backgroundColor = useCSSVariable("--color-background") as
+  const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
 
@@ -58,19 +60,41 @@ export function WorkbenchDetailScreen() {
   }, [reload]);
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor }}>
-      <View className="flex-row items-center justify-between px-4 pb-2 pt-2">
-        <View className="flex-1 pr-3">
-          <Text className="text-xl font-semibold text-foreground">
-            {pin?.fullName ?? "Repo"}
-          </Text>
-        </View>
-        <Pressable accessibilityRole="button" onPress={() => void reload()}>
-          <Text className="text-sm text-muted-foreground">Refresh</Text>
-        </Pressable>
-      </View>
+    <StackScreen>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: pin?.fullName ?? "Repo",
+          headerTintColor: foregroundColor,
+          headerBackButtonDisplayMode: "minimal",
+          headerRight:
+            Platform.OS === "ios"
+              ? undefined
+              : () => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Refresh"
+                    className="min-h-11 justify-center px-2"
+                    onPress={() => void reload()}
+                  >
+                    <Text style={{ color: foregroundColor, fontSize: 17 }}>
+                      Refresh
+                    </Text>
+                  </Pressable>
+                ),
+        }}
+      />
+      {Platform.OS === "ios" ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon="arrow.clockwise"
+            accessibilityLabel="Refresh"
+            onPress={() => void reload()}
+          />
+        </Stack.Toolbar>
+      ) : null}
 
-      <View className="mb-2 flex-row gap-2 px-4">
+      <View className="mb-2 flex-row gap-2 px-4 pt-2">
         {(
           [
             ["overview", "Overview"],
@@ -103,9 +127,7 @@ export function WorkbenchDetailScreen() {
       ) : null}
 
       {loading && !pin ? (
-        <View className="py-10">
-          <ActivityIndicator />
-        </View>
+        <LoadingCenter />
       ) : tab === "overview" ? (
         <OverviewTab
           status={status}
@@ -118,7 +140,7 @@ export function WorkbenchDetailScreen() {
       ) : tab === "usage" && id ? (
         <UsageTab pinId={id} onOpenPearlBilling={() => router.push("/settings")} />
       ) : null}
-    </SafeAreaView>
+    </StackScreen>
   );
 }
 

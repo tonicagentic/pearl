@@ -7,41 +7,33 @@ import {
 } from "react";
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   ScrollView,
   Text,
   View,
 } from "react-native";
-import { router, Stack } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { PlusIcon } from "lucide-react-native";
+import { router } from "expo-router";
 import { useCSSVariable } from "uniwind";
 
-import { CreateProjectModal } from "@/components/create-project-modal";
+import { CreateProjectModal } from "@/components/home/create-project-modal";
 import { ProjectMark } from "@/components/project-mark";
-import { Icon } from "@/components/ui/icon";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 
 export type ProjectsScreenHandle = {
   readonly openComposer: () => void;
 };
 
-/** Projects list. When `embedded`, skips stack chrome for the Mail home shell. */
+/** Projects list for the Mail home shell (Chats / Tasks / Projects). */
 export const ProjectsScreen = forwardRef<
   ProjectsScreenHandle,
   {
-    readonly embedded?: boolean;
     readonly bottomInset?: number;
   }
->(function ProjectsScreen({ embedded = false, bottomInset = 0 }, ref) {
+>(function ProjectsScreen({ bottomInset = 0 }, ref) {
   const [projects, setProjects] = useState<readonly ProjectDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
 
@@ -88,8 +80,8 @@ export const ProjectsScreen = forwardRef<
     };
   }, []);
 
-  const body = (
-    <>
+  return (
+    <View style={{ flex: 1, backgroundColor }}>
       {error ? (
         <Pressable className="px-5 py-3" onPress={() => void reload()}>
           <Text className="text-sm text-destructive">
@@ -105,7 +97,7 @@ export const ProjectsScreen = forwardRef<
       ) : (
         <ScrollView
           className="flex-1 px-5"
-          contentContainerClassName={embedded ? "pt-0" : "pt-2"}
+          contentContainerClassName="pt-0"
           contentContainerStyle={{ paddingBottom: 24 + bottomInset }}
           contentInsetAdjustmentBehavior="automatic"
         >
@@ -166,48 +158,6 @@ export const ProjectsScreen = forwardRef<
           router.push(`/projects/${encodeURIComponent(project.id)}`);
         }}
       />
-    </>
-  );
-
-  if (embedded) {
-    return <View style={{ flex: 1, backgroundColor }}>{body}</View>;
-  }
-
-  return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor }}
-      edges={["left", "right"]}
-    >
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: "Projects",
-          headerTintColor: foregroundColor,
-          headerRight:
-            Platform.OS === "ios"
-              ? undefined
-              : () => (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="New project"
-                    className="h-10 w-10 items-center justify-center"
-                    onPress={() => setShowForm(true)}
-                  >
-                    <Icon as={PlusIcon} className="size-5 text-foreground" />
-                  </Pressable>
-                ),
-        }}
-      />
-      {Platform.OS === "ios" ? (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon="plus"
-            accessibilityLabel="New project"
-            onPress={() => setShowForm(true)}
-          />
-        </Stack.Toolbar>
-      ) : null}
-      {body}
-    </SafeAreaView>
+    </View>
   );
 });

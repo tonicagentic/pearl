@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
-import { PearlIntroPager } from "@/components/pearl-intro-pager";
+import { PearlIntroPager } from "@/components/intro/pearl-intro-pager";
 import { isHostedLocked } from "@/src/eve-transport";
 
 /**

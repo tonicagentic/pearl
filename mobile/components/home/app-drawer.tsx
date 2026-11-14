@@ -15,7 +15,7 @@ import { useCSSVariable } from "uniwind";
 import {
   HistoryListIOS,
   type HistoryChatActionHandlers,
-} from "@/components/history-list";
+} from "@/components/home/history-list";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";

@@ -19,7 +19,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
-import { SheetScaffold } from "@/components/sheet-scaffold";
+import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { TextField } from "@/components/ui/text-field";
 import {
   createSkillRequest,
@@ -187,7 +187,7 @@ export function SkillsScreen() {
 
   return (
     <>
-    <SheetScaffold title="Skills">
+    <SheetScaffold>
         {error ? (
           <Text className="px-1 text-[13px] text-destructive" accessibilityRole="alert">
             {error}

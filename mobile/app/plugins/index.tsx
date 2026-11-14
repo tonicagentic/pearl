@@ -1,11 +1,11 @@
-import { Redirect } from "expo-router";
-
-import { PluginsScreen } from "@/components/plugins-screen";
-import { useAuth } from "@/src/auth";
+import { PluginsScreen } from "@/components/settings/plugins-screen";
+import { RequireSignedIn } from "@/src/require-signed-in";
 
 /** Plugins settings route; requires the auth gate (redirects home otherwise). */
 export default function Plugins() {
-  const { signedIn } = useAuth();
-  if (!signedIn) return <Redirect href="/" />;
-  return <PluginsScreen />;
+  return (
+    <RequireSignedIn>
+      <PluginsScreen />
+    </RequireSignedIn>
+  );
 }

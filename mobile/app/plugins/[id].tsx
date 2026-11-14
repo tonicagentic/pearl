@@ -1,17 +1,18 @@
 import { Redirect, useLocalSearchParams } from "expo-router";
 
-import { PluginDetailScreen } from "@/components/plugin-detail-screen";
-import { getPluginById, isMarketplacePluginId } from "../../../lib/plugins/catalog";
-import { useAuth } from "@/src/auth";
+import { PluginDetailScreen } from "@/components/settings/plugin-detail-screen";
+import {
+  getPluginById,
+  isMarketplacePluginId,
+} from "../../../lib/plugins/catalog";
+import { RequireSignedIn } from "@/src/require-signed-in";
 
 /** Plugin detail route; requires auth and a known marketplace plugin id. */
 export default function PluginDetailRoute() {
-  const { signedIn } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  if (!signedIn) return <Redirect href="/" />;
-
-  const pluginId = typeof id === "string" ? id : Array.isArray(id) ? id[0] : null;
+  const pluginId =
+    typeof id === "string" ? id : Array.isArray(id) ? id[0] : null;
   if (!pluginId || !isMarketplacePluginId(pluginId)) {
     return <Redirect href="/plugins" />;
   }
@@ -19,5 +20,9 @@ export default function PluginDetailRoute() {
   const plugin = getPluginById(pluginId);
   if (!plugin) return <Redirect href="/plugins" />;
 
-  return <PluginDetailScreen plugin={plugin} />;
+  return (
+    <RequireSignedIn>
+      <PluginDetailScreen plugin={plugin} />
+    </RequireSignedIn>
+  );
 }

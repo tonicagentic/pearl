@@ -1,11 +1,11 @@
-import { Redirect } from "expo-router";
-
-import { IdentityScreen } from "@/components/identity-screen";
-import { useAuth } from "@/src/auth";
+import { IdentityScreen } from "@/components/settings/identity-screen";
+import { RequireSignedIn } from "@/src/require-signed-in";
 
 /** Identity settings route; requires the auth gate (redirects home otherwise). */
 export default function Identity() {
-  const { signedIn } = useAuth();
-  if (!signedIn) return <Redirect href="/" />;
-  return <IdentityScreen />;
+  return (
+    <RequireSignedIn>
+      <IdentityScreen />
+    </RequireSignedIn>
+  );
 }

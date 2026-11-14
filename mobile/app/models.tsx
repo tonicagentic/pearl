@@ -1,11 +1,11 @@
-import { Redirect } from "expo-router";
-
-import { ModelsScreen } from "@/components/models-screen";
-import { useAuth } from "@/src/auth";
+import { ModelsScreen } from "@/components/settings/models-screen";
+import { RequireSignedIn } from "@/src/require-signed-in";
 
 /** Models settings route; requires the auth gate (redirects home otherwise). */
 export default function Models() {
-  const { signedIn } = useAuth();
-  if (!signedIn) return <Redirect href="/" />;
-  return <ModelsScreen />;
+  return (
+    <RequireSignedIn>
+      <ModelsScreen />
+    </RequireSignedIn>
+  );
 }

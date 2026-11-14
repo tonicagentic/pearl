@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import {
-  Alert,
-  Platform,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
+import { Alert, Platform, View } from "react-native";
 import { Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
 import {
@@ -15,10 +9,7 @@ import {
   type AppendMessage,
   type ThreadMessageLike,
 } from "@assistant-ui/react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
@@ -32,6 +23,7 @@ import { ThreadActionsDrawer } from "@/components/thread-actions-drawer";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { ComputerPanel } from "@/components/computer-panel";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
+import { StackScreen } from "@/components/ui/stack-screen";
 import { getAgentMode } from "@/src/agent-mode";
 import { withPendingAssistant } from "@/src/stream-presentation";
 import { buildTurnClientContext } from "@/src/turn-client-context";
@@ -79,10 +71,6 @@ export function ChatScreen({
     | string
     | undefined;
   const foregroundColor = useCSSVariable("--color-foreground") as string | undefined;
-  const screenStyle: StyleProp<ViewStyle> = [
-    { flex: 1 },
-    { backgroundColor },
-  ];
   // Match Thread list clearance under the transparent iOS nav.
   const computerTopInset =
     Platform.OS === "ios" ? insets.top + 44 : 0;
@@ -744,7 +732,7 @@ export function ChatScreen({
             : null;
 
   return (
-    <SafeAreaView style={screenStyle} edges={["left", "right"]}>
+    <StackScreen>
       <Stack.Screen
         options={{
           headerShown: true,
@@ -863,7 +851,7 @@ export function ChatScreen({
           </SubagentInspectProvider>
         </ConversationProvider>
       </View>
-    </SafeAreaView>
+    </StackScreen>
   );
 }
 

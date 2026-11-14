@@ -1,6 +1,6 @@
 import { Stack } from "expo-router";
 
-import { BillingGateScreen } from "@/components/billing-gate-screen";
+import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { useAuth } from "@/src/auth";
 
 /**

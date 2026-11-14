@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 
-import { GrantsList } from "@/components/grants-list";
-import { PluginLogo } from "@/components/plugin-logo";
-import { SheetScaffold } from "@/components/sheet-scaffold";
+import { GrantsList } from "@/components/settings/grants-list";
+import { PluginLogo } from "@/components/settings/plugin-logo";
+import { SheetScaffold } from "@/components/settings/sheet-scaffold";
+import { Section } from "@/components/ui/section";
 import {
   PLUGIN_SECTIONS,
   isConnectablePlugin,
@@ -12,7 +13,7 @@ import {
   type PluginCatalogEntry,
   type PluginMarkId,
   type ResolvedPlugin,
-} from "../../lib/plugins/catalog";
+} from "../../../lib/plugins/catalog";
 import {
   getConnections,
   type ConnectionStatus,
@@ -86,7 +87,7 @@ export function PluginsScreen() {
         const plugins = pluginsForSection(section);
         if (plugins.length === 0) return null;
         return (
-          <PluginSection key={section.id} title={section.title}>
+          <Section key={section.id} title={section.title}>
             {plugins.map((plugin, index) => (
               <CatalogRow
                 key={plugin.id}
@@ -102,7 +103,7 @@ export function PluginsScreen() {
                 showSeparator={index < plugins.length - 1}
               />
             ))}
-          </PluginSection>
+          </Section>
         );
       })}
     </SheetScaffold>
@@ -125,23 +126,6 @@ function trailingForStatus(status: ConnectionStatus | undefined): string {
   }
   if (status.status === "unavailable") return "Unavailable";
   return "Connect";
-}
-
-function PluginSection({
-  title,
-  children,
-}: {
-  readonly title: string;
-  readonly children: ReactNode;
-}) {
-  return (
-    <View className="gap-1.5">
-      <Text className="px-1 text-[13px] font-medium text-muted-foreground">
-        {title}
-      </Text>
-      <View className="overflow-hidden rounded-[18px] bg-card">{children}</View>
-    </View>
-  );
 }
 
 function CatalogRow({

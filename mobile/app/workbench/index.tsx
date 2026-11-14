@@ -1,11 +1,10 @@
-import { Redirect } from "expo-router";
-
 import { WorkbenchScreen } from "@/components/workbench-screen";
-import { useAuth } from "@/src/auth";
+import { RequireSignedIn } from "@/src/require-signed-in";
 
 export default function WorkbenchRoute() {
-  const { signedIn, restoring } = useAuth();
-  if (restoring) return null;
-  if (!signedIn) return <Redirect href="/" />;
-  return <WorkbenchScreen />;
+  return (
+    <RequireSignedIn>
+      <WorkbenchScreen />
+    </RequireSignedIn>
+  );
 }

@@ -44,7 +44,7 @@ export default function RootLayout() {
 }
 
 function AuthenticatedLayout() {
-  const { signedIn, restoring, billingReady, viewerEmail } = useAuth();
+  const { signedIn, billingReady, viewerEmail } = useAuth();
   useEffect(() => {
     configureModelSelectionPersistence(saveModelSelection);
     configureImageModelSelectionPersistence(saveImageModelSelection);
@@ -60,10 +60,11 @@ function AuthenticatedLayout() {
   }, []);
   // Dispose in-memory chat state whenever an account signs out or changes.
   const accountKey = signedIn ? `account:${viewerEmail}` : "signed-out";
-  const ready = !restoring;
-  const signedOut = ready && !signedIn;
-  const needsBilling = ready && signedIn && !billingReady;
-  const appReady = ready && signedIn && billingReady;
+  // Keep at least one Stack.Protected guard true while the session restores
+  // (otherwise Expo Router warns that every route is protected).
+  const signedOut = !signedIn;
+  const needsBilling = signedIn && !billingReady;
+  const appReady = signedIn && billingReady;
 
   return (
     <ChatsProvider key={accountKey}>
@@ -159,18 +160,20 @@ function AuthenticatedLayout() {
                       name="self-host"
                       options={{ title: "Self-host", headerShown: true }}
                     />
-                    <Stack.Screen
-                      name="json-render-smoke"
-                      options={{ title: "json-render smoke" }}
-                    />
-                    <Stack.Screen
-                      name="thread-samples"
-                      options={{
-                        title: "Thread samples",
-                        headerShown: true,
-                        headerBackButtonDisplayMode: "minimal",
-                      }}
-                    />
+                    <Stack.Protected guard={__DEV__}>
+                      <Stack.Screen
+                        name="json-render-smoke"
+                        options={{ title: "json-render smoke" }}
+                      />
+                      <Stack.Screen
+                        name="thread-samples"
+                        options={{
+                          title: "Thread samples",
+                          headerShown: true,
+                          headerBackButtonDisplayMode: "minimal",
+                        }}
+                      />
+                    </Stack.Protected>
                     <Stack.Screen
                       name="browser"
                       options={{

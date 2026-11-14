@@ -1,13 +1,5 @@
-import type { ReactNode } from "react";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import {
-  Alert,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Alert, Platform, Text, View } from "react-native";
 import { router } from "expo-router";
 import {
   BrainIcon,
@@ -19,12 +11,14 @@ import {
   NetworkIcon,
   PuzzleIcon,
   SparklesIcon,
+  Trash2Icon,
   WalletIcon,
 } from "lucide-react-native";
-import { useCSSVariable } from "uniwind";
 
-import { SheetScaffold } from "@/components/sheet-scaffold";
+import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { Icon } from "@/components/ui/icon";
+import { SettingsCard } from "@/components/ui/settings-card";
+import { SettingsRow } from "@/components/ui/settings-row";
 import { agentHostname } from "@/src/agent-url";
 import { getAppVersionDetail } from "@/src/app-version";
 import { useAuth } from "@/src/auth";
@@ -38,6 +32,7 @@ import {
   AGENT_URL,
   getAgentUrl,
   getAuthCookie,
+  isHostedLocked,
   subscribeAgentUrlBinding,
 } from "@/src/eve-transport";
 import {
@@ -104,8 +99,53 @@ export function SettingsScreen() {
     ]);
   };
 
+  const confirmDeleteAccount = () => {
+    const run = async () => {
+      try {
+        const credential = getAuthCookie();
+        const response = await fetch(`${AGENT_URL}/api/account`, {
+          method: "DELETE",
+          headers: {
+            "content-type": "application/json",
+            Origin: AGENT_URL,
+            ...(credential ? { authorization: `Bearer ${credential}` } : {}),
+          },
+        });
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          throw new Error(body?.error ?? `Delete failed (${response.status}).`);
+        }
+        signOut();
+      } catch (cause) {
+        const message =
+          cause instanceof Error ? cause.message : "Could not delete account.";
+        if (Platform.OS === "web") {
+          window.alert(message);
+        } else {
+          Alert.alert("Could not delete account", message);
+        }
+      }
+    };
+
+    const title = "Delete your Pearl account?";
+    const body =
+      "This removes your chats, projects, and connection grants on this host. It cannot be undone.";
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && window.confirm(`${title}\n\n${body}`)) {
+        void run();
+      }
+      return;
+    }
+    Alert.alert(title, body, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete account", style: "destructive", onPress: () => void run() },
+    ]);
+  };
+
   return (
-    <SheetScaffold title="Settings">
+    <SheetScaffold>
       {viewerEmail ? (
         <Text className="px-1 text-center text-[13px] text-muted-foreground">
           {viewerEmail}
@@ -162,13 +202,17 @@ export function SettingsScreen() {
 
       <SettingsCard>
         <BillingRow />
-        <SettingsRow
-          icon={<Icon as={CloudIcon} className="size-5 text-muted-foreground" />}
-          label="Self-host"
-          detail={agentHostLabel}
-          onPress={() => router.push("/self-host")}
-          showSeparator
-        />
+        {isHostedLocked() ? null : (
+          <SettingsRow
+            icon={
+              <Icon as={CloudIcon} className="size-5 text-muted-foreground" />
+            }
+            label="Self-host"
+            detail={agentHostLabel}
+            onPress={() => router.push("/self-host")}
+            showSeparator
+          />
+        )}
         <SettingsRow
           icon={<Icon as={InfoIcon} className="size-5 text-muted-foreground" />}
           label="About Pearl"
@@ -181,6 +225,13 @@ export function SettingsScreen() {
           label="Sign out"
           labelDestructive
           onPress={confirmSignOut}
+          showSeparator
+        />
+        <SettingsRow
+          icon={<Icon as={Trash2Icon} className="size-5 text-destructive" />}
+          label="Delete account"
+          labelDestructive
+          onPress={confirmDeleteAccount}
         />
       </SettingsCard>
 
@@ -213,6 +264,10 @@ function BillingRow() {
   const detail = (() => {
     if (!status || !status.enabled) return "Off";
     if (status.exempt) return "Free pass";
+    if (status.trial) {
+      if (status.reason === "trial_cap_reached") return "Allowance used";
+      return `${formatCents(status.spentCents)} of ${formatCents(status.usageCapCents)} trial`;
+    }
     if (status.needsCheckout) return "Subscribe";
     return `${formatCents(status.spentCents)} of ${formatCents(status.usageCapCents)}`;
   })();
@@ -221,6 +276,14 @@ function BillingRow() {
     if (!status?.enabled || pending) return;
     if (status.exempt) {
       Alert.alert("Billing", "This account has a free pass and is not billed.");
+      return;
+    }
+    if (status.trial) {
+      Alert.alert(
+        "Friend beta",
+        status.message ??
+          `Included ${formatCents(status.usageCapCents)} / month. Spent ${formatCents(status.spentCents)} this period.`,
+      );
       return;
     }
     setPending(true);
@@ -268,85 +331,3 @@ function BillingRow() {
     />
   );
 }
-
-function SettingsCard({ children }: { readonly children: ReactNode }) {
-  return (
-    <View className="overflow-hidden rounded-[18px] bg-card">{children}</View>
-  );
-}
-
-function SettingsRow({
-  icon,
-  label,
-  detail,
-  detailAccent,
-  labelDestructive,
-  onPress,
-  showSeparator,
-}: {
-  readonly icon: ReactNode;
-  readonly label: string;
-  readonly detail?: string;
-  readonly detailAccent?: boolean;
-  readonly labelDestructive?: boolean;
-  readonly onPress: () => void;
-  readonly showSeparator?: boolean;
-}) {
-  const accentColor = useCSSVariable("--color-primary") as string | undefined;
-
-  return (
-    <View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        className="active:bg-muted/80"
-        onPress={onPress}
-        style={styles.row}
-      >
-        <View className="size-9 items-center justify-center overflow-hidden rounded-[10px] bg-muted">
-          {icon}
-        </View>
-        <Text
-          className={`min-w-0 flex-1 text-[17px] leading-[22px] ${labelDestructive ? "text-destructive" : "text-foreground"}`}
-          numberOfLines={1}
-        >
-          {label}
-        </Text>
-        {detail ? (
-          <Text
-            className="max-w-[42%] text-right text-[15px] text-muted-foreground"
-            numberOfLines={1}
-            style={
-              detailAccent && accentColor ? { color: accentColor } : undefined
-            }
-          >
-            {detail}
-          </Text>
-        ) : null}
-        <Text className="text-[20px] font-light text-muted-foreground/40">
-          ›
-        </Text>
-      </Pressable>
-      {showSeparator ? (
-        <View
-          className="ml-[52px] h-px bg-border"
-          style={styles.separatorHairline}
-        />
-      ) : null}
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  row: {
-    minHeight: 52,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  separatorHairline: {
-    height: StyleSheet.hairlineWidth,
-  },
-});

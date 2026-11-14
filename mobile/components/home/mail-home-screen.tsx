@@ -7,28 +7,31 @@ import { useCSSVariable } from "uniwind";
 import {
   HistoryScreen,
   type HistoryChatActionHandlers,
-} from "@/components/app-drawer";
+} from "@/components/home/app-drawer";
 import {
   HomeCategoryPills,
   type HomeCategory,
-} from "@/components/home-category-pills";
-import { HOME_DOCK_CLEARANCE, HomeDock } from "@/components/home-dock";
-import { HistorySearchScreen } from "@/components/history-search-screen";
+} from "@/components/home/home-category-pills";
+import { HOME_DOCK_CLEARANCE, HomeDock } from "@/components/home/home-dock";
+import { HistorySearchScreen } from "@/components/home/history-search-screen";
 import {
   IssuesScreen,
   type IssuesScreenHandle,
-} from "@/components/issues-screen";
+} from "@/components/home/issues-screen";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import {
   ProjectsScreen,
   type ProjectsScreenHandle,
-} from "@/components/projects-screen";
+} from "@/components/home/projects-screen";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { Icon } from "@/components/ui/icon";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
 
 const HOME_PRESENCE_POLL_MS = 5_000;
+const IS_IOS = Platform.OS === "ios";
+/** Native bottom toolbar owns inset on iOS; Android uses the floating dock. */
+const LIST_BOTTOM_INSET = IS_IOS ? 0 : HOME_DOCK_CLEARANCE;
 
 /**
  * Mail-style home: stack Settings gear, category pills below, list + dock.
@@ -97,6 +100,18 @@ export function MailHomeScreen() {
     setSearchOpen(false);
     setSearchQuery("");
   }, []);
+
+  const handleCompose = useCallback(() => {
+    if (category === "tasks") {
+      tasksRef.current?.openComposer();
+      return;
+    }
+    if (category === "projects") {
+      projectsRef.current?.openComposer();
+      return;
+    }
+    handleNewChat();
+  }, [category, handleNewChat]);
 
   const promptRename = useCallback(
     (chat: ChatListItem) => {
@@ -213,7 +228,8 @@ export function MailHomeScreen() {
     <View style={{ flex: 1, backgroundColor }}>
       <Stack.Screen
         options={{
-          headerShown: !searchOpen,
+          // iOS: keep header up so Stack.SearchBar / bottom SearchBarSlot stay live.
+          headerShown: IS_IOS ? true : !searchOpen,
           title: "",
           headerShadowVisible: false,
           headerTransparent: false,
@@ -221,21 +237,20 @@ export function MailHomeScreen() {
           headerStyle: { backgroundColor },
           // iOS: Stack.Toolbar owns the morphing glass gear — leave headerLeft
           // unset so we don't get a second chrome button over the list.
-          headerLeft:
-            Platform.OS === "ios"
-              ? undefined
-              : () => (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Settings"
-                    className="h-10 w-10 items-center justify-center"
-                    onPress={() => router.push("/settings")}
-                  >
-                    <Icon as={SettingsIcon} className="size-5 text-foreground" />
-                  </Pressable>
-                ),
+          headerLeft: IS_IOS
+            ? undefined
+            : () => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Settings"
+                  className="h-10 w-10 items-center justify-center"
+                  onPress={() => router.push("/settings")}
+                >
+                  <Icon as={SettingsIcon} className="size-5 text-foreground" />
+                </Pressable>
+              ),
           headerRight:
-            Platform.OS === "ios" || !showCategoryCreate
+            IS_IOS || !showCategoryCreate
               ? undefined
               : () => (
                   <Pressable
@@ -252,27 +267,25 @@ export function MailHomeScreen() {
         }}
       />
       {/* Keep mounted while blurred so the gear morphs into chat/settings. */}
-      {!searchOpen && Platform.OS === "ios" ? (
-        <>
-          <Stack.Toolbar placement="left">
-            <Stack.Toolbar.Button
-              icon="gearshape"
-              accessibilityLabel="Settings"
-              onPress={() => router.push("/settings")}
-            />
-          </Stack.Toolbar>
-          {showCategoryCreate ? (
-            <Stack.Toolbar placement="right">
-              <Stack.Toolbar.Button
-                icon="plus"
-                accessibilityLabel={
-                  category === "tasks" ? "New task" : "New project"
-                }
-                onPress={openCategoryCreate}
-              />
-            </Stack.Toolbar>
-          ) : null}
-        </>
+      {IS_IOS && !searchOpen ? (
+        <Stack.Toolbar placement="left">
+          <Stack.Toolbar.Button
+            icon="gearshape"
+            accessibilityLabel="Settings"
+            onPress={() => router.push("/settings")}
+          />
+        </Stack.Toolbar>
+      ) : null}
+      {IS_IOS && !searchOpen && showCategoryCreate ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon="plus"
+            accessibilityLabel={
+              category === "tasks" ? "New task" : "New project"
+            }
+            onPress={openCategoryCreate}
+          />
+        </Stack.Toolbar>
       ) : null}
 
       {!searchOpen ? (
@@ -298,22 +311,14 @@ export function MailHomeScreen() {
             onOpenChat={openChat}
             chatActions={chatActions}
             visible={!searchOpen}
-            bottomInset={HOME_DOCK_CLEARANCE}
+            bottomInset={LIST_BOTTOM_INSET}
           />
         ) : null}
         {category === "tasks" ? (
-          <IssuesScreen
-            ref={tasksRef}
-            embedded
-            bottomInset={HOME_DOCK_CLEARANCE}
-          />
+          <IssuesScreen ref={tasksRef} bottomInset={LIST_BOTTOM_INSET} />
         ) : null}
         {category === "projects" ? (
-          <ProjectsScreen
-            ref={projectsRef}
-            embedded
-            bottomInset={HOME_DOCK_CLEARANCE}
-          />
+          <ProjectsScreen ref={projectsRef} bottomInset={LIST_BOTTOM_INSET} />
         ) : null}
       </View>
 
@@ -326,14 +331,45 @@ export function MailHomeScreen() {
         }}
       />
 
-      <HomeDock
-        searchActive={searchOpen}
-        searchValue={searchQuery}
-        onSearchChangeText={setSearchQuery}
-        onSearchActivate={() => setSearchOpen(true)}
-        onSearchClose={closeSearch}
-        onCompose={handleNewChat}
-      />
+      {IS_IOS ? (
+        <Stack.SearchBar
+          placeholder="Search"
+          hideWhenScrolling
+          onChangeText={(event) => {
+            setSearchQuery(event.nativeEvent.text);
+          }}
+          onFocus={() => setSearchOpen(true)}
+          onOpen={() => setSearchOpen(true)}
+          onCancelButtonPress={closeSearch}
+          onClose={closeSearch}
+        />
+      ) : null}
+      {IS_IOS ? (
+        <Stack.Toolbar placement="bottom">
+          <Stack.Toolbar.SearchBarSlot separateBackground />
+          <Stack.Toolbar.Spacer />
+          <Stack.Toolbar.Button
+            icon="square.and.pencil"
+            accessibilityLabel={
+              category === "tasks"
+                ? "New task"
+                : category === "projects"
+                  ? "New project"
+                  : "New chat"
+            }
+            onPress={handleCompose}
+          />
+        </Stack.Toolbar>
+      ) : (
+        <HomeDock
+          searchActive={searchOpen}
+          searchValue={searchQuery}
+          onSearchChangeText={setSearchQuery}
+          onSearchActivate={() => setSearchOpen(true)}
+          onSearchClose={closeSearch}
+          onCompose={handleCompose}
+        />
+      )}
 
       <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
       <ProjectPickerModal

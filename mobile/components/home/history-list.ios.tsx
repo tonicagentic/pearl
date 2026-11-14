@@ -39,9 +39,9 @@ import {
 } from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
 
-import type { HistoryChatActionHandlers } from "@/components/history-list";
+import type { HistoryChatActionHandlers } from "@/components/home/history-list";
 
-export type { HistoryChatActionHandlers } from "@/components/history-list";
+export type { HistoryChatActionHandlers } from "@/components/home/history-list";
 
 /**
  * iOS home: plain List with swipe delete + context menu actions.

@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 
-import { SheetScaffold } from "@/components/sheet-scaffold";
+import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { TextField } from "@/components/ui/text-field";
 import { cn } from "@/lib/utils";
 import {
@@ -213,7 +213,6 @@ export function IdentityScreen() {
 
   return (
     <SheetScaffold
-      title="Identity"
       footer={
         <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
           Pearl loads these for fit and health context when needed — not every

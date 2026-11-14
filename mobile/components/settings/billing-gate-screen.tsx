@@ -7,13 +7,13 @@ import { Button } from "@/components/ui/button";
 import {
   fetchBillingStatus,
   startBillingCheckout,
+  type MobileBillingStatus,
 } from "@/src/billing-client";
 import { openWebUrlExternally } from "@/src/open-web-url";
 
 /**
- * Shown after sign-in when the account needs a Stripe subscription. Opens
- * the same Checkout page as the web app; polls until the webhook activates
- * access.
+ * Shown after sign-in when the account cannot chat yet: Stripe checkout for
+ * paying users, or a trial-ended message for allowlisted friend-beta accounts.
  */
 export function BillingGateScreen({
   onReady,
@@ -33,10 +33,12 @@ export function BillingGateScreen({
   const [pending, setPending] = useState(false);
   const [polling, setPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<MobileBillingStatus | null>(null);
 
   const checkStatus = useCallback(async () => {
-    const status = await fetchBillingStatus();
-    if (!status || !status.enabled || status.exempt || status.allowed) {
+    const next = await fetchBillingStatus();
+    setStatus(next);
+    if (!next || !next.enabled || next.exempt || next.allowed) {
       onReady();
       return true;
     }
@@ -84,6 +86,10 @@ export function BillingGateScreen({
     };
   }, [checkStatus, polling]);
 
+  const trialEnded =
+    status?.reason === "trial_cap_reached" ||
+    (status?.trial === true && status.allowed === false);
+
   const subscribe = async () => {
     setPending(true);
     setError(null);
@@ -101,27 +107,41 @@ export function BillingGateScreen({
   return (
     <SafeAreaView style={[StyleSheet.absoluteFill, { backgroundColor }]}>
       <View style={styles.container}>
-        <Text style={[styles.title, { color: foregroundColor }]}>
-          Subscribe to Pearl
-        </Text>
-        <Text style={[styles.body, { color: hintColor }]}>
-          $10 per month, plus usage. New accounts start with a $50 usage cap
-          you can raise in Settings.
-        </Text>
-        <Button
-          label="Continue to Stripe"
-          loading={pending}
-          loadingLabel="Opening Stripe…"
-          onPress={() => void subscribe()}
-        />
-        {polling ? (
-          <View style={styles.row}>
-            <ActivityIndicator />
-            <Text style={{ color: hintColor }}>
-              Waiting for payment to confirm…
+        {trialEnded ? (
+          <>
+            <Text style={[styles.title, { color: foregroundColor }]}>
+              Monthly allowance used
             </Text>
-          </View>
-        ) : null}
+            <Text style={[styles.body, { color: hintColor }]}>
+              {status?.message ??
+                "You used the included $20 of usage for this month. Access opens again next month."}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={[styles.title, { color: foregroundColor }]}>
+              Subscribe to Pearl
+            </Text>
+            <Text style={[styles.body, { color: hintColor }]}>
+              $10 per month, plus usage. New accounts start with a $50 usage
+              cap you can raise in Settings.
+            </Text>
+            <Button
+              label="Continue to Stripe"
+              loading={pending}
+              loadingLabel="Opening Stripe…"
+              onPress={() => void subscribe()}
+            />
+            {polling ? (
+              <View style={styles.row}>
+                <ActivityIndicator />
+                <Text style={{ color: hintColor }}>
+                  Waiting for payment to confirm…
+                </Text>
+              </View>
+            ) : null}
+          </>
+        )}
         {error ? (
           <Text style={styles.error} accessibilityRole="alert">
             {error}

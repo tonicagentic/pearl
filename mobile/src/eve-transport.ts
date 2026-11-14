@@ -99,6 +99,14 @@ export function isCustomAgentUrl(): boolean {
   return AGENT_URL !== resolveAgentUrl(envOrDefaultAgentUrl());
 }
 
+/**
+ * TestFlight / store builds bake EXPO_PUBLIC_LOCK_HOSTED=1 so friends cannot
+ * retarget the agent URL (and send passwords to an arbitrary host).
+ */
+export function isHostedLocked(): boolean {
+  return process.env.EXPO_PUBLIC_LOCK_HOSTED?.trim() === "1";
+}
+
 // Session credential captured at sign-in (mirrored to SecureStore by
 // session-store). A better-auth bearer token from the sign-in response body
 // (RN fetch cannot read Set-Cookie). Cleared when the user signs out.

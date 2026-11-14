@@ -10,8 +10,8 @@ import {
 } from "react-native";
 import { useCSSVariable } from "uniwind";
 
-import { PearlIntroGraphic } from "@/components/pearl-intro-graphic";
-import { PEARL_INTRO_PANELS } from "@/components/pearl-intro-panels";
+import { PearlIntroGraphic } from "@/components/intro/pearl-intro-graphic";
+import { PEARL_INTRO_PANELS } from "@/components/intro/pearl-intro-panels";
 import { Button } from "@/components/ui/button";
 
 /**

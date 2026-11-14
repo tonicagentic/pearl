@@ -1,11 +1,10 @@
-import { Redirect } from "expo-router";
-
-import { SettingsScreen } from "@/components/settings-screen";
-import { useAuth } from "@/src/auth";
+import { SettingsScreen } from "@/components/settings/settings-screen";
+import { RequireSignedIn } from "@/src/require-signed-in";
 
 export default function Settings() {
-  const { restoring, signedIn } = useAuth();
-  if (restoring) return null;
-  if (!signedIn) return <Redirect href="/" />;
-  return <SettingsScreen />;
+  return (
+    <RequireSignedIn>
+      <SettingsScreen />
+    </RequireSignedIn>
+  );
 }

@@ -16,7 +16,7 @@ import {
 } from "lucide-react-native";
 
 import { Icon } from "@/components/ui/icon";
-import type { PluginMarkId } from "../../lib/plugins/catalog";
+import type { PluginMarkId } from "../../../lib/plugins/catalog";
 
 type BrandSpec = {
   readonly background: string;

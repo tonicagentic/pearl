@@ -12,8 +12,6 @@ export function SheetScaffold({
   children,
   footer,
 }: {
-  /** @deprecated Native stack header owns the title. */
-  readonly title?: string;
   readonly children: ReactNode;
   readonly footer?: ReactNode;
 }) {

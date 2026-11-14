@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 
-import { SelfHostScreen } from "@/components/self-host-screen";
+import { SelfHostScreen } from "@/components/settings/self-host-screen";
 
 /**
  * Self-host / custom agent URL. Available signed-in (Settings) or signed-out

@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { SheetScaffold } from "@/components/sheet-scaffold";
+import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import {
   COMPOSER_MODEL_SECTIONS,
   getImageModelSelection,
@@ -78,7 +78,6 @@ export function ModelsScreen() {
 
   return (
     <SheetScaffold
-      title="Models"
       footer={
         <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
           A model runs inference for each reply. Pearl is the agent around it —
