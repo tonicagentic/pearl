@@ -10,7 +10,7 @@ export type PearlIntroBubbleKind = "user" | "pearl" | "status";
 export type PearlIntroBubble = {
   readonly text: string;
   readonly kind: PearlIntroBubbleKind;
-  /** Absolute position as % of graphic area. */
+  /** Absolute position as % of graphic area. Keep clear of the center mark. */
   readonly top: number;
   readonly left: number;
   /** Degrees of rotation. */
@@ -24,7 +24,10 @@ export type PearlIntroPanel = {
   readonly bubbles: readonly PearlIntroBubble[];
 };
 
-/** Shared copy + collage seeds for the signed-out intro and Settings → About. */
+/**
+ * Shared copy + collage seeds for the signed-out intro and Settings → About.
+ * Three bubbles per panel, inset from edges so rotation does not clip.
+ */
 export const PEARL_INTRO_PANELS: readonly PearlIntroPanel[] = [
   {
     id: "meet",
@@ -34,30 +37,23 @@ export const PEARL_INTRO_PANELS: readonly PearlIntroPanel[] = [
       {
         text: "Plan the launch checklist",
         kind: "user",
-        top: 8,
-        left: 4,
-        rotate: -8,
+        top: 6,
+        left: 6,
+        rotate: -7,
       },
       {
         text: "On it.",
         kind: "pearl",
-        top: 18,
-        left: 58,
+        top: 14,
+        left: 56,
         rotate: 6,
-      },
-      {
-        text: "Open the repo and draft a PR",
-        kind: "user",
-        top: 58,
-        left: 8,
-        rotate: 4,
       },
       {
         text: "Working in the sandbox…",
         kind: "status",
         top: 72,
-        left: 48,
-        rotate: -5,
+        left: 18,
+        rotate: -4,
       },
     ],
   },
@@ -71,28 +67,21 @@ export const PEARL_INTRO_PANELS: readonly PearlIntroPanel[] = [
         kind: "user",
         top: 6,
         left: 8,
-        rotate: -7,
+        rotate: -6,
       },
       {
         text: "Pulled from the web + Sheets",
         kind: "pearl",
-        top: 24,
-        left: 48,
+        top: 16,
+        left: 52,
         rotate: 5,
       },
       {
         text: "Browser · docs open",
         kind: "status",
-        top: 58,
-        left: 4,
-        rotate: 4,
-      },
-      {
-        text: "File updated in workspace",
-        kind: "pearl",
         top: 72,
-        left: 40,
-        rotate: -6,
+        left: 22,
+        rotate: 3,
       },
     ],
   },
@@ -104,30 +93,23 @@ export const PEARL_INTRO_PANELS: readonly PearlIntroPanel[] = [
       {
         text: "Hand this to the coder agent",
         kind: "user",
-        top: 8,
+        top: 6,
         left: 6,
-        rotate: -7,
+        rotate: -6,
       },
       {
         text: "Delegating to Coder…",
         kind: "status",
-        top: 22,
-        left: 52,
-        rotate: 6,
+        top: 16,
+        left: 54,
+        rotate: 5,
       },
       {
         text: "Research agent: sources ready",
         kind: "pearl",
-        top: 58,
-        left: 4,
-        rotate: 4,
-      },
-      {
-        text: "Tonic Agentic",
-        kind: "status",
-        top: 74,
-        left: 48,
-        rotate: -5,
+        top: 72,
+        left: 16,
+        rotate: 3,
       },
     ],
   },
@@ -139,30 +121,23 @@ export const PEARL_INTRO_PANELS: readonly PearlIntroPanel[] = [
       {
         text: "Need a quick decision",
         kind: "pearl",
-        top: 10,
-        left: 12,
+        top: 8,
+        left: 8,
         rotate: -5,
       },
       {
         text: "Call me when you’re free",
         kind: "user",
-        top: 30,
-        left: 50,
-        rotate: 6,
+        top: 16,
+        left: 52,
+        rotate: 5,
       },
       {
         text: "Incoming call",
         kind: "status",
-        top: 60,
-        left: 8,
-        rotate: 3,
-      },
-      {
-        text: "Ship it",
-        kind: "user",
-        top: 74,
-        left: 52,
-        rotate: -4,
+        top: 72,
+        left: 28,
+        rotate: 2,
       },
     ],
   },
@@ -174,30 +149,23 @@ export const PEARL_INTRO_PANELS: readonly PearlIntroPanel[] = [
       {
         text: "Self-host on your machine",
         kind: "user",
-        top: 8,
+        top: 6,
         left: 6,
-        rotate: -6,
+        rotate: -5,
       },
       {
         text: "Your data stays with you",
         kind: "pearl",
-        top: 24,
-        left: 48,
+        top: 16,
+        left: 52,
         rotate: 5,
       },
       {
         text: "$10/mo + usage",
         kind: "status",
-        top: 60,
-        left: 8,
-        rotate: 3,
-      },
-      {
-        text: "Or subscribe on Stripe",
-        kind: "pearl",
-        top: 74,
-        left: 44,
-        rotate: -4,
+        top: 72,
+        left: 28,
+        rotate: 2,
       },
     ],
   },

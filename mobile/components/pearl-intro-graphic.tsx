@@ -56,7 +56,11 @@ export function PearlIntroGraphic({
           },
         ]}
       >
-        <Image source={icon} style={styles.avatar} accessibilityIgnoresInvertColors />
+        <Image
+          source={icon}
+          style={styles.avatar}
+          accessibilityIgnoresInvertColors
+        />
       </View>
     </View>
   );
@@ -129,6 +133,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: 8,
   },
   avatarRing: {
     width: 96,
@@ -146,7 +151,7 @@ const styles = StyleSheet.create({
   },
   bubble: {
     position: "absolute",
-    maxWidth: "46%",
+    maxWidth: "42%",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,

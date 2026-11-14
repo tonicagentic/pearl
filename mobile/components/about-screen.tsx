@@ -4,15 +4,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { PearlIntroPager } from "@/components/pearl-intro-pager";
+import { isHostedLocked } from "@/src/eve-transport";
 
 /**
  * Settings → About Pearl. Hosts the swipeable intro; last panel offers
- * hosted continue (pop) or Self-host (push connect screen).
+ * hosted continue (pop) or Self-host (push connect screen) when unlocked.
  */
 export function AboutScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
+  const locked = isHostedLocked();
 
   return (
     <SafeAreaView
@@ -21,8 +23,11 @@ export function AboutScreen() {
     >
       <PearlIntroPager
         compact
+        continueLabel="Done"
         onContinueWithHost={() => router.back()}
-        onSelfHost={() => router.push("/self-host")}
+        onSelfHost={
+          locked ? undefined : () => router.push("/self-host")
+        }
       />
     </SafeAreaView>
   );

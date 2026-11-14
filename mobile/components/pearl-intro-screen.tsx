@@ -10,7 +10,7 @@ export function PearlIntroScreen({
   onSelfHost,
 }: {
   readonly onContinueWithHost: () => void;
-  readonly onSelfHost: () => void;
+  readonly onSelfHost?: () => void;
 }) {
   const backgroundColor = useCSSVariable("--color-background") as
     | string
@@ -19,6 +19,7 @@ export function PearlIntroScreen({
   return (
     <SafeAreaView style={[StyleSheet.absoluteFill, { backgroundColor }]}>
       <PearlIntroPager
+        continueLabel="Get started"
         onContinueWithHost={onContinueWithHost}
         onSelfHost={onSelfHost}
       />

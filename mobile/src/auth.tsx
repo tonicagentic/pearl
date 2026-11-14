@@ -157,11 +157,16 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       path: "sign-in/email" | "sign-up/email",
       email: string,
       password: string,
-    ): Promise<string> => {
+      options?: { readonly requireToken?: boolean },
+    ): Promise<string | null> => {
       const timeout = AbortSignal.timeout(45_000);
+      // Do not set Origin here: iOS URLSession strips/replaces it with "null".
+      // Production stamps the canonical app origin in /api/auth before CSRF.
       const response = await fetch(`${AGENT_URL}/api/auth/${path}`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+        },
         body: JSON.stringify({ email, password, name: email.split("@")[0] }),
         signal: timeout,
       });
@@ -173,9 +178,9 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       // RN fetch cannot read Set-Cookie (iOS strips it from the header map),
       // so the credential comes from the response body via better-auth's
       // bearer plugin on the server.
-      const credential = body?.token;
+      const credential = body?.token ?? null;
 
-      if (!response.ok || !credential) {
+      if (!response.ok || (options?.requireToken !== false && !credential)) {
         const detail =
           (typeof body?.error === "string"
             ? body.error
@@ -204,6 +209,9 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
 
       try {
         const credential = await requestToken("sign-in/email", email, password);
+        if (!credential) {
+          throw new Error("Sign-in failed.");
+        }
         await commitSession(credential, email, handOffFrom);
       } catch (cause) {
         setSignInState("error");
@@ -228,37 +236,19 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       setSignInError(null);
 
       try {
-        const timeout = AbortSignal.timeout(45_000);
-        const response = await fetch(`${AGENT_URL}/api/auth/sign-up/email`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            email,
-            password,
-            name: email.split("@")[0],
-          }),
-          signal: timeout,
-        });
-        const body = (await response.json().catch(() => null)) as {
-          token?: string;
-          message?: string;
-          error?: { message?: string } | string;
-        } | null;
-
-        if (!response.ok) {
-          const detail =
-            (typeof body?.error === "string"
-              ? body.error
-              : body?.error?.message) ??
-            body?.message ??
-            (body ? JSON.stringify(body).slice(0, 160) : "");
-          throw new Error(detail || `Sign-up failed (${response.status}).`);
-        }
-
         // Prefer a bearer token from sign-up; otherwise sign in immediately.
+        const fromSignUp = await requestToken(
+          "sign-up/email",
+          email,
+          password,
+          { requireToken: false },
+        );
         const credential =
-          body?.token ??
+          fromSignUp ??
           (await requestToken("sign-in/email", email, password));
+        if (!credential) {
+          throw new Error("Sign-up failed.");
+        }
         await commitSession(credential, email, handOffFrom);
       } catch (cause) {
         setSignInState("error");

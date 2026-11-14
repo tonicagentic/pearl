@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState, type ComponentRef } from "react";
 import {
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -16,21 +16,26 @@ import { Button } from "@/components/ui/button";
 
 /**
  * Full-bleed horizontal intro pager: graphic collage on top, short copy below,
- * page dots, and last-panel CTAs for hosted vs self-host.
+ * page dots, and a primary CTA (Next / continue) with optional Self-host.
  */
 export function PearlIntroPager({
   onContinueWithHost,
   onSelfHost,
+  continueLabel = "Get started",
   compact = false,
 }: {
   readonly onContinueWithHost: () => void;
-  readonly onSelfHost: () => void;
+  /** Omitted on locked TestFlight builds that only talk to the host. */
+  readonly onSelfHost?: () => void;
+  /** Last-slide primary label (signed-out vs About). */
+  readonly continueLabel?: string;
   /** Slightly tighter spacing for form sheets. */
   readonly compact?: boolean;
 }) {
   const { width: windowWidth } = useWindowDimensions();
   const [pageWidth, setPageWidth] = useState(windowWidth);
   const [index, setIndex] = useState(0);
+  const pagerRef = useRef<ComponentRef<typeof ScrollView>>(null);
 
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
@@ -55,6 +60,19 @@ export function PearlIntroPager({
     [index, lastIndex, pageWidth],
   );
 
+  const goNext = useCallback(() => {
+    if (onLast) {
+      onContinueWithHost();
+      return;
+    }
+    const nextIndex = Math.min(lastIndex, index + 1);
+    pagerRef.current?.scrollTo({
+      x: nextIndex * pageWidth,
+      animated: true,
+    });
+    setIndex(nextIndex);
+  }, [index, lastIndex, onContinueWithHost, onLast, pageWidth]);
+
   return (
     <View
       style={styles.root}
@@ -66,6 +84,7 @@ export function PearlIntroPager({
       }}
     >
       <ScrollView
+        ref={pagerRef}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
@@ -75,15 +94,9 @@ export function PearlIntroPager({
         style={styles.pager}
       >
         {PEARL_INTRO_PANELS.map((panel) => (
-          <View
-            key={panel.id}
-            style={[styles.page, { width: pageWidth }]}
-          >
+          <View key={panel.id} style={[styles.page, { width: pageWidth }]}>
             <View
-              style={[
-                styles.graphic,
-                compact ? styles.graphicCompact : null,
-              ]}
+              style={[styles.graphic, compact ? styles.graphicCompact : null]}
             >
               <PearlIntroGraphic panelId={panel.id} />
             </View>
@@ -97,10 +110,7 @@ export function PearlIntroPager({
                 {panel.title}
               </Text>
               <Text
-                style={[
-                  styles.body,
-                  hintColor ? { color: hintColor } : null,
-                ]}
+                style={[styles.body, hintColor ? { color: hintColor } : null]}
               >
                 {panel.body}
               </Text>
@@ -118,31 +128,25 @@ export function PearlIntroPager({
                 styles.dot,
                 {
                   backgroundColor:
-                    i === index
-                      ? (dotActive ?? "#111")
-                      : (dotIdle ?? "#ccc"),
+                    i === index ? (dotActive ?? "#111") : (dotIdle ?? "#ccc"),
                   opacity: i === index ? 1 : 0.55,
                 },
               ]}
             />
           ))}
         </View>
-        <View style={styles.ctaSlot}>
-          {onLast ? (
-            <View style={styles.ctaStack}>
-              <Button
-                label="Continue with host"
-                onPress={onContinueWithHost}
-              />
-              <Button
-                label="Self-host"
-                variant="secondary"
-                onPress={onSelfHost}
-              />
-            </View>
-          ) : (
-            <View style={styles.ctaPlaceholder} />
-          )}
+        <View style={styles.ctaStack}>
+          <Button
+            label={onLast ? continueLabel : "Next"}
+            onPress={goNext}
+          />
+          {onLast && onSelfHost ? (
+            <Button
+              label="Self-host"
+              variant="secondary"
+              onPress={onSelfHost}
+            />
+          ) : null}
         </View>
       </View>
     </View>
@@ -166,6 +170,7 @@ const styles = StyleSheet.create({
     minHeight: 220,
     marginTop: 8,
     marginBottom: 12,
+    overflow: "hidden",
   },
   graphicCompact: {
     minHeight: 180,
@@ -210,13 +215,7 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 4,
   },
-  ctaSlot: {
-    minHeight: 118,
-  },
   ctaStack: {
     gap: 10,
-  },
-  ctaPlaceholder: {
-    height: 118,
   },
 });

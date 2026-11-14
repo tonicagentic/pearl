@@ -7,6 +7,7 @@ import {
   AUTH_HINT_COOKIE_VALUE,
   isSecureAuthHintCookie,
 } from "@/lib/auth-hint";
+import { withTrustedNativeOrigin } from "@/lib/auth-native-origin";
 import { getSetupStatus } from "@/lib/setup";
 
 const BETTER_AUTH_SESSION_COOKIE_NAME = "better-auth.session_token";
@@ -34,7 +35,8 @@ async function handleAuth(request: Request) {
     return redirectToAuthError(request, "auth_env_missing");
   }
 
-  const response = await auth.handler(request);
+  // Phone apps cannot set Origin; stamp the canonical host so CSRF passes.
+  const response = await auth.handler(withTrustedNativeOrigin(request));
 
   return withAuthHintCookie(response);
 }
