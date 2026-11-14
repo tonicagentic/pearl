@@ -2,6 +2,9 @@ import { getGithubUserToken } from "@/lib/connections/tokens";
 
 export const REPOS_PER_PAGE = 30;
 const MAX_PER_PAGE = 100;
+/** Cap when walking every page for connection screens (100 × 20 = 2,000). */
+export const ALL_REPOS_PER_PAGE = 100;
+export const ALL_REPOS_MAX_PAGES = 20;
 
 export type UserRepo = {
   readonly id: number;
@@ -126,4 +129,65 @@ export async function listUserRepos(args: {
     perPage,
     hasNext,
   };
+}
+
+export type UserReposCatalog =
+  | {
+      readonly connected: true;
+      readonly repos: readonly UserRepo[];
+      readonly truncated: boolean;
+    }
+  | {
+      readonly connected: false;
+      readonly repos: readonly [];
+      readonly truncated: false;
+      readonly message: string;
+    };
+
+/**
+ * Walk GitHub `/user/repos` pages until exhausted or {@link ALL_REPOS_MAX_PAGES}.
+ * Injectable `fetchPage` keeps the walker unit-testable without network I/O.
+ */
+export async function walkGithubRepoPages(args: {
+  readonly fetchPage: (page: number) => Promise<UserReposPage>;
+  readonly maxPages?: number;
+}): Promise<UserReposCatalog> {
+  const maxPages = args.maxPages ?? ALL_REPOS_MAX_PAGES;
+  const repos: UserRepo[] = [];
+  let truncated = false;
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const result = await args.fetchPage(page);
+    if (!result.connected) {
+      return {
+        connected: false,
+        repos: [],
+        truncated: false,
+        message: result.message,
+      };
+    }
+    repos.push(...result.repos);
+    if (!result.hasNext) {
+      return { connected: true, repos, truncated };
+    }
+    if (page === maxPages) {
+      truncated = true;
+    }
+  }
+
+  return { connected: true, repos, truncated };
+}
+
+/** Every repo visible to the signed-in GitHub grant (owner/collab/org), newest push first. */
+export async function listAllUserRepos(args: {
+  readonly userId: string;
+}): Promise<UserReposCatalog> {
+  return walkGithubRepoPages({
+    fetchPage: (page) =>
+      listUserRepos({
+        userId: args.userId,
+        page,
+        perPage: ALL_REPOS_PER_PAGE,
+      }),
+  });
 }
