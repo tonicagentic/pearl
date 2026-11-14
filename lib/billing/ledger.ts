@@ -241,6 +241,76 @@ export async function usageBreakdownBySource(
   }));
 }
 
+export type UsagePeriodBreakdown = {
+  readonly periodStart: Date;
+  readonly totalCents: number;
+  readonly bySource: readonly {
+    readonly source: string;
+    readonly costCents: number;
+  }[];
+};
+
+/**
+ * All recorded spend for a user, grouped by billing period and source.
+ * Periods are newest-first; sources within a period are sorted by spend.
+ */
+export async function usageByPeriod(
+  userId: string,
+): Promise<{
+  readonly totalCents: number;
+  readonly periods: readonly UsagePeriodBreakdown[];
+}> {
+  const rows = await db
+    .select({
+      periodStart: usageEvent.periodStart,
+      source: usageEvent.source,
+      costCents: sql<number>`coalesce(sum(${usageEvent.costCents}), 0)`,
+    })
+    .from(usageEvent)
+    .where(eq(usageEvent.userId, userId))
+    .groupBy(usageEvent.periodStart, usageEvent.source);
+
+  const byPeriod = new Map<
+    number,
+    {
+      periodStart: Date;
+      totalCents: number;
+      bySource: { source: string; costCents: number }[];
+    }
+  >();
+
+  for (const row of rows) {
+    const key = row.periodStart.getTime();
+    const costCents = Number(row.costCents);
+    const existing = byPeriod.get(key);
+    if (existing) {
+      existing.totalCents += costCents;
+      existing.bySource.push({ source: row.source, costCents });
+    } else {
+      byPeriod.set(key, {
+        periodStart: row.periodStart,
+        totalCents: costCents,
+        bySource: [{ source: row.source, costCents }],
+      });
+    }
+  }
+
+  const periods = [...byPeriod.values()]
+    .map((period) => ({
+      periodStart: period.periodStart,
+      totalCents: period.totalCents,
+      bySource: [...period.bySource].sort(
+        (a, b) => b.costCents - a.costCents || a.source.localeCompare(b.source),
+      ),
+    }))
+    .sort((a, b) => b.periodStart.getTime() - a.periodStart.getTime());
+
+  return {
+    totalCents: periods.reduce((sum, period) => sum + period.totalCents, 0),
+    periods,
+  };
+}
+
 /** Drop expired reservations (best-effort cleanup). */
 export async function expireStaleReservations(): Promise<number> {
   const now = new Date();

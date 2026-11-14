@@ -5,20 +5,18 @@ import {
   BrainIcon,
   CircleUserIcon,
   CloudIcon,
+  CoinsIcon,
   InfoIcon,
   LogOutIcon,
-  NetworkIcon,
   NotebookPenIcon,
   PuzzleIcon,
   SparklesIcon,
   Trash2Icon,
   WalletIcon,
-  MailIcon,
   CalendarIcon,
 } from "lucide-react-native";
 
 import { CodeSection, connectedPluginCount } from "@/components/settings/code-section";
-import { ComputerUseSection } from "@/components/settings/computer-use-section";
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { Icon } from "@/components/ui/icon";
 import { SettingsCard } from "@/components/ui/settings-card";
@@ -50,6 +48,7 @@ import {
   getModelSelection,
   subscribeModelSelection,
 } from "@/src/model-selection";
+import { fetchUsageSummary, formatSpendCents } from "@/src/usage-client";
 import * as Linking from "expo-linking";
 
 export function SettingsScreen() {
@@ -74,6 +73,7 @@ export function SettingsScreen() {
   const [mailboxCount, setMailboxCount] = useState<number | null>(null);
   const [calendarDetail, setCalendarDetail] = useState<string | null>(null);
   const [memoryDetail, setMemoryDetail] = useState("Facts Pearl keeps");
+  const [usageDetail, setUsageDetail] = useState("Spend by period");
 
   useFocusEffect(
     useCallback(() => {
@@ -114,6 +114,17 @@ export function SettingsScreen() {
         .catch(() => {
           if (!cancelled) setCalendarDetail(null);
         });
+      void fetchUsageSummary()
+        .then((summary) => {
+          if (cancelled || !summary) return;
+          const latest = summary.periods[0];
+          setUsageDetail(
+            latest
+              ? `${formatSpendCents(latest.totalCents)} this period`
+              : "No usage yet",
+          );
+        })
+        .catch(() => {});
       return () => {
         cancelled = true;
       };
@@ -254,13 +265,6 @@ export function SettingsScreen() {
           showSeparator
         />
         <SettingsRow
-          icon={<Icon as={MailIcon} className="size-5 text-sky-600" />}
-          label="Email"
-          detail={emailDetail}
-          onPress={() => router.push("/email")}
-          showSeparator
-        />
-        <SettingsRow
           icon={<Icon as={CalendarIcon} className="size-5 text-rose-500" />}
           label="Calendar"
           detail={calendarRowDetail}
@@ -275,20 +279,16 @@ export function SettingsScreen() {
         />
       </SettingsCard>
 
-      <CodeSection />
-
-      <ComputerUseSection />
+      <CodeSection emailDetail={emailDetail} />
 
       <SettingsCard>
         <SettingsRow
-          icon={<Icon as={NetworkIcon} className="size-5 text-teal-500" />}
-          label="Areas"
-          detail="Life tree (read-only on mobile)"
-          onPress={() => router.push("/areas")}
+          icon={<Icon as={CoinsIcon} className="size-5 text-amber-500" />}
+          label="Usage"
+          detail={usageDetail}
+          onPress={() => router.push("/usage")}
+          showSeparator
         />
-      </SettingsCard>
-
-      <SettingsCard>
         <BillingRow />
         {isHostedLocked() ? null : (
           <SettingsRow

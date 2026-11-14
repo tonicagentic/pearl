@@ -185,6 +185,14 @@ function AuthenticatedLayout() {
                       options={{ title: "Computer Use", headerShown: true }}
                     />
                     <Stack.Screen
+                      name="usage"
+                      options={{
+                        title: "Usage",
+                        headerShown: true,
+                        headerBackButtonDisplayMode: "minimal",
+                      }}
+                    />
+                    <Stack.Screen
                       name="about"
                       options={{ title: "About", headerShown: true }}
                     />

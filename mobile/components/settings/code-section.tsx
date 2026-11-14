@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
-import { Code2Icon, FolderGit2Icon } from "lucide-react-native";
+import { Code2Icon, MailIcon, MonitorIcon } from "lucide-react-native";
 
 import { PluginLogo } from "@/components/settings/plugin-logo";
 import { Icon } from "@/components/ui/icon";
@@ -29,24 +29,35 @@ function coderToolPlugins(): readonly ResolvedPlugin[] {
 }
 
 /**
- * Profile section for coding. Repos stays here; GitHub, Vercel, and the
- * other build tools open from inside Coder.
+ * Capabilities section: Coder, Computer Use, and Email. GitHub, Vercel, and
+ * the other build tools open from inside Coder.
  */
-export function CodeSection() {
+export function CodeSection({
+  emailDetail,
+}: {
+  readonly emailDetail: string;
+}) {
   return (
-    <Section title="Code">
-      <SettingsRow
-        icon={<Icon as={FolderGit2Icon} className="size-5 text-orange-500" />}
-        label="Repos"
-        detail="Pinned GitHub / Vercel / Expo"
-        onPress={() => router.push("/workbench")}
-        showSeparator
-      />
+    <Section title="Capabilities">
       <SettingsRow
         icon={<Icon as={Code2Icon} className="size-5 text-emerald-600" />}
         label="Coder"
         detail="Build, PR, deploy"
         onPress={() => router.push("/plugins/coder")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={<Icon as={MonitorIcon} className="size-5 text-sky-600" />}
+        label="Computer Use"
+        detail="Browser and sandboxes"
+        onPress={() => router.push("/computer-use")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={<Icon as={MailIcon} className="size-5 text-sky-600" />}
+        label="Email"
+        detail={emailDetail}
+        onPress={() => router.push("/email")}
       />
     </Section>
   );
