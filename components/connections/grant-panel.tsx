@@ -106,31 +106,78 @@ function GithubGrantBlock({
         Signed in as <span className="text-foreground">{github.login}</span>
         {github.hasRepoScope ? " · repo scope granted" : " · missing repo scope"}
       </p>
-      {github.orgs.length > 0 ? (
-        <p className="mt-1 text-muted-foreground">
-          Orgs: {github.orgs.join(", ")}
+
+      <div className="mt-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Organizations
         </p>
-      ) : (
-        <p className="mt-1 text-muted-foreground">
-          No organizations visible to this grant.
+        {github.orgs.length > 0 ? (
+          <ul className="mt-1 space-y-1 text-muted-foreground">
+            {github.orgs.map((org) => (
+              <li key={org}>
+                <span className="text-foreground">{org}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-1 text-muted-foreground">
+            No organizations visible to this grant.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Repositories
         </p>
-      )}
+        {(github.availableRepos ?? []).length > 0 ? (
+          <ul className="mt-1 max-h-64 space-y-2 overflow-y-auto">
+            {(github.availableRepos ?? []).map((repo) => (
+              <li key={repo.fullName}>
+                <a
+                  href={repo.htmlUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  {repo.fullName}
+                </a>
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {repo.private ? "Private" : "Public"}
+                </span>
+                {repo.description ? (
+                  <p className="line-clamp-2 text-xs text-muted-foreground">
+                    {repo.description}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-1 text-muted-foreground">
+            No repositories visible to this grant yet.
+          </p>
+        )}
+      </div>
+
       {github.repos.length > 0 ? (
-        <ul className="mt-2 space-y-1">
-          {github.repos.map((repo) => (
-            <li key={repo.fullName} className="text-muted-foreground">
-              <span className="text-foreground">{repo.fullName}</span>
-              {repo.canPush
-                ? " · can push"
-                : ` · blocked${repo.blockedReason ? `: ${repo.blockedReason}` : ""}`}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-2 text-muted-foreground">
-          Pin a repository on the workbench to check push access here.
-        </p>
-      )}
+        <div className="mt-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Workbench pins
+          </p>
+          <ul className="mt-1 space-y-1">
+            {github.repos.map((repo) => (
+              <li key={repo.fullName} className="text-muted-foreground">
+                <span className="text-foreground">{repo.fullName}</span>
+                {repo.canPush
+                  ? " · can push"
+                  : ` · blocked${repo.blockedReason ? `: ${repo.blockedReason}` : ""}`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <p className="mt-2">
         <a
           href={github.manageUrl}

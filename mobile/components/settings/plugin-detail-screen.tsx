@@ -536,6 +536,8 @@ function ConnectionPanel({
         </Text>
       </View>
 
+      {grant?.github ? <GithubAccessSections github={grant.github} /> : null}
+
       {capabilities ? (
         <CapabilitiesCard
           capabilities={capabilities}
@@ -545,6 +547,106 @@ function ConnectionPanel({
               : "What Pearl can do after you connect"
           }
         />
+      ) : null}
+    </View>
+  );
+}
+
+function GithubAccessSections({
+  github,
+}: {
+  readonly github: NonNullable<ConnectionGrantSummary["github"]>;
+}) {
+  return (
+    <View className="gap-4">
+      <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
+        <Text className="text-[17px] font-medium text-foreground">
+          Organizations
+        </Text>
+        {github.orgs.length > 0 ? (
+          <View className="gap-2">
+            {github.orgs.map((org) => (
+              <Text
+                key={org}
+                className="text-[15px] text-foreground"
+                numberOfLines={1}
+              >
+                {org}
+              </Text>
+            ))}
+          </View>
+        ) : (
+          <Text className="text-[13px] leading-[18px] text-muted-foreground">
+            No organizations visible to this grant. Approve org access on
+            GitHub if you need them.
+          </Text>
+        )}
+      </View>
+
+      <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
+        <Text className="text-[17px] font-medium text-foreground">
+          Repositories
+        </Text>
+        <Text className="text-[13px] leading-[18px] text-muted-foreground">
+          Recent repos this connection can see, most recently pushed first.
+        </Text>
+        {(github.availableRepos ?? []).length > 0 ? (
+          <View className="gap-3">
+            {(github.availableRepos ?? []).map((repo) => (
+              <Pressable
+                key={repo.fullName}
+                accessibilityRole="link"
+                onPress={() => void Linking.openURL(repo.htmlUrl)}
+                className="gap-1"
+              >
+                <View className="flex-row flex-wrap items-center gap-2">
+                  <Text
+                    className="min-w-0 flex-1 text-[15px] font-medium text-foreground"
+                    numberOfLines={1}
+                  >
+                    {repo.fullName}
+                  </Text>
+                  <Text className="text-[12px] text-muted-foreground">
+                    {repo.private ? "Private" : "Public"}
+                  </Text>
+                </View>
+                {repo.description ? (
+                  <Text
+                    className="text-[13px] leading-[18px] text-muted-foreground"
+                    numberOfLines={2}
+                  >
+                    {repo.description}
+                  </Text>
+                ) : null}
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <Text className="text-[13px] leading-[18px] text-muted-foreground">
+            No repositories visible yet. Reconnect GitHub if this looks wrong.
+          </Text>
+        )}
+      </View>
+
+      {github.repos.length > 0 ? (
+        <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
+          <Text className="text-[17px] font-medium text-foreground">
+            Workbench pins
+          </Text>
+          <View className="gap-2">
+            {github.repos.map((repo) => (
+              <Text
+                key={repo.fullName}
+                className="text-[13px] leading-[18px] text-muted-foreground"
+              >
+                <Text className="text-foreground">{repo.fullName}</Text>
+                {repo.canPush
+                  ? " · can push"
+                  : ` · blocked${repo.blockedReason ? `: ${repo.blockedReason}` : ""}`}
+              </Text>
+            ))}
+          </View>
+        </View>
       ) : null}
     </View>
   );

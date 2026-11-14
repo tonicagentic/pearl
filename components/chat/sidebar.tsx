@@ -2,7 +2,6 @@
 
 import {
   ArrowRightIcon,
-  FolderGit2Icon,
   EllipsisIcon,
   FolderKanbanIcon,
   InboxIcon,
@@ -72,7 +71,6 @@ export function ChatSidebar({
   const onChatRoute = pathname === "/" || pathname?.startsWith("/chat") || false;
   const newSessionActive = activeChatId === null && onChatRoute;
   const issuesActive = pathname?.startsWith("/issues") ?? false;
-  const reposActive = pathname?.startsWith("/repos") ?? false;
   const projectsActive = pathname?.startsWith("/projects") ?? false;
   const areasActive =
     pathname?.startsWith("/settings/areas") ?? false;
@@ -179,16 +177,6 @@ export function ChatSidebar({
         >
           <InboxIcon className="size-4" />
           Issues
-        </Link>
-        <Link
-          className={cn(
-            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
-            reposActive ? activeRowClass : inactiveRowClass,
-          )}
-          href="/repos"
-        >
-          <FolderGit2Icon className="size-4" />
-          Repos
         </Link>
       </div>
 

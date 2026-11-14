@@ -94,7 +94,7 @@
     },
     "extra": {
       "router": {},
-      "pearlOta": "10",
+      "pearlOta": "11",
       "eas": {
         "projectId": "43ee6005-c5ac-4b8f-b463-5d910681956d"
       }

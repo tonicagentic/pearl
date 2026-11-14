@@ -37,6 +37,12 @@ export type ConnectionGrantSummary = ConnectionStatus & {
     login: string;
     hasRepoScope: boolean;
     orgs: readonly string[];
+    availableRepos: readonly {
+      fullName: string;
+      private: boolean;
+      htmlUrl: string;
+      description: string | null;
+    }[];
     repos: readonly {
       fullName: string;
       canPush: boolean;

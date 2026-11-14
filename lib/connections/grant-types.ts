@@ -6,10 +6,21 @@ export type GithubRepoGrant = {
   readonly blockedReason?: string;
 };
 
+/** Repo visible to the grant (account catalog — not only workbench pins). */
+export type GithubAvailableRepo = {
+  readonly fullName: string;
+  readonly private: boolean;
+  readonly htmlUrl: string;
+  readonly description: string | null;
+};
+
 export type GithubGrantDetails = {
   readonly login: string;
   readonly hasRepoScope: boolean;
   readonly orgs: readonly string[];
+  /** Recent repos from the signed-in GitHub account (owner/collab/org). */
+  readonly availableRepos: readonly GithubAvailableRepo[];
+  /** Workbench pins with push-access checks for this grant. */
   readonly repos: readonly GithubRepoGrant[];
   /** GitHub page where the user grants org access to the OAuth app. */
   readonly manageUrl: string;

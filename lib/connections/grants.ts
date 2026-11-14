@@ -19,6 +19,7 @@ import {
 } from "@/lib/connections/catalog";
 import type {
   ConnectionGrantSummary,
+  GithubAvailableRepo,
   GithubGrantDetails,
   GithubRepoGrant,
   VercelGrantDetails,
@@ -230,6 +231,8 @@ async function probeGithub(
     }
   }
 
+  const availableRepos = await listAvailableGithubRepos(token);
+
   const orgSet = new Set(orgs.map((name) => name.toLowerCase()));
   const hasRepoScope = scopes
     .map((scope) => scope.trim().toLowerCase())
@@ -295,10 +298,45 @@ async function probeGithub(
       login,
       hasRepoScope,
       orgs,
+      availableRepos,
       repos,
       manageUrl: GITHUB_MANAGE_URL,
     },
   };
+}
+
+async function listAvailableGithubRepos(
+  token: string,
+): Promise<GithubAvailableRepo[]> {
+  const url = new URL("https://api.github.com/user/repos");
+  url.searchParams.set("per_page", "30");
+  url.searchParams.set("sort", "pushed");
+  url.searchParams.set("affiliation", "owner,collaborator,organization_member");
+
+  const response = await githubFetch(token, url.href);
+  if (!response.ok) return [];
+
+  const body = (await response.json()) as Array<{
+    full_name?: string;
+    private?: boolean;
+    html_url?: string;
+    description?: string | null;
+  }>;
+
+  const repos: GithubAvailableRepo[] = [];
+  for (const repo of body) {
+    const fullName = repo.full_name?.trim();
+    const htmlUrl = repo.html_url?.trim();
+    if (!fullName || !htmlUrl) continue;
+    repos.push({
+      fullName,
+      private: repo.private === true,
+      htmlUrl,
+      description:
+        typeof repo.description === "string" ? repo.description : null,
+    });
+  }
+  return repos;
 }
 
 async function githubFetch(token: string, url: string): Promise<Response> {

@@ -1,6 +1,6 @@
 import { Redirect } from "expo-router";
 
-/** Compat: old `/repos` deep link → Mail home (Repos lives under Settings). */
+/** Compat: old `/repos` deep link → GitHub connection under Coder. */
 export default function ReposRedirect() {
-  return <Redirect href="/" />;
+  return <Redirect href="/plugins/github" />;
 }
