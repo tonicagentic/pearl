@@ -17,12 +17,16 @@ export class SecretCryptoError extends Error {
   }
 }
 
+export type CredentialsEnv = {
+  readonly ICLOUD_CALDAV_CREDENTIALS_KEY?: string;
+};
+
 /**
  * Resolve the AES-256 key for encrypting user CalDAV credentials.
  * Accepts 32 raw bytes as base64 or 64-char hex.
  */
 export function resolveCredentialsKey(
-  env: NodeJS.ProcessEnv = process.env,
+  env: CredentialsEnv = process.env,
 ): Buffer {
   const raw = env.ICLOUD_CALDAV_CREDENTIALS_KEY?.trim();
   if (!raw) {
@@ -48,7 +52,7 @@ export function resolveCredentialsKey(
 }
 
 export function credentialsKeyConfigured(
-  env: NodeJS.ProcessEnv = process.env,
+  env: CredentialsEnv = process.env,
 ): boolean {
   try {
     resolveCredentialsKey(env);
@@ -64,7 +68,7 @@ export function credentialsKeyConfigured(
 export function encryptSecret(
   plaintext: string,
   keyId = "v1",
-  env: NodeJS.ProcessEnv = process.env,
+  env: CredentialsEnv = process.env,
 ): { ciphertext: string; keyId: string } {
   const key = resolveCredentialsKey(env);
   const iv = randomBytes(IV_LENGTH);
@@ -81,7 +85,7 @@ export function encryptSecret(
 /** Decrypt a value produced by {@link encryptSecret}. */
 export function decryptSecret(
   ciphertext: string,
-  env: NodeJS.ProcessEnv = process.env,
+  env: CredentialsEnv = process.env,
 ): string {
   const key = resolveCredentialsKey(env);
   let packed: Buffer;
