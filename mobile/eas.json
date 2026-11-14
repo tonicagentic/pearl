@@ -29,12 +29,21 @@
     "production": {
       "autoIncrement": true,
       "channel": "production",
+      "node": "24.11.0",
       "ios": {
         "resourceClass": "m-medium"
+      },
+      "env": {
+        "EXPO_PUBLIC_AGENT_URL": "https://my-agent-pi-eight.vercel.app",
+        "EXPO_PUBLIC_LOCK_HOSTED": "1"
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6834637706"
+      }
+    }
   }
 }

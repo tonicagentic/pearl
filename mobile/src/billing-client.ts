@@ -4,7 +4,9 @@ export type MobileBillingStatus = {
   readonly enabled: boolean;
   readonly allowed: boolean;
   readonly exempt: boolean;
+  readonly trial: boolean;
   readonly needsCheckout: boolean;
+  readonly reason: string | null;
   readonly message: string | null;
   readonly usageCapCents: number | null;
   readonly spentCents: number;

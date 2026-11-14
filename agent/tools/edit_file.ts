@@ -5,7 +5,7 @@ import { writeFile } from "eve/tools/write_file";
 import { houseLint } from "../lib/house-lint.js";
 import { isDesignFilePath } from "../lib/design-files.js";
 import { withFileLock } from "@/lib/agent/file-mutex";
-import { persistAgentFile } from "@/agent/tools/write_file";
+import { persistAgentFile } from "@/lib/agent/persist-agent-file";
 import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
 type WriteOutcome = { existed: boolean; path: string };

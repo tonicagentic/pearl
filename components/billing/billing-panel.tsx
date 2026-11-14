@@ -11,6 +11,7 @@ type BillingStatus = {
   readonly enabled: boolean;
   readonly allowed: boolean;
   readonly exempt: boolean;
+  readonly trial: boolean;
   readonly needsCheckout: boolean;
   readonly reason: string | null;
   readonly message: string | null;
@@ -132,7 +133,9 @@ export function BillingPanel() {
         <p className="text-xs text-muted-foreground">
           {status.exempt
             ? "This account has a free pass and is not invoiced."
-            : "Subscription plus metered usage for this billing period."}
+            : status.trial
+              ? "Friend beta — included monthly allowance (not billed to you)."
+              : "Subscription plus metered usage for this billing period."}
         </p>
       </div>
 
@@ -177,14 +180,14 @@ export function BillingPanel() {
         <p className="text-sm text-muted-foreground">No metered usage yet this period.</p>
       )}
 
-      {!status.exempt && status.needsCheckout ? (
+      {!status.exempt && !status.trial && status.needsCheckout ? (
         <Button disabled={pending} onClick={() => void openCheckout()} type="button">
           {pending ? <Loader2Icon className="size-4 animate-spin" /> : null}
           Subscribe — $10/month + usage
         </Button>
       ) : null}
 
-      {!status.exempt && !status.needsCheckout ? (
+      {!status.exempt && !status.trial && !status.needsCheckout ? (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <label className="flex flex-1 flex-col gap-1 text-xs text-muted-foreground">
             Usage spend cap (USD)

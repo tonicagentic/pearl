@@ -2,8 +2,10 @@ import { and, eq, gt, isNull, sql } from "drizzle-orm";
 
 import {
   DEFAULT_USAGE_CAP_CENTS,
+  getTrialCapCents,
   isBillingExplicitlyOff,
   isBillingProvidersConfigured,
+  isEmailOnTrialAllowlist,
   type BillingBlockReason,
 } from "@/lib/billing/config";
 import { db } from "@/lib/db/client";
@@ -18,6 +20,8 @@ import { getSetupStatus } from "@/lib/setup";
 export type BillingAccess = {
   readonly enabled: boolean;
   readonly exempt: boolean;
+  /** Allowlisted friend-beta trial (no Stripe, soft monthly cap). */
+  readonly trial: boolean;
   readonly allowed: boolean;
   readonly reason: BillingBlockReason | null;
   readonly status: string | null;
@@ -208,82 +212,102 @@ export function resolvePeriod(account: {
   return calendarMonthPeriod();
 }
 
+function emptyAccess(
+  partial: Partial<BillingAccess> &
+    Pick<BillingAccess, "enabled" | "allowed">,
+): BillingAccess {
+  return {
+    exempt: false,
+    trial: false,
+    reason: null,
+    status: null,
+    usageCapCents: null,
+    periodStart: null,
+    periodEnd: null,
+    stripeCustomerId: null,
+    metronomeCustomerId: null,
+    spentCents: 0,
+    reservedCents: 0,
+    ...partial,
+  };
+}
+
 export async function getBillingAccess(
   userId: string,
 ): Promise<BillingAccess> {
   const enabled = await isBillingActive();
   if (!enabled) {
-    return {
-      enabled: false,
-      exempt: false,
-      allowed: true,
-      reason: null,
-      status: null,
-      usageCapCents: null,
-      periodStart: null,
-      periodEnd: null,
-      stripeCustomerId: null,
-      metronomeCustomerId: null,
-      spentCents: 0,
-      reservedCents: 0,
-    };
+    return emptyAccess({ enabled: false, allowed: true });
   }
 
   const flags = await getUserBillingFlags(userId);
   if (!flags) {
-    return {
+    return emptyAccess({
       enabled: true,
-      exempt: false,
       allowed: false,
       reason: "unpaid",
-      status: null,
-      usageCapCents: null,
-      periodStart: null,
-      periodEnd: null,
-      stripeCustomerId: null,
-      metronomeCustomerId: null,
-      spentCents: 0,
-      reservedCents: 0,
-    };
+    });
   }
 
   if (flags.exempt) {
     const period = calendarMonthPeriod();
     const spentCents = await sumSpentCents(userId, period.start);
-    return {
+    return emptyAccess({
       enabled: true,
       exempt: true,
       allowed: true,
-      reason: null,
       status: "exempt",
-      usageCapCents: null,
       periodStart: period.start,
       periodEnd: period.end,
-      stripeCustomerId: null,
-      metronomeCustomerId: null,
       spentCents,
-      reservedCents: 0,
-    };
-  }
-
-  if (!isBillingProvidersConfigured()) {
-    return {
-      enabled: true,
-      exempt: false,
-      allowed: false,
-      reason: "billing_misconfigured",
-      status: null,
-      usageCapCents: null,
-      periodStart: null,
-      periodEnd: null,
-      stripeCustomerId: null,
-      metronomeCustomerId: null,
-      spentCents: 0,
-      reservedCents: 0,
-    };
+    });
   }
 
   const account = await getBillingAccount(userId);
+  const paying = Boolean(account && ACTIVE_STATUSES.has(account.status));
+
+  // Friend-beta trial: allowlisted, no active subscription, soft monthly cap.
+  // Stripe is not required for this path.
+  if (!paying && isEmailOnTrialAllowlist(flags.email)) {
+    const period = calendarMonthPeriod();
+    const spentCents = await sumSpentCents(userId, period.start);
+    const reservedCents = await sumReservedCents(userId, period.start);
+    const usageCapCents = getTrialCapCents();
+    if (spentCents + reservedCents >= usageCapCents) {
+      return emptyAccess({
+        enabled: true,
+        trial: true,
+        allowed: false,
+        reason: "trial_cap_reached",
+        status: "trial",
+        usageCapCents,
+        periodStart: period.start,
+        periodEnd: period.end,
+        spentCents,
+        reservedCents,
+      });
+    }
+    return emptyAccess({
+      enabled: true,
+      trial: true,
+      allowed: true,
+      status: "trial",
+      usageCapCents,
+      periodStart: period.start,
+      periodEnd: period.end,
+      spentCents,
+      reservedCents,
+    });
+  }
+
+  if (!isBillingProvidersConfigured()) {
+    return emptyAccess({
+      enabled: true,
+      allowed: false,
+      reason: "billing_misconfigured",
+    });
+  }
+
   const period = resolvePeriod(account);
   const spentCents = account
     ? await sumSpentCents(userId, period.start)
@@ -292,14 +316,13 @@ export async function getBillingAccess(
     ? await sumReservedCents(userId, period.start)
     : 0;
 
-  if (!account || !ACTIVE_STATUSES.has(account.status)) {
+  if (!account || !paying) {
     const reason: BillingBlockReason =
       account?.status === "past_due" || account?.status === "unpaid"
         ? "payment_failed"
         : "unpaid";
-    return {
+    return emptyAccess({
       enabled: true,
-      exempt: false,
       allowed: false,
       reason,
       status: account?.status ?? null,
@@ -310,40 +333,37 @@ export async function getBillingAccess(
       metronomeCustomerId: account?.metronomeCustomerId ?? null,
       spentCents,
       reservedCents,
-    };
+    });
   }
 
-  if (spentCents + reservedCents >= account.usageCapCents) {
-    return {
+  if (spentCents + reservedCents >= account!.usageCapCents) {
+    return emptyAccess({
       enabled: true,
-      exempt: false,
       allowed: false,
       reason: "cap_reached",
-      status: account.status,
-      usageCapCents: account.usageCapCents,
+      status: account!.status,
+      usageCapCents: account!.usageCapCents,
       periodStart: period.start,
       periodEnd: period.end,
-      stripeCustomerId: account.stripeCustomerId,
-      metronomeCustomerId: account.metronomeCustomerId,
+      stripeCustomerId: account!.stripeCustomerId,
+      metronomeCustomerId: account!.metronomeCustomerId,
       spentCents,
       reservedCents,
-    };
+    });
   }
 
-  return {
+  return emptyAccess({
     enabled: true,
-    exempt: false,
     allowed: true,
-    reason: null,
-    status: account.status,
-    usageCapCents: account.usageCapCents,
+    status: account!.status,
+    usageCapCents: account!.usageCapCents,
     periodStart: period.start,
     periodEnd: period.end,
-    stripeCustomerId: account.stripeCustomerId,
-    metronomeCustomerId: account.metronomeCustomerId,
+    stripeCustomerId: account!.stripeCustomerId,
+    metronomeCustomerId: account!.metronomeCustomerId,
     spentCents,
     reservedCents,
-  };
+  });
 }
 
 export async function findBillingAccountByStripeCustomer(

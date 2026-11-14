@@ -7,7 +7,12 @@ import { projectPin } from "../lib/db/schema.ts";
 
 describe("project_pin schema", () => {
   it("exports a project_pin table with project and pin fks", () => {
-    assert.equal(projectPin[Symbol.for("drizzle:Name")], "project_pin");
+    assert.equal(
+      (projectPin as unknown as Record<symbol, string>)[
+        Symbol.for("drizzle:Name")
+      ],
+      "project_pin",
+    );
     const columns = Object.keys(projectPin);
     assert.ok(columns.includes("id"));
     assert.ok(columns.includes("projectId"));

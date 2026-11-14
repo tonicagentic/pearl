@@ -40,11 +40,11 @@ function mirrorBody(input: {
 
 type MirrorSession = {
   readonly id: string;
-  readonly getSandbox?: () => Promise<{
+  readonly getSandbox?: () => PromiseLike<{
     writeTextFile: (input: {
       readonly path: string;
       readonly content: string;
-    }) => Promise<unknown>;
+    }) => PromiseLike<unknown>;
   }>;
 };
 
@@ -75,8 +75,14 @@ export async function mirrorPlanMarkdown(input: {
       // Sandbox write is best-effort; Blob below still makes it durable.
     }
 
-    const { persistAgentFile } = await import("@/agent/tools/write_file");
-    const persistence = await persistAgentFile(input.session, path, content);
+    const { persistAgentFile } = await import(
+      "@/lib/agent/persist-agent-file"
+    );
+    const persistence = await persistAgentFile(
+      { session: input.session },
+      path,
+      content,
+    );
     return {
       path,
       mirrored: persistence.persisted,

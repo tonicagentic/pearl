@@ -19,6 +19,7 @@ export async function GET() {
       enabled: false,
       allowed: true,
       exempt: false,
+      trial: false,
       needsCheckout: false,
     });
   }
@@ -33,7 +34,12 @@ export async function GET() {
     enabled: true,
     allowed: access.allowed,
     exempt: access.exempt,
-    needsCheckout: !access.exempt && !access.allowed && access.reason === "unpaid",
+    trial: access.trial,
+    needsCheckout:
+      !access.exempt &&
+      !access.trial &&
+      !access.allowed &&
+      access.reason === "unpaid",
     reason: access.reason,
     message: access.reason ? blockMessage(access.reason) : null,
     status: access.status,
@@ -43,10 +49,14 @@ export async function GET() {
     remainingCents:
       access.usageCapCents == null
         ? null
-        : Math.max(0, access.usageCapCents - access.spentCents - access.reservedCents),
+        : Math.max(
+            0,
+            access.usageCapCents - access.spentCents - access.reservedCents,
+          ),
     periodStart: access.periodStart?.toISOString() ?? null,
     periodEnd: access.periodEnd?.toISOString() ?? null,
-    hasPortal: Boolean(access.stripeCustomerId) && !access.exempt,
+    hasPortal:
+      Boolean(access.stripeCustomerId) && !access.exempt && !access.trial,
     bySource,
   });
 }

@@ -313,7 +313,7 @@ function RecentChatRowAndroid({
       ? CHAT_PRESENCE_AMBER
       : presence === "unread"
         ? CHAT_PRESENCE_BLUE
-        : mutedDot;
+        : null;
 
   return (
     <Pressable
@@ -338,7 +338,7 @@ function RecentChatRowAndroid({
           accessibilityElementsHidden
           importantForAccessibility="no"
           className="h-2 w-2 shrink-0 rounded-full"
-          style={{ backgroundColor: markColor }}
+          style={markColor ? { backgroundColor: markColor } : undefined}
         />
       )}
       <View className="min-w-0 flex-1">

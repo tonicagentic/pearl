@@ -29,7 +29,7 @@ export default defineDynamic(async (ctx) => {
     plans.length === 0
       ? ["(no plans yet)"]
       : plans.map((row) => {
-          const path = planMirrorPath(row.projectId, row.slug);
+          const path = planMirrorPath(owned.id, row.slug);
           return `- ${row.title} (slug: ${row.slug}, id: ${row.id}, path: ${path})`;
         });
 

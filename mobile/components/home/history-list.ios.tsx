@@ -226,7 +226,7 @@ function RecentChatRow({
       ? CHAT_PRESENCE_AMBER
       : presence === "unread"
         ? CHAT_PRESENCE_BLUE
-        : mutedColor;
+        : null;
   const statusMark =
     presence === "working" ? (
       <RNHostView matchContents>
@@ -245,8 +245,13 @@ function RecentChatRow({
           />
         </View>
       </RNHostView>
-    ) : (
+    ) : markTint ? (
       <Image systemName="circle.fill" size={8} modifiers={[tint(markTint)]} />
+    ) : (
+      // Keep title columns aligned when some rows show a presence mark.
+      <RNHostView matchContents>
+        <View style={{ width: 8, height: 8 }} />
+      </RNHostView>
     );
   const row = (
     <Button onPress={onOpen} modifiers={[buttonStyle("plain")]}>

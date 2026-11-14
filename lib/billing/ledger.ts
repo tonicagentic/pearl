@@ -22,6 +22,8 @@ import {
   type UsageEventSource,
 } from "@/lib/db/schema";
 
+const ACTIVE_BILLING_STATUSES = new Set(["active", "trialing"]);
+
 export type RecordUsageInput = {
   readonly idempotencyKey: string;
   readonly userId: string;
@@ -33,9 +35,9 @@ export type RecordUsageInput = {
 };
 
 /**
- * Append one usage row. Idempotent on idempotencyKey. Free-pass users get
- * billable=false so Metronome never sees them. Best-effort ingest for
- * billable rows.
+ * Append one usage row. Idempotent on idempotencyKey. Free-pass and
+ * friend-beta trial users get billable=false so Metronome never sees them.
+ * Best-effort ingest for billable (subscribed) rows.
  */
 export async function recordUsage(
   input: RecordUsageInput,
@@ -57,8 +59,13 @@ export async function recordUsage(
   const account = flags.exempt
     ? null
     : await getBillingAccount(input.userId);
-  const period = resolvePeriod(account);
-  const billable = !flags.exempt;
+  const paying = Boolean(
+    account && ACTIVE_BILLING_STATUSES.has(account.status),
+  );
+  // Trial / exempt: calendar month. Paying: Stripe period.
+  const period = paying ? resolvePeriod(account) : resolvePeriod(null);
+  // Only subscribed accounts are invoiced. Free-pass and trial stay local.
+  const billable = paying && !flags.exempt;
 
   const id = randomUUID();
   const inserted = await db
@@ -129,12 +136,17 @@ export async function reserveSpend(input: {
   if (!access.periodStart || access.usageCapCents === null) {
     return { ok: false, reason: "unpaid" };
   }
+  // Trial users share the reservation path with paying users so concurrent
+  // chats cannot both clear a near-cap check.
 
   const cents = Math.max(0, Math.round(input.cents));
   const spent = await sumSpentCents(input.userId, access.periodStart);
   const reserved = await sumReservedCents(input.userId, access.periodStart);
   if (spent + reserved + cents > access.usageCapCents) {
-    return { ok: false, reason: "cap_reached" };
+    return {
+      ok: false,
+      reason: access.trial ? "trial_cap_reached" : "cap_reached",
+    };
   }
 
   const id = randomUUID();

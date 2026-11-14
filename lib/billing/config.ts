@@ -2,9 +2,14 @@
  * Hosted production billing. On when the app runs in database (production)
  * mode and PEARL_BILLING is not explicitly "off". Self-hosters who want
  * production persistence without Pearl invoices set PEARL_BILLING=off.
+ *
+ * Friend-beta trial: emails on PEARL_TRIAL_ALLOWLIST skip Stripe and share a
+ * soft spend cap (default $20/month of operator AI cost). Exempt accounts
+ * (operator free pass) are separate and uncapped.
  */
 
 export const DEFAULT_USAGE_CAP_CENTS = 5000;
+export const DEFAULT_TRIAL_CAP_CENTS = 2000;
 export const SUBSCRIPTION_PRICE_CENTS = 1000;
 
 /** Rough reservation for a model turn before real usage lands. */
@@ -87,7 +92,40 @@ export type BillingBlockReason =
   | "unpaid"
   | "payment_failed"
   | "cap_reached"
+  | "trial_cap_reached"
   | "billing_misconfigured";
+
+/** Comma-separated allowlist of emails for the friend-beta trial. */
+export function getTrialAllowlist(): readonly string[] {
+  const raw = process.env.PEARL_TRIAL_ALLOWLIST?.trim();
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isEmailOnTrialAllowlist(email: string): boolean {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return getTrialAllowlist().includes(normalized);
+}
+
+/** Soft spend cap for trial users (operator cost). Default $20. */
+export function getTrialCapCents(): number {
+  const raw = process.env.PEARL_TRIAL_CAP_CENTS?.trim();
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return Math.floor(parsed);
+    }
+  }
+  return DEFAULT_TRIAL_CAP_CENTS;
+}
 
 export function blockMessage(reason: BillingBlockReason): string {
   switch (reason) {
@@ -97,6 +135,8 @@ export function blockMessage(reason: BillingBlockReason): string {
       return "Your last payment failed. Update your card to keep chatting.";
     case "cap_reached":
       return "You reached your usage spend cap for this period. Raise the cap in Settings to continue.";
+    case "trial_cap_reached":
+      return "You used the included $20 of usage for this month. Access opens again next month.";
     case "billing_misconfigured":
       return "Billing is not configured on this deployment. Try again later.";
   }

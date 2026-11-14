@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { networkInterfaces } from "node:os";
-import { betterAuth } from "better-auth";
+import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { bearer } from "better-auth/plugins";
 import { getAppUrlHost, getEffectiveAppUrl } from "@/lib/auth-url";
 import { db } from "@/lib/db/client";
+import {
+  isSignUpEmailAllowed,
+  SIGNUP_NOT_INVITED_MESSAGE,
+} from "@/lib/trial-allowlist";
 
 /** Dev-only: phone → Mac LAN IP:3000 must be an allowed better-auth host. */
 function localLanAgentHosts(): string[] {
@@ -37,9 +41,35 @@ const authProtocol = new URL(authBaseUrl).protocol === "https:" ? "https" : "htt
 // better-auth's origin check rejects anything not in trustedOrigins, so
 // development additionally trusts private-LAN http origins on any port; the
 // wildcard list never applies to production (NODE_ENV gate).
+//
+// Production also trusts the canonical app origin so the native phone app can
+// send Origin: <EXPO_PUBLIC_AGENT_URL> on auth calls (native fetch has none).
+const productionTrustedOrigins = [
+  authBaseUrl,
+  process.env.BETTER_AUTH_URL?.trim()
+    ? `https://${getAppUrlHost(process.env.BETTER_AUTH_URL)}`
+    : null,
+  "https://my-agent-pi-eight.vercel.app",
+  "https://pearl.tonicagentic.com",
+].filter((origin, index, list): origin is string => {
+  if (!origin) return false;
+  try {
+    const normalized = new URL(origin).origin;
+    return list.findIndex((entry) => {
+      try {
+        return entry != null && new URL(entry).origin === normalized;
+      } catch {
+        return false;
+      }
+    }) === index;
+  } catch {
+    return false;
+  }
+});
+
 const trustedOrigins =
   process.env.NODE_ENV === "production"
-    ? undefined
+    ? productionTrustedOrigins
     : [
         "http://localhost:*",
         "http://127.0.0.1:*",
@@ -70,6 +100,7 @@ const allowedHosts = [
   ...localLanAgentHosts(),
   "*.vercel.app",
   "pearl.tonicagentic.com",
+  "my-agent-pi-eight.vercel.app",
   getAppUrlHost(process.env.BETTER_AUTH_URL),
   getAppUrlHost(process.env.VERCEL_PROJECT_PRODUCTION_URL),
   getAppUrlHost(process.env.VERCEL_URL),
@@ -94,11 +125,11 @@ export const auth = betterAuth({
   },
   secret: betterAuthSecret ?? "eve-chat-template-unconfigured-secret",
   trustedOrigins,
-  // Native clients (the iOS app's expo/fetch) send no Origin header, so
-  // better-auth's browser-oriented CSRF check rejects them with
-  // MISSING_OR_NULL_ORIGIN. Disabled outside production only: the check
-  // exists to protect browser sessions, the deployed app keeps it, and every
-  // chat request still requires a valid session either way.
+  // Native clients (iOS URLSession via expo/fetch) send Origin: null, which
+  // better-auth rejects with MISSING_OR_NULL_ORIGIN. Disabled outside
+  // production only: the check protects browser sessions. Production keeps
+  // CSRF; /api/auth stamps the canonical origin for opaque native requests
+  // (see lib/auth-native-origin.ts) so they match trustedOrigins above.
   advanced: {
     disableCSRFCheck: process.env.NODE_ENV !== "production",
     database: {
@@ -107,9 +138,24 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
-    // Public email/password registration is open; scripts/create-user.mjs
-    // remains available for seeding accounts.
+    // Sign-up is gated by PEARL_TRIAL_ALLOWLIST in databaseHooks below.
+    // scripts/create-user.mjs can still seed accounts (bypass the HTTP path).
     disableSignUp: false,
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        async before(user) {
+          const email =
+            typeof user.email === "string" ? user.email : String(user.email ?? "");
+          if (!isSignUpEmailAllowed(email)) {
+            throw new APIError("FORBIDDEN", {
+              message: SIGNUP_NOT_INVITED_MESSAGE,
+            });
+          }
+        },
+      },
+    },
   },
   onAPIError: {
     errorURL: "/auth/error",

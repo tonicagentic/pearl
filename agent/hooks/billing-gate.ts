@@ -9,7 +9,8 @@ import { assertCanSpend } from "@/lib/billing/ledger";
 
 /**
  * Hard stop before expensive work. Free-pass and non-billing deployments
- * skip. Paying users need an active subscription and remaining cap room.
+ * skip. Trial users need remaining soft-cap room. Paying users need an
+ * active subscription and remaining cap room.
  *
  * turn.started: reserve a small amount so concurrent chats cannot both
  * clear a near-cap check. usage.recorded (billing-usage hook) records the

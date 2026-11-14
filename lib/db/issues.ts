@@ -77,33 +77,38 @@ type DefaultArea = {
   readonly children?: readonly DefaultArea[];
 };
 
+/** Generic stewardship tree for new accounts (not operator-specific). */
 const DEFAULT_AREAS: readonly DefaultArea[] = [
-  { name: "Body", children: [{ name: "Aesthetics" }, { name: "Physical health" }] },
-  { name: "Mind", children: [{ name: "Learning" }, { name: "Reflection" }, { name: "Comfort" }] },
-  { name: "Career", children: [{ name: "Tonic Agentic" }, { name: "Personal brand" }] },
-  { name: "People", children: [{ name: "Family" }, { name: "Friends" }, { name: "Intimacy" }, { name: "Community" }] },
-  { name: "Home", children: [{ name: "San Francisco" }, { name: "Boulder" }] },
+  {
+    name: "Health",
+    children: [{ name: "Physical" }, { name: "Mental" }],
+  },
+  {
+    name: "Work",
+    children: [{ name: "Career" }, { name: "Projects" }],
+  },
+  {
+    name: "People",
+    children: [{ name: "Family" }, { name: "Friends" }, { name: "Community" }],
+  },
+  {
+    name: "Home",
+    children: [{ name: "Household" }, { name: "Local" }],
+  },
   {
     name: "Finances",
     children: [
+      { name: "Budget" },
       { name: "Taxes" },
       { name: "Investments" },
-      { name: "Cash flow" },
-      { name: "Insurance" },
     ],
   },
   {
-    name: "Activity",
+    name: "Growth",
     children: [
-      { name: "Travel" },
-      {
-        name: "Creative",
-        children: [{ name: "Music" }, { name: "Design engineering" }, { name: "Architecture" }],
-      },
-      {
-        name: "Outdoors",
-        children: [{ name: "Surfing" }, { name: "Snowboarding" }, { name: "Hiking" }],
-      },
+      { name: "Learning" },
+      { name: "Creative" },
+      { name: "Outdoors" },
     ],
   },
 ];
