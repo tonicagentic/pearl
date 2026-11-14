@@ -24,6 +24,7 @@ import {
   type ProjectsScreenHandle,
 } from "@/components/home/projects-screen";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
+import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Icon } from "@/components/ui/icon";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
@@ -92,6 +93,9 @@ export function MailHomeScreen() {
   }, []);
 
   const handleNewChat = useCallback(() => {
+    // Drop any home search keyboard before the push so it cannot hand off
+    // into the chat transition.
+    dismissKeyboard();
     newChat();
     router.push("/chat");
   }, [newChat]);

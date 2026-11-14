@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Alert, Platform, View } from "react-native";
-import { Stack } from "expo-router";
+import { Stack, useNavigation } from "expo-router";
 import * as Haptics from "expo-haptics";
 import {
   AssistantRuntimeProvider,
@@ -92,10 +92,41 @@ export function ChatScreen({
   const { setChatId, tabs } = useWorkspace();
   const [mainTab, setMainTab] = useState<MainTab>("chat");
   const tabCountRef = useRef(tabs.length);
+  const navigation = useNavigation();
+  // Defer new-chat autofocus until the stack push finishes so keyboard +
+  // composer morph do not fight the transition.
+  const [navSettled, setNavSettled] = useState(false);
 
   useEffect(() => {
     setChatId(activeChatId);
   }, [activeChatId, setChatId]);
+
+  useEffect(() => {
+    // Only gate the new-chat autofocus path.
+    if (!(Platform.OS === "ios" && activeChatId === null && chromeRevealed)) {
+      return;
+    }
+    setNavSettled(false);
+    let settled = false;
+    const markSettled = () => {
+      if (settled) return;
+      settled = true;
+      setNavSettled(true);
+    };
+    const unsub = navigation.addListener(
+      "transitionEnd" as never,
+      ((event: { data?: { closing?: boolean } }) => {
+        if (event?.data?.closing) return;
+        markSettled();
+      }) as never,
+    );
+    // No animation / missed event: still focus after a beat.
+    const fallback = setTimeout(markSettled, 450);
+    return () => {
+      unsub();
+      clearTimeout(fallback);
+    };
+  }, [navigation, activeChatId, chromeRevealed, newChatEntry]);
 
   // Auto-open Computer when the agent opens the first tab; return to Chat when empty.
   useEffect(() => {
@@ -788,7 +819,8 @@ export function ChatScreen({
                   autoFocus={
                     Platform.OS === "ios" &&
                     activeChatId === null &&
-                    chromeRevealed
+                    chromeRevealed &&
+                    navSettled
                   }
                   chromeRevealed={chromeRevealed}
                   conversationId={activeChatId}

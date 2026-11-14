@@ -691,7 +691,9 @@ export const Thread: FC<ThreadProps> = ({
         <ThreadViewportContext.Provider value={viewport}>
           <ThreadPrimitive.Root className="aui-root aui-thread-root bg-background flex-1">
             {followsKeyboard ? (
-              <IosKeyboardLayout>{threadViewport}</IosKeyboardLayout>
+              <IosKeyboardLayout seedAtZero={conversationId == null}>
+                {threadViewport}
+              </IosKeyboardLayout>
             ) : (
               <KeyboardAvoidingView
                 className="flex-1"
@@ -779,10 +781,20 @@ const COMPOSER_MENU_HOLD_MS = 2500;
 const COMPOSER_BLUR_COLLAPSE_MS = 450;
 
 /** One UI-thread keyboard height drives the iOS composer and transcript together. */
-const IosKeyboardLayout: FC<{ children: ReactNode }> = ({ children }) => {
-  // A chat can mount while the keyboard is already open (e.g. after sign-in).
+const IosKeyboardLayout: FC<{
+  children: ReactNode;
+  /** New-chat mounts start at 0 so a leftover home keyboard cannot mid-morph. */
+  seedAtZero?: boolean;
+}> = ({ children, seedAtZero = false }) => {
+  // Existing chats may mount while the keyboard is already open (e.g. after
+  // sign-in). New chats always seed at 0 so the composer stays minimized until
+  // post-transition focus raises the keyboard once.
   const keyboardHeight = useSharedValue(
-    KeyboardController.isVisible() ? KeyboardController.state().height : 0,
+    seedAtZero
+      ? 0
+      : KeyboardController.isVisible()
+        ? KeyboardController.state().height
+        : 0,
   );
   // Sticky is only for native menus stealing focus — keyboard height alone
   // drives the morph while the field is selected.
@@ -1114,7 +1126,6 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
   const publishedRef = useRef(storeText);
   const awaitingEchoRef = useRef(false);
   const nativeInput = useRef<TextInputInstance>(null);
-  const focusOnMount = useRef(autoFocus);
   useEffect(() => {
     if (storeText === publishedRef.current) {
       awaitingEchoRef.current = false;
@@ -1154,12 +1165,12 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
   };
 
   useEffect(() => {
-    if (Platform.OS !== "ios" || !focusOnMount.current) return;
-    // The initial native autoFocus can select the field before the window is
-    // ready, leaving a caret but no keyboard. Focus after it has mounted.
-    const timer = setTimeout(() => nativeInput.current?.focus(), 120);
+    if (Platform.OS !== "ios" || !autoFocus) return;
+    // ChatScreen gates autoFocus until transitionEnd so this runs after the
+    // push — native autoFocus on mount races the stack animation.
+    const timer = setTimeout(() => nativeInput.current?.focus(), 40);
     return () => clearTimeout(timer);
-  }, []);
+  }, [autoFocus]);
 
   useEffect(() => {
     if (Platform.OS !== "ios") return;
