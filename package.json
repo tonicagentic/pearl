@@ -83,6 +83,7 @@
     "tailwind-merge": "3.6.0",
     "tailwindcss": "4.3.3",
     "three": "^0.187.0",
+    "tsdav": "^2.5.0",
     "tw-shimmer": "^0.4.13",
     "use-stick-to-bottom": "1.1.6",
     "vercel": "^59.16.0",

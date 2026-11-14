@@ -27,8 +27,9 @@ export type BuiltinPluginId =
   | "plan"
   | "tax";
 
+export type CredentialPluginId = "icloud-calendar";
+
 export type ComingSoonPluginId =
-  | "icloud-calendar"
   | "icloud-drive"
   | "pearl-cloud"
   | "postgres"
@@ -42,11 +43,17 @@ export type MarketplacePluginId =
   | AccountPluginId
   | TonicPluginId
   | BuiltinPluginId
+  | CredentialPluginId
   | ComingSoonPluginId;
 
 export type PluginMarkId = MarketplacePluginId | "sheets" | "xero";
 
-export type PluginKind = "account" | "tonic" | "builtin" | "coming_soon";
+export type PluginKind =
+  | "account"
+  | "tonic"
+  | "builtin"
+  | "credential"
+  | "coming_soon";
 
 export type PluginCatalogEntry<Id extends string = string> = {
   readonly id: Id;
@@ -66,6 +73,10 @@ export type BuiltinPluginEntry = PluginCatalogEntry<BuiltinPluginId> & {
   readonly kind: "builtin";
 };
 
+export type CredentialPluginEntry = PluginCatalogEntry<CredentialPluginId> & {
+  readonly kind: "credential";
+};
+
 export type ComingSoonPluginEntry = PluginCatalogEntry<ComingSoonPluginId> & {
   readonly kind: "coming_soon";
 };
@@ -73,6 +84,7 @@ export type ComingSoonPluginEntry = PluginCatalogEntry<ComingSoonPluginId> & {
 export type ResolvedPlugin =
   | ConnectablePluginEntry
   | BuiltinPluginEntry
+  | CredentialPluginEntry
   | ComingSoonPluginEntry;
 
 export type PluginSectionId =
@@ -241,15 +253,19 @@ export const BUILTIN_PLUGINS: readonly BuiltinPluginEntry[] = [
   },
 ] as const;
 
-export const COMING_SOON_PLUGINS: readonly ComingSoonPluginEntry[] = [
+/** Non-OAuth account plugins (Apple ID + app-specific password, etc.). */
+export const CREDENTIAL_PLUGINS: readonly CredentialPluginEntry[] = [
   {
     id: "icloud-calendar",
-    kind: "coming_soon",
+    kind: "credential",
     label: "iCloud Calendar",
     detail: "Apple Calendar events and availability",
     description:
-      "iCloud Calendar will connect here so Pearl can read events and availability from Apple Calendar. Connect is not available yet.",
+      "Connect iCloud Calendar with your Apple ID and an app-specific password so Pearl can read calendars, upcoming events, and availability from Apple Calendar. Credentials are encrypted at rest in Pearl’s database; the password is never shown again after you save it.",
   },
+] as const;
+
+export const COMING_SOON_PLUGINS: readonly ComingSoonPluginEntry[] = [
   {
     id: "icloud-drive",
     kind: "coming_soon",
@@ -377,6 +393,7 @@ const ALL_MARKETPLACE: readonly ResolvedPlugin[] = [
   ...ACCOUNT_PLUGINS,
   ...TONIC_PLUGINS,
   ...BUILTIN_PLUGINS,
+  ...CREDENTIAL_PLUGINS,
   ...COMING_SOON_PLUGINS,
 ];
 
@@ -405,4 +422,10 @@ export function isConnectablePlugin(
   plugin: ResolvedPlugin,
 ): plugin is ConnectablePluginEntry {
   return plugin.kind === "account" || plugin.kind === "tonic";
+}
+
+export function isCredentialPlugin(
+  plugin: ResolvedPlugin,
+): plugin is CredentialPluginEntry {
+  return plugin.kind === "credential";
 }

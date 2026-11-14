@@ -28,6 +28,7 @@ import {
 } from "../../../lib/plugins/capabilities";
 import {
   isConnectablePlugin,
+  isCredentialPlugin,
   type ResolvedPlugin,
 } from "../../../lib/plugins/catalog";
 import {
@@ -112,7 +113,10 @@ export function PluginDetailScreen({
           {plugin.description}
         </Text>
 
-        {isConnectablePlugin(plugin) ? (
+        {(isConnectablePlugin(plugin) && plugin.connectionId === "calendar") ||
+        (isCredentialPlugin(plugin) && plugin.id === "icloud-calendar") ? (
+          <CalendarManagePanel />
+        ) : isConnectablePlugin(plugin) ? (
           plugin.connectionId === "gmail" ? (
             <GmailMailboxSummaryPanel />
           ) : (
@@ -143,6 +147,43 @@ export function PluginDetailScreen({
         )}
       </SheetScaffold>
     </>
+  );
+}
+
+function CalendarManagePanel() {
+  const googleCapabilities = capabilitiesForConnection("calendar");
+  const icloudCapabilities = capabilitiesForPlugin("icloud-calendar");
+
+  return (
+    <View className="gap-4">
+      <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
+        <Text className="text-[17px] font-medium text-foreground">
+          Calendar accounts
+        </Text>
+        <Text className="text-[13px] leading-[18px] text-muted-foreground">
+          Manage Google Calendar and iCloud Calendar from one place.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/calendar")}
+          className="min-h-11 justify-center self-start rounded-[10px] bg-muted px-4"
+        >
+          <Text className="text-[15px] text-foreground">Manage Calendar</Text>
+        </Pressable>
+      </View>
+      {googleCapabilities ? (
+        <CapabilitiesCard
+          capabilities={googleCapabilities}
+          heading="Google Calendar"
+        />
+      ) : null}
+      {icloudCapabilities ? (
+        <CapabilitiesCard
+          capabilities={icloudCapabilities}
+          heading="iCloud Calendar"
+        />
+      ) : null}
+    </View>
   );
 }
 

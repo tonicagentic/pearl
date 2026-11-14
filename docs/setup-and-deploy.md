@@ -377,6 +377,26 @@ Gmail, Calendar, Drive, Sheets, GitHub, Vercel, Xero, and Tempo stay unavailable
 until their connector env vars are set and the connectors are attached. Tempo
 also requires `TEMPO_MCP_URL`.
 
+### iCloud Calendar (CalDAV)
+
+iCloud Calendar does not use Vercel Connect. Pearl stores an encrypted Apple
+app-specific password per linked account and talks to `caldav.icloud.com`.
+
+1. Generate a 32-byte key: `openssl rand -base64 32`
+2. Set it on the project (and locally in `.env.local`):
+
+```bash
+printf '%s' "<base64-key>" | vercel env add ICLOUD_CALDAV_CREDENTIALS_KEY production preview development
+```
+
+3. Run database migrations so `icloud_calendar_account` exists (`pnpm db:migrate`
+   or your usual Neon migrate path).
+4. Users connect from Settings → Calendar (mobile) or Plugins → iCloud Calendar
+   (web) with their Apple ID and an [app-specific password](https://support.apple.com/en-us/102654).
+
+Without `ICLOUD_CALDAV_CREDENTIALS_KEY`, the iCloud Calendar UI shows as
+unavailable; Google Calendar still works via `CALENDAR_CONNECTOR`.
+
 ### Gmail (REST + Vercel Connect)
 
 Gmail does **not** use Google's MCP server. Pearl calls `gmail.googleapis.com`

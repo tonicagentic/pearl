@@ -110,16 +110,35 @@ export default function PrivacyPage() {
 
         <section className="space-y-3">
           <h2 className="text-base font-medium text-foreground">
+            Calendar data
+          </h2>
+          <p>
+            If you connect Google Calendar, Pearl uses Google OAuth through
+            Vercel Connect so the agent can list calendars, search and read
+            events, and suggest times. If you connect iCloud Calendar, you
+            provide your Apple ID and an app-specific password. Pearl uses
+            those credentials only to access your calendars over CalDAV
+            (read-only in the current product). Pearl does not sell calendar
+            data or use it for advertising.
+          </p>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-base font-medium text-foreground">
             Storage and retention
           </h2>
           <p>
-            Connection grants are stored by Vercel Connect; Pearl keeps
-            mailbox metadata needed to run the product (for example which
-            Gmail accounts you linked). Chat transcripts and tool results that
-            include mail snippets may be stored in your Pearl account database
-            until you delete them or delete your account. Access tokens are
-            not stored in Pearl application secrets; Connect issues them when
-            Pearl needs to call Gmail.
+            Connection grants for Google and other OAuth plugins are stored by
+            Vercel Connect; Pearl keeps mailbox and calendar account metadata
+            needed to run the product (for example which Gmail or iCloud
+            accounts you linked). iCloud CalDAV app-specific passwords are
+            encrypted at rest in Pearl’s database and are never returned to
+            the browser or mobile app after you save them. Chat transcripts
+            and tool results that include mail or calendar snippets may be
+            stored in your Pearl account database until you delete them or
+            delete your account. Google access tokens are not stored in Pearl
+            application secrets; Connect issues them when Pearl needs to call
+            Google APIs.
           </p>
         </section>
 
@@ -128,11 +147,14 @@ export default function PrivacyPage() {
             Deletion and disconnection
           </h2>
           <p>
-            You can disconnect Gmail from Settings → Email / Plugins. You can
-            delete your Pearl account from Settings. Deletion removes your
-            Pearl account data from the hosted service and revokes connection
-            grants Pearl holds for you. You can also revoke Pearl’s access in
-            your Google Account security settings.
+            You can disconnect Gmail from Settings → Email / Plugins and
+            calendars from Settings → Calendar / Plugins. You can delete your
+            Pearl account from Settings. Deletion removes your Pearl account
+            data from the hosted service (including encrypted iCloud calendar
+            credentials) and revokes connection grants Pearl holds for you.
+            You can also revoke Pearl’s access in your Google Account security
+            settings, and revoke or rotate app-specific passwords in your
+            Apple ID account.
           </p>
         </section>
 

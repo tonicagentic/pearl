@@ -900,3 +900,41 @@ export const mailRule = pgTable(
 );
 
 export type MailRuleRow = typeof mailRule.$inferSelect;
+
+/**
+ * iCloud Calendar accounts linked via CalDAV (Apple ID + app-specific
+ * password). The password is stored only as AES-GCM ciphertext; never
+ * returned to clients.
+ */
+export const icloudCalendarAccount = pgTable(
+  "icloud_calendar_account",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** Apple ID email used for CalDAV Basic auth. */
+    appleId: text("apple_id").notNull(),
+    nickname: text("nickname"),
+    /** base64(iv || authTag || ciphertext) of the app-specific password. */
+    credentialCiphertext: text("credential_ciphertext").notNull(),
+    credentialKeyId: text("credential_key_id").notNull().default("v1"),
+    /** Cached calendar-home-set URL after successful discovery. */
+    calendarHomeUrl: text("calendar_home_url"),
+    lastVerifiedAt: timestamp("last_verified_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_icloud_calendar_account_user").on(table.userId),
+    uniqueIndex("idx_icloud_calendar_account_user_apple").on(
+      table.userId,
+      table.appleId,
+    ),
+  ],
+);
+
+export type IcloudCalendarAccountRow =
+  typeof icloudCalendarAccount.$inferSelect;

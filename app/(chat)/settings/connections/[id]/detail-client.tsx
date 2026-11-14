@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { CalendarAccountsPanel } from "@/components/connections/calendar-accounts-panel";
 import { GmailMailboxesPanel } from "@/components/connections/gmail-mailboxes-panel";
 import { PluginLogo } from "@/components/connections/plugin-logo";
 import { GrantDetails } from "@/components/connections/grant-panel";
@@ -14,6 +15,7 @@ import {
 } from "@/lib/plugins/capabilities";
 import {
   isConnectablePlugin,
+  isCredentialPlugin,
   type ResolvedPlugin,
 } from "@/lib/plugins/catalog";
 
@@ -24,6 +26,9 @@ export function PluginDetailClient({
 }) {
   const builtinCapabilities =
     plugin.kind === "builtin" ? capabilitiesForPlugin(plugin.id) : null;
+  const showCalendarPanel =
+    (isConnectablePlugin(plugin) && plugin.connectionId === "calendar") ||
+    (isCredentialPlugin(plugin) && plugin.id === "icloud-calendar");
 
   return (
     <div className="flex flex-col gap-6">
@@ -48,7 +53,9 @@ export function PluginDetailClient({
         {plugin.description}
       </p>
 
-      {isConnectablePlugin(plugin) ? (
+      {showCalendarPanel ? (
+        <CalendarAccountsPanel />
+      ) : isConnectablePlugin(plugin) ? (
         plugin.connectionId === "gmail" ? (
           <GmailMailboxesPanel />
         ) : (

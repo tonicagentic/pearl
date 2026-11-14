@@ -110,6 +110,7 @@ function trailingForPlugin(
 ): string {
   if (plugin.kind === "coming_soon") return "Coming soon";
   if (plugin.kind === "builtin") return "Enabled";
+  if (plugin.kind === "credential") return "Connect";
   if (!isConnectablePlugin(plugin)) return "…";
   return trailingForStatus(statusById.get(plugin.connectionId));
 }

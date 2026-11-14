@@ -7,6 +7,7 @@ import type { ConnectionId } from "../connections/catalog";
 import type {
   AccountPluginId,
   BuiltinPluginId,
+  CredentialPluginId,
   MarketplacePluginId,
   TonicPluginId,
 } from "./catalog";
@@ -84,6 +85,20 @@ const CONNECTION_CAPABILITIES: Record<
   },
 };
 
+const CREDENTIAL_CAPABILITIES: Record<
+  CredentialPluginId,
+  PluginCapabilities
+> = {
+  "icloud-calendar": {
+    canDo: [
+      "List calendars on your linked iCloud accounts",
+      "List and search events in a time range",
+      "Read event details (title, time, location, notes)",
+    ],
+    needsApproval: [],
+  },
+};
+
 const BUILTIN_CAPABILITIES: Partial<
   Record<BuiltinPluginId, PluginCapabilities>
 > = {
@@ -119,12 +134,15 @@ export function capabilitiesForConnection(
   return null;
 }
 
-/** Capabilities for any catalog plugin id (connectable or built-in). */
+/** Capabilities for any catalog plugin id (connectable, credential, or built-in). */
 export function capabilitiesForPlugin(
   id: MarketplacePluginId | string,
 ): PluginCapabilities | null {
   if (id in CONNECTION_CAPABILITIES) {
     return CONNECTION_CAPABILITIES[id as MarketplaceConnectionId];
+  }
+  if (id in CREDENTIAL_CAPABILITIES) {
+    return CREDENTIAL_CAPABILITIES[id as CredentialPluginId];
   }
   if (id in BUILTIN_CAPABILITIES) {
     return BUILTIN_CAPABILITIES[id as BuiltinPluginId] ?? null;

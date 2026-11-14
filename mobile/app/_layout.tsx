@@ -161,6 +161,14 @@ function AuthenticatedLayout() {
                       }}
                     />
                     <Stack.Screen
+                      name="calendar"
+                      options={{
+                        title: "Calendar",
+                        headerShown: true,
+                        headerBackButtonDisplayMode: "minimal",
+                      }}
+                    />
+                    <Stack.Screen
                       name="models"
                       options={{ title: "Models", headerShown: true }}
                     />

@@ -14,6 +14,7 @@ import {
   Trash2Icon,
   WalletIcon,
   MailIcon,
+  CalendarIcon,
 } from "lucide-react-native";
 
 import { CodeSection, connectedPluginCount } from "@/components/settings/code-section";
@@ -34,6 +35,7 @@ import {
   getConnections,
   type ConnectionStatus,
 } from "@/src/connections-client";
+import { listCalendarAccounts } from "@/src/calendar-accounts-client";
 import { listMailboxes } from "@/src/mailboxes-client";
 import { fetchMemories } from "@/src/memory-client";
 import {
@@ -70,6 +72,7 @@ export function SettingsScreen() {
     readonly ConnectionStatus[] | null
   >(null);
   const [mailboxCount, setMailboxCount] = useState<number | null>(null);
+  const [calendarDetail, setCalendarDetail] = useState<string | null>(null);
   const [memoryDetail, setMemoryDetail] = useState("Facts Pearl keeps");
 
   useFocusEffect(
@@ -98,6 +101,19 @@ export function SettingsScreen() {
         .catch(() => {
           if (!cancelled) setMailboxCount(null);
         });
+      void listCalendarAccounts()
+        .then((icloud) => {
+          if (cancelled) return;
+          setCalendarDetail(
+            icloud.accounts.filter((item) => item.status === "connected")
+              .length > 0
+              ? "icloud-linked"
+              : "icloud-none",
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setCalendarDetail(null);
+        });
       return () => {
         cancelled = true;
       };
@@ -118,6 +134,25 @@ export function SettingsScreen() {
       : mailboxCount === 0
         ? "None connected"
         : `${mailboxCount} connected`;
+  const googleCalendarConnected =
+    connections?.some(
+      (item) => item.id === "calendar" && item.status === "connected",
+    ) ?? false;
+  const calendarRowDetail = (() => {
+    if (connections == null && calendarDetail == null) {
+      return "Google / iCloud";
+    }
+    const parts: string[] = [];
+    if (googleCalendarConnected) parts.push("Google");
+    if (calendarDetail === "icloud-linked") parts.push("iCloud");
+    if (parts.length === 0) {
+      if (connections != null || calendarDetail != null) {
+        return "None connected";
+      }
+      return "Google / iCloud";
+    }
+    return parts.join(" · ");
+  })();
 
   const confirmSignOut = () => {
     const complete = () => {
@@ -223,6 +258,13 @@ export function SettingsScreen() {
           label="Email"
           detail={emailDetail}
           onPress={() => router.push("/email")}
+          showSeparator
+        />
+        <SettingsRow
+          icon={<Icon as={CalendarIcon} className="size-5 text-rose-500" />}
+          label="Calendar"
+          detail={calendarRowDetail}
+          onPress={() => router.push("/calendar")}
           showSeparator
         />
         <SettingsRow

@@ -96,11 +96,12 @@ export function PluginsScreen() {
                   plugin={plugin}
                   trailing={trailingForPlugin(plugin, statusById)}
                   trailingAccent={
-                    isConnectablePlugin(plugin) &&
-                    (statusById.get(plugin.connectionId)?.status ===
-                      "not-connected" ||
-                      statusById.get(plugin.connectionId)?.status ===
-                        "available")
+                    plugin.kind === "credential" ||
+                    (isConnectablePlugin(plugin) &&
+                      (statusById.get(plugin.connectionId)?.status ===
+                        "not-connected" ||
+                        statusById.get(plugin.connectionId)?.status ===
+                          "available"))
                   }
                   showSeparator={index < plugins.length - 1}
                 />
@@ -119,6 +120,7 @@ function trailingForPlugin(
 ): string {
   if (plugin.kind === "coming_soon") return "Coming soon";
   if (plugin.kind === "builtin") return "Enabled";
+  if (plugin.kind === "credential") return "Connect";
   return trailingForStatus(statusById.get(plugin.connectionId));
 }
 
