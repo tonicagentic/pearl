@@ -346,10 +346,14 @@ export function MailHomeScreen() {
       ) : null}
       {IS_IOS ? (
         <Stack.Toolbar placement="bottom">
-          <Stack.Toolbar.SearchBarSlot separateBackground />
-          <Stack.Toolbar.Spacer />
+          {/* Wide search: no separateBackground on the slot (that forces
+              compact integratedButton). Fixed-width Spacer — a flexible
+              Spacer steals the width — plus compose separateBackground. */}
+          <Stack.Toolbar.SearchBarSlot />
+          <Stack.Toolbar.Spacer width={10} sharesBackground={false} />
           <Stack.Toolbar.Button
             icon="square.and.pencil"
+            separateBackground
             accessibilityLabel={
               category === "tasks"
                 ? "New task"
