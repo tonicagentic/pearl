@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { PluginLogo } from "@/components/connections/plugin-logo";
+import { GrantsList } from "@/components/connections/grants-list";
 import type { ConnectionStatus } from "@/lib/connections/catalog";
 import {
   PLUGIN_SECTIONS,
@@ -63,13 +64,15 @@ export function ConnectionsSettings() {
         Tonic Agentic. Open a plugin for details and connection actions.
       </p>
 
+      <GrantsList />
+
       <button
         type="button"
         className="min-h-11 self-start rounded-lg border px-3 text-sm hover:bg-muted disabled:opacity-50"
         disabled={loading}
         onClick={() => void load()}
       >
-        {loading ? "Loading…" : "Refresh accounts"}
+        {loading ? "Loading…" : "Refresh catalog"}
       </button>
       {error ? (
         <p role="alert" className="text-sm text-destructive">

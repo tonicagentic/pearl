@@ -14,7 +14,7 @@ export async function getGithubUserToken(userId: string): Promise<string> {
   const connector = connectionConfiguration("github").connector;
   if (!connector) {
     throw new Error(
-      "GitHub is not configured. Attach GITHUB_CONNECTOR, then connect GitHub in Settings.",
+      "GitHub is not configured. Attach GITHUB_CONNECTOR, then connect GitHub in Settings → GitHub.",
     );
   }
   return getToken(connector, {
@@ -46,7 +46,7 @@ export async function getVercelUserToken(userId: string): Promise<string> {
   const connector = connectionConfiguration("vercel").connector;
   if (!connector) {
     throw new Error(
-      "Vercel is not configured. Attach VERCEL_CONNECTOR, then connect Vercel in Settings.",
+      "Vercel is not configured. Attach VERCEL_CONNECTOR, then connect Vercel in Settings → Vercel.",
     );
   }
   return getToken(connector, {

@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { PluginLogo } from "@/components/connections/plugin-logo";
-import type { ConnectionId, ConnectionStatus } from "@/lib/connections/catalog";
+import { GrantDetails } from "@/components/connections/grant-panel";
+import type { ConnectionId } from "@/lib/connections/catalog";
+import type { ConnectionGrantSummary } from "@/lib/connections/grant-types";
 import {
   capabilitiesForConnection,
   capabilitiesForPlugin,
@@ -13,14 +15,6 @@ import {
   isConnectablePlugin,
   type ResolvedPlugin,
 } from "@/lib/plugins/catalog";
-
-const STATUS_LABEL: Record<ConnectionStatus["status"], string> = {
-  available: "Available · not checked",
-  connected: "Connected",
-  "not-connected": "Not connected",
-  unavailable: "Unavailable",
-  unknown: "Unable to verify",
-};
 
 export function PluginDetailClient({
   plugin,
@@ -54,10 +48,7 @@ export function PluginDetailClient({
       </p>
 
       {isConnectablePlugin(plugin) ? (
-        <ConnectionPanel
-          connectionId={plugin.connectionId}
-          pluginLabel={plugin.label}
-        />
+        <ConnectionPanel connectionId={plugin.connectionId} />
       ) : plugin.kind === "builtin" ? (
         <>
           <StatusCard
@@ -129,46 +120,44 @@ function StatusCard({
 
 function ConnectionPanel({
   connectionId,
-  pluginLabel,
 }: {
   readonly connectionId: ConnectionId;
-  readonly pluginLabel: string;
 }) {
-  const [status, setStatus] = useState<ConnectionStatus | null>(null);
+  const [grant, setGrant] = useState<ConnectionGrantSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [checking, setChecking] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const busy = loading || checking || connecting || disconnecting;
+  const busy = loading || connecting || disconnecting;
   const capabilities = capabilitiesForConnection(connectionId);
-  const connected = status?.status === "connected";
+  const connected = grant?.status === "connected";
+  const state = grant?.status;
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("/api/connections/status", {
+        const response = await fetch("/api/connections/grants", {
           cache: "no-store",
           signal,
         });
         if (!response.ok) {
-          throw new Error(`Could not load status (${response.status}).`);
+          throw new Error(`Could not load grant (${response.status}).`);
         }
         const data = (await response.json()) as {
-          connections: ConnectionStatus[];
+          grants: ConnectionGrantSummary[];
         };
         if (!signal?.aborted) {
-          setStatus(
-            data.connections.find((item) => item.id === connectionId) ?? null,
+          setGrant(
+            data.grants.find((item) => item.id === connectionId) ?? null,
           );
         }
       } catch (cause) {
         if (!signal?.aborted) {
           setError(
-            cause instanceof Error ? cause.message : "Could not load status.",
+            cause instanceof Error ? cause.message : "Could not load grant.",
           );
         }
       } finally {
@@ -184,31 +173,7 @@ function ConnectionPanel({
     return () => controller.abort();
   }, [load]);
 
-  const check = async () => {
-    if (busy) return;
-    setChecking(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/connections/status", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: connectionId }),
-      });
-      if (!response.ok) {
-        throw new Error(`Could not check connection (${response.status}).`);
-      }
-      const data = (await response.json()) as { connection: ConnectionStatus };
-      setStatus(data.connection);
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Could not check connection.",
-      );
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const connect = async () => {
+  const authorize = async () => {
     if (busy) return;
     setConnecting(true);
     setError(null);
@@ -250,8 +215,7 @@ function ConnectionPanel({
       if (!response.ok) {
         throw new Error(`Could not disconnect (${response.status}).`);
       }
-      const data = (await response.json()) as { connection: ConnectionStatus };
-      setStatus(data.connection);
+      await load();
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not disconnect.",
@@ -261,48 +225,40 @@ function ConnectionPanel({
     }
   };
 
-  const state = status?.status;
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
-        <h2 className="font-medium">Connection</h2>
-        {loading && !status ? (
-          <p className="text-sm text-muted-foreground">Checking status…</p>
+        <h2 className="font-medium">Grant</h2>
+        {loading && !grant ? (
+          <p className="text-sm text-muted-foreground">Checking grant…</p>
         ) : null}
-        {status ? (
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Status
-              </dt>
-              <dd className="text-sm">{STATUS_LABEL[status.status]}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Account
-              </dt>
-              <dd className="text-sm">
-                {connected
-                  ? (status.accountLabel ?? `Your ${pluginLabel} account`)
-                  : state === "unavailable"
-                    ? "Not available on this deployment"
-                    : "None connected"}
-              </dd>
-            </div>
-            {status.detail ? (
-              <p className="text-sm text-muted-foreground sm:col-span-2">
-                {status.detail}
-              </p>
-            ) : null}
-          </dl>
-        ) : null}
+        {grant ? <GrantDetails grant={grant} /> : null}
         {error ? (
           <p role="alert" className="text-sm text-destructive">
             {error}
           </p>
         ) : null}
         <div className="flex flex-wrap gap-2">
+          {connected ? (
+            <button
+              type="button"
+              disabled={busy}
+              className="min-h-11 rounded-lg bg-foreground px-4 text-sm text-background disabled:opacity-50"
+              onClick={() => void authorize()}
+            >
+              {connecting ? "Opening…" : "Update"}
+            </button>
+          ) : null}
+          {state !== "connected" && state !== "unavailable" ? (
+            <button
+              type="button"
+              disabled={busy}
+              className="min-h-11 rounded-lg bg-foreground px-4 text-sm text-background disabled:opacity-50"
+              onClick={() => void authorize()}
+            >
+              {connecting ? "Connecting…" : "Connect"}
+            </button>
+          ) : null}
           {state === "connected" || state === "unknown" ? (
             <button
               type="button"
@@ -313,28 +269,19 @@ function ConnectionPanel({
               {disconnecting ? "Disconnecting…" : "Disconnect"}
             </button>
           ) : null}
-          {state !== "connected" && state !== "unavailable" ? (
-            <button
-              type="button"
-              disabled={busy}
-              className="min-h-11 rounded-lg bg-foreground px-4 text-sm text-background disabled:opacity-50"
-              onClick={() => void connect()}
-            >
-              {connecting ? "Connecting…" : "Connect"}
-            </button>
-          ) : null}
           <button
             type="button"
             disabled={busy || state === "unavailable"}
             className="min-h-11 rounded-lg border px-3 text-sm hover:bg-muted disabled:opacity-50"
-            onClick={() => void check()}
+            onClick={() => void load()}
           >
-            {checking ? "Checking…" : "Check status"}
+            {loading ? "Checking…" : "Refresh"}
           </button>
         </div>
         <p className="text-xs text-muted-foreground">
           Authorization is stored by Vercel Connect for your signed-in account.
-          Pearl never stores provider tokens in this browser.
+          Update reopens the provider consent screen without disconnecting
+          first. Pearl never stores provider tokens in this browser.
         </p>
       </div>
 

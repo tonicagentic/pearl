@@ -17,6 +17,7 @@ import { requireCoderUserId } from "@/lib/coder/principal";
  * use the Connect user token through the GitHub API from the app runtime so
  * the token never enters the sandbox.
  */
+import { githubPushDeniedMessage } from "@/lib/connections/grant-errors";
 import { getGithubUserToken } from "@/lib/connections/tokens";
 
 export default defineTool({
@@ -41,10 +42,10 @@ export default defineTool({
     let token: string;
     try {
       token = await getGithubUserToken(auth.userId);
-    } catch (cause) {
+    } catch {
       return {
         status: "error",
-        error: cause instanceof Error ? cause.message : "GitHub token unavailable.",
+        error: githubPushDeniedMessage(input.owner),
       };
     }
 

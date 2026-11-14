@@ -29,6 +29,27 @@ export type ConnectionStatus = {
   accountLabel?: string;
 };
 
+export type ConnectionGrantSummary = ConnectionStatus & {
+  requestedScopes: readonly string[];
+  grantedScopes?: readonly string[];
+  missingScopes?: readonly string[];
+  github?: {
+    login: string;
+    hasRepoScope: boolean;
+    orgs: readonly string[];
+    repos: readonly {
+      fullName: string;
+      canPush: boolean;
+      blockedReason?: string;
+    }[];
+    manageUrl: string;
+  };
+  vercel?: {
+    username: string;
+    teams: readonly { id: string; name: string; slug: string }[];
+  };
+};
+
 function authHeaders(): Record<string, string> {
   const credential = getAuthCookie();
   return {
@@ -54,6 +75,20 @@ export async function getConnections(): Promise<ConnectionStatus[]> {
   }
   const data = (await response.json()) as { connections: ConnectionStatus[] };
   return data.connections;
+}
+
+export async function getConnectionGrants(): Promise<ConnectionGrantSummary[]> {
+  const response = await fetch(`${AGENT_URL}/api/connections/grants`, {
+    headers: authHeaders(),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    await parseError(response, "Could not load connection grants");
+  }
+  const data = (await response.json()) as {
+    grants: ConnectionGrantSummary[];
+  };
+  return data.grants;
 }
 
 export async function checkConnection(

@@ -42,12 +42,16 @@ in the delegated `message`. Continue the same task when the parent passes
 
 - Authenticated GitHub: always `git__gh` (and `git__pr`). Never put tokens in
   commands or files. No force-push. No pushes to the default branch. Gate the
-  first push and draft PR with `gated_git`.
+  first push and draft PR with `gated_git`. If `git push` or `gh pr create`
+  returns 403, say Pearl's GitHub connection cannot act as the user for that
+  owner and point them to Settings → GitHub (Update / grant the org). Do not
+  say their GitHub account lacks access.
 - `publish_dev_server`: runs the repo's own `dev`/`start` script and publishes
   the port. Not Next.js-only.
 - `deploy_vercel`: preview by default; production after a healthy preview.
   Pass `owner` and `repo`. Approval every time. Separate from `eas_update`.
   When the repo is Pearl (`alex/my-agent`), production changes the phone API.
+  If the Vercel token is missing, point them to Settings → Vercel.
 - `expo_simulator` / `eas_update` / `eas_build` / `eas_submit`: aim at the
   Expo project id on the pin (or the checkout). Pearl's project id is only the
   default when the task is Pearl itself. `eas_update` changes the installed

@@ -52,7 +52,10 @@ const CONNECTION_CAPABILITIES: Record<
       "Read file contents, issues, and pull requests",
       "Support coding and review work with the Coder agent",
     ],
-    needsApproval: [],
+    needsApproval: [
+      "First push and draft pull request in a coding task",
+      "Merge a pull request when checks are green",
+    ],
   },
   vercel: {
     canDo: [
@@ -60,7 +63,9 @@ const CONNECTION_CAPABILITIES: Record<
       "Inspect deployments and project details",
       "Search Vercel documentation in context",
     ],
-    needsApproval: [],
+    needsApproval: [
+      "Preview or production deploy with the Coder agent",
+    ],
   },
   tempo: {
     canDo: [

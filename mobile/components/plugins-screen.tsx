@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 
+import { GrantsList } from "@/components/grants-list";
 import { PluginLogo } from "@/components/plugin-logo";
 import { SheetScaffold } from "@/components/sheet-scaffold";
 import {
@@ -56,6 +57,8 @@ export function PluginsScreen() {
         Tonic Agentic.
       </Text>
 
+      <GrantsList />
+
       <Pressable
         accessibilityRole="button"
         disabled={loading}
@@ -63,7 +66,7 @@ export function PluginsScreen() {
         className="min-h-11 self-start justify-center rounded-[10px] bg-card px-4 disabled:opacity-50"
       >
         <Text className="text-[17px] text-foreground">
-          {loading ? "Loading…" : "Refresh accounts"}
+          {loading ? "Loading…" : "Refresh catalog"}
         </Text>
       </Pressable>
 

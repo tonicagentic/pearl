@@ -23,11 +23,10 @@ import {
 } from "../../lib/plugins/catalog";
 import {
   authorizeConnection,
-  checkConnection,
-  getConnections,
+  getConnectionGrants,
   revokeConnection,
+  type ConnectionGrantSummary,
   type ConnectionId,
-  type ConnectionStatus,
 } from "@/src/connections-client";
 
 function validatedHttpsUrl(value: unknown): string | null {
@@ -45,7 +44,7 @@ function validatedHttpsUrl(value: unknown): string | null {
   }
 }
 
-const STATUS_LABEL: Record<ConnectionStatus["status"], string> = {
+const STATUS_LABEL: Record<ConnectionGrantSummary["status"], string> = {
   available: "Available",
   connected: "Connected",
   "not-connected": "Not connected",
@@ -158,33 +157,33 @@ function ConnectionPanel({
   readonly connectionId: ConnectionId;
   readonly pluginLabel: string;
 }) {
-  const [status, setStatus] = useState<ConnectionStatus | null>(null);
+  const [grant, setGrant] = useState<ConnectionGrantSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [checking, setChecking] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [userCode, setUserCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
   const waitingForReturn = useRef(false);
-  const busy = loading || checking || connecting || disconnecting;
+  const busy = loading || connecting || disconnecting;
   const capabilities = capabilitiesForConnection(connectionId);
-  const connected = status?.status === "connected";
+  const connected = grant?.status === "connected";
+  const state = grant?.status;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const items = await getConnections();
+      const items = await getConnectionGrants();
       const item = items.find((entry) => entry.id === connectionId) ?? null;
       if (mounted.current) {
-        setStatus(item);
+        setGrant(item);
         if (item?.status === "connected") setUserCode(null);
       }
     } catch (cause) {
       if (mounted.current) {
         setError(
-          cause instanceof Error ? cause.message : "Could not load status.",
+          cause instanceof Error ? cause.message : "Could not load grant.",
         );
       }
     } finally {
@@ -216,28 +215,7 @@ function ConnectionPanel({
     };
   }, [load]);
 
-  const check = async () => {
-    if (busy) return;
-    setChecking(true);
-    setError(null);
-    try {
-      const item = await checkConnection(connectionId);
-      if (mounted.current) {
-        setStatus(item);
-        if (item.status === "connected") setUserCode(null);
-      }
-    } catch (cause) {
-      if (mounted.current) {
-        setError(
-          cause instanceof Error ? cause.message : "Could not check status.",
-        );
-      }
-    } finally {
-      if (mounted.current) setChecking(false);
-    }
-  };
-
-  const connect = async () => {
+  const authorize = async () => {
     if (busy) return;
     setConnecting(true);
     setError(null);
@@ -277,11 +255,8 @@ function ConnectionPanel({
     setDisconnecting(true);
     setError(null);
     try {
-      const item = await revokeConnection(connectionId);
-      if (mounted.current) {
-        setStatus(item);
-        setUserCode(null);
-      }
+      await revokeConnection(connectionId);
+      await load();
     } catch (cause) {
       if (mounted.current) {
         setError(
@@ -293,37 +268,65 @@ function ConnectionPanel({
     }
   };
 
-  const state = status?.status;
-
   return (
     <View className="gap-4">
       <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-        <Text className="text-[17px] font-medium text-foreground">
-          Connection
-        </Text>
-        {loading && !status ? (
-          <ActivityIndicator accessibilityLabel="Loading connection status" />
+        <Text className="text-[17px] font-medium text-foreground">Grant</Text>
+        {loading && !grant ? (
+          <ActivityIndicator accessibilityLabel="Loading grant" />
         ) : null}
-        {status ? (
+        {grant ? (
           <View className="gap-2">
-            <DetailRow
-              label="Status"
-              value={STATUS_LABEL[status.status]}
-            />
+            <DetailRow label="Status" value={STATUS_LABEL[grant.status]} />
             <DetailRow
               label="Account"
               value={
                 connected
-                  ? (status.accountLabel ?? `Your ${pluginLabel} account`)
+                  ? (grant.accountLabel ??
+                    grant.github?.login ??
+                    grant.vercel?.username ??
+                    `Your ${pluginLabel} account`)
                   : state === "unavailable"
                     ? "Not available on this deployment"
                     : "None connected"
               }
             />
-            {status.detail ? (
+            {grant.detail ? (
               <Text className="text-[13px] leading-[18px] text-muted-foreground">
-                {status.detail}
+                {grant.detail}
               </Text>
+            ) : null}
+            {grant.missingScopes && grant.missingScopes.length > 0 ? (
+              <Text className="text-[13px] text-amber-600">
+                Missing: {grant.missingScopes.join(", ")}
+              </Text>
+            ) : null}
+            {grant.github ? (
+              <Text className="text-[13px] leading-[18px] text-muted-foreground">
+                GitHub @{grant.github.login}
+                {grant.github.hasRepoScope ? " · repo ok" : " · needs repo"}
+                {grant.github.repos.some((repo) => !repo.canPush)
+                  ? " · some pinned repos blocked"
+                  : ""}
+              </Text>
+            ) : null}
+            {grant.vercel ? (
+              <Text className="text-[13px] leading-[18px] text-muted-foreground">
+                Vercel {grant.vercel.username}
+                {grant.vercel.teams.length > 0
+                  ? ` · ${grant.vercel.teams.length} teams`
+                  : " · personal"}
+              </Text>
+            ) : null}
+            {grant.github?.manageUrl ? (
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => void Linking.openURL(grant.github!.manageUrl)}
+              >
+                <Text className="text-[13px] text-foreground underline">
+                  Authorized OAuth Apps
+                </Text>
+              </Pressable>
             ) : null}
           </View>
         ) : null}
@@ -352,6 +355,20 @@ function ConnectionPanel({
         ) : null}
 
         <View className="flex-row flex-wrap gap-2 pt-1">
+          {connected ? (
+            <ActionChip
+              disabled={busy}
+              label={connecting ? "Opening…" : "Update"}
+              onPress={() => void authorize()}
+            />
+          ) : null}
+          {state !== "connected" && state !== "unavailable" ? (
+            <ActionChip
+              disabled={busy}
+              label={connecting ? "Opening…" : "Connect"}
+              onPress={() => void authorize()}
+            />
+          ) : null}
           {state === "connected" || state === "unknown" ? (
             <ActionChip
               destructive
@@ -360,23 +377,17 @@ function ConnectionPanel({
               onPress={() => void disconnect()}
             />
           ) : null}
-          {state !== "connected" && state !== "unavailable" ? (
-            <ActionChip
-              disabled={busy}
-              label={connecting ? "Opening…" : "Connect"}
-              onPress={() => void connect()}
-            />
-          ) : null}
           <ActionChip
             disabled={busy || state === "unavailable"}
-            label={checking ? "Checking…" : "Check status"}
-            onPress={() => void check()}
+            label={loading ? "Checking…" : "Refresh"}
+            onPress={() => void load()}
           />
         </View>
 
         <Text className="text-[12px] leading-[16px] text-muted-foreground">
           Authorization is stored by Vercel Connect for your signed-in account.
-          Pearl never stores provider tokens in this app.
+          Update reopens consent without disconnecting first. Pearl never stores
+          provider tokens in this app.
         </Text>
       </View>
 

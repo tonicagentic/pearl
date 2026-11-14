@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { brokerVercelHeaders } from "@/lib/coder/network-policy";
 import { requireCoderUserId } from "@/lib/coder/principal";
+import { vercelTokenUnavailableMessage } from "@/lib/connections/grant-errors";
 import { getVercelUserToken } from "@/lib/connections/tokens";
 import { buildApprovalCard } from "@/lib/workbench/approvals";
 import { environment } from "../sandbox.ts";
@@ -40,7 +41,9 @@ export default defineTool({
     } catch (cause) {
       return {
         status: "error",
-        error: cause instanceof Error ? cause.message : "Vercel token unavailable.",
+        error: vercelTokenUnavailableMessage(
+          cause instanceof Error ? cause.message : undefined,
+        ),
       };
     }
 
