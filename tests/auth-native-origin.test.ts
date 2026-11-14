@@ -46,7 +46,7 @@ describe("withTrustedNativeOrigin", () => {
     );
   });
 
-  it("leaves cookie-bearing browser requests alone", () => {
+  it("stamps opaque Origin even when the native cookie jar is attached", () => {
     process.env.BETTER_AUTH_URL = "https://pearl.tonicagentic.com";
     const request = new Request(AUTH_URL, {
       method: "POST",
@@ -59,8 +59,8 @@ describe("withTrustedNativeOrigin", () => {
     });
 
     const next = withTrustedNativeOrigin(request);
-    assert.equal(next, request);
-    assert.equal(next.headers.get("origin"), "null");
+    assert.notEqual(next, request);
+    assert.equal(next.headers.get("origin"), "https://pearl.tonicagentic.com");
   });
 
   it("leaves Sec-Fetch-Site browser requests alone", () => {
@@ -71,13 +71,14 @@ describe("withTrustedNativeOrigin", () => {
         "content-type": "application/json",
         "sec-fetch-site": "same-origin",
         "sec-fetch-mode": "cors",
+        origin: "null",
       },
       body: "{}",
     });
 
     const next = withTrustedNativeOrigin(request);
     assert.equal(next, request);
-    assert.equal(next.headers.get("origin"), null);
+    assert.equal(next.headers.get("origin"), "null");
   });
 
   it("leaves a real Origin unchanged", () => {

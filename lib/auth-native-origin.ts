@@ -3,11 +3,14 @@ import { getEffectiveAppUrl } from "@/lib/auth-url";
 /**
  * Native clients (iOS URLSession via expo/fetch) cannot set Origin; the
  * platform sends the literal string "null" or omits the header. better-auth's
- * CSRF check rejects that with MISSING_OR_NULL_ORIGIN.
+ * CSRF check rejects that with MISSING_OR_NULL_ORIGIN whenever cookies are
+ * present — and URLSession routinely attaches the cookie jar on repeat
+ * sign-ins.
  *
- * Stamp the canonical app origin only when the request has no browser
- * signals (cookies, Sec-Fetch-*, or a real Origin/Referer). Never trust a
- * client-supplied origin.
+ * Stamp the canonical app origin when Origin/Referer are opaque and there are
+ * no Fetch Metadata headers (browsers always send Sec-Fetch-* on credentialed
+ * navigations/fetches). Do not treat cookies alone as a browser signal: that
+ * blocked legitimate phone clients. Never trust a client-supplied origin.
  */
 export function withTrustedNativeOrigin(request: Request): Request {
   const method = request.method.toUpperCase();
@@ -15,7 +18,7 @@ export function withTrustedNativeOrigin(request: Request): Request {
     return request;
   }
 
-  if (looksLikeBrowserAuthRequest(request.headers)) {
+  if (hasFetchMetadata(request.headers)) {
     return request;
   }
 
@@ -44,23 +47,12 @@ export function withTrustedNativeOrigin(request: Request): Request {
   } as RequestInit);
 }
 
-function looksLikeBrowserAuthRequest(headers: Headers): boolean {
-  if (headers.has("cookie")) {
-    return true;
-  }
-
+/** True when the client looks like a browser (Fetch Metadata present). */
+function hasFetchMetadata(headers: Headers): boolean {
   const site = headers.get("sec-fetch-site");
   const mode = headers.get("sec-fetch-mode");
   const dest = headers.get("sec-fetch-dest");
-  if (
-    Boolean(
-      (site && site.trim()) ||
-        (mode && mode.trim()) ||
-        (dest && dest.trim()),
-    )
-  ) {
-    return true;
-  }
-
-  return false;
+  return Boolean(
+    (site && site.trim()) || (mode && mode.trim()) || (dest && dest.trim()),
+  );
 }
