@@ -36,6 +36,8 @@ Docs: https://docs.expo.dev/eas/index.md
 
 **OTA updates:** follow `$eas-update`. Runtime must match the installed binary (`appVersion` policy); wrong `expo.version` means the phone silently ignores the update.
 
+**Beta App Review** signs in as `test@tonicagentic.com` / `pearl-test`. That account stays on `PEARL_TRIAL_ALLOWLIST`. Never put a tester's email in the App Store Connect demo login. Standard: `docs/testflight-review.md`.
+
 ## Rules
 
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.

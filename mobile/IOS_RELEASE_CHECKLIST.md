@@ -2,6 +2,8 @@
 
 Run this on a physical iPhone using a release/TestFlight build, not only Expo Go or a simulator. Do not ship if any item fails. Record device, iOS version, build number, network conditions, and the result of each run.
 
+Beta App Review signs in as `test@tonicagentic.com`. Credentials, the trial allowlist, and the App Store Connect notes are the standard in [docs/testflight-review.md](../docs/testflight-review.md). Do not substitute a tester's email.
+
 ## Automated checks
 
 From `mobile/`:

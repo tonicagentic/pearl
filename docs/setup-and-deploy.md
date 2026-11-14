@@ -90,6 +90,8 @@ PEARL_BILLING=off
 
 Starter mode, the shared password, and local development never bill.
 
+Friend-beta and Apple review logins skip Checkout. Their emails belong on `PEARL_TRIAL_ALLOWLIST` (production and preview). The TestFlight reviewer always uses the shared account in [TestFlight review account](testflight-review.md), never a tester's personal email. Redeploy production after editing the allowlist.
+
 ## Local Project Link
 
 Create or select the Vercel project that will run this template:
