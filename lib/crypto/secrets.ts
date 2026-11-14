@@ -17,8 +17,9 @@ export class SecretCryptoError extends Error {
   }
 }
 
+/** Minimal env shape for CalDAV credential crypto (tests + process.env). */
 export type CredentialsEnv = {
-  readonly ICLOUD_CALDAV_CREDENTIALS_KEY?: string;
+  [key: string]: string | undefined;
 };
 
 /**
