@@ -34,6 +34,8 @@ Docs: https://docs.expo.dev/eas/index.md
 
 **Phone / device installs:** always use profile **`preview`** (or `production`). Never ship a phone build with profile `development` — that enables `developmentClient` and requires a Metro/dev server on the device. Reserve `development` for explicit development-client work only.
 
+**OTA updates:** follow `$eas-update`. Runtime must match the installed binary (`appVersion` policy); wrong `expo.version` means the phone silently ignores the update.
+
 ## Rules
 
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "EAS Update"
+  short_description: "Publish Pearl mobile OTA updates correctly"
+  default_prompt: "Use $eas-update to publish an Expo update to the preview channel with a matching runtime version."
