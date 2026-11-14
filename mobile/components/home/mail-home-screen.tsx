@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AppState, Platform, Pressable, View } from "react-native";
 import { Stack, router, useFocusEffect } from "expo-router";
-import { PlusIcon, SettingsIcon } from "lucide-react-native";
+import { PlusIcon, UserIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import {
@@ -34,7 +34,7 @@ const IS_IOS = Platform.OS === "ios";
 const LIST_BOTTOM_INSET = IS_IOS ? 0 : HOME_DOCK_CLEARANCE;
 
 /**
- * Mail-style home: stack Settings gear, category pills below, list + dock.
+ * Mail-style home: stack Profile control, category pills below, list + dock.
  */
 export function MailHomeScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
@@ -235,18 +235,18 @@ export function MailHomeScreen() {
           headerTransparent: false,
           headerTintColor: foregroundColor,
           headerStyle: { backgroundColor },
-          // iOS: Stack.Toolbar owns the morphing glass gear — leave headerLeft
-          // unset so we don't get a second chrome button over the list.
+          // iOS: Stack.Toolbar owns the morphing Profile control — leave
+          // headerLeft unset so we don't get a second chrome button.
           headerLeft: IS_IOS
             ? undefined
             : () => (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Settings"
+                  accessibilityLabel="Profile"
                   className="h-10 w-10 items-center justify-center"
                   onPress={() => router.push("/settings")}
                 >
-                  <Icon as={SettingsIcon} className="size-5 text-foreground" />
+                  <Icon as={UserIcon} className="size-5 text-foreground" />
                 </Pressable>
               ),
           headerRight:
@@ -266,12 +266,12 @@ export function MailHomeScreen() {
                 ),
         }}
       />
-      {/* Keep mounted while blurred so the gear morphs into chat/settings. */}
+      {/* Keep mounted while blurred so Profile morphs into chat/settings. */}
       {IS_IOS && !searchOpen ? (
         <Stack.Toolbar placement="left">
           <Stack.Toolbar.Button
-            icon="gearshape"
-            accessibilityLabel="Settings"
+            icon="person"
+            accessibilityLabel="Profile"
             onPress={() => router.push("/settings")}
           />
         </Stack.Toolbar>
