@@ -19,6 +19,10 @@ import {
   revokeMailbox,
   type MailboxClientSummary,
 } from "@/src/mailboxes-client";
+import {
+  capabilitiesForConnection,
+  type PluginCapabilities,
+} from "../../../lib/plugins/capabilities";
 
 function validatedHttpsUrl(value: unknown): string | null {
   if (typeof value !== "string" || value.trim() !== value) return null;
@@ -36,12 +40,14 @@ function validatedHttpsUrl(value: unknown): string | null {
 }
 
 function displayName(mailbox: MailboxClientSummary): string {
-  if (mailbox.nickname?.trim()) {
-    return mailbox.emailLabel
-      ? `${mailbox.nickname.trim()} · ${mailbox.emailLabel}`
-      : mailbox.nickname.trim();
-  }
-  return mailbox.emailLabel ?? "Gmail account";
+  const email = mailbox.emailLabel?.trim();
+  const nickname = mailbox.nickname?.trim();
+  if (nickname && email) return `${nickname} · ${email}`;
+  if (email) return email;
+  if (nickname) return nickname;
+  return mailbox.status === "connected"
+    ? "Gmail account (address unavailable)"
+    : "Gmail account";
 }
 
 function statusLabel(status: MailboxClientSummary["status"]): string {
@@ -63,15 +69,19 @@ export function EmailScreen() {
     readonly MailboxClientSummary[] | null
   >(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | "add" | null>(null);
   const [userCode, setUserCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
   const waitingForReturn = useRef(false);
-  const busy = loading || busyId !== null;
+  const busy = (loading && !refreshing) || busyId !== null;
+  const capabilities = capabilitiesForConnection("gmail");
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { refresh?: boolean }) => {
+    const isRefresh = opts?.refresh === true;
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
       const next = await listMailboxes();
@@ -88,7 +98,10 @@ export function EmailScreen() {
         );
       }
     } finally {
-      if (mounted.current) setLoading(false);
+      if (mounted.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -197,12 +210,20 @@ export function EmailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Email" }} />
-      <SheetScaffold>
-        <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
-          Connect one or more Gmail accounts Pearl can read and manage. Archive
-          and mark-read need a reconnect if an account was linked before those
-          permissions were added.
+      <Stack.Screen
+        options={{
+          title: "Email",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <SheetScaffold
+        refreshing={refreshing}
+        onRefresh={() => void load({ refresh: true })}
+      >
+        <Text className="px-1 text-[15px] leading-[22px] text-foreground">
+          Connect Gmail so Pearl can search and read threads, draft replies,
+          send only after you approve, and archive or label mail in batches you
+          confirm.
         </Text>
 
         <View className="flex-row flex-wrap gap-2 px-1">
@@ -213,8 +234,8 @@ export function EmailScreen() {
           />
           <ActionChip
             disabled={busy}
-            label={loading ? "Checking…" : "Refresh"}
-            onPress={() => void load()}
+            label={loading && !refreshing ? "Checking…" : "Refresh"}
+            onPress={() => void load({ refresh: true })}
           />
         </View>
 
@@ -268,8 +289,66 @@ export function EmailScreen() {
             ))}
           </SettingsCard>
         ) : null}
+
+        {capabilities ? (
+          <EmailCapabilitiesCard
+            capabilities={capabilities}
+            heading={
+              connectedCount > 0
+                ? "What Pearl can do"
+                : "What Pearl can do after you connect"
+            }
+          />
+        ) : null}
+
+        <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
+          Each address is authorized separately through Google. Pearl never
+          stores provider tokens on this device. Archive and mark-read need a
+          one-time reconnect if an account was linked before those permissions
+          were added.
+        </Text>
       </SheetScaffold>
     </>
+  );
+}
+
+function EmailCapabilitiesCard({
+  capabilities,
+  heading,
+}: {
+  readonly capabilities: PluginCapabilities;
+  readonly heading: string;
+}) {
+  return (
+    <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
+      <Text className="text-[17px] font-medium text-foreground">{heading}</Text>
+      <BulletList items={capabilities.canDo} />
+      {capabilities.needsApproval.length > 0 ? (
+        <View className="gap-2 pt-1">
+          <Text className="text-[15px] font-medium text-foreground">
+            Needs your approval
+          </Text>
+          <BulletList items={capabilities.needsApproval} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function BulletList({ items }: { readonly items: readonly string[] }) {
+  return (
+    <View className="gap-2">
+      {items.map((item) => (
+        <View key={item} className="flex-row gap-2">
+          <Text className="text-[15px] leading-[20px] text-muted-foreground">
+            •
+          </Text>
+          <Text className="min-w-0 flex-1 text-[15px] leading-[20px] text-muted-foreground">
+            {item}
+          </Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -289,15 +368,28 @@ function MailboxRow({
   readonly onDisconnect: () => void;
 }) {
   const rowBusy = busyId === mailbox.id;
+  const email = mailbox.emailLabel?.trim() || null;
+  const nickname = mailbox.nickname?.trim() || null;
+  const title = nickname || email || displayName(mailbox);
   return (
     <View>
       <View className="gap-2 px-4 py-3">
         <Text
           className="text-[17px] font-medium text-foreground"
           numberOfLines={2}
+          selectable
         >
-          {displayName(mailbox)}
+          {title}
         </Text>
+        {nickname && email ? (
+          <Text
+            className="text-[13px] text-muted-foreground"
+            numberOfLines={1}
+            selectable
+          >
+            {email}
+          </Text>
+        ) : null}
         <Text className="text-[13px] text-muted-foreground">
           {statusLabel(mailbox.status)}
           {mailbox.status === "connected" && !mailbox.canModify

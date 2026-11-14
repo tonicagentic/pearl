@@ -154,7 +154,11 @@ function AuthenticatedLayout() {
                     />
                     <Stack.Screen
                       name="email"
-                      options={{ title: "Email", headerShown: true }}
+                      options={{
+                        title: "Email",
+                        headerShown: true,
+                        headerBackButtonDisplayMode: "minimal",
+                      }}
                     />
                     <Stack.Screen
                       name="models"

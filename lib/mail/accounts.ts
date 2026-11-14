@@ -249,7 +249,11 @@ async function probeMailbox(
       },
       { forceRefresh: false },
     );
-    const label = accountLabelFromToken(token) ?? row.emailLabel;
+    let label = accountLabelFromToken(token) ?? row.emailLabel;
+    if (!label) {
+      const { getGmailProfileEmail } = await import("@/lib/agent/gmail-api");
+      label = await getGmailProfileEmail(token.token);
+    }
     if (label && label !== row.emailLabel) {
       await updateMailAccountLabel(userId, row.id, label);
     }

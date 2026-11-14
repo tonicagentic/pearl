@@ -81,6 +81,22 @@ async function gmailFetch<T>(
   return (await res.json()) as T;
 }
 
+/** Primary address for a Gmail grant — used when Connect omits identity claims. */
+export async function getGmailProfileEmail(
+  token: string,
+): Promise<string | null> {
+  try {
+    const profile = await gmailFetch<{ emailAddress?: string }>(
+      token,
+      "users/me/profile",
+    );
+    const email = profile.emailAddress?.trim();
+    return email || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function searchGmailThreads(
   token: string,
   input: {

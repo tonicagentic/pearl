@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ScrollView } from "react-native";
+import { RefreshControl, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
@@ -11,9 +11,13 @@ import { useCSSVariable } from "uniwind";
 export function SheetScaffold({
   children,
   footer,
+  refreshing,
+  onRefresh,
 }: {
   readonly children: ReactNode;
   readonly footer?: ReactNode;
+  readonly refreshing?: boolean;
+  readonly onRefresh?: () => void;
 }) {
   const backgroundColor = useCSSVariable("--color-background") as
     | string
@@ -30,6 +34,14 @@ export function SheetScaffold({
         contentContainerStyle={{ paddingTop: 12 }}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={refreshing ?? false}
+              onRefresh={onRefresh}
+            />
+          ) : undefined
+        }
       >
         {children}
         {footer}
