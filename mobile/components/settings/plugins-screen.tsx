@@ -21,6 +21,7 @@ import {
 
 /**
  * Plugins list: sectioned catalog rows that open detail screens.
+ * Coding plugins live under Profile → Code → Coder instead of here.
  */
 export function PluginsScreen() {
   const [connections, setConnections] = useState<ConnectionStatus[] | null>(
@@ -83,29 +84,31 @@ export function PluginsScreen() {
         </Text>
       ) : null}
 
-      {PLUGIN_SECTIONS.map((section) => {
-        const plugins = pluginsForSection(section);
-        if (plugins.length === 0) return null;
-        return (
-          <Section key={section.id} title={section.title}>
-            {plugins.map((plugin, index) => (
-              <CatalogRow
-                key={plugin.id}
-                plugin={plugin}
-                trailing={trailingForPlugin(plugin, statusById)}
-                trailingAccent={
-                  isConnectablePlugin(plugin) &&
-                  (statusById.get(plugin.connectionId)?.status ===
-                    "not-connected" ||
-                    statusById.get(plugin.connectionId)?.status ===
-                      "available")
-                }
-                showSeparator={index < plugins.length - 1}
-              />
-            ))}
-          </Section>
-        );
-      })}
+      {PLUGIN_SECTIONS.filter((section) => section.id !== "build").map(
+        (section) => {
+          const plugins = pluginsForSection(section);
+          if (plugins.length === 0) return null;
+          return (
+            <Section key={section.id} title={section.title}>
+              {plugins.map((plugin, index) => (
+                <CatalogRow
+                  key={plugin.id}
+                  plugin={plugin}
+                  trailing={trailingForPlugin(plugin, statusById)}
+                  trailingAccent={
+                    isConnectablePlugin(plugin) &&
+                    (statusById.get(plugin.connectionId)?.status ===
+                      "not-connected" ||
+                      statusById.get(plugin.connectionId)?.status ===
+                        "available")
+                  }
+                  showSeparator={index < plugins.length - 1}
+                />
+              ))}
+            </Section>
+          );
+        },
+      )}
     </SheetScaffold>
   );
 }

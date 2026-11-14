@@ -183,6 +183,20 @@
       "when": 1794700000000,
       "tag": "0027_project_pins",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794800000000,
+      "tag": "0028_sandbox_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794900000000,
+      "tag": "0029_flaky_shadowcat",
+      "breakpoints": true
     }
   ]
 }

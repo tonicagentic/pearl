@@ -98,7 +98,7 @@ export const ACCOUNT_PLUGINS: readonly ConnectablePluginEntry[] = [
     label: "Gmail",
     detail: "Read and manage Gmail",
     description:
-      "Let Pearl read your inbox, find threads, and draft replies in your Gmail account. Sending mail always asks for your approval. Authorization is stored by Vercel Connect for your signed-in user only.",
+      "Connect one or more Gmail accounts so Pearl can read inboxes, draft replies, and (with your approval) archive or mark threads read. Sending mail always asks for approval. Authorization is stored by Vercel Connect for your signed-in user only.",
   },
   {
     id: "drive",

@@ -83,6 +83,14 @@ function AuthenticatedLayout() {
                       name="sign-in"
                       options={{ headerShown: false }}
                     />
+                    <Stack.Screen
+                      name="reset-password"
+                      options={{
+                        title: "Reset password",
+                        headerShown: true,
+                        headerBackButtonDisplayMode: "minimal",
+                      }}
+                    />
                   </Stack.Protected>
 
                   <Stack.Protected guard={needsBilling}>
@@ -145,6 +153,10 @@ function AuthenticatedLayout() {
                       options={{ title: "Plugin", headerShown: true }}
                     />
                     <Stack.Screen
+                      name="email"
+                      options={{ title: "Email", headerShown: true }}
+                    />
+                    <Stack.Screen
                       name="models"
                       options={{ title: "Models", headerShown: true }}
                     />
@@ -155,6 +167,10 @@ function AuthenticatedLayout() {
                     <Stack.Screen
                       name="memory"
                       options={{ title: "Memory", headerShown: true }}
+                    />
+                    <Stack.Screen
+                      name="computer-use"
+                      options={{ title: "Computer Use", headerShown: true }}
                     />
                     <Stack.Screen
                       name="about"

@@ -24,6 +24,15 @@ export const user = pgTable("user", {
   // Backfilled true for every row that existed when billing shipped; new
   // accounts default false and must subscribe.
   billingExempt: boolean("billing_exempt").notNull().default(false),
+  // Computer Use sandbox knobs. Defaults match the previous hardcoded opens.
+  sandboxBrowserTimeoutMinutes: integer("sandbox_browser_timeout_minutes")
+    .notNull()
+    .default(30),
+  sandboxBrowserVcpus: integer("sandbox_browser_vcpus").notNull().default(2),
+  sandboxCoderTimeoutMinutes: integer("sandbox_coder_timeout_minutes")
+    .notNull()
+    .default(45),
+  sandboxCoderVcpus: integer("sandbox_coder_vcpus").notNull().default(4),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -815,3 +824,79 @@ export const projectPin = pgTable(
 );
 
 export type ProjectPin = typeof projectPin.$inferSelect;
+
+/**
+ * Gmail mailboxes linked to a Pearl user. Tokens stay in Vercel Connect;
+ * this table stores the Connect subject id and a safe display label.
+ * The first / legacy mailbox uses subjectId === userId so an existing
+ * grant keeps working without reconnecting.
+ */
+export const mailAccount = pgTable(
+  "mail_account",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** Connect user subject id (userId for legacy, `{userId}:gmail:{id}` otherwise). */
+    subjectId: text("subject_id").notNull(),
+    emailLabel: text("email_label"),
+    nickname: text("nickname"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_mail_account_user").on(table.userId),
+    uniqueIndex("idx_mail_account_user_subject").on(
+      table.userId,
+      table.subjectId,
+    ),
+  ],
+);
+
+export type MailAccountRow = typeof mailAccount.$inferSelect;
+
+export const MAIL_RULE_ACTIONS = [
+  "archive",
+  "mark_read",
+  "label",
+] as const;
+
+export type MailRuleAction = (typeof MAIL_RULE_ACTIONS)[number];
+
+/**
+ * User-confirmed auto-triage rules. Matching threads are applied without
+ * a fresh approval prompt; unmatched threads are only proposed.
+ */
+export const mailRule = pgTable(
+  "mail_rule",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** Null = apply across every mailbox for this user. */
+    mailAccountId: text("mail_account_id").references(() => mailAccount.id, {
+      onDelete: "cascade",
+    }),
+    matchFrom: text("match_from"),
+    matchList: text("match_list"),
+    matchSubject: text("match_subject"),
+    action: text("action", { enum: MAIL_RULE_ACTIONS }).notNull(),
+    /** Required when action is `label`. */
+    labelId: text("label_id"),
+    labelName: text("label_name"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_mail_rule_user").on(table.userId),
+    index("idx_mail_rule_account").on(table.mailAccountId),
+  ],
+);
+
+export type MailRuleRow = typeof mailRule.$inferSelect;

@@ -284,11 +284,16 @@ Create any connectors you want to use:
 vercel connect create slack --name eve-chat-template --triggers
 vercel connect attach <slack-connector-uid> --triggers --trigger-path /eve/v1/slack --yes
 
-# User-scoped Google Workspace MCP (developer preview). Enable the Gmail,
-# Calendar, and Drive MCP APIs in Google Cloud, create a Web OAuth client
-# marked for an AI-powered agent, then run create --help first and supply
-# that client when prompted.
-vercel connect create https://gmailmcp.googleapis.com/mcp/v1 --name gmail
+# Gmail is first-party REST (not Google's MCP). Enable the Gmail API in Google
+# Cloud, create a Web OAuth client with redirect
+# https://connect.vercel.com/callback, then:
+#   vercel connect create google --connection-method oauth --name pearl-gmail \
+#     --data @.secrets/pearl-gmail-oauth.json
+# where the JSON has { "clientId", "clientSecret" }. Set GMAIL_CONNECTOR to the
+# returned UID. Scopes: gmail.readonly, gmail.compose, gmail.modify.
+#
+# Calendar / Drive still use Workspace MCP (developer preview). Enable those
+# MCP APIs, create a Web OAuth client marked for an AI-powered agent, then:
 vercel connect create https://calendarmcp.googleapis.com/mcp/v1 --name calendar
 vercel connect create https://drivemcp.googleapis.com/mcp/v1 --name drive
 
@@ -370,22 +375,31 @@ Gmail, Calendar, Drive, Sheets, GitHub, Vercel, Xero, and Tempo stay unavailable
 until their connector env vars are set and the connectors are attached. Tempo
 also requires `TEMPO_MCP_URL`.
 
-### Gmail compose and send
+### Gmail (REST + Vercel Connect)
 
-Gmail's MCP server reads mail and creates drafts (`create_draft`, approved per
-call) but cannot send. Sending is Pearl's own `send_gmail_message` tool: it
-calls the Gmail REST API with the user's Connect token, always asks for
-approval, and is recorded in the execution ledger so a replay never re-sends.
+Gmail does **not** use Google's MCP server. Pearl calls `gmail.googleapis.com`
+with Connect-issued user tokens:
 
-Both need the `gmail.compose` scope in addition to `gmail.readonly` (see
-`GMAIL_OAUTH_SCOPES` in `lib/connections/oauth-scopes.ts`):
+- Read/search: `search_gmail_threads`, `get_gmail_thread`, `get_gmail_message`,
+  `list_gmail_labels`, `list_gmail_drafts`
+- Draft: `create_gmail_draft` (approval every call)
+- Send: `send_gmail_message` (approval + execution ledger)
+- Bulk archive / mark-read / label: `apply_mail_batch` (approval)
 
-- Add `https://www.googleapis.com/auth/gmail.compose` to the OAuth consent
-  screen's scopes in Google Cloud, and confirm the Connect connector allows it.
-- Anyone who connected Gmail before this change holds a read-only grant. Their
-  status shows Not connected until they Disconnect and Connect Gmail again in
-  Settings to consent to compose.
-- A send that fails with 403 means the grant is still read-only.
+Google Cloud setup:
+
+1. Enable **Gmail API** only (not Gmail MCP API).
+2. OAuth consent screen (External / Testing is fine for personal use) with
+   scopes `gmail.readonly`, `gmail.compose`, `gmail.modify`.
+3. Create a **Web application** OAuth client with redirect URI
+   `https://connect.vercel.com/callback`. No “AI-powered agent” flag needed.
+4. Add every mailbox address as a Test user while the app is in Testing.
+5. `vercel connect create google --connection-method oauth --name pearl-gmail --data @.secrets/pearl-gmail-oauth.json`
+   then attach and set `GMAIL_CONNECTOR`.
+
+Multiple Gmail accounts share that connector. Each mailbox is a separate
+Connect grant (legacy first account uses the Better Auth user id as the
+subject; additional accounts use `{userId}:gmail:{mailboxId}`).
 
 Until those env vars are set, Settings shows Unavailable for that service and
 the agent does not register the connection. Shared-password and local

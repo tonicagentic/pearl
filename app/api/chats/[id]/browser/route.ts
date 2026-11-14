@@ -10,7 +10,7 @@ import { getChatForUser } from "@/lib/db/queries";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
-async function requireChatOwner(chatId: string) {
+async function requireChatOwner(chatId: string, requestHeaders?: Headers) {
   const setupStatus = await getSetupStatus();
 
   if (!setupStatus.appReady || setupStatus.storageMode !== "database") {
@@ -22,7 +22,7 @@ async function requireChatOwner(chatId: string) {
     } as const;
   }
 
-  const viewer = await getServerViewer(setupStatus);
+  const viewer = await getServerViewer(setupStatus, requestHeaders);
   if (!viewer) {
     return {
       error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
@@ -41,15 +41,15 @@ async function requireChatOwner(chatId: string) {
 
 /** Mint the viewer URL for the chat's live browser (auth-gated). */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { readonly params: Promise<{ readonly id: string }> },
 ) {
   const { id } = await params;
-  const gate = await requireChatOwner(id);
+  const gate = await requireChatOwner(id, request.headers);
   if ("error" in gate) return gate.error;
 
   try {
-    const handle = await ensureBrowserSession(id);
+    const handle = await ensureBrowserSession(id, { userId: gate.viewerId });
     return NextResponse.json(publicBrowserView(handle));
   } catch (error) {
     return NextResponse.json(
@@ -73,7 +73,7 @@ export async function POST(
   { params }: { readonly params: Promise<{ readonly id: string }> },
 ) {
   const { id } = await params;
-  const gate = await requireChatOwner(id);
+  const gate = await requireChatOwner(id, request.headers);
   if ("error" in gate) return gate.error;
 
   let body: {
@@ -88,7 +88,7 @@ export async function POST(
   }
 
   try {
-    const handle = await ensureBrowserSession(id);
+    const handle = await ensureBrowserSession(id, { userId: gate.viewerId });
 
     if (body.op === "control" && (body.mode === "agent" || body.mode === "user")) {
       const result = await callBrowserAction(handle, {

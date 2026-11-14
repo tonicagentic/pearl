@@ -51,8 +51,17 @@ export type AllowlistedConnectionId = keyof typeof CONNECTION_READONLY_ALLOWLIST
  * tests stay meaningful.
  */
 export const CONNECTION_WRITE_TOOLS = {
-  /** Gmail MCP is compose-only: drafts, never sends (see send_gmail_message). */
-  gmail: ["create_draft"],
+  /**
+   * Gmail MCP: drafts plus label changes (archive = remove INBOX, mark read =
+   * remove UNREAD). Never sends — see send_gmail_message / apply_mail_batch.
+   */
+  gmail: [
+    "create_draft",
+    "label_message",
+    "label_thread",
+    "unlabel_message",
+    "unlabel_thread",
+  ],
   /** Google Sheets MCP (developer preview) exposes no create tool today. */
   sheets: [
     "insert_dimension",
@@ -62,7 +71,7 @@ export const CONNECTION_WRITE_TOOLS = {
   ],
 } as const;
 
-/** Gmail allowlist for the live connection: read tools plus create_draft. */
+/** Gmail allowlist for the live connection: reads plus approval-gated writes. */
 export const CONNECTION_COMPOSE_ALLOWLISTS = {
   gmail: [
     ...CONNECTION_READONLY_ALLOWLISTS.gmail,

@@ -38,7 +38,7 @@ test("Tempo, Sheets, and Gmail compose connections are registered", async () => 
   const files = await readdir("agent/connections");
   assert.ok(files.includes("tempo.ts"));
   assert.ok(files.includes("sheets.ts"));
-  assert.ok(files.includes("gmail.ts"));
+  assert.ok(!files.includes("gmail.ts"));
 
   const catalog = await readFile("lib/connections/catalog.ts", "utf8");
   assert.match(catalog, /"tempo"/);
@@ -55,17 +55,22 @@ test("Tempo, Sheets, and Gmail compose connections are registered", async () => 
   assert.match(sheets, /sheetsmcp\.googleapis\.com/);
   assert.match(sheets, /writeToolApproval/);
 
-  const gmail = await readFile("agent/connections/gmail.ts", "utf8");
-  assert.match(gmail, /CONNECTION_COMPOSE_ALLOWLISTS/);
-  assert.match(gmail, /send_gmail_message/);
-  assert.match(gmail, /writeToolApproval/);
+  const search = await readFile("agent/tools/search_gmail_threads.ts", "utf8");
+  const draft = await readFile("agent/tools/create_gmail_draft.ts", "utf8");
+  const api = await readFile("lib/agent/gmail-api.ts", "utf8");
+  assert.match(search, /searchGmailThreads/);
+  assert.match(draft, /createGmailDraft/);
+  assert.match(draft, /always\(\)/);
+  assert.match(api, /gmail\.googleapis\.com/);
 
   const allowlists = await readFile(
     "agent/lib/connection-allowlists.ts",
     "utf8",
   );
-  assert.match(allowlists, /create_draft/);
   assert.match(allowlists, /TEMPO_ALLOWLIST/);
+
+  const scopes = await readFile("lib/connections/oauth-scopes.ts", "utf8");
+  assert.match(scopes, /gmail\.modify/);
 });
 
 test("send_gmail_message tool ships with always-approval and ledger", async () => {

@@ -26,7 +26,7 @@ Important files:
 | `agent/agent.ts` | Defines the eve agent and model. |
 | `agent/channels/eve.ts` | Configures the eve web channel and auth adapters. |
 | `agent/channels/slack.ts` | Configures the Slack channel route and Vercel Connect credentials. |
-| `agent/connections/gmail.ts` | User-scoped Gmail MCP (read + draft; send is first-party). |
+| `lib/agent/gmail-api.ts` | First-party Gmail REST helpers (search, get, draft, labels) via Connect tokens. |
 | `agent/connections/xero.ts` | User-scoped Xero Remote MCP (read-only spend/reporting). |
 | `agent/instructions.md` | Defines the agent's behavior and long-term-memory rules. |
 | `agent/memory/profile.ts` | Defines the per-principal long-term-memory slot. |

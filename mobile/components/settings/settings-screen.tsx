@@ -5,7 +5,6 @@ import {
   BrainIcon,
   CircleUserIcon,
   CloudIcon,
-  FolderGit2Icon,
   InfoIcon,
   LogOutIcon,
   NetworkIcon,
@@ -14,8 +13,11 @@ import {
   SparklesIcon,
   Trash2Icon,
   WalletIcon,
+  MailIcon,
 } from "lucide-react-native";
 
+import { CodeSection, connectedPluginCount } from "@/components/settings/code-section";
+import { ComputerUseSection } from "@/components/settings/computer-use-section";
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { Icon } from "@/components/ui/icon";
 import { SettingsCard } from "@/components/ui/settings-card";
@@ -28,7 +30,11 @@ import {
   startBillingCheckout,
   type MobileBillingStatus,
 } from "@/src/billing-client";
-import { getConnections } from "@/src/connections-client";
+import {
+  getConnections,
+  type ConnectionStatus,
+} from "@/src/connections-client";
+import { listMailboxes } from "@/src/mailboxes-client";
 import { fetchMemories } from "@/src/memory-client";
 import {
   AGENT_URL,
@@ -60,23 +66,11 @@ export function SettingsScreen() {
     COMPOSER_MODELS.find((model) => model.key === selectedKey)?.label ??
     selectedKey;
   const agentHostLabel = agentHostname(agentUrl);
-  const [connectedCount, setConnectedCount] = useState<number | null>(null);
+  const [connections, setConnections] = useState<
+    readonly ConnectionStatus[] | null
+  >(null);
+  const [mailboxCount, setMailboxCount] = useState<number | null>(null);
   const [memoryDetail, setMemoryDetail] = useState("Facts Pearl keeps");
-
-  const loadConnections = useCallback(async () => {
-    try {
-      const connections = await getConnections();
-      setConnectedCount(
-        connections.filter((item) => item.status === "connected").length,
-      );
-    } catch {
-      setConnectedCount(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadConnections();
-  }, [loadConnections]);
 
   useFocusEffect(
     useCallback(() => {
@@ -86,18 +80,44 @@ export function SettingsScreen() {
           if (!cancelled) setMemoryDetail(memoryCountLabel(snapshot.entries.length));
         })
         .catch(() => {});
+      void getConnections()
+        .then((next) => {
+          if (!cancelled) setConnections(next);
+        })
+        .catch(() => {
+          if (!cancelled) setConnections(null);
+        });
+      void listMailboxes()
+        .then((next) => {
+          if (!cancelled) {
+            setMailboxCount(
+              next.filter((item) => item.status === "connected").length,
+            );
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setMailboxCount(null);
+        });
       return () => {
         cancelled = true;
       };
     }, []),
   );
 
+  const pluginCount =
+    connections == null ? null : connectedPluginCount(connections);
   const pluginsDetail =
-    connectedCount == null
+    pluginCount == null
       ? "Accounts, tools, agents"
-      : connectedCount === 0
+      : pluginCount === 0
         ? "None connected"
-        : `${connectedCount} connected`;
+        : `${pluginCount} connected`;
+  const emailDetail =
+    mailboxCount == null
+      ? "Gmail accounts"
+      : mailboxCount === 0
+        ? "None connected"
+        : `${mailboxCount} connected`;
 
   const confirmSignOut = () => {
     const complete = () => {
@@ -199,6 +219,13 @@ export function SettingsScreen() {
           showSeparator
         />
         <SettingsRow
+          icon={<Icon as={MailIcon} className="size-5 text-sky-600" />}
+          label="Email"
+          detail={emailDetail}
+          onPress={() => router.push("/email")}
+          showSeparator
+        />
+        <SettingsRow
           icon={<Icon as={BrainIcon} className="size-5 text-amber-500" />}
           label="Skills"
           detail="Custom and published"
@@ -206,16 +233,11 @@ export function SettingsScreen() {
         />
       </SettingsCard>
 
+      <CodeSection />
+
+      <ComputerUseSection />
+
       <SettingsCard>
-        <SettingsRow
-          icon={
-            <Icon as={FolderGit2Icon} className="size-5 text-orange-500" />
-          }
-          label="Repos"
-          detail="Pinned GitHub / Vercel / Expo"
-          onPress={() => router.push("/workbench")}
-          showSeparator
-        />
         <SettingsRow
           icon={<Icon as={NetworkIcon} className="size-5 text-teal-500" />}
           label="Areas"

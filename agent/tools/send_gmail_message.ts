@@ -7,13 +7,13 @@ import {
   AmbiguousSendError,
   executeGmailSend,
 } from "../../lib/agent/gmail-send";
-import { getGmailUserToken } from "@/lib/connections/tokens";
+import { getGmailTokenForMailbox } from "@/lib/mail/accounts";
 import { isBetterAuthUserPrincipal } from "../lib/user-connection.js";
 import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
-// Destructive reference tool: sends real email from the signed-in user's
-// Gmail. Gmail's MCP server cannot send, so this calls the Gmail REST API with
-// the user's Vercel Connect token (the token stays in the app runtime).
+// Destructive reference tool: sends real email from a connected Gmail
+// mailbox. Gmail's MCP server cannot send, so this calls the Gmail REST API
+// with the mailbox's Vercel Connect token (the token stays in the app runtime).
 //
 //   - `approval` parks the run until a person approves; the card shows the
 //     recipients, subject, and the full body so the approval is informed.
@@ -21,13 +21,19 @@ import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 //     surfaces a crash mid-send as `incomplete` (lib/agent/gmail-send.ts).
 //   - Plan mode refuses before anything happens.
 //
-// Needs the gmail.compose scope. Users who connected Gmail read-only must
-// re-authorize once in Settings; a missing scope surfaces as a send error.
+// Needs the gmail.compose scope. Pass accountId when multiple mailboxes are
+// connected. Users who connected before compose was added must reconnect.
 
 const GMAIL_SEND_URL =
   "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 
 const inputSchema = z.object({
+  accountId: z
+    .string()
+    .nullish()
+    .describe(
+      "Mailbox id from Settings / list_mail_accounts. Required when more than one Gmail account is connected; omit when there is only one.",
+    ),
   to: z
     .string()
     .min(1)
@@ -52,14 +58,14 @@ const inputSchema = z.object({
 
 const tool = defineTool({
   description:
-    "Send an email from the signed-in user's Gmail. Irreversible and needs the user's approval every time. " +
+    "Send an email from a connected Gmail account. Irreversible and needs the user's approval every time. " +
     "Create a draft first and send only after the user explicitly confirms the exact recipient, subject, and body. " +
-    "Never send in bulk from one confirmation.",
+    "Pass accountId when multiple Gmail accounts are connected. Never send in bulk from one confirmation.",
   inputSchema,
   approval: {
     request: always(),
     prompt: ({ input }) =>
-      `Send this email?\nTo: ${input.to}` +
+      `Send this email${input.accountId ? ` from mailbox ${input.accountId}` : ""}?\nTo: ${input.to}` +
       (input.cc ? `\nCc: ${input.cc}` : "") +
       (input.bcc ? `\nBcc: ${input.bcc}` : "") +
       `\nSubject: ${input.subject}\n\n${input.body}`,
@@ -79,14 +85,20 @@ const tool = defineTool({
     }
 
     let token: string;
+    let fromLabel: string | null = null;
     try {
-      token = await getGmailUserToken(principal.principalId);
+      const resolved = await getGmailTokenForMailbox(
+        principal.principalId,
+        input.accountId,
+      );
+      token = resolved.token;
+      fromLabel = resolved.mailbox.emailLabel;
     } catch (cause) {
       return {
         status: "error",
         error:
           cause instanceof Error
-            ? `${cause.message} If Gmail was connected before sending was added, reconnect it in Settings to grant compose access.`
+            ? `${cause.message} If Gmail was connected before sending was added, reconnect it in Settings → Email to grant compose access.`
             : "Gmail token unavailable.",
       };
     }
@@ -119,7 +131,7 @@ const tool = defineTool({
           throw new Error(
             `Gmail send responded ${res.status}${
               res.status === 403
-                ? " (the grant likely lacks gmail.compose — reconnect Gmail in Settings)"
+                ? " (the grant likely lacks gmail.compose — reconnect Gmail in Settings → Email)"
                 : ""
             }: ${detail}`,
           );
@@ -127,11 +139,14 @@ const tool = defineTool({
         const data = (await res.json()) as { id?: string };
         return data.id ?? "sent";
       },
-    });
+    }).then((result) =>
+      typeof result === "object" && result !== null
+        ? { ...result, from: fromLabel }
+        : result,
+    );
   },
 });
 
 export default defineDynamic(() =>
   toolSurfaceEnabled() ? tool : null,
 );
-

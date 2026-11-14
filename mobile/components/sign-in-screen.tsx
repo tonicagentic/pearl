@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { useAuth, type AuthCtaFrame } from "@/src/auth";
 
-type AuthMode = "sign-in" | "sign-up";
+type AuthMode = "sign-in" | "sign-up" | "forgot";
 
 /** The sign-in / create-account gate: email/password through the agent's better-auth. */
 export function SignInScreen({
@@ -32,7 +32,13 @@ export function SignInScreen({
   /** Hide interactive chrome while the morph overlay owns the transition. */
   handOffActive?: boolean;
 }) {
-  const { signIn, signUp, signInState, signInError } = useAuth();
+  const {
+    signIn,
+    signUp,
+    requestPasswordReset,
+    signInState,
+    signInError,
+  } = useAuth();
   // SafeAreaView is a native codegen view — theme background via style, not className.
   const backgroundColor = useCSSVariable("--color-background") as
     | string
@@ -49,6 +55,7 @@ export function SignInScreen({
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const ctaFrameRef = useRef<AuthCtaFrame | null>(null);
   const emailRef = useRef<TextInputInstance>(null);
 
@@ -56,8 +63,9 @@ export function SignInScreen({
   const error = localError ?? signInError;
   const canSubmit =
     email.trim().length > 0 &&
-    password.length > 0 &&
-    (mode === "sign-in" || confirmPassword.length > 0);
+    (mode === "forgot" ||
+      (password.length > 0 &&
+        (mode === "sign-in" || confirmPassword.length > 0)));
 
   const onCtaLayout = (event: LayoutChangeEvent) => {
     const target = event.target;
@@ -72,7 +80,22 @@ export function SignInScreen({
 
   const submit = () => {
     setLocalError(null);
+    setInfo(null);
     const trimmed = email.trim();
+    if (mode === "forgot") {
+      if (!trimmed) {
+        setLocalError("Enter your email.");
+        return;
+      }
+      void requestPasswordReset(trimmed).then((ok) => {
+        if (ok) {
+          setInfo(
+            "If an account exists for that email, we sent a reset link. Check your inbox.",
+          );
+        }
+      });
+      return;
+    }
     if (mode === "sign-up" && password !== confirmPassword) {
       setLocalError("Passwords don’t match.");
       return;
@@ -92,9 +115,31 @@ export function SignInScreen({
   const switchMode = (next: AuthMode) => {
     setMode(next);
     setLocalError(null);
+    setInfo(null);
     setConfirmPassword("");
     requestAnimationFrame(() => emailRef.current?.focus());
   };
+
+  const hint =
+    mode === "sign-up"
+      ? "Create an account to get started"
+      : mode === "forgot"
+        ? "We’ll email you a link to reset your password"
+        : "Sign in to continue";
+
+  const ctaLabel =
+    mode === "sign-up"
+      ? "Create account"
+      : mode === "forgot"
+        ? "Send reset link"
+        : "Sign in";
+
+  const loadingLabel =
+    mode === "sign-up"
+      ? "Creating account…"
+      : mode === "forgot"
+        ? "Sending…"
+        : "Signing in…";
 
   return (
     <SafeAreaView
@@ -142,9 +187,7 @@ export function SignInScreen({
           <Text
             style={[styles.hint, hintColor ? { color: hintColor } : null]}
           >
-            {mode === "sign-up"
-              ? "Create an account to get started"
-              : "Sign in to continue"}
+            {hint}
           </Text>
 
           <Animated.View layout={LinearTransition} style={styles.fields}>
@@ -159,24 +202,27 @@ export function SignInScreen({
               keyboardType="email-address"
               onChangeText={setEmail}
               placeholder="Email"
-              returnKeyType="next"
+              returnKeyType={mode === "forgot" ? "go" : "next"}
               textContentType="emailAddress"
               value={email}
+              onSubmitEditing={mode === "forgot" ? submit : undefined}
             />
-            <TextField
-              accessibilityLabel="Password"
-              autoComplete={mode === "sign-up" ? "new-password" : "password"}
-              editable={!busy && !handOffActive}
-              onChangeText={setPassword}
-              onSubmitEditing={mode === "sign-in" ? submit : undefined}
-              placeholder="Password"
-              returnKeyType={mode === "sign-up" ? "next" : "go"}
-              secureTextEntry
-              textContentType={
-                mode === "sign-up" ? "newPassword" : "password"
-              }
-              value={password}
-            />
+            {mode !== "forgot" ? (
+              <TextField
+                accessibilityLabel="Password"
+                autoComplete={mode === "sign-up" ? "new-password" : "password"}
+                editable={!busy && !handOffActive}
+                onChangeText={setPassword}
+                onSubmitEditing={mode === "sign-in" ? submit : undefined}
+                placeholder="Password"
+                returnKeyType={mode === "sign-up" ? "next" : "go"}
+                secureTextEntry
+                textContentType={
+                  mode === "sign-up" ? "newPassword" : "password"
+                }
+                value={password}
+              />
+            ) : null}
             {mode === "sign-up" ? (
               <TextField
                 accessibilityLabel="Confirm password"
@@ -196,15 +242,22 @@ export function SignInScreen({
           <View onLayout={onCtaLayout} collapsable={false}>
             <Button
               disabled={!canSubmit || handOffActive}
-              label={mode === "sign-up" ? "Create account" : "Sign in"}
+              label={ctaLabel}
               loading={busy}
-              loadingLabel={
-                mode === "sign-up" ? "Creating account…" : "Signing in…"
-              }
+              loadingLabel={loadingLabel}
               onPress={submit}
               style={{ opacity: handOffActive ? 0 : 1 }}
             />
           </View>
+
+          {info && !handOffActive ? (
+            <Text
+              accessibilityRole="text"
+              className="text-center text-sm text-muted-foreground"
+            >
+              {info}
+            </Text>
+          ) : null}
 
           {error && !handOffActive ? (
             <Text
@@ -215,20 +268,51 @@ export function SignInScreen({
             </Text>
           ) : null}
 
+          {!handOffActive && mode === "sign-in" ? (
+            <Pressable
+              accessibilityRole="button"
+              className="min-h-11 items-center justify-center"
+              disabled={busy}
+              onPress={() => switchMode("forgot")}
+            >
+              <Text
+                className="text-center text-[15px]"
+                style={{ color: hintColor }}
+              >
+                Forgot password?
+              </Text>
+            </Pressable>
+          ) : null}
+
           {!handOffActive ? (
             <Pressable
               accessibilityRole="button"
               className="min-h-11 items-center justify-center"
               disabled={busy}
               onPress={() =>
-                switchMode(mode === "sign-in" ? "sign-up" : "sign-in")
+                switchMode(
+                  mode === "forgot"
+                    ? "sign-in"
+                    : mode === "sign-in"
+                      ? "sign-up"
+                      : "sign-in",
+                )
               }
             >
               <Text
                 className="text-center text-[15px]"
                 style={{ color: hintColor }}
               >
-                {mode === "sign-in" ? (
+                {mode === "forgot" ? (
+                  <>
+                    Remembered it?{" "}
+                    <Text
+                      style={{ color: foregroundColor, fontWeight: "600" }}
+                    >
+                      Sign in
+                    </Text>
+                  </>
+                ) : mode === "sign-in" ? (
                   <>
                     Don’t have an account?{" "}
                     <Text

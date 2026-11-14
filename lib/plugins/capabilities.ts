@@ -24,11 +24,15 @@ const CONNECTION_CAPABILITIES: Record<
 > = {
   gmail: {
     canDo: [
-      "Search and read threads and messages in your Gmail",
+      "Search and read threads and messages across connected Gmail accounts",
       "List labels and drafts",
       "Create email drafts in your account",
+      "Archive, mark read, and label threads (after you approve a batch)",
     ],
-    needsApproval: ["Send mail (always asks before sending)"],
+    needsApproval: [
+      "Send mail (always asks before sending)",
+      "Archive, mark read, or label in bulk",
+    ],
   },
   drive: {
     canDo: [

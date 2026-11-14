@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { GmailMailboxesPanel } from "@/components/connections/gmail-mailboxes-panel";
 import { PluginLogo } from "@/components/connections/plugin-logo";
 import { GrantDetails } from "@/components/connections/grant-panel";
 import type { ConnectionId } from "@/lib/connections/catalog";
@@ -48,7 +49,11 @@ export function PluginDetailClient({
       </p>
 
       {isConnectablePlugin(plugin) ? (
-        <ConnectionPanel connectionId={plugin.connectionId} />
+        plugin.connectionId === "gmail" ? (
+          <GmailMailboxesPanel />
+        ) : (
+          <ConnectionPanel connectionId={plugin.connectionId} />
+        )
       ) : plugin.kind === "builtin" ? (
         <>
           <StatusCard

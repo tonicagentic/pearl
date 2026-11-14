@@ -82,6 +82,53 @@ export async function checkConnectionStatus(
   if (available.status !== "available") return available;
   const connector = connectionConfiguration(id).connector;
   if (!connector) return available;
+
+  // Gmail can have several Connect grants (one per mailbox). Summarize from
+  // mail_account rows so Plugins shows Connected when any mailbox is live.
+  if (id === "gmail") {
+    const { listMailboxSummaries } = await import("@/lib/mail/accounts");
+    const mailboxes = await listMailboxSummaries(userId);
+    const connected = mailboxes.filter((box) => box.status === "connected");
+    if (connected.length > 0) {
+      const labels = connected
+        .map((box) => box.emailLabel?.trim())
+        .filter((label): label is string => Boolean(label));
+      const accountLabel =
+        labels.length === 0
+          ? undefined
+          : labels.length === 1
+            ? labels[0]
+            : `${labels.length} accounts`;
+      return {
+        id,
+        label: available.label,
+        status: "connected",
+        accountLabel,
+        detail:
+          connected.length === 1
+            ? accountLabel
+              ? `Connected as ${accountLabel}.`
+              : "Connected to your Gmail account."
+            : `Connected to ${connected.length} Gmail accounts.`,
+      };
+    }
+    if (mailboxes.some((box) => box.status === "unknown")) {
+      return {
+        id,
+        label: available.label,
+        status: "unknown",
+        detail: "Could not verify your authorization right now.",
+      };
+    }
+    return {
+      id,
+      label: available.label,
+      status: "not-connected",
+      detail:
+        "Not authorized for your account. You can connect here or authorize when Pearl needs it in chat.",
+    };
+  }
+
   try {
     // Match lib/eve-auth.ts's principal id and issuer exactly so a status
     // check cannot accidentally inspect another principal's grant.

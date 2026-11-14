@@ -4,6 +4,12 @@ import { Sandbox } from "@vercel/sandbox";
 import { getEffectiveAppUrl } from "@/lib/auth-url";
 import { noteSandboxOpened } from "@/lib/billing/sandbox-meter";
 import {
+  browserTimeoutMs,
+  DEFAULT_SANDBOX_SETTINGS,
+  type SandboxSettings,
+} from "@/lib/sandbox/settings";
+import { getSandboxSettings } from "@/lib/sandbox/store";
+import {
   getChatBrowserSession,
   setChatBrowserSession,
 } from "@/lib/db/queries";
@@ -83,12 +89,13 @@ function frameAncestors(): string {
 async function defaultCreateSandbox(
   name: string,
   secret: string,
+  settings: SandboxSettings = DEFAULT_SANDBOX_SETTINGS,
 ): Promise<BrowserSandbox> {
   return (await Sandbox.create({
     name,
     ports: [BROWSER_CONTROL_PORT],
-    timeout: BROWSER_TIMEOUT_MS,
-    resources: { vcpus: 2 },
+    timeout: browserTimeoutMs(settings),
+    resources: { vcpus: settings.browserVcpus },
     env: {
       BROWSER_CONTROL_SECRET: secret,
       BROWSER_CONTROL_PORT: String(BROWSER_CONTROL_PORT),
@@ -192,6 +199,7 @@ export type EnsureBrowserSessionDeps = {
   readonly createSandbox?: (
     name: string,
     secret: string,
+    settings: SandboxSettings,
   ) => Promise<BrowserSandbox>;
   readonly getSandbox?: (name: string) => Promise<BrowserSandbox>;
 };
@@ -208,6 +216,10 @@ export async function ensureBrowserSession(
   const setRow = deps.setChatBrowserSession ?? setChatBrowserSession;
   const createSandbox = deps.createSandbox ?? defaultCreateSandbox;
   const getSandbox = deps.getSandbox ?? defaultGetSandbox;
+  const settings = deps.userId
+    ? await getSandboxSettings(deps.userId)
+    : DEFAULT_SANDBOX_SETTINGS;
+  const timeoutMs = browserTimeoutMs(settings);
 
   let row = await getRow(chatId);
   let secret = row?.browserControlSecret ?? null;
@@ -228,19 +240,19 @@ export async function ensureBrowserSession(
   try {
     sandbox = await getSandbox(name);
   } catch {
-    sandbox = await createSandbox(name, secret);
+    sandbox = await createSandbox(name, secret, settings);
     created = true;
   }
 
   await sandbox.update({
     ports: [BROWSER_CONTROL_PORT],
-    timeout: BROWSER_TIMEOUT_MS,
+    timeout: timeoutMs,
     networkPolicy: {
       allow: ["*"],
       subnets: { deny: [...BROWSER_SUBNET_DENY] },
     },
   });
-  await sandbox.extendTimeout(BROWSER_TIMEOUT_MS).catch(() => {});
+  await sandbox.extendTimeout(timeoutMs).catch(() => {});
 
   if (created || !(await isControlUp(sandbox))) {
     await startControlServer(sandbox);
@@ -250,7 +262,7 @@ export async function ensureBrowserSession(
     noteSandboxOpened({
       sandboxId: name,
       userId: deps.userId,
-      vcpus: 2,
+      vcpus: settings.browserVcpus,
       label: "browser",
     });
   }

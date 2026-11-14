@@ -32,20 +32,27 @@ export const environment = VercelSandbox.environment({
 });
 
 export default defineSandbox(async ({ session }) => {
+  const principalId = session.auth.current?.principalId;
+  const { coderTimeoutMs, DEFAULT_SANDBOX_SETTINGS } = await import(
+    "@/lib/sandbox/settings"
+  );
+  const { getSandboxSettings } = await import("@/lib/sandbox/store");
+  const settings = principalId
+    ? await getSandboxSettings(principalId)
+    : DEFAULT_SANDBOX_SETTINGS;
   const sandbox = await environment.open({
     networkPolicy: CODER_BASELINE_NETWORK_POLICY,
-    resources: { vcpus: 4 },
-    timeout: 45 * 60 * 1000,
+    resources: { vcpus: settings.coderVcpus },
+    timeout: coderTimeoutMs(settings),
     // Publish common web-dev ports so publish_dev_server can call domain(port).
     ports: [3000, 3001, 4000, 5173, 8080],
   });
-  const principalId = session.auth.current?.principalId;
   if (principalId) {
     const { noteSandboxOpened } = await import("@/lib/billing/sandbox-meter");
     noteSandboxOpened({
       sandboxId: `coder:${session.id}`,
       userId: principalId,
-      vcpus: 4,
+      vcpus: settings.coderVcpus,
       label: "coder",
     });
   }

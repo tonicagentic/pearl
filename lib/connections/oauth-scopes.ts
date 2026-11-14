@@ -40,14 +40,15 @@ export const GITHUB_OAUTH_SCOPES = [
 ] as const;
 
 /**
- * Gmail MCP scopes. `gmail.compose` covers create_draft on the MCP server and
- * the REST `users.messages.send` call behind send_gmail_message. Grants made
- * before compose was added only carry `gmail.readonly`, so those users must
- * re-authorize once from Settings.
+ * Gmail REST scopes for Connect OAuth grants. `gmail.compose` covers
+ * create_gmail_draft and send_gmail_message. `gmail.modify` covers archive /
+ * mark-read / label via threads.modify. Older grants may lack compose or
+ * modify; those mailboxes must reconnect in Settings once.
  */
 export const GMAIL_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/gmail.modify",
 ] as const;
 
 /** Google Sheets MCP (developer preview) — read and edit spreadsheets. */

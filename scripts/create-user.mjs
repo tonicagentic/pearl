@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 //
-// Provision an email/password account for the eve chat template.
+// Provision or reset an email/password account for the eve chat template.
 //
 // Seed an account without going through the public sign-up UI:
 //
 //   node scripts/create-user.mjs <email> <password> [name]
+//
+// Reset the credential password for an existing user:
+//
+//   node scripts/create-user.mjs --reset <email> <password>
 //
 // The password is hashed with better-auth/crypto (the same primitive the app
 // uses), and the row lands in the same `user`/`account` tables Better Auth
@@ -33,10 +37,17 @@ for (const envFile of [".env.development.local", ".env.local"]) {
   }
 }
 
-const [emailArg, passwordArg, nameArg] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const resetMode = argv[0] === "--reset";
+const positional = resetMode ? argv.slice(1) : argv;
+const [emailArg, passwordArg, nameArg] = positional;
 
 if (!emailArg || !passwordArg) {
-  console.error("Usage: node scripts/create-user.mjs <email> <password> [name]");
+  console.error(
+    resetMode
+      ? "Usage: node scripts/create-user.mjs --reset <email> <password>"
+      : "Usage: node scripts/create-user.mjs <email> <password> [name]",
+  );
   process.exit(1);
 }
 
@@ -87,14 +98,44 @@ async function runQuery(text, params) {
   return sql.query(text, params);
 }
 
-async function main() {
+async function resetPassword(userId) {
+  const passwordHash = await hashPassword(password);
+  const accounts = await runQuery(
+    `select id from account
+     where user_id = $1 and provider_id = 'credential'
+     limit 1`,
+    [userId],
+  );
+
+  if (accounts.length > 0) {
+    await runQuery(
+      `update account
+       set password = $1, updated_at = now()
+       where id = $2`,
+      [passwordHash, accounts[0].id],
+    );
+  } else {
+    const accountId = randomUUID();
+    await runQuery(
+      `insert into account (id, account_id, provider_id, issuer, user_id, password, created_at, updated_at)
+       values ($1, $2, 'credential', 'local:credential', $3, $4, now(), now())`,
+      [accountId, userId, userId, passwordHash],
+    );
+  }
+
+  console.log(`Reset password for ${email} (user id: ${userId})`);
+}
+
+async function createUser() {
   const existing = await runQuery(
     'select id from "user" where email = $1',
     [email],
   );
 
   if (existing.length > 0) {
-    console.error(`A user with email ${email} already exists.`);
+    console.error(
+      `A user with email ${email} already exists. Use --reset to change the password.`,
+    );
     process.exit(1);
   }
 
@@ -116,6 +157,23 @@ async function main() {
   );
 
   console.log(`Created account for ${rows[0].email} (user id: ${rows[0].id})`);
+}
+
+async function main() {
+  if (resetMode) {
+    const existing = await runQuery(
+      'select id from "user" where email = $1',
+      [email],
+    );
+    if (existing.length === 0) {
+      console.error(`No user with email ${email}.`);
+      process.exit(1);
+    }
+    await resetPassword(existing[0].id);
+    return;
+  }
+
+  await createUser();
 }
 
 main().catch((error) => {

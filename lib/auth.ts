@@ -6,6 +6,7 @@ import { nextCookies } from "better-auth/next-js";
 import { bearer } from "better-auth/plugins";
 import { getAppUrlHost, getEffectiveAppUrl } from "@/lib/auth-url";
 import { db } from "@/lib/db/client";
+import { sendPasswordResetEmail } from "@/lib/email/resend";
 import {
   isSignUpEmailAllowed,
   SIGNUP_NOT_INVITED_MESSAGE,
@@ -141,6 +142,13 @@ export const auth = betterAuth({
     // Sign-up is gated by PEARL_TRIAL_ALLOWLIST in databaseHooks below.
     // scripts/create-user.mjs can still seed accounts (bypass the HTTP path).
     disableSignUp: false,
+    // Fire-and-forget so timing attacks cannot infer whether the email exists;
+    // Better Auth already runs this via runInBackgroundOrAwait.
+    sendResetPassword: async ({ user, url }) => {
+      void sendPasswordResetEmail({ to: user.email, url }).catch((error) => {
+        console.error("[auth] failed to send password reset email", error);
+      });
+    },
   },
   databaseHooks: {
     user: {

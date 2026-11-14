@@ -65,6 +65,12 @@ type AuthContextValue = {
     password: string,
     handOffFrom?: AuthCtaFrame | null,
   ) => Promise<void>;
+  /** Returns true when the request was accepted (email may or may not exist). */
+  readonly requestPasswordReset: (email: string) => Promise<boolean>;
+  readonly resetPassword: (
+    token: string,
+    newPassword: string,
+  ) => Promise<void>;
   readonly completeAuthHandOff: () => void;
   readonly markBillingReady: () => void;
   readonly signOut: () => void;
@@ -263,6 +269,88 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     [commitSession, requestToken],
   );
 
+  const requestPasswordReset = useCallback(async (email: string) => {
+    setSignInState("signing-in");
+    setSignInError(null);
+    try {
+      const timeout = AbortSignal.timeout(45_000);
+      const redirectTo = `${AGENT_URL.replace(/\/$/, "")}/reset-password`;
+      const response = await fetch(
+        `${AGENT_URL}/api/auth/request-password-reset`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, redirectTo }),
+          signal: timeout,
+        },
+      );
+      const body = (await response.json().catch(() => null)) as {
+        message?: string;
+        error?: { message?: string } | string;
+      } | null;
+      if (!response.ok) {
+        const detail =
+          (typeof body?.error === "string"
+            ? body.error
+            : body?.error?.message) ??
+          body?.message ??
+          `Reset failed (${response.status}).`;
+        throw new Error(detail);
+      }
+      setSignInState("idle");
+      return true;
+    } catch (cause) {
+      setSignInState("error");
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setSignInError(
+        message.toLowerCase().includes("abort")
+          ? "Can't reach Pearl. Check your connection and try again."
+          : message,
+      );
+      return false;
+    }
+  }, []);
+
+  const resetPassword = useCallback(
+    async (token: string, newPassword: string) => {
+      setSignInState("signing-in");
+      setSignInError(null);
+      try {
+        const timeout = AbortSignal.timeout(45_000);
+        const response = await fetch(`${AGENT_URL}/api/auth/reset-password`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token, newPassword }),
+          signal: timeout,
+        });
+        const body = (await response.json().catch(() => null)) as {
+          message?: string;
+          error?: { message?: string } | string;
+        } | null;
+        if (!response.ok) {
+          const detail =
+            (typeof body?.error === "string"
+              ? body.error
+              : body?.error?.message) ??
+            body?.message ??
+            `Reset failed (${response.status}).`;
+          throw new Error(detail);
+        }
+        setSignInState("idle");
+      } catch (cause) {
+        setSignInState("error");
+        const message = cause instanceof Error ? cause.message : String(cause);
+        setSignInError(
+          message.toLowerCase().includes("abort")
+            ? "Can't reach Pearl. Check your connection and try again."
+            : message,
+        );
+        throw cause;
+      }
+    },
+    [],
+  );
+
   const completeAuthHandOff = useCallback(() => {
     setAuthHandOff(null);
   }, []);
@@ -297,6 +385,8 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       signInError,
       signIn,
       signUp,
+      requestPasswordReset,
+      resetPassword,
       completeAuthHandOff,
       markBillingReady,
       signOut,
@@ -311,6 +401,8 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       signInError,
       signIn,
       signUp,
+      requestPasswordReset,
+      resetPassword,
       completeAuthHandOff,
       markBillingReady,
       signOut,

@@ -8,10 +8,12 @@ import {
   View,
 } from "react-native";
 import * as Linking from "expo-linking";
-import { Stack } from "expo-router";
+import { Stack, router, useFocusEffect } from "expo-router";
 
+import { CoderToolsList } from "@/components/settings/code-section";
 import { PluginLogo } from "@/components/settings/plugin-logo";
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
+import { SettingsCard } from "@/components/ui/settings-card";
 import {
   capabilitiesForConnection,
   capabilitiesForPlugin,
@@ -24,10 +26,16 @@ import {
 import {
   authorizeConnection,
   getConnectionGrants,
+  getConnections,
   revokeConnection,
   type ConnectionGrantSummary,
   type ConnectionId,
+  type ConnectionStatus,
 } from "@/src/connections-client";
+import {
+  listMailboxes,
+  type MailboxClientSummary,
+} from "@/src/mailboxes-client";
 
 function validatedHttpsUrl(value: unknown): string | null {
   if (typeof value !== "string" || value.trim() !== value) return null;
@@ -82,10 +90,14 @@ export function PluginDetailScreen({
         </Text>
 
         {isConnectablePlugin(plugin) ? (
-          <ConnectionPanel
-            connectionId={plugin.connectionId}
-            pluginLabel={plugin.label}
-          />
+          plugin.connectionId === "gmail" ? (
+            <GmailMailboxSummaryPanel />
+          ) : (
+            <ConnectionPanel
+              connectionId={plugin.connectionId}
+              pluginLabel={plugin.label}
+            />
+          )
         ) : plugin.kind === "builtin" ? (
           <>
             <StatusCard
@@ -98,6 +110,7 @@ export function PluginDetailScreen({
                 heading="What Pearl can do"
               />
             ) : null}
+            {plugin.id === "coder" ? <CoderTools /> : null}
           </>
         ) : (
           <StatusCard
@@ -107,6 +120,138 @@ export function PluginDetailScreen({
         )}
       </SheetScaffold>
     </>
+  );
+}
+
+function GmailMailboxSummaryPanel() {
+  const [mailboxes, setMailboxes] = useState<
+    readonly MailboxClientSummary[] | null
+  >(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const capabilities = capabilitiesForConnection("gmail");
+  const connectedCount =
+    mailboxes?.filter((item) => item.status === "connected").length ?? 0;
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      setLoading(true);
+      void listMailboxes()
+        .then((next) => {
+          if (!cancelled) {
+            setMailboxes(next);
+            setError(null);
+          }
+        })
+        .catch((cause) => {
+          if (!cancelled) {
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : "Could not load mailboxes.",
+            );
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
+  return (
+    <View className="gap-4">
+      <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
+        <Text className="text-[17px] font-medium text-foreground">
+          Gmail accounts
+        </Text>
+        <Text className="text-[13px] leading-[18px] text-muted-foreground">
+          {loading && mailboxes == null
+            ? "Loading…"
+            : connectedCount === 0
+              ? "None connected"
+              : `${connectedCount} connected`}
+        </Text>
+        {mailboxes?.map((mailbox) => (
+          <Text
+            key={mailbox.id}
+            className="text-[15px] text-foreground"
+            numberOfLines={1}
+          >
+            {mailbox.nickname?.trim()
+              ? `${mailbox.nickname.trim()} · ${mailbox.emailLabel ?? "Gmail"}`
+              : (mailbox.emailLabel ?? "Gmail account")}
+            {mailbox.status === "connected" && !mailbox.canModify
+              ? " · needs reconnect"
+              : ""}
+          </Text>
+        ))}
+        {error ? (
+          <Text
+            accessibilityRole="alert"
+            className="text-[13px] text-destructive"
+          >
+            {error}
+          </Text>
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/email")}
+          className="min-h-11 justify-center self-start rounded-[10px] bg-muted px-4"
+        >
+          <Text className="text-[15px] text-foreground">Manage Email</Text>
+        </Pressable>
+      </View>
+      {capabilities ? (
+        <CapabilitiesCard
+          capabilities={capabilities}
+          heading={
+            connectedCount > 0
+              ? "What Pearl can do"
+              : "What Pearl can do after you connect"
+          }
+        />
+      ) : null}
+    </View>
+  );
+}
+
+function CoderTools() {
+  const [connections, setConnections] = useState<
+    readonly ConnectionStatus[] | null
+  >(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void getConnections()
+        .then((next) => {
+          if (!cancelled) setConnections(next);
+        })
+        .catch(() => {
+          if (!cancelled) setConnections(null);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
+  return (
+    <View className="gap-1.5">
+      <Text className="px-1 text-[13px] font-medium text-muted-foreground">
+        Accounts and tools
+      </Text>
+      <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
+        GitHub, Vercel, and the other connections Coder uses.
+      </Text>
+      <SettingsCard>
+        <CoderToolsList connections={connections} />
+      </SettingsCard>
+    </View>
   );
 }
 
