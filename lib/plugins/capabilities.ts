@@ -86,6 +86,30 @@ const CONNECTION_CAPABILITIES: Record<
       "Tap, type, or scroll on a connected device",
     ],
   },
+  neon: {
+    canDo: [
+      "List Neon organizations, projects, and branches",
+      "Inspect schemas, tables, and database diagnostics",
+      "Search and read Neon documentation",
+    ],
+    needsApproval: [
+      "Run SQL (including SELECT via run_sql)",
+      "Create, update, or delete projects, branches, and databases",
+      "Apply schema migrations or change Auth / Functions / storage",
+    ],
+  },
+  betterstack: {
+    canDo: [
+      "List monitors, heartbeats, incidents, and on-call schedules",
+      "Inspect status pages, telemetry sources, dashboards, and errors",
+      "Search Better Stack documentation and run read queries",
+    ],
+    needsApproval: [
+      "Create or change monitors, heartbeats, and status pages",
+      "Acknowledge, escalate, resolve, or reopen incidents",
+      "Create or edit dashboards, charts, and team membership",
+    ],
+  },
   tempo: {
     canDo: [
       "Search and resolve people, companies, and deals in Tempo",

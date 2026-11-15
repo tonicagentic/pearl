@@ -11,7 +11,9 @@ export type AccountPluginId =
   | "calendar"
   | "github"
   | "vercel"
-  | "expo";
+  | "expo"
+  | "neon"
+  | "betterstack";
 
 export type TonicPluginId = "tempo";
 
@@ -33,8 +35,6 @@ export type ComingSoonPluginId =
   | "icloud-drive"
   | "pearl-cloud"
   | "postgres"
-  | "neon"
-  | "betterstack"
   | "shopify"
   | "stripe"
   | "brex";
@@ -156,6 +156,24 @@ export const ACCOUNT_PLUGINS: readonly ConnectablePluginEntry[] = [
     detail: "Simulators, builds, and projects",
     description:
       "Connect your Expo account so Pearl’s Coder can list your orgs and projects, start cloud iOS simulators, inspect EAS builds and workflows, and (with your approval) run builds or submissions. Authorization is stored by Vercel Connect for your signed-in user only.",
+  },
+  {
+    id: "neon",
+    connectionId: "neon",
+    kind: "account",
+    label: "Neon",
+    detail: "Serverless Postgres projects and branches",
+    description:
+      "Connect your Neon account so Pearl’s Coder can list orgs and projects, inspect schemas, run SQL, and manage branches. Writes and mutating SQL need your approval. Authorization is stored by Vercel Connect for your signed-in user only.",
+  },
+  {
+    id: "betterstack",
+    connectionId: "betterstack",
+    kind: "account",
+    label: "Better Stack",
+    detail: "Uptime, incidents, logs, and metrics",
+    description:
+      "Connect Better Stack so Pearl’s Coder can inspect monitors, incidents, on-call, status pages, and telemetry. Creating or changing monitors, incidents, and dashboards needs your approval. Authorization is stored by Vercel Connect for your signed-in user only.",
   },
 ] as const;
 
@@ -292,22 +310,6 @@ export const COMING_SOON_PLUGINS: readonly ComingSoonPluginEntry[] = [
       "A dedicated Postgres connection for schema and query work is coming soon. Pearl can still reason about SQL you paste or attach today.",
   },
   {
-    id: "neon",
-    kind: "coming_soon",
-    label: "Neon",
-    detail: "Serverless Postgres branches and projects",
-    description:
-      "Neon project and branch tooling will connect here later for database work alongside the Coder agent.",
-  },
-  {
-    id: "betterstack",
-    kind: "coming_soon",
-    label: "BetterStack",
-    detail: "Uptime, logs, and incident context",
-    description:
-      "BetterStack uptime and log context will connect here later so Pearl can help investigate incidents with your production signals.",
-  },
-  {
     id: "shopify",
     kind: "coming_soon",
     label: "Shopify",
@@ -355,12 +357,10 @@ export const PLUGIN_SECTIONS: readonly PluginSection[] = [
     pluginIds: [
       "github",
       "vercel",
-      "postgres",
       "neon",
       "expo",
       "betterstack",
       "coder",
-      "designer",
     ],
   },
   {

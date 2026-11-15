@@ -62,6 +62,18 @@ export const SHEETS_OAUTH_SCOPES = [
  */
 export const EXPO_OAUTH_SCOPES = ["mcp:access"] as const;
 
+/**
+ * Neon MCP OAuth scopes from
+ * https://mcp.neon.tech/.well-known/oauth-authorization-server
+ */
+export const NEON_OAUTH_SCOPES = ["read", "write"] as const;
+
+/**
+ * Better Stack MCP OAuth scopes from
+ * https://mcp.betterstack.com/.well-known/oauth-protected-resource
+ */
+export const BETTERSTACK_OAUTH_SCOPES = ["read", "write"] as const;
+
 /** Extra Connect token params for a catalog connection (scopes, etc.). */
 export function connectionTokenParams(id: ConnectionId): {
   readonly scopes?: string[];
@@ -80,6 +92,12 @@ export function connectionTokenParams(id: ConnectionId): {
   }
   if (id === "expo") {
     return { scopes: [...EXPO_OAUTH_SCOPES] };
+  }
+  if (id === "neon") {
+    return { scopes: [...NEON_OAUTH_SCOPES] };
+  }
+  if (id === "betterstack") {
+    return { scopes: [...BETTERSTACK_OAUTH_SCOPES] };
   }
   return {};
 }

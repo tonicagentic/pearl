@@ -277,7 +277,7 @@ Open the matching local URL and make sure the Vercel App contains the same callb
 
 ## Optional Vercel Connect Integrations
 
-Slack is optional and is not part of the required deploy button flow. Gmail, Google Calendar, Google Drive, Google Sheets, GitHub, Vercel, Expo, Xero, and Tempo MCP are optional and user-scoped: each signed-in person authorizes their own account from Settings (web or mobile) or through the in-chat Connect card. Expo is connected from Profile → Coder → Expo. Public multi-tenant deploys need Better Auth (`email` / `vercel`), not shared-password mode, for per-user plugins.
+Slack is optional and is not part of the required deploy button flow. Gmail, Google Calendar, Google Drive, Google Sheets, GitHub, Vercel, Expo, Neon, Better Stack, Xero, and Tempo MCP are optional and user-scoped: each signed-in person authorizes their own account from Settings (web or mobile) or through the in-chat Connect card. Expo, Neon, and Better Stack are connected from Profile → Coder. Public multi-tenant deploys need Better Auth (`email` / `vercel`), not shared-password mode, for per-user plugins.
 
 Create any connectors you want to use:
 
@@ -333,6 +333,26 @@ vercel connect create vercel --name vercel
 # subagent; users connect from Profile → Coder → Expo.
 vercel connect create https://mcp.expo.dev/mcp --name pearl-expo
 
+# User-scoped Neon MCP (https://mcp.neon.tech/mcp). OAuth scopes read + write.
+# Pearl mounts this on the coder subagent; users connect from Profile → Coder → Neon.
+vercel connect create https://mcp.neon.tech/mcp --name pearl-neon
+
+# User-scoped Better Stack MCP (https://mcp.betterstack.com). Managed Connect
+# creation may 404 ("Connect is not enabled for this team"); use OAuth DCR + a
+# BYO connector instead. Register a public client (auth method none) against
+# Better Stack, then create the connector with userAuthorization enabled:
+#   curl -sS -X POST https://betterstack.com/oauth/register \
+#     -H 'Content-Type: application/json' \
+#     -d '{"client_name":"Pearl (Vercel Connect)","redirect_uris":["https://connect.vercel.com/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none","scope":"read write"}'
+# Put clientId + serverConfig (issuer https://betterstack.com, authorize/token/
+# register endpoints, scopes read+write) in
+# .secrets/pearl-betterstack-connect-create.json with userAuthorization.enabled
+# and refreshTokens.enabled, defaultResource https://mcp.betterstack.com.
+# Pearl mounts this on the coder subagent; users connect from Profile → Coder →
+# Better Stack.
+vercel connect create https://mcp.betterstack.com --name pearl-betterstack \
+  --connector-type oauth --data @.secrets/pearl-betterstack-connect-create.json
+
 # User-scoped Xero Remote MCP (https://api.xero.com/mcp/v1). Create a Xero Web
 # app (not Custom Connection) at https://developer.xero.com/app/manage with
 # redirect URI https://connect.vercel.com/callback. Enable granular
@@ -368,6 +388,8 @@ printf '%s' "<connector-uid>" | vercel env add DRIVE_CONNECTOR production previe
 printf '%s' "<connector-uid>" | vercel env add GITHUB_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add VERCEL_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add EXPO_CONNECTOR production preview development
+printf '%s' "<connector-uid>" | vercel env add NEON_CONNECTOR production preview development
+printf '%s' "<connector-uid>" | vercel env add BETTERSTACK_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add XERO_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add SHEETS_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add TEMPO_CONNECTOR production preview development

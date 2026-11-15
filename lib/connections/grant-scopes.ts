@@ -1,9 +1,11 @@
 import type { ConnectionId } from "@/lib/connections/catalog";
 import {
+  BETTERSTACK_OAUTH_SCOPES,
   connectionTokenParams,
   EXPO_OAUTH_SCOPES,
   GITHUB_OAUTH_SCOPES,
   GMAIL_OAUTH_SCOPES,
+  NEON_OAUTH_SCOPES,
   SHEETS_OAUTH_SCOPES,
   XERO_OAUTH_SCOPES,
 } from "@/lib/connections/oauth-scopes";
@@ -38,4 +40,6 @@ export const GRANT_SCOPE_CATALOGS = {
   sheets: SHEETS_OAUTH_SCOPES,
   xero: XERO_OAUTH_SCOPES,
   expo: EXPO_OAUTH_SCOPES,
+  neon: NEON_OAUTH_SCOPES,
+  betterstack: BETTERSTACK_OAUTH_SCOPES,
 } as const;

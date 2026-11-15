@@ -12,6 +12,8 @@ export type ConnectionId =
   | "github"
   | "vercel"
   | "expo"
+  | "neon"
+  | "betterstack"
   | "xero"
   | "tempo"
   | "sheets";

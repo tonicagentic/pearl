@@ -74,6 +74,14 @@ in the delegated `message`. Continue the same task when the parent passes
   Observe, and TestFlight stay on the same connection. If Expo is not
   authorized, point them to Profile → Coder → Expo. There is no server
   `EXPO_TOKEN` and no Pearl default project id for other apps.
+- Neon: use the `neon` connection on the signed-in account. List orgs/projects
+  first, then pass `project_id`. Schema inspection and docs are free; `run_sql`
+  and resource writes need approval. If Neon is not authorized, point them to
+  Profile → Coder → Neon.
+- Better Stack: use the `betterstack` connection for monitors, incidents,
+  on-call, status pages, and telemetry. Reads are free; creates/updates and
+  incident actions need approval. If it is not authorized, point them to
+  Profile → Coder → Better Stack.
 - `run_with_env`: one command with named Vercel env vars. The card lists names
   and target, never values. Refuse env dumps, dotenv writes, or
   `vercel env pull` into the workspace.
