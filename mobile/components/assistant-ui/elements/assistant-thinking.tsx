@@ -17,6 +17,10 @@ import {
   getWaitingLabel,
   subscribeWaitingLabel,
 } from "../../../../lib/waiting-label";
+import {
+  statusLabelForTool,
+  type ActivityToolPart,
+} from "../../../../lib/thread-activity";
 
 function isDelegationToolCall(part: {
   readonly type?: string;
@@ -39,9 +43,9 @@ const PERSON_WAIT_PHASE = "person-wait";
 
 /**
  * Bottom status for pre-content / uncovered tools / open questions. Hidden
- * while the answer streams (timeline already shows Worked for) and while a
- * trailing timeline owns live Working — except stall warnings during active
- * work, and "Asking questions" while a choice question owns the composer.
+ * while the answer streams (timeline already shows the settled header) and
+ * while a trailing timeline owns live activity — except stall warnings during
+ * active work, and "Asking questions" while a choice question owns the composer.
  */
 export function AssistantThinking() {
   const { waitKind } = useChatConversation();
@@ -109,7 +113,7 @@ export function AssistantThinking() {
     ) {
       return undefined;
     }
-    return `Running ${pending.toolName}`;
+    return statusLabelForTool(pending as ActivityToolPart, { live: true });
   });
 
   const personWaitLabel = waitKind ? pendingWaitLabel(waitKind) : null;

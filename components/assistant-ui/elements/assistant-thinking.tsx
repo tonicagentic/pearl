@@ -8,25 +8,28 @@ import {
   getWaitingLabel,
   subscribeWaitingLabel,
 } from "@/lib/waiting-label";
+import {
+  statusLabelForTool,
+  type ActivityToolPart,
+} from "@/lib/thread-activity";
 
 import { isTimelineToolCall } from "./session-timeline";
 
 // In-thread agent status, following the assistant-ui thinking-indicator
 // runtime recipe (assistant-ui.com/elements/thinking-indicator): the label is
-// the pending tool call's name, falling back to "Thinking" while the run is
-// active and nothing visible has arrived yet. Once the assistant streams real
-// content the selector returns undefined and the indicator yields to it —
-// inside the same assistant message row, so there is no remount.
+// the pending uncovered tool's participle, falling back to "Thinking" while
+// the run is active and nothing visible has arrived yet. Once the assistant
+// streams real content the selector returns undefined and the indicator
+// yields to it — inside the same assistant message row, so there is no remount.
 //
 // Coexistence with the SessionTimeline (which renders right below this and
 // names every reasoning/tool step live): once the timeline has signal for the
-// turn, it owns the live view and this indicator steps back — otherwise every
-// covered tool call would read twice ("Running edit_file" above a shimmering
-// "Edited" step). The indicator keeps two jobs: the pre-content phase (before
-// any part exists) and uncovered tools like write_file, whose streaming the
-// timeline does not summarize. The stall watchdog still wins over the
-// timeline: after 45s without progress the escalation must surface even
-// though the timeline is showing live steps.
+// turn, it owns the live view and this indicator steps back. The indicator
+// keeps two jobs: the pre-content phase (before any part exists) and uncovered
+// tools like write_file ("Writing notes.md"), whose streaming the timeline
+// does not summarize. The stall watchdog still wins over the timeline: after
+// 45s without progress the escalation must surface even though the timeline
+// is showing live steps.
 //
 // The elapsed badge needs its own timer (docs: metadata.timing only finalizes
 // once the message stops streaming). The clock starts in an effect, which also
@@ -56,7 +59,9 @@ export function AssistantThinking() {
         part.toolName !== "todo",
     );
     if (pending?.type === "tool-call") {
-      return `Running ${pending.toolName}`;
+      // Timeline already names covered tools; stay quiet for those.
+      if (isTimelineToolCall(pending)) return undefined;
+      return statusLabelForTool(pending as ActivityToolPart, { live: true });
     }
     // The runtime emits a placeholder "indicator" part while a message has no
     // content yet; only real content parts hand the row over to the message.

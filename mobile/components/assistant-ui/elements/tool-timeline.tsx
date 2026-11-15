@@ -28,8 +28,8 @@ import {
   useMotion,
 } from "./surfaces";
 
-// RN port of the web tool-timeline: quiet meta rows, Worked-for header,
-// and inline edit stats — no mono chips.
+// RN port of the web tool-timeline: quiet meta rows, activity header,
+// and inline edit diffs on the edit row — no Editing footer.
 
 const DETAIL_MS = 180;
 
@@ -43,13 +43,8 @@ export interface TimelineStep {
   /** Distinct presentation for load_skill rows. */
   kind?: "skill";
   failed?: boolean;
-}
-
-export interface TimelineStat {
-  file: string;
   added?: number;
   removed?: number;
-  filePath?: string;
 }
 
 export type ActivityBit = {
@@ -67,7 +62,8 @@ export interface ToolTimelineProps {
   readonly restingLabel: ReactNode;
   /** Live header string (shimmer flattens children). */
   readonly activeLabel: string;
-  readonly stats: readonly TimelineStat[];
+  readonly headerAdded?: number;
+  readonly headerRemoved?: number;
   /** Elapsed badge: live while streaming, the settled duration after. */
   readonly elapsed?: string;
 }
@@ -129,6 +125,37 @@ function MetaChevron({ open }: { readonly open: boolean }) {
   );
 }
 
+function DiffCounts({
+  added,
+  removed,
+}: {
+  readonly added?: number;
+  readonly removed?: number;
+}) {
+  if (!added && !removed) return null;
+  return (
+    <View className="flex-row items-baseline gap-1.5">
+      {added && added > 0 ? (
+        <Text variant="label" className={cn(threadDiffAdd, "tabular-nums")}>
+          +{added}
+        </Text>
+      ) : null}
+      {removed && removed > 0 ? (
+        <Text
+          variant="label"
+          className={cn(threadDiffRemove, "tabular-nums")}
+        >
+          −{removed}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function isReasoningVerb(verb: string): boolean {
+  return verb === "Thought" || verb === "Thinking…";
+}
+
 function StepRow({
   step,
   active,
@@ -149,9 +176,8 @@ function StepRow({
   const verb =
     active && step.verb === "Thought" ? "Thinking…" : step.verb;
   const showChip = step.chip.length > 0;
-  // One text node keeps verb + duration on the same baseline ("Thought 2s").
-  const label =
-    elapsed !== undefined ? `${verb.replace(/…$/, "")} ${elapsed}` : verb;
+  // Keep the ellipsis on Thinking… when the duration sits beside it.
+  const label = elapsed !== undefined ? `${verb} ${elapsed}` : verb;
 
   return (
     <Animated.View
@@ -203,6 +229,7 @@ function StepRow({
             </Text>
           )
         ) : null}
+        <DiffCounts added={step.added} removed={step.removed} />
         {expandable ? <MetaChevron open={expanded} /> : null}
       </Pressable>
       {expandable && expanded ? (
@@ -220,48 +247,6 @@ function StepRow({
   );
 }
 
-function StatLine({ stats }: { readonly stats: readonly TimelineStat[] }) {
-  if (stats.length === 0) return null;
-
-  const totalAdded = stats.reduce((sum, stat) => sum + (stat.added ?? 0), 0);
-  const totalRemoved = stats.reduce(
-    (sum, stat) => sum + (stat.removed ?? 0),
-    0,
-  );
-  const latest = stats[stats.length - 1];
-  // Cursor: "Editing file.tsx … +10" — prefer the latest file when present.
-  const bit: ActivityBit =
-    stats.length === 1 && latest
-      ? { verb: "Editing", detail: latest.file }
-      : {
-          verb: "Edited",
-          detail: `${stats.length} file${stats.length === 1 ? "" : "s"}`,
-        };
-
-  return (
-    <View className="flex-row flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5">
-      <ActivityPhrase bits={[bit]} numberOfLines={1} />
-      {totalAdded > 0 || totalRemoved > 0 ? (
-        <View className="flex-row items-baseline gap-1.5">
-          {totalAdded > 0 ? (
-            <Text variant="label" className={cn(threadDiffAdd, "tabular-nums")}>
-              +{totalAdded}
-            </Text>
-          ) : null}
-          {totalRemoved > 0 ? (
-            <Text
-              variant="label"
-              className={cn(threadDiffRemove, "tabular-nums")}
-            >
-              −{totalRemoved}
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
 export function ToolTimeline({
   steps,
   visibleSteps,
@@ -270,7 +255,8 @@ export function ToolTimeline({
   onOpenChange,
   restingLabel,
   activeLabel,
-  stats,
+  headerAdded,
+  headerRemoved,
   elapsed,
 }: ToolTimelineProps) {
   const motion = useMotion();
@@ -296,12 +282,11 @@ export function ToolTimeline({
   );
 
   const rootEntering = motion ? thinkSwapEnter : undefined;
+  const liveHeader = elapsed ? `${activeLabel} · ${elapsed}` : activeLabel;
 
   // A single step needs no collapse chrome: render it inline.
   if (steps.length === 1) {
-    const step = steps[0];
-    const stepElapsed = step.verb === "Thought" ? elapsed : undefined;
-
+    const step = steps[0]!;
     return (
       <Animated.View
         entering={rootEntering}
@@ -313,9 +298,8 @@ export function ToolTimeline({
           active={streaming}
           expanded={expandedSteps.has(0)}
           onToggle={() => toggleStep(0)}
-          elapsed={stepElapsed}
+          elapsed={isReasoningVerb(step.verb) ? elapsed : undefined}
         />
-        <StatLine stats={stats} />
       </Animated.View>
     );
   }
@@ -332,15 +316,29 @@ export function ToolTimeline({
         onPress={() => onOpenChange(!open)}
       >
         <SwapLabel active={streaming ? 0 : 1} className="min-w-0 flex-1 text-start">
-          <ShimmerLabel
-            active={streaming}
-            variant="label"
-            className={threadMetaCall}
-            numberOfLines={2}
-          >
-            {elapsed ? `${activeLabel} · ${elapsed}` : activeLabel}
-          </ShimmerLabel>
-          {restingLabel}
+          <View className="min-w-0 flex-1 flex-row flex-wrap items-baseline gap-x-2">
+            <ShimmerLabel
+              active
+              variant="label"
+              className={threadMetaCall}
+              numberOfLines={2}
+            >
+              {liveHeader}
+            </ShimmerLabel>
+            <DiffCounts added={headerAdded} removed={headerRemoved} />
+          </View>
+          <View className="min-w-0 flex-1 flex-row flex-wrap items-baseline gap-x-2">
+            {restingLabel}
+            {elapsed ? (
+              <Text
+                variant="label"
+                className={cn(threadMetaDetail, "tabular-nums")}
+              >
+                {`· ${elapsed}`}
+              </Text>
+            ) : null}
+            <DiffCounts added={headerAdded} removed={headerRemoved} />
+          </View>
         </SwapLabel>
         <MetaChevron open={open} />
       </Pressable>
@@ -358,7 +356,6 @@ export function ToolTimeline({
               onToggle={() => toggleStep(index)}
             />
           ))}
-          <StatLine stats={stats} />
         </Animated.View>
       </CollapsePanel>
     </Animated.View>

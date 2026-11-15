@@ -509,7 +509,7 @@ const gallery: ThreadSample = {
         toolCall("write_file", {
           filePath: "notes.md",
           content:
-            "# Notes\n\n- Timeline is the default tool row\n- Worked for stays for multi-step turns\n- Approvals, todos, and task cards stay as their own surfaces\n",
+            "# Notes\n\n- Timeline is the default tool row\n- Settled headers use past rollups (Edited, explored, ran)\n- Approvals, todos, and task cards stay as their own surfaces\n",
         }),
         toolCall(
           "coder",
@@ -522,7 +522,7 @@ const gallery: ThreadSample = {
           type: "text",
           text: `Here's the layout after the change:
 
-1. Timeline steps stay quiet under **Worked for**.
+1. Timeline steps stay quiet under the settled activity header.
 2. Todos, write previews, and task cards keep their own chrome.
 3. Approvals and questions stay open until you answer.
 
