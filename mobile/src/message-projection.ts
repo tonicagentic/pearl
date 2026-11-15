@@ -709,7 +709,9 @@ export function appendSpokenTurnMessages(
   projected: readonly ThreadMessageLike[],
   spoken: readonly SpokenTurn[],
 ): ThreadMessageLike[] {
-  if (spoken.length === 0) return [...projected];
+  // Keep the projected array identity when there is nothing to overlay so
+  // assistant-ui's external-store equality can skip a full thread resync.
+  if (spoken.length === 0) return projected as ThreadMessageLike[];
   const overlay: ThreadMessageLike[] = spoken.map((turn) => ({
     role: turn.role === "assistant" ? ("assistant" as const) : ("user" as const),
     content: [{ type: "text" as const, text: turn.text }],

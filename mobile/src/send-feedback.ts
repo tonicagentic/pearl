@@ -117,7 +117,9 @@ export function projectSendMessages(
   pending: LocalSend | null,
   confirmed = false,
 ): ThreadMessageLike[] {
-  if (!pending) return [...messages];
+  // Preserve identity when there is no local overlay so stream ticks that
+  // only grow the last assistant can keep a stable messages array reference.
+  if (!pending) return messages as ThreadMessageLike[];
   const next = [...messages];
   const userIndex = sourceMessages.findIndex(
     (message, index) => index >= pending.baseline && message.role === "user",

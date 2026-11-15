@@ -41,7 +41,7 @@ import type { WaitingAction } from "@/components/assistant-ui/elements/waiting-a
 import { SubagentTranscriptSheet } from "@/components/assistant-ui/elements/subagent-transcript-sheet";
 import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
 import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft, type LocalSend } from "@/src/send-feedback";
-import { useChats } from "@/src/chat-context";
+import { EveEventsProvider, useChats } from "@/src/chat-context";
 import {
   ConversationProvider,
   agentForCall,
@@ -51,6 +51,7 @@ import {
   SubagentInspectProvider,
   useSubagentInspect,
 } from "@/src/subagent-inspect-context";
+import { SubagentRunsProvider } from "@/components/assistant-ui/elements/task-card.aui";
 import { toThreadMessages } from "@/src/eve-transport";
 import { isEveSessionInactive } from "../../lib/chat/eve-session-recovery";
 
@@ -266,26 +267,17 @@ export function ChatScreen({
   );
   const localSend = localSends.get(store) ?? null;
   const expectingAssistant = expectingAssistantByStore.get(store) ?? false;
-  const messages = useSyncExternalStore(
+  // One subscription for the active store — five separate hooks each paid a
+  // full snapshot read on every line boundary.
+  const snapshot = useSyncExternalStore(
     (cb) => store.subscribe(cb),
-    () => store.snapshot.messages,
+    () => store.snapshot,
   );
-  const status = useSyncExternalStore(
-    (cb) => store.subscribe(cb),
-    () => store.snapshot.status,
-  );
-  const storeError = useSyncExternalStore(
-    (cb) => store.subscribe(cb),
-    () => store.snapshot.error,
-  );
-  const events = useSyncExternalStore(
-    (cb) => store.subscribe(cb),
-    () => store.snapshot.events,
-  );
-  const agents = useSyncExternalStore(
-    (cb) => store.subscribe(cb),
-    () => store.snapshot.agents,
-  );
+  const messages = snapshot.messages;
+  const status = snapshot.status;
+  const storeError = snapshot.error;
+  const events = snapshot.events;
+  const agents = snapshot.agents;
   const conversation = useMemo(
     () => ({ messages, agents }),
     [messages, agents],
@@ -474,14 +466,40 @@ export function ChatScreen({
     }
   }, [expectingAssistant, messages, store, localSend, isBusy]);
 
-  // Rebuilt when the store instance changes (chat selection): the adapter
-  // closes over the current store, and the runtime core re-syncs on the new
-  // adapter object.
+  // Callbacks read from this ref so the adapter object only rebuilds when
+  // messages / run flags change — not on every localSend or project id tick.
+  // assistant-ui compares `adapter.messages` by reference inside setAdapter,
+  // so projectedMessages must still be a direct property (not a shared getter).
+  const sendCtxRef = useRef({
+    store,
+    localSend,
+    pendingMessage,
+    composerBlocked,
+    activeChatId,
+    activeProjectId,
+    wasSendPrepared,
+    recoverDeadSession,
+    ensureProjectForPlanMode,
+    setActiveProjectId,
+  });
+  useEffect(() => {
+    sendCtxRef.current = {
+      store,
+      localSend,
+      pendingMessage,
+      composerBlocked,
+      activeChatId,
+      activeProjectId,
+      wasSendPrepared,
+      recoverDeadSession,
+      ensureProjectForPlanMode,
+      setActiveProjectId,
+    };
+  });
+
   const adapter = useMemo(
     () => ({
-      get messages(): ThreadMessageLike[] {
-        return projectedMessages;
-      },
+      messages: projectedMessages,
       // Return the projection as-is: the runtime's converter assigns stable
       // positional fallback ids (the projection omits ids on purpose) and
       // honors the per-message status it carries.
@@ -490,24 +508,26 @@ export function ChatScreen({
       isDisabled: status === "resuming",
       isSendDisabled: composerBlocked,
       onNew: async (message: AppendMessage) => {
+        const ctx = sendCtxRef.current;
+        const { store: activeStore } = ctx;
         setSendError(null);
-        if (composerBlocked) {
+        if (ctx.composerBlocked) {
           throw new MessageNotSentError(
             "This chat is waiting for authorization or approval.",
           );
         }
-        if (hasUnresolvedSend(store.snapshot.events, localSend, pendingMessage)) {
+        if (hasUnresolvedSend(activeStore.snapshot.events, ctx.localSend, ctx.pendingMessage)) {
           const reason = "Check the previous message in this chat before sending another.";
-          setSendError({ store, message: reason });
+          setSendError({ store: activeStore, message: reason });
           throw new MessageNotSentError(reason);
         }
-        let projectIdForTurn = activeProjectId;
+        let projectIdForTurn = ctx.activeProjectId;
         try {
-          projectIdForTurn = await ensureProjectForPlanMode();
-          if (projectIdForTurn) setActiveProjectId(projectIdForTurn);
+          projectIdForTurn = await ctx.ensureProjectForPlanMode();
+          if (projectIdForTurn) ctx.setActiveProjectId(projectIdForTurn);
         } catch {
           const reason = "Plan mode needs a project before sending.";
-          setSendError({ store, message: reason });
+          setSendError({ store: activeStore, message: reason });
           throw new MessageNotSentError(reason);
         }
         let turn: ReturnType<typeof toEveTurn>;
@@ -517,7 +537,7 @@ export function ChatScreen({
           // Only validation failures are known to have never reached eve.
           // Restore the draft and chips; network failures remain uncertain.
           const reason = cause instanceof Error ? cause.message : "Attachment is not ready.";
-          setSendError({ store, message: reason });
+          setSendError({ store: activeStore, message: reason });
           throw new MessageNotSentError(reason);
         }
         // Match an attachment-only pending row to this exact eve receive event
@@ -528,55 +548,55 @@ export function ChatScreen({
         // Paint the user turn before the durable marker's network round-trip.
         // This row is display-only; Eve still waits for prepareSend to persist it.
         const preview = createLocalSend(
-          store,
-          store.snapshot.messages.length,
-          store.snapshot.events.length,
+          activeStore,
+          activeStore.snapshot.messages.length,
+          activeStore.snapshot.events.length,
           message,
           outgoing,
         );
-        setLocalSends((current) => new Map(current).set(store, preview));
-        setExpectingAssistantByStore((current) => new Map(current).set(store, true));
+        setLocalSends((current) => new Map(current).set(activeStore, preview));
+        setExpectingAssistantByStore((current) => new Map(current).set(activeStore, true));
         // Light tick as the bubble appears; skip validation failures above.
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         const sendPayload = {
           message: outgoing,
-          clientContext: buildTurnClientContext(projectIdForTurn, activeChatId),
+          clientContext: buildTurnClientContext(projectIdForTurn, ctx.activeChatId),
         };
         try {
           // Mode, project, and model ride the turn as ephemeral clientContext.
           // send() resolves with a Delivery once the server accepts the turn.
-          let delivery = await store.send(sendPayload);
+          let delivery = await activeStore.send(sendPayload);
           // Dead eve session: start a fresh session on the same chat and retry once.
           if (
-            isEveSessionInactive(store.snapshot.error) &&
-            recoverDeadSession(store)
+            isEveSessionInactive(activeStore.snapshot.error) &&
+            ctx.recoverDeadSession(activeStore)
           ) {
-            delivery = await store.send(sendPayload);
+            delivery = await activeStore.send(sendPayload);
           }
           // Eve reports prepareSend failures through error/onError, not by
           // rejecting send(). Nothing went to Eve if the durable mark failed.
-          if (shouldRestoreUnsentDraft(store.snapshot.error, wasSendPrepared(store))) {
+          if (shouldRestoreUnsentDraft(activeStore.snapshot.error, ctx.wasSendPrepared(activeStore))) {
             throw new Error("Pending message was not saved.");
           }
           const accepted =
             Boolean(delivery?.deliveryId) ||
-            hasConfirmedSend(store.snapshot.events, preview);
+            hasConfirmedSend(activeStore.snapshot.events, preview);
           setLocalSends((current) => {
-            if (current.get(store)?.preview !== preview.preview) return current;
+            if (current.get(activeStore)?.preview !== preview.preview) return current;
             const next = new Map(current);
-            if (accepted) next.delete(store);
-            else next.set(store, { ...preview, phase: "uncertain" });
+            if (accepted) next.delete(activeStore);
+            else next.set(activeStore, { ...preview, phase: "uncertain" });
             return next;
           });
           if (accepted) {
             void import("@/src/pending-attachments").then(
               ({ clearPendingAttachments, chatAttachmentKey }) => {
-                clearPendingAttachments(chatAttachmentKey(activeChatId));
+                clearPendingAttachments(chatAttachmentKey(ctx.activeChatId));
               },
             );
           } else {
             setSendError({
-              store,
+              store: activeStore,
               message:
                 "Couldn't confirm delivery. Your message is still here — resend when you're ready.",
             });
@@ -584,28 +604,28 @@ export function ChatScreen({
         } catch (cause) {
           if (
             (isEveSessionInactive(cause) ||
-              isEveSessionInactive(store.snapshot.error)) &&
-            recoverDeadSession(store)
+              isEveSessionInactive(activeStore.snapshot.error)) &&
+            ctx.recoverDeadSession(activeStore)
           ) {
             try {
-              const delivery = await store.send(sendPayload);
-              if (shouldRestoreUnsentDraft(store.snapshot.error, wasSendPrepared(store))) {
+              const delivery = await activeStore.send(sendPayload);
+              if (shouldRestoreUnsentDraft(activeStore.snapshot.error, ctx.wasSendPrepared(activeStore))) {
                 throw new Error("Pending message was not saved.");
               }
               const accepted =
                 Boolean(delivery?.deliveryId) ||
-                hasConfirmedSend(store.snapshot.events, preview);
+                hasConfirmedSend(activeStore.snapshot.events, preview);
               setLocalSends((current) => {
-                if (current.get(store)?.preview !== preview.preview) return current;
+                if (current.get(activeStore)?.preview !== preview.preview) return current;
                 const next = new Map(current);
-                if (accepted) next.delete(store);
-                else next.set(store, { ...preview, phase: "uncertain" });
+                if (accepted) next.delete(activeStore);
+                else next.set(activeStore, { ...preview, phase: "uncertain" });
                 return next;
               });
               if (accepted) {
                 void import("@/src/pending-attachments").then(
                   ({ clearPendingAttachments, chatAttachmentKey }) => {
-                    clearPendingAttachments(chatAttachmentKey(activeChatId));
+                    clearPendingAttachments(chatAttachmentKey(ctx.activeChatId));
                   },
                 );
                 return;
@@ -614,37 +634,37 @@ export function ChatScreen({
               // Fall through to the normal uncertain-delivery path.
             }
           }
-          if (!wasSendPrepared(store)) {
+          if (!ctx.wasSendPrepared(activeStore)) {
             setLocalSends((current) => {
-              if (current.get(store)?.preview !== preview.preview) return current;
+              if (current.get(activeStore)?.preview !== preview.preview) return current;
               const next = new Map(current);
-              next.delete(store);
+              next.delete(activeStore);
               return next;
             });
             setExpectingAssistantByStore((current) => {
-              if (!current.has(store)) return current;
+              if (!current.has(activeStore)) return current;
               const next = new Map(current);
-              next.delete(store);
+              next.delete(activeStore);
               return next;
             });
             const reason =
               "Couldn't save before sending. Your message is still in the composer.";
-            setSendError({ store, message: reason });
+            setSendError({ store: activeStore, message: reason });
             throw new MessageNotSentError(reason);
           }
           // After the durable mark, only delivery.consumed proves acceptance.
           // A transport error without it is ambiguous; never resend automatically.
-          const accepted = hasConfirmedSend(store.snapshot.events, preview);
+          const accepted = hasConfirmedSend(activeStore.snapshot.events, preview);
           setLocalSends((current) => {
-            if (current.get(store)?.preview !== preview.preview) return current;
+            if (current.get(activeStore)?.preview !== preview.preview) return current;
             const next = new Map(current);
-            if (accepted) next.delete(store);
-            else next.set(store, { ...preview, phase: "uncertain" });
+            if (accepted) next.delete(activeStore);
+            else next.set(activeStore, { ...preview, phase: "uncertain" });
             return next;
           });
           if (!accepted) {
             setSendError({
-              store,
+              store: activeStore,
               message:
                 "Connection dropped before delivery was confirmed. Your message is still here — resend when you're ready.",
             });
@@ -653,16 +673,17 @@ export function ChatScreen({
         }
       },
       onCancel: async () => {
-        await store.cancel();
+        await sendCtxRef.current.store.cancel();
       },
       onRespondToToolApproval: async (response: { approvalId: string; optionId?: string; approved?: boolean; text?: string }) => {
+        const ctx = sendCtxRef.current;
         const hasDecision =
           response.optionId !== undefined || response.approved !== undefined;
         const optionId = hasDecision
           ? (response.optionId ??
             (response.approved ? "approve" : "cancel"))
           : undefined;
-        await store.send({
+        await ctx.store.send({
           answers: [
             {
               interactionId: response.approvalId,
@@ -670,26 +691,12 @@ export function ChatScreen({
               ...(response.text !== undefined ? { text: response.text } : {}),
             },
           ],
-          clientContext: buildTurnClientContext(activeProjectId, activeChatId),
+          clientContext: buildTurnClientContext(ctx.activeProjectId, ctx.activeChatId),
         });
       },
     }),
-    // state and status change with the store's own updates; the adapter is
-    // rebuilt whenever they change so the runtime re-syncs.
-    [
-      store,
-      projectedMessages,
-      status,
-      isBusy,
-      composerBlocked,
-      wasSendPrepared,
-      localSend,
-      pendingMessage,
-      activeChatId,
-      activeProjectId,
-      ensureProjectForPlanMode,
-      setActiveProjectId,
-    ],
+    // Rebuild only when the thread snapshot the runtime compares changes.
+    [projectedMessages, isBusy, status, composerBlocked],
   );
 
   // Carry out (and similar) creates a chat with a durable pending marker but no
@@ -933,53 +940,57 @@ export function ChatScreen({
         {!billingReady ? (
           <BillingGateScreen onReady={markBillingReady} />
         ) : (
-          <ConversationProvider conversation={conversation} waitKind={waitKind}>
-            <SubagentInspectProvider>
-              <AssistantRuntimeProvider runtime={runtime}>
-                <EveAuthorization />
-                {mainTab === "computer" ? (
-                  <ComputerPanel
-                    topInset={computerTopInset}
-                    visible={mainTab === "computer"}
+          <EveEventsProvider events={events}>
+            <SubagentRunsProvider>
+              <ConversationProvider conversation={conversation} waitKind={waitKind}>
+                <SubagentInspectProvider>
+                  <AssistantRuntimeProvider runtime={runtime}>
+                    <EveAuthorization />
+                    {mainTab === "computer" ? (
+                      <ComputerPanel
+                        topInset={computerTopInset}
+                        visible={mainTab === "computer"}
+                      />
+                    ) : (
+                      <Thread
+                        autoFocus={
+                          Platform.OS === "ios" &&
+                          activeChatId === null &&
+                          chromeRevealed &&
+                          navSettled
+                        }
+                        chromeRevealed={chromeRevealed}
+                        conversationId={activeChatId}
+                        focusNewChatKey={newChatEntry}
+                        notice={notice}
+                        waitingAction={waitingAction}
+                      />
+                    )}
+                  </AssistantRuntimeProvider>
+                  <SubagentInspectHost onAnswer={answerInteraction} />
+                  <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
+                  <ProjectPickerModal
+                    open={projectPickerOpen}
+                    onClose={() => {
+                      setProjectPickerOpen(false);
+                      const waiter = projectPickWaiter.current;
+                      projectPickWaiter.current = null;
+                      waiter?.reject(new Error("Project picker closed."));
+                    }}
+                    onSelect={(project) => {
+                      setActiveProjectId(project.id);
+                      if (activeChatId) {
+                        void setChatProject(activeChatId, project.id).catch(() => {});
+                      }
+                      const waiter = projectPickWaiter.current;
+                      projectPickWaiter.current = null;
+                      waiter?.resolve(project.id);
+                    }}
                   />
-                ) : (
-                  <Thread
-                    autoFocus={
-                      Platform.OS === "ios" &&
-                      activeChatId === null &&
-                      chromeRevealed &&
-                      navSettled
-                    }
-                    chromeRevealed={chromeRevealed}
-                    conversationId={activeChatId}
-                    focusNewChatKey={newChatEntry}
-                    notice={notice}
-                    waitingAction={waitingAction}
-                  />
-                )}
-              </AssistantRuntimeProvider>
-              <SubagentInspectHost onAnswer={answerInteraction} />
-              <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
-              <ProjectPickerModal
-                open={projectPickerOpen}
-                onClose={() => {
-                  setProjectPickerOpen(false);
-                  const waiter = projectPickWaiter.current;
-                  projectPickWaiter.current = null;
-                  waiter?.reject(new Error("Project picker closed."));
-                }}
-                onSelect={(project) => {
-                  setActiveProjectId(project.id);
-                  if (activeChatId) {
-                    void setChatProject(activeChatId, project.id).catch(() => {});
-                  }
-                  const waiter = projectPickWaiter.current;
-                  projectPickWaiter.current = null;
-                  waiter?.resolve(project.id);
-                }}
-              />
-            </SubagentInspectProvider>
-          </ConversationProvider>
+                </SubagentInspectProvider>
+              </ConversationProvider>
+            </SubagentRunsProvider>
+          </EveEventsProvider>
         )}
       </View>
     </StackScreen>

@@ -57,6 +57,23 @@ test("mergeEventsForSnapshot prefers live when it still prefixes archived", () =
   assert.equal(merged, live);
 });
 
+test("mergeEventsForSnapshot prefers live when archived was cloned (DB reload)", () => {
+  const livePrefix = [
+    { type: "turn.started", data: { turnId: "t1" }, meta: { at: "2026-01-01T00:00:00.000Z" } },
+    { type: "content.delta", data: { delta: "hi" }, meta: { at: "2026-01-01T00:00:01.000Z" } },
+  ] as unknown as SessionStreamEvent[];
+  const archived = livePrefix.map(
+    (entry) => JSON.parse(JSON.stringify(entry)) as SessionStreamEvent,
+  );
+  const live = [
+    ...livePrefix,
+    { type: "turn.settled", data: { turnId: "t1" }, meta: { at: "2026-01-01T00:00:02.000Z" } },
+  ] as unknown as SessionStreamEvent[];
+  const merged = mergeEventsForSnapshot(archived, live);
+  assert.equal(merged, live);
+  assert.equal(merged.length, 3);
+});
+
 test("mergeEventsForSnapshot keeps archived when live is empty", () => {
   const archived = [event("a")];
   assert.deepEqual(mergeEventsForSnapshot(archived, []), archived);

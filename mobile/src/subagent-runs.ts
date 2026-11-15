@@ -60,6 +60,7 @@ export function deriveSubagentRuns(
   now: number,
 ): SubagentRun[] {
   const list: MutableRun[] = [];
+  const seenCallIds = new Set<string>();
 
   for (const raw of events) {
     const event = raw as StreamEvent;
@@ -73,9 +74,10 @@ export function deriveSubagentRuns(
 
     if (isCallStart) {
       const callId = event.data?.callId;
-      if (callId && list.some((run) => run.callId === callId)) {
+      if (callId && seenCallIds.has(callId)) {
         continue;
       }
+      if (callId) seenCallIds.add(callId);
       const at = eventTime(event);
       list.push({
         callId: callId ?? `run-${list.length}`,
@@ -89,10 +91,13 @@ export function deriveSubagentRuns(
     // Final completion: no backgroundTask, carries the child's output.
     if (event.type === "subagent.completed") {
       const name = event.data?.name ?? event.data?.subagentName;
-      const run = [...list].reverse().find((r) => !r.delivered && r.name === name);
-      if (run) {
-        run.delivered = true;
-        run.result = event.data?.output;
+      for (let i = list.length - 1; i >= 0; i -= 1) {
+        const run = list[i]!;
+        if (!run.delivered && run.name === name) {
+          run.delivered = true;
+          run.result = event.data?.output;
+          break;
+        }
       }
     }
   }

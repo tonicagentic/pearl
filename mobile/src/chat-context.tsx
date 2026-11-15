@@ -46,6 +46,28 @@ import { useAuth } from "./auth";
 /** Keep this many recently opened SessionStores warm for instant re-open. */
 const RETAINED_STORE_LIMIT = 10;
 
+/** True when newly appended events can open or close a person-wait. */
+function eventsMayChangeWait(
+  previous: readonly unknown[],
+  next: readonly unknown[],
+): boolean {
+  if (next === previous) return false;
+  if (next.length < previous.length) return true;
+  for (let i = previous.length; i < next.length; i += 1) {
+    const type = (next[i] as { readonly type?: string } | undefined)?.type;
+    if (
+      typeof type === "string" &&
+      (type.startsWith("interaction.") ||
+        type.startsWith("tool.") ||
+        type === "turn.settled" ||
+        type === "session.ended")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 type ChatsContextValue = {
   /** The active eve store (one React-mounted store; others may be LRU-retained). */
   readonly store: SessionStore;
@@ -61,7 +83,12 @@ type ChatsContextValue = {
   readonly chatsError: string | null;
   readonly hasMoreChats: boolean;
   readonly loadMoreChats: () => Promise<void>;
-  readonly reloadChats: () => Promise<void>;
+  /**
+   * Refresh the first page of Recents. Pass `{ silent: true }` for polls and
+   * post-snapshot refreshes so the list does not flash loading and pages
+   * already loaded via loadMore stay in memory.
+   */
+  readonly reloadChats: (options?: { readonly silent?: boolean }) => Promise<void>;
   /** Open a stored chat (replays its events, attaches its session). */
   readonly selectChat: (chatId: string) => Promise<boolean>;
   readonly selectionError: string | null;
@@ -250,19 +277,45 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     return store;
   }, [bindings, touchRetained]);
 
-  const reloadChats = useCallback(async () => {
-    setChatsLoading(true);
+  const reloadChats = useCallback(async (options?: { readonly silent?: boolean }) => {
+    const silent = options?.silent === true;
+    if (!silent) setChatsLoading(true);
 
     try {
       const page = await listChats(null);
-      setChats(page.chats);
-      setCursor(page.nextCursor);
+      setChats((current) => {
+        if (!silent || current.length === 0) {
+          return page.chats;
+        }
+        // Merge page-1 into any already-loaded pages so a presence poll or
+        // turn-end snapshot does not drop history the user scrolled into.
+        const freshById = new Map(page.chats.map((chat) => [chat.id, chat]));
+        const seen = new Set<string>();
+        const merged: ChatListItem[] = [];
+        for (const chat of page.chats) {
+          merged.push(chat);
+          seen.add(chat.id);
+        }
+        for (const chat of current) {
+          if (seen.has(chat.id)) continue;
+          const updated = freshById.get(chat.id);
+          merged.push(updated ?? chat);
+          seen.add(chat.id);
+        }
+        return merged;
+      });
+      // Only reset the cursor on a full replace; silent merges keep pagination.
+      if (!silent) {
+        setCursor(page.nextCursor);
+      } else {
+        setCursor((current) => current ?? page.nextCursor);
+      }
       setChatsError(null);
     } catch {
       // Preserve the last successful list but expose the offline state.
       setChatsError("Could not load history. Check your connection and retry.");
     } finally {
-      setChatsLoading(false);
+      if (!silent) setChatsLoading(false);
     }
   }, []);
 
@@ -373,7 +426,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           binding.syncFailed = false;
           if (activeStoreRef.current === store) setPersistenceError(null);
           // The next turn waits on this queue; history GET must not hold its durable mark.
-          void reloadChats();
+          void reloadChats({ silent: true });
           // Snapshot settled — retry overflow eviction now that this writer is idle.
           evictRetainedOverflow();
         });
@@ -680,7 +733,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           ? saved.find((turn) => turn.role === "user")?.text.slice(0, 48) || current
           : current,
       );
-      void reloadChats();
+      void reloadChats({ silent: true });
     },
     [bindings, reloadChats, touchRetained],
   );
@@ -772,20 +825,19 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     const id = binding.id;
     // Retry belongs to the same queue as onFinish and prepareSend. Otherwise a
     // follow-up could mark itself pending while an older retry clears the mark.
+    // Always merge + snapshot — remapping live events to 0…n-1 overwrote
+    // durable indices when a pending marker was still set.
     const attempt = binding.queue.then(async () => {
       const snapshot = store.snapshot;
-      if (binding.pendingMessage) {
-        await appendChatEvents(id, snapshot.events.map((event, eventIndex) => ({ event, eventIndex })));
-        if (snapshot.session) await saveChatSession(id, snapshot.session);
-      } else {
-        const events = mergeEventsForSnapshot(
-          binding.archivedEvents,
-          snapshot.events,
-        );
-        await saveChatSnapshot(id, events, snapshot.session);
-        binding.archivedEvents = [...events];
-        binding.savedEventCount = events.length;
-      }
+      const events = mergeEventsForSnapshot(
+        binding.archivedEvents,
+        snapshot.events,
+      );
+      await saveChatSnapshot(id, events, snapshot.session);
+      binding.archivedEvents = [...events];
+      binding.savedEventCount = events.length;
+      binding.eventIndex = Math.max(binding.eventIndex, events.length);
+      if (snapshot.session) await saveChatSession(id, snapshot.session);
     });
     binding.queue = attempt.catch(() => {
       binding.syncFailed = true;
@@ -795,23 +847,34 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       await attempt;
       binding.syncFailed = false;
       if (activeStoreRef.current === store) setPersistenceError(null);
-      await reloadChats();
+      await reloadChats({ silent: true });
     } catch {
       // The queued handler keeps the failure visible and lets later retries run.
     }
   }, [store, reloadChats, bindings]);
 
   // Keep the Recents presence mark in sync with the open chat's live store.
+  // Only rescan pending person-waits when status flips or an interaction-shaped
+  // event arrives — content.delta must not walk the whole conversation.
   useEffect(() => {
     const chatId = activeChatId;
     if (!chatId) return;
     let wasBusy =
       store.snapshot.status === "busy" || store.snapshot.status === "resuming";
+    let lastWaiting = hasPendingAction(store.snapshot);
+    let lastStatus = store.snapshot.status;
+    let lastEvents = store.snapshot.events;
     const syncPresence = () => {
-      const waiting = hasPendingAction(store.snapshot);
-      const busy =
-        store.snapshot.status === "busy" ||
-        store.snapshot.status === "resuming";
+      const { status, events } = store.snapshot;
+      const busy = status === "busy" || status === "resuming";
+      const statusChanged = status !== lastStatus;
+      lastStatus = status;
+      let waiting = lastWaiting;
+      if (statusChanged || eventsMayChangeWait(lastEvents, events)) {
+        waiting = hasPendingAction(store.snapshot);
+        lastWaiting = waiting;
+      }
+      lastEvents = events;
       const presence: ChatPresence = waiting
         ? "waiting"
         : busy
@@ -828,13 +891,50 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     return store.subscribe(syncPresence);
   }, [store, activeChatId, patchChatPresence]);
 
+  const detachAllStores = useCallback(() => {
+    for (const [chatId, candidate] of [...retainedStores.entries()]) {
+      const binding = bindings.get(candidate);
+      binding?.stopObserving?.();
+      if (binding) {
+        binding.stopObserving = null;
+        if (binding.timer) {
+          clearTimeout(binding.timer);
+          binding.timer = null;
+        }
+      }
+      void candidate.cancel().catch(() => {});
+      retainedStores.delete(chatId);
+    }
+    const active = activeStoreRef.current;
+    if (active) {
+      const binding = bindings.get(active);
+      binding?.stopObserving?.();
+      if (binding) {
+        binding.stopObserving = null;
+        if (binding.timer) {
+          clearTimeout(binding.timer);
+          binding.timer = null;
+        }
+      }
+      void active.cancel().catch(() => {});
+    }
+  }, [bindings, retainedStores]);
+
   // The auth provider restores the bearer asynchronously; load when signed in.
+  // On sign-out (or provider remount via accountKey), stop streams so a stale
+  // bearer cannot keep writing after sessionInvalid().
   useEffect(() => {
-    if (!signedIn) return;
+    if (!signedIn) {
+      detachAllStores();
+      return;
+    }
     let cancelled = false;
     Promise.resolve().then(() => { if (!cancelled) void reloadChats(); });
-    return () => { cancelled = true; };
-  }, [signedIn, reloadChats]);
+    return () => {
+      cancelled = true;
+      detachAllStores();
+    };
+  }, [signedIn, reloadChats, detachAllStores]);
 
   const value = useMemo(
     () => ({
@@ -907,16 +1007,39 @@ export function useChats(): ChatsContextValue {
 }
 
 /**
+ * Shared events for the open chat tree. ChatScreen publishes the snapshot it
+ * already subscribed to so timeline rows / task cards do not each open another
+ * store listener (and so SubagentRunsProvider can sit under chat, not the app root).
+ */
+const EveEventsContext = createContext<readonly unknown[] | null>(null);
+
+export function EveEventsProvider({
+  events,
+  children,
+}: {
+  readonly events: readonly unknown[];
+  readonly children: ReactNode;
+}) {
+  return (
+    <EveEventsContext.Provider value={events}>
+      {children}
+    </EveEventsContext.Provider>
+  );
+}
+
+/**
  * The active chat's authoritative eve event stream (subagent runs, turn
  * timings — the same events the web's session timeline and task cards
- * consume). Reference-stable between publishes, so useSyncExternalStore-safe.
+ * consume). Prefers EveEventsProvider when mounted; otherwise subscribes to
+ * the active store (reference-stable between publishes).
  */
 export function useEveEvents(): readonly unknown[] {
+  const fromProvider = useContext(EveEventsContext);
   const { store } = useChats();
-
-  return useSyncExternalStore(
-    (cb) => store.subscribe(cb),
-    () => store.snapshot.events,
-    () => store.snapshot.events,
+  const fromStore = useSyncExternalStore(
+    (cb) => (fromProvider != null ? () => {} : store.subscribe(cb)),
+    () => (fromProvider != null ? fromProvider : store.snapshot.events),
+    () => (fromProvider != null ? fromProvider : store.snapshot.events),
   );
+  return fromProvider ?? fromStore;
 }

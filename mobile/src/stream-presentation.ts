@@ -48,8 +48,10 @@ export function withPendingAssistant(
   streaming: boolean,
   awaitingReply = false,
 ): ThreadMessageLike[] {
+  // Preserve identity when the overlay is a no-op so external-store can skip
+  // a full thread resync on stream ticks that only grow the last assistant.
   if (messages[messages.length - 1]?.role === "assistant") {
-    return [...messages];
+    return messages as ThreadMessageLike[];
   }
   const lastSource = source[source.length - 1];
   const streamReady =
@@ -59,7 +61,7 @@ export function withPendingAssistant(
   const preparingOptimistic =
     awaitingReply && messages[messages.length - 1]?.role === "user";
   if (!streamReady && !preparingOptimistic) {
-    return [...messages];
+    return messages as ThreadMessageLike[];
   }
   return [...messages, { role: "assistant", content: [], status: { type: "running" } }];
 }

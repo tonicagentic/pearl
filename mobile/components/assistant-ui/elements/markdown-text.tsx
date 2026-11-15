@@ -95,39 +95,6 @@ function wrapListItemBody(
   return out;
 }
 
-/** Count single `*` markers that are not part of `**` (Hermes-safe). */
-function oddSingleAsterisks(text: string): boolean {
-  let singles = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] !== "*") continue;
-    if (text[i + 1] === "*") {
-      i += 1;
-      continue;
-    }
-    singles += 1;
-  }
-  return (singles & 1) === 1;
-}
-
-/**
- * Mid-stream the model often has an open `**` / `` ` ``. Closing those for
- * display keeps Pearl painting rendered markdown instead of raw markers.
- */
-function stabilizeStreamingMarkdown(text: string): string {
-  let out = text;
-  if (((out.match(/\*\*/g) ?? []).length & 1) === 1) out += "**";
-  if (oddSingleAsterisks(out)) out += "*";
-  if (((out.match(/__/g) ?? []).length & 1) === 1) out += "__";
-  if (((out.match(/`/g) ?? []).length & 1) === 1) out += "`";
-  // Unclosed fence: hide the incomplete fence rather than dump ```.
-  const fences = out.match(/^```/gm)?.length ?? 0;
-  if (fences & 1) {
-    const last = out.lastIndexOf("```");
-    if (last >= 0) out = out.slice(0, last).replace(/\s+$/, "");
-  }
-  return out;
-}
-
 type ListToken = NonNullable<ReturnType<MarkedTokenizer["list"]>>;
 type ListItemToken = ListToken["items"][number];
 
@@ -515,22 +482,7 @@ type MarkdownTextProps = TextMessagePartProps & {
   variant?: MarkdownTextVariant;
 };
 
-const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
-  const statusType = status?.type ?? "running";
-  const streaming = statusType === "running";
-  // Paint wire text directly — setState throttles nested under
-  // NotificationManager hit max update depth; useDeferredValue starved
-  // and left the body blank until settle.
-  useEffect(() => {
-    if (!streaming) return;
-    traceStream("paint", text.length);
-  }, [streaming, text.length]);
-  // Close odd markers mid-stream so Marked can bold instead of showing `**`.
-  const displayText = useMemo(
-    () => (streaming ? stabilizeStreamingMarkdown(text) : text),
-    [text, streaming],
-  );
-  const baseOptions = useMarkdownOptions(variant);
+function useMarkdownTypeStyle(variant: MarkdownTextVariant | undefined) {
   const hydrated = useHydrated();
   const foreground = useCSSVariable("--color-foreground") as string | undefined;
   const mutedForeground = useCSSVariable("--color-muted-foreground") as
@@ -556,20 +508,62 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
         }
       : null),
   } as const;
+  return { fallbackClass, typeStyle } as const;
+}
 
-  // One parse for the full message. Text blocks share a selectable host;
-  // list Views sit beside them so wraps can hang under the marker.
-  const renderer = useMemo(
-    () => new MarkdownRenderer(displayText),
-    [displayText],
+/**
+ * Streaming answers paint as plain Text — Marked over the growing buffer on
+ * every line boundary freezes the JS thread. Settled messages use the full
+ * markdown path. Do not use useDeferredValue here (it blanked the body).
+ */
+const StreamingMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
+  useEffect(() => {
+    traceStream("paint", text.length);
+  }, [text.length]);
+  const { fallbackClass, typeStyle } = useMarkdownTypeStyle(variant);
+
+  if (!text) {
+    return <View className="aui-md-root" />;
+  }
+
+  return (
+    <View className="aui-md-root">
+      {Platform.OS === "ios" ? (
+        <TextInput
+          multiline
+          editable={false}
+          readOnly
+          scrollEnabled={false}
+          selectionColor={SELECTION_COLOR}
+          style={typeStyle}
+          className={fallbackClass}
+          value={text}
+        />
+      ) : (
+        <Text
+          selectable
+          selectionColor={SELECTION_COLOR}
+          variant={variant === "muted" ? "body" : "label"}
+          tone={variant === "muted" ? "muted" : "default"}
+        >
+          {text}
+        </Text>
+      )}
+    </View>
   );
+};
+
+const SettledMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
+  const { fallbackClass, typeStyle } = useMarkdownTypeStyle(variant);
+  const baseOptions = useMarkdownOptions(variant);
+  const renderer = useMemo(() => new MarkdownRenderer(text), [text]);
   const options = useMemo(
     () => ({ ...baseOptions, renderer }),
     [baseOptions, renderer],
   );
-  const elements = useMarkdown(displayText || " ", options);
+  const elements = useMarkdown(text || " ", options);
 
-  if (!displayText) {
+  if (!text) {
     return <View className="aui-md-root" />;
   }
 
@@ -613,6 +607,15 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
         );
       })}
     </View>
+  );
+};
+
+const MarkdownTextImpl: FC<MarkdownTextProps> = (props) => {
+  const streaming = (props.status?.type ?? "running") === "running";
+  return streaming ? (
+    <StreamingMarkdownText {...props} />
+  ) : (
+    <SettledMarkdownText {...props} />
   );
 };
 

@@ -1719,11 +1719,21 @@ const UserText: TextMessagePartComponent = ({ text, status }) => (
   </View>
 );
 
-function contentPartComponents(
+const ReasoningHidden = () => null;
+
+type ContentPartComponents = {
+  readonly Text: typeof AssistantInlineText;
+  readonly Image: typeof Image;
+  readonly File: typeof File;
+  readonly Reasoning: typeof ReasoningHidden;
+  readonly tools: { readonly Fallback: ToolCallMessagePartComponent };
+};
+
+function buildContentPartComponents(
   index: number,
   ToolFallbackComponent: ToolCallMessagePartComponent,
   TaskGroupComponent: ComponentType<{ group: ThreadGroupPart }>,
-) {
+): ContentPartComponents {
   const Fallback: ToolCallMessagePartComponent = (props) => {
     if (props.toolName === "todo") return null;
     if (isTimelineToolCall(props)) return null;
@@ -1749,7 +1759,7 @@ function contentPartComponents(
     Text: AssistantInlineText,
     Image,
     File,
-    Reasoning: () => null,
+    Reasoning: ReasoningHidden,
     tools: { Fallback },
   };
 }
@@ -1770,6 +1780,25 @@ const AssistantMessage: FC = () => {
     [messageParts],
   );
   const lastTimeline = lastTimelineBlockIndex(blocks);
+  // Stable per-index maps so PartByIndex can bail out when only sibling
+  // chrome re-renders. Rebuilt when the part list or tool renderers change.
+  const componentsByIndex = useMemo(() => {
+    const map = new Map<number, ContentPartComponents>();
+    for (const block of blocks) {
+      if (block.kind === "timeline") continue;
+      for (const index of block.indices) {
+        map.set(
+          index,
+          buildContentPartComponents(
+            index,
+            ToolFallbackComponent,
+            TaskGroupComponent,
+          ),
+        );
+      }
+    }
+    return map;
+  }, [blocks, ToolFallbackComponent, TaskGroupComponent]);
 
   return (
     <MessagePrimitive.Root className="aui-assistant-message-root">
@@ -1800,11 +1829,7 @@ const AssistantMessage: FC = () => {
                   <MessagePrimitive.PartByIndex
                     key={index}
                     index={index}
-                    components={contentPartComponents(
-                      index,
-                      ToolFallbackComponent,
-                      TaskGroupComponent,
-                    )}
+                    components={componentsByIndex.get(index)}
                   />
                 ))}
               </View>

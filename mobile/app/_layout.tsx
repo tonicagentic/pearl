@@ -7,7 +7,6 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
-import { SubagentRunsProvider } from "@/components/assistant-ui/elements/task-card.aui";
 import { PushNotificationsBridge } from "@/components/push-notifications-bridge";
 import { applyUpdatesOnLaunch } from "@/src/apply-updates";
 import { AuthProvider, useAuth } from "@/src/auth";
@@ -74,20 +73,19 @@ function AuthenticatedLayout() {
   return (
     <ChatsProvider key={accountKey}>
       <WorkspaceProvider>
-        <SubagentRunsProvider>
-          <PushNotificationsBridge />
-          <GestureHandlerRootView className="flex-1">
-            <SafeAreaProvider>
-              <KeyboardProvider
-                enabled={Platform.OS === "ios" && !Platform.isPad}
-              >
-                <StatusBar style="auto" />
-                {restoring ? (
-                  // Don't mount the navigator until we know the zone — otherwise
-                  // restore paints sign-in then pushes (home), and the nav chrome
-                  // slides in with the default stack animation.
-                  <View style={{ flex: 1, backgroundColor }} />
-                ) : (
+        <PushNotificationsBridge />
+        <GestureHandlerRootView className="flex-1">
+          <SafeAreaProvider>
+            <KeyboardProvider
+              enabled={Platform.OS === "ios" && !Platform.isPad}
+            >
+              <StatusBar style="auto" />
+              {restoring ? (
+                // Don't mount the navigator until we know the zone — otherwise
+                // restore paints sign-in then pushes (home), and the nav chrome
+                // slides in with the default stack animation.
+                <View style={{ flex: 1, backgroundColor }} />
+              ) : (
                 <Stack
                   // Remount per auth zone so home is the initial route, not a
                   // push on top of sign-in (animation: "none" alone is ignored
@@ -248,11 +246,10 @@ function AuthenticatedLayout() {
                     />
                   </Stack.Protected>
                 </Stack>
-                )}
-              </KeyboardProvider>
-            </SafeAreaProvider>
-          </GestureHandlerRootView>
-        </SubagentRunsProvider>
+              )}
+            </KeyboardProvider>
+          </SafeAreaProvider>
+        </GestureHandlerRootView>
       </WorkspaceProvider>
     </ChatsProvider>
   );

@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useMemo,
   type ReactNode,
 } from "react";
 import type { ConversationAgentSession, EveMessage } from "eve/client";
@@ -31,8 +32,12 @@ export function ConversationProvider({
   readonly waitKind: PendingWaitKind | null;
   readonly children: ReactNode;
 }) {
+  const value = useMemo(
+    () => ({ conversation, waitKind }),
+    [conversation, waitKind],
+  );
   return (
-    <ConversationContext.Provider value={{ conversation, waitKind }}>
+    <ConversationContext.Provider value={value}>
       {children}
     </ConversationContext.Provider>
   );

@@ -55,13 +55,38 @@ function useSubagentClock(): number {
   return useContext(TaskRunsContext).now;
 }
 
+/** Only re-derive when the event log gains/loses subagent-shaped rows. */
+function subagentEventsKey(events: readonly unknown[]): string {
+  let count = 0;
+  let lastType = "";
+  let lastCallId = "";
+  for (const raw of events) {
+    const event = raw as {
+      readonly type?: string;
+      readonly data?: { readonly callId?: string };
+    };
+    if (
+      event.type === "subagent.called" ||
+      event.type === "subagent.completed"
+    ) {
+      count += 1;
+      lastType = event.type;
+      lastCallId = event.data?.callId ?? "";
+    }
+  }
+  return `${count}:${lastType}:${lastCallId}`;
+}
+
 export function SubagentRunsProvider({ children }: { readonly children: ReactNode }) {
   const events = useEveEvents();
   const [now, setNow] = useState(() => Date.now());
-
+  // Gate full-log scans: content.delta does not change this key, so `runs`
+  // keeps its prior identity across ordinary stream ticks.
+  const eventsKey = subagentEventsKey(events);
   const runs = useMemo(
     () => deriveSubagentRuns(events, now),
-    [events, now],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- events keyed via eventsKey
+    [eventsKey, now],
   );
 
   // Tick while any run is undelivered (keying on the post-derivation state

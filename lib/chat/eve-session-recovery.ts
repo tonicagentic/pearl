@@ -24,6 +24,24 @@ export function isEveSessionInactive(error: unknown): boolean {
 }
 
 /**
+ * True when two stream events are the same durable row. Prefer reference
+ * equality; fall back to JSON so a DB round-trip clone still matches the live
+ * store's prefix after resume (reference identity alone almost never holds).
+ */
+export function sessionEventsEqual(
+  left: SessionStreamEvent,
+  right: SessionStreamEvent,
+): boolean {
+  if (left === right) return true;
+  if (left.type !== right.type) return false;
+  try {
+    return JSON.stringify(left) === JSON.stringify(right);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Preserve Pearl UI history when a SessionStore snapshot only contains the
  * new session’s events after `newSession()`. Never shrinks the archived prefix.
  */
@@ -38,7 +56,7 @@ export function mergeEventsForSnapshot(
   if (live.length >= archived.length) {
     let prefixMatch = true;
     for (let i = 0; i < archived.length; i += 1) {
-      if (live[i] !== archived[i]) {
+      if (!sessionEventsEqual(live[i]!, archived[i]!)) {
         prefixMatch = false;
         break;
       }

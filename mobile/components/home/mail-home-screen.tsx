@@ -70,10 +70,12 @@ export function MailHomeScreen() {
   useFocusEffect(
     useCallback(() => {
       homeFocusedRef.current = true;
+      // Focus: full refresh is fine. Polls stay silent so chatsLoading does
+      // not flash the whole tree every 5s, and loaded pages stay merged.
       void reloadChats();
       const timer = setInterval(() => {
         if (AppState.currentState !== "active") return;
-        void reloadChats();
+        void reloadChats({ silent: true });
       }, HOME_PRESENCE_POLL_MS);
       return () => {
         homeFocusedRef.current = false;
@@ -85,7 +87,7 @@ export function MailHomeScreen() {
   useEffect(() => {
     const onChange = (next: string) => {
       if (next === "active" && homeFocusedRef.current) {
-        void reloadChats();
+        void reloadChats({ silent: true });
       }
     };
     const subscription = AppState.addEventListener("change", onChange);
