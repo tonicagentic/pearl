@@ -32,7 +32,6 @@ import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
 
-const HOME_PRESENCE_POLL_MS = 5_000;
 const IS_IOS = Platform.OS === "ios";
 /** Native bottom toolbar owns inset on iOS; Android uses the floating dock. */
 const LIST_BOTTOM_INSET = IS_IOS ? 0 : HOME_DOCK_CLEARANCE;
@@ -70,16 +69,11 @@ export function MailHomeScreen() {
   useFocusEffect(
     useCallback(() => {
       homeFocusedRef.current = true;
-      // Focus: full refresh is fine. Polls stay silent so chatsLoading does
-      // not flash the whole tree every 5s, and loaded pages stay merged.
+      // Focus: full refresh. Adaptive silent polls live in ChatsProvider so
+      // presence stays fresh on /chat too.
       void reloadChats();
-      const timer = setInterval(() => {
-        if (AppState.currentState !== "active") return;
-        void reloadChats({ silent: true });
-      }, HOME_PRESENCE_POLL_MS);
       return () => {
         homeFocusedRef.current = false;
-        clearInterval(timer);
       };
     }, [reloadChats]),
   );

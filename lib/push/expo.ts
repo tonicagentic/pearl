@@ -4,10 +4,14 @@ const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
 export type ExpoPushMessage = {
   readonly to: string;
-  readonly title: string;
-  readonly body: string;
+  /** Omit for silent / data-only presence fanout. */
+  readonly title?: string;
+  readonly body?: string;
   readonly data?: Readonly<Record<string, string>>;
   readonly sound?: "default" | null;
+  readonly priority?: "default" | "normal" | "high";
+  /** iOS: deliver as content-available / background data. */
+  readonly _contentAvailable?: boolean;
 };
 
 type ExpoTicket =

@@ -7,20 +7,24 @@ import { useChats } from "@/src/chat-context";
 import {
   chatIdFromNotificationResponse,
   installPushNotificationHandler,
+  presenceFromNotificationData,
   registerForPushNotifications,
   setActiveChatIdForPush,
 } from "@/src/push-notifications";
 
 /**
  * Registers the Expo push token after sign-in, opens the named chat when a
- * banner is tapped, and keeps the active-chat suppressor in sync so the open
- * thread does not get a redundant banner.
+ * banner is tapped, applies silent presence patches to Recents, and keeps the
+ * active-chat suppressor in sync so the open thread does not get a redundant
+ * banner.
  */
 export function PushNotificationsBridge() {
   const { signedIn, restoring } = useAuth();
-  const { activeChatId, selectChat } = useChats();
+  const { activeChatId, selectChat, patchChatPresence } = useChats();
   const selectChatRef = useRef(selectChat);
   selectChatRef.current = selectChat;
+  const patchPresenceRef = useRef(patchChatPresence);
+  patchPresenceRef.current = patchChatPresence;
 
   useEffect(() => {
     installPushNotificationHandler();
@@ -62,13 +66,24 @@ export function PushNotificationsBridge() {
       });
     }
 
-    const subscription =
+    const responseSub =
       Notifications.addNotificationResponseReceivedListener((response) => {
         void openFromNotification(response);
       });
 
+    const receivedSub = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        const presence = presenceFromNotificationData(
+          notification.request.content.data,
+        );
+        if (!presence) return;
+        patchPresenceRef.current(presence.chatId, presence.presence);
+      },
+    );
+
     return () => {
-      subscription.remove();
+      responseSub.remove();
+      receivedSub.remove();
     };
   }, [restoring, signedIn]);
 

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
@@ -16,6 +15,10 @@ import {
   HistoryListIOS,
   type HistoryChatActionHandlers,
 } from "@/components/home/history-list";
+import {
+  MATRIX_DOT_LOADER_SIZE,
+  MatrixDotLoader,
+} from "@/components/ui/matrix-dot-loader";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
@@ -326,20 +329,33 @@ function RecentChatRowAndroid({
       delayLongPress={350}
     >
       {presence === "working" ? (
-        <ActivityIndicator
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-          size="small"
-          color={mutedDot}
-          style={{ width: 8, height: 8, transform: [{ scale: 0.55 }] }}
+        <MatrixDotLoader
+          baseColor={mutedDot}
+          activeColor={CHAT_PRESENCE_BLUE}
         />
       ) : (
         <View
           accessibilityElementsHidden
           importantForAccessibility="no"
-          className="h-2 w-2 shrink-0 rounded-full"
-          style={markColor ? { backgroundColor: markColor } : undefined}
-        />
+          className="shrink-0 rounded-full"
+          style={{
+            width: MATRIX_DOT_LOADER_SIZE,
+            height: MATRIX_DOT_LOADER_SIZE,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {markColor ? (
+            <View
+              className="rounded-full"
+              style={{
+                width: 8,
+                height: 8,
+                backgroundColor: markColor,
+              }}
+            />
+          ) : null}
+        </View>
       )}
       <View className="min-w-0 flex-1">
         <Text className="text-base text-foreground" numberOfLines={1}>

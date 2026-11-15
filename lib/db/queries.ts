@@ -652,6 +652,90 @@ export async function appendChatEvents({
     });
 }
 
+/** Event types that drive Recents presence (matches presenceByChatIds filter). */
+export const CHAT_PRESENCE_EVENT_TYPES = [
+  "interaction.opened",
+  "interaction.settled",
+  "turn.started",
+  "turn.paused",
+  "turn.settled",
+  "delivery.consumed",
+  "session.ended",
+] as const;
+
+export type ChatPresenceEventType = (typeof CHAT_PRESENCE_EVENT_TYPES)[number];
+
+export function isChatPresenceEventType(
+  type: string,
+): type is ChatPresenceEventType {
+  return (CHAT_PRESENCE_EVENT_TYPES as readonly string[]).includes(type);
+}
+
+/**
+ * Upsert a presence-relevant stream event from an eve agent hook (no cookie).
+ * Idempotent on (chatId, eventIndex) so client flushes can race safely.
+ * Returns null when no chat row is linked to the session yet.
+ */
+export async function appendChatEventForSession({
+  sessionId,
+  event,
+  eventIndex,
+  bumpUpdatedAt = true,
+}: {
+  readonly sessionId: string;
+  readonly event: SessionStreamEvent;
+  readonly eventIndex: number;
+  readonly bumpUpdatedAt?: boolean;
+}): Promise<{
+  readonly chatId: string;
+  readonly userId: string;
+  readonly presence: ChatPresence;
+} | null> {
+  const [row] = await db
+    .select({
+      id: chat.id,
+      userId: chat.userId,
+      lastReadAt: chat.lastReadAt,
+    })
+    .from(chat)
+    .where(sql`${chat.eveSession} ->> 'sessionId' = ${sessionId}`)
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  await db
+    .insert(chatEvent)
+    .values({
+      chatId: row.id,
+      event,
+      eventIndex,
+      id: randomUUID(),
+    })
+    .onConflictDoUpdate({
+      set: { event },
+      target: [chatEvent.chatId, chatEvent.eventIndex],
+    });
+
+  if (bumpUpdatedAt) {
+    await db
+      .update(chat)
+      .set({ updatedAt: new Date() })
+      .where(eq(chat.id, row.id));
+  }
+
+  const presenceById = await presenceByChatIds([
+    { id: row.id, lastReadAt: row.lastReadAt },
+  ]);
+
+  return {
+    chatId: row.id,
+    userId: row.userId,
+    presence: presenceById.get(row.id) ?? "idle",
+  };
+}
+
 export async function saveChatSnapshot({
   chatId,
   events,

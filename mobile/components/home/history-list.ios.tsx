@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import {
   Button,
   ContextMenu,
@@ -38,6 +38,10 @@ import {
   chatListPresence,
 } from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
+import {
+  MATRIX_DOT_LOADER_SIZE,
+  MatrixDotLoader,
+} from "@/components/ui/matrix-dot-loader";
 
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
 
@@ -227,32 +231,31 @@ function RecentChatRow({
       : presence === "unread"
         ? CHAT_PRESENCE_BLUE
         : null;
-  const statusMark =
-    presence === "working" ? (
-      <RNHostView matchContents>
-        <View
-          style={{
-            width: 12,
-            height: 12,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <ActivityIndicator
-            size="small"
-            color={mutedColor}
-            style={{ transform: [{ scale: 0.55 }] }}
+  const statusMark = (
+    <RNHostView matchContents>
+      <View
+        style={{
+          width: MATRIX_DOT_LOADER_SIZE,
+          height: MATRIX_DOT_LOADER_SIZE,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {presence === "working" ? (
+          <MatrixDotLoader
+            baseColor={mutedColor}
+            activeColor={CHAT_PRESENCE_BLUE}
           />
-        </View>
-      </RNHostView>
-    ) : markTint ? (
-      <Image systemName="circle.fill" size={8} modifiers={[tint(markTint)]} />
-    ) : (
-      // Keep title columns aligned when some rows show a presence mark.
-      <RNHostView matchContents>
-        <View style={{ width: 8, height: 8 }} />
-      </RNHostView>
-    );
+        ) : markTint ? (
+          <Image
+            systemName="circle.fill"
+            size={8}
+            modifiers={[tint(markTint)]}
+          />
+        ) : null}
+      </View>
+    </RNHostView>
+  );
   const row = (
     <Button onPress={onOpen} modifiers={[buttonStyle("plain")]}>
       <HStack

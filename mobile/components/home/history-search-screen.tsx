@@ -25,7 +25,9 @@ import Animated, {
 
 import { HOME_DOCK_CLEARANCE } from "@/components/home/home-dock";
 import { Icon } from "@/components/ui/icon";
+import { MatrixDotLoader } from "@/components/ui/matrix-dot-loader";
 import { Text } from "@/components/ui/text";
+import { CHAT_PRESENCE_BLUE } from "@/src/chat-presence";
 
 /** iOS uses the native bottom search toolbar; Android keeps the floating dock. */
 const SEARCH_FIELD_CLEARANCE =
@@ -293,7 +295,10 @@ function SearchPill({
     >
       <View style={[styles.thumb, { backgroundColor: thumbBg }]}>
         {presence === "working" ? (
-          <ActivityIndicator size="small" color={mutedColor} />
+          <MatrixDotLoader
+            baseColor={mutedColor ?? "#d9d9d9"}
+            activeColor={CHAT_PRESENCE_BLUE}
+          />
         ) : (
           <Icon
             as={MessageSquareIcon}

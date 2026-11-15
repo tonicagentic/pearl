@@ -26,6 +26,42 @@ function chatIdFromNotificationData(data: unknown): string | null {
   return typeof chatId === "string" && chatId.trim() ? chatId.trim() : null;
 }
 
+export type PresencePushPayload = {
+  readonly chatId: string;
+  readonly presence: "working" | "waiting" | "unread" | "idle";
+};
+
+export function presenceFromNotificationData(
+  data: unknown,
+): PresencePushPayload | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+  const payload = data as {
+    type?: unknown;
+    chatId?: unknown;
+    presence?: unknown;
+  };
+  if (payload.type !== "presence") {
+    return null;
+  }
+  const chatId =
+    typeof payload.chatId === "string" && payload.chatId.trim()
+      ? payload.chatId.trim()
+      : null;
+  const presence = payload.presence;
+  if (
+    !chatId ||
+    (presence !== "working" &&
+      presence !== "waiting" &&
+      presence !== "unread" &&
+      presence !== "idle")
+  ) {
+    return null;
+  }
+  return { chatId, presence };
+}
+
 export function installPushNotificationHandler() {
   if (handlerInstalled) {
     return;
@@ -34,9 +70,17 @@ export function installPushNotificationHandler() {
 
   Notifications.setNotificationHandler({
     handleNotification: async (notification) => {
-      const chatId = chatIdFromNotificationData(
-        notification.request.content.data,
-      );
+      const data = notification.request.content.data;
+      // Silent presence fanout must never show a banner.
+      if (presenceFromNotificationData(data)) {
+        return {
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+      const chatId = chatIdFromNotificationData(data);
       const suppress =
         Boolean(chatId) && chatId === activeChatIdForPush;
       return {

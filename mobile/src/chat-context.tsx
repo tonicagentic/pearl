@@ -45,6 +45,10 @@ import { useAuth } from "./auth";
 
 /** Keep this many recently opened SessionStores warm for instant re-open. */
 const RETAINED_STORE_LIMIT = 10;
+/** Silent list backstop when nothing is working/waiting. */
+const PRESENCE_POLL_MS = 5_000;
+/** Faster backstop while any Recents row is live. */
+const PRESENCE_POLL_ACTIVE_MS = 1_500;
 
 /** True when newly appended events can open or close a person-wait. */
 function eventsMayChangeWait(
@@ -89,6 +93,11 @@ type ChatsContextValue = {
    * already loaded via loadMore stay in memory.
    */
   readonly reloadChats: (options?: { readonly silent?: boolean }) => Promise<void>;
+  /** Patch one Recents row from a silent presence push (or live store). */
+  readonly patchChatPresence: (
+    chatId: string,
+    presence: ChatPresence,
+  ) => void;
   /** Open a stored chat (replays its events, attaches its session). */
   readonly selectChat: (chatId: string) => Promise<boolean>;
   readonly selectionError: string | null;
@@ -168,6 +177,10 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   // a retained id must not create a second writer for the same chat.
   const [retainedStores] = useState(() => new Map<string, SessionStore>());
   const activeStoreRef = useRef<SessionStore | null>(null);
+  /** Unsubscribe helpers for background working observers (warm transcript sync). */
+  const backgroundPresenceUnsubs = useRef(
+    new Map<SessionStore, () => void>(),
+  );
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectIdState] = useState<string | null>(null);
   const activeProjectIdRef = useRef<string | null>(null);
@@ -352,6 +365,30 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     evictRetainedOverflow();
   }, [evictRetainedOverflow]);
 
+  const patchChatPresence = useCallback(
+    (chatId: string, presence: ChatPresence) => {
+      setChats((current) => {
+        const index = current.findIndex((chat) => chat.id === chatId);
+        if (index < 0) return current;
+        const existing = current[index]!;
+        if (
+          existing.presence === presence &&
+          Boolean(existing.waitingForInput) === (presence === "waiting")
+        ) {
+          return current;
+        }
+        const next = [...current];
+        next[index] = {
+          ...existing,
+          presence,
+          waitingForInput: presence === "waiting",
+        };
+        return next;
+      });
+    },
+    [],
+  );
+
   // Each callback closes over its own binding. A stream finishing after a chat
   // switch must NEVER write its events into the newly selected chat.
   useEffect(() => {
@@ -511,58 +548,100 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     // An attached session can have an unfinished turn after the app was killed.
     // Replaying its durable stream reconciles accepted messages before the user
     // decides whether an unsent message needs resending.
+    // Drop any prior background presence watcher — this store is active again.
+    const priorBackground = backgroundPresenceUnsubs.current.get(store);
+    if (priorBackground) {
+      priorBackground();
+      backgroundPresenceUnsubs.current.delete(store);
+    }
+
     if (store.snapshot.session) void store.resume();
     return () => {
       flush();
+      const stillWorking =
+        store.snapshot.status === "busy" ||
+        store.snapshot.status === "resuming" ||
+        Boolean(binding.pendingMessage);
+      if (stillWorking) {
+        // Warm path: keep observe()+callbacks so the transcript keeps syncing
+        // while the user is in another chat. Presence also comes from the
+        // server mirror + silent push; this is for faster reopen.
+        let lastWaiting = hasPendingAction(store.snapshot);
+        let lastStatus = store.snapshot.status;
+        let lastEvents = store.snapshot.events;
+        const stopBackground = store.subscribe(() => {
+          if (activeStoreRef.current === store) return;
+          const { status, events } = store.snapshot;
+          const busy = status === "busy" || status === "resuming";
+          const statusChanged = status !== lastStatus;
+          lastStatus = status;
+          let waiting = lastWaiting;
+          if (statusChanged || eventsMayChangeWait(lastEvents, events)) {
+            waiting = hasPendingAction(store.snapshot);
+            lastWaiting = waiting;
+          }
+          lastEvents = events;
+          const chatId = binding.id;
+          if (chatId) {
+            patchChatPresence(
+              chatId,
+              waiting ? "waiting" : busy ? "working" : "idle",
+            );
+          }
+          if (busy && !waiting) return;
+          if (binding.timer) {
+            clearTimeout(binding.timer);
+            binding.timer = null;
+          }
+          const batch = binding.batch.splice(0);
+          if (binding.id && batch.length > 0) {
+            const id = binding.id;
+            enqueue(() => appendChatEvents(id, batch));
+          }
+          binding.stopObserving?.();
+          binding.stopObserving = null;
+          backgroundPresenceUnsubs.current.delete(store);
+          stopBackground();
+        });
+        backgroundPresenceUnsubs.current.set(store, stopBackground);
+        return;
+      }
       binding.stopObserving?.();
       binding.stopObserving = null;
     };
-  }, [store, reloadChats, bindings, touchRetained, evictRetainedOverflow]);
+  }, [
+    store,
+    reloadChats,
+    bindings,
+    touchRetained,
+    evictRetainedOverflow,
+    patchChatPresence,
+  ]);
 
-  // When iOS/Android returns the process to the foreground, catch up the
-  // active chat from eve's durable stream without waiting for a banner tap.
+  // When iOS/Android returns the process to the foreground, catch up every
+  // still-working retained store (not only the open chat).
   useEffect(() => {
     const onChange = (next: AppStateStatus) => {
       if (next !== "active") {
         return;
       }
-      const active = activeStoreRef.current;
-      if (!active?.snapshot.session) {
-        return;
+      for (const candidate of [
+        activeStoreRef.current,
+        ...retainedStores.values(),
+      ]) {
+        if (!candidate?.snapshot.session) continue;
+        const status = candidate.snapshot.status;
+        if (status !== "busy" && status !== "resuming") continue;
+        void candidate.resume().catch(() => {
+          // Already streaming, or a transient network error — leave alone.
+        });
       }
-      void active.resume().catch(() => {
-        // Already streaming, or a transient network error — leave the UI alone.
-      });
     };
     const subscription = AppState.addEventListener("change", onChange);
     return () => {
       subscription.remove();
     };
-  }, []);
-
-  const patchChatPresence = useCallback(
-    (chatId: string, presence: ChatPresence) => {
-      setChats((current) => {
-        const index = current.findIndex((chat) => chat.id === chatId);
-        if (index < 0) return current;
-        const existing = current[index]!;
-        if (
-          existing.presence === presence &&
-          Boolean(existing.waitingForInput) === (presence === "waiting")
-        ) {
-          return current;
-        }
-        const next = [...current];
-        next[index] = {
-          ...existing,
-          presence,
-          waitingForInput: presence === "waiting",
-        };
-        return next;
-      });
-    },
-    [],
-  );
+  }, [retainedStores]);
 
   const markActiveChatRead = useCallback((chatId: string) => {
     // Optimistic: opening clears unread; waiting/working stay visible.
@@ -908,6 +987,10 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   }, [store, activeChatId, patchChatPresence]);
 
   const detachAllStores = useCallback(() => {
+    for (const unsub of backgroundPresenceUnsubs.current.values()) {
+      unsub();
+    }
+    backgroundPresenceUnsubs.current.clear();
     for (const [chatId, candidate] of [...retainedStores.entries()]) {
       const binding = bindings.get(candidate);
       binding?.stopObserving?.();
@@ -952,6 +1035,25 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     };
   }, [signedIn, reloadChats, detachAllStores]);
 
+  // Presence backstop: silent poll while the app is active. Faster when any
+  // row is working/waiting so missed silent pushes still catch up quickly —
+  // including while the user is inside /chat, not only on home.
+  const needsFastPresencePoll = chats.some(
+    (item) => item.presence === "working" || item.presence === "waiting",
+  );
+  useEffect(() => {
+    if (!signedIn) return;
+    const intervalMs = needsFastPresencePoll
+      ? PRESENCE_POLL_ACTIVE_MS
+      : PRESENCE_POLL_MS;
+    const tick = () => {
+      if (AppState.currentState !== "active") return;
+      void reloadChats({ silent: true });
+    };
+    const timer = setInterval(tick, intervalMs);
+    return () => clearInterval(timer);
+  }, [signedIn, reloadChats, needsFastPresencePoll]);
+
   const value = useMemo(
     () => ({
       store,
@@ -966,6 +1068,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       hasMoreChats: cursor !== null,
       loadMoreChats,
       reloadChats,
+      patchChatPresence,
       selectChat,
       selectionError,
       persistenceError,
@@ -994,6 +1097,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       cursor,
       loadMoreChats,
       reloadChats,
+      patchChatPresence,
       selectChat,
       selectionError,
       persistenceError,
