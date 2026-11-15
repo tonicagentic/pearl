@@ -71,9 +71,9 @@ export function MailHomeScreen() {
   useFocusEffect(
     useCallback(() => {
       homeFocusedRef.current = true;
-      // Focus: full refresh. Adaptive silent polls live in ChatsProvider so
-      // presence stays fresh on /chat too.
-      void reloadChats();
+      // Silent so popping a thread does not rebuild the SwiftUI list. Adaptive
+      // polls in ChatsProvider keep presence fresh, including on /chat.
+      void reloadChats({ silent: true });
       return () => {
         homeFocusedRef.current = false;
       };

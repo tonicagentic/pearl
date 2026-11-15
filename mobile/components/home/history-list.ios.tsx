@@ -7,7 +7,7 @@ import {
   HStack,
   Image,
   List,
-  RNHostView,
+  ProgressView,
   Section,
   Spacer,
   SwipeActions,
@@ -16,13 +16,16 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   buttonStyle,
+  clipped,
   font,
   foregroundStyle,
+  frame,
   lineLimit,
   listRowBackground,
   listRowInsets,
   listRowSpacing,
   listStyle,
+  opacity,
   padding,
   scrollContentBackground,
   tint,
@@ -38,12 +41,10 @@ import {
   chatListPresence,
 } from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
-import {
-  MATRIX_DOT_LOADER_SIZE,
-  MatrixDotLoader,
-} from "@/components/ui/matrix-dot-loader";
-
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
+
+/** Fixed leading slot so titles stay aligned with or without a presence mark. */
+const PRESENCE_SLOT = 14;
 
 export type { HistoryChatActionHandlers } from "@/components/home/history-list";
 
@@ -231,31 +232,29 @@ function RecentChatRow({
       : presence === "unread"
         ? CHAT_PRESENCE_BLUE
         : null;
-  const statusMark = (
-    <RNHostView matchContents>
-      <View
-        style={{
-          width: MATRIX_DOT_LOADER_SIZE,
-          height: MATRIX_DOT_LOADER_SIZE,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {presence === "working" ? (
-          <MatrixDotLoader
-            baseColor={mutedColor}
-            activeColor={CHAT_PRESENCE_BLUE}
-          />
-        ) : markTint ? (
-          <Image
-            systemName="circle.fill"
-            size={8}
-            modifiers={[tint(markTint)]}
-          />
-        ) : null}
-      </View>
-    </RNHostView>
-  );
+  // Stay in SwiftUI. A React Native host (and a Reanimated pulse inside it)
+  // remeasures the row every frame, so after popping a thread the list goes
+  // sluggish and stops taking taps.
+  const statusMark =
+    presence === "working" ? (
+      <ProgressView
+        modifiers={[
+          frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
+          clipped(true),
+          tint(mutedColor),
+        ]}
+      />
+    ) : (
+      <Image
+        systemName="circle.fill"
+        size={8}
+        modifiers={[
+          frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
+          tint(markTint ?? mutedColor),
+          opacity(markTint ? 1 : 0),
+        ]}
+      />
+    );
   const row = (
     <Button onPress={onOpen} modifiers={[buttonStyle("plain")]}>
       <HStack
