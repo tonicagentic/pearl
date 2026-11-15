@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 
+import { formatApprovalPrompt } from "@/lib/chat/approval-brief";
 import { requireCoderUserId } from "@/lib/coder/principal";
 
 /**
@@ -21,7 +22,19 @@ import { githubPushDeniedMessage } from "@/lib/connections/grant-errors";
 import { getGithubUserToken } from "@/lib/connections/tokens";
 
 export default defineTool({
-  approval: always(),
+  approval: {
+    request: always(),
+    prompt: ({ input }) =>
+      formatApprovalPrompt({
+        toolName: "merge_pr",
+        input: {
+          owner: input.owner,
+          repo: input.repo,
+          pullNumber: input.pullNumber,
+          ...(input.title != null ? { title: input.title } : {}),
+        },
+      }),
+  },
   description:
     "Squash-merge a pull request for the signed-in user. Only merge when " +
     "checks are green. Always needs approval. The card must name owner/repo " +

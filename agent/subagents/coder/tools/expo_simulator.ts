@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 
+import { formatApprovalPrompt } from "@/lib/chat/approval-brief";
 import { upsertChatPreviewForSession } from "@/lib/db/chat-previews";
 import { requireCoderUserId } from "@/lib/coder/principal";
 import { buildApprovalCard } from "@/lib/workbench/approvals";
@@ -20,7 +21,24 @@ import { PEARL_EXPO_PROJECT_ID } from "@/lib/workbench/types";
  * preview URL on the Computer tab. Always needs approval.
  */
 export default defineTool({
-  approval: always(),
+  approval: {
+    request: always(),
+    prompt: ({ input }) =>
+      formatApprovalPrompt({
+        toolName: "expo_simulator",
+        input: {
+          owner: input.owner,
+          repo: input.repo,
+          ...(input.expoProjectId != null
+            ? { expoProjectId: input.expoProjectId }
+            : {}),
+          ...(input.buildId != null ? { buildId: input.buildId } : {}),
+          ...(input.sessionName != null
+            ? { sessionName: input.sessionName }
+            : {}),
+        },
+      }),
+  },
   description:
     "Start an Expo cloud iOS simulator (agent-device) for the pin's Expo " +
     "project, install a simulator build when buildId is set, and return the " +

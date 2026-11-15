@@ -81,8 +81,10 @@ describe("pending approvals across the thread", () => {
     const pending = getPendingApprovals(data);
     expect(pending).toHaveLength(1);
     expect(pending[0]?.requestId).toBe("Tq7ObdSW833S7spV");
-    expect(pending[0]?.prompt).toBe("Approve Expo simulator?");
-    expect(pending[0]?.toolName).toBe("coder");
+    expect(pending[0]?.prompt).toMatch(/Expo simulator/i);
+    expect(pending[0]?.toolName).toBe("expo_simulator");
+    expect(pending[0]?.detail).toMatch(/tonicagentic\/pearl/);
+    expect(pending[0]?.detail).toMatch(/connection-resource-details/);
     expect(pendingForToolCall(data, "call_first_coder")?.requestId).toBe(
       "Tq7ObdSW833S7spV",
     );

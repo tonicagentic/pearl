@@ -1,6 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
+import { formatApprovalPrompt } from "@/lib/chat/approval-brief";
 import { requireCoderUserId } from "@/lib/coder/principal";
 import { buildApprovalCard } from "@/lib/workbench/approvals";
 import {
@@ -36,19 +37,31 @@ function stateFor(sessionId: string): ShipGateState {
  * or draft PR; for other commands it returns not-applicable immediately.
  */
 export default defineTool({
-  approval: async ({ toolInput }) => {
-    const command =
-      typeof toolInput === "object" &&
-      toolInput &&
-      "command" in toolInput &&
-      typeof (toolInput as { command?: unknown }).command === "string"
-        ? (toolInput as { command: string }).command
-        : "";
-    const decision = classifyGitCommand(command, emptyShipGateState());
-    if (decision.needsApproval) {
-      return "user-approval";
-    }
-    return "not-applicable";
+  approval: {
+    request: async ({ toolInput }) => {
+      const command =
+        typeof toolInput === "object" &&
+        toolInput &&
+        "command" in toolInput &&
+        typeof (toolInput as { command?: unknown }).command === "string"
+          ? (toolInput as { command: string }).command
+          : "";
+      const decision = classifyGitCommand(command, emptyShipGateState());
+      if (decision.needsApproval) {
+        return "user-approval";
+      }
+      return "not-applicable";
+    },
+    prompt: ({ input }) =>
+      formatApprovalPrompt({
+        toolName: "gated_git",
+        input: {
+          command: input.command,
+          owner: input.owner,
+          repo: input.repo,
+          ...(input.branch != null ? { branch: input.branch } : {}),
+        },
+      }),
   },
   description:
     "Preflight for the first `git push` and first `gh pr create --draft` in " +

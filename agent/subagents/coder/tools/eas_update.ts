@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 
+import { formatApprovalPrompt } from "@/lib/chat/approval-brief";
 import { requireCoderUserId } from "@/lib/coder/principal";
 import { buildApprovalCard } from "@/lib/workbench/approvals";
 import {
@@ -15,7 +16,22 @@ import { environment } from "../sandbox.ts";
  * Always needs approval. Separate from production deploy_vercel.
  */
 export default defineTool({
-  approval: always(),
+  approval: {
+    request: always(),
+    prompt: ({ input }) =>
+      formatApprovalPrompt({
+        toolName: "eas_update",
+        input: {
+          owner: input.owner,
+          repo: input.repo,
+          ...(input.expoProjectId != null
+            ? { expoProjectId: input.expoProjectId }
+            : {}),
+          ...(input.channel != null ? { channel: input.channel } : {}),
+          ...(input.message != null ? { message: input.message } : {}),
+        },
+      }),
+  },
   description:
     "Publish an Expo EAS Update (JavaScript OTA) to the named Expo project " +
     "and channel. Always needs approval. Never combine with production " +

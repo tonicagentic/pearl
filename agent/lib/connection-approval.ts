@@ -1,5 +1,6 @@
-import type { ApprovalPolicy } from "eve/tools/approval";
+import type { Approval } from "eve/tools/approval";
 
+import { formatApprovalPrompt } from "@/lib/chat/approval-brief";
 import { isPlanMode } from "./turn-context.ts";
 
 /** Strip eve's `<connection>__` prefix from a qualified MCP tool name. */
@@ -23,6 +24,15 @@ function readPlanMode(): boolean {
   }
 }
 
+function asInputRecord(
+  input: unknown,
+): Record<string, unknown> | null {
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    return input as Record<string, unknown>;
+  }
+  return null;
+}
+
 /**
  * Connection `approval` policy for MCP connections that mix reads and writes.
  *
@@ -37,21 +47,28 @@ function readPlanMode(): boolean {
 export function writeToolApproval(
   writeTools: readonly string[],
   deps: WriteApprovalDeps = {},
-): ApprovalPolicy {
+): Approval {
   const writes = new Set(writeTools);
   const planMode = deps.planMode ?? readPlanMode;
 
-  return ({ toolName }) => {
-    const bare = bareConnectionToolName(toolName);
-    if (!writes.has(bare)) return "not-applicable";
-    if (planMode()) {
-      return {
-        type: "denied",
-        reason:
-          `Plan mode cannot call ${bare}. Write or update a plan with save_plan, ` +
-          "or switch to Agent mode to carry the work out.",
-      };
-    }
-    return "user-approval";
+  return {
+    request: ({ toolName }) => {
+      const bare = bareConnectionToolName(toolName);
+      if (!writes.has(bare)) return "not-applicable";
+      if (planMode()) {
+        return {
+          type: "denied",
+          reason:
+            `Plan mode cannot call ${bare}. Write or update a plan with save_plan, ` +
+            "or switch to Agent mode to carry the work out.",
+        };
+      }
+      return "user-approval";
+    },
+    prompt: ({ input, toolName }) =>
+      formatApprovalPrompt({
+        toolName,
+        input: asInputRecord(input),
+      }),
   };
 }

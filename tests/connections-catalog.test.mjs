@@ -179,16 +179,27 @@ test("write approval asks for writes, denies in plan mode, passes reads", () => 
   const agentMode = writeToolApproval(TEMPO_WRITE_TOOLS, {
     planMode: () => false,
   });
-  assert.equal(agentMode(ctx("tempo__upsert_company")), "user-approval");
-  assert.equal(agentMode(ctx("create_task")), "user-approval");
-  assert.equal(agentMode(ctx("tempo__search")), "not-applicable");
-  assert.equal(agentMode(ctx("tempo__list_meetings")), "not-applicable");
+  assert.equal(typeof agentMode, "object");
+  assert.equal(typeof agentMode.request, "function");
+  assert.equal(typeof agentMode.prompt, "function");
+  assert.equal(agentMode.request(ctx("tempo__upsert_company")), "user-approval");
+  assert.equal(agentMode.request(ctx("create_task")), "user-approval");
+  assert.equal(agentMode.request(ctx("tempo__search")), "not-applicable");
+  assert.equal(agentMode.request(ctx("tempo__list_meetings")), "not-applicable");
+  assert.match(
+    agentMode.prompt({
+      toolName: "tempo__upsert_company",
+      input: { name: "Acme" },
+      callId: "call_1",
+    }),
+    /Approve Upsert company/i,
+  );
 
   const planMode = writeToolApproval(TEMPO_WRITE_TOOLS, {
     planMode: () => true,
   });
-  assert.equal(planMode(ctx("tempo__upsert_company")).type, "denied");
-  assert.equal(planMode(ctx("tempo__search")), "not-applicable");
+  assert.equal(planMode.request(ctx("tempo__upsert_company")).type, "denied");
+  assert.equal(planMode.request(ctx("tempo__search")), "not-applicable");
   assert.equal(bareConnectionToolName("gmail__create_draft"), "create_draft");
 });
 

@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 
+import { formatApprovalPrompt } from "@/lib/chat/approval-brief";
 import { requireCoderUserId } from "@/lib/coder/principal";
 import { getVercelUserToken } from "@/lib/connections/tokens";
 import { environment } from "../sandbox.ts";
@@ -10,7 +11,21 @@ const FORBIDDEN =
   /\b(printenv|env\b|export\s+-p|vercel\s+env\s+pull|dotenv|\.env\b|set\s+-a)\b/i;
 
 export default defineTool({
-  approval: always(),
+  approval: {
+    request: always(),
+    prompt: ({ input }) =>
+      formatApprovalPrompt({
+        toolName: "run_with_env",
+        input: {
+          command: input.command,
+          names: input.names,
+          target: input.target,
+          ...(input.workingDirectory != null
+            ? { workingDirectory: input.workingDirectory }
+            : {}),
+        },
+      }),
+  },
   description:
     "Run one sandbox command with named Vercel environment variables injected " +
     "into that process only. Always needs approval — the card lists variable " +

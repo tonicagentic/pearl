@@ -2,11 +2,24 @@ import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 
+import { formatApprovalPrompt } from "@/lib/chat/approval-brief";
 import { requireCoderUserId } from "@/lib/coder/principal";
 import { environment } from "../sandbox.ts";
 
 export default defineTool({
-  approval: always(),
+  approval: {
+    request: always(),
+    prompt: ({ input }) =>
+      formatApprovalPrompt({
+        toolName: "eas_build",
+        input: {
+          ...(input.workingDirectory != null
+            ? { workingDirectory: input.workingDirectory }
+            : {}),
+          ...(input.profile != null ? { profile: input.profile } : {}),
+        },
+      }),
+  },
   description:
     "Start an Expo EAS iOS build for the checkout (--non-interactive --no-wait). " +
     "Always needs approval. Returns the EAS build URL; does not wait for the " +

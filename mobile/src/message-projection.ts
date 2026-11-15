@@ -9,6 +9,7 @@ import {
   isLiveHistoryId,
   type SpokenTurn,
 } from "../../lib/chat/spoken-turns";
+import { buildApprovalBrief } from "../../lib/chat/approval-brief";
 import { isAttachmentMarker } from "./attachment-content";
 
 type Part = Exclude<ThreadMessageLike["content"], string>[number];
@@ -428,30 +429,27 @@ function pendingFromHit(hit: OpenPartHit): PendingApproval | null {
         : []
   ).map((option) => ({ id: option.id, label: option.label }));
 
-  const toolInput =
-    part.type === "tool" && part.state !== "streaming" ? part.input : undefined;
-  const interactionInput =
-    part.type === "interaction" ? part.call?.input : undefined;
-  const askedInput = interaction.call?.input;
-  const rawInput = toolInput ?? interactionInput ?? askedInput;
+  // Prefer the parked call on the interaction — when a coder (or other
+  // parent) relays a child wait, part.name/input are the parent tool.
+  const askedCall = interaction.call ?? (part.type === "interaction" ? part.call : undefined);
+  const toolName =
+    askedCall?.name ??
+    (part.type === "tool"
+      ? part.name
+      : part.type === "interaction"
+        ? part.call?.name ?? request.kind
+        : request.kind);
+  const rawInput =
+    askedCall?.input ??
+    (part.type === "tool" && part.state !== "streaming"
+      ? part.input
+      : undefined) ??
+    (part.type === "interaction" ? part.call?.input : undefined);
   const input =
     rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
       ? (rawInput as Record<string, unknown>)
       : null;
-  const summary =
-    typeof input?.summary === "string"
-      ? input.summary
-      : typeof input?.filePath === "string"
-        ? input.filePath
-        : typeof input?.statement === "string"
-          ? input.statement
-          : undefined;
-  const toolName =
-    part.type === "tool"
-      ? part.name
-      : part.type === "interaction"
-        ? part.call?.name ?? interaction.call?.name ?? request.kind
-        : interaction.call?.name ?? request.kind;
+
   const defaultPrompt =
     kind === "question"
       ? "Answer the question to continue."
@@ -462,6 +460,35 @@ function pendingFromHit(hit: OpenPartHit): PendingApproval | null {
     kind === "question" &&
     (requestDismissible(request as { readonly dismissible?: boolean }) ||
       skipOptionId != null);
+
+  if (kind === "approval") {
+    const brief = buildApprovalBrief({
+      toolName,
+      prompt: request.prompt ?? defaultPrompt,
+      input,
+    });
+    return {
+      requestId: interaction.interactionId,
+      toolName,
+      kind,
+      display,
+      prompt: brief.headline,
+      ...(brief.detail ? { detail: brief.detail } : {}),
+      options,
+      allowFreeform,
+      ...(dismissible ? { dismissible: true } : {}),
+      ...(skipOptionId ? { skipOptionId } : {}),
+    };
+  }
+
+  const summary =
+    typeof input?.summary === "string"
+      ? input.summary
+      : typeof input?.filePath === "string"
+        ? input.filePath
+        : typeof input?.statement === "string"
+          ? input.statement
+          : undefined;
   return {
     requestId: interaction.interactionId,
     toolName,

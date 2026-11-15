@@ -2,11 +2,25 @@ import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 
+import { formatApprovalPrompt } from "@/lib/chat/approval-brief";
 import { requireCoderUserId } from "@/lib/coder/principal";
 import { environment } from "../sandbox.ts";
 
 export default defineTool({
-  approval: always(),
+  approval: {
+    request: always(),
+    prompt: ({ input }) =>
+      formatApprovalPrompt({
+        toolName: "eas_submit",
+        input: {
+          buildId: input.buildId,
+          destination: input.destination,
+          ...(input.workingDirectory != null
+            ? { workingDirectory: input.workingDirectory }
+            : {}),
+        },
+      }),
+  },
   description:
     "Submit a finished EAS iOS build to TestFlight (default) or the App Store. " +
     "Always needs approval — separate from eas_build. Pass only a build id " +

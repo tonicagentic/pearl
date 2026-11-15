@@ -5,12 +5,14 @@ import {
 } from "@/components/assistant-ui/elements/questions-card";
 import {
   inkButton,
+  mono,
+  monoStyle,
   useAnnounce,
   useMotion,
 } from "@/components/assistant-ui/elements/surfaces";
 import { cn } from "@/lib/utils";
 import { type FC, useEffect, useState, type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
 export type { QuestionsWaitingAction, WaitingQuestionItem };
@@ -171,13 +173,24 @@ const ApprovalOrAuthCard: FC<{
           {headline}
         </Text>
         {action.detail ? (
-          <Text
-            className="text-muted-foreground text-xs leading-snug"
-            numberOfLines={6}
-            testID="waiting-action-detail"
+          <ScrollView
+            className="max-h-[200px]"
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+            testID="waiting-action-detail-scroll"
           >
-            {action.detail}
-          </Text>
+            <Text
+              className={cn(
+                "text-muted-foreground text-xs leading-snug",
+                mono,
+              )}
+              style={monoStyle}
+              selectable
+              testID="waiting-action-detail"
+            >
+              {action.detail}
+            </Text>
+          </ScrollView>
         ) : null}
       </MotionBox>
       {showOptions ? (

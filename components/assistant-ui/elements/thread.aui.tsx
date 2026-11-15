@@ -16,6 +16,7 @@ import { SessionTodoList } from "@/components/assistant-ui/elements/todo-list";
 import { useLargePasteComposer, useHeldLargePastes } from "@/app/_components/large-paste";
 import { ComposerModePicker } from "@/app/_components/mode-picker";
 import { ComposerModelPicker } from "@/app/_components/model-picker";
+import { buildApprovalBrief } from "@/lib/chat/approval-brief";
 import { splitPasteBlocks } from "@/lib/chat/large-paste";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
 import { Image } from "@/components/assistant-ui/elements/image";
@@ -120,27 +121,11 @@ function isTurnBusyError(cause: unknown): boolean {
   return cause instanceof Error && TURN_BUSY_RE.test(cause.message);
 }
 
-function approvalDetail(args: unknown): string | undefined {
-  if (!args || typeof args !== "object" || Array.isArray(args)) return undefined;
-  const record = args as Record<string, unknown>;
-  if (typeof record.summary === "string" && record.summary.trim()) {
-    return record.summary;
-  }
-  if (typeof record.filePath === "string" && record.filePath.trim()) {
-    return record.filePath;
-  }
-  if (
-    typeof record.slug === "string" &&
-    record.slug.trim() &&
-    typeof record.title === "string" &&
-    record.title.trim()
-  ) {
-    return `${record.title} (${record.slug})`;
-  }
-  if (typeof record.title === "string" && record.title.trim()) {
-    return record.title;
-  }
-  return undefined;
+function approvalArgs(
+  args: unknown,
+): Record<string, unknown> | null {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return null;
+  return args as Record<string, unknown>;
 }
 
 function getPendingComposerApproval(
@@ -183,15 +168,19 @@ function getPendingComposerApproval(
             kind: option.kind,
           }));
 
-      const detail = approvalDetail(part.args);
+      const brief = buildApprovalBrief({
+        toolName: part.toolName,
+        prompt:
+          part.approval.prompt?.trim() ||
+          `Approve tool call: ${part.toolName}`,
+        input: approvalArgs(part.args),
+      });
       return {
         messageIndex: index,
         toolCallId: part.toolCallId,
         approvalId: part.approval.id,
-        prompt:
-          part.approval.prompt?.trim() ||
-          `Approve tool call: ${part.toolName}`,
-        ...(detail ? { detail } : {}),
+        prompt: brief.headline,
+        ...(brief.detail ? { detail: brief.detail } : {}),
         options,
         syntheticOptions,
       };
@@ -570,9 +559,9 @@ const WaitingActionCard: FC<{
           </p>
         ) : null}
         {detail ? (
-          <p className="text-muted-foreground line-clamp-3 text-xs leading-snug">
+          <pre className="text-muted-foreground max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-snug">
             {detail}
-          </p>
+          </pre>
         ) : null}
       </div>
       {kind === "approval" && options && options.length > 0 ? (

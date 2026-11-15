@@ -3,6 +3,7 @@ import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 
+import { formatApprovalPrompt } from "@/lib/chat/approval-brief";
 import { brokerVercelHeaders } from "@/lib/coder/network-policy";
 import { requireCoderUserId } from "@/lib/coder/principal";
 import { vercelTokenUnavailableMessage } from "@/lib/connections/grant-errors";
@@ -11,7 +12,21 @@ import { buildApprovalCard } from "@/lib/workbench/approvals";
 import { environment } from "../sandbox.ts";
 
 export default defineTool({
-  approval: always(),
+  approval: {
+    request: always(),
+    prompt: ({ input }) =>
+      formatApprovalPrompt({
+        toolName: "deploy_vercel",
+        input: {
+          target: input.target,
+          ...(input.owner != null ? { owner: input.owner } : {}),
+          ...(input.repo != null ? { repo: input.repo } : {}),
+          ...(input.workingDirectory != null
+            ? { workingDirectory: input.workingDirectory }
+            : {}),
+        },
+      }),
+  },
   description:
     "Deploy the current sandbox checkout to the signed-in user's Vercel " +
     "account. Preview is the default; production only when target is " +
