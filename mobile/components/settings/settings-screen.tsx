@@ -7,6 +7,7 @@ import {
   CloudIcon,
   CoinsIcon,
   InfoIcon,
+  IdCardIcon,
   LogOutIcon,
   NotebookPenIcon,
   ShapesIcon,
@@ -221,13 +222,14 @@ export function SettingsScreen() {
 
   return (
     <SheetScaffold>
-      {viewerEmail ? (
-        <Text variant="secondary" className="px-1 text-center">
-          {viewerEmail}
-        </Text>
-      ) : null}
-
       <SettingsCard>
+        <SettingsRow
+          icon={<Icon as={IdCardIcon} className="size-5 text-blue-500" />}
+          label="Account"
+          detail={viewerEmail ?? "Email and password"}
+          onPress={() => router.push("/account")}
+          showSeparator
+        />
         <SettingsRow
           icon={<Icon as={CircleUserIcon} className="size-5 text-sky-500" />}
           label="Identity"

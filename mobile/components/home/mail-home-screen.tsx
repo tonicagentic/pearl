@@ -31,6 +31,7 @@ import { Text } from "@/components/ui/text";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
+import { initials as viewerInitials } from "@/src/initials";
 
 const IS_IOS = Platform.OS === "ios";
 /** Native bottom toolbar owns inset on iOS; Android uses the floating dock. */
@@ -46,7 +47,8 @@ export function MailHomeScreen() {
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
-  const { billingReady, markBillingReady } = useAuth();
+  const { billingReady, markBillingReady, viewerEmail, viewerName } = useAuth();
+  const profileInitials = viewerInitials(viewerName, viewerEmail);
   const {
     newChat,
     deleteChat,
@@ -255,7 +257,17 @@ export function MailHomeScreen() {
                   className="h-10 w-10 items-center justify-center"
                   onPress={() => router.push("/settings")}
                 >
-                  <Icon as={UserIcon} className="size-5 text-foreground" />
+                  {profileInitials ? (
+                    <Text
+                      variant="label"
+                      weight="semibold"
+                      className="text-foreground"
+                    >
+                      {profileInitials}
+                    </Text>
+                  ) : (
+                    <Icon as={UserIcon} className="size-5 text-foreground" />
+                  )}
                 </Pressable>
               ),
           headerRight:
@@ -278,11 +290,20 @@ export function MailHomeScreen() {
       {/* Keep mounted while blurred so Profile morphs into chat/settings. */}
       {IS_IOS && !searchOpen ? (
         <Stack.Toolbar placement="left">
-          <Stack.Toolbar.Button
-            icon="person"
-            accessibilityLabel="Profile"
-            onPress={() => router.push("/settings")}
-          />
+          {profileInitials ? (
+            <Stack.Toolbar.Button
+              accessibilityLabel="Profile"
+              onPress={() => router.push("/settings")}
+            >
+              {profileInitials}
+            </Stack.Toolbar.Button>
+          ) : (
+            <Stack.Toolbar.Button
+              icon="person"
+              accessibilityLabel="Profile"
+              onPress={() => router.push("/settings")}
+            />
+          )}
         </Stack.Toolbar>
       ) : null}
       {IS_IOS && !searchOpen && showCategoryCreate ? (

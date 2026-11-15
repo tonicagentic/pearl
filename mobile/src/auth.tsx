@@ -44,6 +44,8 @@ type AuthContextValue = {
   readonly signedIn: boolean;
   /** Email of the signed-in account. */
   readonly viewerEmail: string | null;
+  /** better-auth `user.name` for the Profile initials / Account screen. */
+  readonly viewerName: string | null;
   /** True while the Keychain session is being restored on cold start. */
   readonly restoring: boolean;
   /**
@@ -82,6 +84,8 @@ type AuthContextValue = {
   readonly checkEmailExists: (email: string) => Promise<boolean | null>;
   readonly completeAuthHandOff: () => void;
   readonly markBillingReady: () => void;
+  /** Updates the cached display name after Account saves. */
+  readonly setViewerName: (name: string | null) => void;
   readonly signOut: () => void;
 };
 
@@ -96,9 +100,21 @@ const AuthContext = createContext<AuthContextValue | null>(null);
  * session survives app restarts; a stored cookie that starts failing with 401
  * (server-side expiry) clears both copies via the invalidation listener.
  */
+type AuthTokenResult = {
+  readonly credential: string | null;
+  readonly name: string | null;
+};
+
+function nameFromAuthUser(user: unknown): string | null {
+  if (!user || typeof user !== "object") return null;
+  const name = (user as { name?: unknown }).name;
+  return typeof name === "string" && name.trim() ? name.trim() : null;
+}
+
 export function AuthProvider({ children }: { readonly children: ReactNode }) {
   const [signedIn, setSignedIn] = useState(false);
   const [viewerEmail, setViewerEmail] = useState<string | null>(null);
+  const [viewerName, setViewerName] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(true);
   const [billingReady, setBillingReady] = useState(true);
   const [authHandOff, setAuthHandOff] = useState<AuthHandOff | null>(null);
@@ -119,6 +135,26 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     }
   }, []);
 
+  const refreshViewerName = useCallback(async (credential: string) => {
+    try {
+      const response = await fetch(`${AGENT_URL}/api/auth/get-session`, {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${credential}`,
+        },
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const body = (await response.json().catch(() => null)) as {
+        user?: unknown;
+      } | null;
+      const name = nameFromAuthUser(body?.user);
+      if (name) setViewerName(name);
+    } catch {
+      // Initials fall back to the email local-part until name loads.
+    }
+  }, []);
+
   // Cold-start restore: agent URL first (so API calls hit the right host),
   // then the stored session, so a signed-in user lands straight in the chat.
   useEffect(() => {
@@ -134,6 +170,10 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         setViewerEmail(session.email || null);
         setSignedIn(true);
         await refreshBillingGate();
+        // Name for initials — do not block restoring / home paint on this.
+        if (!cancelled) {
+          void refreshViewerName(session.cookie);
+        }
       } catch {
         // Corrupt or unreadable storage: fall through to the sign-in screen.
       } finally {
@@ -146,17 +186,23 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [refreshBillingGate]);
+  }, [refreshBillingGate, refreshViewerName]);
 
   const commitSession = useCallback(
     async (
       credential: string,
       email: string,
       handOffFrom?: AuthCtaFrame | null,
+      name?: string | null,
     ) => {
       await saveSession(credential, email);
       setAuthCookie(credential);
       setViewerEmail(email);
+      if (name) {
+        setViewerName(name);
+      } else {
+        void refreshViewerName(credential);
+      }
       setSignInState("idle");
       await refreshBillingGate();
       if (handOffFrom) {
@@ -164,7 +210,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       }
       setSignedIn(true);
     },
-    [refreshBillingGate],
+    [refreshBillingGate, refreshViewerName],
   );
 
   const requestToken = useCallback(
@@ -173,7 +219,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       email: string,
       password: string,
       options?: { readonly requireToken?: boolean },
-    ): Promise<string | null> => {
+    ): Promise<AuthTokenResult> => {
       const timeout = AbortSignal.timeout(45_000);
       // Do not set Origin here: iOS URLSession strips/replaces it with "null".
       // Production stamps the canonical app origin in /api/auth before CSRF.
@@ -187,6 +233,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       });
       const body = (await response.json().catch(() => null)) as {
         token?: string;
+        user?: unknown;
         message?: string;
         error?: { message?: string } | string;
       } | null;
@@ -208,7 +255,10 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         );
       }
 
-      return credential;
+      return {
+        credential,
+        name: nameFromAuthUser(body?.user),
+      };
     },
     [],
   );
@@ -223,11 +273,16 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       setSignInError(null);
 
       try {
-        const credential = await requestToken("sign-in/email", email, password);
-        if (!credential) {
+        const result = await requestToken("sign-in/email", email, password);
+        if (!result.credential) {
           throw new Error("Sign-in failed.");
         }
-        await commitSession(credential, email, handOffFrom);
+        await commitSession(
+          result.credential,
+          email,
+          handOffFrom,
+          result.name,
+        );
       } catch (cause) {
         setSignInState("error");
         const message = cause instanceof Error ? cause.message : String(cause);
@@ -258,13 +313,18 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
           password,
           { requireToken: false },
         );
-        const credential =
-          fromSignUp ??
-          (await requestToken("sign-in/email", email, password));
-        if (!credential) {
+        const result = fromSignUp.credential
+          ? fromSignUp
+          : await requestToken("sign-in/email", email, password);
+        if (!result.credential) {
           throw new Error("Sign-up failed.");
         }
-        await commitSession(credential, email, handOffFrom);
+        await commitSession(
+          result.credential,
+          email,
+          handOffFrom,
+          result.name,
+        );
       } catch (cause) {
         setSignInState("error");
         const message = cause instanceof Error ? cause.message : String(cause);
@@ -394,6 +454,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     setAuthCookie(null);
     void clearSession();
     setViewerEmail(null);
+    setViewerName(null);
     setAuthHandOff(null);
     setSignInState("idle");
     setSignInError(null);
@@ -407,6 +468,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     () => ({
       signedIn,
       viewerEmail,
+      viewerName,
       restoring,
       billingReady,
       authHandOff,
@@ -419,11 +481,13 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       checkEmailExists,
       completeAuthHandOff,
       markBillingReady,
+      setViewerName,
       signOut,
     }),
     [
       signedIn,
       viewerEmail,
+      viewerName,
       restoring,
       billingReady,
       authHandOff,
