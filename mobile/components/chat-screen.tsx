@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Alert, Platform, View } from "react-native";
+import { Alert, Platform, Pressable, View } from "react-native";
 import { Stack, useNavigation } from "expo-router";
 import * as Haptics from "expo-haptics";
 import {
@@ -9,20 +9,18 @@ import {
   type AppendMessage,
   type ThreadMessageLike,
 } from "@assistant-ui/react-native";
+import { MonitorIcon, MoreHorizontalIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
-import {
-  ChatFilesSegment,
-  type MainTab,
-} from "@/components/chat-files-segment";
 import { ThreadActionsDrawer } from "@/components/thread-actions-drawer";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { ComputerPanel } from "@/components/computer-panel";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
+import { Icon } from "@/components/ui/icon";
 import { StackScreen } from "@/components/ui/stack-screen";
 import { getAgentMode } from "@/src/agent-mode";
 import { withPendingAssistant } from "@/src/stream-presentation";
@@ -52,6 +50,8 @@ import {
 } from "@/src/subagent-inspect-context";
 import { toThreadMessages } from "@/src/eve-transport";
 import { isEveSessionInactive } from "../../lib/chat/eve-session-recovery";
+
+type MainTab = "chat" | "computer";
 
 /**
  * Nested chat thread (route `/chat`): assistant-ui Thread over the eve session.
@@ -762,6 +762,11 @@ export function ChatScreen({
               }
             : null;
 
+  const toggleComputer = useCallback(() => {
+    setMainTab((current) => (current === "computer" ? "chat" : "computer"));
+  }, []);
+  const computerBadge = tabs.length > 0 && mainTab === "chat";
+
   return (
     <StackScreen>
       <Stack.Screen
@@ -769,13 +774,6 @@ export function ChatScreen({
           headerShown: true,
           title: activeTitle,
           headerBackButtonDisplayMode: "minimal",
-          headerTitle: () => (
-            <ChatFilesSegment
-              value={mainTab}
-              onChange={setMainTab}
-              computerBadge={tabs.length > 0 && mainTab === "chat"}
-            />
-          ),
           // Thread content draws under the bar and pads itself so the first
           // message rests below the nav; scrolling can fade under it.
           headerTransparent: Platform.OS === "ios",
@@ -785,25 +783,77 @@ export function ChatScreen({
           headerTintColor: foregroundColor,
           headerTitleStyle:
             Platform.OS === "web" ? { color: foregroundColor } : undefined,
+          headerRight:
+            Platform.OS === "web"
+              ? () => (
+                  <View className="flex-row items-center">
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        computerBadge
+                          ? "Computer, open activity available"
+                          : "Computer"
+                      }
+                      accessibilityState={{ selected: mainTab === "computer" }}
+                      className="h-10 w-10 items-center justify-center"
+                      onPress={toggleComputer}
+                    >
+                      <View>
+                        <Icon
+                          as={MonitorIcon}
+                          className={
+                            mainTab === "computer"
+                              ? "size-5 text-foreground"
+                              : "size-5 text-muted-foreground"
+                          }
+                        />
+                        {computerBadge ? (
+                          <View className="bg-primary absolute -right-0.5 -top-0.5 size-1.5 rounded-full" />
+                        ) : null}
+                      </View>
+                    </Pressable>
+                    {projectedMessages.length > 0 ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Thread actions"
+                        className="h-10 w-10 items-center justify-center"
+                        onPress={openThreadActions}
+                      >
+                        <Icon
+                          as={MoreHorizontalIcon}
+                          className="size-5 text-foreground"
+                        />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                )
+              : undefined,
         }}
       />
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
-          icon="folder"
-          accessibilityLabel={
-            projectLabel ? `Project: ${projectLabel}` : "Choose project"
-          }
-          onPress={openProjectPicker}
-          tintColor={foregroundColor}
-        />
-        <Stack.Toolbar.Button
-          icon="ellipsis"
-          accessibilityLabel="Thread actions"
-          hidden={projectedMessages.length === 0}
-          onPress={openThreadActions}
-          tintColor={foregroundColor}
-        />
-      </Stack.Toolbar>
+      {Platform.OS !== "web" ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon="desktopcomputer"
+            accessibilityLabel={
+              computerBadge
+                ? "Computer, open activity available"
+                : "Computer"
+            }
+            selected={mainTab === "computer"}
+            onPress={toggleComputer}
+            tintColor={foregroundColor}
+          >
+            {computerBadge ? <Stack.Toolbar.Badge /> : null}
+          </Stack.Toolbar.Button>
+          <Stack.Toolbar.Button
+            icon="ellipsis"
+            accessibilityLabel="Thread actions"
+            hidden={projectedMessages.length === 0}
+            onPress={openThreadActions}
+            tintColor={foregroundColor}
+          />
+        </Stack.Toolbar>
+      ) : null}
       <View style={{ flex: 1 }}>
         <ConversationProvider conversation={conversation} waitKind={waitKind}>
           <SubagentInspectProvider>
