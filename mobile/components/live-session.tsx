@@ -116,7 +116,6 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
   const [cameraReady, setCameraReady] = useState(false);
   const [videoRejected, setVideoRejected] = useState(false);
   const [turns, setTurns] = useState<readonly LiveTurn[]>([]);
-  const [assistantCaption, setAssistantCaption] = useState("");
   const [voiceMode, setVoiceMode] = useState<LiveVoiceMode>("connecting");
   const [micLevel, setMicLevel] = useState(0);
 
@@ -487,11 +486,9 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
               if (!mutedRef.current) setVoiceMode("listening");
             } else if (message.type === "audio-transcript-delta" && typeof message.delta === "string") {
               partialRef.current += message.delta;
-              setAssistantCaption(partialRef.current);
             } else if (message.type === "audio-transcript-done") {
               const text = (typeof message.transcript === "string" ? message.transcript : partialRef.current).trim();
               partialRef.current = "";
-              setAssistantCaption("");
               if (text) {
                 turnsRef.current = [...turnsRef.current, { role: "pearl", text }];
                 setTurns(turnsRef.current);
@@ -612,12 +609,6 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
   };
 
   const cameraGranted = cameraPermission?.granted === true;
-  const lastTurn = turns[turns.length - 1];
-  const caption = assistantCaption
-    ? `Pearl: ${assistantCaption}`
-    : lastTurn
-      ? `${lastTurn.role === "user" ? "You" : "Pearl"}: ${lastTurn.text}`
-      : null;
   const orbMode = phase === "connecting" ? "connecting" : phase === "error" ? "ended" : voiceMode;
   const endLabel = phase === "live" || phase === "connecting"
     ? "End live"
@@ -654,15 +645,9 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
           <Text variant="body" weight="semibold" numberOfLines={1}>
             {liveVoiceStatusLabel(orbMode)}
           </Text>
-          {caption ? (
-            <Text variant="secondary" numberOfLines={2}>
-              {caption}
-            </Text>
-          ) : (
-            <Text variant="secondary" numberOfLines={1}>
-              {phase === "connecting" ? "Starting the call…" : "Say something"}
-            </Text>
-          )}
+          <Text variant="secondary" numberOfLines={1}>
+            {phase === "connecting" ? "Starting the call…" : "Say something"}
+          </Text>
         </View>
       </View>
 
