@@ -23,15 +23,15 @@ import { Text } from "@/components/ui/text";
 export type HomeCategory = "chats" | "tasks" | "projects";
 
 /**
- * Match Gmail inbox category chips: ~32pt circles, ~6pt gaps, selected
- * expands to the right so the icon barely moves.
+ * Match Gmail inbox category chips: circles with gaps, selected expands
+ * to the right so the icon barely moves.
  */
 const CHIP_FILL = "#E8E8ED";
-const CHIP_SIZE = 32;
-const CHIP_GAP = 6;
-const ICON_SIZE = 15;
-const SELECTED_PAD_X = 10;
-const LABEL_GAP = 5;
+const CHIP_SIZE = 40;
+const CHIP_GAP = 8;
+const ICON_SIZE = 18;
+const SELECTED_PAD_X = 12;
+const LABEL_GAP = 6;
 /** Keeps the glyph optically centered in the collapsed circle. */
 const COLLAPSED_PAD_X = (CHIP_SIZE - ICON_SIZE) / 2;
 const ACCENT_FG = "#FFFFFF";
@@ -44,9 +44,9 @@ const CATEGORY_ACCENT: Record<HomeCategory, string> = {
 
 /** Precomputed expanded widths (pads + icon + gap + label) for stable morphing. */
 const EXPANDED_WIDTH: Record<HomeCategory, number> = {
-  chats: 78,
-  tasks: 76,
-  projects: 92,
+  chats: 90,
+  tasks: 88,
+  projects: 106,
 };
 
 const SPRING = { damping: 24, stiffness: 260, mass: 0.85 };
@@ -143,7 +143,7 @@ function CategoryChip({
     const clamp = Extrapolation.CLAMP;
     return {
       opacity: interpolate(p, [0.45, 1], [0, 1], clamp),
-      maxWidth: interpolate(p, [0, 1], [0, 72], clamp),
+      maxWidth: interpolate(p, [0, 1], [0, 80], clamp),
       marginLeft: interpolate(p, [0, 1], [0, LABEL_GAP], clamp),
     };
   });
@@ -154,7 +154,7 @@ function CategoryChip({
       accessibilityState={{ selected }}
       accessibilityLabel={category.label}
       onPress={onPress}
-      hitSlop={6}
+      hitSlop={10}
     >
       <Animated.View
         style={[
