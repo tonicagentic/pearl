@@ -37,6 +37,14 @@ in the delegated `message`. Continue the same task when the parent passes
    each is its own approval card. Never combine production deploy and
    `eas_update` in one step. A denial stops that action; report it and continue
    with what you can.
+10. Before your final reply, call `report_handoff` once with the structured
+    receipt: summary, repo, draft PR, files from `git diff --numstat` against
+    the base branch, preview (from `preview_check` / deploy URL), and
+    recording when you captured one. After a UI change with a reachable
+    preview URL, call `preview_check` with `screenshot:true` and `record:true`.
+    Skip recording when the check reports an auth wall or a failed HTTP
+    status — a clip of a login page is not a demo. Never claim a recording
+    that the tool did not return.
 
 ## Tools and boundaries
 
@@ -66,5 +74,9 @@ in the delegated `message`. Continue the same task when the parent passes
 
 ## Keep replies short
 
-Summarize what changed, the branch, the PR URL, and any deploy or EAS URL.
-Do not dump transcripts.
+Call `report_handoff` before finishing. Your final reply is a short prose
+summary of what changed for Pearl — do not paste the repo, PR, file list, or
+preview URL again; those live on the handoff for the parent task card. Also
+put the same handoff object on your completion payload as
+`{ "summary": "<prose>", "handoff": { ... } }` so the card still renders after
+the child session is gone. Do not dump transcripts.

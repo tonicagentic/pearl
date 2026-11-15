@@ -26,7 +26,8 @@ const CODER_DESCRIPTION =
   "the repo (or 'create one'), the goal, and constraints in message; continue " +
   "the same task with taskId. The child owns coding tools, git__gh, gated_git, " +
   "publish_dev_server, deploy_vercel, merge_pr, expo_simulator, eas_update, " +
-  "eas_build, eas_submit, preview_check, deployment_logs, and run_with_env.";
+  "eas_build, eas_submit, preview_check, deployment_logs, run_with_env, and " +
+  "report_handoff.";
 
 export default defineDynamic(async (ctx) => {
   if (readTurnClientIntent(await ctx.messages()).mode === "plan") {

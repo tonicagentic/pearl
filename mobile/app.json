@@ -81,7 +81,8 @@
       "expo-asset",
       "expo-font",
       "expo-sharing",
-      "expo-updates"
+      "expo-updates",
+      "expo-video"
     ],
     "scheme": "pearl",
     "runtimeVersion": {

@@ -408,7 +408,13 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     true,
     ["network", "timeout"],
     2,
-    "HTTP status / screenshot read of a public URL, no mutating side effect.",
+    "HTTP status / screenshot / recording read of a public URL, no mutating side effect.",
+  ),
+  report_handoff: policy(
+    true,
+    [],
+    1,
+    "Pure receipt publish for the parent task card; no side effect.",
   ),
   deployment_logs: policy(
     true,

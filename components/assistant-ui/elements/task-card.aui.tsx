@@ -9,9 +9,17 @@ import {
   type SubagentRun,
 } from "@/lib/agent/subagent-runs";
 import {
+  deriveCoderJobProgress,
+  extractCoderHandoff,
+} from "@/lib/chat/coder-receipt";
+import {
   TaskCard,
   type TaskCardState,
 } from "@/components/assistant-ui/elements/task-card";
+import {
+  CoderSettledReceipt,
+  CoderWorkingReceipt,
+} from "@/components/assistant-ui/elements/coder-receipt";
 
 // Runtime binding for the task-card element (docs: elements/task-card).
 //
@@ -115,6 +123,24 @@ function taskState(part: ToolCallPartState, run?: SubagentRun): TaskCardState {
   return "done";
 }
 
+function coderResult(input: {
+  readonly label: string;
+  readonly state: TaskCardState;
+  readonly run?: SubagentRun;
+}): ReactNode {
+  const { label, state, run } = input;
+  if (state === "failed") {
+    return "no result arrived — the run was likely interrupted; ask again";
+  }
+  if (state === "working" || state === "waiting") {
+    const progress = deriveCoderJobProgress([]);
+    return <CoderWorkingReceipt title={label} progress={progress} />;
+  }
+  const handoff = extractCoderHandoff({ runResult: run?.result });
+  if (handoff) return <CoderSettledReceipt handoff={handoff} />;
+  return undefined;
+}
+
 // The lane renderer for delegated tool calls. Thread routes a group whose
 // parts are all delegations here instead of the tool group.
 export function TaskGroup({
@@ -135,26 +161,31 @@ export function TaskGroup({
     <div data-slot="aui_task-group" className="flex flex-col gap-2 px-2">
       {delegations.map((part) => {
         const run = runs.find((r) => r.callId === part.toolCallId);
-        const working = taskState(part, run) === "working";
+        const state = taskState(part, run);
+        const working = state === "working";
         const elapsed =
           run !== undefined
             ? formatElapsed((now ?? run.at) - run.at)
             : undefined;
+        const isCoder =
+          part.toolName === "coder" || run?.name === "coder";
+        const label = taskLabel(part);
         return (
           <TaskCard
             key={part.toolCallId}
-            label={taskLabel(part)}
+            label={label}
             meta={taskMeta(part, run)}
-            state={taskState(part, run)}
+            state={state}
             elapsed={elapsed}
-            // The transcript lives in the child session, not in this part;
-            // the card stays a compact status row with its result below.
+            className={isCoder ? "max-w-xl" : undefined}
             result={
-              run?.state === "failed"
-                ? "no result arrived — the run was likely interrupted; ask again"
-                : working
-                  ? `Waiting on ${taskMeta(part, run)}…`
-                  : undefined
+              isCoder
+                ? coderResult({ label, state, run })
+                : run?.state === "failed"
+                  ? "no result arrived — the run was likely interrupted; ask again"
+                  : working
+                    ? `Waiting on ${taskMeta(part, run)}…`
+                    : undefined
             }
           />
         );

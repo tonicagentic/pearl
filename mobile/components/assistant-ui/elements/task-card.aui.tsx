@@ -21,6 +21,11 @@ import {
 import { pendingForDelegation } from "@/src/message-projection";
 import { latestSubagentPreviewLine } from "@/src/subagent-preview";
 import { useSubagentInspect } from "@/src/subagent-inspect-context";
+import {
+  deriveCoderJobProgress,
+  extractCoderHandoff,
+} from "../../../../lib/chat/coder-receipt";
+import { CoderSettledReceipt, CoderWorkingReceipt } from "./coder-receipt";
 import { TaskCard, type TaskCardState } from "./task-card";
 
 // Runtime binding for the task-card element (docs: elements/task-card) —
@@ -171,6 +176,49 @@ function taskState(
   return "done";
 }
 
+function childMessagesFor(
+  agent: ReturnType<typeof agentForCall>,
+): readonly {
+  readonly parts?: readonly {
+    readonly type?: string;
+    readonly name?: string;
+    readonly input?: unknown;
+    readonly state?: string;
+    readonly output?: unknown;
+  }[];
+}[] {
+  if (!agent || agent.observation.status === "not-followed") return [];
+  return agent.observation.conversation.messages;
+}
+
+function coderResult(input: {
+  readonly label: string;
+  readonly state: TaskCardState;
+  readonly run?: SubagentRun;
+  readonly agent: ReturnType<typeof agentForCall>;
+  readonly waitPrompt?: string;
+}): ReactNode {
+  const { label, state, run, agent, waitPrompt } = input;
+  if (waitPrompt) return waitPrompt;
+  if (state === "failed") {
+    return "no result arrived — the run was likely interrupted; ask again";
+  }
+
+  const messages = childMessagesFor(agent);
+  if (state === "working" || state === "waiting") {
+    const livePreview = latestSubagentPreviewLine(agent);
+    const progress = deriveCoderJobProgress(messages, livePreview);
+    return <CoderWorkingReceipt title={label} progress={progress} />;
+  }
+
+  const handoff = extractCoderHandoff({
+    runResult: run?.result,
+    childMessages: messages,
+  });
+  if (handoff) return <CoderSettledReceipt handoff={handoff} />;
+  return undefined;
+}
+
 // The lane renderer for delegated tool calls. Thread routes a group whose
 // parts are all delegations here instead of the tool group.
 export function TaskGroup({
@@ -201,14 +249,18 @@ export function TaskGroup({
             ? formatElapsed((clock || run.at) - run.at)
             : undefined;
         const agent = agentForCall(conversation.agents, part.toolCallId);
+        const isCoder =
+          part.toolName === "coder" || run?.name === "coder";
+        const label = taskLabel(part);
         const livePreview = working ? latestSubagentPreviewLine(agent) : null;
         return (
           <TaskCard
             key={part.toolCallId}
-            label={taskLabel(part)}
+            label={label}
             meta={taskMeta(part, run)}
             state={state}
             elapsed={elapsed}
+            className={isCoder ? "max-w-xl" : undefined}
             onPress={() => {
               open({
                 sessionId: agent?.sessionId ?? part.toolCallId ?? part.toolName,
@@ -218,13 +270,21 @@ export function TaskGroup({
               });
             }}
             result={
-              wait
-                ? wait.prompt
-                : run?.state === "failed"
-                  ? "no result arrived — the run was likely interrupted; ask again"
-                  : working
-                    ? (livePreview ?? `Waiting on ${taskMeta(part, run)}…`)
-                    : undefined
+              isCoder
+                ? coderResult({
+                    label,
+                    state,
+                    run,
+                    agent,
+                    waitPrompt: wait?.prompt,
+                  })
+                : wait
+                  ? wait.prompt
+                  : run?.state === "failed"
+                    ? "no result arrived — the run was likely interrupted; ask again"
+                    : working
+                      ? (livePreview ?? `Waiting on ${taskMeta(part, run)}…`)
+                      : undefined
             }
           />
         );
