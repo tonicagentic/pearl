@@ -1,6 +1,9 @@
 import { defineHook } from "eve/hooks";
 
-import { getChatLinkByEveSessionId } from "@/lib/db/queries";
+import {
+  countWaitingChatsForUser,
+  getChatLinkByEveSessionId,
+} from "@/lib/db/queries";
 import {
   claimPushDelivery,
   hasPushDelivery,
@@ -64,13 +67,19 @@ async function deliverPush(input: {
     return;
   }
 
+  const waitingBadge = await countWaitingChatsForUser(input.userId);
+
   await sendExpoPush(
     tokens.map((row) => ({
       to: row.token,
       title: input.title,
       body: input.body,
       sound: "default" as const,
-      data: { chatId: input.chatId },
+      badge: waitingBadge,
+      data: {
+        chatId: input.chatId,
+        badge: String(waitingBadge),
+      },
     })),
   );
 }

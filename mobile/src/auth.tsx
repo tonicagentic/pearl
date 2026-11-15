@@ -21,7 +21,10 @@ import {
   onSessionInvalid,
   saveSession,
 } from "./session-store";
-import { unregisterForPushNotifications } from "./push-notifications";
+import {
+  clearAppIconBadge,
+  unregisterForPushNotifications,
+} from "./push-notifications";
 
 export type SignInState = "idle" | "signing-in" | "error";
 
@@ -387,6 +390,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   const signOut = useCallback(() => {
     const credential = getAuthCookie();
     void unregisterForPushNotifications(credential);
+    void clearAppIconBadge();
     setAuthCookie(null);
     void clearSession();
     setViewerEmail(null);

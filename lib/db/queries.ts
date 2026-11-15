@@ -203,6 +203,33 @@ async function presenceByChatIds(
   return presence;
 }
 
+/**
+ * Absolute app-icon badge: how many of the user's chats are parked on
+ * presence "waiting" (needs you). Not unread / working.
+ */
+export async function countWaitingChatsForUser(
+  userId: string,
+): Promise<number> {
+  const rows = await db
+    .select({ id: chat.id, lastReadAt: chat.lastReadAt })
+    .from(chat)
+    .where(eq(chat.userId, userId));
+
+  if (rows.length === 0) {
+    return 0;
+  }
+
+  const presenceById = await presenceByChatIds(
+    rows.map((row) => ({ id: row.id, lastReadAt: row.lastReadAt })),
+  );
+
+  let waiting = 0;
+  for (const presence of presenceById.values()) {
+    if (presence === "waiting") waiting += 1;
+  }
+  return waiting;
+}
+
 export async function createChat(
   userId: string,
   {

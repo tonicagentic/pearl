@@ -62,6 +62,35 @@ export function presenceFromNotificationData(
   return { chatId, presence };
 }
 
+/** Absolute waiting-chat badge from push data (`badge` string or number). */
+export function badgeFromNotificationData(data: unknown): number | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+  const raw = (data as { badge?: unknown }).badge;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return Math.max(0, Math.floor(raw));
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    const parsed = Number.parseInt(raw.trim(), 10);
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
+  }
+  return null;
+}
+
+/** Set the home-screen icon badge to an absolute waiting count. */
+export async function setAppIconBadge(count: number): Promise<void> {
+  try {
+    await Notifications.setBadgeCountAsync(Math.max(0, Math.floor(count)));
+  } catch {
+    // Badge APIs are unavailable on some simulators / permission states.
+  }
+}
+
+export async function clearAppIconBadge(): Promise<void> {
+  await setAppIconBadge(0);
+}
+
 export function installPushNotificationHandler() {
   if (handlerInstalled) {
     return;
@@ -71,8 +100,10 @@ export function installPushNotificationHandler() {
   Notifications.setNotificationHandler({
     handleNotification: async (notification) => {
       const data = notification.request.content.data;
-      // Silent presence fanout must never show a banner.
-      if (presenceFromNotificationData(data)) {
+      // Absolute badge is applied manually from data / Expo `badge` field.
+      // Never let the OS increment so counts do not drift.
+      const isPresence = Boolean(presenceFromNotificationData(data));
+      if (isPresence) {
         return {
           shouldPlaySound: false,
           shouldSetBadge: false,
@@ -85,7 +116,7 @@ export function installPushNotificationHandler() {
         Boolean(chatId) && chatId === activeChatIdForPush;
       return {
         shouldPlaySound: !suppress,
-        shouldSetBadge: !suppress,
+        shouldSetBadge: false,
         shouldShowBanner: !suppress,
         shouldShowList: !suppress,
       };
@@ -152,11 +183,12 @@ export async function unregisterForPushNotifications(
   credential?: string | null,
 ): Promise<void> {
   const token = registeredToken;
+  registeredToken = null;
+  void clearAppIconBadge();
   if (!token) {
     return;
   }
   const auth = credential ?? getAuthCookie();
-  registeredToken = null;
   try {
     await unregisterPushToken(token, auth);
   } catch {

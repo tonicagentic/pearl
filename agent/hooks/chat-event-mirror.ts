@@ -2,6 +2,7 @@ import { defineHook } from "eve/hooks";
 
 import {
   appendChatEventForSession,
+  countWaitingChatsForUser,
   isChatPresenceEventType,
 } from "@/lib/db/queries";
 import { listDevicePushTokensForUser } from "@/lib/db/push";
@@ -66,8 +67,10 @@ async function mirrorPresenceEvent(
       return;
     }
 
-    // Silent data-only: updates Recents without a banner. Visible "needs you"
-    // banners still come from mobile-push.ts on interaction.opened.
+    const waitingBadge = await countWaitingChatsForUser(mirrored.userId);
+
+    // Silent data-only: updates Recents + absolute waiting badge without a
+    // banner. Visible "needs you" banners still come from mobile-push.ts.
     await sendExpoPush(
       tokens.map((row) => ({
         to: row.token,
@@ -75,10 +78,12 @@ async function mirrorPresenceEvent(
           type: "presence",
           chatId: mirrored.chatId,
           presence: mirrored.presence,
+          badge: String(waitingBadge),
         },
         sound: null,
         priority: "normal" as const,
         _contentAvailable: true,
+        badge: waitingBadge,
       })),
     );
   } catch (error) {

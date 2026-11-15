@@ -12,6 +12,8 @@ export type ExpoPushMessage = {
   readonly priority?: "default" | "normal" | "high";
   /** iOS: deliver as content-available / background data. */
   readonly _contentAvailable?: boolean;
+  /** Absolute app-icon badge (waiting-chat count). */
+  readonly badge?: number;
 };
 
 type ExpoTicket =

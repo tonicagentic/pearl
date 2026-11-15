@@ -1,26 +1,29 @@
 import { useEffect, useRef } from "react";
+import { AppState } from "react-native";
 import * as Notifications from "expo-notifications";
 
 import { revealChatThread } from "@/components/chat-history-push";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import {
+  badgeFromNotificationData,
   chatIdFromNotificationResponse,
   installPushNotificationHandler,
   presenceFromNotificationData,
   registerForPushNotifications,
   setActiveChatIdForPush,
+  setAppIconBadge,
 } from "@/src/push-notifications";
 
 /**
  * Registers the Expo push token after sign-in, opens the named chat when a
- * banner is tapped, applies silent presence patches to Recents, and keeps the
- * active-chat suppressor in sync so the open thread does not get a redundant
- * banner.
+ * banner is tapped, applies silent presence patches + waiting badge, and
+ * keeps the active-chat suppressor in sync so the open thread does not get a
+ * redundant banner.
  */
 export function PushNotificationsBridge() {
   const { signedIn, restoring } = useAuth();
-  const { activeChatId, selectChat, patchChatPresence } = useChats();
+  const { activeChatId, selectChat, patchChatPresence, chats } = useChats();
   const selectChatRef = useRef(selectChat);
   selectChatRef.current = selectChat;
   const patchPresenceRef = useRef(patchChatPresence);
@@ -39,6 +42,33 @@ export function PushNotificationsBridge() {
       return;
     }
     void registerForPushNotifications();
+  }, [restoring, signedIn]);
+
+  const chatsRef = useRef(chats);
+  chatsRef.current = chats;
+
+  // Foreground backstop from the loaded Recents page when the app activates.
+  // Server pushes carry the absolute waiting count for background updates.
+  useEffect(() => {
+    if (restoring || !signedIn) {
+      return;
+    }
+
+    const syncFromChats = () => {
+      const waiting = chatsRef.current.reduce(
+        (count, chat) =>
+          count +
+          (chat.presence === "waiting" || chat.waitingForInput ? 1 : 0),
+        0,
+      );
+      void setAppIconBadge(waiting);
+    };
+
+    syncFromChats();
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (next === "active") syncFromChats();
+    });
+    return () => subscription.remove();
   }, [restoring, signedIn]);
 
   useEffect(() => {
@@ -73,11 +103,15 @@ export function PushNotificationsBridge() {
 
     const receivedSub = Notifications.addNotificationReceivedListener(
       (notification) => {
-        const presence = presenceFromNotificationData(
-          notification.request.content.data,
-        );
-        if (!presence) return;
-        patchPresenceRef.current(presence.chatId, presence.presence);
+        const data = notification.request.content.data;
+        const presence = presenceFromNotificationData(data);
+        if (presence) {
+          patchPresenceRef.current(presence.chatId, presence.presence);
+        }
+        const badge = badgeFromNotificationData(data);
+        if (badge != null) {
+          void setAppIconBadge(badge);
+        }
       },
     );
 
