@@ -18,6 +18,7 @@ import { File } from "@/components/assistant-ui/elements/file";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
 import { Image } from "@/components/assistant-ui/elements/image";
 import { AssistantInlineText } from "@/components/json-render/chat-json-render";
+import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
 import { proseFromMessageText } from "../../../../lib/json-render/inline-spec";
 import {
   SessionTimelineSegment,
@@ -120,7 +121,7 @@ import {
   type TextInputInstance,
   type ViewProps,
 } from "react-native";
-import { Text, textVariants } from "@/components/ui/text";
+import { TEXT_METRICS, Text, textVariants } from "@/components/ui/text";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   KeyboardController,
@@ -1149,12 +1150,20 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
       paddingBottom: interpolate(progress, [0, 1], [COMPOSER_COLLAPSED_INPUT_PAD_Y, 4]),
     };
   });
+  // Native TextInput often ignores Tailwind type classes for the caret glyph /
+  // placeholder — pin the message size so "Ask anything" matches thread prose.
+  const composerTypeStyle = {
+    fontSize: TEXT_METRICS.label.fontSize,
+    lineHeight: 22,
+  } as const;
   const inputProps = {
     placeholder: "Ask anything",
     placeholderTextColorClassName: hydrated ? placeholderColor : undefined,
     className: cn(
       "aui-composer-input web:resize-none web:outline-none",
+      // Label is 17/26 for thread prose; keep the dock on the tighter 22 leading.
       textVariants({ variant: "label" }),
+      "leading-[22px]",
       Platform.OS === "ios"
         ? "h-full w-full pl-2 pr-2"
         : "min-h-10 max-h-48 px-2.5 py-1",
@@ -1183,7 +1192,6 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
     <AnimatedTextInput
       ref={nativeInput}
       value={value}
-      style={iosPadStyle}
       onBlur={() => {
         // Keep expanded chrome while the keyboard is still up (shell taps
         // that briefly resign the field). Collapse only after the keyboard
@@ -1210,9 +1218,14 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
         if (expandedHeight.value !== next) expandedHeight.value = next;
       }}
       {...inputProps}
+      style={[iosPadStyle, composerTypeStyle]}
     />
   ) : (
-    <ComposerPrimitive.Input autoFocus={autoFocus} {...inputProps} />
+    <ComposerPrimitive.Input
+      autoFocus={autoFocus}
+      {...inputProps}
+      style={composerTypeStyle}
+    />
   );
 };
 
@@ -1691,15 +1704,18 @@ const ComposerTrailingControls: FC<{
 // Connection / send failures are explained via ThreadNotice + Resend — never
 // as assistant chat copy (ErrorPrimitive / failure banners).
 
-const UserText: TextMessagePartComponent = ({ text }) => (
-  <Text
-    variant="label"
-    className="aui-user-message-text"
-    selectable
-    selectionColor="rgba(127, 127, 127, 0.35)"
-  >
-    {text}
-  </Text>
+/**
+ * Same renderer as assistant answers — iOS UITextView + Marked styles —
+ * so bubble copy cannot drift to the TextInput default (~14pt).
+ */
+const UserText: TextMessagePartComponent = ({ text, status }) => (
+  <View className="aui-user-message-text">
+    <MarkdownText
+      type="text"
+      text={text}
+      status={status ?? { type: "complete" }}
+    />
+  </View>
 );
 
 function contentPartComponents(

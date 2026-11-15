@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { Stack, router } from "expo-router";
+import { Stack, router, useLocalSearchParams } from "expo-router";
 import {
   AssistantRuntimeProvider,
   useExternalStoreRuntime,
@@ -19,6 +19,10 @@ import {
   threadSample,
   type ThreadSampleId,
 } from "@/src/thread-samples";
+
+function isThreadSampleId(value: string): value is ThreadSampleId {
+  return THREAD_SAMPLES.some((sample) => sample.id === value);
+}
 
 function leaveSamples() {
   if (router.canGoBack()) router.back();
@@ -40,7 +44,14 @@ function SampleToolFallback(props: ToolCallMessagePartProps) {
  * or via pearl:///thread-samples. Never writes to /api/chats.
  */
 export default function ThreadSamplesScreen() {
-  const [sampleId, setSampleId] = useState<ThreadSampleId>("approve");
+  const params = useLocalSearchParams<{ readonly id?: string | string[] }>();
+  const paramId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const initialId =
+    typeof paramId === "string" && isThreadSampleId(paramId) ? paramId : "approve";
+  const [sampleId, setSampleId] = useState<ThreadSampleId>(initialId);
+  useEffect(() => {
+    setSampleId(initialId);
+  }, [initialId]);
   const sample = threadSample(sampleId);
   const backgroundColor = useCSSVariable("--color-background") as
     | string

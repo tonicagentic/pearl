@@ -30,15 +30,16 @@
   --font-sans: -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, monospace;
 
-  /* Semantic type scale (mirrored from mobile; adopt in a later web pass). */
+  /* Semantic type scale (mirrored from mobile; adopt in a later web pass).
+     Sized to the pre-scale thread: message 17/26, muted prose 15/24. */
   --text-caption: 12px;
   --text-caption--line-height: 16px;
   --text-secondary: 13px;
   --text-secondary--line-height: 18px;
   --text-body: 15px;
-  --text-body--line-height: 20px;
+  --text-body--line-height: 24px;
   --text-label: 17px;
-  --text-label--line-height: 22px;
+  --text-label--line-height: 26px;
   --text-title: 22px;
   --text-title--line-height: 28px;
   --text-display: 28px;

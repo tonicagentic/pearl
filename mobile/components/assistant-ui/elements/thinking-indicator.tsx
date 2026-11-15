@@ -39,13 +39,13 @@ export function ThinkingIndicator({
           entering={motion ? thinkSwapEnter : undefined}
           exiting={motion ? thinkSwapExit : undefined}
         >
-          <ShimmerLabel active variant="body" className={threadMeta}>
+          <ShimmerLabel active variant="label" className={threadMeta}>
             {display}
           </ShimmerLabel>
         </Animated.View>
       </View>
       {elapsed !== undefined ? (
-        <Text variant="body" className={cn(threadMeta, "tabular-nums")}>
+        <Text variant="label" className={cn(threadMeta, "tabular-nums")}>
           {elapsed}
         </Text>
       ) : null}

@@ -31,7 +31,7 @@ import {
 } from "react-native-marked";
 import { useCSSVariable, useUniwind } from "uniwind";
 
-import { Text, textVariants } from "@/components/ui/text";
+import { TEXT_METRICS, Text, textVariants } from "@/components/ui/text";
 
 const MONOSPACE = Platform.select({
   ios: "Menlo",
@@ -39,10 +39,10 @@ const MONOSPACE = Platform.select({
   default: "monospace",
 });
 
-const BODY_SIZE = 17;
-const BODY_LINE = 26;
-const MUTED_SIZE = 15;
-const MUTED_LINE = 24;
+const BODY_SIZE = TEXT_METRICS.label.fontSize;
+const BODY_LINE = TEXT_METRICS.label.lineHeight;
+const MUTED_SIZE = TEXT_METRICS.body.fontSize;
+const MUTED_LINE = TEXT_METRICS.body.lineHeight;
 
 /** Match user/spoken selection highlight. */
 const SELECTION_COLOR = "rgba(127, 127, 127, 0.35)";
@@ -446,12 +446,31 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
     [text, streaming],
   );
   const baseOptions = useMarkdownOptions(variant);
-  // muted → body (15); default answer → label (17). Marked styles keep
-  // numeric fontSize for the StyleSheet-driven renderer tree.
+  const hydrated = useHydrated();
+  const foreground = useCSSVariable("--color-foreground") as string | undefined;
+  const mutedForeground = useCSSVariable("--color-muted-foreground") as
+    | string
+    | undefined;
+  // muted → body (15); default answer → label (17). Size is pinned on the
+  // native style — keep in lockstep with UserText bubbles.
   const fallbackClass =
     variant === "muted"
-      ? textVariants({ variant: "body", tone: "muted" })
-      : textVariants({ variant: "label" });
+      ? textVariants({ variant: "body", tone: "muted", includeSize: false })
+      : textVariants({ variant: "label", includeSize: false });
+  const typeStyle = {
+    padding: 0,
+    margin: 0,
+    fontSize: variant === "muted" ? MUTED_SIZE : BODY_SIZE,
+    lineHeight: variant === "muted" ? MUTED_LINE : BODY_LINE,
+    ...(hydrated
+      ? {
+          color:
+            variant === "muted"
+              ? asColor(mutedForeground)
+              : asColor(foreground),
+        }
+      : null),
+  } as const;
 
   // One renderer + one parse for the full message so selection can span
   // paragraphs, lists, and code as a single native range.
@@ -484,7 +503,7 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
           readOnly
           scrollEnabled={false}
           selectionColor={SELECTION_COLOR}
-          style={{ padding: 0, margin: 0 }}
+          style={typeStyle}
           className={fallbackClass}
         >
           {document}

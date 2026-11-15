@@ -115,7 +115,7 @@ export const ReasoningTrigger: FC<ReasoningTriggerProps> = ({
       <Icon as={BrainIcon} className="text-muted-foreground size-3.5" />
       <ShimmerLabel
         active={active}
-        variant="body"
+        variant="label"
         tone="muted"
         className="tabular-nums"
       >

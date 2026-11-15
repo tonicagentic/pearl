@@ -2,6 +2,8 @@ import type { WaitingAction } from "@/components/assistant-ui/elements/waiting-a
 import type { ThreadMessageLike } from "@assistant-ui/react-native";
 import type { ReadonlyJSONObject } from "assistant-stream/utils";
 
+import { IMPORTED_THREAD_SAMPLES } from "./thread-samples-imported";
+
 export type ThreadSampleId =
   | "approve"
   | "choose"
@@ -10,7 +12,11 @@ export type ThreadSampleId =
   | "authorize"
   | "gallery"
   | "one-read"
-  | "mixed";
+  | "mixed"
+  | "prod-twitch"
+  | "prod-mail"
+  | "prod-pearl"
+  | "prod-cacio";
 
 type SampleWaitingAction = Exclude<
   WaitingAction,
@@ -584,6 +590,7 @@ export const THREAD_SAMPLES: readonly ThreadSample[] = [
   gallery,
   oneRead,
   mixed,
+  ...IMPORTED_THREAD_SAMPLES,
 ];
 
 export function threadSample(id: ThreadSampleId): ThreadSample {

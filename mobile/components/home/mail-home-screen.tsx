@@ -26,6 +26,7 @@ import {
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Icon } from "@/components/ui/icon";
+import { Text } from "@/components/ui/text";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
 
@@ -300,9 +301,27 @@ export function MailHomeScreen() {
             paddingHorizontal: 16,
             paddingTop: 10,
             paddingBottom: 8,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
           }}
         >
-          <HomeCategoryPills value={category} onChange={setCategory} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <HomeCategoryPills value={category} onChange={setCategory} />
+          </View>
+          {__DEV__ ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Thread samples"
+              hitSlop={8}
+              className="rounded-full bg-muted px-3 py-2 active:opacity-70"
+              onPress={() => router.push("/thread-samples")}
+            >
+              <Text variant="secondary" weight="medium" tone="default">
+                Samples
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 

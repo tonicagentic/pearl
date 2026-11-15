@@ -49,8 +49,8 @@ export const inkButton = "bg-foreground active:opacity-90";
 export const mono = "tracking-tight";
 
 /**
- * Thinking / tool chrome — Cursor-like muted status (softer than body copy).
- * Pair with `Text variant="body"`; body answers stay on default tone.
+ * Thinking / tool chrome — Cursor-like muted status (softer than answer copy).
+ * Pair with `Text variant="label"` so meta matches message size; mute via tone.
  */
 export const threadMeta = "text-muted-foreground/75";
 

@@ -137,7 +137,7 @@ function StepRow({
       >
         <ShimmerLabel
           active={active}
-          variant="body"
+          variant="label"
           className={cn(threadMeta, "shrink-0")}
         >
           {label}
@@ -161,7 +161,7 @@ function StepRow({
           ) : (
             <Text
               numberOfLines={1}
-              variant="body"
+              variant="label"
               className={cn(threadMeta, "min-w-0 flex-shrink")}
             >
               {step.chip}
@@ -202,19 +202,19 @@ function StatLine({ stats }: { readonly stats: readonly TimelineStat[] }) {
 
   return (
     <View className="flex-row flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5">
-      <Text variant="body" className={threadMeta}>
+      <Text variant="label" className={threadMeta}>
         {summary}
       </Text>
       {totalAdded > 0 || totalRemoved > 0 ? (
         <View className="flex-row items-baseline gap-1.5">
           {totalAdded > 0 ? (
-            <Text variant="body" className={cn(threadDiffAdd, "tabular-nums")}>
+            <Text variant="label" className={cn(threadDiffAdd, "tabular-nums")}>
               +{totalAdded}
             </Text>
           ) : null}
           {totalRemoved > 0 ? (
             <Text
-              variant="body"
+              variant="label"
               className={cn(threadDiffRemove, "tabular-nums")}
             >
               −{totalRemoved}
@@ -298,13 +298,13 @@ export function ToolTimeline({
         <SwapLabel active={streaming ? 0 : 1} className="min-w-0 flex-1 text-start">
           <ShimmerLabel
             active={streaming}
-            variant="body"
+            variant="label"
             className={threadMeta}
             numberOfLines={2}
           >
             {elapsed ? `${activeLabel} · ${elapsed}` : activeLabel}
           </ShimmerLabel>
-          <Text variant="body" className={threadMeta} numberOfLines={2}>
+          <Text variant="label" className={threadMeta} numberOfLines={2}>
             {restingLabel}
           </Text>
         </SwapLabel>
