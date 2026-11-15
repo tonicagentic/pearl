@@ -16,7 +16,6 @@ import { useCSSVariable } from "uniwind";
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
-import { ThreadActionsDrawer } from "@/components/thread-actions-drawer";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { ComputerPanel } from "@/components/computer-panel";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
@@ -142,7 +141,6 @@ export function ChatScreen({
   } | null>(null);
   const autoSentPendingFor = useRef<string | null>(null);
   const [costOpen, setCostOpen] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
 
   const [projectLabel, setProjectLabel] = useState<string | null>(null);
@@ -211,10 +209,47 @@ export function ChatScreen({
     );
   }, [activeChatId, performDelete]);
 
+  const clearProject = useCallback(() => {
+    setActiveProjectId(null);
+    if (activeChatId) {
+      void setChatProject(activeChatId, null).catch(() => {});
+    }
+  }, [activeChatId, setActiveProjectId, setChatProject]);
+
+  /** Web fallback — native uses Stack.Toolbar.Menu. */
   const openThreadActions = useCallback(() => {
     dismissKeyboard();
-    setActionsOpen(true);
-  }, []);
+    const buttons: {
+      text: string;
+      style?: "cancel" | "destructive" | "default";
+      onPress?: () => void;
+    }[] = [
+      {
+        text: projectLabel ? "Change project" : "Add to project",
+        onPress: openProjectPicker,
+      },
+    ];
+    if (activeProjectId) {
+      buttons.push({ text: "Remove from project", onPress: clearProject });
+    }
+    buttons.push(
+      { text: "View cost", onPress: openCost },
+      ...(activeChatId
+        ? [{ text: "Delete", style: "destructive" as const, onPress: confirmDelete }]
+        : []),
+      { text: "Cancel", style: "cancel" },
+    );
+    Alert.alert(activeTitle === "New chat" ? "Thread" : activeTitle, undefined, buttons);
+  }, [
+    activeChatId,
+    activeProjectId,
+    activeTitle,
+    clearProject,
+    confirmDelete,
+    openCost,
+    openProjectPicker,
+    projectLabel,
+  ]);
 
   const [sendError, setSendError] = useState<{ store: object; message: string } | null>(null);
   const [localSends, setLocalSends] = useState<Map<object, LocalSend>>(() => new Map());
@@ -845,13 +880,41 @@ export function ChatScreen({
           >
             {computerBadge ? <Stack.Toolbar.Badge /> : null}
           </Stack.Toolbar.Button>
-          <Stack.Toolbar.Button
+          <Stack.Toolbar.Menu
             icon="ellipsis"
             accessibilityLabel="Thread actions"
             hidden={projectedMessages.length === 0}
-            onPress={openThreadActions}
             tintColor={foregroundColor}
-          />
+          >
+            <Stack.Toolbar.MenuAction
+              icon="folder"
+              subtitle={projectLabel ?? undefined}
+              onPress={openProjectPicker}
+            >
+              {projectLabel ? "Change project" : "Add to project"}
+            </Stack.Toolbar.MenuAction>
+            <Stack.Toolbar.MenuAction
+              icon="folder.badge.minus"
+              hidden={!activeProjectId}
+              onPress={clearProject}
+            >
+              Remove from project
+            </Stack.Toolbar.MenuAction>
+            <Stack.Toolbar.MenuAction
+              icon="dollarsign.circle"
+              onPress={openCost}
+            >
+              View cost
+            </Stack.Toolbar.MenuAction>
+            <Stack.Toolbar.MenuAction
+              icon="trash"
+              destructive
+              hidden={!activeChatId}
+              onPress={confirmDelete}
+            >
+              Delete
+            </Stack.Toolbar.MenuAction>
+          </Stack.Toolbar.Menu>
         </Stack.Toolbar>
       ) : null}
       <View style={{ flex: 1 }}>
@@ -881,36 +944,6 @@ export function ChatScreen({
               )}
             </AssistantRuntimeProvider>
             <SubagentInspectHost onAnswer={answerInteraction} />
-            <ThreadActionsDrawer
-              open={actionsOpen}
-              title={activeTitle}
-              canDelete={Boolean(activeChatId)}
-              projectLabel={projectLabel}
-              onClose={() => setActionsOpen(false)}
-              onOpenProject={() => {
-                setActionsOpen(false);
-                openProjectPicker();
-              }}
-              onClearProject={
-                activeProjectId
-                  ? () => {
-                      setActionsOpen(false);
-                      setActiveProjectId(null);
-                      if (activeChatId) {
-                        void setChatProject(activeChatId, null).catch(() => {});
-                      }
-                    }
-                  : undefined
-              }
-              onOpenCost={() => {
-                setActionsOpen(false);
-                openCost();
-              }}
-              onDelete={() => {
-                setActionsOpen(false);
-                confirmDelete();
-              }}
-            />
             <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
             <ProjectPickerModal
               open={projectPickerOpen}
