@@ -1,7 +1,7 @@
 import AVFoundation
 import ExpoModulesCore
 
-private let playbackRate: Double = 24_000
+private let wireRate: Double = 24_000
 
 struct LiveVoiceStatus: Record {
   @Field var sampleRate: Double = 0
@@ -20,9 +20,12 @@ internal final class LiveVoiceException: GenericException<String> {
 /// scheduled on the player node — a separate AVPlayer is not in the graph.
 final class LiveVoice: SharedObject {
   private let lock = NSLock()
+  private let audioQueue = DispatchQueue(label: "pearl.live-voice.audio")
   private var engine: AVAudioEngine?
   private var player: AVAudioPlayerNode?
-  private var playbackFormat: AVAudioFormat?
+  private var hardwareFormat: AVAudioFormat?
+  private var wireFormat: AVAudioFormat?
+  private var converter: AVAudioConverter?
   private var tapInstalled = false
   private var started = false
   private var pending = 0
@@ -50,27 +53,25 @@ final class LiveVoice: SharedObject {
 
     let engine = AVAudioEngine()
     let player = AVAudioPlayerNode()
-    guard let playbackFormat = AVAudioFormat(
-      commonFormat: .pcmFormatFloat32,
-      sampleRate: playbackRate,
-      channels: 1,
-      interleaved: false
-    ) else {
-      throw LiveVoiceException("The microphone did not start.")
-    }
-
-    engine.attach(player)
-    engine.connect(player, to: engine.mainMixerNode, format: playbackFormat)
-
     let input = engine.inputNode
+
+    // Voice processing must be enabled while the engine is stopped, before
+    // connecting nodes, so both I/O nodes share the echo-cancellation path.
     do {
       try input.setVoiceProcessingEnabled(true)
     } catch {
       throw LiveVoiceException("The microphone did not start.")
     }
     input.isVoiceProcessingBypassed = false
-    engine.prepare()
+    if #available(iOS 17.0, *) {
+      input.voiceProcessingOtherAudioDuckingConfiguration =
+        AVAudioVoiceProcessingOtherAudioDuckingConfiguration(
+          enableAdvancedDucking: false,
+          duckingLevel: .min
+        )
+    }
 
+    engine.prepare()
     var format = input.outputFormat(forBus: 0)
     if format.sampleRate == 0 || format.channelCount == 0 {
       try session.setActive(true)
@@ -81,9 +82,55 @@ final class LiveVoice: SharedObject {
       throw LiveVoiceException("The microphone did not start.")
     }
 
+    // Play and record in the voice-processing hardware format so the
+    // canceller compares the same signal the speaker is rendering.
+    guard let monoHardware = AVAudioFormat(
+      commonFormat: .pcmFormatFloat32,
+      sampleRate: format.sampleRate,
+      channels: 1,
+      interleaved: false
+    ) else {
+      throw LiveVoiceException("The microphone did not start.")
+    }
+    guard let wire = AVAudioFormat(
+      commonFormat: .pcmFormatFloat32,
+      sampleRate: wireRate,
+      channels: 1,
+      interleaved: false
+    ) else {
+      throw LiveVoiceException("The microphone did not start.")
+    }
+
+    engine.attach(player)
+    engine.connect(player, to: engine.mainMixerNode, format: monoHardware)
+    engine.connect(engine.mainMixerNode, to: engine.outputNode, format: monoHardware)
+
     let bufferSize = AVAudioFrameCount(max(256.0, format.sampleRate * 0.02))
     input.installTap(onBus: 0, bufferSize: bufferSize, format: format) { [weak self] buffer, _ in
-      self?.emitMic(buffer)
+      guard let self else { return }
+      // Copy off the realtime thread before allocating / crossing into JS.
+      let frames = Int(buffer.frameLength)
+      guard frames > 0 else { return }
+      guard let copy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameCapacity) else {
+        return
+      }
+      copy.frameLength = buffer.frameLength
+      if let src = buffer.floatChannelData, let dst = copy.floatChannelData {
+        let channels = Int(buffer.format.channelCount)
+        for channel in 0..<channels {
+          memcpy(dst[channel], src[channel], frames * MemoryLayout<Float>.size)
+        }
+      } else if let src = buffer.int16ChannelData, let dst = copy.int16ChannelData {
+        let channels = Int(buffer.format.channelCount)
+        for channel in 0..<channels {
+          memcpy(dst[channel], src[channel], frames * MemoryLayout<Int16>.size)
+        }
+      } else {
+        return
+      }
+      self.audioQueue.async { [weak self] in
+        self?.emitMic(copy)
+      }
     }
     tapInstalled = true
 
@@ -96,12 +143,22 @@ final class LiveVoice: SharedObject {
     }
     player.play()
 
+    guard input.isVoiceProcessingEnabled else {
+      input.removeTap(onBus: 0)
+      tapInstalled = false
+      player.stop()
+      engine.stop()
+      throw LiveVoiceException("The microphone did not start.")
+    }
+
     self.engine = engine
     self.player = player
-    self.playbackFormat = playbackFormat
+    self.hardwareFormat = monoHardware
+    self.wireFormat = wire
+    self.converter = AVAudioConverter(from: wire, to: monoHardware)
     started = true
     status.sampleRate = format.sampleRate
-    status.voiceProcessing = input.isVoiceProcessingEnabled
+    status.voiceProcessing = true
     return status
   }
 
@@ -119,22 +176,31 @@ final class LiveVoice: SharedObject {
     engine?.stop()
     engine = nil
     player = nil
-    playbackFormat = nil
+    hardwareFormat = nil
+    wireFormat = nil
+    converter = nil
     started = false
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
   }
 
   func enqueue(base64: String) {
-    guard started, let player, let playbackFormat else { return }
+    guard started else { return }
+    audioQueue.async { [weak self] in
+      self?.scheduleDecoded(base64: base64)
+    }
+  }
+
+  private func scheduleDecoded(base64: String) {
+    guard started, let player, let hardwareFormat, let wireFormat else { return }
     guard let data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters) else { return }
     let frames = data.count / 2
     guard frames > 0 else { return }
-    guard let buffer = AVAudioPCMBuffer(
-      pcmFormat: playbackFormat,
+    guard let wireBuffer = AVAudioPCMBuffer(
+      pcmFormat: wireFormat,
       frameCapacity: AVAudioFrameCount(frames)
     ) else { return }
-    buffer.frameLength = AVAudioFrameCount(frames)
-    guard let destination = buffer.floatChannelData?[0] else { return }
+    wireBuffer.frameLength = AVAudioFrameCount(frames)
+    guard let destination = wireBuffer.floatChannelData?[0] else { return }
 
     data.withUnsafeBytes { raw in
       guard let bytes = raw.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
@@ -144,12 +210,38 @@ final class LiveVoice: SharedObject {
       }
     }
 
+    let scheduled: AVAudioPCMBuffer
+    if abs(hardwareFormat.sampleRate - wireRate) < 0.5 {
+      scheduled = wireBuffer
+    } else {
+      guard let converter else { return }
+      let ratio = hardwareFormat.sampleRate / wireRate
+      let capacity = AVAudioFrameCount(ceil(Double(frames) * ratio) + 32)
+      guard let out = AVAudioPCMBuffer(pcmFormat: hardwareFormat, frameCapacity: capacity) else {
+        return
+      }
+      var error: NSError?
+      var consumed = false
+      let status = converter.convert(to: out, error: &error) { _, outStatus in
+        if consumed {
+          outStatus.pointee = .noDataNow
+          return nil
+        }
+        consumed = true
+        outStatus.pointee = .haveData
+        return wireBuffer
+      }
+      if status == .error || out.frameLength == 0 { return }
+      scheduled = out
+    }
+
     lock.lock()
     let token = generation
     pending += 1
     lock.unlock()
 
-    player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+    // scheduleBuffer is thread-safe; keep decode off the main / realtime paths.
+    player.scheduleBuffer(scheduled, completionCallbackType: .dataPlayedBack) { [weak self] _ in
       guard let self else { return }
       self.lock.lock()
       let matches = self.generation == token
@@ -261,7 +353,6 @@ public class LiveVoiceModule: Module {
       AsyncFunction("enqueuePcm16Base64") { (voice: LiveVoice, audio: String) in
         voice.enqueue(base64: audio)
       }
-      .runOnQueue(.main)
 
       AsyncFunction("stopPlayback") { (voice: LiveVoice) in
         voice.stopPlayback()

@@ -19,6 +19,7 @@ import {
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
 import { beginStreamTrace, traceStream } from "./stream-trace";
 import { pendingMessageLabel, hasPendingAction } from "./message-projection";
+import type { LiveSpokenDraft, SpokenTurn } from "../../lib/chat/spoken-turns";
 import {
   appendChatEvents,
   attachChatToProject,
@@ -31,6 +32,7 @@ import {
   renameChat as renameChatRequest,
   saveChatSession,
   saveChatSnapshot,
+  saveSpokenTurns as saveSpokenTurnsRequest,
   setChatProject as setChatProjectRequest,
   type ActiveChat,
   type ChatListItem,
@@ -84,6 +86,10 @@ type ChatsContextValue = {
     chatId: string,
     projectId: string | null,
   ) => Promise<void>;
+  /** Live voice lines shown until eve imports them on the next real send. */
+  readonly spokenTurns: readonly SpokenTurn[];
+  /** Persist a live call without starting a Pearl turn. */
+  readonly saveSpokenTurns: (turns: readonly LiveSpokenDraft[]) => Promise<void>;
 };
 
 const ChatsContext = createContext<ChatsContextValue | null>(null);
@@ -141,6 +147,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [spokenTurns, setSpokenTurns] = useState<readonly SpokenTurn[]>([]);
 
   const setActiveProjectId = useCallback((projectId: string | null) => {
     activeProjectIdRef.current = projectId;
@@ -433,6 +440,10 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         }
         binding.pendingMessage = message || null;
         binding.sendPrepared = true;
+        // onMessage imports spoken turns for this send; drop the overlay source.
+        if (message && activeStoreRef.current === store) {
+          setSpokenTurns([]);
+        }
         traceSend(binding, "pending marker saved");
         if (binding.id) touchRetained(binding.id, store);
         return input;
@@ -541,11 +552,18 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         const pending = hasHistory ? null : binding.pendingMessage;
         if (hasHistory) binding.pendingMessage = null;
         setPendingMessage(pending);
+        setSpokenTurns([]);
         setPersistenceError(binding.syncFailed ? "Save failed" : null);
         touchRetained(chatId, retained);
         setStore(retained);
         pruneIdleStore(prior);
         markActiveChatRead(chatId);
+        // Retained stores skip a network round-trip; refresh spoken turns.
+        void getChat(chatId).then((fresh) => {
+          if (activeChatIdRef.current === chatId && fresh) {
+            setSpokenTurns(fresh.spokenTurns ?? []);
+          }
+        });
         return true;
       }
       try {
@@ -574,6 +592,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         activeProjectIdRef.current = chat.projectId ?? null;
         setActiveProjectIdState(chat.projectId ?? null);
         setPendingMessage(stillPending);
+        setSpokenTurns(chat.spokenTurns ?? []);
         setPersistenceError(null);
         setStore(nextStore);
         pruneIdleStore(prior);
@@ -606,6 +625,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     setNewChatEntry((current) => current + 1);
     setActiveTitle("New chat");
     setPendingMessage(null);
+    setSpokenTurns([]);
     setPersistenceError(null);
     setSelectionError(null);
     // Drop durable composer attachments for the prior chat and the draft key.
@@ -621,6 +641,49 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     setStore(nextStore);
     pruneIdleStore(prior);
   }, [buildStore, pruneIdleStore]);
+
+  const saveSpokenTurns = useCallback(
+    async (drafts: readonly LiveSpokenDraft[]) => {
+      const store = activeStoreRef.current;
+      if (!store) throw new Error("Could not save the live conversation to this chat.");
+      const binding = bindings.get(store);
+      if (!binding) throw new Error("Could not save the live conversation to this chat.");
+
+      let chatId = binding.id;
+      const projectId = binding.projectId ?? activeProjectIdRef.current ?? null;
+      if (!chatId) {
+        const created = await createChat(undefined, projectId);
+        chatId = created.id;
+        binding.id = created.id;
+        binding.projectId = created.projectId ?? projectId;
+        binding.title = created.title;
+        activeChatIdRef.current = created.id;
+        setActiveChatId(created.id);
+        setActiveTitle(created.title);
+        activeProjectIdRef.current = binding.projectId;
+        setActiveProjectIdState(binding.projectId);
+        setChats((current) => [
+          {
+            ...created,
+            waitingForInput: false,
+            presence: "idle" as const,
+          },
+          ...current.filter((chat) => chat.id !== created.id),
+        ]);
+        touchRetained(created.id, store);
+      }
+
+      const saved = await saveSpokenTurnsRequest(chatId, drafts);
+      setSpokenTurns(saved);
+      setActiveTitle((current) =>
+        current === "New chat" && saved[0]
+          ? saved.find((turn) => turn.role === "user")?.text.slice(0, 48) || current
+          : current,
+      );
+      void reloadChats();
+    },
+    [bindings, reloadChats, touchRetained],
+  );
 
   const deleteChat = useCallback(
     async (chatId: string) => {
@@ -798,6 +861,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       deleteChat,
       renameChat,
       setChatProject,
+      spokenTurns,
+      saveSpokenTurns,
     }),
     [
       store,
@@ -823,6 +888,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       deleteChat,
       renameChat,
       setChatProject,
+      spokenTurns,
+      saveSpokenTurns,
     ],
   );
 

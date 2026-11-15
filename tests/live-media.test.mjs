@@ -7,6 +7,11 @@ import {
   LIVE_MODEL_ID,
 } from "../lib/live-token.ts";
 import {
+  isLiveHistoryId,
+  spokenTurnsAsHistory,
+  toSpokenTurns,
+} from "../lib/chat/spoken-turns.ts";
+import {
   LIVE_BARGE_IN_LEVEL,
   LIVE_CAPTURE_SAMPLE_RATE,
   LIVE_FRAME_MAX_BYTES,
@@ -26,6 +31,7 @@ import {
   liveVoiceStatusLabel,
   pcm16PeakLevel,
   resampleLinear,
+  shouldUploadWhileSpeaking,
   wavFromPcm16,
 } from "../mobile/src/live-media.ts";
 
@@ -36,6 +42,7 @@ test("live session config stays voice-first without gateway providerOptions", ()
   assert.equal("providerOptions" in LIVE_SESSION_CONFIG, false);
   assert.equal(LIVE_MODEL_ID, "openai/gpt-realtime-mini");
   assert.equal(LIVE_SESSION_CONFIG.turnDetection.type, "server-vad");
+  assert.equal(LIVE_SESSION_CONFIG.turnDetection.threshold, 0.6);
   assert.equal(liveGreetingResponseEvent().type, "response-create");
 });
 
@@ -46,8 +53,28 @@ test("pcm peak level and voice labels support the speaking orb", () => {
   new DataView(loud.buffer).setInt16(0, 20000, true);
   new DataView(loud.buffer).setInt16(2, -20000, true);
   assert.ok(pcm16PeakLevel(loud) > LIVE_BARGE_IN_LEVEL);
+  assert.equal(shouldUploadWhileSpeaking(0), false);
+  assert.equal(shouldUploadWhileSpeaking(LIVE_BARGE_IN_LEVEL - 0.01), false);
+  assert.equal(shouldUploadWhileSpeaking(LIVE_BARGE_IN_LEVEL), true);
   assert.equal(liveVoiceStatusLabel("speaking"), "Pearl is talking");
   assert.equal(liveVoiceStatusLabel("listening"), "You're talking");
+});
+
+test("live turns map to eve history without a Pearl reply turn", () => {
+  const turns = toSpokenTurns("chat-1", [
+    { role: "user", text: " Hello " },
+    { role: "pearl", text: "Hi there." },
+    { role: "user", text: "   " },
+  ]);
+  assert.deepEqual(turns, [
+    { id: "live:chat-1:0", role: "user", text: "Hello" },
+    { id: "live:chat-1:1", role: "assistant", text: "Hi there." },
+  ]);
+  assert.equal(isLiveHistoryId(turns[0]?.id), true);
+  assert.deepEqual(spokenTurnsAsHistory(turns), [
+    { id: "live:chat-1:0", role: "user", text: "Hello" },
+    { id: "live:chat-1:1", role: "assistant", text: "Hi there." },
+  ]);
 });
 
 test("a data-policy mint failure is explained and other failures stay generic", () => {

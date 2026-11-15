@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { randomUUID } from "node:crypto";
 import type { ClientSessionState, SessionStreamEvent } from "eve/client";
+import type { SpokenTurn } from "@/lib/chat/spoken-turns";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -117,6 +118,11 @@ export const chat = pgTable(
       .default(sql`'[]'::jsonb`),
     // Last time the owner opened this chat (unread = settle after this).
     lastReadAt: timestamp("last_read_at").notNull().defaultNow(),
+    // Live voice lines waiting to join eve history on the next real send.
+    spokenTurns: jsonb("spoken_turns")
+      .$type<SpokenTurn[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

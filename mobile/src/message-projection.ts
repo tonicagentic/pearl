@@ -5,6 +5,10 @@ import type {
   EveToolPart,
 } from "eve/client";
 import type { ThreadMessageLike } from "@assistant-ui/react-native";
+import {
+  isLiveHistoryId,
+  type SpokenTurn,
+} from "../../lib/chat/spoken-turns";
 import { isAttachmentMarker } from "./attachment-content";
 
 type Part = Exclude<ThreadMessageLike["content"], string>[number];
@@ -620,10 +624,19 @@ function projectAssistantMessage(
       : isRunning && last ? { type: "running" }
       : message.metadata?.status === "streaming" ? { type: "incomplete", reason: "cancelled" }
       : { type: "complete", reason: "stop" };
+  const live = isLiveHistoryId(message.metadata?.historyId);
   return {
     role: "assistant", status,
     content: message.parts.map(assistantPart).filter((p): p is Part => p !== null),
-    metadata: { custom: { turnId: message.metadata?.turnId } },
+    metadata: {
+      ...(live ? { modality: "voice" as const } : {}),
+      custom: {
+        turnId: message.metadata?.turnId,
+        ...(message.metadata?.historyId
+          ? { historyId: message.metadata.historyId }
+          : {}),
+      },
+    },
   };
 }
 
@@ -655,6 +668,7 @@ function projectUserMessage(message: EveMessage): ThreadMessageLike {
       status: { type: "complete" as const }, content: [],
     })));
   const hasImage = attachments.some((attachment) => attachment.type === "image" && attachment.content.length > 0);
+  const live = isLiveHistoryId(message.metadata?.historyId);
   return {
     role: "user",
     content: message.parts.filter((part): part is Extract<EveMessagePart, { type: "text" }> =>
@@ -665,7 +679,45 @@ function projectUserMessage(message: EveMessage): ThreadMessageLike {
       return text ? [{ type: "text" as const, text }] : [];
     }),
     ...(attachments.length ? { attachments } : {}),
+    ...(live
+      ? {
+          metadata: {
+            modality: "voice" as const,
+            custom: { historyId: message.metadata?.historyId },
+          },
+        }
+      : {}),
   };
+}
+
+/** Spoken lines not yet present as imported eve messages. */
+export function spokenTurnsPendingImport(
+  spoken: readonly SpokenTurn[],
+  messages: readonly EveMessage[],
+): SpokenTurn[] {
+  const imported = new Set(
+    messages
+      .map((message) => message.metadata?.historyId)
+      .filter((id): id is string => typeof id === "string"),
+  );
+  return spoken.filter((turn) => !imported.has(turn.id));
+}
+
+/** Overlay live turns onto the thread until eve imports them. */
+export function appendSpokenTurnMessages(
+  projected: readonly ThreadMessageLike[],
+  spoken: readonly SpokenTurn[],
+): ThreadMessageLike[] {
+  if (spoken.length === 0) return [...projected];
+  const overlay: ThreadMessageLike[] = spoken.map((turn) => ({
+    role: turn.role === "assistant" ? ("assistant" as const) : ("user" as const),
+    content: [{ type: "text" as const, text: turn.text }],
+    metadata: {
+      modality: "voice" as const,
+      custom: { historyId: turn.id },
+    },
+  }));
+  return [...projected, ...overlay];
 }
 
 // Omit the message id: eve replaces the optimistic user id on acceptance, and

@@ -204,6 +204,13 @@
       "when": 1795000000000,
       "tag": "0030_windy_aqueduct",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794761985551,
+      "tag": "0032_normal_queen_noir",
+      "breakpoints": true
     }
   ]
 }

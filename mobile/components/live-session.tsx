@@ -29,10 +29,10 @@ import {
   LIVE_CAPTURE_SAMPLE_RATE,
   LIVE_MAX_SESSION_MS,
   LIVE_MIC_SETTLE_MS,
+  LIVE_PLAYBACK_TAIL_MS,
   LIVE_SAMPLE_RATE,
   PcmPlaybackBuffer,
   captureToPcm16Base64,
-  formatLiveTranscript,
   isFatalLiveError,
   isVideoFrameRejection,
   liveFrameEvent,
@@ -41,12 +41,12 @@ import {
   liveSocketProtocols,
   liveVoiceStatusLabel,
   pcm16PeakLevel,
+  shouldUploadWhileSpeaking,
   wavFromPcm16,
   type LiveTurn,
   type LiveVoiceMode,
 } from "@/src/live-media";
 import { fetchLiveToken } from "@/src/live-token-client";
-import { buildTurnClientContext } from "@/src/turn-client-context";
 import { cn } from "@/lib/utils";
 
 type Phase = "connecting" | "live" | "closed" | "error";
@@ -93,7 +93,7 @@ async function startMicStream(stream: { start: () => Promise<unknown> }) {
 }
 
 export function LiveSession({ onClose }: { readonly onClose: () => void }) {
-  const { store, activeProjectId } = useChats();
+  const { saveSpokenTurns } = useChats();
   const cameraRef = useRef<CameraView>(null);
   const onCapture = useRef<(buffer: AudioStreamBuffer) => void>(() => {});
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -139,6 +139,13 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
   const finishRef = useRef<() => void>(() => {});
   const suppressMicRef = useRef(false);
   const awaitPlaybackDrainRef = useRef(false);
+  /** iOS: Pearl is audible on the speaker; residual mic frames are gated. */
+  const assistantAudibleRef = useRef(false);
+  const modelAudioDoneRef = useRef(false);
+  /** True after an audio-delta until native playbackDrained. */
+  const playbackScheduledRef = useRef(false);
+  const clearedInputForTurnRef = useRef(false);
+  const drainTailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const levelTickRef = useRef(0);
   const voiceRef = useRef<LiveVoice | null>(null);
   const iosDuplex = Platform.OS === "ios";
@@ -148,6 +155,66 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     if (!socket || socket.readyState !== WebSocket.OPEN || closedRef.current) return;
     socket.send(JSON.stringify(event));
   }, []);
+
+  const clearDrainTail = useCallback(() => {
+    if (drainTailTimerRef.current) {
+      clearTimeout(drainTailTimerRef.current);
+      drainTailTimerRef.current = null;
+    }
+  }, []);
+
+  const releaseAssistantAudible = useCallback(() => {
+    clearDrainTail();
+    assistantAudibleRef.current = false;
+    modelAudioDoneRef.current = false;
+    playbackScheduledRef.current = false;
+    clearedInputForTurnRef.current = false;
+    setMicLevel(0);
+    if (!closedRef.current && !mutedRef.current) setVoiceMode("idle");
+  }, [clearDrainTail]);
+
+  const startAudibleTailIfReady = useCallback(() => {
+    if (closedRef.current) return;
+    if (!assistantAudibleRef.current || !modelAudioDoneRef.current) return;
+    if (playbackScheduledRef.current) return;
+    clearDrainTail();
+    drainTailTimerRef.current = setTimeout(() => {
+      drainTailTimerRef.current = null;
+      releaseAssistantAudible();
+    }, LIVE_PLAYBACK_TAIL_MS);
+  }, [clearDrainTail, releaseAssistantAudible]);
+
+  const markAssistantAudible = useCallback(() => {
+    clearDrainTail();
+    const first = !assistantAudibleRef.current;
+    assistantAudibleRef.current = true;
+    modelAudioDoneRef.current = false;
+    playbackScheduledRef.current = true;
+    if (first && !clearedInputForTurnRef.current) {
+      clearedInputForTurnRef.current = true;
+      sendEvent({ type: "input-audio-clear" });
+    }
+    setVoiceMode((current) => (current === "muted" || current === "speaking" ? current : "speaking"));
+  }, [clearDrainTail, sendEvent]);
+
+  const noteModelAudioDone = useCallback(() => {
+    if (!assistantAudibleRef.current) return;
+    modelAudioDoneRef.current = true;
+    startAudibleTailIfReady();
+  }, [startAudibleTailIfReady]);
+
+  const notePlaybackDrained = useCallback(() => {
+    if (closedRef.current) return;
+    playbackScheduledRef.current = false;
+    if (!assistantAudibleRef.current || !modelAudioDoneRef.current) {
+      setMicLevel(0);
+      setVoiceMode((current) =>
+        current === "listening" || current === "muted" ? current : "idle",
+      );
+      return;
+    }
+    startAudibleTailIfReady();
+  }, [startAudibleTailIfReady]);
 
   const settleAfterPlayback = useCallback(() => {
     if (!awaitPlaybackDrainRef.current) return;
@@ -201,6 +268,8 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     if (endingRef.current) return;
     endingRef.current = true;
     closedRef.current = true;
+    clearDrainTail();
+    assistantAudibleRef.current = false;
     const socket = socketRef.current;
     socketRef.current = null;
     socket?.close();
@@ -218,27 +287,24 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       turnsRef.current = [...turnsRef.current, { role: "pearl", text: spoken }];
       setTurns(turnsRef.current);
     }
-    const transcript = formatLiveTranscript(turnsRef.current);
-    if (!transcript) {
+    const spokenTurns = turnsRef.current;
+    if (spokenTurns.length === 0) {
       onClose();
       return;
     }
-    const status = store.snapshot.status;
-    if (status === "busy" || status === "resuming") {
-      endingRef.current = false;
-      setHandoffError("This chat is still responding. Save the live conversation after it finishes.");
-      return;
-    }
-    void store.send({
-      message: transcript,
-      clientContext: buildTurnClientContext(activeProjectId),
-    }).then(() => {
-      onClose();
-    }).catch((cause: unknown) => {
-      endingRef.current = false;
-      setHandoffError(cause instanceof Error ? cause.message : "Could not save the live conversation to this chat.");
-    });
-  }, [onClose, stopPlayback, store, activeProjectId]);
+    void saveSpokenTurns(spokenTurns)
+      .then(() => {
+        onClose();
+      })
+      .catch((cause: unknown) => {
+        endingRef.current = false;
+        setHandoffError(
+          cause instanceof Error
+            ? cause.message
+            : "Could not save the live conversation to this chat.",
+        );
+      });
+  }, [clearDrainTail, onClose, saveSpokenTurns, stopPlayback]);
 
   useEffect(() => {
     finishRef.current = finish;
@@ -280,9 +346,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       onCapture.current({ ...buffer, timestamp: 0 });
     });
     const drained = voice.addDrainedListener(() => {
-      if (closedRef.current) return;
-      setMicLevel(0);
-      setVoiceMode((current) => current === "listening" || current === "muted" ? current : "idle");
+      notePlaybackDrained();
     });
     return () => {
       buffers.remove();
@@ -290,7 +354,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       voice.stop();
       if (voiceRef.current === voice) voiceRef.current = null;
     };
-  }, [iosDuplex]);
+  }, [iosDuplex, notePlaybackDrained]);
 
   useEffect(() => {
     onCapture.current = (buffer) => {
@@ -307,6 +371,10 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
         stopPlayback();
         suppressMicRef.current = false;
         setVoiceMode("listening");
+      }
+      // iOS: while Pearl is audible, drop residual echo; upload only barge-in.
+      if (iosDuplex && assistantAudibleRef.current && !shouldUploadWhileSpeaking(level)) {
+        return;
       }
       const audio = captureToPcm16Base64({
         data: bytes,
@@ -338,7 +406,11 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
           if (cancelled) return;
           const voice = voiceRef.current;
           if (!voice) throw new Error("The microphone did not start.");
-          await voice.start();
+          const status = await voice.start();
+          if (!status.voiceProcessing) {
+            voice.stop();
+            throw new Error("The microphone did not start.");
+          }
           if (cancelled || closedRef.current) {
             voice.stop();
             return;
@@ -388,19 +460,26 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
             const message = item as ServerEvent;
             if (message.type === "audio-delta" && typeof message.delta === "string") {
               if (iosDuplex) {
+                markAssistantAudible();
                 voiceRef.current?.enqueuePcm16Base64(message.delta);
-                setVoiceMode((current) => current === "muted" || current === "speaking" ? current : "speaking");
               } else {
                 for (const chunk of playbackRef.current.pushBase64(message.delta)) enqueueWav(chunk);
               }
             } else if (message.type === "audio-done" || message.type === "response-done") {
-              if (!iosDuplex) {
+              if (iosDuplex) {
+                noteModelAudioDone();
+              } else {
                 const tail = playbackRef.current.flush();
                 if (tail) enqueueWav(tail);
                 awaitPlaybackDrainRef.current = true;
                 settleAfterPlayback();
               }
             } else if (message.type === "speech-started") {
+              clearDrainTail();
+              assistantAudibleRef.current = false;
+              modelAudioDoneRef.current = false;
+              playbackScheduledRef.current = false;
+              clearedInputForTurnRef.current = false;
               voiceRef.current?.stopPlayback();
               stopPlayback();
               suppressMicRef.current = false;
@@ -460,6 +539,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     void connect();
     return () => {
       cancelled = true;
+      clearDrainTail();
       if (sessionTimer) clearTimeout(sessionTimer);
       socket?.close();
       if (socketRef.current === socket) socketRef.current = null;
@@ -468,7 +548,17 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       voiceRef.current?.stop();
       stopPlayback();
     };
-  }, [enqueueWav, iosDuplex, sendEvent, settleAfterPlayback, stopPlayback]);
+  }, [
+    clearDrainTail,
+    enqueueWav,
+    iosDuplex,
+    markAssistantAudible,
+    noteModelAudioDone,
+    notePlaybackDrained,
+    sendEvent,
+    settleAfterPlayback,
+    stopPlayback,
+  ]);
 
   useEffect(() => {
     if (!cameraOn || !cameraReady || videoRejected || phase !== "live") return;

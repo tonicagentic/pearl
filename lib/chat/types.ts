@@ -1,4 +1,5 @@
 import type { ClientSessionState, SessionStreamEvent } from "eve/client";
+import type { SpokenTurn } from "@/lib/chat/spoken-turns";
 
 export type Viewer = {
   readonly email: string;
@@ -46,6 +47,7 @@ export type ActiveChat = {
   readonly pendingUserMessage: string | null;
   readonly projectId: string | null;
   readonly session: ClientSessionState | undefined;
+  readonly spokenTurns: readonly SpokenTurn[];
   readonly title: string;
 };
 

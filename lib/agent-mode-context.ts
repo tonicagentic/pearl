@@ -5,5 +5,7 @@
 
 export const MODE_MARKER = "eveAgentMode";
 export const PROJECT_ID_MARKER = "eveProjectId";
+/** Lets onMessage load spoken live turns before the chat row has an eve session. */
+export const CHAT_ID_MARKER = "eveChatId";
 
 export type AgentMode = "agent" | "plan";

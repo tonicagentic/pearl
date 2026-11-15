@@ -13,6 +13,7 @@ import type {
   ChatListPage,
   ChatSearchHit,
 } from "@/lib/chat/types";
+import type { SpokenTurn } from "@/lib/chat/spoken-turns";
 import { createFallbackTitle, DEFAULT_CHAT_TITLE } from "@/lib/chat/title";
 import {
   chat,
@@ -271,6 +272,7 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
       pendingUserMessage: chat.pendingUserMessage,
       pendingUserMessageCreatedAt: chat.pendingUserMessageCreatedAt,
       projectId: chat.projectId,
+      spokenTurns: chat.spokenTurns,
     })
     .from(chat)
     .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
@@ -306,8 +308,103 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
     pendingUserMessage: hasCurrentTurnCompleted ? null : row.pendingUserMessage,
     projectId: row.projectId ?? null,
     session: row.eveSession ?? undefined,
+    spokenTurns: Array.isArray(row.spokenTurns) ? row.spokenTurns : [],
     title: row.title,
   };
+}
+
+/** Persist live voice turns on the chat until the next real send imports them. */
+export async function saveSpokenTurnsForUser({
+  chatId,
+  userId,
+  turns,
+}: {
+  readonly chatId: string;
+  readonly userId: string;
+  readonly turns: readonly SpokenTurn[];
+}): Promise<boolean> {
+  const [row] = await db
+    .update(chat)
+    .set({
+      spokenTurns: [...turns],
+      title: sql<string>`
+        case
+          when ${chat.title} = ${DEFAULT_CHAT_TITLE}
+          then ${createFallbackTitle(turns.find((turn) => turn.role === "user")?.text ?? "Live conversation")}
+          else ${chat.title}
+        end
+      `,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
+    .returning({ id: chat.id });
+
+  return Boolean(row);
+}
+
+/**
+ * Atomically read and clear spoken turns for a chat the caller owns.
+ * Used by the eve channel to import history on the next real send.
+ */
+export async function takeSpokenTurnsForUser({
+  chatId,
+  userId,
+}: {
+  readonly chatId: string;
+  readonly userId: string;
+}): Promise<SpokenTurn[]> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ spokenTurns: chat.spokenTurns })
+      .from(chat)
+      .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
+      .limit(1);
+
+    const turns = Array.isArray(row?.spokenTurns) ? row.spokenTurns : [];
+    if (turns.length === 0) return [];
+
+    await tx
+      .update(chat)
+      .set({ spokenTurns: [], updatedAt: new Date() })
+      .where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
+
+    return turns;
+  });
+}
+
+/**
+ * Resolve which chat holds spoken turns for this delivery: prefer an explicit
+ * chat id from clientContext, then the chat linked to the eve session.
+ */
+export async function resolveChatIdForSpokenTurns({
+  chatId,
+  sessionId,
+  userId,
+}: {
+  readonly chatId?: string | null;
+  readonly sessionId?: string | null;
+  readonly userId: string;
+}): Promise<string | null> {
+  const explicit = chatId?.trim();
+  if (explicit) {
+    const [row] = await db
+      .select({ id: chat.id })
+      .from(chat)
+      .where(and(eq(chat.id, explicit), eq(chat.userId, userId)))
+      .limit(1);
+    if (row) return row.id;
+  }
+
+  const fromSession = sessionId?.trim();
+  if (!fromSession) return null;
+  const linked = await getChatIdByEveSessionId(fromSession);
+  if (!linked) return null;
+  const [owned] = await db
+    .select({ id: chat.id })
+    .from(chat)
+    .where(and(eq(chat.id, linked), eq(chat.userId, userId)))
+    .limit(1);
+  return owned?.id ?? null;
 }
 
 export async function markChatPendingMessage({

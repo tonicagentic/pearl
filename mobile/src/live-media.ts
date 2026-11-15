@@ -33,8 +33,24 @@ export const LIVE_SESSION_CONFIG = {
   outputAudioTranscription: {},
   inputAudioFormat: { type: "audio/pcm", rate: LIVE_SAMPLE_RATE },
   outputAudioFormat: { type: "audio/pcm", rate: LIVE_SAMPLE_RATE },
-  turnDetection: { type: "server-vad" },
+  // 0.6 is speakerphone margin so residual echo is less likely to trip VAD.
+  turnDetection: { type: "server-vad", threshold: 0.6 },
 } as const;
+
+/**
+ * Keep the uplink gate closed after the model finishes while the speaker
+ * drains the last buffers (~200 ms at the hardware rate).
+ */
+export const LIVE_PLAYBACK_TAIL_MS = 200;
+
+/**
+ * Whether a mic frame should be uploaded while the assistant is audible.
+ * Silent residual echo is dropped; energy at or above the barge-in level is
+ * a real interrupt and goes to the server.
+ */
+export function shouldUploadWhileSpeaking(level: number): boolean {
+  return level >= LIVE_BARGE_IN_LEVEL;
+}
 
 /** Peak amplitude 0..1 from little-endian PCM16 mono bytes. */
 export function pcm16PeakLevel(pcm: Uint8Array): number {
@@ -50,9 +66,9 @@ export function pcm16PeakLevel(pcm: Uint8Array): number {
 }
 
 /**
- * Android local interrupt threshold. iOS does not use it: the mic and the
- * speaker share one voice-processing engine, and server speech-started is
- * the only interrupt.
+ * Local barge-in threshold. Android uses it to stop expo-audio playback.
+ * iOS uses it to decide whether a mic frame is residual echo (drop) or a
+ * real interrupt (upload; server speech-started stops the player).
  */
 export const LIVE_BARGE_IN_LEVEL = 0.14;
 

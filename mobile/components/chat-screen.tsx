@@ -26,11 +26,13 @@ import { withPendingAssistant } from "@/src/stream-presentation";
 import { buildTurnClientContext } from "@/src/turn-client-context";
 import { useWorkspace } from "@/src/workspace-context";
 import {
+  appendSpokenTurnMessages,
   composerWaitingQuestions,
   getPendingApprovals,
   hasPendingAction,
   isTextOnlyPendingQuestion,
   pendingWaitKind,
+  spokenTurnsPendingImport,
   type PendingApproval,
 } from "@/src/message-projection";
 import type { WaitingAction } from "@/components/assistant-ui/elements/waiting-action-card";
@@ -87,6 +89,7 @@ export function ChatScreen({
     deleteChat,
     wasSendPrepared,
     recoverDeadSession,
+    spokenTurns,
   } = useChats();
   const { setChatId, tabs } = useWorkspace();
   const [mainTab, setMainTab] = useState<MainTab>("chat");
@@ -311,7 +314,7 @@ export function ChatScreen({
             ...(response.text !== undefined ? { text: response.text } : {}),
           },
         ],
-        clientContext: buildTurnClientContext(activeProjectId),
+        clientContext: buildTurnClientContext(activeProjectId, activeChatId),
       });
     },
     [store, activeProjectId],
@@ -340,7 +343,7 @@ export function ChatScreen({
               ...(response.text !== undefined ? { text: response.text } : {}),
             },
           ],
-          clientContext: buildTurnClientContext(activeProjectId),
+          clientContext: buildTurnClientContext(activeProjectId, activeChatId),
         });
       };
       return {
@@ -396,7 +399,7 @@ export function ChatScreen({
                 ...(response.text !== undefined ? { text: response.text } : {}),
               },
             ],
-            clientContext: buildTurnClientContext(activeProjectId),
+            clientContext: buildTurnClientContext(activeProjectId, activeChatId),
           });
         },
       };
@@ -423,21 +426,27 @@ export function ChatScreen({
   );
   // Parent transcript only — do not depend on `agents` / `conversation` or
   // every followed-child delta rebuilds the assistant-ui adapter.
-  const projectedMessages = useMemo(
-    () => withPendingAssistant(
-      projectSendMessages(
-        toThreadMessages({ messages }, { isRunning: isBusy, hasError }),
-        messages,
-        confirmed ? null : hasError && localSend
-          ? { ...localSend, phase: "uncertain" }
-          : localSend,
-      ),
+  const pendingSpoken = useMemo(
+    () => spokenTurnsPendingImport(spokenTurns, messages),
+    [spokenTurns, messages],
+  );
+
+  const projectedMessages = useMemo(() => {
+    const projected = projectSendMessages(
+      toThreadMessages({ messages }, { isRunning: isBusy, hasError }),
+      messages,
+      confirmed ? null : hasError && localSend
+        ? { ...localSend, phase: "uncertain" }
+        : localSend,
+    );
+    const base = withPendingAssistant(
+      projected as Parameters<typeof withPendingAssistant>[0],
       messages,
       isBusy,
       awaitingReply,
-    ),
-    [messages, localSend, confirmed, isBusy, hasError, awaitingReply],
-  );
+    );
+    return appendSpokenTurnMessages(base as ThreadMessageLike[], pendingSpoken);
+  }, [messages, localSend, confirmed, isBusy, hasError, awaitingReply, pendingSpoken]);
 
   useEffect(() => {
     if (!expectingAssistant) return;
@@ -528,7 +537,7 @@ export function ChatScreen({
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         const sendPayload = {
           message: outgoing,
-          clientContext: buildTurnClientContext(projectIdForTurn),
+          clientContext: buildTurnClientContext(projectIdForTurn, activeChatId),
         };
         try {
           // Mode, project, and model ride the turn as ephemeral clientContext.
@@ -658,7 +667,7 @@ export function ChatScreen({
               ...(response.text !== undefined ? { text: response.text } : {}),
             },
           ],
-          clientContext: buildTurnClientContext(activeProjectId),
+          clientContext: buildTurnClientContext(activeProjectId, activeChatId),
         });
       },
     }),
@@ -696,7 +705,7 @@ export function ChatScreen({
     autoSentPendingFor.current = activeChatId;
     void store.send({
       message: pendingMessage,
-      clientContext: buildTurnClientContext(activeProjectId),
+      clientContext: buildTurnClientContext(activeProjectId, activeChatId),
     });
   }, [pendingMessage, activeChatId, status, store, activeProjectId]);
 
@@ -721,7 +730,7 @@ export function ChatScreen({
       const delivery = await store.send({
         // Outgoing was built by toEveTurn for this same store.send shape.
         message: payload as never,
-        clientContext: buildTurnClientContext(activeProjectId),
+        clientContext: buildTurnClientContext(activeProjectId, activeChatId),
       });
       const accepted =
         Boolean(delivery?.deliveryId) ||

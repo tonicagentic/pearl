@@ -4,6 +4,7 @@
 
 import type { ClientSessionState, SessionStreamEvent } from 'eve/client';
 
+import type { LiveSpokenDraft, SpokenTurn } from '../../lib/chat/spoken-turns';
 import { AGENT_URL, getAuthCookie } from './eve-transport';
 import { sessionInvalid } from './session-store';
 
@@ -34,6 +35,7 @@ export type ActiveChat = {
   readonly pendingUserMessage: string | null;
   readonly projectId: string | null;
   readonly session: ClientSessionState | undefined;
+  readonly spokenTurns: readonly SpokenTurn[];
   readonly title: string;
 };
 
@@ -151,8 +153,11 @@ export async function getChat(id: string): Promise<ActiveChat | null> {
   }
 
   const data = (await response.json()) as { chat: ActiveChat | null };
-
-  return data.chat;
+  if (!data.chat) return null;
+  return {
+    ...data.chat,
+    spokenTurns: data.chat.spokenTurns ?? [],
+  };
 }
 
 /** Durable session cursor, files, and browser-active flag for the Computer tab. */
@@ -179,6 +184,33 @@ export async function fetchComputerState(
   }
 
   return (await response.json()) as ComputerState;
+}
+
+/** Persist live voice turns without starting a Pearl turn. */
+export async function saveSpokenTurns(
+  chatId: string,
+  turns: readonly LiveSpokenDraft[],
+): Promise<readonly SpokenTurn[]> {
+  const response = await fetch(
+    `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/spoken-turns`,
+    {
+      method: "PUT",
+      headers: authHeaders(),
+      body: JSON.stringify({ turns }),
+    },
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      sessionInvalid();
+      throw new Error("Sign in to continue.");
+    }
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `Failed to save the live conversation (${response.status}).`);
+  }
+
+  const data = (await response.json()) as { spokenTurns?: SpokenTurn[] };
+  return data.spokenTurns ?? [];
 }
 
 export async function createChat(

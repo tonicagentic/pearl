@@ -45,7 +45,11 @@ import {
 } from "@/app/_components/model-selection";
 import { ProjectPickerDialog } from "@/app/_components/project-picker-dialog";
 import { attachChatToProjectAction } from "@/app/actions/projects";
-import { MODE_MARKER, PROJECT_ID_MARKER } from "@/lib/agent-mode-context";
+import {
+  CHAT_ID_MARKER,
+  MODE_MARKER,
+  PROJECT_ID_MARKER,
+} from "@/lib/agent-mode-context";
 import { waitingLabelForText } from "@/lib/pearl-lane";
 import { setWaitingLabel } from "@/lib/waiting-label";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
@@ -529,6 +533,10 @@ function AssistantChatSurfaceInner({
             pendingUserMessage: null,
             projectId: projectIdRef.current,
             session,
+            // onMessage imports and clears spoken turns for a real send.
+            spokenTurns: lastOutgoingMessageRef.current
+              ? []
+              : (activeChat?.spokenTurns ?? []),
             title: currentTitleRef.current,
           });
           onPendingUserMessageSettled?.();
@@ -624,6 +632,9 @@ function AssistantChatSurfaceInner({
         };
         if (projectIdRef.current) {
           clientContext[PROJECT_ID_MARKER] = projectIdRef.current;
+        }
+        if (activeChatIdRef.current) {
+          clientContext[CHAT_ID_MARKER] = activeChatIdRef.current;
         }
         if (selected && selected.key !== DEFAULT_MODEL_KEY) {
           clientContext.eveModelSelection = selected.key;
@@ -755,6 +766,24 @@ function AssistantChatSurfaceInner({
           <ReadFileToolUI />
           <BrowserToolUI />
           <SessionStatusBanner isRunning={isRunning} />
+          {(activeChat?.spokenTurns?.length ?? 0) > 0 ? (
+            <div className="border-border/60 bg-muted/40 text-muted-foreground mx-3 mb-2 rounded-xl border px-3 py-2 text-[13px] leading-relaxed">
+              <p className="text-foreground mb-1 font-medium">Live conversation</p>
+              <ul className="space-y-1">
+                {activeChat!.spokenTurns.map((turn) => (
+                  <li key={turn.id}>
+                    <span className="font-medium">
+                      {turn.role === "user" ? "You" : "Pearl"}:
+                    </span>{" "}
+                    {turn.text}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-[12px]">
+                Saved to this chat. The next message continues from here.
+              </p>
+            </div>
+          ) : null}
           <CanvasLayout />
 
           <EveAuthorization />
