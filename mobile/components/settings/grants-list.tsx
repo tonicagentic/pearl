@@ -5,11 +5,11 @@ import {
   Linking,
   Platform,
   Pressable,
-  Text,
   View,
 } from "react-native";
 
 import { PluginLogo } from "@/components/settings/plugin-logo";
+import { Text } from "@/components/ui/text";
 import {
   authorizeConnection,
   getConnectionGrants,
@@ -148,10 +148,10 @@ export function GrantsList() {
   return (
     <View className="gap-3">
       <View className="gap-1 px-1">
-        <Text className="text-[15px] font-medium text-muted-foreground">
+        <Text variant="body" tone="muted" weight="medium">
           Your grants
         </Text>
-        <Text className="text-[13px] leading-[18px] text-muted-foreground">
+        <Text variant="secondary">
           Pearl acts as you with these accounts. Update refreshes scopes without
           disconnecting first.
         </Text>
@@ -163,7 +163,7 @@ export function GrantsList() {
         onPress={() => void load()}
         className="min-h-11 self-start justify-center rounded-[10px] bg-card px-4 disabled:opacity-50"
       >
-        <Text className="text-[17px] text-foreground">
+        <Text variant="label" weight="regular">
           {loading ? "Loading…" : "Refresh grants"}
         </Text>
       </Pressable>
@@ -174,13 +174,20 @@ export function GrantsList() {
       {error ? (
         <Text
           accessibilityRole="alert"
-          className="px-1 text-[13px] text-destructive"
+          variant="secondary"
+          tone="destructive"
+          className="px-1"
         >
           {error}
         </Text>
       ) : null}
       {userCode ? (
-        <Text selectable className="px-1 text-[15px] font-semibold text-foreground">
+        <Text
+          selectable
+          variant="body"
+          weight="semibold"
+          className="px-1"
+        >
           Code: {userCode}
         </Text>
       ) : null}
@@ -198,9 +205,7 @@ export function GrantsList() {
             <View className="flex-row items-start gap-3">
               <PluginLogo id={grant.id as PluginMarkId} size={40} />
               <View className="min-w-0 flex-1 gap-1">
-                <Text className="text-[17px] font-medium text-foreground">
-                  {grant.label}
-                </Text>
+                <Text variant="label">{grant.label}</Text>
                 <GrantBody grant={grant} />
               </View>
             </View>
@@ -239,22 +244,20 @@ function GrantBody({ grant }: { readonly grant: ConnectionGrantSummary }) {
   const connected = grant.status === "connected";
   return (
     <View className="gap-1">
-      <Text className="text-[13px] text-muted-foreground">
+      <Text variant="secondary">
         {STATUS_LABEL[grant.status]}
         {connected && grant.accountLabel ? ` · ${grant.accountLabel}` : ""}
       </Text>
       {grant.detail ? (
-        <Text className="text-[13px] leading-[18px] text-muted-foreground">
-          {grant.detail}
-        </Text>
+        <Text variant="secondary">{grant.detail}</Text>
       ) : null}
       {grant.missingScopes && grant.missingScopes.length > 0 ? (
-        <Text className="text-[13px] text-amber-600">
+        <Text variant="secondary" className="text-amber-600">
           Missing: {grant.missingScopes.join(", ")}
         </Text>
       ) : null}
       {grant.github ? (
-        <Text className="text-[13px] leading-[18px] text-muted-foreground">
+        <Text variant="secondary">
           GitHub @{grant.github.login}
           {grant.github.hasRepoScope ? " · repo ok" : " · needs repo"}
           {grant.github.repos.some((repo) => !repo.canPush)
@@ -265,7 +268,7 @@ function GrantBody({ grant }: { readonly grant: ConnectionGrantSummary }) {
         </Text>
       ) : null}
       {grant.vercel ? (
-        <Text className="text-[13px] leading-[18px] text-muted-foreground">
+        <Text variant="secondary">
           Vercel {grant.vercel.username}
           {grant.vercel.teams.length > 0
             ? ` · ${grant.vercel.teams.length} team${grant.vercel.teams.length === 1 ? "" : "s"}`
@@ -277,7 +280,7 @@ function GrantBody({ grant }: { readonly grant: ConnectionGrantSummary }) {
           accessibilityRole="link"
           onPress={() => void Linking.openURL(grant.github!.manageUrl)}
         >
-          <Text className="text-[13px] text-foreground underline">
+          <Text variant="secondary" tone="default" className="underline">
             Authorized OAuth Apps
           </Text>
         </Pressable>
@@ -305,7 +308,9 @@ function ActionChip({
       onPress={onPress}
     >
       <Text
-        className={`text-sm font-medium ${destructive ? "text-destructive" : "text-foreground"}`}
+        variant="secondary"
+        weight="medium"
+        tone={destructive ? "destructive" : "default"}
       >
         {label}
       </Text>

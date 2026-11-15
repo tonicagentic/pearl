@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, View } from "react-native";
 import { router } from "expo-router";
 
 import { GrantsList } from "@/components/settings/grants-list";
 import { PluginLogo } from "@/components/settings/plugin-logo";
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { Section } from "@/components/ui/section";
+import { Text } from "@/components/ui/text";
 import {
   PLUGIN_SECTIONS,
   isConnectablePlugin,
@@ -54,7 +55,7 @@ export function PluginsScreen() {
 
   return (
     <SheetScaffold>
-      <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
+      <Text variant="secondary" className="px-1">
         Connect accounts Pearl can use, and see built-in tools from Pearl and
         Tonic Agentic.
       </Text>
@@ -67,7 +68,7 @@ export function PluginsScreen() {
         onPress={() => void load()}
         className="min-h-11 self-start justify-center rounded-[10px] bg-card px-4 disabled:opacity-50"
       >
-        <Text className="text-[17px] text-foreground">
+        <Text variant="label" weight="regular">
           {loading ? "Loading…" : "Refresh catalog"}
         </Text>
       </Pressable>
@@ -78,7 +79,9 @@ export function PluginsScreen() {
       {error ? (
         <Text
           accessibilityRole="alert"
-          className="px-1 text-[13px] text-destructive"
+          variant="secondary"
+          tone="destructive"
+          className="px-1"
         >
           {error}
         </Text>
@@ -155,22 +158,19 @@ function CatalogRow({
         <View className="flex-row items-center gap-3 px-4 py-3.5">
           <PluginLogo id={plugin.id as PluginMarkId} />
           <View className="min-w-0 flex-1 gap-0.5">
-            <Text className="text-[17px] font-medium leading-[22px] text-foreground">
-              {plugin.label}
-            </Text>
-            <Text
-              className="text-[13px] leading-[18px] text-muted-foreground"
-              numberOfLines={2}
-            >
+            <Text variant="label">{plugin.label}</Text>
+            <Text variant="secondary" numberOfLines={2}>
               {plugin.detail}
             </Text>
           </View>
           <Text
-            className={`text-[13px] font-medium ${trailingAccent ? "text-primary" : "text-muted-foreground"}`}
+            variant="secondary"
+            tone={trailingAccent ? "primary" : "muted"}
+            weight="medium"
           >
             {trailing}
           </Text>
-          <Text className="text-[20px] font-light text-muted-foreground/40">
+          <Text variant="title" tone="muted" weight="light" className="opacity-40">
             ›
           </Text>
         </View>

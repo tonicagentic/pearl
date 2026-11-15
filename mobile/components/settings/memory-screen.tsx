@@ -4,13 +4,13 @@ import {
   Alert,
   Platform,
   Pressable,
-  Text,
   View,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { SettingsCard } from "@/components/ui/settings-card";
+import { Text } from "@/components/ui/text";
 import { TextField } from "@/components/ui/text-field";
 import {
   addMemory,
@@ -141,13 +141,18 @@ export function MemoryScreen() {
 
   return (
     <SheetScaffold>
-      <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
+      <Text variant="secondary" className="px-1">
         Facts Pearl keeps across chats. It reads these before every
         conversation. Ask in chat to remember something, or add it here.
       </Text>
 
       {error ? (
-        <Text accessibilityRole="alert" className="px-1 text-[13px] text-destructive">
+        <Text
+          accessibilityRole="alert"
+          variant="secondary"
+          tone="destructive"
+          className="px-1"
+        >
           {error}
         </Text>
       ) : null}
@@ -171,7 +176,7 @@ export function MemoryScreen() {
             disabled={busy || draft.trim().length === 0}
             onPress={() => void remember()}
           >
-            <Text className="text-[17px] font-medium text-background">
+            <Text variant="label" className="text-background">
               {busy ? "Saving…" : "Remember"}
             </Text>
           </Pressable>
@@ -179,7 +184,7 @@ export function MemoryScreen() {
       </SettingsCard>
 
       {snapshot && snapshot.entries.length > 0 ? (
-        <Text className="px-1 text-[13px] text-muted-foreground">
+        <Text variant="secondary" className="px-1">
           {snapshot.recallCharacters.toLocaleString("en-US")} of{" "}
           {snapshot.recallLimit.toLocaleString("en-US")} characters Pearl can
           recall
@@ -190,7 +195,7 @@ export function MemoryScreen() {
         <ActivityIndicator accessibilityLabel="Loading memories" />
       ) : snapshot === null ? null : entries.length === 0 ? (
         <View className="rounded-[18px] bg-card px-4 py-4">
-          <Text className="text-[15px] leading-[21px] text-muted-foreground">
+          <Text variant="body" tone="muted">
             No memories yet. Add one above, or ask Pearl to remember a
             preference in chat.
           </Text>
@@ -213,7 +218,7 @@ export function MemoryScreen() {
                       value={editingText}
                     />
                   ) : (
-                    <Text className="text-[17px] leading-[22px] text-foreground">
+                    <Text variant="label" weight="regular">
                       {entry.text}
                     </Text>
                   )}
@@ -271,7 +276,9 @@ export function MemoryScreen() {
           disabled={busy}
           onPress={() => void forgetAll()}
         >
-          <Text className="text-[17px] text-destructive">Forget all</Text>
+          <Text variant="label" tone="destructive" weight="regular">
+            Forget all
+          </Text>
         </Pressable>
       ) : null}
     </SheetScaffold>
@@ -297,7 +304,9 @@ function ActionChip({
       onPress={onPress}
     >
       <Text
-        className={`text-sm font-medium ${destructive ? "text-destructive" : "text-foreground"}`}
+        variant="secondary"
+        weight="medium"
+        tone={destructive ? "destructive" : "default"}
       >
         {label}
       </Text>

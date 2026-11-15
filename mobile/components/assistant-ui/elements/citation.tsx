@@ -1,7 +1,8 @@
 import { useMemo, type ComponentProps, type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useAuiState } from "@assistant-ui/react-native";
 
+import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { openWebUrl } from "@/src/open-web-url";
 import { threadMeta } from "./surfaces";
@@ -70,7 +71,11 @@ export function CitationChip({
         className,
       )}
     >
-      <Text className="text-muted-foreground text-[11px] leading-none font-medium tabular-nums">
+      <Text
+        variant="caption"
+        weight="medium"
+        className="leading-none tabular-nums"
+      >
         {label}
       </Text>
     </Pressable>
@@ -106,12 +111,18 @@ export function MessageSources({ className }: ComponentProps<typeof View>) {
       data-slot="message-sources"
       className={cn("flex-col gap-1.5 pt-1", className)}
     >
-      <Text className={cn(threadMeta, "font-medium")}>Sources</Text>
+      <Text variant="body" weight="medium" className={threadMeta}>
+        Sources
+      </Text>
       <View className="flex-col gap-1">
         {refs.map((ref) => (
           <View key={ref.index} className="min-w-0 flex-row items-baseline gap-2">
             <View className="bg-muted h-4 min-w-4 shrink-0 items-center justify-center rounded px-1">
-              <Text className="text-muted-foreground text-[11px] leading-none font-medium tabular-nums">
+              <Text
+                variant="caption"
+                weight="medium"
+                className="leading-none tabular-nums"
+              >
                 {ref.index}
               </Text>
             </View>
@@ -121,9 +132,9 @@ export function MessageSources({ className }: ComponentProps<typeof View>) {
               onPress={() => openWebUrl(ref.url)}
               className="min-w-0 flex-1 active:opacity-70"
             >
-              <Text className={cn(threadMeta)} numberOfLines={1}>
+              <Text variant="body" className={threadMeta} numberOfLines={1}>
                 {ref.title?.trim() || hostnameOf(ref.url)}
-                <Text className="text-muted-foreground/70">
+                <Text variant="body" tone="muted" className="opacity-70">
                   {" "}
                   · {hostnameOf(ref.url)}
                 </Text>

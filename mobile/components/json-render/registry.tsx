@@ -1,7 +1,8 @@
 import type { ComponentRegistry } from "@json-render/react-native";
 import { comparisonBarShares } from "../../../lib/json-render/comparison-bar";
+import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
-import { Pressable, Text, View, Image as RNImage, ScrollView } from "react-native";
+import { Pressable, View, Image as RNImage, ScrollView } from "react-native";
 import type { ReactNode } from "react";
 
 function asNumber(value: unknown): number {
@@ -27,7 +28,7 @@ const badgeToneClass = {
 } as const;
 
 const badgeToneText = {
-  neutral: "text-muted-foreground",
+  neutral: undefined,
   positive: "text-emerald-700 dark:text-emerald-300",
   negative: "text-red-700 dark:text-red-300",
   warning: "text-amber-800 dark:text-amber-200",
@@ -82,12 +83,12 @@ export const chatRegistry: ComponentRegistry = {
       {(element.props.title || element.props.description) && (
         <View className="flex-col gap-0.5">
           {element.props.title ? (
-            <Text className="text-foreground text-[15px] font-medium leading-snug">
+            <Text variant="body" weight="medium" className="leading-snug">
               {asString(element.props.title)}
             </Text>
           ) : null}
           {element.props.description ? (
-            <Text className="text-muted-foreground text-[13.5px] leading-relaxed">
+            <Text variant="secondary" className="leading-relaxed">
               {asString(element.props.description)}
             </Text>
           ) : null}
@@ -99,39 +100,35 @@ export const chatRegistry: ComponentRegistry = {
   Divider: () => <View className="bg-border/60 my-1 h-px w-full" />,
   Heading: ({ element }) => (
     <Text
-      className={cn(
-        "text-foreground font-medium",
-        element.props.level === "1" && "text-lg leading-7",
-        element.props.level === "3" && "text-sm leading-5",
-        (element.props.level == null || element.props.level === "2") &&
-          "text-base leading-6",
-      )}
+      variant={
+        element.props.level === "1"
+          ? "label"
+          : element.props.level === "3"
+            ? "secondary"
+            : "body"
+      }
+      weight="medium"
+      tone="default"
     >
       {asString(element.props.text)}
     </Text>
   ),
   Text: ({ element }) => (
     <Text
-      className={cn(
-        "text-[15px] leading-6",
-        element.props.muted ? "text-muted-foreground" : "text-foreground",
-      )}
+      variant="body"
+      tone={element.props.muted ? "muted" : "default"}
     >
       {asString(element.props.text)}
     </Text>
   ),
   Metric: ({ element }) => (
     <View className="min-w-[7rem] flex-col gap-0.5">
-      <Text className="text-muted-foreground text-[12.5px] leading-4">
-        {asString(element.props.label)}
-      </Text>
-      <Text className="text-foreground text-xl font-semibold tracking-tight">
+      <Text variant="caption">{asString(element.props.label)}</Text>
+      <Text variant="title" className="tracking-tight">
         {asString(element.props.value)}
       </Text>
       {element.props.hint ? (
-        <Text className="text-muted-foreground text-[12px] leading-4">
-          {asString(element.props.hint)}
-        </Text>
+        <Text variant="caption">{asString(element.props.hint)}</Text>
       ) : null}
     </View>
   ),
@@ -146,10 +143,10 @@ export const chatRegistry: ComponentRegistry = {
         )}
       >
         <Text
-          className={cn(
-            "text-[12px] font-medium",
-            badgeToneText[tone] ?? badgeToneText.neutral,
-          )}
+          variant="caption"
+          weight="medium"
+          tone={tone === "neutral" ? "muted" : "default"}
+          className={badgeToneText[tone] ?? badgeToneText.neutral}
         >
           {asString(element.props.label)}
         </Text>
@@ -165,10 +162,10 @@ export const chatRegistry: ComponentRegistry = {
     return (
       <View className="w-full flex-col gap-1.5">
         <View className="flex-row items-baseline justify-between gap-3">
-          <Text className="text-foreground text-[13px] font-medium">
+          <Text variant="secondary" weight="medium">
             {leftLabel} {leftValue}%
           </Text>
-          <Text className="text-foreground text-right text-[13px] font-medium">
+          <Text variant="secondary" weight="medium" className="text-right">
             {rightLabel} {rightValue}%
           </Text>
         </View>
@@ -187,9 +184,7 @@ export const chatRegistry: ComponentRegistry = {
           />
         </View>
         {element.props.caption ? (
-          <Text className="text-muted-foreground text-[12px] leading-4">
-            {asString(element.props.caption)}
-          </Text>
+          <Text variant="caption">{asString(element.props.caption)}</Text>
         ) : null}
       </View>
     );
@@ -210,7 +205,9 @@ export const chatRegistry: ComponentRegistry = {
             {columns.map((column) => (
               <Text
                 key={column}
-                className="text-muted-foreground min-w-[5.5rem] flex-1 px-2.5 py-1.5 text-[13.5px] font-medium"
+                variant="secondary"
+                weight="medium"
+                className="min-w-[5.5rem] flex-1 px-2.5 py-1.5"
               >
                 {column}
               </Text>
@@ -224,7 +221,9 @@ export const chatRegistry: ComponentRegistry = {
               {row.map((cell, cellIndex) => (
                 <Text
                   key={cellIndex}
-                  className="text-foreground min-w-[5.5rem] flex-1 px-2.5 py-1.5 text-[13.5px]"
+                  variant="secondary"
+                  tone="default"
+                  className="min-w-[5.5rem] flex-1 px-2.5 py-1.5"
                 >
                   {cell}
                 </Text>
@@ -263,9 +262,10 @@ export const chatRegistry: ComponentRegistry = {
       )}
     >
       <Text
+        variant="secondary"
+        weight="medium"
+        tone="default"
         className={cn(
-          "text-[14px] font-medium",
-          element.props.variant === "outline" && "text-foreground",
           element.props.variant === "secondary" && "text-secondary-foreground",
           (element.props.variant == null ||
             element.props.variant === "default") &&

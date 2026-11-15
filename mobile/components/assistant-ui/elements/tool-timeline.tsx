@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ChevronDownIcon } from "lucide-react-native";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -10,6 +10,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { Icon } from "@/components/ui/icon";
+import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import {
   COLLAPSE_MS,
@@ -23,7 +24,6 @@ import {
   threadDiffAdd,
   threadDiffRemove,
   threadMeta,
-  threadText,
   useMotion,
 } from "./surfaces";
 
@@ -137,7 +137,8 @@ function StepRow({
       >
         <ShimmerLabel
           active={active}
-          className={cn(threadMeta, "shrink-0 leading-6")}
+          variant="body"
+          className={cn(threadMeta, "shrink-0")}
         >
           {label}
         </ShimmerLabel>
@@ -151,10 +152,8 @@ function StepRow({
             >
               <Text
                 numberOfLines={1}
-                className={cn(
-                  "text-[13px] leading-5",
-                  step.failed ? "text-destructive" : "text-foreground",
-                )}
+                variant="secondary"
+                tone={step.failed ? "destructive" : "default"}
               >
                 {step.chip}
               </Text>
@@ -162,7 +161,8 @@ function StepRow({
           ) : (
             <Text
               numberOfLines={1}
-              className={cn(threadMeta, "min-w-0 flex-shrink leading-6")}
+              variant="body"
+              className={cn(threadMeta, "min-w-0 flex-shrink")}
             >
               {step.chip}
             </Text>
@@ -176,7 +176,7 @@ function StepRow({
           exiting={motion ? FadeOut.duration(DETAIL_MS) : undefined}
           className="ms-0.5 mb-1 mt-0.5"
         >
-          <Text selectable className={cn(threadText, "text-foreground/90 leading-6")}>
+          <Text selectable variant="body" className="opacity-90">
             {step.detail}
           </Text>
         </Animated.View>
@@ -202,16 +202,21 @@ function StatLine({ stats }: { readonly stats: readonly TimelineStat[] }) {
 
   return (
     <View className="flex-row flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5">
-      <Text className={cn(threadMeta, "leading-6")}>{summary}</Text>
+      <Text variant="body" className={threadMeta}>
+        {summary}
+      </Text>
       {totalAdded > 0 || totalRemoved > 0 ? (
         <View className="flex-row items-baseline gap-1.5">
           {totalAdded > 0 ? (
-            <Text className={cn(threadText, threadDiffAdd, "tabular-nums leading-6")}>
+            <Text variant="body" className={cn(threadDiffAdd, "tabular-nums")}>
               +{totalAdded}
             </Text>
           ) : null}
           {totalRemoved > 0 ? (
-            <Text className={cn(threadText, threadDiffRemove, "tabular-nums leading-6")}>
+            <Text
+              variant="body"
+              className={cn(threadDiffRemove, "tabular-nums")}
+            >
               −{totalRemoved}
             </Text>
           ) : null}
@@ -293,12 +298,13 @@ export function ToolTimeline({
         <SwapLabel active={streaming ? 0 : 1} className="min-w-0 flex-1 text-start">
           <ShimmerLabel
             active={streaming}
-            className={cn(threadMeta, "leading-6")}
+            variant="body"
+            className={threadMeta}
             numberOfLines={2}
           >
             {elapsed ? `${activeLabel} · ${elapsed}` : activeLabel}
           </ShimmerLabel>
-          <Text className={cn(threadMeta, "leading-6")} numberOfLines={2}>
+          <Text variant="body" className={threadMeta} numberOfLines={2}>
             {restingLabel}
           </Text>
         </SwapLabel>

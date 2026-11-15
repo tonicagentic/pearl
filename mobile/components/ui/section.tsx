@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 
 import { SettingsCard } from "@/components/ui/settings-card";
+import { Text } from "@/components/ui/text";
 
 /**
  * Titled settings-style section: muted label + SettingsCard body.
@@ -16,7 +17,7 @@ export function Section({
 }) {
   return (
     <View className="gap-1.5">
-      <Text className="px-1 text-[13px] font-medium text-muted-foreground">
+      <Text variant="secondary" weight="medium" className="px-1">
         {title}
       </Text>
       <SettingsCard>{children}</SettingsCard>

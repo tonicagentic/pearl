@@ -1,6 +1,7 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import Animated from "react-native-reanimated";
 
+import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import {
   ShimmerLabel,
@@ -38,13 +39,13 @@ export function ThinkingIndicator({
           entering={motion ? thinkSwapEnter : undefined}
           exiting={motion ? thinkSwapExit : undefined}
         >
-          <ShimmerLabel active className={cn(threadMeta, "leading-6")}>
+          <ShimmerLabel active variant="body" className={threadMeta}>
             {display}
           </ShimmerLabel>
         </Animated.View>
       </View>
       {elapsed !== undefined ? (
-        <Text className={cn(threadMeta, "tabular-nums leading-6")}>
+        <Text variant="body" className={cn(threadMeta, "tabular-nums")}>
           {elapsed}
         </Text>
       ) : null}

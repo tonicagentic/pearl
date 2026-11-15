@@ -5,7 +5,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  Text,
   TextInput,
   View,
 } from "react-native";
@@ -15,6 +14,8 @@ import { useCSSVariable } from "uniwind";
 
 import { TaskDateField } from "@/components/task-date-field";
 import { Icon } from "@/components/ui/icon";
+import { Text, textVariants } from "@/components/ui/text";
+import { cn } from "@/lib/utils";
 import {
   createIssueRequest,
   type IssueDto,
@@ -117,12 +118,17 @@ export function CreateTaskModal({
 
         <View className="flex-1 px-5 pt-4">
           {error ? (
-            <Text className="mb-3 text-sm text-destructive">{error}</Text>
+            <Text variant="secondary" tone="destructive" className="mb-3">
+              {error}
+            </Text>
           ) : null}
           <TextInput
             accessibilityLabel="Task title"
             autoFocus
-            className="min-h-12 text-[28px] font-semibold tracking-tight text-foreground"
+            className={cn(
+              "min-h-12 tracking-tight",
+              textVariants({ variant: "display" }),
+            )}
             maxLength={200}
             onChangeText={setTitle}
             onSubmitEditing={submit}
@@ -133,7 +139,7 @@ export function CreateTaskModal({
           />
           <TextInput
             accessibilityLabel="Task notes"
-            className="mt-2 min-h-24 text-[16px] leading-6 text-foreground"
+            className={cn("mt-2 min-h-24", textVariants({ variant: "body" }))}
             multiline
             onChangeText={setDescription}
             placeholder="Notes"

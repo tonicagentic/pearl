@@ -1,11 +1,27 @@
-import { Pressable, Text, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 import { router } from "expo-router";
-import { Code2Icon, MailIcon, MonitorIcon } from "lucide-react-native";
+import {
+  BriefcaseIcon,
+  CalendarIcon,
+  CircleDollarSignIcon,
+  ClipboardListIcon,
+  Code2Icon,
+  HeartIcon,
+  MailIcon,
+  MessageCircleQuestionIcon,
+  MonitorIcon,
+  PaletteIcon,
+  PenLineIcon,
+  PlaneIcon,
+  ScanSearchIcon,
+  ShoppingBagIcon,
+} from "lucide-react-native";
 
 import { PluginLogo } from "@/components/settings/plugin-logo";
 import { Icon } from "@/components/ui/icon";
 import { Section } from "@/components/ui/section";
 import { SettingsRow } from "@/components/ui/settings-row";
+import { Text } from "@/components/ui/text";
 import {
   PLUGIN_SECTIONS,
   isConnectablePlugin,
@@ -28,14 +44,21 @@ function coderToolPlugins(): readonly ResolvedPlugin[] {
   return codingPlugins().filter((plugin) => plugin.id !== "coder");
 }
 
+function comingSoon(label: string) {
+  Alert.alert(label, "This capability is coming soon.");
+}
+
 /**
- * Capabilities section: Coder, Computer Use, and Email. GitHub, Vercel, and
- * the other build tools open from inside Coder.
+ * Capabilities section: Coder, Computer Use, Email, Calendar, and the other
+ * product capabilities. GitHub, Vercel, and the other build tools open from
+ * inside Coder.
  */
 export function CodeSection({
   emailDetail,
+  calendarDetail,
 }: {
   readonly emailDetail: string;
+  readonly calendarDetail: string;
 }) {
   return (
     <Section title="Capabilities">
@@ -58,6 +81,90 @@ export function CodeSection({
         label="Email"
         detail={emailDetail}
         onPress={() => router.push("/email")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={<Icon as={CalendarIcon} className="size-5 text-rose-500" />}
+        label="Calendar"
+        detail={calendarDetail}
+        onPress={() => router.push("/calendar")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={<Icon as={ScanSearchIcon} className="size-5 text-violet-500" />}
+        label="Research"
+        detail="Deep research with cited findings"
+        onPress={() => router.push("/plugins/researcher")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={
+          <Icon as={CircleDollarSignIcon} className="size-5 text-emerald-500" />
+        }
+        label="Finance"
+        detail="Money, taxes, and financial context"
+        onPress={() => router.push("/plugins/tax")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={<Icon as={ClipboardListIcon} className="size-5 text-amber-500" />}
+        label="Planning"
+        detail="Research and write durable plans"
+        onPress={() => router.push("/plugins/plan")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={
+          <Icon
+            as={MessageCircleQuestionIcon}
+            className="size-5 text-sky-500"
+          />
+        }
+        label="Answers"
+        detail="Look up facts and sources"
+        onPress={() => router.push("/plugins/search")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={<Icon as={HeartIcon} className="size-5 text-rose-500" />}
+        label="Health"
+        detail="Coming soon"
+        onPress={() => comingSoon("Health")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={<Icon as={PenLineIcon} className="size-5 text-indigo-500" />}
+        label="Drafting"
+        detail="Coming soon"
+        onPress={() => comingSoon("Drafting")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={<Icon as={PlaneIcon} className="size-5 text-sky-600" />}
+        label="Travel"
+        detail="Coming soon"
+        onPress={() => comingSoon("Travel")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={<Icon as={ShoppingBagIcon} className="size-5 text-orange-500" />}
+        label="Shopping"
+        detail="Coming soon"
+        onPress={() => comingSoon("Shopping")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={<Icon as={PaletteIcon} className="size-5 text-fuchsia-500" />}
+        label="Visualize"
+        detail="Layouts, visuals, and design"
+        onPress={() => router.push("/plugins/designer")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={<Icon as={BriefcaseIcon} className="size-5 text-teal-600" />}
+        label="Small Business"
+        detail="CRM, payments, and store tools"
+        onPress={() => router.push("/plugins/tempo")}
       />
     </Section>
   );
@@ -154,23 +261,21 @@ function CodePluginRow({
         <View className="flex-row items-center gap-3 px-4 py-3.5">
           <PluginLogo id={plugin.id as PluginMarkId} />
           <View className="min-w-0 flex-1 gap-0.5">
-            <Text className="text-[17px] font-medium leading-[22px] text-foreground">
-              {plugin.label}
-            </Text>
-            <Text
-              className="text-[13px] leading-[18px] text-muted-foreground"
-              numberOfLines={2}
-            >
+            <Text variant="label">{plugin.label}</Text>
+            <Text variant="secondary" numberOfLines={2}>
               {plugin.detail}
             </Text>
           </View>
           <Text
-            className={`max-w-[28%] text-right text-[13px] font-medium ${trailingAccent ? "text-primary" : "text-muted-foreground"}`}
+            variant="secondary"
+            tone={trailingAccent ? "primary" : "muted"}
+            weight="medium"
+            className="max-w-[28%] text-right"
             numberOfLines={2}
           >
             {trailing}
           </Text>
-          <Text className="text-[20px] font-light text-muted-foreground/40">
+          <Text variant="title" tone="muted" weight="light" className="opacity-40">
             ›
           </Text>
         </View>

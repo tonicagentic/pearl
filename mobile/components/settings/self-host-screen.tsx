@@ -1,16 +1,10 @@
 import { useState } from "react";
-import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { Button } from "@/components/ui/button";
+import { Text } from "@/components/ui/text";
 import { TextField } from "@/components/ui/text-field";
 import { agentHostname, normalizeAgentUrlInput } from "@/src/agent-url";
 import {
@@ -44,12 +38,6 @@ export function SelfHostScreen({
   readonly title?: string;
 }) {
   const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const foregroundColor = useCSSVariable("--color-foreground") as
-    | string
-    | undefined;
-  const hintColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
 
@@ -107,51 +95,41 @@ export function SelfHostScreen({
             disabled={busy !== null}
             onPress={onBack}
           >
-            <Text
-              style={[
-                styles.backLabel,
-                hintColor ? { color: hintColor } : null,
-              ]}
-            >
+            <Text variant="label" tone="muted">
               ‹ Back
             </Text>
           </Pressable>
         ) : null}
-        <Text
-          style={[
-            styles.title,
-            foregroundColor ? { color: foregroundColor } : null,
-          ]}
-        >
+        <Text variant="title" className="text-center tracking-tight">
           {title}
         </Text>
-        <Text style={[styles.body, hintColor ? { color: hintColor } : null]}>
+        <Text variant="body" tone="muted" className="leading-[22px]">
           Deploy the open-source Pearl agent on Vercel, then point this app at
           your deployment instead of the hosted service.
         </Text>
 
         <View style={styles.section}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              foregroundColor ? { color: foregroundColor } : null,
-            ]}
-          >
+          <Text variant="label" weight="semibold">
             1. Deploy on Vercel
           </Text>
-          <Text style={[styles.body, hintColor ? { color: hintColor } : null]}>
+          <Text variant="body" tone="muted" className="leading-[22px]">
             Fork or clone the Pearl repo, create a Vercel project, and deploy.
             For a quick start set{" "}
-            <Text style={styles.mono}>EVE_CHAT_PASSWORD</Text> (16+ characters).
-            To skip Stripe billing on your install, set{" "}
-            <Text style={styles.mono}>PEARL_BILLING=off</Text>.
+            <Text variant="caption" className="font-mono">
+              EVE_CHAT_PASSWORD
+            </Text>{" "}
+            (16+ characters). To skip Stripe billing on your install, set{" "}
+            <Text variant="caption" className="font-mono">
+              PEARL_BILLING=off
+            </Text>
+            .
           </Text>
           <Pressable
             accessibilityRole="link"
             onPress={() => openWebUrlExternally(REPO_URL)}
             style={styles.linkRow}
           >
-            <Text style={[styles.link, foregroundColor ? { color: foregroundColor } : null]}>
+            <Text variant="body" weight="semibold" className="underline">
               Open GitHub repo
             </Text>
           </Pressable>
@@ -160,25 +138,22 @@ export function SelfHostScreen({
             onPress={() => openWebUrlExternally(SETUP_DOCS_URL)}
             style={styles.linkRow}
           >
-            <Text style={[styles.link, foregroundColor ? { color: foregroundColor } : null]}>
+            <Text variant="body" weight="semibold" className="underline">
               Setup and deploy docs
             </Text>
           </Pressable>
         </View>
 
         <View style={styles.section}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              foregroundColor ? { color: foregroundColor } : null,
-            ]}
-          >
+          <Text variant="label" weight="semibold">
             2. Connect this app
           </Text>
-          <Text style={[styles.body, hintColor ? { color: hintColor } : null]}>
+          <Text variant="body" tone="muted" className="leading-[22px]">
             Paste your deployment URL (for example{" "}
-            <Text style={styles.mono}>https://your-app.vercel.app</Text>). Pearl
-            will sign you into that agent instead of the paid host.
+            <Text variant="caption" className="font-mono">
+              https://your-app.vercel.app
+            </Text>
+            ). Pearl will sign you into that agent instead of the paid host.
           </Text>
           <TextField
             accessibilityLabel="Agent URL"
@@ -193,13 +168,17 @@ export function SelfHostScreen({
             value={url}
             onSubmitEditing={() => void connect()}
           />
-          <Text style={[styles.hint, hintColor ? { color: hintColor } : null]}>
+          <Text variant="caption">
             Currently using {agentHostname(AGENT_URL)}
           </Text>
         </View>
 
         {error ? (
-          <Text accessibilityRole="alert" style={styles.error}>
+          <Text
+            accessibilityRole="alert"
+            variant="secondary"
+            tone="destructive"
+          >
             {error}
           </Text>
         ) : null}
@@ -228,44 +207,10 @@ export function SelfHostScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  backLabel: {
-    fontSize: 17,
-    fontWeight: "500",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "600",
-    letterSpacing: -0.3,
-    textAlign: "center",
-  },
   section: { gap: 10 },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  body: {
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  mono: {
-    fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }),
-    fontSize: 13,
-  },
   linkRow: {
     minHeight: 44,
     justifyContent: "center",
   },
-  link: {
-    fontSize: 16,
-    fontWeight: "600",
-    textDecorationLine: "underline",
-  },
-  hint: {
-    fontSize: 13,
-  },
   actions: { gap: 10, marginTop: 4 },
-  error: {
-    color: "#b91c1c",
-    fontSize: 14,
-  },
 });

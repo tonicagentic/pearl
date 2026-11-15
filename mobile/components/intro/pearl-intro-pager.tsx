@@ -4,15 +4,16 @@ import {
   NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
+
 import { useCSSVariable } from "uniwind";
 
 import { PearlIntroGraphic } from "@/components/intro/pearl-intro-graphic";
 import { PEARL_INTRO_PANELS } from "@/components/intro/pearl-intro-panels";
 import { Button } from "@/components/ui/button";
+import { Text } from "@/components/ui/text";
 
 /**
  * Full-bleed horizontal intro pager: graphic collage on top, short copy below,
@@ -37,12 +38,6 @@ export function PearlIntroPager({
   const [index, setIndex] = useState(0);
   const pagerRef = useRef<ComponentRef<typeof ScrollView>>(null);
 
-  const foregroundColor = useCSSVariable("--color-foreground") as
-    | string
-    | undefined;
-  const hintColor = useCSSVariable("--color-muted-foreground") as
-    | string
-    | undefined;
   const dotActive = useCSSVariable("--color-foreground") as string | undefined;
   const dotIdle = useCSSVariable("--color-border") as string | undefined;
 
@@ -102,15 +97,19 @@ export function PearlIntroPager({
             </View>
             <View style={styles.copy}>
               <Text
-                style={[
-                  compact ? styles.titleCompact : styles.title,
-                  foregroundColor ? { color: foregroundColor } : null,
-                ]}
+                variant={compact ? "title" : "display"}
+                className={
+                  compact
+                    ? "text-center tracking-tight leading-7"
+                    : "text-center tracking-tight leading-8"
+                }
               >
                 {panel.title}
               </Text>
               <Text
-                style={[styles.body, hintColor ? { color: hintColor } : null]}
+                variant="body"
+                tone="muted"
+                className="text-center leading-[23px]"
               >
                 {panel.body}
               </Text>
@@ -179,25 +178,6 @@ const styles = StyleSheet.create({
   copy: {
     gap: 10,
     paddingBottom: 8,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "600",
-    letterSpacing: -0.4,
-    lineHeight: 32,
-    textAlign: "center",
-  },
-  titleCompact: {
-    fontSize: 22,
-    fontWeight: "600",
-    letterSpacing: -0.3,
-    lineHeight: 28,
-    textAlign: "center",
-  },
-  body: {
-    fontSize: 16,
-    lineHeight: 23,
-    textAlign: "center",
   },
   footer: {
     paddingHorizontal: 24,

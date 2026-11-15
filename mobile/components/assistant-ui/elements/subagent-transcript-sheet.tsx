@@ -3,7 +3,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Text,
   View,
 } from "react-native";
 import type { ConversationAgentSession } from "eve/client";
@@ -13,6 +12,7 @@ import {
   WaitingActionCard,
   type WaitingAction,
 } from "@/components/assistant-ui/elements/waiting-action-card";
+import { Text } from "@/components/ui/text";
 import {
   getPendingApprovals,
   composerWaitingQuestions,
@@ -142,10 +142,14 @@ export function SubagentTranscriptSheet({
       >
         <View className="flex-row items-center justify-between px-4 pb-3">
           <View className="min-w-0 flex-1 pr-3">
-            <Text className="text-foreground text-base font-medium" numberOfLines={1}>
+            <Text variant="body" weight="medium" numberOfLines={1}>
               {target.name}
             </Text>
-            <Text className={cn(mono, "text-foreground/45 text-xs")}>
+            <Text
+              variant="caption"
+              tone="default"
+              className={cn(mono, "opacity-45")}
+            >
               {observationLabel(agent)}
             </Text>
           </View>
@@ -155,7 +159,9 @@ export function SubagentTranscriptSheet({
             className="min-h-11 justify-center px-2"
             onPress={onClose}
           >
-            <Text className="text-primary text-sm font-medium">Done</Text>
+            <Text variant="secondary" tone="primary" weight="medium">
+              Done
+            </Text>
           </Pressable>
         </View>
 
@@ -165,7 +171,7 @@ export function SubagentTranscriptSheet({
         >
           {blocks.length === 0 ? (
             <View className={cn(paper, "rounded-2xl px-3.5 py-3")}>
-              <Text className="text-foreground/60 text-sm">
+              <Text variant="secondary" className="opacity-60">
                 {agent?.observation.status === "not-followed"
                   ? "This subagent stream is not available on this device yet."
                   : "Waiting for the subagent to start streaming…"}
@@ -177,13 +183,19 @@ export function SubagentTranscriptSheet({
                 key={block.id}
                 className={cn(paper, "rounded-2xl px-3.5 py-3")}
               >
-                <Text className={cn(mono, "text-foreground/35 mb-1.5 text-[11px]")}>
+                <Text
+                  variant="caption"
+                  tone="default"
+                  className={cn(mono, "mb-1.5 opacity-35")}
+                >
                   {block.role === "user" ? "You" : target.name}
                 </Text>
                 {block.lines.map((line, index) => (
                   <Text
                     key={`${block.id}-${index}`}
-                    className="text-foreground mb-1 text-[13.5px] leading-5"
+                    variant="secondary"
+                    tone="default"
+                    className="mb-1"
                     selectable
                   >
                     {line}

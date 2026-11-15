@@ -12,6 +12,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
+import { Text } from "@/components/ui/text";
 import type { AuthCtaFrame } from "@/src/auth";
 
 /** Match the floating iOS composer dock in thread.aui.tsx. */
@@ -102,15 +103,9 @@ export function AuthToChatMorph({
             labelStyle,
           ]}
         >
-          <Animated.Text
-            style={{
-              color: labelColor,
-              fontSize: 17,
-              fontWeight: "600",
-            }}
-          >
+          <Text variant="label" weight="semibold" style={{ color: labelColor }}>
             Welcome
-          </Animated.Text>
+          </Text>
         </Animated.View>
       </Animated.View>
     </View>

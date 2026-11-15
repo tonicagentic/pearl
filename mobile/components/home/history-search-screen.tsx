@@ -5,7 +5,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,6 +25,7 @@ import Animated, {
 
 import { HOME_DOCK_CLEARANCE } from "@/components/home/home-dock";
 import { Icon } from "@/components/ui/icon";
+import { Text } from "@/components/ui/text";
 
 /** iOS uses the native bottom search toolbar; Android keeps the floating dock. */
 const SEARCH_FIELD_CLEARANCE =
@@ -218,11 +218,11 @@ export function HistorySearchScreen({
               <ActivityIndicator />
             </View>
           ) : error ? (
-            <Text style={[styles.statusText, { color: mutedColor }]}>
+            <Text variant="body" tone="muted" className="px-2 py-6">
               {error}
             </Text>
           ) : rows.length === 0 ? (
-            <Text style={[styles.statusText, { color: mutedColor }]}>
+            <Text variant="body" tone="muted" className="px-2 py-6">
               No chats match “{trimmedQuery}”.
             </Text>
           ) : (
@@ -310,14 +310,18 @@ function SearchPill({
       <View style={styles.pillText}>
         <Text
           numberOfLines={1}
-          style={[styles.pillTitle, { color: foregroundColor }]}
+          variant="label"
+          weight="semibold"
+          style={foregroundColor ? { color: foregroundColor } : undefined}
         >
           {title}
         </Text>
         {subtitle ? (
           <Text
             numberOfLines={1}
-            style={[styles.pillSubtitle, { color: mutedColor }]}
+            variant="secondary"
+            className="leading-[18px]"
+            style={mutedColor ? { color: mutedColor } : undefined}
           >
             {subtitle}
           </Text>
@@ -359,22 +363,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: 2,
   },
-  pillTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  pillSubtitle: {
-    fontSize: 14,
-    lineHeight: 18,
-  },
   centered: {
     paddingVertical: 32,
     alignItems: "center",
-  },
-  statusText: {
-    paddingHorizontal: 8,
-    paddingVertical: 24,
-    fontSize: 15,
-    lineHeight: 20,
   },
 });

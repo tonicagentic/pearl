@@ -12,8 +12,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
+
+import { Text, textVariants } from "@/components/ui/text";
 
 /** Synthetic choice that expands into a free-text field over the options. */
 export const FREEFORM_OPTION_ID = "__freeform__";
@@ -259,17 +261,16 @@ export const QuestionsCard: FC<{
       <View className="flex-row items-center justify-between gap-2">
         <View className="flex-row items-center gap-1.5">
           <View className="bg-muted size-5 items-center justify-center rounded-full">
-            <Text className="text-foreground text-[10px] font-bold">?</Text>
+            <Text variant="caption" weight="semibold" className="font-bold">
+              ?
+            </Text>
           </View>
-          <Text className="text-foreground text-sm font-semibold">
+          <Text variant="secondary" weight="semibold">
             Questions
           </Text>
         </View>
         {multi ? (
-          <Text
-            className="text-muted-foreground text-xs font-medium"
-            testID="questions-progress"
-          >
+          <Text variant="caption" weight="medium" testID="questions-progress">
             {safeIndex + 1}/{items.length}
           </Text>
         ) : null}
@@ -289,14 +290,17 @@ export const QuestionsCard: FC<{
         className="mt-3 gap-1.5"
       >
         <Text
-          className="text-foreground text-sm font-medium leading-snug"
+          variant="secondary"
+          weight="medium"
+          className="leading-snug"
           testID="waiting-action-prompt"
         >
           {item.prompt}
         </Text>
         {item.detail ? (
           <Text
-            className="text-muted-foreground text-xs leading-snug"
+            variant="caption"
+            className="leading-snug"
             numberOfLines={6}
             testID="waiting-action-detail"
           >
@@ -342,22 +346,21 @@ export const QuestionsCard: FC<{
                   )}
                 >
                   <Text
-                    className={cn(
-                      "text-xs font-semibold",
-                      selected ? "text-background" : "text-muted-foreground",
-                    )}
+                    variant="caption"
+                    weight="semibold"
+                    tone={selected ? "default" : "muted"}
+                    className={selected ? "text-background" : undefined}
                   >
                     {letter}
                   </Text>
                 </View>
                 <Text
-                  className={cn(
-                    "flex-1 text-sm font-medium",
-                    selected ? "text-background" : "text-foreground",
-                    isFreeformChoice && !selected
-                      ? "text-muted-foreground"
-                      : undefined,
-                  )}
+                  variant="secondary"
+                  weight="medium"
+                  tone={
+                    selected || !isFreeformChoice ? "default" : "muted"
+                  }
+                  className={cn("flex-1", selected && "text-background")}
                 >
                   {option.label}
                 </Text>
@@ -379,7 +382,7 @@ export const QuestionsCard: FC<{
               hitSlop={8}
               className="self-start active:opacity-70 disabled:opacity-50"
             >
-              <Text className="text-muted-foreground text-xs font-medium">
+              <Text variant="caption" weight="medium">
                 ← Choices
               </Text>
             </Pressable>
@@ -395,7 +398,10 @@ export const QuestionsCard: FC<{
             accessibilityLabel={item.prompt}
             placeholder="Type your answer"
             testID="waiting-action-answer"
-            className="text-foreground border-border/70 bg-background min-h-24 rounded-xl border px-2.5 py-2.5 text-sm"
+            className={cn(
+              "border-border/70 bg-background min-h-24 rounded-xl border px-2.5 py-2.5",
+              textVariants({ variant: "secondary", tone: "default" }),
+            )}
           />
         </View>
       ) : null}
@@ -410,7 +416,9 @@ export const QuestionsCard: FC<{
             testID="waiting-action-back"
             className="h-9 justify-center rounded-full border border-border/70 bg-background px-4 active:opacity-80 disabled:opacity-50"
           >
-            <Text className="text-foreground text-sm font-medium">Back</Text>
+            <Text variant="secondary" weight="medium">
+              Back
+            </Text>
           </Pressable>
         ) : (
           <View />
@@ -425,7 +433,9 @@ export const QuestionsCard: FC<{
               testID="waiting-action-skip"
               className="h-9 justify-center rounded-full border border-border/70 bg-background px-4 active:opacity-80 disabled:opacity-50"
             >
-              <Text className="text-foreground text-sm font-medium">Skip</Text>
+              <Text variant="secondary" weight="medium">
+                Skip
+              </Text>
             </Pressable>
           ) : null}
           <Pressable
@@ -439,7 +449,11 @@ export const QuestionsCard: FC<{
               inkButton,
             )}
           >
-            <Text className="text-background text-sm font-medium">
+            <Text
+              variant="secondary"
+              weight="medium"
+              className="text-background"
+            >
               {submitting ? "…" : last ? "Done" : "Next"}
             </Text>
           </Pressable>
@@ -447,7 +461,7 @@ export const QuestionsCard: FC<{
       </View>
 
       {error ? (
-        <Text className="text-destructive mt-2 text-xs" selectable>
+        <Text variant="caption" tone="destructive" className="mt-2" selectable>
           {error}
         </Text>
       ) : null}

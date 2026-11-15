@@ -1,7 +1,8 @@
 import { useState, useSyncExternalStore } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
+import { Text } from "@/components/ui/text";
 import {
   COMPOSER_MODEL_SECTIONS,
   getImageModelSelection,
@@ -79,7 +80,7 @@ export function ModelsScreen() {
   return (
     <SheetScaffold
       footer={
-        <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
+        <Text variant="secondary" className="px-1">
           A model runs inference for each reply. Pearl is the agent around it —
           tools, skills, plugins, and multi-step loops. This default applies to
           new turns; change it in the composer for a single message.
@@ -113,7 +114,9 @@ export function ModelsScreen() {
       {saveError ? (
         <Text
           accessibilityRole="alert"
-          className="px-1 text-[13px] text-destructive"
+          variant="secondary"
+          tone="destructive"
+          className="px-1"
         >
           {saveError}
         </Text>
@@ -136,11 +139,11 @@ function ModelSection({
   return (
     <View className="gap-1.5">
       <View className="px-1">
-        <Text className="text-[13px] font-normal uppercase tracking-[0.04em] text-muted-foreground">
+        <Text variant="secondary" className="uppercase tracking-[0.04em]">
           {section.title}
         </Text>
         {section.description ? (
-          <Text className="mt-1 text-[13px] leading-[18px] text-muted-foreground">
+          <Text variant="secondary" className="mt-1">
             {section.description}
           </Text>
         ) : null}
@@ -163,22 +166,20 @@ function ModelSection({
                 style={styles.row}
               >
                 <View className="min-w-0 flex-1 gap-0.5">
-                  <Text className="text-[17px] leading-[22px] text-foreground">
+                  <Text variant="label" weight="regular">
                     {model.label}
                   </Text>
-                  <Text className="text-[13px] leading-[18px] text-muted-foreground">
-                    {`by ${model.company}`}
-                  </Text>
+                  <Text variant="secondary">{`by ${model.company}`}</Text>
                   {model.openWeight ? (
                     <View className="mt-0.5 self-start rounded-full bg-muted px-2 py-0.5">
-                      <Text className="text-[11px] font-medium text-muted-foreground">
+                      <Text variant="caption" weight="medium">
                         Open Weight
                       </Text>
                     </View>
                   ) : null}
                 </View>
                 {selected ? (
-                  <Text className="text-[17px] font-semibold leading-[22px] text-primary">
+                  <Text variant="label" tone="primary" weight="semibold">
                     ✓
                   </Text>
                 ) : null}

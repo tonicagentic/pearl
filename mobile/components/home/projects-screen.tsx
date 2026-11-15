@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
-  Text,
   View,
 } from "react-native";
 import { router } from "expo-router";
@@ -17,6 +16,7 @@ import { useCSSVariable } from "uniwind";
 
 import { CreateProjectModal } from "@/components/home/create-project-modal";
 import { ProjectMark } from "@/components/project-mark";
+import { Text } from "@/components/ui/text";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 
 export type ProjectsScreenHandle = {
@@ -84,7 +84,7 @@ export const ProjectsScreen = forwardRef<
     <View style={{ flex: 1, backgroundColor }}>
       {error ? (
         <Pressable className="px-5 py-3" onPress={() => void reload()}>
-          <Text className="text-sm text-destructive">
+          <Text variant="secondary" tone="destructive">
             {error} Tap to retry.
           </Text>
         </Pressable>
@@ -103,10 +103,10 @@ export const ProjectsScreen = forwardRef<
         >
           {(projects ?? []).length === 0 ? (
             <View className="py-8">
-              <Text className="text-base font-medium text-foreground">
+              <Text variant="body" weight="medium">
                 No projects yet
               </Text>
-              <Text className="text-muted-foreground mt-1.5 text-sm leading-5">
+              <Text variant="secondary" className="mt-1.5">
                 Create a project to draft plans and keep related chats together.
               </Text>
             </View>
@@ -122,17 +122,11 @@ export const ProjectsScreen = forwardRef<
               >
                 <ProjectMark name={project.name} />
                 <View className="min-w-0 flex-1">
-                  <Text
-                    className="text-[16px] font-medium text-foreground"
-                    numberOfLines={1}
-                  >
+                  <Text variant="body" weight="medium" numberOfLines={1}>
                     {project.name}
                   </Text>
                   {project.instructions.trim() ? (
-                    <Text
-                      className="mt-0.5 text-[13px] text-muted-foreground"
-                      numberOfLines={1}
-                    >
+                    <Text variant="secondary" className="mt-0.5" numberOfLines={1}>
                       {project.instructions.trim()}
                     </Text>
                   ) : null}

@@ -4,7 +4,6 @@ import {
   FlatList,
   Platform,
   Pressable,
-  Text,
   View,
 } from "react-native";
 import { Stack, useIsFocused, useRouter } from "expo-router";
@@ -13,6 +12,7 @@ import { useCSSVariable } from "uniwind";
 
 import { Icon } from "@/components/ui/icon";
 import { StackScreen } from "@/components/ui/stack-screen";
+import { Text } from "@/components/ui/text";
 import {
   createWorkbenchPin,
   fetchWorkbenchPins,
@@ -103,7 +103,12 @@ export function WorkbenchScreen() {
                     className="min-h-11 justify-center px-2"
                     onPress={() => void reload()}
                   >
-                    <Text style={{ color: foregroundColor, fontSize: 17 }}>
+                    <Text
+                      variant="label"
+                      style={
+                        foregroundColor ? { color: foregroundColor } : undefined
+                      }
+                    >
                       Refresh
                     </Text>
                   </Pressable>

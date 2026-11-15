@@ -1,12 +1,13 @@
 import { CheckIcon, Loader2 } from "lucide-react-native";
 import { useAuiState } from "@assistant-ui/react-native";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 
 import {
   latestTodoSnapshot,
   todoProgress,
   type AgentTodo,
 } from "../../../../lib/agent-todos";
+import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 
 function StatusMark({ status }: { readonly status: AgentTodo["status"] }) {
@@ -32,15 +33,18 @@ function TodoRow({ item }: { readonly item: AgentTodo }) {
     <View className="flex-row items-start gap-2">
       <StatusMark status={item.status} />
       <Text
-        className={cn(
-          "min-w-0 flex-1 text-[13px] leading-5",
-          done ? "text-muted-foreground line-through" : "text-foreground/90",
-        )}
+        variant="secondary"
+        tone={done ? "muted" : "default"}
+        className={cn("min-w-0 flex-1", done && "line-through opacity-90")}
       >
         {item.content}
       </Text>
       {item.priority === "high" && !done ? (
-        <Text className="pt-0.5 text-[11px] uppercase tracking-wide text-foreground/45">
+        <Text
+          variant="caption"
+          className="pt-0.5 uppercase tracking-wide opacity-45"
+          tone="default"
+        >
           High
         </Text>
       ) : null}
@@ -70,8 +74,10 @@ function TodoListCard({
       className="w-full rounded-xl border border-border/60 bg-foreground/[0.02] px-3 py-2.5"
     >
       <View className="flex-row items-center justify-between gap-3">
-        <Text className="text-[13px] font-medium text-foreground/80">To-dos</Text>
-        <Text className="text-[12px] tabular-nums text-muted-foreground">
+        <Text variant="secondary" weight="medium" className="opacity-80">
+          To-dos
+        </Text>
+        <Text variant="caption" className="tabular-nums">
           {updating && items.length === 0 ? "Updating…" : countLabel}
         </Text>
       </View>

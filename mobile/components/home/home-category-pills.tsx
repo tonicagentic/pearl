@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import {
   FolderIcon,
@@ -18,6 +18,7 @@ import Animated, {
 import { useCSSVariable } from "uniwind";
 
 import { Icon } from "@/components/ui/icon";
+import { Text } from "@/components/ui/text";
 
 export type HomeCategory = "chats" | "tasks" | "projects";
 
@@ -29,7 +30,6 @@ const CHIP_FILL = "#E8E8ED";
 const CHIP_SIZE = 32;
 const CHIP_GAP = 6;
 const ICON_SIZE = 15;
-const LABEL_SIZE = 13;
 const SELECTED_PAD_X = 10;
 const LABEL_GAP = 5;
 /** Keeps the glyph optically centered in the collapsed circle. */
@@ -178,13 +178,11 @@ function CategoryChip({
         </View>
         <Animated.View style={[{ overflow: "hidden" }, labelStyle]}>
           <Text
+            variant="secondary"
+            weight="semibold"
             numberOfLines={1}
-            style={{
-              color: ACCENT_FG,
-              fontSize: LABEL_SIZE,
-              fontWeight: "600",
-              letterSpacing: -0.2,
-            }}
+            className="tracking-tight"
+            style={{ color: ACCENT_FG }}
           >
             {category.label}
           </Text>

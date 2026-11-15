@@ -2,7 +2,6 @@ import { useMemo, useState, type ComponentType } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  Text,
   View,
   useWindowDimensions,
   type ViewProps,
@@ -13,6 +12,7 @@ import { ExternalLinkIcon, XIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { Icon } from "@/components/ui/icon";
+import { Text } from "@/components/ui/text";
 import { openWebUrlExternally } from "@/src/open-web-url";
 
 type WebViewNavigationEvent = {
@@ -90,15 +90,14 @@ export function InAppBrowserScreen({ url }: { readonly url: string }) {
         </Pressable>
         <View className="min-w-0 flex-1">
           <Text
-            className="text-foreground text-center text-[15px] font-medium"
+            variant="body"
+            weight="medium"
+            className="text-center"
             numberOfLines={1}
           >
             {heading}
           </Text>
-          <Text
-            className="text-muted-foreground text-center text-[12px]"
-            numberOfLines={1}
-          >
+          <Text variant="caption" className="text-center" numberOfLines={1}>
             {hostnameOf(currentUrl)}
           </Text>
         </View>
@@ -115,10 +114,10 @@ export function InAppBrowserScreen({ url }: { readonly url: string }) {
 
       {!WebView ? (
         <View className="gap-3 px-4 py-6">
-          <Text className="text-foreground text-base font-medium">
+          <Text variant="body" weight="medium">
             Preview unavailable
           </Text>
-          <Text className="text-muted-foreground text-sm leading-5">
+          <Text variant="secondary">
             This build cannot embed web pages. Open the link in your browser
             instead.
           </Text>
@@ -127,7 +126,7 @@ export function InAppBrowserScreen({ url }: { readonly url: string }) {
             className="mt-1 min-h-11 justify-center self-start active:opacity-70"
             onPress={() => openWebUrlExternally(url)}
           >
-            <Text className="text-foreground text-sm font-medium">
+            <Text variant="secondary" tone="default" weight="medium">
               Open in browser
             </Text>
           </Pressable>
@@ -153,18 +152,16 @@ export function InAppBrowserScreen({ url }: { readonly url: string }) {
           ) : null}
           {error ? (
             <View className="gap-3 px-4 py-6">
-              <Text className="text-foreground text-base font-medium">
+              <Text variant="body" weight="medium">
                 Couldn’t load page
               </Text>
-              <Text className="text-muted-foreground text-sm leading-5">
-                {error}
-              </Text>
+              <Text variant="secondary">{error}</Text>
               <Pressable
                 accessibilityRole="button"
                 className="mt-1 min-h-11 justify-center self-start active:opacity-70"
                 onPress={() => openWebUrlExternally(currentUrl || url)}
               >
-                <Text className="text-foreground text-sm font-medium">
+                <Text variant="secondary" tone="default" weight="medium">
                   Open in browser
                 </Text>
               </Pressable>

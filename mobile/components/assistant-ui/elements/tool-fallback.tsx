@@ -10,8 +10,9 @@ import {
 } from "@assistant-ui/react-native";
 import { CheckIcon, XIcon } from "lucide-react-native";
 import { type FC, useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Text, textVariants } from "@/components/ui/text";
 import {
   field,
   inkButton,
@@ -103,10 +104,10 @@ const ApprovalButton: FC<{
     )}
   >
     <Text
-      className={cn(
-        "text-xs font-medium",
-        primary ? "text-background" : "text-foreground",
-      )}
+      variant="caption"
+      weight="medium"
+      tone="default"
+      className={primary ? "text-background" : undefined}
     >
       {label}
     </Text>
@@ -248,14 +249,23 @@ export const ToolFallbackApproval: FC<
 
   const subject = argsText ? (
     <View className="aui-tool-fallback-approval-args bg-muted/40 rounded-xl px-2.5 py-2">
-      <Text className="text-muted-foreground text-xs" style={monoStyle} selectable>
+      <Text
+        variant="caption"
+        className={mono}
+        style={monoStyle}
+        selectable
+      >
         {argsText}
       </Text>
     </View>
   ) : null;
 
   const promptText = approval?.prompt ? (
-    <Text className="aui-tool-fallback-approval-prompt text-foreground text-sm">
+    <Text
+      variant="secondary"
+      tone="default"
+      className="aui-tool-fallback-approval-prompt"
+    >
       {approval.prompt}
     </Text>
   ) : null;
@@ -264,7 +274,9 @@ export const ToolFallbackApproval: FC<
     <Text
       accessibilityRole="alert"
       accessibilityLiveRegion={webLiveRegion}
-      className="aui-tool-fallback-approval-error text-destructive text-xs"
+      variant="caption"
+      tone="destructive"
+      className="aui-tool-fallback-approval-error"
     >
       {error}
     </Text>
@@ -286,7 +298,8 @@ export const ToolFallbackApproval: FC<
           hydrated ? "accent-muted-foreground/60" : undefined
         }
         className={cn(
-          "text-foreground web:resize-none web:outline-none min-h-16 rounded-lg px-2.5 py-2 text-sm",
+          "web:resize-none web:outline-none min-h-16 rounded-lg px-2.5 py-2",
+          textVariants({ variant: "secondary", tone: "default" }),
           field,
         )}
       />
@@ -314,20 +327,20 @@ export const ToolFallbackApproval: FC<
         className={cn("aui-tool-fallback-approval-confirm gap-2", className)}
       >
         {subject}
-        <Text className="text-foreground text-sm font-semibold">
+        <Text variant="secondary" weight="semibold">
           {confirmMeta?.title ?? `${approvalOptionLabel(confirming)}?`}
         </Text>
         {confirmDescription && (
-          <Text className="text-muted-foreground text-sm">
-            {confirmDescription}
-          </Text>
+          <Text variant="secondary">{confirmDescription}</Text>
         )}
         {confirming.grants && confirming.grants.length > 0 && (
           <View className="aui-tool-fallback-approval-confirm-grants items-start gap-1">
             {confirming.grants.map((grant) => (
               <View key={grant} className={cn("rounded px-1.5 py-0.5", field)}>
                 <Text
-                  className={cn(mono, "text-foreground")}
+                  variant="caption"
+                  tone="default"
+                  className={mono}
                   style={monoStyle}
                   selectable
                 >
@@ -448,16 +461,28 @@ function FilePreview({ path, content }: { path: string; content: string }) {
 
   return <>
     <Pressable accessibilityRole="button" accessibilityLabel={`Open ${path}`} className="min-h-11 justify-center ps-6" onPress={openPreview}>
-      <Text className="text-primary text-sm" numberOfLines={1}>Open {path}</Text>
+      <Text variant="secondary" tone="primary" numberOfLines={1}>
+        Open {path}
+      </Text>
     </Pressable>
     <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
       <SafeAreaView className="bg-background flex-1 p-4">
         <Pressable accessibilityRole="button" className="min-h-11 justify-center" onPress={() => setOpen(false)}>
-          <Text className="text-primary text-base">Close</Text>
+          <Text variant="body" tone="primary">
+            Close
+          </Text>
         </Pressable>
-        <Text className="text-foreground mb-3 text-base font-semibold" numberOfLines={2}>{path}</Text>
+        <Text variant="body" weight="semibold" className="mb-3" numberOfLines={2}>
+          {path}
+        </Text>
         <ScrollView className="flex-1">
-          <Text selectable className="text-foreground text-sm" style={monoStyle}>
+          <Text
+            selectable
+            variant="secondary"
+            tone="default"
+            className={mono}
+            style={monoStyle}
+          >
             {content.slice(0, 5_000)}{content.length > 5_000 ? "\n… Preview limited to 5,000 characters" : ""}
           </Text>
         </ScrollView>
@@ -559,7 +584,8 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
   if (textOnlyQuestion) {
     return (
       <Text
-        className="text-foreground text-[15px] leading-snug"
+        variant="body"
+        className="leading-snug"
         testID="text-only-question-prompt"
       >
         {approval!.prompt}
@@ -571,13 +597,21 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
     <View className="aui-tool-fallback-root gap-2 py-0.5">
       <View className="aui-tool-fallback-header flex-row items-center gap-2">
         <Icon as={presentation.icon} className="text-muted-foreground size-4" />
-        <Text className="aui-tool-fallback-title text-foreground/80 flex-1 text-sm font-medium">
+        <Text
+          variant="secondary"
+          weight="medium"
+          className="aui-tool-fallback-title flex-1 opacity-80"
+        >
           {label}
         </Text>
         {resolution === "approved" ? (
           <View className="flex-row items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5">
             <Icon as={CheckIcon} className="size-3 text-emerald-700 dark:text-emerald-400" />
-            <Text className="text-[11px] font-medium text-emerald-800 dark:text-emerald-300">
+            <Text
+              variant="caption"
+              weight="medium"
+              className="text-emerald-800 dark:text-emerald-300"
+            >
               Approved
             </Text>
           </View>
@@ -585,26 +619,30 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
         {resolution === "denied" ? (
           <View className="flex-row items-center gap-1 rounded-full bg-foreground/5 px-2 py-0.5">
             <Icon as={XIcon} className="text-muted-foreground size-3" />
-            <Text className="text-muted-foreground text-[11px] font-medium">
+            <Text variant="caption" weight="medium">
               Cancelled
             </Text>
           </View>
         ) : null}
       </View>
       {detail ? (
-        <Text className="text-muted-foreground ps-6 text-xs leading-snug" numberOfLines={3}>
+        <Text
+          variant="caption"
+          className="ps-6 leading-snug"
+          numberOfLines={3}
+        >
           {detail}
         </Text>
       ) : null}
       {resolution === "approved" ? (
-        <Text className="text-muted-foreground ps-6 text-xs leading-snug">
+        <Text variant="caption" className="ps-6 leading-snug">
           {resultSummary
             ? `You approved · ${resultSummary}`
             : "You approved this step."}
         </Text>
       ) : null}
       {resolution === "denied" ? (
-        <Text className="text-muted-foreground ps-6 text-xs leading-snug">
+        <Text variant="caption" className="ps-6 leading-snug">
           {approval?.reason
             ? `You cancelled · ${approval.reason}`
             : "You cancelled this step."}
@@ -612,10 +650,10 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
       ) : null}
       {error !== "" && (
         <View className="aui-tool-fallback-error gap-0.5 ps-6">
-          <Text className="text-muted-foreground text-xs font-semibold">
+          <Text variant="caption" weight="semibold">
             {isCancelled ? "Cancelled reason:" : "Error:"}
           </Text>
-          <Text className="text-muted-foreground text-xs" selectable>
+          <Text variant="caption" selectable>
             {error}
           </Text>
         </View>
@@ -630,7 +668,7 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
             void workspace.openPath(generatedSvgPath);
           }}
         >
-          <Text className="text-primary text-sm" numberOfLines={1}>
+          <Text variant="secondary" tone="primary" numberOfLines={1}>
             Open {generatedSvgPath}
           </Text>
         </Pressable>

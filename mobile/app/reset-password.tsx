@@ -5,13 +5,13 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { Button } from "@/components/ui/button";
+import { Text } from "@/components/ui/text";
 import { TextField } from "@/components/ui/text-field";
 import { useAuth } from "@/src/auth";
 
@@ -31,12 +31,6 @@ export default function ResetPasswordRoute() {
 
   const { resetPassword, signInState, signInError } = useAuth();
   const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const foregroundColor = useCSSVariable("--color-foreground") as
-    | string
-    | undefined;
-  const hintColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
 
@@ -76,15 +70,10 @@ export default function ResetPasswordRoute() {
       <SafeAreaView style={[StyleSheet.absoluteFill, { backgroundColor }]}>
         <Stack.Screen options={{ title: "Reset password", headerShown: true }} />
         <View style={styles.center}>
-          <Text
-            style={[
-              styles.title,
-              foregroundColor ? { color: foregroundColor } : null,
-            ]}
-          >
+          <Text variant="display" className="text-center tracking-tight">
             Link expired
           </Text>
-          <Text style={[styles.hint, hintColor ? { color: hintColor } : null]}>
+          <Text variant="body" tone="muted" className="mb-1 text-center leading-[22px]">
             This password reset link is invalid or has expired. Request a new
             one from sign in.
           </Text>
@@ -102,15 +91,10 @@ export default function ResetPasswordRoute() {
       <SafeAreaView style={[StyleSheet.absoluteFill, { backgroundColor }]}>
         <Stack.Screen options={{ title: "Reset password", headerShown: true }} />
         <View style={styles.center}>
-          <Text
-            style={[
-              styles.title,
-              foregroundColor ? { color: foregroundColor } : null,
-            ]}
-          >
+          <Text variant="display" className="text-center tracking-tight">
             Password updated
           </Text>
-          <Text style={[styles.hint, hintColor ? { color: hintColor } : null]}>
+          <Text variant="body" tone="muted" className="mb-1 text-center leading-[22px]">
             Sign in with your new password.
           </Text>
           <Button
@@ -130,15 +114,10 @@ export default function ResetPasswordRoute() {
         style={styles.flex}
       >
         <View style={styles.center}>
-          <Text
-            style={[
-              styles.title,
-              foregroundColor ? { color: foregroundColor } : null,
-            ]}
-          >
+          <Text variant="display" className="text-center tracking-tight">
             Choose a new password
           </Text>
-          <Text style={[styles.hint, hintColor ? { color: hintColor } : null]}>
+          <Text variant="body" tone="muted" className="mb-1 text-center leading-[22px]">
             Use at least 8 characters.
           </Text>
           <View style={styles.fields}>
@@ -174,7 +153,9 @@ export default function ResetPasswordRoute() {
           {error ? (
             <Text
               accessibilityRole="alert"
-              className="text-center text-sm text-destructive"
+              variant="secondary"
+              tone="destructive"
+              className="text-center"
             >
               {error}
             </Text>
@@ -185,7 +166,7 @@ export default function ResetPasswordRoute() {
             disabled={busy}
             onPress={() => router.replace("/sign-in")}
           >
-            <Text style={{ color: hintColor }}>Back to sign in</Text>
+            <Text variant="secondary">Back to sign in</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -200,18 +181,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 24,
     gap: 14,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "600",
-    textAlign: "center",
-    letterSpacing: -0.3,
-  },
-  hint: {
-    fontSize: 16,
-    lineHeight: 22,
-    textAlign: "center",
-    marginBottom: 4,
   },
   fields: { gap: 12 },
 });

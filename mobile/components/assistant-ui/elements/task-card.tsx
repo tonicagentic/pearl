@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { Ban, CheckIcon, Loader2, XIcon } from "lucide-react-native";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 
+import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { mono, paper } from "./surfaces";
 
@@ -63,24 +64,34 @@ export function TaskCard({
     <>
       <View className="flex-row items-center gap-2.5 px-3.5 py-2.5">
         <TaskStateIcon state={state} />
-        <Text
-          numberOfLines={1}
-          className="min-w-0 flex-1 text-[13.5px] text-foreground"
-        >
+        <Text variant="secondary" tone="default" numberOfLines={1} className="min-w-0 flex-1">
           {label}
         </Text>
         {meta !== undefined && (
-          <Text numberOfLines={1} className={cn(mono, "max-w-24 shrink-0 text-foreground/35")}>
+          <Text
+            variant="caption"
+            tone="default"
+            numberOfLines={1}
+            className={cn(mono, "max-w-24 shrink-0 opacity-35")}
+          >
             {meta}
           </Text>
         )}
         {elapsed !== undefined && (
-          <Text className={cn(mono, "shrink-0 text-foreground/30")}>{elapsed}</Text>
+          <Text
+            variant="caption"
+            tone="default"
+            className={cn(mono, "shrink-0 opacity-30")}
+          >
+            {elapsed}
+          </Text>
         )}
       </View>
       {isRenderable(result) && (
         <View className="border-t border-border/60 px-3.5 py-2">
-          <Text className="text-xs leading-relaxed text-foreground/70">{result}</Text>
+          <Text variant="caption" tone="default" className="leading-relaxed opacity-70">
+            {result}
+          </Text>
         </View>
       )}
     </>

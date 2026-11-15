@@ -5,7 +5,6 @@ import {
   AppState,
   Platform,
   Pressable,
-  Text,
   View,
 } from "react-native";
 import * as Linking from "expo-linking";
@@ -13,6 +12,7 @@ import { Stack, useFocusEffect } from "expo-router";
 
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { SettingsCard } from "@/components/ui/settings-card";
+import { Text } from "@/components/ui/text";
 import {
   authorizeMailbox,
   listMailboxes,
@@ -220,7 +220,7 @@ export function EmailScreen() {
         refreshing={refreshing}
         onRefresh={() => void load({ refresh: true })}
       >
-        <Text className="px-1 text-[15px] leading-[22px] text-foreground">
+        <Text variant="body" className="px-1">
           Connect Gmail so Pearl can search and read threads, draft replies,
           send only after you approve, and archive or label mail in batches you
           confirm.
@@ -239,7 +239,7 @@ export function EmailScreen() {
           />
         </View>
 
-        <Text className="px-1 text-[13px] text-muted-foreground">
+        <Text variant="secondary" className="px-1">
           {mailboxes == null
             ? "Loading…"
             : connectedCount === 0
@@ -249,23 +249,17 @@ export function EmailScreen() {
 
         {userCode ? (
           <View className="gap-1 rounded-[18px] bg-card px-4 py-3">
-            <Text
-              selectable
-              className="text-[17px] font-semibold text-foreground"
-            >
+            <Text variant="label" weight="semibold" selectable>
               Code: {userCode}
             </Text>
-            <Text className="text-[13px] text-muted-foreground">
+            <Text variant="secondary">
               Enter this code on the authorization page if prompted.
             </Text>
           </View>
         ) : null}
 
         {error ? (
-          <Text
-            accessibilityRole="alert"
-            className="px-1 text-[13px] text-destructive"
-          >
+          <Text variant="secondary" tone="destructive" className="px-1" accessibilityRole="alert">
             {error}
           </Text>
         ) : null}
@@ -301,7 +295,7 @@ export function EmailScreen() {
           />
         ) : null}
 
-        <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
+        <Text variant="secondary" className="px-1">
           Each address is authorized separately through Google. Pearl never
           stores provider tokens on this device. Archive and mark-read need a
           one-time reconnect if an account was linked before those permissions
@@ -321,11 +315,11 @@ function EmailCapabilitiesCard({
 }) {
   return (
     <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-      <Text className="text-[17px] font-medium text-foreground">{heading}</Text>
+      <Text variant="label">{heading}</Text>
       <BulletList items={capabilities.canDo} />
       {capabilities.needsApproval.length > 0 ? (
         <View className="gap-2 pt-1">
-          <Text className="text-[15px] font-medium text-foreground">
+          <Text variant="body" weight="medium">
             Needs your approval
           </Text>
           <BulletList items={capabilities.needsApproval} />
@@ -340,10 +334,10 @@ function BulletList({ items }: { readonly items: readonly string[] }) {
     <View className="gap-2">
       {items.map((item) => (
         <View key={item} className="flex-row gap-2">
-          <Text className="text-[15px] leading-[20px] text-muted-foreground">
+          <Text variant="body" tone="muted">
             •
           </Text>
-          <Text className="min-w-0 flex-1 text-[15px] leading-[20px] text-muted-foreground">
+          <Text variant="body" tone="muted" className="min-w-0 flex-1">
             {item}
           </Text>
         </View>
@@ -374,23 +368,17 @@ function MailboxRow({
   return (
     <View>
       <View className="gap-2 px-4 py-3">
-        <Text
-          className="text-[17px] font-medium text-foreground"
-          numberOfLines={2}
-          selectable
-        >
+        <Text variant="label" numberOfLines={2}
+          selectable>
           {title}
         </Text>
         {nickname && email ? (
-          <Text
-            className="text-[13px] text-muted-foreground"
-            numberOfLines={1}
-            selectable
-          >
+          <Text variant="secondary" numberOfLines={1}
+            selectable>
             {email}
           </Text>
         ) : null}
-        <Text className="text-[13px] text-muted-foreground">
+        <Text variant="secondary">
           {statusLabel(mailbox.status)}
           {mailbox.status === "connected" && !mailbox.canModify
             ? " · reconnect for archive and mark-read"
@@ -444,9 +432,8 @@ function ActionChip({
       }`}
     >
       <Text
-        className={`text-[15px] ${
-          destructive ? "text-destructive" : "text-foreground"
-        }`}
+        variant="body"
+        tone={destructive ? "destructive" : "default"}
       >
         {label}
       </Text>

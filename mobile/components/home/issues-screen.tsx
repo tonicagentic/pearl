@@ -11,7 +11,6 @@ import {
   LayoutAnimation,
   Pressable,
   ScrollView,
-  Text,
   UIManager,
   View,
   Platform,
@@ -27,6 +26,7 @@ import { useCSSVariable } from "uniwind";
 
 import { CreateTaskModal } from "@/components/home/create-task-modal";
 import { Icon } from "@/components/ui/icon";
+import { Text } from "@/components/ui/text";
 import {
   deleteIssueRequest,
   fetchIssues,
@@ -239,8 +239,14 @@ export const IssuesScreen = forwardRef<
             className="mb-4 rounded-2xl bg-destructive/10 px-4 py-3"
             onPress={() => void reload()}
           >
-            <Text className="text-[14px] text-destructive">{error}</Text>
-            <Text className="mt-1 text-[12px] text-destructive/80">
+            <Text variant="secondary" tone="destructive">
+              {error}
+            </Text>
+            <Text
+              variant="caption"
+              tone="destructive"
+              className="mt-1 opacity-80"
+            >
               Tap to retry
             </Text>
           </Pressable>
@@ -323,13 +329,19 @@ function TaskGroup({
 }) {
   return (
     <View className="mb-7">
-      <Text className="mb-2.5 text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
+      <Text
+        variant="secondary"
+        weight="medium"
+        className="mb-2.5 uppercase tracking-wide"
+      >
         {title}
         {issues.length > 0 ? ` · ${issues.length}` : ""}
       </Text>
       {issues.length === 0 ? (
         empty ? (
-          <Text className="px-1 text-[15px] text-muted-foreground">{empty}</Text>
+          <Text variant="body" tone="muted" className="px-1">
+            {empty}
+          </Text>
         ) : null
       ) : (
         <View className="overflow-hidden rounded-2xl bg-muted/35">
@@ -406,20 +418,21 @@ function TaskRow({
         onLongPress={() => onDelete(issue)}
       >
         <Text
-          className={`text-[16px] leading-5 ${resolved ? "text-muted-foreground line-through" : "text-foreground"}`}
+          variant="body"
+          tone={resolved ? "muted" : "default"}
+          className={resolved ? "line-through" : undefined}
         >
           {issue.title}
         </Text>
         {issue.description ? (
-          <Text
-            className="mt-1 text-[13px] leading-4 text-muted-foreground"
-            numberOfLines={2}
-          >
+          <Text variant="secondary" className="mt-1" numberOfLines={2}>
             {issue.description}
           </Text>
         ) : null}
         {meta ? (
-          <Text className="mt-1.5 text-[12px] text-muted-foreground">{meta}</Text>
+          <Text variant="caption" className="mt-1.5">
+            {meta}
+          </Text>
         ) : null}
       </Pressable>
       <Pressable

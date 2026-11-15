@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { Alert, Platform, Text } from "react-native";
+import { Alert, Platform } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import {
   BrainIcon,
@@ -9,18 +9,18 @@ import {
   InfoIcon,
   LogOutIcon,
   NotebookPenIcon,
-  PuzzleIcon,
+  ShapesIcon,
   SparklesIcon,
   Trash2Icon,
   WalletIcon,
-  CalendarIcon,
 } from "lucide-react-native";
 
-import { CodeSection, connectedPluginCount } from "@/components/settings/code-section";
+import { CodeSection } from "@/components/settings/code-section";
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { Icon } from "@/components/ui/icon";
 import { SettingsCard } from "@/components/ui/settings-card";
 import { SettingsRow } from "@/components/ui/settings-row";
+import { Text } from "@/components/ui/text";
 import { agentHostname } from "@/src/agent-url";
 import { getAppVersionDetail } from "@/src/app-version";
 import { useAuth } from "@/src/auth";
@@ -131,14 +131,6 @@ export function SettingsScreen() {
     }, []),
   );
 
-  const pluginCount =
-    connections == null ? null : connectedPluginCount(connections);
-  const pluginsDetail =
-    pluginCount == null
-      ? "Accounts, tools, agents"
-      : pluginCount === 0
-        ? "None connected"
-        : `${pluginCount} connected`;
   const emailDetail =
     mailboxCount == null
       ? "Gmail accounts"
@@ -230,7 +222,7 @@ export function SettingsScreen() {
   return (
     <SheetScaffold>
       {viewerEmail ? (
-        <Text className="px-1 text-center text-[13px] text-muted-foreground">
+        <Text variant="secondary" className="px-1 text-center">
           {viewerEmail}
         </Text>
       ) : null}
@@ -251,24 +243,10 @@ export function SettingsScreen() {
           showSeparator
         />
         <SettingsRow
-          icon={<Icon as={SparklesIcon} className="size-5 text-violet-500" />}
-          label="Models"
-          detail={selectedLabel}
-          onPress={() => router.push("/models")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={PuzzleIcon} className="size-5 text-emerald-500" />}
-          label="Plugins"
-          detail={pluginsDetail}
-          onPress={() => router.push("/plugins")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={CalendarIcon} className="size-5 text-rose-500" />}
-          label="Calendar"
-          detail={calendarRowDetail}
-          onPress={() => router.push("/calendar")}
+          icon={<Icon as={ShapesIcon} className="size-5 text-violet-500" />}
+          label="Schemas"
+          detail="Precise concept definitions"
+          onPress={() => router.push("/plugins/schema-designer")}
           showSeparator
         />
         <SettingsRow
@@ -279,9 +257,19 @@ export function SettingsScreen() {
         />
       </SettingsCard>
 
-      <CodeSection emailDetail={emailDetail} />
+      <CodeSection
+        emailDetail={emailDetail}
+        calendarDetail={calendarRowDetail}
+      />
 
       <SettingsCard>
+        <SettingsRow
+          icon={<Icon as={SparklesIcon} className="size-5 text-violet-500" />}
+          label="Models"
+          detail={selectedLabel}
+          onPress={() => router.push("/models")}
+          showSeparator
+        />
         <SettingsRow
           icon={<Icon as={CoinsIcon} className="size-5 text-amber-500" />}
           label="Usage"
@@ -323,7 +311,7 @@ export function SettingsScreen() {
         />
       </SettingsCard>
 
-      <Text className="px-1 pb-2 text-center text-[12px] text-muted-foreground/70">
+      <Text variant="caption" className="px-1 pb-2 text-center opacity-70">
         Pearl {getAppVersionDetail()}
       </Text>
     </SheetScaffold>

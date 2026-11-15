@@ -10,7 +10,6 @@ import {
   AppState,
   Platform,
   Pressable,
-  Text,
   TextInput,
   View,
 } from "react-native";
@@ -21,6 +20,8 @@ import { CoderToolsList } from "@/components/settings/code-section";
 import { PluginLogo } from "@/components/settings/plugin-logo";
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { SettingsCard } from "@/components/ui/settings-card";
+import { Text, textVariants } from "@/components/ui/text";
+import { cn } from "@/lib/utils";
 import {
   capabilitiesForConnection,
   capabilitiesForPlugin,
@@ -100,16 +101,16 @@ export function PluginDetailScreen({
         <View className="flex-row items-start gap-4 px-1">
           <PluginLogo id={plugin.id} size={56} />
           <View className="min-w-0 flex-1 gap-1">
-            <Text className="text-[22px] font-semibold leading-[28px] text-foreground">
+            <Text variant="title">
               {plugin.label}
             </Text>
-            <Text className="text-[15px] leading-[20px] text-muted-foreground">
+            <Text variant="body" tone="muted">
               {plugin.detail}
             </Text>
           </View>
         </View>
 
-        <Text className="px-1 text-[15px] leading-[22px] text-foreground">
+        <Text variant="body" className="px-1">
           {plugin.description}
         </Text>
 
@@ -157,10 +158,10 @@ function CalendarManagePanel() {
   return (
     <View className="gap-4">
       <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-        <Text className="text-[17px] font-medium text-foreground">
+        <Text variant="label">
           Calendar accounts
         </Text>
-        <Text className="text-[13px] leading-[18px] text-muted-foreground">
+        <Text variant="secondary">
           Manage Google Calendar and iCloud Calendar from one place.
         </Text>
         <Pressable
@@ -168,7 +169,7 @@ function CalendarManagePanel() {
           onPress={() => router.push("/calendar")}
           className="min-h-11 justify-center self-start rounded-[10px] bg-muted px-4"
         >
-          <Text className="text-[15px] text-foreground">Manage Calendar</Text>
+          <Text variant="body">Manage Calendar</Text>
         </Pressable>
       </View>
       {googleCapabilities ? (
@@ -229,10 +230,10 @@ function GmailMailboxSummaryPanel() {
   return (
     <View className="gap-4">
       <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-        <Text className="text-[17px] font-medium text-foreground">
+        <Text variant="label">
           Gmail accounts
         </Text>
-        <Text className="text-[13px] leading-[18px] text-muted-foreground">
+        <Text variant="secondary">
           {loading && mailboxes == null
             ? "Loading…"
             : connectedCount === 0
@@ -240,11 +241,7 @@ function GmailMailboxSummaryPanel() {
               : `${connectedCount} connected`}
         </Text>
         {mailboxes?.map((mailbox) => (
-          <Text
-            key={mailbox.id}
-            className="text-[15px] text-foreground"
-            numberOfLines={1}
-          >
+          <Text key={mailbox.id} variant="body" numberOfLines={1}>
             {mailbox.nickname?.trim()
               ? `${mailbox.nickname.trim()} · ${mailbox.emailLabel ?? "Gmail"}`
               : (mailbox.emailLabel ?? "Gmail account")}
@@ -254,10 +251,7 @@ function GmailMailboxSummaryPanel() {
           </Text>
         ))}
         {error ? (
-          <Text
-            accessibilityRole="alert"
-            className="text-[13px] text-destructive"
-          >
+          <Text variant="secondary" tone="destructive" accessibilityRole="alert">
             {error}
           </Text>
         ) : null}
@@ -266,7 +260,7 @@ function GmailMailboxSummaryPanel() {
           onPress={() => router.push("/email")}
           className="min-h-11 justify-center self-start rounded-[10px] bg-muted px-4"
         >
-          <Text className="text-[15px] text-foreground">Manage Email</Text>
+          <Text variant="body">Manage Email</Text>
         </Pressable>
       </View>
       {capabilities ? (
@@ -306,10 +300,10 @@ function CoderTools() {
 
   return (
     <View className="gap-1.5">
-      <Text className="px-1 text-[13px] font-medium text-muted-foreground">
+      <Text variant="secondary" weight="medium" className="px-1">
         Accounts and tools
       </Text>
-      <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
+      <Text variant="secondary" className="px-1">
         GitHub, Vercel, and the other connections Coder uses.
       </Text>
       <SettingsCard>
@@ -328,11 +322,11 @@ function CapabilitiesCard({
 }) {
   return (
     <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-      <Text className="text-[17px] font-medium text-foreground">{heading}</Text>
+      <Text variant="label">{heading}</Text>
       <BulletList items={capabilities.canDo} />
       {capabilities.needsApproval.length > 0 ? (
         <View className="gap-2 pt-1">
-          <Text className="text-[15px] font-medium text-foreground">
+          <Text variant="body" weight="medium">
             Needs your approval
           </Text>
           <BulletList items={capabilities.needsApproval} />
@@ -351,8 +345,8 @@ function StatusCard({
 }) {
   return (
     <View className="gap-2 rounded-[18px] bg-card px-4 py-4">
-      <Text className="text-[17px] font-medium text-foreground">{title}</Text>
-      <Text className="text-[13px] leading-[18px] text-muted-foreground">
+      <Text variant="label">{title}</Text>
+      <Text variant="secondary">
         {body}
       </Text>
     </View>
@@ -480,7 +474,7 @@ function ConnectionPanel({
   return (
     <View className="gap-4">
       <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-        <Text className="text-[17px] font-medium text-foreground">Grant</Text>
+        <Text variant="label">Grant</Text>
         {loading && !grant ? (
           <ActivityIndicator accessibilityLabel="Loading grant" />
         ) : null}
@@ -501,17 +495,17 @@ function ConnectionPanel({
               }
             />
             {grant.detail ? (
-              <Text className="text-[13px] leading-[18px] text-muted-foreground">
+              <Text variant="secondary">
                 {grant.detail}
               </Text>
             ) : null}
             {grant.missingScopes && grant.missingScopes.length > 0 ? (
-              <Text className="text-[13px] text-amber-600">
+              <Text variant="secondary" className="text-amber-600">
                 Missing: {grant.missingScopes.join(", ")}
               </Text>
             ) : null}
             {grant.github ? (
-              <Text className="text-[13px] leading-[18px] text-muted-foreground">
+              <Text variant="secondary">
                 GitHub @{grant.github.login}
                 {grant.github.hasRepoScope ? " · repo ok" : " · needs repo"}
                 {grant.github.repos.some((repo) => !repo.canPush)
@@ -520,7 +514,7 @@ function ConnectionPanel({
               </Text>
             ) : null}
             {grant.vercel ? (
-              <Text className="text-[13px] leading-[18px] text-muted-foreground">
+              <Text variant="secondary">
                 Vercel {grant.vercel.username}
                 {grant.vercel.teams.length > 0
                   ? ` · ${grant.vercel.teams.length} teams`
@@ -532,7 +526,7 @@ function ConnectionPanel({
                 accessibilityRole="link"
                 onPress={() => void Linking.openURL(grant.github!.manageUrl)}
               >
-                <Text className="text-[13px] text-foreground underline">
+                <Text variant="secondary" tone="default" className="underline">
                   Authorized OAuth Apps
                 </Text>
               </Pressable>
@@ -542,23 +536,17 @@ function ConnectionPanel({
 
         {userCode ? (
           <View className="gap-1">
-            <Text
-              selectable
-              className="text-[17px] font-semibold text-foreground"
-            >
+            <Text variant="label" weight="semibold" selectable>
               Code: {userCode}
             </Text>
-            <Text className="text-[13px] text-muted-foreground">
+            <Text variant="secondary">
               Enter this code on the authorization page if prompted.
             </Text>
           </View>
         ) : null}
 
         {error ? (
-          <Text
-            accessibilityRole="alert"
-            className="text-[13px] text-destructive"
-          >
+          <Text variant="secondary" tone="destructive" accessibilityRole="alert">
             {error}
           </Text>
         ) : null}
@@ -593,7 +581,7 @@ function ConnectionPanel({
           />
         </View>
 
-        <Text className="text-[12px] leading-[16px] text-muted-foreground">
+        <Text variant="caption">
           Authorization is stored by Vercel Connect for your signed-in account.
           Update reopens consent without disconnecting first. Pearl never stores
           provider tokens in this app.
@@ -640,7 +628,10 @@ function CatalogFilter({
       autoCapitalize="none"
       autoCorrect={false}
       clearButtonMode="while-editing"
-      className="min-h-10 rounded-xl border border-border/60 bg-background px-3 text-[15px] text-foreground"
+      className={cn(
+        textVariants({ variant: "body" }),
+        "min-h-10 rounded-xl border border-border/60 bg-background px-3",
+      )}
     />
   );
 }
@@ -653,23 +644,19 @@ function GithubAccessSections({
   return (
     <View className="gap-4">
       <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-        <Text className="text-[17px] font-medium text-foreground">
+        <Text variant="label">
           Organizations
         </Text>
         {github.orgs.length > 0 ? (
           <View className="gap-2">
             {github.orgs.map((org) => (
-              <Text
-                key={org}
-                className="text-[15px] text-foreground"
-                numberOfLines={1}
-              >
+              <Text key={org} variant="body" numberOfLines={1}>
                 {org}
               </Text>
             ))}
           </View>
         ) : (
-          <Text className="text-[13px] leading-[18px] text-muted-foreground">
+          <Text variant="secondary">
             No organizations visible to this grant. Approve org access on
             GitHub if you need them.
           </Text>
@@ -680,16 +667,15 @@ function GithubAccessSections({
 
       {github.repos.length > 0 ? (
         <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-          <Text className="text-[17px] font-medium text-foreground">
+          <Text variant="label">
             Workbench pins
           </Text>
           <View className="gap-2">
             {github.repos.map((repo) => (
-              <Text
-                key={repo.fullName}
-                className="text-[13px] leading-[18px] text-muted-foreground"
-              >
-                <Text className="text-foreground">{repo.fullName}</Text>
+              <Text key={repo.fullName} variant="secondary">
+                <Text variant="secondary" tone="default">
+                  {repo.fullName}
+                </Text>
                 {repo.canPush
                   ? " · can push"
                   : ` · blocked${repo.blockedReason ? `: ${repo.blockedReason}` : ""}`}
@@ -751,13 +737,13 @@ function GithubReposCatalogSection() {
 
   return (
     <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-      <Text className="text-[17px] font-medium text-foreground">
+      <Text variant="label">
         Repositories
         {catalog?.connected === true && repos.length > 0
           ? ` · ${repos.length}`
           : ""}
       </Text>
-      <Text className="text-[13px] leading-[18px] text-muted-foreground">
+      <Text variant="secondary">
         Every repo this connection can see, most recently pushed first.
       </Text>
 
@@ -775,10 +761,7 @@ function GithubReposCatalogSection() {
 
       {error ? (
         <View className="gap-2">
-          <Text
-            accessibilityRole="alert"
-            className="text-[13px] text-destructive"
-          >
+          <Text variant="secondary" tone="destructive" accessibilityRole="alert">
             {error}
           </Text>
           <ActionChip label="Retry" onPress={() => void load()} />
@@ -786,7 +769,7 @@ function GithubReposCatalogSection() {
       ) : null}
 
       {catalog?.connected === false ? (
-        <Text className="text-[13px] leading-[18px] text-muted-foreground">
+        <Text variant="secondary">
           {catalog.message}
         </Text>
       ) : null}
@@ -802,35 +785,29 @@ function GithubReposCatalogSection() {
                 className="gap-1"
               >
                 <View className="flex-row flex-wrap items-center gap-2">
-                  <Text
-                    className="min-w-0 flex-1 text-[15px] font-medium text-foreground"
-                    numberOfLines={1}
-                  >
+                  <Text variant="body" weight="medium" className="min-w-0 flex-1" numberOfLines={1}>
                     {repo.fullName}
                   </Text>
-                  <Text className="text-[12px] text-muted-foreground">
+                  <Text variant="caption">
                     {repo.private ? "Private" : "Public"}
                   </Text>
                 </View>
                 {repo.description ? (
-                  <Text
-                    className="text-[13px] leading-[18px] text-muted-foreground"
-                    numberOfLines={2}
-                  >
+                  <Text variant="secondary" numberOfLines={2}>
                     {repo.description}
                   </Text>
                 ) : null}
               </Pressable>
             ))}
             {catalog.truncated ? (
-              <Text className="text-[12px] leading-[16px] text-muted-foreground">
+              <Text variant="caption">
                 Showing the first {repos.length} repositories. Refine access on
                 GitHub if you expected more.
               </Text>
             ) : null}
           </View>
         ) : (
-          <Text className="text-[13px] leading-[18px] text-muted-foreground">
+          <Text variant="secondary">
             {needle
               ? "No repositories match that filter."
               : "No repositories visible yet. Reconnect GitHub if this looks wrong."}
@@ -906,13 +883,13 @@ function VercelProjectsSection({
 
   return (
     <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-      <Text className="text-[17px] font-medium text-foreground">
+      <Text variant="label">
         Projects
         {catalog?.connected === true && projects.length > 0
           ? ` · ${projects.length}`
           : ""}
       </Text>
-      <Text className="text-[13px] leading-[18px] text-muted-foreground">
+      <Text variant="secondary">
         Every project on your personal account and each team, newest updates
         first.
       </Text>
@@ -931,10 +908,7 @@ function VercelProjectsSection({
 
       {error ? (
         <View className="gap-2">
-          <Text
-            accessibilityRole="alert"
-            className="text-[13px] text-destructive"
-          >
+          <Text variant="secondary" tone="destructive" accessibilityRole="alert">
             {error}
           </Text>
           <ActionChip label="Retry" onPress={() => void load()} />
@@ -942,7 +916,7 @@ function VercelProjectsSection({
       ) : null}
 
       {catalog?.connected === false ? (
-        <Text className="text-[13px] leading-[18px] text-muted-foreground">
+        <Text variant="secondary">
           {catalog.message}
         </Text>
       ) : null}
@@ -967,13 +941,13 @@ function VercelProjectsSection({
             />
           ))}
           {catalog.skippedTeams.length > 0 ? (
-            <Text className="text-[12px] leading-[16px] text-muted-foreground">
+            <Text variant="caption">
               Skipped {catalog.skippedTeams.map((team) => team.slug).join(", ")}{" "}
               (no access).
             </Text>
           ) : null}
           {catalog.truncated ? (
-            <Text className="text-[12px] leading-[16px] text-muted-foreground">
+            <Text variant="caption">
               Showing the first {projects.length} projects. Open the Vercel
               dashboard if you expected more.
             </Text>
@@ -995,7 +969,7 @@ function VercelAccountProjects({
 }) {
   return (
     <View className="gap-2">
-      <Text className="text-[12px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+      <Text variant="caption" weight="medium" className="uppercase tracking-[0.04em]">
         {title}
       </Text>
       {projects.length > 0 ? (
@@ -1007,13 +981,10 @@ function VercelAccountProjects({
               onPress={() => void Linking.openURL(project.dashboardUrl)}
               className="gap-0.5"
             >
-              <Text
-                className="text-[15px] font-medium text-foreground"
-                numberOfLines={1}
-              >
+              <Text variant="body" weight="medium" numberOfLines={1}>
                 {project.name}
               </Text>
-              <Text className="text-[12px] text-muted-foreground">
+              <Text variant="caption">
                 {[project.framework, project.updatedAt
                   ? `Updated ${new Date(project.updatedAt).toLocaleDateString()}`
                   : null]
@@ -1024,7 +995,7 @@ function VercelAccountProjects({
           ))}
         </View>
       ) : (
-        <Text className="text-[13px] leading-[18px] text-muted-foreground">
+        <Text variant="secondary">
           {emptyLabel}
         </Text>
       )}
@@ -1145,10 +1116,7 @@ function VercelResourcesSections({
 
       {error ? (
         <View className="gap-2 rounded-[18px] bg-card px-4 py-4">
-          <Text
-            accessibilityRole="alert"
-            className="text-[13px] text-destructive"
-          >
+          <Text variant="secondary" tone="destructive" accessibilityRole="alert">
             {error}
           </Text>
           <ActionChip label="Retry" onPress={() => void load()} />
@@ -1157,7 +1125,7 @@ function VercelResourcesSections({
 
       {catalog?.connected === false ? (
         <View className="gap-2 rounded-[18px] bg-card px-4 py-4">
-          <Text className="text-[13px] leading-[18px] text-muted-foreground">
+          <Text variant="secondary">
             {catalog.message}
           </Text>
         </View>
@@ -1398,11 +1366,11 @@ function VercelResourceCard({
 }) {
   return (
     <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-      <Text className="text-[17px] font-medium text-foreground">
+      <Text variant="label">
         {title}
         {count > 0 ? ` · ${count}` : ""}
       </Text>
-      <Text className="text-[13px] leading-[18px] text-muted-foreground">
+      <Text variant="secondary">
         {description}
       </Text>
       {showFilter ? (
@@ -1414,13 +1382,13 @@ function VercelResourceCard({
       ) : null}
       {children}
       {skippedTeams.length > 0 ? (
-        <Text className="text-[12px] leading-[16px] text-muted-foreground">
+        <Text variant="caption">
           Skipped {skippedTeams.map((team) => team.slug).join(", ")} (no
           access).
         </Text>
       ) : null}
       {truncated ? (
-        <Text className="text-[12px] leading-[16px] text-muted-foreground">
+        <Text variant="caption">
           {truncatedLabel}
         </Text>
       ) : null}
@@ -1444,7 +1412,7 @@ function VercelAccountResourceList({
 }) {
   return (
     <View className="gap-2">
-      <Text className="text-[12px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+      <Text variant="caption" weight="medium" className="uppercase tracking-[0.04em]">
         {title}
       </Text>
       {items.length > 0 ? (
@@ -1456,14 +1424,11 @@ function VercelAccountResourceList({
               onPress={() => void Linking.openURL(item.url)}
               className="gap-0.5"
             >
-              <Text
-                className="text-[15px] font-medium text-foreground"
-                numberOfLines={1}
-              >
+              <Text variant="body" weight="medium" numberOfLines={1}>
                 {item.title}
               </Text>
               {item.subtitle ? (
-                <Text className="text-[12px] text-muted-foreground">
+                <Text variant="caption">
                   {item.subtitle}
                 </Text>
               ) : null}
@@ -1471,7 +1436,7 @@ function VercelAccountResourceList({
           ))}
         </View>
       ) : (
-        <Text className="text-[13px] leading-[18px] text-muted-foreground">
+        <Text variant="secondary">
           {emptyLabel}
         </Text>
       )}
@@ -1488,10 +1453,10 @@ function DetailRow({
 }) {
   return (
     <View className="gap-0.5">
-      <Text className="text-[12px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+      <Text variant="caption" weight="medium" className="uppercase tracking-[0.04em]">
         {label}
       </Text>
-      <Text selectable className="text-[15px] text-foreground">
+      <Text variant="body" selectable>
         {value}
       </Text>
     </View>
@@ -1503,8 +1468,8 @@ function BulletList({ items }: { readonly items: readonly string[] }) {
     <View className="gap-2">
       {items.map((item) => (
         <View key={item} className="flex-row gap-2">
-          <Text className="text-[13px] text-muted-foreground">•</Text>
-          <Text className="min-w-0 flex-1 text-[13px] leading-[18px] text-muted-foreground">
+          <Text variant="secondary">•</Text>
+          <Text variant="secondary" className="min-w-0 flex-1">
             {item}
           </Text>
         </View>
@@ -1532,7 +1497,9 @@ function ActionChip({
       onPress={onPress}
     >
       <Text
-        className={`text-sm font-medium ${destructive ? "text-destructive" : "text-foreground"}`}
+        variant="secondary"
+        weight="medium"
+        tone={destructive ? "destructive" : "default"}
       >
         {label}
       </Text>

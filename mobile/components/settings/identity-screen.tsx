@@ -4,11 +4,11 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
+import { Text } from "@/components/ui/text";
 import { TextField } from "@/components/ui/text-field";
 import { cn } from "@/lib/utils";
 import {
@@ -214,7 +214,7 @@ export function IdentityScreen() {
   return (
     <SheetScaffold
       footer={
-        <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
+        <Text variant="secondary" className="px-1">
           Pearl loads these for fit and health context when needed — not every
           turn. Free-form memories stay separate.
         </Text>
@@ -225,10 +225,7 @@ export function IdentityScreen() {
       ) : (
         <View className="gap-5">
           {error ? (
-            <Text
-              accessibilityRole="alert"
-              className="px-1 text-[13px] text-destructive"
-            >
+            <Text variant="secondary" tone="destructive" className="px-1" accessibilityRole="alert">
               {error}
             </Text>
           ) : null}
@@ -349,13 +346,13 @@ export function IdentityScreen() {
             disabled={saving}
             onPress={onSave}
           >
-            <Text className="text-[17px] font-semibold text-foreground">
+            <Text variant="label" weight="semibold">
               {saving ? "Saving…" : "Save"}
             </Text>
           </Pressable>
 
           {savedHint ? (
-            <Text className="px-1 text-center text-[13px] text-muted-foreground">
+            <Text variant="secondary" className="px-1 text-center">
               {savedHint}
             </Text>
           ) : null}
@@ -374,7 +371,7 @@ function FieldGroup({
 }) {
   return (
     <View className="gap-1.5">
-      <Text className="px-1 text-[13px] font-normal uppercase tracking-[0.04em] text-muted-foreground">
+      <Text variant="secondary" className="px-1 uppercase tracking-[0.04em]">
         {label}
       </Text>
       <View className="overflow-hidden rounded-[10px] bg-card">{children}</View>
@@ -397,7 +394,7 @@ function TextRow({
 }) {
   return (
     <View className={cn("gap-2 px-4 pt-2.5 pb-3", !last && "border-b border-border")}>
-      <Text className="text-[13px] text-muted-foreground">{label}</Text>
+      <Text variant="secondary">{label}</Text>
       <TextField
         autoCapitalize="sentences"
         autoCorrect
@@ -425,7 +422,7 @@ function MultilineRow({
 }) {
   return (
     <View className={cn("gap-2 px-4 pt-2.5 pb-3", !last && "border-b border-border")}>
-      <Text className="text-[13px] text-muted-foreground">{label}</Text>
+      <Text variant="secondary">{label}</Text>
       <TextField
         autoCapitalize="sentences"
         multiline
@@ -458,10 +455,9 @@ function UnitPills<T extends string>({
             onPress={() => onChange(option.id)}
           >
             <Text
-              className={cn(
-                "text-xs",
-                active ? "text-primary-foreground" : "text-muted-foreground",
-              )}
+              variant="caption"
+              tone={active ? "default" : "muted"}
+              className={active ? "text-primary-foreground" : undefined}
             >
               {option.label}
             </Text>
@@ -482,7 +478,7 @@ function HeightRow({
   return (
     <View className="gap-2 border-b border-border px-4 pt-2.5 pb-3">
       <View className="flex-row items-center justify-between gap-3">
-        <Text className="text-[13px] text-muted-foreground">Height</Text>
+        <Text variant="secondary">Height</Text>
         <UnitPills<HeightUnit>
           onChange={(unit) => onChange({ ...value, unit })}
           options={[
@@ -532,7 +528,7 @@ function WeightRow({
   return (
     <View className="gap-2 border-b border-border px-4 pt-2.5 pb-3">
       <View className="flex-row items-center justify-between gap-3">
-        <Text className="text-[13px] text-muted-foreground">Weight</Text>
+        <Text variant="secondary">Weight</Text>
         <UnitPills<WeightUnit>
           onChange={(unit) => onChange({ ...value, unit })}
           options={[
@@ -570,7 +566,7 @@ function ChipRow({
 }) {
   return (
     <View className="gap-2 border-b border-border px-4 pt-2.5 pb-3">
-      <Text className="text-[13px] text-muted-foreground">{label}</Text>
+      <Text variant="secondary">{label}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View className="flex-row gap-2 py-0.5">
           {options.map((option) => {
@@ -587,12 +583,9 @@ function ChipRow({
                 onPress={() => onSelect(active ? "" : option)}
               >
                 <Text
-                  className={cn(
-                    "text-[13px]",
-                    active
-                      ? "text-primary-foreground"
-                      : "text-muted-foreground",
-                  )}
+                  variant="secondary"
+                  tone={active ? "default" : "muted"}
+                  className={active ? "text-primary-foreground" : undefined}
                 >
                   {option}
                 </Text>
@@ -633,7 +626,7 @@ function SwatchRow({
 }) {
   return (
     <View className="gap-2 border-b border-border px-4 pt-2.5 pb-3">
-      <Text className="text-[13px] text-muted-foreground">{label}</Text>
+      <Text variant="secondary">{label}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View className="flex-row gap-2.5 py-1">
           {options.map((option) => {
@@ -653,10 +646,9 @@ function SwatchRow({
                   style={{ backgroundColor: option.swatch }}
                 />
                 <Text
-                  className={cn(
-                    "text-center text-[10px]",
-                    active ? "text-foreground" : "text-muted-foreground",
-                  )}
+                  variant="caption"
+                  tone={active ? "default" : "muted"}
+                  className="text-center"
                   numberOfLines={1}
                 >
                   {option.label}
@@ -676,9 +668,9 @@ function SwatchRow({
                   : "border-border",
               )}
             >
-              <Text className="text-base text-muted-foreground">+</Text>
+              <Text variant="body" tone="muted">+</Text>
             </View>
-            <Text className="text-center text-[10px] text-muted-foreground">
+            <Text variant="caption" className="text-center">
               Custom
             </Text>
           </Pressable>
@@ -710,7 +702,7 @@ function MeasurementsBlock({
   };
   return (
     <View className={cn("gap-2 px-4 pt-2.5 pb-3", !last && "border-b border-border")}>
-      <Text className="text-[13px] text-muted-foreground">Measurements</Text>
+      <Text variant="secondary">Measurements</Text>
       <View className="flex-row gap-2">
         <MiniMeasure
           label="Chest"
@@ -762,7 +754,7 @@ function MiniMeasure({
 }) {
   return (
     <View className="flex-1 gap-1">
-      <Text className="text-[11px] text-muted-foreground">{label}</Text>
+      <Text variant="caption">{label}</Text>
       <TextField
         onChangeText={onChangeText}
         placeholder='32"'
@@ -778,7 +770,6 @@ const styles = StyleSheet.create({
     minHeight: 40,
     borderRadius: 8,
     paddingHorizontal: 12,
-    fontSize: 17,
   },
   multiline: {
     minHeight: 88,

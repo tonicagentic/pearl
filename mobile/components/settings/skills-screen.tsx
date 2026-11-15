@@ -13,14 +13,15 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
+import { Text, textVariants } from "@/components/ui/text";
 import { TextField } from "@/components/ui/text-field";
+import { cn } from "@/lib/utils";
 import {
   createSkillRequest,
   deleteSkillRequest,
@@ -189,14 +190,14 @@ export function SkillsScreen() {
     <>
     <SheetScaffold>
         {error ? (
-          <Text className="px-1 text-[13px] text-destructive" accessibilityRole="alert">
+          <Text variant="secondary" tone="destructive" className="px-1" accessibilityRole="alert">
             {error}
           </Text>
         ) : null}
 
         <View className="gap-1.5">
           <View className="flex-row items-center justify-between px-1">
-            <Text className="text-[13px] font-normal uppercase tracking-[0.04em] text-muted-foreground">
+            <Text variant="secondary" className="uppercase tracking-[0.04em]">
               Your skills
             </Text>
             <Pressable
@@ -209,7 +210,7 @@ export function SkillsScreen() {
                 setEditor({ kind: "create" });
               }}
             >
-              <Text className="text-[15px] font-medium text-foreground">New</Text>
+              <Text variant="body" weight="medium">New</Text>
             </Pressable>
           </View>
 
@@ -217,7 +218,7 @@ export function SkillsScreen() {
             <ActivityIndicator accessibilityLabel="Loading skills" />
           ) : sorted.length === 0 ? (
             <View className="rounded-[10px] bg-card px-4 py-4">
-              <Text className="text-[13px] text-muted-foreground">
+              <Text variant="secondary">
                 No custom skills yet. Create one, or install a published skill
                 below.
               </Text>
@@ -231,31 +232,28 @@ export function SkillsScreen() {
                 >
                   <View className="gap-1">
                     <View className="flex-row flex-wrap items-center gap-2">
-                      <Text className="text-base font-medium text-foreground">
+                      <Text variant="body" weight="medium">
                         {skill.title}
                       </Text>
-                      <Text className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                      <Text variant="caption" className="rounded-md bg-muted px-1.5 py-0.5 font-mono">
                         {skill.slug}
                       </Text>
                       {skill.source === "registry" ? (
-                        <Text className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                        <Text variant="caption" className="rounded-full bg-muted px-2 py-0.5">
                           published
                         </Text>
                       ) : null}
                       {!skill.enabled ? (
-                        <Text className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                        <Text variant="caption" className="rounded-full bg-muted px-2 py-0.5">
                           disabled
                         </Text>
                       ) : null}
                     </View>
-                    <Text className="text-sm text-muted-foreground" numberOfLines={2}>
+                    <Text variant="secondary" numberOfLines={2}>
                       {skill.description}
                     </Text>
                     {skill.registryName ? (
-                      <Text
-                        className="text-[11px] text-muted-foreground"
-                        numberOfLines={1}
-                      >
+                      <Text variant="caption" numberOfLines={1}>
                         {skill.registryName}
                       </Text>
                     ) : null}
@@ -291,9 +289,9 @@ export function SkillsScreen() {
             className="min-h-11 justify-center px-1"
             onPress={() => void reload()}
           >
-            <Text className="text-[13px] text-muted-foreground">Refresh</Text>
+            <Text variant="secondary">Refresh</Text>
           </Pressable>
-          <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
+          <Text variant="secondary" className="px-1">
             Description is the routing hint Pearl sees every turn. Saves apply
             on the next message.
           </Text>
@@ -336,7 +334,9 @@ function ActionChip({
       onPress={onPress}
     >
       <Text
-        className={`text-sm font-medium ${destructive ? "text-destructive" : "text-foreground"}`}
+        variant="secondary"
+        weight="medium"
+        tone={destructive ? "destructive" : "default"}
       >
         {label}
       </Text>
@@ -401,9 +401,9 @@ function SkillEditorModal({
               disabled={busy}
               onPress={onCancel}
             >
-              <Text className="text-base text-muted-foreground">Cancel</Text>
+              <Text variant="body" tone="muted">Cancel</Text>
             </Pressable>
-            <Text className="text-base font-medium text-foreground">
+            <Text variant="body" weight="medium">
               {skill ? "Edit skill" : "New skill"}
             </Text>
             <Pressable
@@ -414,7 +414,7 @@ function SkillEditorModal({
                 onSave({ title, slug, description, markdown, enabled })
               }
             >
-              <Text className="text-base font-semibold text-foreground">
+              <Text variant="body" weight="semibold">
                 {busy ? "Saving…" : "Save"}
               </Text>
             </Pressable>
@@ -469,12 +469,12 @@ function SkillEditorModal({
                 editable={!busy}
                 multiline
                 onChangeText={setMarkdown}
+                className={cn(textVariants({ variant: "caption" }))}
                 style={{
                   minHeight: 200,
                   paddingTop: 14,
                   paddingBottom: 14,
                   fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-                  fontSize: 13,
                 }}
                 textAlignVertical="top"
                 value={markdown}
@@ -491,14 +491,14 @@ function SkillEditorModal({
                 className={`size-5 items-center justify-center rounded border ${enabled ? "border-foreground bg-foreground" : "border-border bg-card"}`}
               >
                 {enabled ? (
-                  <Text className="text-[11px] font-bold text-background">✓</Text>
+                  <Text variant="caption" className="font-bold text-background">✓</Text>
                 ) : null}
               </View>
-              <Text className="text-base text-foreground">Enabled</Text>
+              <Text variant="body">Enabled</Text>
             </Pressable>
             {skill?.source === "registry" &&
             Object.keys(skill.files ?? {}).length > 0 ? (
-              <Text className="text-[11px] text-muted-foreground">
+              <Text variant="caption">
                 Package files ({Object.keys(skill.files).length}):{" "}
                 {Object.keys(skill.files).sort().join(", ")}
               </Text>
@@ -521,11 +521,11 @@ function FieldLabel({
 }) {
   return (
     <View className="gap-2">
-      <Text className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <Text variant="caption" weight="semibold" className="uppercase tracking-wider">
         {label}
       </Text>
       {hint ? (
-        <Text className="text-xs text-muted-foreground">{hint}</Text>
+        <Text variant="caption">{hint}</Text>
       ) : null}
       {children}
     </View>
@@ -568,10 +568,10 @@ function PublishedSkillsSection({
   return (
     <View className="gap-3">
       <View className="gap-1 px-1">
-        <Text className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <Text variant="caption" weight="semibold" className="uppercase tracking-wider">
           Add a published skill
         </Text>
-        <Text className="text-sm text-muted-foreground">
+        <Text variant="secondary">
           Search skills.sh (including Vercel’s agent skills), preview, then
           install a copy for your account.
         </Text>
@@ -594,7 +594,7 @@ function PublishedSkillsSection({
           disabled={searching || busy}
           onPress={() => void runSearch()}
         >
-          <Text className="text-base font-medium text-foreground">
+          <Text variant="body" weight="medium">
             {searching ? "…" : "Search"}
           </Text>
         </Pressable>
@@ -609,13 +609,13 @@ function PublishedSkillsSection({
                 key={item.name}
                 className={`gap-2 px-4 py-3 ${index > 0 ? "border-t border-border/40" : ""} ${active ? "bg-muted/40" : ""}`}
               >
-                <Text className="text-base font-medium text-foreground">
+                <Text variant="body" weight="medium">
                   {item.title}
                 </Text>
-                <Text className="text-sm text-muted-foreground" numberOfLines={2}>
+                <Text variant="secondary" numberOfLines={2}>
                   {item.description || "No description."}
                 </Text>
-                <Text className="text-[11px] text-muted-foreground" numberOfLines={1}>
+                <Text variant="caption" numberOfLines={1}>
                   {item.name}
                 </Text>
                 <ActionChip
@@ -646,13 +646,13 @@ function PublishedSkillsSection({
         <View className="gap-3 rounded-2xl border border-border/60 bg-card px-4 py-4">
           <View className="flex-row items-start justify-between gap-2">
             <View className="min-w-0 flex-1 gap-1">
-              <Text className="text-base font-medium text-foreground">
+              <Text variant="body" weight="medium">
                 {preview.title}
               </Text>
-              <Text className="text-sm text-muted-foreground">
+              <Text variant="secondary">
                 {preview.description}
               </Text>
-              <Text className="text-[11px] text-muted-foreground">
+              <Text variant="caption">
                 {preview.registryName}
                 {preview.author ? ` · ${preview.author}` : ""}
               </Text>
@@ -663,20 +663,20 @@ function PublishedSkillsSection({
               disabled={busy}
               onPress={() => setPreview(null)}
             >
-              <Text className="text-sm text-muted-foreground">Close</Text>
+              <Text variant="secondary">Close</Text>
             </Pressable>
           </View>
           <View className="gap-1">
-            <Text className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <Text variant="caption" weight="semibold" className="uppercase tracking-wider">
               SKILL.md
             </Text>
-            <Text className="rounded-xl bg-muted/40 p-3 font-mono text-[11px] leading-5 text-foreground">
+            <Text variant="caption" tone="default" className="rounded-xl bg-muted/40 p-3 font-mono">
               {preview.markdown.slice(0, 4_000)}
               {preview.markdown.length > 4_000 ? "\n…" : ""}
             </Text>
           </View>
           {preview.filePaths.length > 0 ? (
-            <Text className="text-[11px] text-muted-foreground">
+            <Text variant="caption">
               Extra files ({preview.filePaths.length}):{" "}
               {preview.filePaths.slice(0, 12).join(", ")}
               {preview.filePaths.length > 12 ? "…" : ""}
@@ -704,7 +704,7 @@ function PublishedSkillsSection({
                 .finally(() => onBusy(false));
             }}
           >
-            <Text className="text-base font-medium text-background">
+            <Text variant="body" weight="medium" className="text-background">
               {busy ? "Adding…" : "Add to my skills"}
             </Text>
           </Pressable>

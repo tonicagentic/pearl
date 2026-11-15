@@ -20,11 +20,12 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
+
+import { Text } from "@/components/ui/text";
 
 import { uploadImageAttachment } from "@/src/image-attachment";
 import { uploadPdfAttachment } from "@/src/pdf-attachment";
@@ -149,13 +150,10 @@ function AttachmentPreviewSheet({
           </View>
           <View className="flex-row items-center justify-between px-5 pb-3">
             <View className="min-w-0 flex-1 pr-3">
-              <Text
-                className="text-[17px] font-semibold text-foreground"
-                numberOfLines={2}
-              >
+              <Text variant="label" weight="semibold" numberOfLines={2}>
                 {name}
               </Text>
-              <Text className="mt-0.5 text-[12px] text-muted-foreground">
+              <Text variant="caption" className="mt-0.5">
                 {contentType}
               </Text>
             </View>
@@ -165,7 +163,9 @@ function AttachmentPreviewSheet({
               className="min-h-9 justify-center px-1"
               onPress={onClose}
             >
-              <Text className="text-[16px] text-muted-foreground">Done</Text>
+              <Text variant="body" tone="muted">
+                Done
+              </Text>
             </Pressable>
           </View>
           <ScrollView
@@ -185,11 +185,11 @@ function AttachmentPreviewSheet({
               <View className="rounded-2xl bg-muted/40 px-4 py-4">
                 <View className="mb-3 flex-row items-center gap-2">
                   <Icon as={FileIcon} className="size-5 text-foreground" />
-                  <Text className="text-[15px] font-medium text-foreground">
+                  <Text variant="body" weight="medium">
                     Document
                   </Text>
                 </View>
-                <Text selectable className="text-[14px] leading-5 text-foreground">
+                <Text selectable variant="secondary" tone="default">
                   {text?.slice(0, 8_000) || "No preview available."}
                 </Text>
               </View>

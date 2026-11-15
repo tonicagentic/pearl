@@ -4,7 +4,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
   type LayoutChangeEvent,
   type TextInputInstance,
@@ -14,6 +13,7 @@ import { useCSSVariable } from "uniwind";
 import Animated, { LinearTransition } from "react-native-reanimated";
 
 import { Button } from "@/components/ui/button";
+import { Text } from "@/components/ui/text";
 import { TextField } from "@/components/ui/text-field";
 import { useAuth, type AuthCtaFrame } from "@/src/auth";
 
@@ -41,12 +41,6 @@ export function SignInScreen({
   } = useAuth();
   // SafeAreaView is a native codegen view — theme background via style, not className.
   const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const foregroundColor = useCSSVariable("--color-foreground") as
-    | string
-    | undefined;
-  const hintColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
 
@@ -158,12 +152,7 @@ export function SignInScreen({
             disabled={busy}
             onPress={onBack}
           >
-            <Text
-              style={[
-                styles.backLabel,
-                hintColor ? { color: hintColor } : null,
-              ]}
-            >
+            <Text variant="label" tone="muted">
               ‹ Back
             </Text>
           </Pressable>
@@ -176,17 +165,10 @@ export function SignInScreen({
             { opacity: handOffActive ? 0 : 1 },
           ]}
         >
-          <Text
-            style={[
-              styles.title,
-              foregroundColor ? { color: foregroundColor } : null,
-            ]}
-          >
+          <Text variant="display" className="text-center tracking-tight">
             Pearl
           </Text>
-          <Text
-            style={[styles.hint, hintColor ? { color: hintColor } : null]}
-          >
+          <Text variant="label" tone="muted" className="mb-1 text-center">
             {hint}
           </Text>
 
@@ -253,7 +235,8 @@ export function SignInScreen({
           {info && !handOffActive ? (
             <Text
               accessibilityRole="text"
-              className="text-center text-sm text-muted-foreground"
+              variant="secondary"
+              className="text-center"
             >
               {info}
             </Text>
@@ -262,7 +245,9 @@ export function SignInScreen({
           {error && !handOffActive ? (
             <Text
               accessibilityRole="alert"
-              className="text-center text-sm text-destructive"
+              variant="secondary"
+              tone="destructive"
+              className="text-center"
             >
               {error}
             </Text>
@@ -275,10 +260,7 @@ export function SignInScreen({
               disabled={busy}
               onPress={() => switchMode("forgot")}
             >
-              <Text
-                className="text-center text-[15px]"
-                style={{ color: hintColor }}
-              >
+              <Text variant="body" tone="muted" className="text-center">
                 Forgot password?
               </Text>
             </Pressable>
@@ -299,34 +281,25 @@ export function SignInScreen({
                 )
               }
             >
-              <Text
-                className="text-center text-[15px]"
-                style={{ color: hintColor }}
-              >
+              <Text variant="body" tone="muted" className="text-center">
                 {mode === "forgot" ? (
                   <>
                     Remembered it?{" "}
-                    <Text
-                      style={{ color: foregroundColor, fontWeight: "600" }}
-                    >
+                    <Text weight="semibold" tone="default">
                       Sign in
                     </Text>
                   </>
                 ) : mode === "sign-in" ? (
                   <>
                     Don’t have an account?{" "}
-                    <Text
-                      style={{ color: foregroundColor, fontWeight: "600" }}
-                    >
+                    <Text weight="semibold" tone="default">
                       Create one
                     </Text>
                   </>
                 ) : (
                   <>
                     Already have an account?{" "}
-                    <Text
-                      style={{ color: foregroundColor, fontWeight: "600" }}
-                    >
+                    <Text weight="semibold" tone="default">
                       Sign in
                     </Text>
                   </>
@@ -343,27 +316,11 @@ export function SignInScreen({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   backSpacer: { minHeight: 44 },
-  backLabel: {
-    fontSize: 17,
-    fontWeight: "500",
-  },
   center: {
     flex: 1,
     justifyContent: "center",
     paddingHorizontal: 24,
     gap: 14,
-  },
-  title: {
-    fontSize: 34,
-    fontWeight: "600",
-    textAlign: "center",
-    letterSpacing: -0.4,
-  },
-  hint: {
-    fontSize: 17,
-    lineHeight: 24,
-    textAlign: "center",
-    marginBottom: 4,
   },
   fields: { gap: 12 },
 });

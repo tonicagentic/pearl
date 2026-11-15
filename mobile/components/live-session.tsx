@@ -9,7 +9,7 @@ import {
 } from "expo-audio";
 import { File, Paths } from "expo-file-system";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
 import {
   MicIcon,
   MicOffIcon,
@@ -21,6 +21,7 @@ import {
 
 import { LiveVoiceOrb } from "@/components/live-voice-orb";
 import { Icon } from "@/components/ui/icon";
+import { Text } from "@/components/ui/text";
 import { createLiveVoice, type LiveVoice } from "@/modules/live-voice";
 import { useChats } from "@/src/chat-context";
 import { resizeLiveJpeg } from "@/src/live-camera";
@@ -650,15 +651,15 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
           showLabel={false}
         />
         <View className="min-w-0 flex-1 gap-0.5">
-          <Text className="text-foreground text-[15px] font-semibold" numberOfLines={1}>
+          <Text variant="body" weight="semibold" numberOfLines={1}>
             {liveVoiceStatusLabel(orbMode)}
           </Text>
           {caption ? (
-            <Text className="text-muted-foreground text-[13px] leading-[18px]" numberOfLines={2}>
+            <Text variant="secondary" numberOfLines={2}>
               {caption}
             </Text>
           ) : (
-            <Text className="text-muted-foreground text-[13px] leading-[18px]" numberOfLines={1}>
+            <Text variant="secondary" numberOfLines={1}>
               {phase === "connecting" ? "Starting the call…" : "Say something"}
             </Text>
           )}
@@ -684,10 +685,14 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
         </View>
       ) : null}
 
-      {error ? <Text className="text-destructive text-[13px]">{error}</Text> : null}
-      {notice ? <Text className="text-muted-foreground text-[13px]">{notice}</Text> : null}
+      {error ? (
+        <Text variant="secondary" tone="destructive">
+          {error}
+        </Text>
+      ) : null}
+      {notice ? <Text variant="secondary">{notice}</Text> : null}
       {videoRejected ? (
-        <Text className="text-muted-foreground text-[13px]">
+        <Text variant="secondary">
           The model is not receiving video. Voice stays on.
         </Text>
       ) : null}
@@ -697,10 +702,16 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
           accessibilityLabel="Allow camera"
           onPress={() => void requestCameraPermission()}
         >
-          <Text className="text-primary text-[13px] font-medium">Allow camera</Text>
+          <Text variant="secondary" tone="primary" weight="medium">
+            Allow camera
+          </Text>
         </Pressable>
       ) : null}
-      {handoffError ? <Text className="text-destructive text-[13px]">{handoffError}</Text> : null}
+      {handoffError ? (
+        <Text variant="secondary" tone="destructive">
+          {handoffError}
+        </Text>
+      ) : null}
 
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">

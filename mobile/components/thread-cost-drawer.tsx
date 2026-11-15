@@ -3,7 +3,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,6 +10,7 @@ import { XIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { Icon } from "@/components/ui/icon";
+import { Text } from "@/components/ui/text";
 import { useEveEvents } from "@/src/chat-context";
 import {
   formatTokens,
@@ -60,15 +60,15 @@ export function ThreadCostDrawer({
             className="min-h-10 justify-center px-2"
             onPress={onClose}
           >
-            <Text className="text-[17px] font-medium text-foreground">Done</Text>
+            <Text variant="label">Done</Text>
           </Pressable>
         </View>
 
         <View className="px-5 pb-4 pt-1">
-          <Text className="text-[22px] font-semibold tracking-tight text-foreground">
+          <Text variant="title" className="tracking-tight">
             Cost
           </Text>
-          <Text className="mt-1 text-[13px] leading-4 text-muted-foreground">
+          <Text variant="secondary" className="mt-1">
             Model usage for this thread
           </Text>
         </View>
@@ -112,7 +112,7 @@ export function ThreadCostDrawer({
           </View>
 
           {empty ? (
-            <Text className="px-1 text-[15px] leading-5 text-muted-foreground">
+            <Text variant="body" tone="muted" className="px-1">
               No model calls in this thread yet.
             </Text>
           ) : (
@@ -124,18 +124,18 @@ export function ThreadCostDrawer({
                     className={`flex-row items-start justify-between gap-3 py-3 ${index === 0 ? "" : "border-t border-border/50"}`}
                   >
                     <View className="min-w-0 flex-1">
-                      <Text
-                        className="text-[15px] font-medium text-foreground"
-                        numberOfLines={1}
-                      >
+                      <Text variant="body" weight="medium" numberOfLines={1}>
                         {row.label}
                       </Text>
-                      <Text className="mt-0.5 text-[12px] tabular-nums text-muted-foreground">
+                      <Text
+                        variant="caption"
+                        className="mt-0.5 tabular-nums"
+                      >
                         {row.modelCalls} calls · {formatTokens(row.inputTokens)}{" "}
                         in · {formatTokens(row.outputTokens)} out
                       </Text>
                     </View>
-                    <Text className="text-[15px] tabular-nums text-foreground">
+                    <Text variant="body" className="tabular-nums">
                       {formatUsd(row.costUsd)}
                     </Text>
                   </View>
@@ -146,7 +146,9 @@ export function ThreadCostDrawer({
                 {trace.callTurns.map((turn) => (
                   <View key={turn.turnId ?? turn.label} className="mb-4 last:mb-0">
                     <Text
-                      className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted-foreground"
+                      variant="caption"
+                      weight="medium"
+                      className="mb-2 uppercase tracking-wide"
                       numberOfLines={2}
                     >
                       {turn.label}
@@ -157,13 +159,13 @@ export function ThreadCostDrawer({
                         className={`flex-row items-start justify-between gap-3 py-2.5 ${index === 0 ? "" : "border-t border-border/40"}`}
                       >
                         <View className="min-w-0 flex-1">
-                          <Text
-                            className="text-[15px] text-foreground"
-                            numberOfLines={1}
-                          >
+                          <Text variant="body" numberOfLines={1}>
                             {call.modelId ?? "unknown"}
                           </Text>
-                          <Text className="mt-0.5 text-[12px] tabular-nums text-muted-foreground">
+                          <Text
+                            variant="caption"
+                            className="mt-0.5 tabular-nums"
+                          >
                             {formatTokens(call.inputTokens ?? 0)} in ·{" "}
                             {formatTokens(call.outputTokens ?? 0)} out
                             {(call.cacheReadTokens ?? 0) > 0
@@ -171,7 +173,10 @@ export function ThreadCostDrawer({
                               : ""}
                           </Text>
                         </View>
-                        <Text className="text-[14px] tabular-nums text-muted-foreground">
+                        <Text
+                          variant="secondary"
+                          className="tabular-nums"
+                        >
                           {formatUsd(call.costUsd)}
                         </Text>
                       </View>
@@ -198,14 +203,19 @@ function HeroStat({
 }) {
   return (
     <View className="min-w-0 flex-1 rounded-2xl bg-muted/40 px-4 py-3.5">
-      <Text className="text-[12px] font-medium text-muted-foreground">
+      <Text variant="caption" weight="medium">
         {label}
       </Text>
-      <Text className="mt-1 text-[24px] font-semibold tabular-nums tracking-tight text-foreground">
+      <Text
+        variant="title"
+        className="mt-1 tabular-nums tracking-tight"
+      >
         {value}
       </Text>
       {hint ? (
-        <Text className="mt-0.5 text-[11px] text-muted-foreground">{hint}</Text>
+        <Text variant="caption" className="mt-0.5">
+          {hint}
+        </Text>
       ) : null}
     </View>
   );
@@ -222,13 +232,11 @@ function QuietStat({
 }) {
   return (
     <View className="min-w-0 flex-1 px-1 py-1">
-      <Text className="text-[12px] text-muted-foreground">{label}</Text>
-      <Text className="mt-0.5 text-[17px] font-medium tabular-nums text-foreground">
+      <Text variant="caption">{label}</Text>
+      <Text variant="label" className="mt-0.5 tabular-nums">
         {value}
       </Text>
-      {hint ? (
-        <Text className="text-[11px] text-muted-foreground">{hint}</Text>
-      ) : null}
+      {hint ? <Text variant="caption">{hint}</Text> : null}
     </View>
   );
 }
@@ -242,7 +250,7 @@ function Section({
 }) {
   return (
     <View>
-      <Text className="mb-2 text-[13px] font-medium text-muted-foreground">
+      <Text variant="secondary" weight="medium" className="mb-2">
         {title}
       </Text>
       <View className="rounded-2xl bg-muted/30 px-4">{children}</View>

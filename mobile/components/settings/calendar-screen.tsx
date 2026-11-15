@@ -10,7 +10,6 @@ import {
   AppState,
   Platform,
   Pressable,
-  Text,
   TextInput,
   View,
 } from "react-native";
@@ -19,6 +18,8 @@ import { Stack, useFocusEffect } from "expo-router";
 
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { SettingsCard } from "@/components/ui/settings-card";
+import { Text, textVariants } from "@/components/ui/text";
+import { cn } from "@/lib/utils";
 import {
   capabilitiesForConnection,
   capabilitiesForPlugin,
@@ -304,16 +305,13 @@ export function CalendarScreen() {
         refreshing={refreshing}
         onRefresh={() => void load({ refresh: true })}
       >
-        <Text className="px-1 text-[15px] leading-[22px] text-foreground">
+        <Text variant="body" className="px-1">
           Connect Google Calendar and iCloud Calendar so Pearl can read
           upcoming events and help you plan around your day.
         </Text>
 
         {error ? (
-          <Text
-            accessibilityRole="alert"
-            className="px-1 text-[13px] text-destructive"
-          >
+          <Text variant="secondary" tone="destructive" className="px-1" accessibilityRole="alert">
             {error}
           </Text>
         ) : null}
@@ -323,10 +321,10 @@ export function CalendarScreen() {
         ) : null}
 
         <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-          <Text className="text-[17px] font-medium text-foreground">
+          <Text variant="label">
             Google Calendar
           </Text>
-          <Text className="text-[13px] text-muted-foreground">
+          <Text variant="secondary">
             {googleGrant
               ? GOOGLE_STATUS[googleGrant.status]
               : loading
@@ -338,13 +336,10 @@ export function CalendarScreen() {
           </Text>
           {userCode ? (
             <View className="gap-1">
-              <Text
-                selectable
-                className="text-[17px] font-semibold text-foreground"
-              >
+              <Text variant="label" weight="semibold" selectable>
                 Code: {userCode}
               </Text>
-              <Text className="text-[13px] text-muted-foreground">
+              <Text variant="secondary">
                 Enter this code on the authorization page if prompted.
               </Text>
             </View>
@@ -388,10 +383,10 @@ export function CalendarScreen() {
         ) : null}
 
         <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-          <Text className="text-[17px] font-medium text-foreground">
+          <Text variant="label">
             iCloud Calendar
           </Text>
-          <Text className="text-[13px] text-muted-foreground">
+          <Text variant="secondary">
             {!icloudAvailable
               ? "Unavailable on this deployment"
               : icloudAccounts == null
@@ -412,15 +407,12 @@ export function CalendarScreen() {
                       : "px-4 py-3"
                   }
                 >
-                  <Text
-                    className="text-[15px] text-foreground"
-                    numberOfLines={1}
-                  >
+                  <Text variant="body" numberOfLines={1}>
                     {account.nickname?.trim()
                       ? `${account.nickname.trim()} · ${account.appleId}`
                       : account.appleId}
                   </Text>
-                  <Text className="mt-1 text-[13px] text-muted-foreground">
+                  <Text variant="secondary" className="mt-1">
                     {account.status === "connected"
                       ? "Connected"
                       : account.status === "unavailable"
@@ -433,7 +425,7 @@ export function CalendarScreen() {
                     onPress={() => confirmDisconnectIcloud(account)}
                     className="mt-2 min-h-10 justify-center self-start rounded-[10px] border border-border px-3"
                   >
-                    <Text className="text-[14px] text-destructive">
+                    <Text variant="secondary" tone="destructive">
                       {busyId === account.id ? "…" : "Disconnect"}
                     </Text>
                   </Pressable>
@@ -466,7 +458,7 @@ export function CalendarScreen() {
                 onChangeText={setNickname}
                 placeholder="Personal"
               />
-              <Text className="text-[13px] leading-[18px] text-muted-foreground">
+              <Text variant="secondary">
                 Create an app-specific password at appleid.apple.com. Pearl
                 encrypts it at rest and never shows it again.
               </Text>
@@ -508,7 +500,7 @@ export function CalendarScreen() {
           />
         ) : null}
 
-        <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
+        <Text variant="secondary" className="px-1">
           Google Calendar uses Vercel Connect. iCloud Calendar uses CalDAV with
           an Apple app-specific password stored encrypted in Pearl — never on
           this device after you save it.
@@ -527,11 +519,11 @@ function CapabilitiesCard({
 }) {
   return (
     <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-      <Text className="text-[17px] font-medium text-foreground">{heading}</Text>
+      <Text variant="label">{heading}</Text>
       <BulletList items={capabilities.canDo} />
       {capabilities.needsApproval.length > 0 ? (
         <View className="gap-2 pt-1">
-          <Text className="text-[15px] font-medium text-foreground">
+          <Text variant="body" weight="medium">
             Needs your approval
           </Text>
           <BulletList items={capabilities.needsApproval} />
@@ -546,10 +538,10 @@ function BulletList({ items }: { readonly items: readonly string[] }) {
     <View className="gap-2">
       {items.map((item) => (
         <View key={item} className="flex-row gap-2">
-          <Text className="text-[15px] leading-[20px] text-muted-foreground">
+          <Text variant="body" tone="muted">
             •
           </Text>
-          <Text className="min-w-0 flex-1 text-[15px] leading-[20px] text-muted-foreground">
+          <Text variant="body" tone="muted" className="min-w-0 flex-1">
             {item}
           </Text>
         </View>
@@ -579,9 +571,8 @@ function ActionChip({
       } ${disabled ? "opacity-50" : ""}`}
     >
       <Text
-        className={`text-[15px] ${
-          destructive ? "text-destructive" : "text-foreground"
-        }`}
+        variant="body"
+        tone={destructive ? "destructive" : "default"}
       >
         {label}
       </Text>
@@ -608,7 +599,9 @@ function LabeledField({
 }) {
   return (
     <View className="gap-1">
-      <Text className="text-[13px] font-medium text-foreground">{label}</Text>
+      <Text variant="secondary" tone="default" weight="medium">
+        {label}
+      </Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -618,7 +611,10 @@ function LabeledField({
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
         keyboardType={keyboardType}
-        className="min-h-11 rounded-[10px] border border-border bg-background px-3 text-[15px] text-foreground"
+        className={cn(
+          textVariants({ variant: "body" }),
+          "min-h-11 rounded-[10px] border border-border bg-background px-3",
+        )}
       />
     </View>
   );

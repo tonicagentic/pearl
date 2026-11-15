@@ -3,7 +3,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Text,
   View,
   type PressableProps,
 } from "react-native";
@@ -17,6 +16,7 @@ import { useState, useSyncExternalStore } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/ui/icon";
+import { Text } from "@/components/ui/text";
 import {
   getAgentMode,
   setAgentMode,
@@ -156,7 +156,10 @@ function ModeModelMenu({
           >
             <View className="gap-2">
               <View className="px-1">
-                <Text className="text-[13px] font-normal uppercase tracking-[0.04em] text-muted-foreground">
+                <Text
+                  variant="secondary"
+                  className="uppercase tracking-[0.04em]"
+                >
                   Mode
                 </Text>
               </View>
@@ -174,11 +177,14 @@ function ModeModelMenu({
             {COMPOSER_MODEL_SECTIONS.map((section) => (
               <View key={section.id} className="gap-2">
                 <View className="px-1">
-                  <Text className="text-[13px] font-normal uppercase tracking-[0.04em] text-muted-foreground">
+                  <Text
+                    variant="secondary"
+                    className="uppercase tracking-[0.04em]"
+                  >
                     {section.title}
                   </Text>
                   {section.description ? (
-                    <Text className="mt-1 text-[13px] leading-[18px] text-muted-foreground">
+                    <Text variant="secondary" className="mt-1">
                       {section.description}
                     </Text>
                   ) : null}
@@ -222,12 +228,10 @@ function ModeOption({
       <View className="min-w-0 flex-1 flex-row items-center gap-3">
         <ModeIcon className="size-4 text-foreground" />
         <View className="min-w-0 flex-1 gap-0.5">
-          <Text className="text-sm font-medium text-foreground">
+          <Text variant="secondary" tone="default" weight="medium">
             {mode.label}
           </Text>
-          <Text className="text-xs text-muted-foreground">
-            {mode.description}
-          </Text>
+          <Text variant="caption">{mode.description}</Text>
         </View>
       </View>
       {isSelected ? <CheckIcon className="size-3.5 text-foreground" /> : null}
@@ -252,11 +256,13 @@ function ModelOption({
       onPress={onPress}
     >
       <View className="min-w-0 flex-1 gap-0.5">
-        <Text className="text-sm font-medium text-foreground">{model.label}</Text>
-        <Text className="text-xs text-muted-foreground">{`by ${model.company}`}</Text>
+        <Text variant="secondary" tone="default" weight="medium">
+          {model.label}
+        </Text>
+        <Text variant="caption">{`by ${model.company}`}</Text>
         {model.openWeight ? (
           <View className="mt-0.5 self-start rounded-full bg-muted px-2 py-0.5">
-            <Text className="text-[11px] font-medium text-muted-foreground">
+            <Text variant="caption" weight="medium">
               Open Weight
             </Text>
           </View>

@@ -4,7 +4,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Text,
   TextInput,
   View,
 } from "react-native";
@@ -16,6 +15,8 @@ import { TaskDateField } from "@/components/task-date-field";
 import { Icon } from "@/components/ui/icon";
 import { LoadingCenter } from "@/components/ui/loading-center";
 import { StackScreen } from "@/components/ui/stack-screen";
+import { Text, textVariants } from "@/components/ui/text";
+import { cn } from "@/lib/utils";
 import {
   deleteIssueRequest,
   fetchIssueRequest,
@@ -273,7 +274,7 @@ export function TaskDetailScreen({
         >
           {error ? (
             <Pressable onPress={() => void reload()}>
-              <Text className="text-sm text-destructive">
+              <Text variant="secondary" tone="destructive">
                 {error} Tap to retry.
               </Text>
             </Pressable>
@@ -282,7 +283,10 @@ export function TaskDetailScreen({
           <View className="gap-3">
             <TextInput
               accessibilityLabel="Task title"
-              className="min-h-11 text-[28px] font-semibold tracking-tight text-foreground"
+              className={cn(
+                "min-h-11 tracking-tight",
+                textVariants({ variant: "display" }),
+              )}
               maxLength={200}
               onBlur={saveIfDirty}
               onChangeText={setTitle}
@@ -292,7 +296,7 @@ export function TaskDetailScreen({
             />
             <TextInput
               accessibilityLabel="Task notes"
-              className="min-h-24 text-[16px] leading-6 text-foreground"
+              className={cn("min-h-24", textVariants({ variant: "body" }))}
               multiline
               onBlur={saveIfDirty}
               onChangeText={setDescription}
@@ -301,9 +305,7 @@ export function TaskDetailScreen({
               textAlignVertical="top"
               value={description}
             />
-            {saving ? (
-              <Text className="text-xs text-muted-foreground">Saving…</Text>
-            ) : null}
+            {saving ? <Text variant="caption">Saving…</Text> : null}
           </View>
 
           <View className="flex-row gap-3">

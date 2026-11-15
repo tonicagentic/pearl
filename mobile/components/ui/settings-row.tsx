@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useCSSVariable } from "uniwind";
+import { Pressable, StyleSheet, View } from "react-native";
+
+import { Text } from "@/components/ui/text";
 
 /** Chevron row inside a SettingsCard (icon + label + optional detail). */
 export function SettingsRow({
@@ -20,8 +21,6 @@ export function SettingsRow({
   readonly onPress: () => void;
   readonly showSeparator?: boolean;
 }) {
-  const accentColor = useCSSVariable("--color-primary") as string | undefined;
-
   return (
     <View>
       <Pressable
@@ -35,23 +34,24 @@ export function SettingsRow({
           {icon}
         </View>
         <Text
-          className={`min-w-0 flex-1 text-[17px] leading-[22px] ${labelDestructive ? "text-destructive" : "text-foreground"}`}
+          variant="label"
+          tone={labelDestructive ? "destructive" : "default"}
+          className="min-w-0 flex-1"
           numberOfLines={1}
         >
           {label}
         </Text>
         {detail ? (
           <Text
-            className="max-w-[42%] text-right text-[15px] text-muted-foreground"
+            variant="body"
+            tone={detailAccent ? "primary" : "muted"}
+            className="max-w-[42%] text-right"
             numberOfLines={1}
-            style={
-              detailAccent && accentColor ? { color: accentColor } : undefined
-            }
           >
             {detail}
           </Text>
         ) : null}
-        <Text className="text-[20px] font-light text-muted-foreground/40">
+        <Text variant="title" tone="muted" weight="light" className="opacity-40">
           ›
         </Text>
       </Pressable>

@@ -5,7 +5,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  Text,
   TextInput,
   View,
 } from "react-native";
@@ -15,6 +14,8 @@ import { useCSSVariable } from "uniwind";
 
 import { ProjectMark } from "@/components/project-mark";
 import { Icon } from "@/components/ui/icon";
+import { Text, textVariants } from "@/components/ui/text";
+import { cn } from "@/lib/utils";
 import {
   createProjectRequest,
   type ProjectDto,
@@ -114,12 +115,17 @@ export function CreateProjectModal({
             <ProjectMark name={name || "project"} size="lg" />
           </View>
           {error ? (
-            <Text className="mb-3 text-sm text-destructive">{error}</Text>
+            <Text variant="secondary" tone="destructive" className="mb-3">
+              {error}
+            </Text>
           ) : null}
           <TextInput
             accessibilityLabel="Project name"
             autoFocus
-            className="min-h-12 text-[28px] font-semibold tracking-tight text-foreground"
+            className={cn(
+              "min-h-12 tracking-tight",
+              textVariants({ variant: "display" }),
+            )}
             maxLength={120}
             onChangeText={setName}
             onSubmitEditing={submit}
@@ -130,7 +136,7 @@ export function CreateProjectModal({
           />
           <TextInput
             accessibilityLabel="Project summary"
-            className="mt-2 min-h-24 text-[16px] leading-6 text-foreground"
+            className={cn("mt-2 min-h-24", textVariants({ variant: "body" }))}
             multiline
             onChangeText={setInstructions}
             placeholder="Short summary…"

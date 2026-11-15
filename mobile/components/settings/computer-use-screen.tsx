@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Platform, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { MonitorIcon, TimerIcon } from "lucide-react-native";
 
@@ -7,6 +7,7 @@ import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { Icon } from "@/components/ui/icon";
 import { Section } from "@/components/ui/section";
 import { SettingsRow } from "@/components/ui/settings-row";
+import { Text } from "@/components/ui/text";
 import {
   BROWSER_TIMEOUT_MINUTES,
   CODER_TIMEOUT_MINUTES,
@@ -117,7 +118,7 @@ export function ComputerUseScreen() {
   return (
     <SheetScaffold>
       {error ? (
-        <Text className="px-1 text-[15px] leading-5 text-destructive">
+        <Text variant="body" tone="destructive" className="px-1">
           {error}
         </Text>
       ) : null}
@@ -194,7 +195,7 @@ export function ComputerUseScreen() {
             />
           </Section>
 
-          <Text className="px-1 text-[13px] leading-[18px] text-muted-foreground">
+          <Text variant="secondary" className="px-1">
             These apply the next time a browser or coder sandbox starts. A
             sandbox that is already open keeps its current size until it is
             created again.

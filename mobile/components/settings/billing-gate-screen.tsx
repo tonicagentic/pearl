@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { Button } from "@/components/ui/button";
+import { Text } from "@/components/ui/text";
 import {
   fetchBillingStatus,
   startBillingCheckout,
@@ -21,12 +22,6 @@ export function BillingGateScreen({
   readonly onReady: () => void;
 }) {
   const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const foregroundColor = useCSSVariable("--color-foreground") as
-    | string
-    | undefined;
-  const hintColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
 
@@ -109,20 +104,16 @@ export function BillingGateScreen({
       <View style={styles.container}>
         {trialEnded ? (
           <>
-            <Text style={[styles.title, { color: foregroundColor }]}>
-              Monthly allowance used
-            </Text>
-            <Text style={[styles.body, { color: hintColor }]}>
+            <Text variant="title">Monthly allowance used</Text>
+            <Text variant="body" tone="muted" className="leading-[22px]">
               {status?.message ??
                 "You used the included $20 of usage for this month. Access opens again next month."}
             </Text>
           </>
         ) : (
           <>
-            <Text style={[styles.title, { color: foregroundColor }]}>
-              Subscribe to Pearl
-            </Text>
-            <Text style={[styles.body, { color: hintColor }]}>
+            <Text variant="title">Subscribe to Pearl</Text>
+            <Text variant="body" tone="muted" className="leading-[22px]">
               $10 per month, plus usage. New accounts start with a $50 usage
               cap you can raise in Settings.
             </Text>
@@ -135,15 +126,13 @@ export function BillingGateScreen({
             {polling ? (
               <View style={styles.row}>
                 <ActivityIndicator />
-                <Text style={{ color: hintColor }}>
-                  Waiting for payment to confirm…
-                </Text>
+                <Text variant="secondary">Waiting for payment to confirm…</Text>
               </View>
             ) : null}
           </>
         )}
         {error ? (
-          <Text style={styles.error} accessibilityRole="alert">
+          <Text variant="secondary" tone="destructive" accessibilityRole="alert">
             {error}
           </Text>
         ) : null}
@@ -159,21 +148,9 @@ const styles = StyleSheet.create({
     gap: 16,
     paddingHorizontal: 24,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "600",
-  },
-  body: {
-    fontSize: 15,
-    lineHeight: 22,
-  },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-  },
-  error: {
-    color: "#b91c1c",
-    fontSize: 14,
   },
 });

@@ -16,7 +16,7 @@ import {
 } from "react";
 import {
   Platform,
-  Text,
+  Text as RNText,
   TextInput,
   type TextStyle,
   View,
@@ -30,6 +30,8 @@ import {
   type useMarkdownHookOptions,
 } from "react-native-marked";
 import { useCSSVariable, useUniwind } from "uniwind";
+
+import { Text, textVariants } from "@/components/ui/text";
 
 const MONOSPACE = Platform.select({
   ios: "Menlo",
@@ -128,7 +130,7 @@ function WorkspaceFileLink({
   const path = decodeURIComponent(href.replace(/^file:\/\//i, ""));
 
   return (
-    <Text
+    <RNText
       accessibilityRole="link"
       accessibilityLabel={title || `Open ${path}`}
       onPress={() => {
@@ -137,7 +139,7 @@ function WorkspaceFileLink({
       style={styles}
     >
       {children}
-    </Text>
+    </RNText>
   );
 }
 
@@ -161,33 +163,33 @@ class MarkdownRenderer extends Renderer {
   /** Paragraphs are nested Text, not Views — required for cross-block select. */
   override paragraph(children: ReactNode[], styles?: ViewStyle): ReactNode {
     return (
-      <Text key={this.getKey()} style={styles as TextStyle}>
+      <RNText key={this.getKey()} style={styles as TextStyle}>
         {children}
-      </Text>
+      </RNText>
     );
   }
 
   override listItem(children: ReactNode[], styles?: ViewStyle): ReactNode {
     return (
-      <Text key={this.getKey()} style={styles as TextStyle}>
+      <RNText key={this.getKey()} style={styles as TextStyle}>
         {children}
-      </Text>
+      </RNText>
     );
   }
 
   override blockquote(children: ReactNode[], styles?: ViewStyle): ReactNode {
     return (
-      <Text key={this.getKey()} style={[{ opacity: 0.9 }, styles as TextStyle]}>
+      <RNText key={this.getKey()} style={[{ opacity: 0.9 }, styles as TextStyle]}>
         {children}
-      </Text>
+      </RNText>
     );
   }
 
   override hr(styles?: ViewStyle): ReactNode {
     return (
-      <Text key={this.getKey()} style={styles as TextStyle}>
+      <RNText key={this.getKey()} style={styles as TextStyle}>
         ———
-      </Text>
+      </RNText>
     );
   }
 
@@ -198,15 +200,16 @@ class MarkdownRenderer extends Renderer {
     textStyle?: TextStyle,
   ): ReactNode {
     return (
-      <Text
+      <RNText
         key={this.getKey()}
         style={[
+          // Intentional StyleSheet mono sizing — marked styles, not className.
           { fontFamily: MONOSPACE, fontSize: 13, lineHeight: 20 },
           textStyle,
         ]}
       >
         {text}
-      </Text>
+      </RNText>
     );
   }
 
@@ -217,7 +220,7 @@ class MarkdownRenderer extends Renderer {
     title?: string,
   ): ReactNode {
     const label = (alt || title || "image").trim() || "image";
-    return <Text key={this.getKey()}>{`[${label}]`}</Text>;
+    return <RNText key={this.getKey()}>{`[${label}]`}</RNText>;
   }
 
   override linkImage(
@@ -229,13 +232,13 @@ class MarkdownRenderer extends Renderer {
   ): ReactNode {
     const label = (alt || title || "image").trim() || "image";
     return (
-      <Text
+      <RNText
         key={this.getKey()}
         accessibilityRole="link"
         onPress={() => openWebUrl(href)}
       >
         {`[${label}]`}
-      </Text>
+      </RNText>
     );
   }
 
@@ -248,22 +251,22 @@ class MarkdownRenderer extends Renderer {
   ): ReactNode {
     const lineOf = (cells: ReactNode[][]) =>
       cells.map((cell, index) => (
-        <Text key={`c-${index}`}>
+        <RNText key={`c-${index}`}>
           {index > 0 ? " | " : ""}
           {cell}
-        </Text>
+        </RNText>
       ));
     return (
-      <Text key={this.getKey()}>
+      <RNText key={this.getKey()}>
         {lineOf(header)}
         {"\n"}
         {rows.map((row, rowIndex) => (
-          <Text key={`r-${rowIndex}`}>
+          <RNText key={`r-${rowIndex}`}>
             {rowIndex > 0 ? "\n" : ""}
             {lineOf(row)}
-          </Text>
+          </RNText>
         ))}
-      </Text>
+      </RNText>
     );
   }
 
@@ -277,7 +280,7 @@ class MarkdownRenderer extends Renderer {
     if (/^https?:\/\//i.test(href) && isCitationLabel(label)) {
       const index = label.replace(/^\s*\[|\]\s*$/g, "");
       return (
-        <Text
+        <RNText
           key={this.getKey()}
           accessibilityRole="link"
           accessibilityLabel={`Source ${index}`}
@@ -285,12 +288,12 @@ class MarkdownRenderer extends Renderer {
           style={[{ fontWeight: "600" }, styles]}
         >
           {`[${index}]`}
-        </Text>
+        </RNText>
       );
     }
     if (/^https?:\/\//i.test(href)) {
       return (
-        <Text
+        <RNText
           key={this.getKey()}
           accessibilityRole="link"
           accessibilityLabel={title || "Link"}
@@ -298,7 +301,7 @@ class MarkdownRenderer extends Renderer {
           style={styles}
         >
           {children}
-        </Text>
+        </RNText>
       );
     }
     if (/^file:\/\//i.test(href)) {
@@ -325,15 +328,15 @@ class MarkdownRenderer extends Renderer {
   ): ReactNode {
     const listKey = this.getKey();
     return (
-      <Text key={listKey} style={textStyle}>
+      <RNText key={listKey} style={textStyle}>
         {li.map((item, index) => (
-          <Text key={`${listKey}-${index}`}>
+          <RNText key={`${listKey}-${index}`}>
             {index > 0 ? "\n" : ""}
             {ordered ? `${startIndex + index}. ` : "• "}
             {item}
-          </Text>
+          </RNText>
         ))}
-      </Text>
+      </RNText>
     );
   }
 }
@@ -443,10 +446,12 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
     [text, streaming],
   );
   const baseOptions = useMarkdownOptions(variant);
+  // muted → body (15); default answer → label (17). Marked styles keep
+  // numeric fontSize for the StyleSheet-driven renderer tree.
   const fallbackClass =
     variant === "muted"
-      ? "text-muted-foreground text-[15px] leading-6"
-      : "text-foreground text-[17px] leading-[26px]";
+      ? textVariants({ variant: "body", tone: "muted" })
+      : textVariants({ variant: "label" });
 
   // One renderer + one parse for the full message so selection can span
   // paragraphs, lists, and code as a single native range.
@@ -471,20 +476,6 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
   // iOS Text.selectable is UILabel (whole-block Copy only). Multiline
   // TextInput uses UITextView so partial selection matches native Notes.
   if (Platform.OS === "ios") {
-    const inputStyle =
-      variant === "muted"
-        ? {
-            fontSize: MUTED_SIZE,
-            lineHeight: MUTED_LINE,
-            padding: 0,
-            margin: 0,
-          }
-        : {
-            fontSize: BODY_SIZE,
-            lineHeight: BODY_LINE,
-            padding: 0,
-            margin: 0,
-          };
     return (
       <View className="aui-md-root">
         <TextInput
@@ -493,7 +484,7 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
           readOnly
           scrollEnabled={false}
           selectionColor={SELECTION_COLOR}
-          style={inputStyle}
+          style={{ padding: 0, margin: 0 }}
           className={fallbackClass}
         >
           {document}
@@ -507,7 +498,8 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
       <Text
         selectable
         selectionColor={SELECTION_COLOR}
-        className={fallbackClass}
+        variant={variant === "muted" ? "body" : "label"}
+        tone={variant === "muted" ? "muted" : "default"}
       >
         {document}
       </Text>

@@ -4,7 +4,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Text,
   TextInput,
   View,
 } from "react-native";
@@ -17,6 +16,8 @@ import { ProjectMark } from "@/components/project-mark";
 import { Icon } from "@/components/ui/icon";
 import { LoadingCenter } from "@/components/ui/loading-center";
 import { StackScreen } from "@/components/ui/stack-screen";
+import { Text, textVariants } from "@/components/ui/text";
+import { cn } from "@/lib/utils";
 import { useChats } from "@/src/chat-context";
 import { createChat } from "@/src/chats-client";
 import {
@@ -388,7 +389,7 @@ export function ProjectDetailScreen({
         >
           {error ? (
             <Pressable onPress={() => void reload()}>
-              <Text className="text-sm text-destructive">
+              <Text variant="secondary" tone="destructive">
                 {error} Tap to retry.
               </Text>
             </Pressable>
@@ -401,7 +402,10 @@ export function ProjectDetailScreen({
             />
             <TextInput
               accessibilityLabel="Project name"
-              className="min-h-11 text-[28px] font-semibold tracking-tight text-foreground"
+              className={cn(
+                "min-h-11 tracking-tight",
+                textVariants({ variant: "display" }),
+              )}
               maxLength={120}
               onBlur={saveIfDirty}
               onChangeText={setName}
@@ -411,7 +415,7 @@ export function ProjectDetailScreen({
             />
             <TextInput
               accessibilityLabel="Project summary"
-              className="min-h-16 text-[16px] leading-6 text-foreground"
+              className={cn("min-h-16", textVariants({ variant: "body" }))}
               multiline
               onBlur={saveIfDirty}
               onChangeText={setInstructions}
@@ -420,14 +424,16 @@ export function ProjectDetailScreen({
               textAlignVertical="top"
               value={instructions}
             />
-            {saving ? (
-              <Text className="text-xs text-muted-foreground">Saving…</Text>
-            ) : null}
+            {saving ? <Text variant="caption">Saving…</Text> : null}
           </View>
 
           <View className="gap-2">
             <View className="flex-row items-center justify-between">
-              <Text className="text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
+              <Text
+                variant="secondary"
+                weight="medium"
+                className="uppercase tracking-wide"
+              >
                 Repos
               </Text>
               <Pressable
@@ -435,13 +441,13 @@ export function ProjectDetailScreen({
                 disabled={linkingPin}
                 onPress={openReposMenu}
               >
-                <Text className="text-sm font-medium text-foreground">
+                <Text variant="secondary" tone="default" weight="medium">
                   {linkingPin ? "Linking…" : "Add"}
                 </Text>
               </Pressable>
             </View>
             {(workspace?.pins ?? []).length === 0 ? (
-              <Text className="text-sm text-muted-foreground">
+              <Text variant="secondary">
                 No repos linked yet. Add a Workbench pin to make this project
                 the coding workspace.
               </Text>
@@ -475,13 +481,9 @@ export function ProjectDetailScreen({
                     router.push(`/workbench/${encodeURIComponent(pin.id)}`)
                   }
                 >
-                  <Text className="text-base text-foreground">
-                    {pin.fullName}
-                  </Text>
+                  <Text variant="body">{pin.fullName}</Text>
                   {pin.vercelProjectId ? (
-                    <Text className="text-xs text-muted-foreground">
-                      Vercel linked
-                    </Text>
+                    <Text variant="caption">Vercel linked</Text>
                   ) : null}
                 </Pressable>
               ))
@@ -490,7 +492,11 @@ export function ProjectDetailScreen({
 
           <View className="gap-2">
             <View className="flex-row items-center justify-between">
-              <Text className="text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
+              <Text
+                variant="secondary"
+                weight="medium"
+                className="uppercase tracking-wide"
+              >
                 Plans
               </Text>
               <Pressable
@@ -498,15 +504,13 @@ export function ProjectDetailScreen({
                 disabled={creatingPlan}
                 onPress={createPlan}
               >
-                <Text className="text-sm font-medium text-foreground">
+                <Text variant="secondary" tone="default" weight="medium">
                   {creatingPlan ? "Creating…" : "New"}
                 </Text>
               </Pressable>
             </View>
             {(workspace?.plans ?? []).length === 0 ? (
-              <Text className="text-sm text-muted-foreground">
-                No plans yet.
-              </Text>
+              <Text variant="secondary">No plans yet.</Text>
             ) : (
               (workspace?.plans ?? []).map((plan) => (
                 <Pressable
@@ -519,7 +523,7 @@ export function ProjectDetailScreen({
                     )
                   }
                 >
-                  <Text className="text-base text-foreground">{plan.title}</Text>
+                  <Text variant="body">{plan.title}</Text>
                 </Pressable>
               ))
             )}
@@ -527,7 +531,11 @@ export function ProjectDetailScreen({
 
           <View className="gap-2">
             <View className="flex-row items-center justify-between">
-              <Text className="text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
+              <Text
+                variant="secondary"
+                weight="medium"
+                className="uppercase tracking-wide"
+              >
                 Chats
               </Text>
               <Pressable
@@ -535,15 +543,13 @@ export function ProjectDetailScreen({
                 disabled={creatingChat}
                 onPress={createProjectChat}
               >
-                <Text className="text-sm font-medium text-foreground">
+                <Text variant="secondary" tone="default" weight="medium">
                   {creatingChat ? "Starting…" : "New"}
                 </Text>
               </Pressable>
             </View>
             {(workspace?.chats ?? []).length === 0 ? (
-              <Text className="text-sm text-muted-foreground">
-                No chats in this project yet.
-              </Text>
+              <Text variant="secondary">No chats in this project yet.</Text>
             ) : (
               (workspace?.chats ?? []).map((chat) => (
                 <Pressable
@@ -556,7 +562,7 @@ export function ProjectDetailScreen({
                     void selectChat(chat.id);
                   }}
                 >
-                  <Text className="text-base text-foreground">{chat.title}</Text>
+                  <Text variant="body">{chat.title}</Text>
                 </Pressable>
               ))
             )}

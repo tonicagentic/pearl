@@ -1,11 +1,12 @@
 import {
   Pressable,
-  Text,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
 import { useCSSVariable } from "uniwind";
+
+import { Text } from "@/components/ui/text";
 
 export type ButtonProps = Omit<PressableProps, "children"> & {
   readonly label: string;
@@ -54,7 +55,8 @@ export function Button({
       {...props}
     >
       <Text
-        className="text-[17px] font-semibold"
+        variant="label"
+        weight="semibold"
         style={{
           color: secondary ? foregroundColor : buttonTextColor,
         }}

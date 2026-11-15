@@ -1,4 +1,4 @@
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 import { useCSSVariable } from "uniwind";
 
 import type {
@@ -6,6 +6,7 @@ import type {
   PearlIntroPanelId,
 } from "@/components/intro/pearl-intro-panels";
 import { PEARL_INTRO_PANELS } from "@/components/intro/pearl-intro-panels";
+import { Text } from "@/components/ui/text";
 
 const icon = require("../../assets/icon.png");
 
@@ -119,7 +120,10 @@ function Bubble({
     >
       <Text
         numberOfLines={2}
-        style={[styles.bubbleText, { color: palette.color }]}
+        variant="secondary"
+        weight="medium"
+        className="leading-[17px]"
+        style={palette.color ? { color: palette.color } : undefined}
       >
         {bubble.text}
       </Text>
@@ -157,10 +161,5 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     zIndex: 1,
-  },
-  bubbleText: {
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: "500",
   },
 });

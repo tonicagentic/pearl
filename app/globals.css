@@ -29,6 +29,20 @@
   --radius-xl: calc(var(--radius) + 4px);
   --font-sans: -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, monospace;
+
+  /* Semantic type scale (mirrored from mobile; adopt in a later web pass). */
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-secondary: 13px;
+  --text-secondary--line-height: 18px;
+  --text-body: 15px;
+  --text-body--line-height: 20px;
+  --text-label: 17px;
+  --text-label--line-height: 22px;
+  --text-title: 22px;
+  --text-title--line-height: 28px;
+  --text-display: 28px;
+  --text-display--line-height: 34px;
 }
 
 :root,

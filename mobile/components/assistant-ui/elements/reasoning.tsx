@@ -16,10 +16,10 @@ import {
   Pressable,
   ScrollView,
   type ScrollViewProps,
-  Text,
   View,
   type ViewProps,
 } from "react-native";
+import { Text } from "@/components/ui/text";
 import { ShimmerLabel, textButtonHitSlop } from "./surfaces";
 
 type ReasoningContextValue = {
@@ -115,7 +115,9 @@ export const ReasoningTrigger: FC<ReasoningTriggerProps> = ({
       <Icon as={BrainIcon} className="text-muted-foreground size-3.5" />
       <ShimmerLabel
         active={active}
-        className="text-muted-foreground text-[15px] leading-6 tabular-nums"
+        variant="body"
+        tone="muted"
+        className="tabular-nums"
       >
         {label}
       </ShimmerLabel>
@@ -222,7 +224,7 @@ export const ReasoningText: FC<ReasoningTextProps> = ({
     >
       <View>
         {typeof children === "string" || typeof children === "number" ? (
-          <Text className="text-muted-foreground text-sm">{children}</Text>
+          <Text variant="secondary">{children}</Text>
         ) : (
           children
         )}

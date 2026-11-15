@@ -4,7 +4,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,6 +13,7 @@ import { useCSSVariable } from "uniwind";
 import { CreateProjectModal } from "@/components/home/create-project-modal";
 import { ProjectMark } from "@/components/project-mark";
 import { Icon } from "@/components/ui/icon";
+import { Text } from "@/components/ui/text";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 
 /** Sheet to pick or create a project before Plan-mode sends. */
@@ -77,17 +77,19 @@ export function ProjectPickerModal({
           </View>
 
           <View className="gap-1 px-5 pb-3">
-            <Text className="text-[22px] font-semibold tracking-tight text-foreground">
+            <Text variant="title" className="tracking-tight">
               Choose a project
             </Text>
-            <Text className="text-sm text-muted-foreground">
+            <Text variant="secondary">
               Plan mode writes into a project. Pick an existing one or create a
               new project for this chat.
             </Text>
           </View>
 
           {error ? (
-            <Text className="px-5 pb-2 text-sm text-destructive">{error}</Text>
+            <Text variant="secondary" tone="destructive" className="px-5 pb-2">
+              {error}
+            </Text>
           ) : null}
 
           {loading ? (
@@ -101,7 +103,7 @@ export function ProjectPickerModal({
               keyboardShouldPersistTaps="handled"
             >
               {projects.length === 0 ? (
-                <Text className="py-2 text-sm text-muted-foreground">
+                <Text variant="secondary" className="py-2">
                   No projects yet. Create one below.
                 </Text>
               ) : (
@@ -117,7 +119,9 @@ export function ProjectPickerModal({
                   >
                     <ProjectMark name={project.name} size="sm" />
                     <Text
-                      className="min-w-0 flex-1 text-base font-medium text-foreground"
+                      variant="body"
+                      weight="medium"
+                      className="min-w-0 flex-1"
                       numberOfLines={1}
                     >
                       {project.name}
@@ -134,7 +138,7 @@ export function ProjectPickerModal({
                 <View className="h-7 w-7 items-center justify-center rounded-lg bg-muted/60">
                   <Icon as={PlusIcon} className="size-4 text-foreground" />
                 </View>
-                <Text className="text-base font-medium text-foreground">
+                <Text variant="body" weight="medium">
                   New project
                 </Text>
               </Pressable>

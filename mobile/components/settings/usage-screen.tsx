@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { CoinsIcon } from "lucide-react-native";
 
@@ -7,6 +7,7 @@ import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { Icon } from "@/components/ui/icon";
 import { Section } from "@/components/ui/section";
 import { SettingsCard } from "@/components/ui/settings-card";
+import { Text } from "@/components/ui/text";
 import {
   fetchUsageSummary,
   formatSpendCents,
@@ -84,7 +85,7 @@ export function UsageScreen() {
     return (
       <SheetScaffold>
         <SettingsCard>
-          <Text className="px-4 py-4 text-[15px] text-muted-foreground">
+          <Text variant="body" tone="muted" className="px-4 py-4">
             {error}
           </Text>
         </SettingsCard>
@@ -102,8 +103,8 @@ export function UsageScreen() {
             <Icon as={CoinsIcon} className="size-5 text-amber-500" />
           </View>
           <View className="min-w-0 flex-1 gap-0.5">
-            <Text className="text-[13px] text-muted-foreground">Total spend</Text>
-            <Text className="text-[22px] font-semibold tabular-nums text-foreground">
+            <Text variant="secondary">Total spend</Text>
+            <Text variant="title" className="tabular-nums">
               {formatSpendCents(summary?.totalCents ?? 0)}
             </Text>
           </View>
@@ -112,7 +113,7 @@ export function UsageScreen() {
 
       {periods.length === 0 ? (
         <SettingsCard>
-          <Text className="px-4 py-4 text-[15px] text-muted-foreground">
+          <Text variant="body" tone="muted" className="px-4 py-4">
             No usage yet.
           </Text>
         </SettingsCard>
@@ -130,8 +131,8 @@ function PeriodBlock({ period }: { readonly period: UsagePeriodRow }) {
     <Section title={formatPeriodStart(period.periodStart)}>
       <View className="gap-0">
         <View className="flex-row items-center justify-between px-4 py-3.5">
-          <Text className="text-[17px] font-medium text-foreground">Spend</Text>
-          <Text className="text-[17px] font-semibold tabular-nums text-foreground">
+          <Text variant="label">Spend</Text>
+          <Text variant="label" weight="semibold" className="tabular-nums">
             {formatSpendCents(period.totalCents)}
           </Text>
         </View>
@@ -139,10 +140,10 @@ function PeriodBlock({ period }: { readonly period: UsagePeriodRow }) {
           <View key={row.source}>
             <View className="ml-4 h-px bg-border" />
             <View className="flex-row items-center justify-between px-4 py-3">
-              <Text className="text-[15px] text-muted-foreground">
+              <Text variant="body" tone="muted">
                 {sourceLabel(row.source)}
               </Text>
-              <Text className="text-[15px] tabular-nums text-muted-foreground">
+              <Text variant="body" tone="muted" className="tabular-nums">
                 {formatSpendCents(row.costCents)}
               </Text>
             </View>

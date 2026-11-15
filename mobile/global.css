@@ -10,6 +10,20 @@
   --radius-xl: 14px;
   --radius-2xl: 18px;
   --radius-3xl: 24px;
+
+  /* Semantic type scale — use via <Text variant="…">, not arbitrary px. */
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-secondary: 13px;
+  --text-secondary--line-height: 18px;
+  --text-body: 15px;
+  --text-body--line-height: 20px;
+  --text-label: 17px;
+  --text-label--line-height: 22px;
+  --text-title: 22px;
+  --text-title--line-height: 28px;
+  --text-display: 28px;
+  --text-display--line-height: 34px;
 }
 
 @layer theme {

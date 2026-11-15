@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Modal, Platform, Pressable, Text, View } from "react-native";
+import { Modal, Platform, Pressable, View } from "react-native";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { useCSSVariable } from "uniwind";
+
+import { Text } from "@/components/ui/text";
 
 function formatDay(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -44,8 +46,8 @@ export function TaskDateField({
         className="min-h-12 justify-center rounded-2xl bg-muted/50 px-3"
         onPress={() => setOpen(true)}
       >
-        <Text className="text-[12px] text-muted-foreground">{label}</Text>
-        <Text className="mt-0.5 text-[15px] text-foreground">
+        <Text variant="caption">{label}</Text>
+        <Text variant="body" className="mt-0.5">
           {value || "None"}
         </Text>
       </Pressable>
@@ -61,7 +63,7 @@ export function TaskDateField({
               style={{ backgroundColor }}
               className="rounded-t-3xl px-4 pb-8 pt-4"
             >
-              <Text className="mb-2 text-lg font-semibold text-foreground">
+              <Text variant="title" className="mb-2">
                 {label}
               </Text>
               {picker}
@@ -74,14 +76,14 @@ export function TaskDateField({
                     setOpen(false);
                   }}
                 >
-                  <Text className="text-foreground">Clear</Text>
+                  <Text>Clear</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
                   className="min-h-11 justify-center px-4"
                   onPress={() => setOpen(false)}
                 >
-                  <Text className="font-medium text-foreground">Done</Text>
+                  <Text weight="medium">Done</Text>
                 </Pressable>
               </View>
             </View>

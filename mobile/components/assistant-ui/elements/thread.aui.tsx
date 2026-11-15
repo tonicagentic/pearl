@@ -114,13 +114,13 @@ import {
   Platform,
   Pressable,
   Share,
-  Text,
   TextInput,
   useColorScheme,
   View,
   type TextInputInstance,
   type ViewProps,
 } from "react-native";
+import { Text, textVariants } from "@/components/ui/text";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   KeyboardController,
@@ -955,7 +955,8 @@ const useVoiceRunPosition = (): VoiceRunPosition =>
 
 const SpokenText: TextMessagePartComponent = ({ text }) => (
   <Text
-    className="aui-spoken-message-text text-foreground text-sm leading-relaxed"
+    variant="secondary"
+    className="aui-spoken-message-text leading-relaxed"
     selectable
     selectionColor="rgba(127, 127, 127, 0.35)"
   >
@@ -986,9 +987,7 @@ const SpokenMessage: FC = () => {
       {opensExchange && (
         <View className="aui-spoken-exchange-header mb-1.5 flex-row items-center gap-1.5">
           <Icon as={PhoneIcon} className="text-muted-foreground size-3" />
-          <Text className="text-muted-foreground text-xs">
-            Voice conversation
-          </Text>
+          <Text variant="caption">Voice conversation</Text>
         </View>
       )}
       <View className="aui-spoken-message-content flex-row items-start gap-2">
@@ -1056,7 +1055,7 @@ const HistoryEdge: FC = () => {
       className="aui-thread-history-edge items-center pb-4"
       accessibilityLiveRegion={webLiveRegion}
     >
-      <ShimmerLabel className="text-muted-foreground text-[13px]">
+      <ShimmerLabel variant="secondary" tone="muted">
         Loading earlier messages
       </ShimmerLabel>
     </View>
@@ -1154,10 +1153,11 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
     placeholder: "Ask anything",
     placeholderTextColorClassName: hydrated ? placeholderColor : undefined,
     className: cn(
-      "aui-composer-input text-foreground web:resize-none web:outline-none",
+      "aui-composer-input web:resize-none web:outline-none",
+      textVariants({ variant: "label" }),
       Platform.OS === "ios"
-        ? "h-full w-full pl-2 pr-2 text-[17px] leading-[22px]"
-        : "min-h-10 max-h-48 px-2.5 py-1 text-base leading-6",
+        ? "h-full w-full pl-2 pr-2"
+        : "min-h-10 max-h-48 px-2.5 py-1",
     ),
     multiline: true,
     textAlignVertical: "top" as const,
@@ -1693,7 +1693,8 @@ const ComposerTrailingControls: FC<{
 
 const UserText: TextMessagePartComponent = ({ text }) => (
   <Text
-    className="aui-user-message-text text-foreground text-[17px] leading-[26px]"
+    variant="label"
+    className="aui-user-message-text"
     selectable
     selectionColor="rgba(127, 127, 127, 0.35)"
   >
@@ -1883,7 +1884,9 @@ const UserMessage: FC = () => {
 
 const ThreadNotice: FC<NonNullable<ThreadProps["notice"]>> = ({ text, actionLabel, onAction }) => (
   <View className="border-border/60 bg-muted/40 mx-4 my-3 rounded-xl border p-3">
-    <Text className="text-foreground text-sm" accessibilityRole="alert">{text}</Text>
+    <Text variant="secondary" accessibilityRole="alert">
+      {text}
+    </Text>
     {actionLabel && onAction ? (
       <Pressable
         onPress={onAction}
@@ -1891,7 +1894,9 @@ const ThreadNotice: FC<NonNullable<ThreadProps["notice"]>> = ({ text, actionLabe
         accessibilityLabel={actionLabel}
         className="mt-1 min-h-11 self-start justify-center"
       >
-        <Text className="text-foreground text-sm font-medium">{actionLabel}</Text>
+        <Text variant="secondary" weight="medium">
+          {actionLabel}
+        </Text>
       </Pressable>
     ) : null}
   </View>
@@ -1899,7 +1904,10 @@ const ThreadNotice: FC<NonNullable<ThreadProps["notice"]>> = ({ text, actionLabe
 
 const DefaultEditComposerInput: FC = () => (
   <ComposerPrimitive.Input
-    className="aui-edit-composer-input text-foreground web:resize-none web:outline-none min-h-14 px-4 pt-3 pb-1 text-base"
+    className={cn(
+      "aui-edit-composer-input web:resize-none web:outline-none min-h-14 px-4 pt-3 pb-1",
+      textVariants({ variant: "body" }),
+    )}
     multiline
     autoFocus
   />
@@ -1916,10 +1924,16 @@ const EditComposer: FC = () => {
         <ComposerInput />
         <View className="aui-edit-composer-footer mx-2.5 mb-2.5 flex-row items-center gap-1.5 self-end">
           <ComposerPrimitive.Cancel className="active:bg-accent h-8 justify-center rounded-full px-3.5">
-            <Text className="text-foreground text-sm font-medium">Cancel</Text>
+            <Text variant="secondary" weight="medium">
+              Cancel
+            </Text>
           </ComposerPrimitive.Cancel>
           <ComposerPrimitive.Send className="bg-primary active:bg-primary/90 h-8 justify-center rounded-full px-3.5">
-            <Text className="text-primary-foreground text-sm font-medium">
+            <Text
+              variant="secondary"
+              weight="medium"
+              className="text-primary-foreground"
+            >
               Update
             </Text>
           </ComposerPrimitive.Send>
@@ -1948,7 +1962,11 @@ const BranchPicker: FC<ViewProps> = ({ className, ...rest }) => {
       >
         <Icon as={ChevronLeftIcon} className="text-muted-foreground size-4" />
       </BranchPickerPrimitive.Previous>
-      <Text className="aui-branch-picker-state text-muted-foreground text-xs font-medium">
+      <Text
+        variant="caption"
+        weight="medium"
+        className="aui-branch-picker-state"
+      >
         <BranchPickerPrimitive.Number /> / <BranchPickerPrimitive.Count />
       </Text>
       <BranchPickerPrimitive.Next

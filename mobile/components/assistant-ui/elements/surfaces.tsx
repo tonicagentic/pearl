@@ -13,12 +13,11 @@ import {
   Animated,
   Easing as RnEasing,
   Platform,
-  Text,
   View,
   type LayoutChangeEvent,
-  type TextProps,
   type TextStyle,
 } from "react-native";
+import { Text, type TextProps } from "@/components/ui/text";
 // React 19 typings for this package are incomplete; cast for JSX.
 import MaskedViewOrigin from "@react-native-masked-view/masked-view";
 const MaskedView = MaskedViewOrigin as unknown as FC<{
@@ -46,16 +45,14 @@ export const field = "bg-foreground/5 dark:bg-foreground/10";
 
 export const inkButton = "bg-foreground active:opacity-90";
 
-export const mono = "text-[11px] tracking-tight";
-
-/** Shared thread type scale: body and meta stay the same size. */
-export const threadText = "text-[15px] leading-6";
+/** Mono tracking only — pair with `Text variant="caption"` (or `text-caption`). */
+export const mono = "tracking-tight";
 
 /**
  * Thinking / tool chrome — Cursor-like muted status (softer than body copy).
- * Body answers stay on `text-foreground`; these rows stay secondary.
+ * Pair with `Text variant="body"`; body answers stay on default tone.
  */
-export const threadMeta = `${threadText} text-muted-foreground/75`;
+export const threadMeta = "text-muted-foreground/75";
 
 /** Cursor-style green/red line deltas on edit summaries. */
 export const threadDiffAdd = "text-emerald-600/90 dark:text-emerald-400/90";

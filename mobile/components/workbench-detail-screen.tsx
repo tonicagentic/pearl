@@ -4,7 +4,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Text,
   TextInput,
   View,
 } from "react-native";
@@ -13,6 +12,7 @@ import { useCSSVariable } from "uniwind";
 
 import { LoadingCenter } from "@/components/ui/loading-center";
 import { StackScreen } from "@/components/ui/stack-screen";
+import { Text } from "@/components/ui/text";
 import { openWebUrlExternally } from "@/src/open-web-url";
 import {
   addPinDomain,
@@ -77,7 +77,12 @@ export function WorkbenchDetailScreen() {
                     className="min-h-11 justify-center px-2"
                     onPress={() => void reload()}
                   >
-                    <Text style={{ color: foregroundColor, fontSize: 17 }}>
+                    <Text
+                      variant="label"
+                      style={
+                        foregroundColor ? { color: foregroundColor } : undefined
+                      }
+                    >
                       Refresh
                     </Text>
                   </Pressable>

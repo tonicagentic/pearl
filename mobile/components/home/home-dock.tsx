@@ -30,6 +30,8 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { Icon } from "@/components/ui/icon";
+import { Text, textVariants } from "@/components/ui/text";
+import { cn } from "@/lib/utils";
 
 const CAN_USE_LIQUID_GLASS =
   Platform.OS === "ios" &&
@@ -232,6 +234,7 @@ export function HomeDock({
                   onChangeText={onSearchChangeText}
                   placeholder="Search"
                   placeholderTextColor={placeholderColor ?? "#8E8E93"}
+                  className={cn(textVariants({ variant: "label" }))}
                   style={[styles.input, { color: foregroundColor }]}
                   returnKeyType="search"
                   autoCorrect={false}
@@ -240,14 +243,12 @@ export function HomeDock({
               ) : (
                 <>
                   <View style={styles.placeholderGrow}>
-                    <Animated.Text
-                      style={[
-                        styles.placeholder,
-                        { color: placeholderColor ?? "#8E8E93" },
-                      ]}
+                    <Text
+                      variant="label"
+                      style={{ color: placeholderColor ?? "#8E8E93" }}
                     >
                       Search
-                    </Animated.Text>
+                    </Text>
                   </View>
                   <Icon
                     as={MicIcon}
@@ -329,10 +330,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   placeholderGrow: { flex: 1 },
-  placeholder: { fontSize: 17 },
   input: {
     flex: 1,
-    fontSize: 17,
     paddingVertical: 0,
   },
   composeInner: {
