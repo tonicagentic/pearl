@@ -7,15 +7,10 @@ import {
   payloadLeaksSecret,
 } from "../../lib/workbench/approvals.ts";
 import { runReadOnlyQuery, sanitizeDatabasePayload } from "../../lib/workbench/database.ts";
-import { buildEasUpdateRequest } from "../../lib/workbench/eas-update.ts";
-import {
-  buildCreateSimulatorBody,
-  expoStopSessionPath,
-  resolvePhonePreviewUrl,
-} from "../../lib/workbench/expo-simulator.ts";
 import { validatePinInput } from "../../lib/workbench/pins.ts";
 import {
   buildDevServerPreview,
+  buildExpoSimulatorPreview,
   mergeComputerPreviews,
   resolveDevScript,
 } from "../../lib/workbench/previews.ts";
@@ -269,42 +264,18 @@ test("dev server: uses package.json script, not hardcoded next dev", () => {
   assert.equal(computer.previews[0]?.url, "https://abc123.vercel.run");
 });
 
-test("expo session: create body uses pin project id, not Pearl's for other app", () => {
-  const otherBody = buildCreateSimulatorBody({
-    expoProjectId: OTHER_EXPO.expoProjectId,
-    name: "tonic check",
+test("expo simulator preview pins an https dashboard URL on Computer", () => {
+  const preview = buildExpoSimulatorPreview({
+    repoFullName: OTHER_EXPO.fullName,
+    previewUrl: "https://expo.dev/preview/sess1",
   });
-  assert.equal(otherBody.platform, "ios");
-  assert.equal(otherBody.type, "agent-device");
-  assert.equal(otherBody.appId, OTHER_EXPO.expoProjectId);
-  assert.notEqual(otherBody.appId, PEARL_EXPO_PROJECT_ID);
-
-  const pearlBody = buildCreateSimulatorBody({
-    expoProjectId: null,
-    name: "pearl check",
-  });
-  assert.equal(pearlBody.appId, PEARL_EXPO_PROJECT_ID);
-
-  const resolved = resolvePhonePreviewUrl({
-    url: "https://expo.dev/accounts/x/projects/y/simulator-sessions/sess1",
-    remoteConfig: {
-      previewUrl: "https://expo.dev/preview/sess1",
-      webPreviewToken: "tok_secret",
-    },
-    publicPreview: false,
-  });
-  assert.equal(resolved.previewUrl, "https://expo.dev/preview/sess1");
-  assert.equal(resolved.hasToken, true);
-  // Token must not be embedded when publicPreview is false.
-  assert.doesNotMatch(resolved.previewUrl!, /tok_secret/);
-
-  assert.equal(
-    expoStopSessionPath("sess-123"),
-    "/v2/device-run-sessions/sess-123/stop",
-  );
+  assert.equal(preview.kind, "expo-simulator");
+  assert.equal(preview.url, "https://expo.dev/preview/sess1");
+  assert.match(preview.label, /Expo Simulator/);
+  assert.equal(preview.repoFullName, OTHER_EXPO.fullName);
 });
 
-test("pearl self-update: production web and EAS Update are two approvals", () => {
+test("pearl self-update: production web and Expo phone update are two approvals", () => {
   assert.equal(
     areShipApprovalsSeparate("production_deploy", "eas_update"),
     true,
@@ -330,13 +301,14 @@ test("pearl self-update: production web and EAS Update are two approvals", () =>
   assert.equal(web.warnsPhoneApi, true);
   assert.equal(update.warnsInstalledApp, true);
 
-  const otherUpdate = buildEasUpdateRequest({
-    expoProjectId: OTHER_EXPO.expoProjectId,
-    channel: OTHER_EXPO.expoUpdateChannel,
+  const sim = buildApprovalCard({
+    action: "simulator_start",
+    owner: OTHER_EXPO.owner,
+    repo: OTHER_EXPO.name,
+    target: OTHER_EXPO.expoProjectId!,
   });
-  assert.equal(otherUpdate.expoProjectId, OTHER_EXPO.expoProjectId);
-  assert.notEqual(otherUpdate.expoProjectId, PEARL_EXPO_PROJECT_ID);
-  assert.equal(otherUpdate.isPearl, false);
+  assert.equal(sim.warnsInstalledApp, false);
+  assert.notEqual(sim.target, PEARL_EXPO_PROJECT_ID);
 });
 
 test("resources: env names strip values; denied writes skip Vercel", async () => {

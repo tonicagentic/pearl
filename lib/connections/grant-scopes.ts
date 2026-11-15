@@ -1,6 +1,7 @@
 import type { ConnectionId } from "@/lib/connections/catalog";
 import {
   connectionTokenParams,
+  EXPO_OAUTH_SCOPES,
   GITHUB_OAUTH_SCOPES,
   GMAIL_OAUTH_SCOPES,
   SHEETS_OAUTH_SCOPES,
@@ -36,4 +37,5 @@ export const GRANT_SCOPE_CATALOGS = {
   gmail: GMAIL_OAUTH_SCOPES,
   sheets: SHEETS_OAUTH_SCOPES,
   xero: XERO_OAUTH_SCOPES,
+  expo: EXPO_OAUTH_SCOPES,
 } as const;

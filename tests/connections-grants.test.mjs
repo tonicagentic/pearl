@@ -12,6 +12,7 @@ import {
   requestedScopesFor,
 } from "../lib/connections/grant-scopes.ts";
 import {
+  EXPO_OAUTH_SCOPES,
   GITHUB_OAUTH_SCOPES,
   GMAIL_OAUTH_SCOPES,
 } from "../lib/connections/oauth-scopes.ts";
@@ -20,7 +21,9 @@ test("requestedScopesFor returns catalog scopes for github and gmail", () => {
   assert.deepEqual(requestedScopesFor("github"), [...GITHUB_OAUTH_SCOPES]);
   assert.deepEqual(requestedScopesFor("gmail"), [...GMAIL_OAUTH_SCOPES]);
   assert.deepEqual(requestedScopesFor("vercel"), []);
+  assert.deepEqual(requestedScopesFor("expo"), [...EXPO_OAUTH_SCOPES]);
   assert.deepEqual(GRANT_SCOPE_CATALOGS.github, GITHUB_OAUTH_SCOPES);
+  assert.deepEqual(GRANT_SCOPE_CATALOGS.expo, EXPO_OAUTH_SCOPES);
 });
 
 test("missingFromGranted finds compose and repo gaps", () => {

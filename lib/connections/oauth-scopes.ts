@@ -56,6 +56,12 @@ export const SHEETS_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
 ] as const;
 
+/**
+ * Expo MCP OAuth scope from
+ * https://mcp.expo.dev/.well-known/oauth-protected-resource
+ */
+export const EXPO_OAUTH_SCOPES = ["mcp:access"] as const;
+
 /** Extra Connect token params for a catalog connection (scopes, etc.). */
 export function connectionTokenParams(id: ConnectionId): {
   readonly scopes?: string[];
@@ -71,6 +77,9 @@ export function connectionTokenParams(id: ConnectionId): {
   }
   if (id === "github") {
     return { scopes: [...GITHUB_OAUTH_SCOPES] };
+  }
+  if (id === "expo") {
+    return { scopes: [...EXPO_OAUTH_SCOPES] };
   }
   return {};
 }

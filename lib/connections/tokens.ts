@@ -46,3 +46,17 @@ export async function getVercelUserToken(userId: string): Promise<string> {
     subject: connectionSubjectForUser(userId),
   });
 }
+
+/** Resolve the signed-in user's Expo MCP OAuth bearer via Vercel Connect. */
+export async function getExpoUserToken(userId: string): Promise<string> {
+  const connector = connectionConfiguration("expo").connector;
+  if (!connector) {
+    throw new Error(
+      "Expo is not configured. Attach EXPO_CONNECTOR, then connect Expo in Profile → Coder → Expo.",
+    );
+  }
+  return getToken(connector, {
+    subject: connectionSubjectForUser(userId),
+    ...connectionTokenParams("expo"),
+  });
+}

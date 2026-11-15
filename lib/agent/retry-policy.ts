@@ -386,17 +386,17 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     1,
     "Approval-gated squash merge; never blind-retry — re-read PR state first.",
   ),
-  eas_build: policy(
-    false,
+  pin_expo_preview: policy(
+    true,
     [],
     1,
-    "Approval-gated Expo build start; a replay would queue a second Mac build.",
+    "Stores an https simulator preview URL on the Computer tab; no Expo call.",
   ),
-  eas_submit: policy(
-    false,
-    [],
-    1,
-    "Approval-gated store/TestFlight submit; never blind-retry a submit.",
+  list_expo_projects: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Read-only catalog of the signed-in user's Expo accounts and projects.",
   ),
   run_with_env: policy(
     false,

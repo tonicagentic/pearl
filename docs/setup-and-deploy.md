@@ -277,7 +277,7 @@ Open the matching local URL and make sure the Vercel App contains the same callb
 
 ## Optional Vercel Connect Integrations
 
-Slack is optional and is not part of the required deploy button flow. Gmail, Google Calendar, Google Drive, Google Sheets, GitHub, Vercel, Xero, and Tempo MCP are optional and user-scoped: each signed-in person authorizes their own account from Settings (web or mobile) or through the in-chat Connect card. Public multi-tenant deploys need Better Auth (`email` / `vercel`), not shared-password mode, for per-user plugins.
+Slack is optional and is not part of the required deploy button flow. Gmail, Google Calendar, Google Drive, Google Sheets, GitHub, Vercel, Expo, Xero, and Tempo MCP are optional and user-scoped: each signed-in person authorizes their own account from Settings (web or mobile) or through the in-chat Connect card. Expo is connected from Profile → Coder → Expo. Public multi-tenant deploys need Better Auth (`email` / `vercel`), not shared-password mode, for per-user plugins.
 
 Create any connectors you want to use:
 
@@ -326,6 +326,13 @@ vercel connect create https://api.githubcopilot.com/mcp/readonly --name pearl-gi
 # User-scoped Vercel MCP (select None / user OAuth when prompted).
 vercel connect create vercel --name vercel
 
+# User-scoped Expo MCP (https://mcp.expo.dev/mcp). OAuth issuer is
+# https://mcp.expo.dev, scope mcp:access, redirect
+# https://connect.vercel.com/callback. Dynamic client registration is on the
+# Expo authorization server. Pearl mounts this connection on the coder
+# subagent; users connect from Profile → Coder → Expo.
+vercel connect create https://mcp.expo.dev/mcp --name pearl-expo
+
 # User-scoped Xero Remote MCP (https://api.xero.com/mcp/v1). Create a Xero Web
 # app (not Custom Connection) at https://developer.xero.com/app/manage with
 # redirect URI https://connect.vercel.com/callback. Enable granular
@@ -360,6 +367,7 @@ printf '%s' "<connector-uid>" | vercel env add CALENDAR_CONNECTOR production pre
 printf '%s' "<connector-uid>" | vercel env add DRIVE_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add GITHUB_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add VERCEL_CONNECTOR production preview development
+printf '%s' "<connector-uid>" | vercel env add EXPO_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add XERO_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add SHEETS_CONNECTOR production preview development
 printf '%s' "<connector-uid>" | vercel env add TEMPO_CONNECTOR production preview development
@@ -373,9 +381,9 @@ Refresh local values without overwriting local-only secrets: a full
 `vercel env pull .env.local` can erase them, so pull to a temporary file and
 merge only the desired lines. Restart local dev or redeploy after changes.
 
-Gmail, Calendar, Drive, Sheets, GitHub, Vercel, Xero, and Tempo stay unavailable
-until their connector env vars are set and the connectors are attached. Tempo
-also requires `TEMPO_MCP_URL`.
+Gmail, Calendar, Drive, Sheets, GitHub, Vercel, Expo, Xero, and Tempo stay
+unavailable until their connector env vars are set and the connectors are
+attached. Tempo also requires `TEMPO_MCP_URL`.
 
 ### iCloud Calendar (CalDAV)
 

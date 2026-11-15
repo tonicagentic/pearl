@@ -45,11 +45,10 @@ describe("pending approvals across the thread", () => {
           },
           call: {
             callId: "call_expo",
-            name: "expo_simulator",
+            name: "expo__simulator_start",
             input: {
-              owner: "tonicagentic",
-              repo: "pearl",
-              sessionName: "connection-resource-details",
+              appFullName: "@tonicagentic/pearl",
+              appId: "43ee6005-c5ac-4b8f-b463-5d910681956d",
             },
           },
         },
@@ -82,9 +81,8 @@ describe("pending approvals across the thread", () => {
     expect(pending).toHaveLength(1);
     expect(pending[0]?.requestId).toBe("Tq7ObdSW833S7spV");
     expect(pending[0]?.prompt).toMatch(/Expo simulator/i);
-    expect(pending[0]?.toolName).toBe("expo_simulator");
-    expect(pending[0]?.detail).toMatch(/tonicagentic\/pearl/);
-    expect(pending[0]?.detail).toMatch(/connection-resource-details/);
+    expect(pending[0]?.toolName).toBe("expo__simulator_start");
+    expect(pending[0]?.detail).toMatch(/@tonicagentic\/pearl/);
     expect(pendingForToolCall(data, "call_first_coder")?.requestId).toBe(
       "Tq7ObdSW833S7spV",
     );
@@ -155,8 +153,8 @@ describe("pending approvals across the thread", () => {
       {
         type: "tool",
         callId: "call_expo",
-        name: "expo_simulator",
-        label: "expo_simulator",
+        name: "expo__simulator_start",
+        label: "simulator_start",
         kind: "action",
         stepIndex: 0,
         state: "running",
@@ -204,7 +202,7 @@ describe("pending approvals across the thread", () => {
     const pending = getPendingApprovals(data);
     expect(pending).toHaveLength(1);
     expect(pending[0]?.requestId).toBe("child-approval");
-    expect(pending[0]?.toolName).toBe("expo_simulator");
+    expect(pending[0]?.toolName).toBe("expo__simulator_start");
   });
 
   test("dedupes the same interaction id across parent and child", () => {

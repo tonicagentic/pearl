@@ -20,14 +20,14 @@ const CODER_DESCRIPTION =
   "Implement, review, and ship code for the signed-in user on their GitHub " +
   "repos. Check out or create a private repo in a Vercel Sandbox, follow the " +
   "repo's AGENTS.md, open a draft pull request, publish a sandbox dev-server " +
-  "URL, deploy to the user's Vercel account (preview by default), start Expo " +
-  "Simulators sessions, publish EAS Updates, and start Expo EAS iOS builds. " +
+  "URL, deploy to the user's Vercel account (preview by default), and use the " +
+  "user's Expo connection for cloud simulators, EAS builds, and workflows. " +
   "Delegate for any request to build, change, deploy, or compile code. Pass " +
   "the repo (or 'create one'), the goal, and constraints in message; continue " +
   "the same task with taskId. The child owns coding tools, git__gh, gated_git, " +
-  "publish_dev_server, deploy_vercel, merge_pr, expo_simulator, eas_update, " +
-  "eas_build, eas_submit, preview_check, deployment_logs, run_with_env, and " +
-  "report_handoff.";
+  "publish_dev_server, deploy_vercel, merge_pr, list_expo_projects, " +
+  "pin_expo_preview, the expo MCP connection, preview_check, deployment_logs, " +
+  "run_with_env, and report_handoff.";
 
 export default defineDynamic(async (ctx) => {
   if (readTurnClientIntent(await ctx.messages()).mode === "plan") {

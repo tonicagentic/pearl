@@ -39,6 +39,41 @@ export const CONNECTION_READONLY_ALLOWLISTS = {
     "search_documentation",
   ],
   sheets: ["get_spreadsheet", "get_values"],
+  /**
+   * Expo MCP reads (no logs — those live on CONNECTION_EXPO_DIAGNOSTIC_TOOLS).
+   * https://docs.expo.dev/mcp/
+   */
+  expo: [
+    "read_documentation",
+    "search_documentation",
+    "usage_budget_get",
+    "workflow_info",
+    "workflow_list",
+    "build_list",
+    "build_info",
+    "sandbox_list",
+    "sandbox_wait",
+    "sandbox_artifact_get",
+    "sandbox_artifact_list",
+    "sandbox_read_file",
+    "observe_versions",
+    "observe_metrics_summary",
+    "observe_metrics",
+    "observe_routes",
+    "observe_event_names",
+    "observe_events",
+    "observe_session",
+    "simulator_get",
+    "simulator_list",
+    "automation_take_screenshot",
+    "automation_find_view",
+    "testflight_crashes",
+    "testflight_feedback",
+    "appstore_reviews",
+    "playstore_crashes",
+    "playstore_reviews",
+    "expo_router_sitemap",
+  ],
 } as const;
 
 export type AllowlistedConnectionId = keyof typeof CONNECTION_READONLY_ALLOWLISTS;
@@ -69,7 +104,44 @@ export const CONNECTION_WRITE_TOOLS = {
     "update_spreadsheet",
     "update_values",
   ],
+  /**
+   * Expo MCP writes / metered actions. Approval every call; denied in plan
+   * mode. sandbox_exec / sandbox_write_stdin and public store reply tools are
+   * omitted from the connection entirely.
+   */
+  expo: [
+    "usage_budget_create",
+    "workflow_run",
+    "workflow_cancel",
+    "workflow_validate",
+    "build_run",
+    "build_submit",
+    "build_cancel",
+    "sandbox_create",
+    "sandbox_stop",
+    "sandbox_artifact_create",
+    "simulator_start",
+    "simulator_stop",
+    "automation_tap",
+    "automation_type",
+    "automation_scroll",
+    "open_devtools",
+  ],
 } as const;
+
+/** Expo log / diagnostic tools — discoverable, not in the readonly list. */
+export const CONNECTION_EXPO_DIAGNOSTIC_TOOLS = [
+  "build_logs",
+  "workflow_logs",
+  "collect_app_logs",
+] as const;
+
+/** Expo allowlist for the live connection: reads, diagnostics, and writes. */
+export const CONNECTION_EXPO_ALLOWLIST = [
+  ...CONNECTION_READONLY_ALLOWLISTS.expo,
+  ...CONNECTION_EXPO_DIAGNOSTIC_TOOLS,
+  ...CONNECTION_WRITE_TOOLS.expo,
+] as const;
 
 /** Gmail allowlist for the live connection: reads plus approval-gated writes. */
 export const CONNECTION_COMPOSE_ALLOWLISTS = {

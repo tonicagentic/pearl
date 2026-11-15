@@ -10,7 +10,8 @@ export type AccountPluginId =
   | "drive"
   | "calendar"
   | "github"
-  | "vercel";
+  | "vercel"
+  | "expo";
 
 export type TonicPluginId = "tempo";
 
@@ -18,7 +19,6 @@ export type BuiltinPluginId =
   | "browser"
   | "search"
   | "coder"
-  | "expo"
   | "projects"
   | "researcher"
   | "analyst"
@@ -148,6 +148,15 @@ export const ACCOUNT_PLUGINS: readonly ConnectablePluginEntry[] = [
     description:
       "Link Vercel to inspect projects, deployments, and runtime context for apps you own. Pearl uses this when debugging deploys or shipping with the Coder agent.",
   },
+  {
+    id: "expo",
+    connectionId: "expo",
+    kind: "account",
+    label: "Expo",
+    detail: "Simulators, builds, and projects",
+    description:
+      "Connect your Expo account so Pearl’s Coder can list your orgs and projects, start cloud iOS simulators, inspect EAS builds and workflows, and (with your approval) run builds or submissions. Authorization is stored by Vercel Connect for your signed-in user only.",
+  },
 ] as const;
 
 export const TONIC_PLUGINS: readonly ConnectablePluginEntry[] = [
@@ -185,15 +194,7 @@ export const BUILTIN_PLUGINS: readonly BuiltinPluginEntry[] = [
     label: "Coder",
     detail: "Build, PR, deploy, and EAS builds",
     description:
-      "A specialized coding agent that can work in a sandbox, open PRs, deploy to Vercel, and kick off Expo/EAS builds. Pearl delegates here when you ask to build or ship software.",
-  },
-  {
-    id: "expo",
-    kind: "builtin",
-    label: "Expo",
-    detail: "Simulators, EAS Update, and iOS builds",
-    description:
-      "Pearl’s Coder can start Expo cloud iOS simulators, publish EAS Updates to a pin’s channel, and start EAS iOS builds with the server Expo token. Pin an Expo project id on a workbench repo to aim at that app.",
+      "A specialized coding agent that can work in a sandbox, open PRs, deploy to Vercel, and kick off Expo/EAS builds on your connected Expo account. Pearl delegates here when you ask to build or ship software.",
   },
   {
     id: "projects",

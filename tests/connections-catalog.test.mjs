@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CONNECTION_COMPOSE_ALLOWLISTS,
+  CONNECTION_EXPO_ALLOWLIST,
+  CONNECTION_EXPO_DIAGNOSTIC_TOOLS,
   CONNECTION_READONLY_ALLOWLISTS,
   CONNECTION_SHEETS_ALLOWLIST,
   CONNECTION_TEMPO_ALLOWLIST,
@@ -23,6 +25,7 @@ import {
   isConnectionId,
 } from "../lib/connections/catalog.ts";
 import {
+  EXPO_OAUTH_SCOPES,
   GITHUB_OAUTH_SCOPES,
   GMAIL_OAUTH_SCOPES,
   SHEETS_OAUTH_SCOPES,
@@ -37,12 +40,14 @@ test("only fixed provider ids are accepted", () => {
     "drive",
     "github",
     "vercel",
+    "expo",
     "xero",
     "tempo",
     "sheets",
   ]);
   assert.equal(isConnectionId("github"), true);
   assert.equal(isConnectionId("gmail"), true);
+  assert.equal(isConnectionId("expo"), true);
   assert.equal(isConnectionId("xero"), true);
   assert.equal(isConnectionId("notion"), false);
   assert.equal(isConnectionId("other"), false);
@@ -93,6 +98,12 @@ test("opt-in Google, GitHub, Vercel, and Xero need connector env vars", () => {
       .connector,
     "vercel/test",
   );
+  assert.equal(connectionConfiguration("expo", {}).connector, null);
+  assert.equal(
+    connectionConfiguration("expo", { EXPO_CONNECTOR: "expo/pearl-expo" })
+      .connector,
+    "expo/pearl-expo",
+  );
   assert.equal(connectionConfiguration("xero", {}).connector, null);
   assert.equal(
     connectionConfiguration("xero", { XERO_CONNECTOR: "xero/pearl-xero" })
@@ -133,7 +144,7 @@ test("read-only allowlists exclude write and log tools", () => {
   assert.equal(looksLikeWriteOrLogTool("list-profit-and-loss"), false);
 });
 
-test("read-only Gmail allowlist stays free of create_draft; compose list adds only it", () => {
+test("read-only Gmail allowlist stays free of create_draft; compose list adds writes", () => {
   assert.equal(
     CONNECTION_READONLY_ALLOWLISTS.gmail.includes("create_draft"),
     false,
@@ -142,7 +153,7 @@ test("read-only Gmail allowlist stays free of create_draft; compose list adds on
     CONNECTION_COMPOSE_ALLOWLISTS.gmail.filter(
       (name) => !CONNECTION_READONLY_ALLOWLISTS.gmail.includes(name),
     ),
-    ["create_draft"],
+    [...CONNECTION_WRITE_TOOLS.gmail],
   );
   assert.equal(CONNECTION_WRITE_TOOLS.gmail.includes("send_message"), false);
 });
@@ -172,6 +183,43 @@ test("Sheets and Tempo write tools are the ones that need approval", () => {
       );
     assert.equal(isRead, !looksWrite, `${name} is misclassified`);
   }
+});
+
+test("Expo allowlist splits reads, diagnostics, and approval-gated writes", () => {
+  for (const name of CONNECTION_READONLY_ALLOWLISTS.expo) {
+    assert.equal(
+      looksLikeWriteOrLogTool(name),
+      false,
+      `expo readonly includes write/log tool ${name}`,
+    );
+    assert.equal(CONNECTION_WRITE_TOOLS.expo.includes(name), false, name);
+  }
+  for (const name of CONNECTION_EXPO_DIAGNOSTIC_TOOLS) {
+    assert.ok(looksLikeWriteOrLogTool(name), name);
+    assert.ok(CONNECTION_EXPO_ALLOWLIST.includes(name), name);
+    assert.equal(
+      CONNECTION_READONLY_ALLOWLISTS.expo.includes(name),
+      false,
+      name,
+    );
+  }
+  for (const name of CONNECTION_WRITE_TOOLS.expo) {
+    assert.ok(CONNECTION_EXPO_ALLOWLIST.includes(name), name);
+    assert.equal(
+      CONNECTION_READONLY_ALLOWLISTS.expo.includes(name),
+      false,
+      name,
+    );
+  }
+  assert.ok(CONNECTION_WRITE_TOOLS.expo.includes("simulator_start"));
+  assert.ok(CONNECTION_WRITE_TOOLS.expo.includes("build_run"));
+  assert.equal(CONNECTION_EXPO_ALLOWLIST.includes("sandbox_exec"), false);
+  assert.equal(
+    CONNECTION_EXPO_ALLOWLIST.includes("appstore_reply_review"),
+    false,
+  );
+  assert.deepEqual(connectionTokenParams("expo").scopes, [...EXPO_OAUTH_SCOPES]);
+  assert.deepEqual(EXPO_OAUTH_SCOPES, ["mcp:access"]);
 });
 
 test("write approval asks for writes, denies in plan mode, passes reads", () => {

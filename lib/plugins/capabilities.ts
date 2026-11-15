@@ -72,6 +72,20 @@ const CONNECTION_CAPABILITIES: Record<
       "Preview or production deploy with the Coder agent",
     ],
   },
+  expo: {
+    canDo: [
+      "List Expo orgs and projects on your account",
+      "Search and read Expo documentation",
+      "Inspect EAS builds, workflows, Observe metrics, and TestFlight",
+      "Take simulator screenshots and find views by testID",
+    ],
+    needsApproval: [
+      "Start or stop a cloud simulator",
+      "Run or cancel EAS builds and workflows",
+      "Submit a build to the stores",
+      "Tap, type, or scroll on a connected device",
+    ],
+  },
   tempo: {
     canDo: [
       "Search and resolve people, companies, and deals in Tempo",
@@ -110,16 +124,6 @@ const BUILTIN_CAPABILITIES: Partial<
     ],
     needsApproval: [
       "Create, update, or retire a concept schema (always asks before saving)",
-    ],
-  },
-  expo: {
-    canDo: [
-      "Start an Expo cloud iOS simulator and show the preview on Computer",
-      "Publish an EAS Update to a pinned app’s channel",
-      "Start an EAS iOS build and submit to TestFlight when asked",
-    ],
-    needsApproval: [
-      "Simulator start, EAS Update, EAS build, and EAS submit (always)",
     ],
   },
 };

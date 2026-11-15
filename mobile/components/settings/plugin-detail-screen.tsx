@@ -17,6 +17,7 @@ import * as Linking from "expo-linking";
 import { Stack, router, useFocusEffect } from "expo-router";
 
 import { CoderToolsList } from "@/components/settings/code-section";
+import { SettingsButton } from "@/components/settings/native";
 import { PluginLogo } from "@/components/settings/plugin-logo";
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { SettingsCard } from "@/components/ui/settings-card";
@@ -33,15 +34,19 @@ import {
   type ResolvedPlugin,
 } from "../../../lib/plugins/catalog";
 import {
+  fetchExpoProjectsCatalog,
   fetchGithubReposCatalog,
   fetchVercelProjectsCatalog,
   fetchVercelResourcesCatalog,
+  type CatalogExpoAccount,
+  type CatalogExpoProject,
   type CatalogRepo,
   type CatalogVercelDomain,
   type CatalogVercelIntegration,
   type CatalogVercelProject,
   type CatalogVercelStore,
   type CatalogVercelTeam,
+  type ExpoProjectsCatalog,
   type GithubReposCatalog,
   type VercelProjectsCatalog,
   type VercelResourcesCatalog,
@@ -164,13 +169,11 @@ function CalendarManagePanel() {
         <Text variant="secondary">
           Manage Google Calendar and iCloud Calendar from one place.
         </Text>
-        <Pressable
-          accessibilityRole="button"
+        <SettingsButton
+          hosted
+          label="Manage Calendar"
           onPress={() => router.push("/calendar")}
-          className="min-h-11 justify-center self-start rounded-[10px] bg-muted px-4"
-        >
-          <Text variant="body">Manage Calendar</Text>
-        </Pressable>
+        />
       </View>
       {googleCapabilities ? (
         <CapabilitiesCard
@@ -255,13 +258,11 @@ function GmailMailboxSummaryPanel() {
             {error}
           </Text>
         ) : null}
-        <Pressable
-          accessibilityRole="button"
+        <SettingsButton
+          hosted
+          label="Manage Email"
           onPress={() => router.push("/email")}
-          className="min-h-11 justify-center self-start rounded-[10px] bg-muted px-4"
-        >
-          <Text variant="body">Manage Email</Text>
-        </Pressable>
+        />
       </View>
       {capabilities ? (
         <CapabilitiesCard
@@ -551,33 +552,38 @@ function ConnectionPanel({
           </Text>
         ) : null}
 
-        <View className="flex-row flex-wrap gap-2 pt-1">
+        <View className="gap-2 pt-1">
           {connected ? (
-            <ActionChip
+            <SettingsButton
+              hosted
               disabled={busy}
               label={connecting ? "Opening…" : "Update"}
               onPress={() => void authorize()}
             />
           ) : null}
           {state !== "connected" && state !== "unavailable" ? (
-            <ActionChip
+            <SettingsButton
+              hosted
               disabled={busy}
               label={connecting ? "Opening…" : "Connect"}
               onPress={() => void authorize()}
             />
           ) : null}
           {state === "connected" || state === "unknown" ? (
-            <ActionChip
+            <SettingsButton
+              hosted
               destructive
               disabled={busy}
               label={disconnecting ? "Disconnecting…" : "Disconnect"}
               onPress={() => void disconnect()}
             />
           ) : null}
-          <ActionChip
+          <SettingsButton
+            hosted
             disabled={busy || state === "unavailable"}
             label={loading ? "Checking…" : "Refresh"}
             onPress={() => void load()}
+            variant="plain"
           />
         </View>
 
@@ -595,6 +601,7 @@ function ConnectionPanel({
           <VercelResourcesSections username={grant.vercel.username} />
         </>
       ) : null}
+      {connectionId === "expo" && connected ? <ExpoProjectsSection /> : null}
 
       {capabilities ? (
         <CapabilitiesCard
@@ -764,7 +771,7 @@ function GithubReposCatalogSection() {
           <Text variant="secondary" tone="destructive" accessibilityRole="alert">
             {error}
           </Text>
-          <ActionChip label="Retry" onPress={() => void load()} />
+          <SettingsButton hosted label="Retry" onPress={() => void load()} />
         </View>
       ) : null}
 
@@ -814,6 +821,173 @@ function GithubReposCatalogSection() {
           </Text>
         )
       ) : null}
+    </View>
+  );
+}
+
+function ExpoProjectsSection() {
+  const [catalog, setCatalog] = useState<ExpoProjectsCatalog | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
+  const mounted = useRef(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await fetchExpoProjectsCatalog();
+      if (mounted.current) setCatalog(next);
+    } catch (cause) {
+      if (mounted.current) {
+        setError(
+          cause instanceof Error ? cause.message : "Could not load projects.",
+        );
+      }
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    void load();
+    return () => {
+      mounted.current = false;
+    };
+  }, [load]);
+
+  const projects: readonly CatalogExpoProject[] =
+    catalog?.connected === true ? catalog.projects : [];
+  const accounts: readonly CatalogExpoAccount[] =
+    catalog?.connected === true ? catalog.accounts : [];
+  const username =
+    catalog?.connected === true ? catalog.username : "Expo";
+  const needle = filter.trim().toLowerCase();
+  const matches = (project: CatalogExpoProject) =>
+    needle.length === 0 ||
+    project.name.toLowerCase().includes(needle) ||
+    project.slug.toLowerCase().includes(needle) ||
+    project.fullName.toLowerCase().includes(needle) ||
+    project.accountName.toLowerCase().includes(needle);
+  const showFilter = projects.length >= FILTER_THRESHOLD;
+
+  const accountSections = accounts
+    .map((account) => ({
+      account,
+      projects: projects.filter(
+        (project) => project.accountId === account.id && matches(project),
+      ),
+    }))
+    .filter((section) => needle.length === 0 || section.projects.length > 0);
+
+  return (
+    <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
+      <Text variant="label">
+        Projects
+        {catalog?.connected === true && projects.length > 0
+          ? ` · ${projects.length}`
+          : ""}
+      </Text>
+      <Text variant="secondary">
+        Personal account and each organization, with every project Pearl can
+        see.
+      </Text>
+
+      {showFilter ? (
+        <CatalogFilter
+          value={filter}
+          onChange={setFilter}
+          placeholder="Filter projects"
+        />
+      ) : null}
+
+      {loading && !catalog ? (
+        <ActivityIndicator accessibilityLabel="Loading Expo projects" />
+      ) : null}
+
+      {error ? (
+        <View className="gap-2">
+          <Text variant="secondary" tone="destructive" accessibilityRole="alert">
+            {error}
+          </Text>
+          <SettingsButton hosted label="Retry" onPress={() => void load()} />
+        </View>
+      ) : null}
+
+      {catalog?.connected === false ? (
+        <Text variant="secondary">{catalog.message}</Text>
+      ) : null}
+
+      {catalog?.connected === true ? (
+        <View className="gap-4">
+          {accountSections.map(({ account, projects: accountProjects }) => (
+            <ExpoAccountProjects
+              key={account.id}
+              title={
+                account.isPersonal
+                  ? `Personal · ${username}`
+                  : `${account.name}`
+              }
+              projects={accountProjects}
+              emptyLabel={
+                needle
+                  ? "No projects match that filter."
+                  : "No projects on this account."
+              }
+            />
+          ))}
+          {catalog.truncated ? (
+            <Text variant="caption">
+              Showing the first {projects.length} projects. Open the Expo
+              dashboard if you expected more.
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function ExpoAccountProjects({
+  title,
+  projects,
+  emptyLabel,
+}: {
+  readonly title: string;
+  readonly projects: readonly CatalogExpoProject[];
+  readonly emptyLabel: string;
+}) {
+  return (
+    <View className="gap-2">
+      <Text
+        variant="caption"
+        weight="medium"
+        className="uppercase tracking-[0.04em]"
+      >
+        {title}
+      </Text>
+      {projects.length > 0 ? (
+        <View className="gap-3">
+          {projects.map((project) => (
+            <Pressable
+              key={project.id}
+              accessibilityRole="link"
+              onPress={() => void Linking.openURL(project.dashboardUrl)}
+              className="gap-0.5"
+            >
+              <Text variant="body" weight="medium" numberOfLines={1}>
+                {project.name}
+              </Text>
+              <Text variant="caption">
+                {project.fullName}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <Text variant="secondary">{emptyLabel}</Text>
+      )}
     </View>
   );
 }
@@ -911,7 +1085,7 @@ function VercelProjectsSection({
           <Text variant="secondary" tone="destructive" accessibilityRole="alert">
             {error}
           </Text>
-          <ActionChip label="Retry" onPress={() => void load()} />
+          <SettingsButton hosted label="Retry" onPress={() => void load()} />
         </View>
       ) : null}
 
@@ -1119,7 +1293,7 @@ function VercelResourcesSections({
           <Text variant="secondary" tone="destructive" accessibilityRole="alert">
             {error}
           </Text>
-          <ActionChip label="Retry" onPress={() => void load()} />
+          <SettingsButton hosted label="Retry" onPress={() => void load()} />
         </View>
       ) : null}
 
@@ -1478,31 +1652,3 @@ function BulletList({ items }: { readonly items: readonly string[] }) {
   );
 }
 
-function ActionChip({
-  label,
-  onPress,
-  disabled,
-  destructive,
-}: {
-  readonly label: string;
-  readonly onPress: () => void;
-  readonly disabled?: boolean;
-  readonly destructive?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={disabled}
-      className="min-h-10 justify-center rounded-xl border border-border/60 px-3 active:bg-muted/60 disabled:opacity-50"
-      onPress={onPress}
-    >
-      <Text
-        variant="secondary"
-        weight="medium"
-        tone={destructive ? "destructive" : "default"}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}

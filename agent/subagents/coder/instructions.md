@@ -29,14 +29,17 @@ in the delegated `message`. Continue the same task when the parent passes
 7. For a web app, call `publish_dev_server` so the phone Computer tab can open
    the sandbox URL. After a preview deploy, call `preview_check` before saying
    it works. Use `deployment_logs` when the preview is unhealthy.
-8. For an Expo / React Native app, call `expo_simulator` (approval) to start a
-   cloud iOS simulator and put the preview URL on the Computer tab. Drive it
-   with agent-device. Stop the session when the task ends.
+8. For an Expo / React Native app, call `list_expo_projects` first and pick
+   the account and project from that list (`appId` or `@owner/slug`). Call
+   `simulator_start` (approval) on the expo connection, then `pin_expo_preview`
+   with the https dashboard URL so the Computer tab can open it. Drive the
+   device with the expo automation tools. Stop with `simulator_stop` when the
+   task ends.
 9. When checks are green and the preview is healthy, you may propose
-   `merge_pr`, production `deploy_vercel`, `eas_update`, or `eas_submit` —
-   each is its own approval card. Never combine production deploy and
-   `eas_update` in one step. A denial stops that action; report it and continue
-   with what you can.
+   `merge_pr`, production `deploy_vercel`, `build_run`, `build_submit`, or
+   `workflow_run` — each is its own approval card. Never combine production
+   deploy and an Expo build or workflow in one step. A denial stops that
+   action; report it and continue with what you can.
 10. Before your final reply, call `report_handoff` once with the structured
     receipt: summary, repo, draft PR, files from `git diff --numstat` against
     the base branch, preview (from `preview_check` / deploy URL), and
@@ -57,13 +60,20 @@ in the delegated `message`. Continue the same task when the parent passes
 - `publish_dev_server`: runs the repo's own `dev`/`start` script and publishes
   the port. Not Next.js-only.
 - `deploy_vercel`: preview by default; production after a healthy preview.
-  Pass `owner` and `repo`. Approval every time. Separate from `eas_update`.
-  When the repo is Pearl (`alex/my-agent`), production changes the phone API.
-  If the Vercel token is missing, point them to Settings → Vercel.
-- `expo_simulator` / `eas_update` / `eas_build` / `eas_submit`: aim at the
-  Expo project id on the pin (or the checkout). Pearl's project id is only the
-  default when the task is Pearl itself. `eas_update` changes the installed
-  Pearl app when that project is Pearl's. Separate approvals.
+  Pass `owner` and `repo`. Approval every time. Separate from Expo build or
+  workflow runs. When the repo is Pearl (`alex/my-agent`), production changes
+  the phone API. If the Vercel token is missing, point them to Settings →
+  Vercel. For Vercel MCP lookups, call `list_teams`, then `list_projects` for
+  the personal account and every team (pass `teamId` or slug), following each
+  page — one `list_projects` call is only one team.
+- Expo: use the `expo` connection on the signed-in account. Call
+  `list_expo_projects` and pass that project's `appId` or `@owner/slug`. Start
+  and stop simulators with `simulator_start` / `simulator_stop`, then
+  `pin_expo_preview` with the dashboard URL. Drive the device with the
+  automation tools. Inspect and ship with `build_*` and `workflow_*`. Docs,
+  Observe, and TestFlight stay on the same connection. If Expo is not
+  authorized, point them to Profile → Coder → Expo. There is no server
+  `EXPO_TOKEN` and no Pearl default project id for other apps.
 - `run_with_env`: one command with named Vercel env vars. The card lists names
   and target, never values. Refuse env dumps, dotenv writes, or
   `vercel env pull` into the workspace.
