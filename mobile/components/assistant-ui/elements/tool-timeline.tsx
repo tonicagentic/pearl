@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { ChevronDownIcon } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import Animated, {
@@ -23,7 +23,8 @@ import {
   thinkSwapEnter,
   threadDiffAdd,
   threadDiffRemove,
-  threadMeta,
+  threadMetaCall,
+  threadMetaDetail,
   useMotion,
 } from "./surfaces";
 
@@ -51,17 +52,51 @@ export interface TimelineStat {
   filePath?: string;
 }
 
+export type ActivityBit = {
+  readonly verb: string;
+  readonly detail: string;
+};
+
 export interface ToolTimelineProps {
   readonly steps: readonly TimelineStep[];
   readonly visibleSteps: number;
   readonly streaming: boolean;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
-  readonly restingLabel: string;
+  /** Settled header — prefer structured bits for verb/detail color split. */
+  readonly restingLabel: ReactNode;
+  /** Live header string (shimmer flattens children). */
   readonly activeLabel: string;
   readonly stats: readonly TimelineStat[];
   /** Elapsed badge: live while streaming, the settled duration after. */
   readonly elapsed?: string;
+}
+
+/** Verb in secondary muted; counts/paths in a lighter muted. */
+export function ActivityPhrase({
+  bits,
+  prefix,
+  numberOfLines = 2,
+}: {
+  readonly bits: readonly ActivityBit[];
+  readonly prefix?: ReactNode;
+  readonly numberOfLines?: number;
+}) {
+  if (bits.length === 0 && prefix == null) return null;
+  return (
+    <Text variant="label" numberOfLines={numberOfLines}>
+      {prefix}
+      {bits.map((bit, index) => (
+        <Fragment key={`${bit.verb}-${index}`}>
+          {index > 0 ? <Text className={threadMetaDetail}>, </Text> : null}
+          <Text className={threadMetaCall}>{bit.verb}</Text>
+          {bit.detail ? (
+            <Text className={threadMetaDetail}>{` ${bit.detail}`}</Text>
+          ) : null}
+        </Fragment>
+      ))}
+    </Text>
+  );
 }
 
 /** ChevronDown points right when collapsed, down when open. */
@@ -138,7 +173,7 @@ function StepRow({
         <ShimmerLabel
           active={active}
           variant="label"
-          className={cn(threadMeta, "shrink-0")}
+          className={cn(threadMetaCall, "shrink-0")}
         >
           {label}
         </ShimmerLabel>
@@ -162,7 +197,7 @@ function StepRow({
             <Text
               numberOfLines={1}
               variant="label"
-              className={cn(threadMeta, "min-w-0 flex-shrink")}
+              className={cn(threadMetaDetail, "min-w-0 flex-shrink")}
             >
               {step.chip}
             </Text>
@@ -195,16 +230,17 @@ function StatLine({ stats }: { readonly stats: readonly TimelineStat[] }) {
   );
   const latest = stats[stats.length - 1];
   // Cursor: "Editing file.tsx … +10" — prefer the latest file when present.
-  const summary =
+  const bit: ActivityBit =
     stats.length === 1 && latest
-      ? `Editing ${latest.file}`
-      : `Edited ${stats.length} file${stats.length === 1 ? "" : "s"}`;
+      ? { verb: "Editing", detail: latest.file }
+      : {
+          verb: "Edited",
+          detail: `${stats.length} file${stats.length === 1 ? "" : "s"}`,
+        };
 
   return (
     <View className="flex-row flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5">
-      <Text variant="label" className={threadMeta}>
-        {summary}
-      </Text>
+      <ActivityPhrase bits={[bit]} numberOfLines={1} />
       {totalAdded > 0 || totalRemoved > 0 ? (
         <View className="flex-row items-baseline gap-1.5">
           {totalAdded > 0 ? (
@@ -299,14 +335,12 @@ export function ToolTimeline({
           <ShimmerLabel
             active={streaming}
             variant="label"
-            className={threadMeta}
+            className={threadMetaCall}
             numberOfLines={2}
           >
             {elapsed ? `${activeLabel} · ${elapsed}` : activeLabel}
           </ShimmerLabel>
-          <Text variant="label" className={threadMeta} numberOfLines={2}>
-            {restingLabel}
-          </Text>
+          {restingLabel}
         </SwapLabel>
         <MetaChevron open={open} />
       </Pressable>

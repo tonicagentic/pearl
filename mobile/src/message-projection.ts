@@ -299,7 +299,8 @@ export function pendingWaitKind(
   data: ConversationMessages,
 ): PendingWaitKind | null {
   const approvals = getPendingApprovals(data);
-  if (approvals.some((item) => item.kind === "question")) return "question";
+  // Choice questions only — text-only freeform answers in the normal composer.
+  if (approvals.some(isChoicePendingQuestion)) return "question";
   if (approvals.some((item) => item.kind === "approval")) return "approval";
   for (const messages of conversationMessageSources(data)) {
     for (const message of messages) {

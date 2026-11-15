@@ -11,10 +11,14 @@ import { formatDurationMs, turnEventSpan } from "@/src/turn-duration";
 import { getToolPresentation } from "./tool-presentation";
 import { TimelineDurationEventsContext } from "./timeline-duration-events";
 import {
+  ActivityPhrase,
   ToolTimeline,
+  type ActivityBit,
   type TimelineStat,
   type TimelineStep,
 } from "./tool-timeline";
+import { threadMetaCall, threadMetaDetail } from "./surfaces";
+import { Text } from "@/components/ui/text";
 import { useTurnElapsed } from "./turn-elapsed";
 
 export {
@@ -23,6 +27,7 @@ export {
 } from "./timeline-duration-events";
 
 export {
+  hasComposerOpenQuestion,
   hasOpenQuestion,
   isContentBlockPart,
   isStandaloneTool,
@@ -237,31 +242,49 @@ function summarizeActivity(parts: readonly TimelinePart[]): {
   return { explored, ran, searched, edited, lastEditFile };
 }
 
-function formatActivitySummary(summary: ReturnType<typeof summarizeActivity>): string {
-  const bits: string[] = [];
+function activityBits(
+  summary: ReturnType<typeof summarizeActivity>,
+): ActivityBit[] {
+  const bits: ActivityBit[] = [];
+  const push = (verb: string, detail: string) => {
+    bits.push({
+      verb: bits.length === 0 ? verb : verb.toLowerCase(),
+      detail,
+    });
+  };
   if (summary.explored > 0) {
-    bits.push(
-      `Explored ${summary.explored} file${summary.explored === 1 ? "" : "s"}`,
+    push(
+      "Explored",
+      `${summary.explored} file${summary.explored === 1 ? "" : "s"}`,
     );
   }
   if (summary.searched > 0) {
-    bits.push(
-      `searched ${summary.searched} time${summary.searched === 1 ? "" : "s"}`,
+    push(
+      "Searched",
+      `${summary.searched} time${summary.searched === 1 ? "" : "s"}`,
     );
   }
   if (summary.ran > 0) {
-    bits.push(
-      `ran ${summary.ran} command${summary.ran === 1 ? "" : "s"}`,
+    push(
+      "Ran",
+      `${summary.ran} command${summary.ran === 1 ? "" : "s"}`,
     );
   }
   if (summary.edited > 0 && !summary.lastEditFile) {
-    bits.push(
-      `edited ${summary.edited} file${summary.edited === 1 ? "" : "s"}`,
+    push(
+      "Edited",
+      `${summary.edited} file${summary.edited === 1 ? "" : "s"}`,
     );
   }
+  return bits;
+}
+
+function formatActivitySummary(
+  summary: ReturnType<typeof summarizeActivity>,
+): string {
+  const bits = activityBits(summary);
   if (bits.length === 0) return "";
-  const [first, ...rest] = bits;
-  return `${first}${rest.length ? `, ${rest.join(", ")}` : ""}.`;
+  return `${bits.map((bit) => `${bit.verb} ${bit.detail}`).join(", ")}.`;
 }
 
 function liveActivityLabel(
@@ -383,13 +406,28 @@ export const SessionTimelineSegment: FC<{
       ? (settledDuration ?? (streaming ? liveElapsed : undefined))
       : undefined;
   const duration = showLive ? liveElapsed : workedFor;
-  const activitySummary = formatActivitySummary(activity);
-  const restingLabel = workedFor
-    ? activitySummary
-      ? `Thought ${workedFor} · ${activitySummary.replace(/\.$/, "")}`
-      : `Thought ${workedFor}`
-    : activitySummary ||
-      `${steps.length} step${steps.length === 1 ? "" : "s"}`;
+  const bits = activityBits(activity);
+  const restingLabel =
+    bits.length > 0 || workedFor ? (
+      <ActivityPhrase
+        bits={bits}
+        prefix={
+          workedFor ? (
+            <>
+              <Text className={threadMetaCall}>Thought</Text>
+              <Text className={threadMetaDetail}>{` ${workedFor}`}</Text>
+              {bits.length > 0 ? (
+                <Text className={threadMetaDetail}> · </Text>
+              ) : null}
+            </>
+          ) : undefined
+        }
+      />
+    ) : (
+      <Text variant="label" className={threadMetaDetail}>
+        {`${steps.length} step${steps.length === 1 ? "" : "s"}`}
+      </Text>
+    );
 
   return (
     <ToolTimeline

@@ -12,9 +12,11 @@ export type AssistantMessagePart = {
   readonly text?: string;
   readonly toolName?: string;
   readonly status?: { readonly type?: string };
+  readonly args?: { readonly options?: readonly unknown[] };
   readonly approval?: {
     readonly display?: string;
     readonly approved?: boolean;
+    readonly options?: readonly unknown[];
   };
 };
 
@@ -159,6 +161,26 @@ export function isTrailingContentPhase(
   return blocks[blocks.length - 1]?.kind === "content";
 }
 
+function isOpenQuestionPart(part: AssistantMessagePart): boolean {
+  if (part.type !== "tool-call") return false;
+  if (part.toolName === "ask_question") {
+    return (
+      part.status?.type === "requires-action" ||
+      (part.approval != null && part.approval.approved === undefined)
+    );
+  }
+  const display = part.approval?.display;
+  if (display !== "select" && display !== "text") return false;
+  return part.approval?.approved === undefined;
+}
+
+function questionHasChoices(part: AssistantMessagePart): boolean {
+  if (part.approval?.display === "text") return false;
+  if (part.approval?.display === "select") return true;
+  const options = part.approval?.options ?? part.args?.options;
+  return Array.isArray(options) && options.length > 0;
+}
+
 /**
  * True when the assistant turn is parked on an unanswered ask_question
  * (select / free-text). Approvals and sign-in are not questions.
@@ -166,16 +188,18 @@ export function isTrailingContentPhase(
 export function hasOpenQuestion(
   parts: readonly AssistantMessagePart[],
 ): boolean {
-  return parts.some((part) => {
-    if (part.type !== "tool-call") return false;
-    if (part.toolName === "ask_question") {
-      return (
-        part.status?.type === "requires-action" ||
-        (part.approval != null && part.approval.approved === undefined)
-      );
-    }
-    const display = part.approval?.display;
-    if (display !== "select" && display !== "text") return false;
-    return part.approval?.approved === undefined;
-  });
+  return parts.some(isOpenQuestionPart);
+}
+
+/**
+ * True when an open question morphs the composer (choice / select chips).
+ * Text-only freeform asks stay in the normal composer — no "Asking questions"
+ * chrome.
+ */
+export function hasComposerOpenQuestion(
+  parts: readonly AssistantMessagePart[],
+): boolean {
+  return parts.some(
+    (part) => isOpenQuestionPart(part) && questionHasChoices(part),
+  );
 }

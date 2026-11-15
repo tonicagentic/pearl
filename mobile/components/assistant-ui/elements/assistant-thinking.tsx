@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 
 import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
 import {
-  hasOpenQuestion,
+  hasComposerOpenQuestion,
   isTimelineToolCall,
   isTrailingContentPhase,
   splitAssistantBlocks,
@@ -41,7 +41,7 @@ const PERSON_WAIT_PHASE = "person-wait";
  * Bottom status for pre-content / uncovered tools / open questions. Hidden
  * while the answer streams (timeline already shows Worked for) and while a
  * trailing timeline owns live Working — except stall warnings during active
- * work, and "Asking questions" while a question parks the turn.
+ * work, and "Asking questions" while a choice question owns the composer.
  */
 export function AssistantThinking() {
   const { waitKind } = useChatConversation();
@@ -55,7 +55,8 @@ export function AssistantThinking() {
     const statusType = s.message.status?.type;
     const parts = s.message.parts as readonly AssistantMessagePart[];
 
-    if (statusType === "requires-action" && hasOpenQuestion(parts)) {
+    // Text-only freeform asks use the normal composer — no status chrome.
+    if (statusType === "requires-action" && hasComposerOpenQuestion(parts)) {
       return ASKING_PHASE;
     }
 

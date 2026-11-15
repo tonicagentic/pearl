@@ -54,6 +54,12 @@ export const mono = "tracking-tight";
  */
 export const threadMeta = "text-muted-foreground/75";
 
+/** Tool call verb — secondary text (stronger than detail chips). */
+export const threadMetaCall = "text-muted-foreground";
+
+/** Tool paths / counts — lighter muted than the verb. */
+export const threadMetaDetail = "text-muted-foreground/55";
+
 /** Cursor-style green/red line deltas on edit summaries. */
 export const threadDiffAdd = "text-emerald-600/90 dark:text-emerald-400/90";
 export const threadDiffRemove = "text-red-600/90 dark:text-red-400/90";
@@ -245,8 +251,8 @@ function childrenToLabel(children: ReactNode): string {
 
 /**
  * transitions.dev `shimmer-text`: base muted glyphs + masked highlight band
- * sweeping with `--shimmer-dur` (2000ms) linear across a 400%-wide gradient
- * (transparent → highlight → transparent).
+ * sweeping LTR with `--shimmer-dur` (2000ms) linear across a 400%-wide
+ * gradient (transparent → highlight → transparent).
  */
 export const ShimmerLabel: FC<TextProps & { active?: boolean }> = ({
   active = true,
@@ -288,12 +294,12 @@ export const ShimmerLabel: FC<TextProps & { active?: boolean }> = ({
     };
   }, [sweep, progress]);
 
-  // background-size: 400% → band travels from 100% → 0% of that canvas.
+  // background-size: 400% → band travels from 0% → 100% of that canvas (LTR).
   const bandWidth = Math.max(size.width * 4, 1);
   const bandStyle = useAnimatedStyle(() => {
     const travel = bandWidth - Math.max(size.width, 1);
     return {
-      transform: [{ translateX: progress.value * -travel }],
+      transform: [{ translateX: (progress.value - 1) * travel }],
     };
   }, [bandWidth, size.width]);
 

@@ -9,7 +9,10 @@ import { traceStream } from "@/src/stream-trace";
 import type { TextMessagePartProps } from "@assistant-ui/react-native";
 import {
   type FC,
+  Fragment,
+  isValidElement,
   memo,
+  type ReactElement,
   type ReactNode,
   useEffect,
   useMemo,
@@ -46,6 +49,51 @@ const MUTED_LINE = TEXT_METRICS.body.lineHeight;
 
 /** Match user/spoken selection highlight. */
 const SELECTION_COLOR = "rgba(127, 127, 127, 0.35)";
+
+/** Match web `ms-5` / ChatGPT-style hanging lists (marker gutter + wrap align). */
+const LIST_INDENT = 12;
+const LIST_MARKER_SLOT = 20;
+const LIST_ITEM_GAP = 4;
+/** Space between paragraphs / lists — tighter than a full blank `\n\n` line. */
+const BLOCK_GAP = 8;
+/** U+25CF BLACK CIRCLE — fuller than U+2022 • at the same point size. */
+const LIST_BULLET = "\u25CF";
+
+/** View hosts (lists) cannot nest inside the selectable Text/TextInput tree. */
+function isViewHost(node: ReactNode): node is ReactElement {
+  return isValidElement(node) && node.type === View;
+}
+
+/**
+ * List-item bodies may mix inline Text with nested View lists — keep Views
+ * as siblings and wrap consecutive text nodes in one Text.
+ */
+function wrapListItemBody(
+  children: ReactNode[],
+  textStyle?: TextStyle,
+): ReactNode[] {
+  const out: ReactNode[] = [];
+  let textBuf: ReactNode[] = [];
+  const flush = () => {
+    if (textBuf.length === 0) return;
+    out.push(
+      <RNText key={`li-t-${out.length}`} style={textStyle}>
+        {textBuf}
+      </RNText>,
+    );
+    textBuf = [];
+  };
+  for (const child of children) {
+    if (isViewHost(child)) {
+      flush();
+      out.push(child);
+    } else if (child != null && child !== false) {
+      textBuf.push(child);
+    }
+  }
+  flush();
+  return out;
+}
 
 /** Count single `*` markers that are not part of `**` (Hermes-safe). */
 function oddSingleAsterisks(text: string): boolean {
@@ -170,10 +218,11 @@ class MarkdownRenderer extends Renderer {
   }
 
   override listItem(children: ReactNode[], styles?: ViewStyle): ReactNode {
+    // flex:1 column beside the marker so wraps hang under the text, not the bullet.
     return (
-      <RNText key={this.getKey()} style={styles as TextStyle}>
-        {children}
-      </RNText>
+      <View key={this.getKey()} style={{ flex: 1, minWidth: 0 }}>
+        {wrapListItemBody(children, styles as TextStyle)}
+      </View>
     );
   }
 
@@ -327,16 +376,52 @@ class MarkdownRenderer extends Renderer {
     startIndex = 1,
   ): ReactNode {
     const listKey = this.getKey();
+    const lastIndex = startIndex + Math.max(li.length, 1) - 1;
+    const markerSlot = ordered
+      ? Math.max(LIST_MARKER_SLOT, String(lastIndex).length * 10 + 12)
+      : LIST_MARKER_SLOT;
+    const fontSize =
+      typeof textStyle?.fontSize === "number" ? textStyle.fontSize : BODY_SIZE;
     return (
-      <RNText key={listKey} style={textStyle}>
+      <View
+        key={listKey}
+        style={{
+          gap: LIST_ITEM_GAP,
+          // Indent the whole list (web `ms-5`); marker sits in the leading slot.
+          paddingLeft: LIST_INDENT,
+        }}
+      >
         {li.map((item, index) => (
-          <RNText key={`${listKey}-${index}`}>
-            {index > 0 ? "\n" : ""}
-            {ordered ? `${startIndex + index}. ` : "• "}
+          <View
+            key={`${listKey}-${index}`}
+            style={{ flexDirection: "row", alignItems: "flex-start" }}
+          >
+            <RNText
+              style={[
+                textStyle,
+                {
+                  width: markerSlot,
+                  textAlign: ordered ? "right" : "left",
+                  paddingRight: ordered ? 6 : 8,
+                  // Same color as body; bullet scaled to sit with the first line.
+                  ...(ordered
+                    ? null
+                    : {
+                        fontSize: Math.round(fontSize * 0.55),
+                        lineHeight:
+                          typeof textStyle?.lineHeight === "number"
+                            ? textStyle.lineHeight
+                            : BODY_LINE,
+                      }),
+                },
+              ]}
+            >
+              {ordered ? `${startIndex + index}.` : LIST_BULLET}
+            </RNText>
             {item}
-          </RNText>
+          </View>
         ))}
-      </RNText>
+      </View>
     );
   }
 }
@@ -472,8 +557,8 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
       : null),
   } as const;
 
-  // One renderer + one parse for the full message so selection can span
-  // paragraphs, lists, and code as a single native range.
+  // One parse for the full message. Text blocks share a selectable host;
+  // list Views sit beside them so wraps can hang under the marker.
   const renderer = useMemo(
     () => new MarkdownRenderer(displayText),
     [displayText],
@@ -488,40 +573,45 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ text, status, variant }) => {
     return <View className="aui-md-root" />;
   }
 
-  const document = elements.flatMap((element, index) =>
-    index === 0 ? [element] : ["\n\n", element],
-  );
-
+  // Each block is its own row with BLOCK_GAP — tighter than joining
+  // paragraphs with `\n\n` (a full blank line). List Views stay outside
+  // TextInput so hanging indents keep working.
   // iOS Text.selectable is UILabel (whole-block Copy only). Multiline
   // TextInput uses UITextView so partial selection matches native Notes.
-  if (Platform.OS === "ios") {
-    return (
-      <View className="aui-md-root">
-        <TextInput
-          multiline
-          editable={false}
-          readOnly
-          scrollEnabled={false}
-          selectionColor={SELECTION_COLOR}
-          style={typeStyle}
-          className={fallbackClass}
-        >
-          {document}
-        </TextInput>
-      </View>
-    );
-  }
-
   return (
-    <View className="aui-md-root">
-      <Text
-        selectable
-        selectionColor={SELECTION_COLOR}
-        variant={variant === "muted" ? "body" : "label"}
-        tone={variant === "muted" ? "muted" : "default"}
-      >
-        {document}
-      </Text>
+    <View className="aui-md-root" style={{ gap: BLOCK_GAP }}>
+      {elements.map((element, index) => {
+        if (isViewHost(element)) {
+          return <Fragment key={`md-v-${index}`}>{element}</Fragment>;
+        }
+        if (Platform.OS === "ios") {
+          return (
+            <TextInput
+              key={`md-t-${index}`}
+              multiline
+              editable={false}
+              readOnly
+              scrollEnabled={false}
+              selectionColor={SELECTION_COLOR}
+              style={typeStyle}
+              className={fallbackClass}
+            >
+              {element}
+            </TextInput>
+          );
+        }
+        return (
+          <Text
+            key={`md-t-${index}`}
+            selectable
+            selectionColor={SELECTION_COLOR}
+            variant={variant === "muted" ? "body" : "label"}
+            tone={variant === "muted" ? "muted" : "default"}
+          >
+            {element}
+          </Text>
+        );
+      })}
     </View>
   );
 };
