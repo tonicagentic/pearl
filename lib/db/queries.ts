@@ -13,7 +13,10 @@ import type {
   ChatListPage,
   ChatSearchHit,
 } from "@/lib/chat/types";
-import type { SpokenTurn } from "@/lib/chat/spoken-turns";
+import {
+  spokenTurnsFromRow,
+  type SpokenTurn,
+} from "@/lib/chat/spoken-turns";
 import { createFallbackTitle, DEFAULT_CHAT_TITLE } from "@/lib/chat/title";
 import {
   chat,
@@ -343,8 +346,13 @@ export async function saveSpokenTurnsForUser({
 }
 
 /**
- * Atomically read and clear spoken turns for a chat the caller owns.
+ * Read and clear spoken turns for a chat the caller owns.
  * Used by the eve channel to import history on the next real send.
+ *
+ * No transaction: the neon-http driver (production) does not support them
+ * ("No transactions support in neon-http driver"). Select then clear as
+ * sequential statements — overlapping sends are already blocked client-side,
+ * and a failure between the two leaves turns for the next send to import.
  */
 export async function takeSpokenTurnsForUser({
   chatId,
@@ -353,23 +361,21 @@ export async function takeSpokenTurnsForUser({
   readonly chatId: string;
   readonly userId: string;
 }): Promise<SpokenTurn[]> {
-  return db.transaction(async (tx) => {
-    const [row] = await tx
-      .select({ spokenTurns: chat.spokenTurns })
-      .from(chat)
-      .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
-      .limit(1);
+  const [row] = await db
+    .select({ spokenTurns: chat.spokenTurns })
+    .from(chat)
+    .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
+    .limit(1);
 
-    const turns = Array.isArray(row?.spokenTurns) ? row.spokenTurns : [];
-    if (turns.length === 0) return [];
+  const turns = spokenTurnsFromRow(row);
+  if (turns.length === 0) return [];
 
-    await tx
-      .update(chat)
-      .set({ spokenTurns: [], updatedAt: new Date() })
-      .where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
+  await db
+    .update(chat)
+    .set({ spokenTurns: [], updatedAt: new Date() })
+    .where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
 
-    return turns;
-  });
+  return turns;
 }
 
 /**

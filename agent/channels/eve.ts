@@ -27,26 +27,36 @@ export default eveChannel({
       return { auth };
     }
 
-    const chatId = await resolveChatIdForSpokenTurns({
-      chatId: chatIdFromClientContext(ctx.eve.clientContext),
-      sessionId: ctx.eve.sessionId,
-      userId: auth.principalId,
-    });
-    if (!chatId) {
+    // Spoken-turn import must never fail the user's send. A DB/driver error
+    // here previously surfaced as a false "delivery not confirmed" on mobile.
+    try {
+      const chatId = await resolveChatIdForSpokenTurns({
+        chatId: chatIdFromClientContext(ctx.eve.clientContext),
+        sessionId: ctx.eve.sessionId,
+        userId: auth.principalId,
+      });
+      if (!chatId) {
+        return { auth };
+      }
+
+      const turns = await takeSpokenTurnsForUser({
+        chatId,
+        userId: auth.principalId,
+      });
+      if (turns.length === 0) {
+        return { auth };
+      }
+
+      return {
+        auth,
+        history: spokenTurnsAsHistory(turns),
+      };
+    } catch (error) {
+      console.error("[eve.channel] spoken-turn import failed; continuing send", {
+        sessionId: ctx.eve.sessionId,
+        error: error instanceof Error ? error.message : error,
+      });
       return { auth };
     }
-
-    const turns = await takeSpokenTurnsForUser({
-      chatId,
-      userId: auth.principalId,
-    });
-    if (turns.length === 0) {
-      return { auth };
-    }
-
-    return {
-      auth,
-      history: spokenTurnsAsHistory(turns),
-    };
   },
 });

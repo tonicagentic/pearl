@@ -45,3 +45,10 @@ export function spokenTurnsAsHistory(
     text: turn.text,
   }));
 }
+
+/** Normalize a chat row's spokenTurns jsonb into a typed list. */
+export function spokenTurnsFromRow(
+  row: { readonly spokenTurns: unknown } | undefined,
+): SpokenTurn[] {
+  return Array.isArray(row?.spokenTurns) ? (row.spokenTurns as SpokenTurn[]) : [];
+}
