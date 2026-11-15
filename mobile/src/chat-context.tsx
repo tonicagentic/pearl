@@ -98,6 +98,12 @@ type ChatsContextValue = {
   /** Whether the durable pending marker completed before this store's send. */
   readonly wasSendPrepared: (source: SessionStore) => boolean;
   /**
+   * Drop the in-memory pending marker once send() returns a deliveryId (before
+   * delivery.consumed). Matches the delivery.consumed clear so a follow-up
+   * send is not blocked by a stale pendingMessage.
+   */
+  readonly clearPendingMessage: (source: SessionStore) => void;
+  /**
    * Archive Pearl events and call `newSession()` once when the eve session is
    * inactive. Returns false if recovery was already attempted for this store.
    */
@@ -798,6 +804,16 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     [bindings],
   );
 
+  const clearPendingMessage = useCallback(
+    (source: SessionStore) => {
+      const binding = bindings.get(source);
+      if (!binding) return;
+      binding.pendingMessage = null;
+      if (activeStoreRef.current === source) setPendingMessage(null);
+    },
+    [bindings],
+  );
+
   const recoverDeadSession = useCallback(
     (source: SessionStore) => {
       const binding = bindings.get(source);
@@ -956,6 +972,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       pendingMessage,
       retrySync,
       wasSendPrepared,
+      clearPendingMessage,
       recoverDeadSession,
       newChat,
       deleteChat,
@@ -983,6 +1000,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       pendingMessage,
       retrySync,
       wasSendPrepared,
+      clearPendingMessage,
       recoverDeadSession,
       newChat,
       deleteChat,

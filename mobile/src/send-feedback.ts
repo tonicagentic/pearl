@@ -44,9 +44,10 @@ export function shouldRestoreUnsentDraft(
 }
 
 /**
- * Only delivery.consumed proves eve accepted the turn (stream v27). An
- * optimistic row or a resolved Delivery from send() also counts when the
- * caller already holds a deliveryId.
+ * Only delivery.consumed proves eve accepted the turn (stream v27) for an
+ * in-flight localSend. Callers that already hold a deliveryId from send()
+ * should clear the durable pending marker (and localSend) so the follow-up
+ * gate does not treat that marker as still unresolved.
  */
 export function hasConfirmedSend(
   events: readonly { readonly type: string }[],
@@ -57,7 +58,11 @@ export function hasConfirmedSend(
     .some((event) => event.type === "delivery.consumed");
 }
 
-/** Do not replace an unconfirmed turn's recovery state with a later send. */
+/**
+ * Do not replace an unconfirmed turn's recovery state with a later send.
+ * When localSend was cleared on deliveryId, pendingMessage must be cleared
+ * too — otherwise this still returns true until delivery.consumed.
+ */
 export function hasUnresolvedSend(
   events: readonly { readonly type: string }[],
   localSend: LocalSend | null,

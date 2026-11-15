@@ -51,6 +51,15 @@ test("unresolved turns cannot be overwritten before confirmation", () => {
   assert.equal(hasUnresolvedSend([], null, null), false);
 });
 
+test("clearing pending after deliveryId accept unblocks the next send", () => {
+  // send() resolved with deliveryId: localSend is dropped, but the durable
+  // prepareSend marker can linger until delivery.consumed. That window used
+  // to block follow-ups via hasUnresolvedSend(..., null, pendingMessage).
+  assert.equal(hasUnresolvedSend([], null, "first"), true);
+  // clearPendingMessage (or delivery.consumed) nulls the marker:
+  assert.equal(hasUnresolvedSend([], null, null), false);
+});
+
 test("a sent photo stays on the bubble instead of the file placeholder", () => {
   const image = "data:image/jpeg;base64,YWJj";
   const attachment = {

@@ -92,6 +92,7 @@ export function ChatScreen({
     pendingMessage,
     deleteChat,
     wasSendPrepared,
+    clearPendingMessage,
     recoverDeadSession,
     spokenTurns,
   } = useChats();
@@ -322,6 +323,9 @@ export function ChatScreen({
     pendingApprovals.every(isTextOnlyPendingQuestion);
   const composerBlocked =
     waitingForAction && !onlyTextQuestionsPending;
+  const unresolvedSend = hasUnresolvedSend(events, localSend, pendingMessage);
+  const sendPreparing =
+    unresolvedSend && localSend?.phase !== "uncertain";
 
   const waitingAction = useMemo((): WaitingAction | null => {
     const questions = composerWaitingQuestions(pendingApprovals);
@@ -475,9 +479,11 @@ export function ChatScreen({
     localSend,
     pendingMessage,
     composerBlocked,
+    unresolvedSend,
     activeChatId,
     activeProjectId,
     wasSendPrepared,
+    clearPendingMessage,
     recoverDeadSession,
     ensureProjectForPlanMode,
     setActiveProjectId,
@@ -488,9 +494,11 @@ export function ChatScreen({
       localSend,
       pendingMessage,
       composerBlocked,
+      unresolvedSend,
       activeChatId,
       activeProjectId,
       wasSendPrepared,
+      clearPendingMessage,
       recoverDeadSession,
       ensureProjectForPlanMode,
       setActiveProjectId,
@@ -506,7 +514,8 @@ export function ChatScreen({
       convertMessage: (message: ThreadMessageLike) => message,
       isRunning: isBusy,
       isDisabled: status === "resuming",
-      isSendDisabled: composerBlocked,
+      // HITL, in-flight prepare, or unconfirmed prior turn — don't invite a throw.
+      isSendDisabled: composerBlocked || unresolvedSend,
       onNew: async (message: AppendMessage) => {
         const ctx = sendCtxRef.current;
         const { store: activeStore } = ctx;
@@ -516,8 +525,11 @@ export function ChatScreen({
             "This chat is waiting for authorization or approval.",
           );
         }
-        if (hasUnresolvedSend(activeStore.snapshot.events, ctx.localSend, ctx.pendingMessage)) {
-          const reason = "Check the previous message in this chat before sending another.";
+        if (ctx.unresolvedSend) {
+          const reason =
+            ctx.localSend?.phase === "uncertain"
+              ? "Couldn't confirm delivery. Your message is still here — resend when you're ready."
+              : "Still sending your last message…";
           setSendError({ store: activeStore, message: reason });
           throw new MessageNotSentError(reason);
         }
@@ -589,6 +601,9 @@ export function ChatScreen({
             return next;
           });
           if (accepted) {
+            // deliveryId can arrive before delivery.consumed; clear pending so
+            // a follow-up is not blocked by the stale prepareSend marker.
+            ctx.clearPendingMessage(activeStore);
             void import("@/src/pending-attachments").then(
               ({ clearPendingAttachments, chatAttachmentKey }) => {
                 clearPendingAttachments(chatAttachmentKey(ctx.activeChatId));
@@ -623,6 +638,7 @@ export function ChatScreen({
                 return next;
               });
               if (accepted) {
+                ctx.clearPendingMessage(activeStore);
                 void import("@/src/pending-attachments").then(
                   ({ clearPendingAttachments, chatAttachmentKey }) => {
                     clearPendingAttachments(chatAttachmentKey(ctx.activeChatId));
@@ -662,7 +678,9 @@ export function ChatScreen({
             else next.set(activeStore, { ...preview, phase: "uncertain" });
             return next;
           });
-          if (!accepted) {
+          if (accepted) {
+            ctx.clearPendingMessage(activeStore);
+          } else {
             setSendError({
               store: activeStore,
               message:
@@ -696,7 +714,7 @@ export function ChatScreen({
       },
     }),
     // Rebuild only when the thread snapshot the runtime compares changes.
-    [projectedMessages, isBusy, status, composerBlocked],
+    [projectedMessages, isBusy, status, composerBlocked, unresolvedSend],
   );
 
   // Carry out (and similar) creates a chat with a durable pending marker but no
@@ -753,7 +771,9 @@ export function ChatScreen({
         else next.set(store, { ...row, phase: "uncertain" });
         return next;
       });
-      if (!accepted) {
+      if (accepted) {
+        clearPendingMessage(store);
+      } else {
         setSendError({
           store,
           message:
@@ -778,7 +798,7 @@ export function ChatScreen({
           "Couldn't reach Pearl. Your message is still here — tap Resend when the connection is back.",
       });
     }
-  }, [store, localSend, activeProjectId, recoverDeadSession]);
+  }, [store, localSend, activeProjectId, recoverDeadSession, clearPendingMessage]);
 
   const runtime = useExternalStoreRuntime(adapter);
   const hasLoadedHistory =
@@ -804,17 +824,19 @@ export function ChatScreen({
           actionLabel: "Resend",
           onAction: () => void resendStoredMessage(),
         }
-      : sendError?.store === store
-        ? { text: sendError.message }
-        : pendingMessage && !localSend && !hasLoadedHistory
-          ? {
-              text: "Couldn't confirm delivery. Open this chat again when you're online.",
-            }
-          : hasError && !localSend
+      : sendPreparing
+        ? { text: "Still sending your last message…" }
+        : sendError?.store === store
+          ? { text: sendError.message }
+          : pendingMessage && !localSend && !hasLoadedHistory
             ? {
-                text: "Connection lost while Pearl was replying. Your last message was saved — send a follow-up when you're ready.",
+                text: "Couldn't confirm delivery. Open this chat again when you're online.",
               }
-            : null;
+            : hasError && !localSend
+              ? {
+                  text: "Connection lost while Pearl was replying. Your last message was saved — send a follow-up when you're ready.",
+                }
+              : null;
 
   const toggleComputer = useCallback(() => {
     setMainTab((current) => (current === "computer" ? "chat" : "computer"));
