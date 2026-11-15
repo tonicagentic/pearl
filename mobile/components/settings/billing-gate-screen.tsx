@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useCSSVariable } from "uniwind";
 
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
@@ -13,18 +11,14 @@ import {
 import { openWebUrlExternally } from "@/src/open-web-url";
 
 /**
- * Shown after sign-in when the account cannot chat yet: Stripe checkout for
- * paying users, or a trial-ended message for allowlisted friend-beta accounts.
+ * Subscribe / trial-ended empty state for the chats surface. Keeps Profile and
+ * other home tabs reachable — it is not a full-app lock screen.
  */
 export function BillingGateScreen({
   onReady,
 }: {
   readonly onReady: () => void;
 }) {
-  const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-
   const [pending, setPending] = useState(false);
   const [polling, setPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,44 +94,42 @@ export function BillingGateScreen({
   };
 
   return (
-    <SafeAreaView style={[StyleSheet.absoluteFill, { backgroundColor }]}>
-      <View style={styles.container}>
-        {trialEnded ? (
-          <>
-            <Text variant="title">Monthly allowance used</Text>
-            <Text variant="body" tone="muted" className="leading-[22px]">
-              {status?.message ??
-                "You used the included $20 of usage for this month. Access opens again next month."}
-            </Text>
-          </>
-        ) : (
-          <>
-            <Text variant="title">Subscribe to Pearl</Text>
-            <Text variant="body" tone="muted" className="leading-[22px]">
-              $10 per month, plus usage. New accounts start with a $50 usage
-              cap you can raise in Settings.
-            </Text>
-            <Button
-              label="Continue to Stripe"
-              loading={pending}
-              loadingLabel="Opening Stripe…"
-              onPress={() => void subscribe()}
-            />
-            {polling ? (
-              <View style={styles.row}>
-                <ActivityIndicator />
-                <Text variant="secondary">Waiting for payment to confirm…</Text>
-              </View>
-            ) : null}
-          </>
-        )}
-        {error ? (
-          <Text variant="secondary" tone="destructive" accessibilityRole="alert">
-            {error}
+    <View style={styles.container}>
+      {trialEnded ? (
+        <>
+          <Text variant="title">Monthly allowance used</Text>
+          <Text variant="body" tone="muted" className="leading-[22px]">
+            {status?.message ??
+              "You used the included $20 of usage for this month. Access opens again next month."}
           </Text>
-        ) : null}
-      </View>
-    </SafeAreaView>
+        </>
+      ) : (
+        <>
+          <Text variant="title">Subscribe to Pearl</Text>
+          <Text variant="body" tone="muted" className="leading-[22px]">
+            $10 per month, plus usage. New accounts start with a $50 usage cap
+            you can raise in Settings.
+          </Text>
+          <Button
+            label="Continue to Stripe"
+            loading={pending}
+            loadingLabel="Opening Stripe…"
+            onPress={() => void subscribe()}
+          />
+          {polling ? (
+            <View style={styles.row}>
+              <ActivityIndicator />
+              <Text variant="secondary">Waiting for payment to confirm…</Text>
+            </View>
+          ) : null}
+        </>
+      )}
+      {error ? (
+        <Text variant="secondary" tone="destructive" accessibilityRole="alert">
+          {error}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 

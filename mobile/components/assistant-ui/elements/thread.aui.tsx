@@ -1368,11 +1368,12 @@ const Composer: FC<{
       keyboardHeight?.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
     );
+    // No overflow:hidden — it clips the SwiftUI Mode/Model popover into a
+    // Mode/Agent fragment over the composer. Fade + width hide the chip instead.
     return {
       opacity: progress,
-      maxWidth: interpolate(progress, [0, 1], [0, COMPOSER_CHIP]),
+      width: interpolate(progress, [0, 1], [0, COMPOSER_CHIP]),
       marginLeft: interpolate(progress, [0, 1], [0, COMPOSER_ROW_GAP]),
-      overflow: "hidden" as const,
     };
   });
 

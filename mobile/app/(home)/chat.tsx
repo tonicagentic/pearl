@@ -10,13 +10,12 @@ export default function ChatRoute() {
   const {
     restoring,
     signedIn,
-    billingReady,
     authHandOff,
     completeAuthHandOff,
   } = useAuth();
 
   if (restoring) return null;
-  if (!signedIn || !billingReady) return <Redirect href="/" />;
+  if (!signedIn) return <Redirect href="/" />;
 
   return (
     <View style={styles.fill}>

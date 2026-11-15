@@ -1,10 +1,11 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { Platform } from "react-native";
+import { Platform, View } from "react-native";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { useCSSVariable } from "uniwind";
 
 import { SubagentRunsProvider } from "@/components/assistant-ui/elements/task-card.aui";
 import { PushNotificationsBridge } from "@/components/push-notifications-bridge";
@@ -44,7 +45,10 @@ export default function RootLayout() {
 }
 
 function AuthenticatedLayout() {
-  const { signedIn, billingReady, viewerEmail } = useAuth();
+  const { signedIn, restoring, viewerEmail } = useAuth();
+  const backgroundColor = useCSSVariable("--color-background") as
+    | string
+    | undefined;
   useEffect(() => {
     configureModelSelectionPersistence(saveModelSelection);
     configureImageModelSelectionPersistence(saveImageModelSelection);
@@ -63,8 +67,9 @@ function AuthenticatedLayout() {
   // Keep at least one Stack.Protected guard true while the session restores
   // (otherwise Expo Router warns that every route is protected).
   const signedOut = !signedIn;
-  const needsBilling = signedIn && !billingReady;
-  const appReady = signedIn && billingReady;
+  // Billing is an empty-state on chats, not a Stack lock — Profile and other
+  // tabs stay reachable while checkout is pending.
+  const appReady = signedIn;
 
   return (
     <ChatsProvider key={accountKey}>
@@ -77,11 +82,33 @@ function AuthenticatedLayout() {
                 enabled={Platform.OS === "ios" && !Platform.isPad}
               >
                 <StatusBar style="auto" />
-                <Stack>
+                {restoring ? (
+                  // Don't mount the navigator until we know the zone — otherwise
+                  // restore paints sign-in then pushes (home), and the nav chrome
+                  // slides in with the default stack animation.
+                  <View style={{ flex: 1, backgroundColor }} />
+                ) : (
+                <Stack
+                  // Remount per auth zone so home is the initial route, not a
+                  // push on top of sign-in (animation: "none" alone is ignored
+                  // for Protected guard swaps on iOS native-stack).
+                  key={signedIn ? "app" : "auth"}
+                  screenOptions={({ route }) =>
+                    route.name === "(home)" || route.name === "sign-in"
+                      ? {
+                          animation: "none",
+                          animationTypeForReplace: "pop",
+                        }
+                      : {}
+                  }
+                >
                   <Stack.Protected guard={signedOut}>
                     <Stack.Screen
                       name="sign-in"
-                      options={{ headerShown: false }}
+                      options={{
+                        headerShown: false,
+                        animation: "none",
+                      }}
                     />
                     <Stack.Screen
                       name="reset-password"
@@ -93,17 +120,14 @@ function AuthenticatedLayout() {
                     />
                   </Stack.Protected>
 
-                  <Stack.Protected guard={needsBilling}>
-                    <Stack.Screen
-                      name="billing"
-                      options={{ headerShown: false }}
-                    />
-                  </Stack.Protected>
-
                   <Stack.Protected guard={appReady}>
                     <Stack.Screen
                       name="(home)"
-                      options={{ headerShown: false }}
+                      options={{
+                        headerShown: false,
+                        animation: "none",
+                        animationTypeForReplace: "pop",
+                      }}
                     />
                     <Stack.Screen
                       name="history"
@@ -224,6 +248,7 @@ function AuthenticatedLayout() {
                     />
                   </Stack.Protected>
                 </Stack>
+                )}
               </KeyboardProvider>
             </SafeAreaProvider>
           </GestureHandlerRootView>

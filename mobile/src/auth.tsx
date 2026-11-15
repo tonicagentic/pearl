@@ -71,6 +71,12 @@ type AuthContextValue = {
     token: string,
     newPassword: string,
   ) => Promise<void>;
+  /**
+   * Whether this email already has an account. Used to route the email-first
+   * gate into “Welcome back” (sign-in) vs create-password (sign-up).
+   * Null when the probe fails — caller should keep the current flow.
+   */
+  readonly checkEmailExists: (email: string) => Promise<boolean | null>;
   readonly completeAuthHandOff: () => void;
   readonly markBillingReady: () => void;
   readonly signOut: () => void;
@@ -269,6 +275,25 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     [commitSession, requestToken],
   );
 
+  const checkEmailExists = useCallback(async (email: string) => {
+    try {
+      const timeout = AbortSignal.timeout(15_000);
+      const response = await fetch(`${AGENT_URL}/api/auth/email-status`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+        signal: timeout,
+      });
+      if (!response.ok) return null;
+      const body = (await response.json().catch(() => null)) as {
+        exists?: unknown;
+      } | null;
+      return typeof body?.exists === "boolean" ? body.exists : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const requestPasswordReset = useCallback(async (email: string) => {
     setSignInState("signing-in");
     setSignInError(null);
@@ -387,6 +412,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       signUp,
       requestPasswordReset,
       resetPassword,
+      checkEmailExists,
       completeAuthHandOff,
       markBillingReady,
       signOut,
@@ -403,6 +429,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       signUp,
       requestPasswordReset,
       resetPassword,
+      checkEmailExists,
       completeAuthHandOff,
       markBillingReady,
       signOut,

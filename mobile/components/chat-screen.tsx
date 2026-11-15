@@ -16,11 +16,13 @@ import { useCSSVariable } from "uniwind";
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
+import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { ComputerPanel } from "@/components/computer-panel";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { Icon } from "@/components/ui/icon";
 import { StackScreen } from "@/components/ui/stack-screen";
+import { useAuth } from "@/src/auth";
 import { getAgentMode } from "@/src/agent-mode";
 import { withPendingAssistant } from "@/src/stream-presentation";
 import { buildTurnClientContext } from "@/src/turn-client-context";
@@ -72,6 +74,7 @@ export function ChatScreen({
     | string
     | undefined;
   const foregroundColor = useCSSVariable("--color-foreground") as string | undefined;
+  const { billingReady, markBillingReady } = useAuth();
   // Match Thread list clearance under the transparent iOS nav.
   const computerTopInset =
     Platform.OS === "ios" ? insets.top + 44 : 0;
@@ -927,53 +930,57 @@ export function ChatScreen({
         </Stack.Toolbar>
       ) : null}
       <View style={{ flex: 1 }}>
-        <ConversationProvider conversation={conversation} waitKind={waitKind}>
-          <SubagentInspectProvider>
-            <AssistantRuntimeProvider runtime={runtime}>
-              <EveAuthorization />
-              {mainTab === "computer" ? (
-                <ComputerPanel
-                  topInset={computerTopInset}
-                  visible={mainTab === "computer"}
-                />
-              ) : (
-                <Thread
-                  autoFocus={
-                    Platform.OS === "ios" &&
-                    activeChatId === null &&
-                    chromeRevealed &&
-                    navSettled
+        {!billingReady ? (
+          <BillingGateScreen onReady={markBillingReady} />
+        ) : (
+          <ConversationProvider conversation={conversation} waitKind={waitKind}>
+            <SubagentInspectProvider>
+              <AssistantRuntimeProvider runtime={runtime}>
+                <EveAuthorization />
+                {mainTab === "computer" ? (
+                  <ComputerPanel
+                    topInset={computerTopInset}
+                    visible={mainTab === "computer"}
+                  />
+                ) : (
+                  <Thread
+                    autoFocus={
+                      Platform.OS === "ios" &&
+                      activeChatId === null &&
+                      chromeRevealed &&
+                      navSettled
+                    }
+                    chromeRevealed={chromeRevealed}
+                    conversationId={activeChatId}
+                    focusNewChatKey={newChatEntry}
+                    notice={notice}
+                    waitingAction={waitingAction}
+                  />
+                )}
+              </AssistantRuntimeProvider>
+              <SubagentInspectHost onAnswer={answerInteraction} />
+              <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
+              <ProjectPickerModal
+                open={projectPickerOpen}
+                onClose={() => {
+                  setProjectPickerOpen(false);
+                  const waiter = projectPickWaiter.current;
+                  projectPickWaiter.current = null;
+                  waiter?.reject(new Error("Project picker closed."));
+                }}
+                onSelect={(project) => {
+                  setActiveProjectId(project.id);
+                  if (activeChatId) {
+                    void setChatProject(activeChatId, project.id).catch(() => {});
                   }
-                  chromeRevealed={chromeRevealed}
-                  conversationId={activeChatId}
-                  focusNewChatKey={newChatEntry}
-                  notice={notice}
-                  waitingAction={waitingAction}
-                />
-              )}
-            </AssistantRuntimeProvider>
-            <SubagentInspectHost onAnswer={answerInteraction} />
-            <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
-            <ProjectPickerModal
-              open={projectPickerOpen}
-              onClose={() => {
-                setProjectPickerOpen(false);
-                const waiter = projectPickWaiter.current;
-                projectPickWaiter.current = null;
-                waiter?.reject(new Error("Project picker closed."));
-              }}
-              onSelect={(project) => {
-                setActiveProjectId(project.id);
-                if (activeChatId) {
-                  void setChatProject(activeChatId, project.id).catch(() => {});
-                }
-                const waiter = projectPickWaiter.current;
-                projectPickWaiter.current = null;
-                waiter?.resolve(project.id);
-              }}
-            />
-          </SubagentInspectProvider>
-        </ConversationProvider>
+                  const waiter = projectPickWaiter.current;
+                  projectPickWaiter.current = null;
+                  waiter?.resolve(project.id);
+                }}
+              />
+            </SubagentInspectProvider>
+          </ConversationProvider>
+        )}
       </View>
     </StackScreen>
   );

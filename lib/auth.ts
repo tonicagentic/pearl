@@ -1,16 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { networkInterfaces } from "node:os";
-import { APIError, betterAuth } from "better-auth";
+import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { bearer } from "better-auth/plugins";
 import { getAppUrlHost, getEffectiveAppUrl } from "@/lib/auth-url";
 import { db } from "@/lib/db/client";
 import { sendPasswordResetEmail } from "@/lib/email/resend";
-import {
-  isSignUpEmailAllowed,
-  SIGNUP_NOT_INVITED_MESSAGE,
-} from "@/lib/trial-allowlist";
 
 /** Dev-only: phone → Mac LAN IP:3000 must be an allowed better-auth host. */
 function localLanAgentHosts(): string[] {
@@ -139,8 +135,6 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
-    // Sign-up is gated by PEARL_TRIAL_ALLOWLIST in databaseHooks below.
-    // scripts/create-user.mjs can still seed accounts (bypass the HTTP path).
     disableSignUp: false,
     // Fire-and-forget so timing attacks cannot infer whether the email exists;
     // Better Auth already runs this via runInBackgroundOrAwait.
@@ -148,21 +142,6 @@ export const auth = betterAuth({
       void sendPasswordResetEmail({ to: user.email, url }).catch((error) => {
         console.error("[auth] failed to send password reset email", error);
       });
-    },
-  },
-  databaseHooks: {
-    user: {
-      create: {
-        async before(user) {
-          const email =
-            typeof user.email === "string" ? user.email : String(user.email ?? "");
-          if (!isSignUpEmailAllowed(email)) {
-            throw new APIError("FORBIDDEN", {
-              message: SIGNUP_NOT_INVITED_MESSAGE,
-            });
-          }
-        },
-      },
     },
   },
   onAPIError: {

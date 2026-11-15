@@ -23,10 +23,12 @@ import {
   ProjectsScreen,
   type ProjectsScreenHandle,
 } from "@/components/home/projects-screen";
+import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
+import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
 
@@ -45,6 +47,7 @@ export function MailHomeScreen() {
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
+  const { billingReady, markBillingReady } = useAuth();
   const {
     newChat,
     deleteChat,
@@ -94,12 +97,17 @@ export function MailHomeScreen() {
   }, []);
 
   const handleNewChat = useCallback(() => {
+    if (!billingReady) {
+      // Stay on chats — the empty state owns checkout.
+      setCategory("chats");
+      return;
+    }
     // Drop any home search keyboard before the push so it cannot hand off
     // into the chat transition.
     dismissKeyboard();
     newChat();
     router.push("/chat");
-  }, [newChat]);
+  }, [billingReady, newChat]);
 
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
@@ -330,12 +338,16 @@ export function MailHomeScreen() {
         accessibilityElementsHidden={searchOpen}
       >
         {category === "chats" ? (
-          <HistoryScreen
-            onOpenChat={openChat}
-            chatActions={chatActions}
-            visible={!searchOpen}
-            bottomInset={LIST_BOTTOM_INSET}
-          />
+          billingReady ? (
+            <HistoryScreen
+              onOpenChat={openChat}
+              chatActions={chatActions}
+              visible={!searchOpen}
+              bottomInset={LIST_BOTTOM_INSET}
+            />
+          ) : (
+            <BillingGateScreen onReady={markBillingReady} />
+          )
         ) : null}
         {category === "tasks" ? (
           <IssuesScreen ref={tasksRef} bottomInset={LIST_BOTTOM_INSET} />

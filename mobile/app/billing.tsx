@@ -1,19 +1,9 @@
-import { Stack } from "expo-router";
-
-import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
-import { useAuth } from "@/src/auth";
+import { Redirect } from "expo-router";
 
 /**
- * Post-auth Stripe gate. Once billing is ready, Stack.Protected
- * reveals the Home tabs.
+ * Legacy full-screen billing route. Checkout now lives on the chats empty
+ * state so signed-in users can still reach Profile and other home tabs.
  */
 export default function BillingRoute() {
-  const { markBillingReady } = useAuth();
-
-  return (
-    <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <BillingGateScreen onReady={markBillingReady} />
-    </>
-  );
+  return <Redirect href="/" />;
 }
