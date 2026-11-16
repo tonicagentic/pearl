@@ -1,13 +1,20 @@
 // Durable session storage: the better-auth bearer credential (and email)
 // live in the device Keychain via expo-secure-store, so a signed-in session
-// survives app restarts. The in-memory mirror in eve-transport stays the
-// request-time source; this module is the disk copy.
+// survives app restarts. The bearer is also mirrored into a shared Keychain
+// access group so Pearl Money can reuse the same session on this device.
+// The in-memory mirror in eve-transport stays the request-time source; this
+// module is the disk copy.
 //
 // Expiry is not tracked locally: a stale credential simply starts failing with
 // 401s, and callers report that through sessionInvalid() so the auth provider
 // clears both disk and memory state.
 
 import * as SecureStore from "expo-secure-store";
+import {
+  clearSharedSessionToken,
+  readSharedSessionToken,
+  writeSharedSessionToken,
+} from "./shared-session-keychain";
 
 const COOKIE_KEY = "pearl.session_cookie";
 const EMAIL_KEY = "pearl.viewer_email";
@@ -20,6 +27,7 @@ export type StoredSession = {
 export async function saveSession(cookie: string, email: string) {
   await SecureStore.setItemAsync(COOKIE_KEY, cookie);
   await SecureStore.setItemAsync(EMAIL_KEY, email);
+  await writeSharedSessionToken(cookie);
 }
 
 export async function loadSession(): Promise<StoredSession | null> {
@@ -28,16 +36,24 @@ export async function loadSession(): Promise<StoredSession | null> {
     SecureStore.getItemAsync(EMAIL_KEY),
   ]);
 
-  if (!cookie) {
+  if (cookie) {
+    return { cookie, email: email ?? "" };
+  }
+
+  // Adopt a session written by Pearl Money (or a prior Pearl install).
+  const shared = await readSharedSessionToken();
+  if (!shared) {
     return null;
   }
 
-  return { cookie, email: email ?? "" };
+  await SecureStore.setItemAsync(COOKIE_KEY, shared);
+  return { cookie: shared, email: email ?? "" };
 }
 
 export async function clearSession() {
   await SecureStore.deleteItemAsync(COOKIE_KEY);
   await SecureStore.deleteItemAsync(EMAIL_KEY);
+  await clearSharedSessionToken();
 }
 
 // 401 handling: API clients call sessionInvalid() when a request that carried

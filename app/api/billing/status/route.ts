@@ -20,7 +20,11 @@ export async function GET() {
       allowed: true,
       exempt: false,
       trial: false,
+      guest: false,
       needsCheckout: false,
+      guestMessageCount: 0,
+      guestMessageLimit: 3,
+      needsSignup: false,
     });
   }
 
@@ -35,11 +39,17 @@ export async function GET() {
     allowed: access.allowed,
     exempt: access.exempt,
     trial: access.trial,
+    guest: access.guest,
     needsCheckout:
       !access.exempt &&
       !access.trial &&
+      !access.guest &&
       !access.allowed &&
       access.reason === "unpaid",
+    needsSignup:
+      access.guest &&
+      !access.allowed &&
+      access.reason === "guest_limit_reached",
     reason: access.reason,
     message: access.reason ? blockMessage(access.reason) : null,
     status: access.status,
@@ -53,6 +63,8 @@ export async function GET() {
             0,
             access.usageCapCents - access.spentCents - access.reservedCents,
           ),
+    guestMessageCount: access.guestMessageCount,
+    guestMessageLimit: access.guestMessageLimit,
     periodStart: access.periodStart?.toISOString() ?? null,
     periodEnd: access.periodEnd?.toISOString() ?? null,
     hasPortal:

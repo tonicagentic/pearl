@@ -1,4 +1,5 @@
 import { useLocalSearchParams, router, Stack } from "expo-router";
+import { ObserveInteractiveMarker } from "@/src/observe";
 import { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -14,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
 import { TextField } from "@/components/ui/text-field";
 import { useAuth } from "@/src/auth";
-import { ObserveInteractiveMarker } from "@/src/observe";
 
 /**
  * In-app password reset when opened with ?token= (deep link or manual).
@@ -117,69 +117,69 @@ export default function ResetPasswordRoute() {
     <>
       <ObserveInteractiveMarker />
       <SafeAreaView style={[StyleSheet.absoluteFill, { backgroundColor }]}>
-        <Stack.Screen options={{ title: "Reset password", headerShown: true }} />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.flex}
-        >
-          <View style={styles.center}>
-            <Text variant="display" className="text-center tracking-tight">
-              Choose a new password
-            </Text>
-            <Text variant="body" tone="muted" className="mb-1 text-center leading-[22px]">
-              Use at least 8 characters.
-            </Text>
-            <View style={styles.fields}>
-              <TextField
-                accessibilityLabel="New password"
-                autoComplete="new-password"
-                editable={!busy}
-                onChangeText={setPassword}
-                placeholder="New password"
-                secureTextEntry
-                textContentType="newPassword"
-                value={password}
-              />
-              <TextField
-                accessibilityLabel="Confirm new password"
-                autoComplete="new-password"
-                editable={!busy}
-                onChangeText={setConfirmPassword}
-                onSubmitEditing={submit}
-                placeholder="Confirm password"
-                secureTextEntry
-                textContentType="newPassword"
-                value={confirmPassword}
-              />
-            </View>
-            <Button
-              disabled={password.length === 0 || confirmPassword.length === 0}
-              label="Update password"
-              loading={busy}
-              loadingLabel="Saving…"
-              onPress={submit}
+      <Stack.Screen options={{ title: "Reset password", headerShown: true }} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.flex}
+      >
+        <View style={styles.center}>
+          <Text variant="display" className="text-center tracking-tight">
+            Choose a new password
+          </Text>
+          <Text variant="body" tone="muted" className="mb-1 text-center leading-[22px]">
+            Use at least 8 characters.
+          </Text>
+          <View style={styles.fields}>
+            <TextField
+              accessibilityLabel="New password"
+              autoComplete="new-password"
+              editable={!busy}
+              onChangeText={setPassword}
+              placeholder="New password"
+              secureTextEntry
+              textContentType="newPassword"
+              value={password}
             />
-            {error ? (
-              <Text
-                accessibilityRole="alert"
-                variant="secondary"
-                tone="destructive"
-                className="text-center"
-              >
-                {error}
-              </Text>
-            ) : null}
-            <Pressable
-              accessibilityRole="button"
-              className="min-h-11 items-center justify-center"
-              disabled={busy}
-              onPress={() => router.replace("/sign-in")}
-            >
-              <Text variant="secondary">Back to sign in</Text>
-            </Pressable>
+            <TextField
+              accessibilityLabel="Confirm new password"
+              autoComplete="new-password"
+              editable={!busy}
+              onChangeText={setConfirmPassword}
+              onSubmitEditing={submit}
+              placeholder="Confirm password"
+              secureTextEntry
+              textContentType="newPassword"
+              value={confirmPassword}
+            />
           </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+          <Button
+            disabled={password.length === 0 || confirmPassword.length === 0}
+            label="Update password"
+            loading={busy}
+            loadingLabel="Saving…"
+            onPress={submit}
+          />
+          {error ? (
+            <Text
+              accessibilityRole="alert"
+              variant="secondary"
+              tone="destructive"
+              className="text-center"
+            >
+              {error}
+            </Text>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            className="min-h-11 items-center justify-center"
+            disabled={busy}
+            onPress={() => router.replace("/sign-in")}
+          >
+            <Text variant="secondary">Back to sign in</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
     </>
   );
 }

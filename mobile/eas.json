@@ -30,12 +30,14 @@
       "autoIncrement": true,
       "channel": "production",
       "node": "24.11.0",
+      "uploadSourceMaps": true,
       "ios": {
         "resourceClass": "m-medium"
       },
       "env": {
-        "EXPO_PUBLIC_AGENT_URL": "https://my-agent-pi-eight.vercel.app",
-        "EXPO_PUBLIC_LOCK_HOSTED": "1"
+        "EXPO_PUBLIC_AGENT_URL": "https://pearl.tonicagentic.com",
+        "EXPO_PUBLIC_LOCK_HOSTED": "1",
+        "EXPO_PUBLIC_APPLE_TEAM_ID": "5829T4LMH6"
       }
     }
   },

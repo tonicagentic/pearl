@@ -9,17 +9,19 @@ import {
   Alert,
   AppState,
   Platform,
-  Pressable,
-  TextInput,
-  View,
 } from "react-native";
 import * as Linking from "expo-linking";
 import { Stack, useFocusEffect } from "expo-router";
 
-import { SheetScaffold } from "@/components/settings/sheet-scaffold";
-import { SettingsCard } from "@/components/ui/settings-card";
-import { Text, textVariants } from "@/components/ui/text";
-import { cn } from "@/lib/utils";
+import {
+  SettingsButton,
+  SettingsField,
+  SettingsForm,
+  SettingsFormText,
+  SettingsLabeledValue,
+  SettingsSection,
+  SettingsSecureField,
+} from "@/components/settings/native";
 import {
   capabilitiesForConnection,
   capabilitiesForPlugin,
@@ -70,7 +72,6 @@ export function CalendarScreen() {
   >(null);
   const [icloudAvailable, setIcloudAvailable] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [userCode, setUserCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,14 +81,12 @@ export function CalendarScreen() {
   const [nickname, setNickname] = useState("");
   const mounted = useRef(true);
   const waitingForReturn = useRef(false);
-  const busy = (loading && !refreshing) || busyId !== null;
+  const busy = loading || busyId !== null;
   const googleCapabilities = capabilitiesForConnection("calendar");
   const icloudCapabilities = capabilitiesForPlugin("icloud-calendar");
 
-  const load = useCallback(async (opts?: { refresh?: boolean }) => {
-    const isRefresh = opts?.refresh === true;
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+  const load = useCallback(async () => {
+    setLoading(true);
     setError(null);
     try {
       const [grants, icloud] = await Promise.all([
@@ -113,10 +112,7 @@ export function CalendarScreen() {
         );
       }
     } finally {
-      if (mounted.current) {
-        setLoading(false);
-        setRefreshing(false);
-      }
+      if (mounted.current) setLoading(false);
     }
   }, []);
 
@@ -189,7 +185,7 @@ export function CalendarScreen() {
     setError(null);
     try {
       await revokeConnection("calendar");
-      await load({ refresh: true });
+      await load();
     } catch (cause) {
       if (mounted.current) {
         setError(
@@ -301,78 +297,72 @@ export function CalendarScreen() {
           headerBackButtonDisplayMode: "minimal",
         }}
       />
-      <SheetScaffold
-        refreshing={refreshing}
-        onRefresh={() => void load({ refresh: true })}
+      <SettingsForm
+        footer={
+          <SettingsFormText tone="secondary">
+            Google Calendar uses Vercel Connect. iCloud Calendar uses CalDAV with
+            an Apple app-specific password stored encrypted in Pearl — never on
+            this device after you save it.
+          </SettingsFormText>
+        }
       >
-        <Text variant="body" className="px-1">
-          Connect Google Calendar and iCloud Calendar so Pearl can read
-          upcoming events and help you plan around your day.
-        </Text>
+        <SettingsFormText>
+          Connect Google Calendar and iCloud Calendar so Pearl can read upcoming
+          events and help you plan around your day.
+        </SettingsFormText>
 
         {error ? (
-          <Text variant="secondary" tone="destructive" className="px-1" accessibilityRole="alert">
-            {error}
-          </Text>
+          <SettingsFormText tone="destructive">{error}</SettingsFormText>
         ) : null}
 
         {loading && googleGrant == null && icloudAccounts == null ? (
           <ActivityIndicator accessibilityLabel="Loading calendars" />
         ) : null}
 
-        <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-          <Text variant="label">
-            Google Calendar
-          </Text>
-          <Text variant="secondary">
-            {googleGrant
-              ? GOOGLE_STATUS[googleGrant.status]
-              : loading
-                ? "Loading…"
-                : "Not connected"}
-            {googleGrant?.accountLabel?.trim()
-              ? ` · ${googleGrant.accountLabel.trim()}`
-              : ""}
-          </Text>
+        <SettingsSection title="Google Calendar">
+          <SettingsLabeledValue
+            label="Status"
+            value={
+              (googleGrant
+                ? GOOGLE_STATUS[googleGrant.status]
+                : loading
+                  ? "Loading…"
+                  : "Not connected") +
+              (googleGrant?.accountLabel?.trim()
+                ? ` · ${googleGrant.accountLabel.trim()}`
+                : "")
+            }
+          />
           {userCode ? (
-            <View className="gap-1">
-              <Text variant="label" weight="semibold" selectable>
-                Code: {userCode}
-              </Text>
-              <Text variant="secondary">
-                Enter this code on the authorization page if prompted.
-              </Text>
-            </View>
+            <SettingsLabeledValue label="Code" value={userCode} />
           ) : null}
-          <View className="flex-row flex-wrap gap-2">
-            {googleConnected ? (
-              <ActionChip
-                disabled={busy}
-                label={busyId === "google" ? "Opening…" : "Update"}
-                onPress={() => void authorizeGoogle()}
-              />
-            ) : googleGrant?.status !== "unavailable" ? (
-              <ActionChip
-                disabled={busy}
-                label={busyId === "google" ? "Connecting…" : "Connect"}
-                onPress={() => void authorizeGoogle()}
-              />
-            ) : null}
-            {googleConnected || googleGrant?.status === "unknown" ? (
-              <ActionChip
-                disabled={busy}
-                label={
-                  busyId === "google-disconnect" ? "Disconnecting…" : "Disconnect"
-                }
-                destructive
-                onPress={confirmDisconnectGoogle}
-              />
-            ) : null}
-          </View>
-        </View>
+          {googleConnected ? (
+            <SettingsButton
+              disabled={busy}
+              label={busyId === "google" ? "Opening…" : "Update"}
+              onPress={() => void authorizeGoogle()}
+            />
+          ) : googleGrant?.status !== "unavailable" ? (
+            <SettingsButton
+              disabled={busy}
+              label={busyId === "google" ? "Connecting…" : "Connect"}
+              onPress={() => void authorizeGoogle()}
+            />
+          ) : null}
+          {googleConnected || googleGrant?.status === "unknown" ? (
+            <SettingsButton
+              destructive
+              disabled={busy}
+              label={
+                busyId === "google-disconnect" ? "Disconnecting…" : "Disconnect"
+              }
+              onPress={confirmDisconnectGoogle}
+            />
+          ) : null}
+        </SettingsSection>
 
         {googleCapabilities ? (
-          <CapabilitiesCard
+          <CapabilitiesSection
             capabilities={googleCapabilities}
             heading={
               googleConnected
@@ -382,115 +372,100 @@ export function CalendarScreen() {
           />
         ) : null}
 
-        <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-          <Text variant="label">
-            iCloud Calendar
-          </Text>
-          <Text variant="secondary">
-            {!icloudAvailable
-              ? "Unavailable on this deployment"
-              : icloudAccounts == null
-                ? "Loading…"
-                : icloudConnected === 0
-                  ? "None connected"
-                  : `${icloudConnected} connected`}
-          </Text>
-
-          {icloudAccounts && icloudAccounts.length > 0 ? (
-            <SettingsCard>
-              {icloudAccounts.map((account, index) => (
-                <View
-                  key={account.id}
-                  className={
-                    index < icloudAccounts.length - 1
-                      ? "border-b border-border px-4 py-3"
-                      : "px-4 py-3"
-                  }
-                >
-                  <Text variant="body" numberOfLines={1}>
-                    {account.nickname?.trim()
-                      ? `${account.nickname.trim()} · ${account.appleId}`
-                      : account.appleId}
-                  </Text>
-                  <Text variant="secondary" className="mt-1">
-                    {account.status === "connected"
-                      ? "Connected"
-                      : account.status === "unavailable"
-                        ? "Unavailable"
-                        : "Unable to verify"}
-                  </Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={busy}
-                    onPress={() => confirmDisconnectIcloud(account)}
-                    className="mt-2 min-h-10 justify-center self-start rounded-[10px] border border-border px-3"
-                  >
-                    <Text variant="secondary" tone="destructive">
-                      {busyId === account.id ? "…" : "Disconnect"}
-                    </Text>
-                  </Pressable>
-                </View>
-              ))}
-            </SettingsCard>
-          ) : null}
+        <SettingsSection title="iCloud Calendar">
+          <SettingsLabeledValue
+            label="Status"
+            value={
+              !icloudAvailable
+                ? "Unavailable on this deployment"
+                : icloudAccounts == null
+                  ? "Loading…"
+                  : icloudConnected === 0
+                    ? "None connected"
+                    : `${icloudConnected} connected`
+            }
+          />
 
           {showIcloudForm ? (
-            <View className="gap-3">
-              <LabeledField
+            <>
+              <SettingsField
                 label="Apple ID"
-                value={appleId}
                 onChangeText={setAppleId}
-                autoCapitalize="none"
-                keyboardType="email-address"
                 placeholder="you@icloud.com"
+                value={appleId}
               />
-              <LabeledField
+              <SettingsSecureField
                 label="App-specific password"
-                value={appSpecificPassword}
                 onChangeText={setAppSpecificPassword}
-                autoCapitalize="none"
-                secureTextEntry
                 placeholder="xxxx-xxxx-xxxx-xxxx"
+                value={appSpecificPassword}
               />
-              <LabeledField
+              <SettingsField
                 label="Nickname (optional)"
-                value={nickname}
                 onChangeText={setNickname}
                 placeholder="Personal"
+                value={nickname}
               />
-              <Text variant="secondary">
+              <SettingsFormText tone="secondary">
                 Create an app-specific password at appleid.apple.com. Pearl
                 encrypts it at rest and never shows it again.
-              </Text>
-              <View className="flex-row flex-wrap gap-2">
-                <ActionChip
-                  disabled={busy || !icloudAvailable}
-                  label={
-                    busyId === "icloud-add" ? "Connecting…" : "Connect iCloud"
-                  }
-                  onPress={() => void connectIcloud()}
-                />
-                <ActionChip
-                  disabled={busy}
-                  label="Cancel"
-                  onPress={() => {
-                    setShowIcloudForm(false);
-                    setAppSpecificPassword("");
-                  }}
-                />
-              </View>
-            </View>
+              </SettingsFormText>
+              <SettingsButton
+                disabled={busy || !icloudAvailable}
+                label={
+                  busyId === "icloud-add" ? "Connecting…" : "Connect iCloud"
+                }
+                onPress={() => void connectIcloud()}
+              />
+              <SettingsButton
+                disabled={busy}
+                label="Cancel"
+                onPress={() => {
+                  setShowIcloudForm(false);
+                  setAppSpecificPassword("");
+                }}
+                variant="plain"
+              />
+            </>
           ) : (
-            <ActionChip
+            <SettingsButton
               disabled={busy || !icloudAvailable}
               label="Add iCloud Calendar"
               onPress={() => setShowIcloudForm(true)}
             />
           )}
-        </View>
+        </SettingsSection>
+
+        {icloudAccounts?.map((account) => (
+          <SettingsSection
+            key={account.id}
+            title={
+              account.nickname?.trim()
+                ? `${account.nickname.trim()} · ${account.appleId}`
+                : account.appleId
+            }
+          >
+            <SettingsLabeledValue
+              label="Status"
+              value={
+                account.status === "connected"
+                  ? "Connected"
+                  : account.status === "unavailable"
+                    ? "Unavailable"
+                    : "Unable to verify"
+              }
+            />
+            <SettingsButton
+              destructive
+              disabled={busy}
+              label={busyId === account.id ? "…" : "Disconnect"}
+              onPress={() => confirmDisconnectIcloud(account)}
+            />
+          </SettingsSection>
+        ))}
 
         {icloudCapabilities ? (
-          <CapabilitiesCard
+          <CapabilitiesSection
             capabilities={icloudCapabilities}
             heading={
               icloudConnected > 0
@@ -499,18 +474,12 @@ export function CalendarScreen() {
             }
           />
         ) : null}
-
-        <Text variant="secondary" className="px-1">
-          Google Calendar uses Vercel Connect. iCloud Calendar uses CalDAV with
-          an Apple app-specific password stored encrypted in Pearl — never on
-          this device after you save it.
-        </Text>
-      </SheetScaffold>
+      </SettingsForm>
     </>
   );
 }
 
-function CapabilitiesCard({
+function CapabilitiesSection({
   capabilities,
   heading,
 }: {
@@ -518,104 +487,22 @@ function CapabilitiesCard({
   readonly heading: string;
 }) {
   return (
-    <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-      <Text variant="label">{heading}</Text>
-      <BulletList items={capabilities.canDo} />
-      {capabilities.needsApproval.length > 0 ? (
-        <View className="gap-2 pt-1">
-          <Text variant="body" weight="medium">
-            Needs your approval
-          </Text>
-          <BulletList items={capabilities.needsApproval} />
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function BulletList({ items }: { readonly items: readonly string[] }) {
-  return (
-    <View className="gap-2">
-      {items.map((item) => (
-        <View key={item} className="flex-row gap-2">
-          <Text variant="body" tone="muted">
-            •
-          </Text>
-          <Text variant="body" tone="muted" className="min-w-0 flex-1">
-            {item}
-          </Text>
-        </View>
+    <SettingsSection title={heading}>
+      {capabilities.canDo.map((item) => (
+        <SettingsFormText key={item} tone="secondary">
+          {`• ${item}`}
+        </SettingsFormText>
       ))}
-    </View>
-  );
-}
-
-function ActionChip({
-  label,
-  onPress,
-  disabled,
-  destructive,
-}: {
-  readonly label: string;
-  readonly onPress: () => void;
-  readonly disabled?: boolean;
-  readonly destructive?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={disabled}
-      onPress={onPress}
-      className={`min-h-11 justify-center rounded-[10px] px-4 ${
-        destructive ? "border border-border" : "bg-muted"
-      } ${disabled ? "opacity-50" : ""}`}
-    >
-      <Text
-        variant="body"
-        tone={destructive ? "destructive" : "default"}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function LabeledField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  secureTextEntry,
-  autoCapitalize,
-  keyboardType,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly onChangeText: (value: string) => void;
-  readonly placeholder?: string;
-  readonly secureTextEntry?: boolean;
-  readonly autoCapitalize?: "none" | "sentences" | "words" | "characters";
-  readonly keyboardType?: "default" | "email-address";
-}) {
-  return (
-    <View className="gap-1">
-      <Text variant="secondary" tone="default" weight="medium">
-        {label}
-      </Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor="#9ca3af"
-        secureTextEntry={secureTextEntry}
-        autoCapitalize={autoCapitalize}
-        autoCorrect={false}
-        keyboardType={keyboardType}
-        className={cn(
-          textVariants({ variant: "body" }),
-          "min-h-11 rounded-[10px] border border-border bg-background px-3",
-        )}
-      />
-    </View>
+      {capabilities.needsApproval.length > 0 ? (
+        <>
+          <SettingsFormText>Needs your approval</SettingsFormText>
+          {capabilities.needsApproval.map((item) => (
+            <SettingsFormText key={item} tone="secondary">
+              {`• ${item}`}
+            </SettingsFormText>
+          ))}
+        </>
+      ) : null}
+    </SettingsSection>
   );
 }

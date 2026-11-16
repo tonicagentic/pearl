@@ -3,25 +3,25 @@ import {
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
 } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
-  ScrollView,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
-import { SheetScaffold } from "@/components/settings/sheet-scaffold";
-import { Text, textVariants } from "@/components/ui/text";
-import { TextField } from "@/components/ui/text-field";
-import { cn } from "@/lib/utils";
+import {
+  SettingsButton,
+  SettingsField,
+  SettingsForm,
+  SettingsFormText,
+  SettingsLabeledValue,
+  SettingsPicker,
+  SettingsSection,
+} from "@/components/settings/native";
 import {
   createSkillRequest,
   deleteSkillRequest,
@@ -188,114 +188,86 @@ export function SkillsScreen() {
 
   return (
     <>
-    <SheetScaffold>
-        {error ? (
-          <Text variant="secondary" tone="destructive" className="px-1" accessibilityRole="alert">
-            {error}
-          </Text>
-        ) : null}
-
-        <View className="gap-1.5">
-          <View className="flex-row items-center justify-between px-1">
-            <Text variant="secondary" className="uppercase tracking-[0.04em]">
-              Your skills
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="New skill"
-              disabled={busy}
-              className="min-h-10 justify-center rounded-xl px-3 active:bg-muted/60"
-              onPress={() => {
-                setError(null);
-                setEditor({ kind: "create" });
-              }}
-            >
-              <Text variant="body" weight="medium">New</Text>
-            </Pressable>
-          </View>
-
-          {skills === null ? (
-            <ActivityIndicator accessibilityLabel="Loading skills" />
-          ) : sorted.length === 0 ? (
-            <View className="rounded-[10px] bg-card px-4 py-4">
-              <Text variant="secondary">
-                No custom skills yet. Create one, or install a published skill
-                below.
-              </Text>
-            </View>
-          ) : (
-            <View className="overflow-hidden rounded-[10px] bg-card">
-              {sorted.map((skill, index) => (
-                <View
-                  key={skill.id}
-                  className={`gap-3 px-4 py-3 ${index > 0 ? "border-t border-border/40" : ""}`}
-                >
-                  <View className="gap-1">
-                    <View className="flex-row flex-wrap items-center gap-2">
-                      <Text variant="body" weight="medium">
-                        {skill.title}
-                      </Text>
-                      <Text variant="caption" className="rounded-md bg-muted px-1.5 py-0.5 font-mono">
-                        {skill.slug}
-                      </Text>
-                      {skill.source === "registry" ? (
-                        <Text variant="caption" className="rounded-full bg-muted px-2 py-0.5">
-                          published
-                        </Text>
-                      ) : null}
-                      {!skill.enabled ? (
-                        <Text variant="caption" className="rounded-full bg-muted px-2 py-0.5">
-                          disabled
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Text variant="secondary" numberOfLines={2}>
-                      {skill.description}
-                    </Text>
-                    {skill.registryName ? (
-                      <Text variant="caption" numberOfLines={1}>
-                        {skill.registryName}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <View className="flex-row flex-wrap gap-2">
-                    <ActionChip
-                      disabled={busy}
-                      label={skill.enabled ? "Disable" : "Enable"}
-                      onPress={() => void toggleEnabled(skill)}
-                    />
-                    <ActionChip
-                      disabled={busy}
-                      label="Edit"
-                      onPress={() => {
-                        setError(null);
-                        setEditor({ kind: "edit", skill });
-                      }}
-                    />
-                    <ActionChip
-                      disabled={busy}
-                      destructive
-                      label="Delete"
-                      onPress={() => confirmDelete(skill)}
-                    />
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-
-          <Pressable
-            accessibilityRole="button"
-            className="min-h-11 justify-center px-1"
-            onPress={() => void reload()}
-          >
-            <Text variant="secondary">Refresh</Text>
-          </Pressable>
-          <Text variant="secondary" className="px-1">
+      <SettingsForm
+        footer={
+          <SettingsFormText tone="secondary">
             Description is the routing hint Pearl sees every turn. Saves apply
             on the next message.
-          </Text>
-        </View>
+          </SettingsFormText>
+        }
+      >
+        {error ? (
+          <SettingsFormText tone="destructive">{error}</SettingsFormText>
+        ) : null}
+
+        <SettingsSection title="Your skills">
+          <SettingsButton
+            disabled={busy}
+            label="New skill"
+            onPress={() => {
+              setError(null);
+              setEditor({ kind: "create" });
+            }}
+          />
+          <SettingsButton
+            disabled={busy}
+            label="Refresh"
+            onPress={() => void reload()}
+            variant="plain"
+          />
+        </SettingsSection>
+
+        {skills === null ? (
+          <ActivityIndicator accessibilityLabel="Loading skills" />
+        ) : sorted.length === 0 ? (
+          <SettingsFormText tone="secondary">
+            No custom skills yet. Create one, or install a published skill
+            below.
+          </SettingsFormText>
+        ) : (
+          sorted.map((skill) => (
+            <SettingsSection
+              key={skill.id}
+              title={skill.title}
+              footer={
+                <SettingsFormText tone="secondary">
+                  {[
+                    skill.slug,
+                    skill.source === "registry" ? "published" : null,
+                    !skill.enabled ? "disabled" : null,
+                    skill.registryName,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </SettingsFormText>
+              }
+            >
+              <SettingsLabeledValue
+                label="Description"
+                value={skill.description || "—"}
+              />
+              <SettingsButton
+                disabled={busy}
+                label={skill.enabled ? "Disable" : "Enable"}
+                onPress={() => void toggleEnabled(skill)}
+              />
+              <SettingsButton
+                disabled={busy}
+                label="Edit"
+                onPress={() => {
+                  setError(null);
+                  setEditor({ kind: "edit", skill });
+                }}
+              />
+              <SettingsButton
+                destructive
+                disabled={busy}
+                label="Delete"
+                onPress={() => confirmDelete(skill)}
+              />
+            </SettingsSection>
+          ))
+        )}
 
         <PublishedSkillsSection
           busy={busy}
@@ -303,7 +275,7 @@ export function SkillsScreen() {
           onError={setError}
           onInstalled={upsertLocal}
         />
-    </SheetScaffold>
+      </SettingsForm>
 
       <SkillEditorModal
         busy={busy}
@@ -312,35 +284,6 @@ export function SkillsScreen() {
         onSave={(input) => void saveEditor(input)}
       />
     </>
-  );
-}
-
-function ActionChip({
-  label,
-  onPress,
-  disabled,
-  destructive,
-}: {
-  readonly label: string;
-  readonly onPress: () => void;
-  readonly disabled?: boolean;
-  readonly destructive?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={disabled}
-      className="min-h-10 justify-center rounded-xl border border-border/60 px-3 active:bg-muted/60"
-      onPress={onPress}
-    >
-      <Text
-        variant="secondary"
-        weight="medium"
-        tone={destructive ? "destructive" : "default"}
-      >
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -389,146 +332,71 @@ function SkillEditorModal({
       visible={open}
       onRequestClose={onCancel}
     >
-      <SafeAreaView style={{ flex: 1, backgroundColor }} edges={["top", "bottom"]}>
-        <KeyboardAvoidingView
-          className="flex-1"
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <View className="flex-row items-center justify-between border-b border-border/60 px-4 py-3">
-            <Pressable
-              accessibilityRole="button"
-              className="min-h-11 justify-center px-1"
+      <View style={{ flex: 1, backgroundColor }}>
+        <SettingsForm>
+          <SettingsSection title={skill ? "Edit skill" : "New skill"}>
+            <SettingsField
+              label="Title"
+              onChangeText={(next) => {
+                setTitle(next);
+                if (!slugTouched) setSlug(slugFromTitle(next));
+              }}
+              value={title}
+            />
+            <SettingsField
+              label="Slug"
+              onChangeText={(next) => {
+                setSlugTouched(true);
+                setSlug(next);
+              }}
+              value={slug}
+            />
+            <SettingsField
+              label="Description"
+              multiline
+              onChangeText={setDescription}
+              placeholder={`Routing hint (max ${String(MAX_DESCRIPTION)})`}
+              value={description}
+            />
+            <SettingsField
+              label="Body"
+              multiline
+              onChangeText={setMarkdown}
+              placeholder="Loaded only when Pearl activates the skill."
+              value={markdown}
+            />
+            <SettingsPicker
+              label="Enabled"
+              onSelectionChange={(value) => setEnabled(value === "Yes")}
+              options={["Yes", "No"]}
+              selection={enabled ? "Yes" : "No"}
+            />
+            {skill?.source === "registry" &&
+            Object.keys(skill.files ?? {}).length > 0 ? (
+              <SettingsFormText tone="secondary">
+                {`Package files (${Object.keys(skill.files).length}): ${Object.keys(skill.files).sort().join(", ")}`}
+              </SettingsFormText>
+            ) : null}
+          </SettingsSection>
+
+          <SettingsSection>
+            <SettingsButton
               disabled={busy}
-              onPress={onCancel}
-            >
-              <Text variant="body" tone="muted">Cancel</Text>
-            </Pressable>
-            <Text variant="body" weight="medium">
-              {skill ? "Edit skill" : "New skill"}
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              className="min-h-11 justify-center px-1"
-              disabled={busy}
+              label={busy ? "Saving…" : "Save"}
               onPress={() =>
                 onSave({ title, slug, description, markdown, enabled })
               }
-            >
-              <Text variant="body" weight="semibold">
-                {busy ? "Saving…" : "Save"}
-              </Text>
-            </Pressable>
-          </View>
-
-          <ScrollView
-            className="flex-1"
-            contentContainerClassName="gap-4 px-5 py-5"
-            keyboardShouldPersistTaps="handled"
-          >
-            <FieldLabel label="Title">
-              <TextField
-                editable={!busy}
-                onChangeText={(next) => {
-                  setTitle(next);
-                  if (!slugTouched) setSlug(slugFromTitle(next));
-                }}
-                value={title}
-              />
-            </FieldLabel>
-            <FieldLabel label="Slug">
-              <TextField
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!busy}
-                onChangeText={(next) => {
-                  setSlugTouched(true);
-                  setSlug(next);
-                }}
-                value={slug}
-              />
-            </FieldLabel>
-            <FieldLabel
-              label="Description"
-              hint={`Routing hint Pearl sees every turn (max ${String(MAX_DESCRIPTION)} characters).`}
-            >
-              <TextField
-                editable={!busy}
-                multiline
-                maxLength={MAX_DESCRIPTION}
-                onChangeText={setDescription}
-                style={{ minHeight: 88, paddingTop: 14, paddingBottom: 14 }}
-                textAlignVertical="top"
-                value={description}
-              />
-            </FieldLabel>
-            <FieldLabel
-              label="Body"
-              hint="Loaded only when Pearl activates the skill."
-            >
-              <TextField
-                editable={!busy}
-                multiline
-                onChangeText={setMarkdown}
-                className={cn(textVariants({ variant: "caption" }))}
-                style={{
-                  minHeight: 200,
-                  paddingTop: 14,
-                  paddingBottom: 14,
-                  fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-                }}
-                textAlignVertical="top"
-                value={markdown}
-              />
-            </FieldLabel>
-            <Pressable
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: enabled }}
-              className="min-h-12 flex-row items-center gap-3"
+            />
+            <SettingsButton
               disabled={busy}
-              onPress={() => setEnabled((current) => !current)}
-            >
-              <View
-                className={`size-5 items-center justify-center rounded border ${enabled ? "border-foreground bg-foreground" : "border-border bg-card"}`}
-              >
-                {enabled ? (
-                  <Text variant="caption" className="font-bold text-background">✓</Text>
-                ) : null}
-              </View>
-              <Text variant="body">Enabled</Text>
-            </Pressable>
-            {skill?.source === "registry" &&
-            Object.keys(skill.files ?? {}).length > 0 ? (
-              <Text variant="caption">
-                Package files ({Object.keys(skill.files).length}):{" "}
-                {Object.keys(skill.files).sort().join(", ")}
-              </Text>
-            ) : null}
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+              label="Cancel"
+              onPress={onCancel}
+              variant="plain"
+            />
+          </SettingsSection>
+        </SettingsForm>
+      </View>
     </Modal>
-  );
-}
-
-function FieldLabel({
-  label,
-  hint,
-  children,
-}: {
-  readonly label: string;
-  readonly hint?: string;
-  readonly children: ReactNode;
-}) {
-  return (
-    <View className="gap-2">
-      <Text variant="caption" weight="semibold" className="uppercase tracking-wider">
-        {label}
-      </Text>
-      {hint ? (
-        <Text variant="caption">{hint}</Text>
-      ) : null}
-      {children}
-    </View>
   );
 }
 
@@ -566,126 +434,101 @@ function PublishedSkillsSection({
   };
 
   return (
-    <View className="gap-3">
-      <View className="gap-1 px-1">
-        <Text variant="caption" weight="semibold" className="uppercase tracking-wider">
-          Add a published skill
-        </Text>
-        <Text variant="secondary">
-          Search skills.sh (including Vercel’s agent skills), preview, then
-          install a copy for your account.
-        </Text>
-      </View>
-
-      <View className="flex-row gap-2">
-        <View className="flex-1">
-          <TextField
-            editable={!searching && !busy}
-            onChangeText={setQuery}
-            onSubmitEditing={() => void runSearch()}
-            placeholder="Search skills.sh…"
-            returnKeyType="search"
-            value={query}
-          />
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          className="min-h-[52px] justify-center rounded-2xl border border-border/60 bg-card px-4 active:bg-muted/60"
+    <>
+      <SettingsSection
+        title="Add a published skill"
+        footer={
+          <SettingsFormText tone="secondary">
+            Search skills.sh (including Vercel’s agent skills), preview, then
+            install a copy for your account.
+          </SettingsFormText>
+        }
+      >
+        <SettingsField
+          label="Search"
+          onChangeText={setQuery}
+          placeholder="Search skills.sh…"
+          value={query}
+        />
+        <SettingsButton
           disabled={searching || busy}
+          label={searching ? "Searching…" : "Search"}
           onPress={() => void runSearch()}
-        >
-          <Text variant="body" weight="medium">
-            {searching ? "…" : "Search"}
-          </Text>
-        </Pressable>
-      </View>
+        />
+      </SettingsSection>
 
-      {results.length > 0 ? (
-        <View className="overflow-hidden rounded-2xl border border-border/60 bg-card">
-          {results.map((item, index) => {
-            const active = preview?.registryName === item.name;
-            return (
-              <View
-                key={item.name}
-                className={`gap-2 px-4 py-3 ${index > 0 ? "border-t border-border/40" : ""} ${active ? "bg-muted/40" : ""}`}
-              >
-                <Text variant="body" weight="medium">
-                  {item.title}
-                </Text>
-                <Text variant="secondary" numberOfLines={2}>
-                  {item.description || "No description."}
-                </Text>
-                <Text variant="caption" numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <ActionChip
-                  disabled={busy || previewing === item.name}
-                  label={previewing === item.name ? "Loading…" : "Preview"}
-                  onPress={() => {
-                    onError(null);
-                    setPreviewing(item.name);
-                    void previewPublishedSkillRequest(item.name)
-                      .then((pkg) => setPreview(pkg))
-                      .catch((cause: unknown) => {
-                        onError(
-                          cause instanceof Error
-                            ? cause.message
-                            : "Could not preview skill.",
-                        );
-                      })
-                      .finally(() => setPreviewing(null));
-                  }}
-                />
-              </View>
-            );
-          })}
-        </View>
-      ) : null}
+      {results.map((item) => {
+        const active = preview?.registryName === item.name;
+        return (
+          <SettingsSection
+            key={item.name}
+            title={item.title}
+            footer={
+              <SettingsFormText tone="secondary">
+                {[item.description || "No description.", item.name]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </SettingsFormText>
+            }
+          >
+            <SettingsButton
+              disabled={busy || previewing === item.name}
+              label={
+                previewing === item.name
+                  ? "Loading…"
+                  : active
+                    ? "Selected"
+                    : "Preview"
+              }
+              onPress={() => {
+                onError(null);
+                setPreviewing(item.name);
+                void previewPublishedSkillRequest(item.name)
+                  .then((pkg) => setPreview(pkg))
+                  .catch((cause: unknown) => {
+                    onError(
+                      cause instanceof Error
+                        ? cause.message
+                        : "Could not preview skill.",
+                    );
+                  })
+                  .finally(() => setPreviewing(null));
+              }}
+            />
+          </SettingsSection>
+        );
+      })}
 
       {preview ? (
-        <View className="gap-3 rounded-2xl border border-border/60 bg-card px-4 py-4">
-          <View className="flex-row items-start justify-between gap-2">
-            <View className="min-w-0 flex-1 gap-1">
-              <Text variant="body" weight="medium">
-                {preview.title}
-              </Text>
-              <Text variant="secondary">
-                {preview.description}
-              </Text>
-              <Text variant="caption">
-                {preview.registryName}
-                {preview.author ? ` · ${preview.author}` : ""}
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              className="min-h-10 justify-center px-2"
-              disabled={busy}
-              onPress={() => setPreview(null)}
-            >
-              <Text variant="secondary">Close</Text>
-            </Pressable>
-          </View>
-          <View className="gap-1">
-            <Text variant="caption" weight="semibold" className="uppercase tracking-wider">
-              SKILL.md
-            </Text>
-            <Text variant="caption" tone="default" className="rounded-xl bg-muted/40 p-3 font-mono">
-              {preview.markdown.slice(0, 4_000)}
-              {preview.markdown.length > 4_000 ? "\n…" : ""}
-            </Text>
-          </View>
+        <SettingsSection
+          title={preview.title}
+          footer={
+            <SettingsFormText tone="secondary">
+              {[
+                preview.description,
+                preview.registryName,
+                preview.author ? `by ${preview.author}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </SettingsFormText>
+          }
+        >
+          <SettingsLabeledValue
+            label="SKILL.md"
+            value={
+              preview.markdown.slice(0, 4_000) +
+              (preview.markdown.length > 4_000 ? "\n…" : "")
+            }
+          />
           {preview.filePaths.length > 0 ? (
-            <Text variant="caption">
-              Extra files ({preview.filePaths.length}):{" "}
-              {preview.filePaths.slice(0, 12).join(", ")}
-              {preview.filePaths.length > 12 ? "…" : ""}
-            </Text>
+            <SettingsFormText tone="secondary">
+              {`Extra files (${preview.filePaths.length}): ${preview.filePaths.slice(0, 12).join(", ")}${preview.filePaths.length > 12 ? "…" : ""}`}
+            </SettingsFormText>
           ) : null}
-          <Pressable
-            accessibilityRole="button"
-            className="min-h-12 items-center justify-center rounded-2xl border border-border/60 bg-foreground px-4 active:opacity-80"
+          <SettingsButton
             disabled={busy}
+            label={busy ? "Adding…" : "Add to my skills"}
             onPress={() => {
               onError(null);
               onBusy(true);
@@ -703,13 +546,15 @@ function PublishedSkillsSection({
                 })
                 .finally(() => onBusy(false));
             }}
-          >
-            <Text variant="body" weight="medium" className="text-background">
-              {busy ? "Adding…" : "Add to my skills"}
-            </Text>
-          </Pressable>
-        </View>
+          />
+          <SettingsButton
+            disabled={busy}
+            label="Close preview"
+            onPress={() => setPreview(null)}
+            variant="plain"
+          />
+        </SettingsSection>
       ) : null}
-    </View>
+    </>
   );
 }

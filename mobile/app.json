@@ -10,6 +10,15 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tonicagentic.pearl",
+      "associatedDomains": ["webcredentials:pearl.tonicagentic.com"],
+      "entitlements": {
+        "com.apple.developer.associated-domains": [
+          "webcredentials:pearl.tonicagentic.com"
+        ],
+        "keychain-access-groups": [
+          "$(AppIdentifierPrefix)com.tonicagentic.pearl.shared"
+        ]
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "Pearl uses the microphone so you can talk during a live conversation.",
@@ -95,7 +104,7 @@
     },
     "extra": {
       "router": {},
-      "pearlOta": "18",
+      "pearlOta": "20",
       "eas": {
         "projectId": "43ee6005-c5ac-4b8f-b463-5d910681956d"
       }

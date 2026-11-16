@@ -4,7 +4,7 @@ import { PluginDetailScreen } from "@/components/settings/plugin-detail-screen";
 import {
   getPluginById,
   isMarketplacePluginId,
-} from "../../../lib/plugins/catalog";
+} from "../../../../lib/plugins/catalog";
 import { RequireSignedIn } from "@/src/require-signed-in";
 
 /** Plugin detail route; requires auth and a known marketplace plugin id. */

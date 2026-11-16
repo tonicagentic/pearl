@@ -1,16 +1,14 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator } from "react-native";
 
-import { SheetScaffold } from "@/components/settings/sheet-scaffold";
-import { Text } from "@/components/ui/text";
-import { TextField } from "@/components/ui/text-field";
-import { cn } from "@/lib/utils";
+import {
+  SettingsButton,
+  SettingsField,
+  SettingsForm,
+  SettingsFormText,
+  SettingsPicker,
+  SettingsSection,
+} from "@/components/settings/native";
 import {
   BUILD_OPTIONS,
   EYE_COLOR_OPTIONS,
@@ -25,10 +23,8 @@ import {
   parseWeight,
   SKIN_TONE_OPTIONS,
   type HeightParts,
-  type HeightUnit,
   type MeasurementParts,
   type WeightParts,
-  type WeightUnit,
 } from "@/src/profile-physical";
 import {
   fetchProfile,
@@ -211,345 +207,235 @@ export function IdentityScreen() {
       .finally(() => setSaving(false));
   };
 
+  if (form === null) {
+    return <ActivityIndicator accessibilityLabel="Loading identity" />;
+  }
+
+  const eyeOptions = [
+    ...EYE_COLOR_OPTIONS.map((o) => o.label),
+    "Custom",
+  ] as const;
+  const hairOptions = [
+    ...HAIR_COLOR_OPTIONS.map((o) => o.label),
+    "Custom",
+  ] as const;
+  const skinOptions = [
+    ...SKIN_TONE_OPTIONS.map((o) => o.label),
+    "Custom",
+  ] as const;
+
   return (
-    <SheetScaffold
+    <SettingsForm
       footer={
-        <Text variant="secondary" className="px-1">
+        <SettingsFormText tone="secondary">
           Pearl loads these for fit and health context when needed — not every
           turn. Free-form memories stay separate.
-        </Text>
+        </SettingsFormText>
       }
     >
-      {form === null ? (
-        <ActivityIndicator accessibilityLabel="Loading identity" />
-      ) : (
-        <View className="gap-5">
-          {error ? (
-            <Text variant="secondary" tone="destructive" className="px-1" accessibilityRole="alert">
-              {error}
-            </Text>
-          ) : null}
+      {error ? (
+        <SettingsFormText tone="destructive">{error}</SettingsFormText>
+      ) : null}
 
-          <FieldGroup label="About you">
-            <TextRow
-              label="Display name"
-              onChangeText={(value) => setField("displayName", value)}
-              value={form.displayName}
-            />
-            <TextRow
-              label="Birthdate (YYYY-MM-DD)"
-              onChangeText={(value) => setField("birthdate", value)}
-              placeholder="1990-01-15"
-              value={form.birthdate}
-            />
-            <TextRow
-              label="Nationality"
-              last
-              onChangeText={(value) => setField("nationality", value)}
-              value={form.nationality}
-            />
-          </FieldGroup>
-
-          <FieldGroup label="Physical">
-            <HeightRow
-              onChange={(height) => setField("height", height)}
-              value={form.height}
-            />
-            <WeightRow
-              onChange={(weight) => setField("weight", weight)}
-              value={form.weight}
-            />
-            <ChipRow
-              label="Build"
-              onCustomChange={(buildCustom) =>
-                setField("buildCustom", buildCustom)
-              }
-              onSelect={(build) => setField("build", build)}
-              options={[...BUILD_OPTIONS, "Custom"]}
-              selected={form.build}
-              custom={form.buildCustom}
-            />
-            <ChipRow
-              label="Gender"
-              onCustomChange={(genderCustom) =>
-                setField("genderCustom", genderCustom)
-              }
-              onSelect={(gender) => setField("gender", gender)}
-              options={[...GENDER_OPTIONS, "Custom"]}
-              selected={form.gender}
-              custom={form.genderCustom}
-            />
-            <SwatchRow
-              custom={form.eyeCustom}
-              label="Eye color"
-              onCustomChange={(eyeCustom) => setField("eyeCustom", eyeCustom)}
-              onSelect={(eyeColor) => setField("eyeColor", eyeColor)}
-              options={EYE_COLOR_OPTIONS}
-              selected={form.eyeColor}
-            />
-            <SwatchRow
-              custom={form.hairCustom}
-              label="Hair color"
-              onCustomChange={(hairCustom) =>
-                setField("hairCustom", hairCustom)
-              }
-              onSelect={(hairColor) => setField("hairColor", hairColor)}
-              options={HAIR_COLOR_OPTIONS}
-              selected={form.hairColor}
-            />
-            <SwatchRow
-              custom={form.skinCustom}
-              label="Skin tone"
-              onCustomChange={(skinCustom) =>
-                setField("skinCustom", skinCustom)
-              }
-              onSelect={(skinTone) => setField("skinTone", skinTone)}
-              options={SKIN_TONE_OPTIONS}
-              selected={form.skinTone}
-            />
-            <MeasurementsBlock
-              last
-              onChange={(measurements) =>
-                setField("measurements", measurements)
-              }
-              value={form.measurements}
-            />
-          </FieldGroup>
-
-          <FieldGroup label="Health">
-            <MultilineRow
-              label="Health notes"
-              last
-              onChangeText={(value) => setField("healthNotes", value)}
-              placeholder="Conditions, allergies, preferences…"
-              value={form.healthNotes}
-            />
-          </FieldGroup>
-
-          <FieldGroup label="Home">
-            <TextRow
-              label="Primary residence"
-              onChangeText={(value) => setField("primaryResidence", value)}
-              value={form.primaryResidence}
-            />
-            <TextRow
-              label="Additional homes"
-              last
-              onChangeText={(value) => setField("additionalHomes", value)}
-              value={form.additionalHomes}
-            />
-          </FieldGroup>
-
-          <Pressable
-            accessibilityRole="button"
-            className="min-h-11 items-center justify-center overflow-hidden rounded-[10px] bg-card active:opacity-80"
-            disabled={saving}
-            onPress={onSave}
-          >
-            <Text variant="label" weight="semibold">
-              {saving ? "Saving…" : "Save"}
-            </Text>
-          </Pressable>
-
-          {savedHint ? (
-            <Text variant="secondary" className="px-1 text-center">
-              {savedHint}
-            </Text>
-          ) : null}
-        </View>
-      )}
-    </SheetScaffold>
-  );
-}
-
-function FieldGroup({
-  label,
-  children,
-}: {
-  readonly label: string;
-  readonly children: ReactNode;
-}) {
-  return (
-    <View className="gap-1.5">
-      <Text variant="secondary" className="px-1 uppercase tracking-[0.04em]">
-        {label}
-      </Text>
-      <View className="overflow-hidden rounded-[10px] bg-card">{children}</View>
-    </View>
-  );
-}
-
-function TextRow({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  last = false,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly onChangeText: (value: string) => void;
-  readonly placeholder?: string;
-  readonly last?: boolean;
-}) {
-  return (
-    <View className={cn("gap-2 px-4 pt-2.5 pb-3", !last && "border-b border-border")}>
-      <Text variant="secondary">{label}</Text>
-      <TextField
-        autoCapitalize="sentences"
-        autoCorrect
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        style={styles.inlineField}
-        value={value}
-      />
-    </View>
-  );
-}
-
-function MultilineRow({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  last = false,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly onChangeText: (value: string) => void;
-  readonly placeholder?: string;
-  readonly last?: boolean;
-}) {
-  return (
-    <View className={cn("gap-2 px-4 pt-2.5 pb-3", !last && "border-b border-border")}>
-      <Text variant="secondary">{label}</Text>
-      <TextField
-        autoCapitalize="sentences"
-        multiline
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        style={[styles.inlineField, styles.multiline]}
-        value={value}
-      />
-    </View>
-  );
-}
-
-function UnitPills<T extends string>({
-  value,
-  options,
-  onChange,
-}: {
-  readonly value: T;
-  readonly options: readonly { readonly id: T; readonly label: string }[];
-  readonly onChange: (value: T) => void;
-}) {
-  return (
-    <View className="flex-row overflow-hidden rounded-lg border border-border">
-      {options.map((option) => {
-        const active = value === option.id;
-        return (
-          <Pressable
-            key={option.id}
-            className={cn("px-2.5 py-1.5", active && "bg-primary")}
-            onPress={() => onChange(option.id)}
-          >
-            <Text
-              variant="caption"
-              tone={active ? "default" : "muted"}
-              className={active ? "text-primary-foreground" : undefined}
-            >
-              {option.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-function HeightRow({
-  value,
-  onChange,
-}: {
-  readonly value: HeightParts;
-  readonly onChange: (value: HeightParts) => void;
-}) {
-  return (
-    <View className="gap-2 border-b border-border px-4 pt-2.5 pb-3">
-      <View className="flex-row items-center justify-between gap-3">
-        <Text variant="secondary">Height</Text>
-        <UnitPills<HeightUnit>
-          onChange={(unit) => onChange({ ...value, unit })}
-          options={[
-            { id: "imperial", label: "ft / in" },
-            { id: "metric", label: "cm" },
-          ]}
-          value={value.unit}
+      <SettingsSection title="About you">
+        <SettingsField
+          label="Display name"
+          onChangeText={(value) => setField("displayName", value)}
+          value={form.displayName}
         />
-      </View>
-      {value.unit === "imperial" ? (
-        <View className="flex-row gap-2">
-          <TextField
-            keyboardType="number-pad"
-            onChangeText={(feet) => onChange({ ...value, feet })}
-            placeholder="5"
-            style={[styles.inlineField, styles.halfField]}
-            value={value.feet}
+        <SettingsField
+          label="Birthdate"
+          onChangeText={(value) => setField("birthdate", value)}
+          placeholder="1990-01-15"
+          value={form.birthdate}
+        />
+        <SettingsField
+          label="Nationality"
+          onChangeText={(value) => setField("nationality", value)}
+          value={form.nationality}
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Physical">
+        <SettingsPicker
+          label="Height unit"
+          onSelectionChange={(unit) =>
+            setField("height", {
+              ...form.height,
+              unit: unit === "metric" ? "metric" : "imperial",
+            })
+          }
+          options={["imperial", "metric"]}
+          selection={form.height.unit}
+        />
+        {form.height.unit === "imperial" ? (
+          <>
+            <SettingsField
+              label="Feet"
+              onChangeText={(feet) =>
+                setField("height", { ...form.height, feet })
+              }
+              value={form.height.feet}
+            />
+            <SettingsField
+              label="Inches"
+              onChangeText={(inches) =>
+                setField("height", { ...form.height, inches })
+              }
+              value={form.height.inches}
+            />
+          </>
+        ) : (
+          <SettingsField
+            label="Centimeters"
+            onChangeText={(cm) => setField("height", { ...form.height, cm })}
+            value={form.height.cm}
           />
-          <TextField
-            keyboardType="decimal-pad"
-            onChangeText={(inches) => onChange({ ...value, inches })}
-            placeholder="10"
-            style={[styles.inlineField, styles.halfField]}
-            value={value.inches}
-          />
-        </View>
-      ) : (
-        <TextField
-          keyboardType="decimal-pad"
-          onChangeText={(cm) => onChange({ ...value, cm })}
-          placeholder="178"
-          style={styles.inlineField}
-          value={value.cm}
+        )}
+        <SettingsPicker
+          label="Weight unit"
+          onSelectionChange={(unit) =>
+            setField("weight", {
+              ...form.weight,
+              unit: unit === "kg" ? "kg" : "lb",
+            })
+          }
+          options={["lb", "kg"]}
+          selection={form.weight.unit}
         />
-      )}
-    </View>
+        <SettingsField
+          label="Weight"
+          onChangeText={(value) =>
+            setField("weight", { ...form.weight, value })
+          }
+          value={form.weight.value}
+        />
+        <OptionPicker
+          custom={form.buildCustom}
+          label="Build"
+          onCustomChange={(buildCustom) => setField("buildCustom", buildCustom)}
+          onSelect={(build) => setField("build", build)}
+          options={[...BUILD_OPTIONS, "Custom"]}
+          selected={form.build}
+        />
+        <OptionPicker
+          custom={form.genderCustom}
+          label="Gender"
+          onCustomChange={(genderCustom) =>
+            setField("genderCustom", genderCustom)
+          }
+          onSelect={(gender) => setField("gender", gender)}
+          options={[...GENDER_OPTIONS, "Custom"]}
+          selected={form.gender}
+        />
+        <OptionPicker
+          custom={form.eyeCustom}
+          label="Eye color"
+          onCustomChange={(eyeCustom) => setField("eyeCustom", eyeCustom)}
+          onSelect={(eyeColor) => setField("eyeColor", eyeColor)}
+          options={[...eyeOptions]}
+          selected={form.eyeColor}
+        />
+        <OptionPicker
+          custom={form.hairCustom}
+          label="Hair color"
+          onCustomChange={(hairCustom) => setField("hairCustom", hairCustom)}
+          onSelect={(hairColor) => setField("hairColor", hairColor)}
+          options={[...hairOptions]}
+          selected={form.hairColor}
+        />
+        <OptionPicker
+          custom={form.skinCustom}
+          label="Skin tone"
+          onCustomChange={(skinCustom) => setField("skinCustom", skinCustom)}
+          onSelect={(skinTone) => setField("skinTone", skinTone)}
+          options={[...skinOptions]}
+          selected={form.skinTone}
+        />
+        <SettingsField
+          label="Chest"
+          onChangeText={(chest) =>
+            setField("measurements", { ...form.measurements, chest })
+          }
+          value={form.measurements.chest}
+        />
+        <SettingsField
+          label="Waist"
+          onChangeText={(waist) =>
+            setField("measurements", { ...form.measurements, waist })
+          }
+          value={form.measurements.waist}
+        />
+        <SettingsField
+          label="Hips"
+          onChangeText={(hips) =>
+            setField("measurements", { ...form.measurements, hips })
+          }
+          value={form.measurements.hips}
+        />
+        <SettingsField
+          label="Inseam"
+          onChangeText={(inseam) =>
+            setField("measurements", { ...form.measurements, inseam })
+          }
+          value={form.measurements.inseam}
+        />
+        <SettingsField
+          label="Shoe"
+          onChangeText={(shoe) =>
+            setField("measurements", { ...form.measurements, shoe })
+          }
+          value={form.measurements.shoe}
+        />
+        <SettingsField
+          label="Measurement notes"
+          multiline
+          onChangeText={(notes) =>
+            setField("measurements", { ...form.measurements, notes })
+          }
+          value={form.measurements.notes}
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Health">
+        <SettingsField
+          label="Health notes"
+          multiline
+          onChangeText={(value) => setField("healthNotes", value)}
+          placeholder="Conditions, allergies, preferences…"
+          value={form.healthNotes}
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Home">
+        <SettingsField
+          label="Primary residence"
+          onChangeText={(value) => setField("primaryResidence", value)}
+          value={form.primaryResidence}
+        />
+        <SettingsField
+          label="Additional homes"
+          onChangeText={(value) => setField("additionalHomes", value)}
+          value={form.additionalHomes}
+        />
+      </SettingsSection>
+
+      <SettingsSection>
+        <SettingsButton
+          disabled={saving}
+          label={saving ? "Saving…" : "Save"}
+          onPress={onSave}
+        />
+      </SettingsSection>
+
+      {savedHint ? (
+        <SettingsFormText tone="secondary">{savedHint}</SettingsFormText>
+      ) : null}
+    </SettingsForm>
   );
 }
 
-function WeightRow({
-  value,
-  onChange,
-}: {
-  readonly value: WeightParts;
-  readonly onChange: (value: WeightParts) => void;
-}) {
-  return (
-    <View className="gap-2 border-b border-border px-4 pt-2.5 pb-3">
-      <View className="flex-row items-center justify-between gap-3">
-        <Text variant="secondary">Weight</Text>
-        <UnitPills<WeightUnit>
-          onChange={(unit) => onChange({ ...value, unit })}
-          options={[
-            { id: "lb", label: "lb" },
-            { id: "kg", label: "kg" },
-          ]}
-          value={value.unit}
-        />
-      </View>
-      <TextField
-        keyboardType="decimal-pad"
-        onChangeText={(next) => onChange({ ...value, value: next })}
-        placeholder={value.unit === "lb" ? "165" : "75"}
-        style={styles.inlineField}
-        value={value.value}
-      />
-    </View>
-  );
-}
-
-function ChipRow({
+function OptionPicker({
   label,
   options,
   selected,
@@ -564,219 +450,22 @@ function ChipRow({
   readonly custom: string;
   readonly onCustomChange: (value: string) => void;
 }) {
+  const selection = selected || options[0] || "";
   return (
-    <View className="gap-2 border-b border-border px-4 pt-2.5 pb-3">
-      <Text variant="secondary">{label}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View className="flex-row gap-2 py-0.5">
-          {options.map((option) => {
-            const active = selected === option;
-            return (
-              <Pressable
-                key={option}
-                className={cn(
-                  "rounded-full border px-3 py-1.5",
-                  active
-                    ? "border-primary bg-primary"
-                    : "border-border bg-transparent",
-                )}
-                onPress={() => onSelect(active ? "" : option)}
-              >
-                <Text
-                  variant="secondary"
-                  tone={active ? "default" : "muted"}
-                  className={active ? "text-primary-foreground" : undefined}
-                >
-                  {option}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </ScrollView>
-      {selected === "Custom" ? (
-        <TextField
+    <>
+      <SettingsPicker
+        label={label}
+        onSelectionChange={onSelect}
+        options={options}
+        selection={selection}
+      />
+      {selection === "Custom" ? (
+        <SettingsField
+          label={`Custom ${label.toLowerCase()}`}
           onChangeText={onCustomChange}
-          placeholder={`Custom ${label.toLowerCase()}`}
-          style={styles.inlineField}
           value={custom}
         />
       ) : null}
-    </View>
+    </>
   );
 }
-
-function SwatchRow({
-  label,
-  options,
-  selected,
-  onSelect,
-  custom,
-  onCustomChange,
-}: {
-  readonly label: string;
-  readonly options: readonly {
-    readonly label: string;
-    readonly swatch: string;
-  }[];
-  readonly selected: string;
-  readonly onSelect: (value: string) => void;
-  readonly custom: string;
-  readonly onCustomChange: (value: string) => void;
-}) {
-  return (
-    <View className="gap-2 border-b border-border px-4 pt-2.5 pb-3">
-      <Text variant="secondary">{label}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View className="flex-row gap-2.5 py-1">
-          {options.map((option) => {
-            const active = selected === option.label;
-            return (
-              <Pressable
-                key={option.label}
-                accessibilityLabel={option.label}
-                className="w-14 items-center gap-1"
-                onPress={() => onSelect(active ? "" : option.label)}
-              >
-                <View
-                  className={cn(
-                    "size-8 rounded-full border",
-                    active ? "border-2 border-foreground" : "border-border",
-                  )}
-                  style={{ backgroundColor: option.swatch }}
-                />
-                <Text
-                  variant="caption"
-                  tone={active ? "default" : "muted"}
-                  className="text-center"
-                  numberOfLines={1}
-                >
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-          <Pressable
-            className="w-14 items-center gap-1"
-            onPress={() => onSelect(selected === "Custom" ? "" : "Custom")}
-          >
-            <View
-              className={cn(
-                "size-8 items-center justify-center rounded-full border border-dashed bg-transparent",
-                selected === "Custom"
-                  ? "border-2 border-foreground"
-                  : "border-border",
-              )}
-            >
-              <Text variant="body" tone="muted">+</Text>
-            </View>
-            <Text variant="caption" className="text-center">
-              Custom
-            </Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-      {selected === "Custom" ? (
-        <TextField
-          onChangeText={onCustomChange}
-          placeholder={`Custom ${label.toLowerCase()}`}
-          style={styles.inlineField}
-          value={custom}
-        />
-      ) : null}
-    </View>
-  );
-}
-
-function MeasurementsBlock({
-  value,
-  onChange,
-  last = false,
-}: {
-  readonly value: MeasurementParts;
-  readonly onChange: (value: MeasurementParts) => void;
-  readonly last?: boolean;
-}) {
-  const set = (key: keyof MeasurementParts, next: string) => {
-    onChange({ ...value, [key]: next });
-  };
-  return (
-    <View className={cn("gap-2 px-4 pt-2.5 pb-3", !last && "border-b border-border")}>
-      <Text variant="secondary">Measurements</Text>
-      <View className="flex-row gap-2">
-        <MiniMeasure
-          label="Chest"
-          onChangeText={(chest) => set("chest", chest)}
-          value={value.chest}
-        />
-        <MiniMeasure
-          label="Waist"
-          onChangeText={(waist) => set("waist", waist)}
-          value={value.waist}
-        />
-      </View>
-      <View className="flex-row gap-2">
-        <MiniMeasure
-          label="Hips"
-          onChangeText={(hips) => set("hips", hips)}
-          value={value.hips}
-        />
-        <MiniMeasure
-          label="Inseam"
-          onChangeText={(inseam) => set("inseam", inseam)}
-          value={value.inseam}
-        />
-      </View>
-      <MiniMeasure
-        label="Shoe size"
-        onChangeText={(shoe) => set("shoe", shoe)}
-        value={value.shoe}
-      />
-      <TextField
-        multiline
-        onChangeText={(notes) => set("notes", notes)}
-        placeholder="Other notes…"
-        style={[styles.inlineField, styles.multiline]}
-        value={value.notes}
-      />
-    </View>
-  );
-}
-
-function MiniMeasure({
-  label,
-  value,
-  onChangeText,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly onChangeText: (value: string) => void;
-}) {
-  return (
-    <View className="flex-1 gap-1">
-      <Text variant="caption">{label}</Text>
-      <TextField
-        onChangeText={onChangeText}
-        placeholder='32"'
-        style={styles.inlineField}
-        value={value}
-      />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  inlineField: {
-    minHeight: 40,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-  },
-  multiline: {
-    minHeight: 88,
-    textAlignVertical: "top",
-    paddingTop: 10,
-  },
-  halfField: {
-    flex: 1,
-  },
-});

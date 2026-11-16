@@ -1,13 +1,13 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Platform, View } from "react-native";
+import { ActivityIndicator } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { MonitorIcon, TimerIcon } from "lucide-react-native";
 
-import { SheetScaffold } from "@/components/settings/sheet-scaffold";
-import { Icon } from "@/components/ui/icon";
-import { Section } from "@/components/ui/section";
-import { SettingsRow } from "@/components/ui/settings-row";
-import { Text } from "@/components/ui/text";
+import {
+  SettingsForm,
+  SettingsFormText,
+  SettingsPicker,
+  SettingsSection,
+} from "@/components/settings/native";
 import {
   BROWSER_TIMEOUT_MINUTES,
   CODER_TIMEOUT_MINUTES,
@@ -24,35 +24,6 @@ function minutesLabel(minutes: number): string {
 
 function vcpuLabel(vcpus: number): string {
   return `${vcpus} vCPU${vcpus === 1 ? "" : "s"}`;
-}
-
-function chooseNumber(
-  title: string,
-  options: readonly number[],
-  label: (value: number) => string,
-): Promise<number | null> {
-  if (Platform.OS === "web") {
-    const answer =
-      typeof window !== "undefined"
-        ? window.prompt(
-            `${title}\n\n${options.map((value) => label(value)).join(", ")}`,
-          )
-        : null;
-    if (!answer) return Promise.resolve(null);
-    const match = options.find(
-      (value) => label(value) === answer.trim() || String(value) === answer.trim(),
-    );
-    return Promise.resolve(match ?? null);
-  }
-  return new Promise((resolve) => {
-    Alert.alert(title, undefined, [
-      ...options.map((value) => ({
-        text: label(value),
-        onPress: () => resolve(value),
-      })),
-      { text: "Cancel", style: "cancel", onPress: () => resolve(null) },
-    ]);
-  });
 }
 
 /**
@@ -88,6 +59,7 @@ export function ComputerUseScreen() {
   );
 
   const save = async (patch: SandboxSettingsPatch) => {
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -103,111 +75,94 @@ export function ComputerUseScreen() {
     }
   };
 
-  const pick = async (
-    title: string,
-    options: readonly number[],
-    label: (value: number) => string,
-    key: keyof SandboxSettingsPatch,
-    current: number,
-  ) => {
-    const value = await chooseNumber(title, options, label);
-    if (value == null || value === current) return;
-    await save({ [key]: value });
-  };
-
   return (
-    <SheetScaffold>
+    <SettingsForm
+      footer={
+        <SettingsFormText tone="secondary">
+          These apply the next time a browser or coder sandbox starts. A sandbox
+          that is already open keeps its current size until it is created again.
+        </SettingsFormText>
+      }
+    >
       {error ? (
-        <Text variant="body" tone="destructive" className="px-1">
-          {error}
-        </Text>
+        <SettingsFormText tone="destructive">{error}</SettingsFormText>
       ) : null}
 
       {settings == null && error == null ? (
-        <View className="min-h-24 items-center justify-center">
-          <ActivityIndicator />
-        </View>
+        <ActivityIndicator accessibilityLabel="Loading computer use settings" />
       ) : null}
 
       {settings ? (
         <>
-          <Section title="Browser">
-            <SettingsRow
-              icon={<Icon as={TimerIcon} className="size-5 text-sky-600" />}
+          <SettingsSection title="Browser">
+            <SettingsPicker
               label="Lifetime"
-              detail={minutesLabel(settings.browserTimeoutMinutes)}
-              onPress={() =>
-                void pick(
-                  "Browser lifetime",
-                  BROWSER_TIMEOUT_MINUTES,
-                  minutesLabel,
-                  "browserTimeoutMinutes",
-                  settings.browserTimeoutMinutes,
-                )
-              }
-              showSeparator
+              onSelectionChange={(value) => {
+                const minutes = BROWSER_TIMEOUT_MINUTES.find(
+                  (item) => minutesLabel(item) === value,
+                );
+                if (
+                  minutes == null ||
+                  minutes === settings.browserTimeoutMinutes
+                ) {
+                  return;
+                }
+                void save({ browserTimeoutMinutes: minutes });
+              }}
+              options={BROWSER_TIMEOUT_MINUTES.map(minutesLabel)}
+              selection={minutesLabel(settings.browserTimeoutMinutes)}
             />
-            <SettingsRow
-              icon={<Icon as={MonitorIcon} className="size-5 text-sky-600" />}
+            <SettingsPicker
               label="Compute"
-              detail={vcpuLabel(settings.browserVcpus)}
-              onPress={() =>
-                void pick(
-                  "Browser compute",
-                  SANDBOX_VCPU_OPTIONS,
-                  vcpuLabel,
-                  "browserVcpus",
-                  settings.browserVcpus,
-                )
-              }
+              onSelectionChange={(value) => {
+                const vcpus = SANDBOX_VCPU_OPTIONS.find(
+                  (item) => vcpuLabel(item) === value,
+                );
+                if (vcpus == null || vcpus === settings.browserVcpus) return;
+                void save({ browserVcpus: vcpus });
+              }}
+              options={SANDBOX_VCPU_OPTIONS.map(vcpuLabel)}
+              selection={vcpuLabel(settings.browserVcpus)}
             />
-          </Section>
+          </SettingsSection>
 
-          <Section title="Coder">
-            <SettingsRow
-              icon={<Icon as={TimerIcon} className="size-5 text-emerald-600" />}
+          <SettingsSection title="Coder">
+            <SettingsPicker
               label="Lifetime"
-              detail={minutesLabel(settings.coderTimeoutMinutes)}
-              onPress={() =>
-                void pick(
-                  "Coder lifetime",
-                  CODER_TIMEOUT_MINUTES,
-                  minutesLabel,
-                  "coderTimeoutMinutes",
-                  settings.coderTimeoutMinutes,
-                )
-              }
-              showSeparator
+              onSelectionChange={(value) => {
+                const minutes = CODER_TIMEOUT_MINUTES.find(
+                  (item) => minutesLabel(item) === value,
+                );
+                if (
+                  minutes == null ||
+                  minutes === settings.coderTimeoutMinutes
+                ) {
+                  return;
+                }
+                void save({ coderTimeoutMinutes: minutes });
+              }}
+              options={CODER_TIMEOUT_MINUTES.map(minutesLabel)}
+              selection={minutesLabel(settings.coderTimeoutMinutes)}
             />
-            <SettingsRow
-              icon={<Icon as={MonitorIcon} className="size-5 text-emerald-600" />}
+            <SettingsPicker
               label="Compute"
-              detail={vcpuLabel(settings.coderVcpus)}
-              onPress={() =>
-                void pick(
-                  "Coder compute",
-                  SANDBOX_VCPU_OPTIONS,
-                  vcpuLabel,
-                  "coderVcpus",
-                  settings.coderVcpus,
-                )
-              }
+              onSelectionChange={(value) => {
+                const vcpus = SANDBOX_VCPU_OPTIONS.find(
+                  (item) => vcpuLabel(item) === value,
+                );
+                if (vcpus == null || vcpus === settings.coderVcpus) return;
+                void save({ coderVcpus: vcpus });
+              }}
+              options={SANDBOX_VCPU_OPTIONS.map(vcpuLabel)}
+              selection={vcpuLabel(settings.coderVcpus)}
             />
-          </Section>
-
-          <Text variant="secondary" className="px-1">
-            These apply the next time a browser or coder sandbox starts. A
-            sandbox that is already open keeps its current size until it is
-            created again.
-          </Text>
+          </SettingsSection>
         </>
       ) : null}
 
       {busy ? (
-        <View className="items-center">
-          <ActivityIndicator />
-        </View>
+        <ActivityIndicator accessibilityLabel="Saving computer use settings" />
       ) : null}
-    </SheetScaffold>
+    </SettingsForm>
   );
 }

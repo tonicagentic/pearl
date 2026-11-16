@@ -1,8 +1,11 @@
 import { useState, useSyncExternalStore } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
 
-import { SheetScaffold } from "@/components/settings/sheet-scaffold";
-import { Text } from "@/components/ui/text";
+import {
+  SettingsForm,
+  SettingsFormText,
+  SettingsPicker,
+  SettingsSection,
+} from "@/components/settings/native";
 import {
   COMPOSER_MODEL_SECTIONS,
   getImageModelSelection,
@@ -16,7 +19,6 @@ import {
   subscribeModelSelection,
   subscribeVectorModelSelection,
   VECTOR_MODEL_SECTION,
-  type ComposerModel,
   type ComposerModelSection,
 } from "@/src/model-selection";
 
@@ -78,13 +80,13 @@ export function ModelsScreen() {
   };
 
   return (
-    <SheetScaffold
+    <SettingsForm
       footer={
-        <Text variant="secondary" className="px-1">
+        <SettingsFormText tone="secondary">
           A model runs inference for each reply. Pearl is the agent around it —
           tools, skills, plugins, and multi-step loops. This default applies to
           new turns; change it in the composer for a single message.
-        </Text>
+        </SettingsFormText>
       }
     >
       {COMPOSER_MODEL_SECTIONS.map((section) => (
@@ -92,7 +94,6 @@ export function ModelsScreen() {
           key={section.id}
           section={section}
           selectedKey={selectedKey}
-          saving={saving}
           onSelect={selectModel}
         />
       ))}
@@ -100,108 +101,71 @@ export function ModelsScreen() {
       <ModelSection
         section={IMAGE_MODEL_SECTION}
         selectedKey={selectedImageKey}
-        saving={saving}
         onSelect={selectImageModel}
       />
 
       <ModelSection
         section={VECTOR_MODEL_SECTION}
         selectedKey={selectedVectorKey}
-        saving={saving}
         onSelect={selectVectorModel}
       />
 
       {saveError ? (
-        <Text
-          accessibilityRole="alert"
-          variant="secondary"
-          tone="destructive"
-          className="px-1"
-        >
-          {saveError}
-        </Text>
+        <SettingsFormText tone="destructive">{saveError}</SettingsFormText>
       ) : null}
-    </SheetScaffold>
+    </SettingsForm>
   );
 }
 
 function ModelSection({
   section,
   selectedKey,
-  saving,
   onSelect,
 }: {
   readonly section: ComposerModelSection;
   readonly selectedKey: string;
-  readonly saving: boolean;
   readonly onSelect: (key: string) => void;
 }) {
+  const labels = section.models.map((model) =>
+    model.openWeight ? `${model.label} (Open Weight)` : model.label,
+  );
+  const selectedModel =
+    section.models.find((model) => model.key === selectedKey) ??
+    section.models[0];
+  const selectionLabel = selectedModel
+    ? selectedModel.openWeight
+      ? `${selectedModel.label} (Open Weight)`
+      : selectedModel.label
+    : labels[0] ?? "";
+
   return (
-    <View className="gap-1.5">
-      <View className="px-1">
-        <Text variant="secondary" className="uppercase tracking-[0.04em]">
-          {section.title}
-        </Text>
-        {section.description ? (
-          <Text variant="secondary" className="mt-1">
-            {section.description}
-          </Text>
-        ) : null}
-      </View>
-      <View className="overflow-hidden rounded-[10px] bg-card">
-        {section.models.map((model: ComposerModel, index: number) => {
-          const selected = selectedKey === model.key;
-          return (
-            <View key={model.key}>
-              {index > 0 ? (
-                <View className="ml-4 bg-border" style={styles.separator} />
-              ) : null}
-              <Pressable
-                accessibilityRole="radio"
-                accessibilityLabel={model.label}
-                accessibilityState={{ checked: selected, disabled: saving }}
-                className="active:bg-muted/80"
-                disabled={saving}
-                onPress={() => onSelect(model.key)}
-                style={styles.row}
-              >
-                <View className="min-w-0 flex-1 gap-0.5">
-                  <Text variant="label" weight="regular">
-                    {model.label}
-                  </Text>
-                  <Text variant="secondary">{`by ${model.company}`}</Text>
-                  {model.openWeight ? (
-                    <View className="mt-0.5 self-start rounded-full bg-muted px-2 py-0.5">
-                      <Text variant="caption" weight="medium">
-                        Open Weight
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-                {selected ? (
-                  <Text variant="label" tone="primary" weight="semibold">
-                    ✓
-                  </Text>
-                ) : null}
-              </Pressable>
-            </View>
-          );
-        })}
-      </View>
-    </View>
+    <SettingsSection
+      title={section.title}
+      footer={
+        section.description ? (
+          <SettingsFormText tone="secondary">{section.description}</SettingsFormText>
+        ) : undefined
+      }
+    >
+      <SettingsPicker
+        label="Model"
+        onSelectionChange={(label) => {
+          const model = section.models.find((item) => {
+            const itemLabel = item.openWeight
+              ? `${item.label} (Open Weight)`
+              : item.label;
+            return itemLabel === label;
+          });
+          if (model) onSelect(model.key);
+        }}
+        options={labels}
+        selection={selectionLabel}
+      />
+      {selectedModel ? (
+        <SettingsFormText tone="secondary">
+          {`by ${selectedModel.company}`}
+        </SettingsFormText>
+      ) : null}
+    </SettingsSection>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    minHeight: 44,
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-  },
-});

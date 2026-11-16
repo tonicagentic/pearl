@@ -3,10 +3,14 @@ import { networkInterfaces } from "node:os";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
-import { bearer } from "better-auth/plugins";
+import { anonymous, bearer } from "better-auth/plugins";
+import { reassignAnonymousUserData } from "@/lib/auth/link-anonymous-user";
 import { getAppUrlHost, getEffectiveAppUrl } from "@/lib/auth-url";
 import { db } from "@/lib/db/client";
-import { sendPasswordResetEmail } from "@/lib/email/resend";
+import {
+  sendPasswordResetEmail,
+  sendVerificationLinkEmail,
+} from "@/lib/email/resend";
 
 /** Dev-only: phone → Mac LAN IP:3000 must be an allowed better-auth host. */
 function localLanAgentHosts(): string[] {
@@ -48,6 +52,10 @@ const productionTrustedOrigins = [
     : null,
   "https://my-agent-pi-eight.vercel.app",
   "https://pearl.tonicagentic.com",
+  // Pearl Money web + Expo app (shared account)
+  process.env.FINANCE_APP_URL?.trim() || null,
+  "pearlmoney://",
+  "pearlmoney://*",
 ].filter((origin, index, list): origin is string => {
   if (!origin) return false;
   try {
@@ -88,6 +96,10 @@ const trustedOrigins =
         "http://172.30.*:*",
         "http://172.31.*:*",
         "http://192.168.*:*",
+        "pearlmoney://",
+        "pearlmoney://*",
+        "exp://",
+        "exp://**",
       ];
 const allowedHosts = [
   "localhost:3000",
@@ -144,6 +156,32 @@ export const auth = betterAuth({
       });
     },
   },
+  user: {
+    changeEmail: {
+      enabled: true,
+      updateEmailWithoutVerification: true,
+      sendChangeEmailConfirmation: async ({ user, newEmail, url }) => {
+        void sendVerificationLinkEmail({
+          to: user.email,
+          url,
+          subject: `Confirm email change to ${newEmail}`,
+        }).catch((error) => {
+          console.error("[auth] failed to send change-email confirmation", error);
+        });
+      },
+    },
+  },
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }) => {
+      void sendVerificationLinkEmail({
+        to: user.email,
+        url,
+        subject: "Verify your Pearl email",
+      }).catch((error) => {
+        console.error("[auth] failed to send verification email", error);
+      });
+    },
+  },
   onAPIError: {
     errorURL: "/auth/error",
   },
@@ -157,5 +195,17 @@ export const auth = betterAuth({
         },
       }
     : {},
-  plugins: [bearer(), nextCookies()],
+  plugins: [
+    anonymous({
+      emailDomainName: "anonymous.pearl.local",
+      onLinkAccount: async ({ anonymousUser, newUser }) => {
+        await reassignAnonymousUserData({
+          fromUserId: anonymousUser.user.id,
+          toUserId: newUser.user.id,
+        });
+      },
+    }),
+    bearer(),
+    nextCookies(),
+  ],
 });

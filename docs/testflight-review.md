@@ -8,7 +8,7 @@ Apple's Beta App Review uses one shared Pearl account. Do not put a friend's or 
 | Password | `pearl-test` |
 | Name | Test |
 
-The account already exists on production. Reviewers **sign in**. They do not create an account. Signup is invite-only, and this email is already registered.
+The account already exists on production. Reviewers **sign in** with the demo login above. First launch also offers guest chat without an account; the review notes still tell Apple to use this shared account so they land on the friend trial.
 
 ## Why this account
 

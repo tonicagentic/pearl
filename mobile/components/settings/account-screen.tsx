@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator } from "react-native";
 
-import { SheetScaffold } from "@/components/settings/sheet-scaffold";
-import { Text } from "@/components/ui/text";
-import { TextField } from "@/components/ui/text-field";
-import { cn } from "@/lib/utils";
+import {
+  SettingsButton,
+  SettingsField,
+  SettingsForm,
+  SettingsFormText,
+  SettingsLabeledValue,
+  SettingsSection,
+  SettingsSecureField,
+} from "@/components/settings/native";
 import { useAuth } from "@/src/auth";
 import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
 import { sessionInvalid } from "@/src/session-store";
@@ -37,8 +42,6 @@ export function AccountScreen() {
 
   useEffect(() => {
     if (nameReady || !viewerEmail) return;
-    // Cold start: name may still be loading; seed from email local-part so the
-    // field is not blank while get-session finishes.
     setName((current) => current || viewerEmail.split("@")[0] || "");
     setNameReady(true);
   }, [nameReady, viewerEmail]);
@@ -134,121 +137,83 @@ export function AccountScreen() {
     })();
   }, [confirmPassword, currentPassword, newPassword, passwordSaving]);
 
+  if (!nameReady) {
+    return <ActivityIndicator accessibilityLabel="Loading account" />;
+  }
+
   return (
-    <SheetScaffold>
-      {!nameReady ? (
-        <ActivityIndicator accessibilityLabel="Loading account" />
-      ) : (
-        <View className="gap-5">
-          <FieldGroup label="Profile">
-            <TextRow
-              autoCapitalize="words"
-              label="Name"
-              onChangeText={(value) => {
-                setName(value);
-                setNameHint(null);
-                setNameError(null);
-              }}
-              value={name}
-            />
-            <ReadOnlyRow label="Email" last value={viewerEmail ?? "—"} />
-          </FieldGroup>
+    <SettingsForm>
+      <SettingsSection title="Profile">
+        <SettingsField
+          label="Name"
+          onChangeText={(value) => {
+            setName(value);
+            setNameHint(null);
+            setNameError(null);
+          }}
+          value={name}
+        />
+        <SettingsLabeledValue label="Email" value={viewerEmail ?? "—"} />
+      </SettingsSection>
 
-          {nameError ? (
-            <Text
-              variant="secondary"
-              tone="destructive"
-              className="px-1"
-              accessibilityRole="alert"
-            >
-              {nameError}
-            </Text>
-          ) : null}
+      {nameError ? (
+        <SettingsFormText tone="destructive">{nameError}</SettingsFormText>
+      ) : null}
+      {nameHint ? <SettingsFormText tone="secondary">{nameHint}</SettingsFormText> : null}
 
-          <Pressable
-            accessibilityRole="button"
-            className="min-h-11 items-center justify-center overflow-hidden rounded-[10px] bg-card active:opacity-80"
-            disabled={nameSaving || !name.trim()}
-            onPress={onSaveName}
-          >
-            <Text variant="label" weight="semibold">
-              {nameSaving ? "Saving…" : "Save name"}
-            </Text>
-          </Pressable>
+      <SettingsSection>
+        <SettingsButton
+          disabled={nameSaving || !name.trim()}
+          label={nameSaving ? "Saving…" : "Save name"}
+          onPress={onSaveName}
+        />
+      </SettingsSection>
 
-          {nameHint ? (
-            <Text variant="secondary" className="px-1 text-center">
-              {nameHint}
-            </Text>
-          ) : null}
+      <SettingsSection title="Password">
+        <SettingsSecureField
+          label="Current password"
+          onChangeText={(value) => {
+            setCurrentPassword(value);
+            setPasswordHint(null);
+            setPasswordError(null);
+          }}
+          value={currentPassword}
+        />
+        <SettingsSecureField
+          label="New password"
+          onChangeText={(value) => {
+            setNewPassword(value);
+            setPasswordHint(null);
+            setPasswordError(null);
+          }}
+          value={newPassword}
+        />
+        <SettingsSecureField
+          label="Confirm new password"
+          onChangeText={(value) => {
+            setConfirmPassword(value);
+            setPasswordHint(null);
+            setPasswordError(null);
+          }}
+          value={confirmPassword}
+        />
+      </SettingsSection>
 
-          <FieldGroup label="Password">
-            <TextRow
-              autoCapitalize="none"
-              label="Current password"
-              onChangeText={(value) => {
-                setCurrentPassword(value);
-                setPasswordHint(null);
-                setPasswordError(null);
-              }}
-              secureTextEntry
-              value={currentPassword}
-            />
-            <TextRow
-              autoCapitalize="none"
-              label="New password"
-              onChangeText={(value) => {
-                setNewPassword(value);
-                setPasswordHint(null);
-                setPasswordError(null);
-              }}
-              secureTextEntry
-              value={newPassword}
-            />
-            <TextRow
-              autoCapitalize="none"
-              label="Confirm new password"
-              last
-              onChangeText={(value) => {
-                setConfirmPassword(value);
-                setPasswordHint(null);
-                setPasswordError(null);
-              }}
-              secureTextEntry
-              value={confirmPassword}
-            />
-          </FieldGroup>
+      {passwordError ? (
+        <SettingsFormText tone="destructive">{passwordError}</SettingsFormText>
+      ) : null}
+      {passwordHint ? (
+        <SettingsFormText tone="secondary">{passwordHint}</SettingsFormText>
+      ) : null}
 
-          {passwordError ? (
-            <Text
-              variant="secondary"
-              tone="destructive"
-              className="px-1"
-              accessibilityRole="alert"
-            >
-              {passwordError}
-            </Text>
-          ) : null}
-
-          <Pressable
-            accessibilityRole="button"
-            className="min-h-11 items-center justify-center overflow-hidden rounded-[10px] bg-card active:opacity-80"
-            disabled={passwordSaving}
-            onPress={onChangePassword}
-          >
-            <Text variant="label" weight="semibold">
-              {passwordSaving ? "Updating…" : "Change password"}
-            </Text>
-          </Pressable>
-
-          {passwordHint ? (
-            <Text variant="secondary" className="px-1 text-center">
-              {passwordHint}
-            </Text>
-          ) : null}
-        </View>
-      )}
-    </SheetScaffold>
+      <SettingsSection>
+        <SettingsButton
+          disabled={passwordSaving}
+          label={passwordSaving ? "Updating…" : "Change password"}
+          onPress={onChangePassword}
+        />
+      </SettingsSection>
+    </SettingsForm>
   );
 }
 
@@ -278,87 +243,3 @@ async function authErrorMessage(
   }
   return fallback;
 }
-
-function FieldGroup({
-  label,
-  children,
-}: {
-  readonly label: string;
-  readonly children: ReactNode;
-}) {
-  return (
-    <View className="gap-1.5">
-      <Text variant="secondary" className="px-1 uppercase tracking-[0.04em]">
-        {label}
-      </Text>
-      <View className="overflow-hidden rounded-[10px] bg-card">{children}</View>
-    </View>
-  );
-}
-
-function TextRow({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  last = false,
-  secureTextEntry = false,
-  autoCapitalize = "sentences",
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly onChangeText: (value: string) => void;
-  readonly placeholder?: string;
-  readonly last?: boolean;
-  readonly secureTextEntry?: boolean;
-  readonly autoCapitalize?: "none" | "sentences" | "words" | "characters";
-}) {
-  return (
-    <View
-      className={cn("gap-2 px-4 pt-2.5 pb-3", !last && "border-b border-border")}
-    >
-      <Text variant="secondary">{label}</Text>
-      <TextField
-        autoCapitalize={autoCapitalize}
-        autoCorrect={false}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        secureTextEntry={secureTextEntry}
-        style={styles.inlineField}
-        textContentType={secureTextEntry ? "password" : "name"}
-        value={value}
-      />
-    </View>
-  );
-}
-
-function ReadOnlyRow({
-  label,
-  value,
-  last = false,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly last?: boolean;
-}) {
-  return (
-    <View
-      className={cn("gap-2 px-4 pt-2.5 pb-3", !last && "border-b border-border")}
-    >
-      <Text variant="secondary">{label}</Text>
-      <Text variant="label" className="py-2">
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  inlineField: {
-    backgroundColor: "transparent",
-    borderWidth: 0,
-    height: 40,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-  },
-});

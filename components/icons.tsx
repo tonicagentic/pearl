@@ -14,20 +14,14 @@ export function VercelIcon({ className }: { readonly className?: string }) {
   );
 }
 
-/** Pearl's mark: a scallop shell. */
+/**
+ * Pearl's mark: the ring. Draw it at 24px or larger — the stroke falls apart
+ * below that.
+ */
 export function PearlIcon({ className }: { readonly className?: string }) {
   return (
-    <svg aria-hidden="true" className={className} fill="currentColor" viewBox="0 0 100 100">
-      <g transform="translate(50 80)">
-        <path d="M-3.2 -73.5 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -72.5 Z" />
-        <path transform="rotate(-15.5)" d="M-3.2 -72 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -71 Z" />
-        <path transform="rotate(15.5)" d="M-3.2 -72 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -71 Z" />
-        <path transform="rotate(-31)" d="M-3.2 -69 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -68 Z" />
-        <path transform="rotate(31)" d="M-3.2 -69 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -68 Z" />
-        <path transform="rotate(-46.5)" d="M-3.2 -64.5 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -63.5 Z" />
-        <path transform="rotate(46.5)" d="M-3.2 -64.5 h6.4 l1 1 L5.4 -4 H-5.4 L-4.2 -63.5 Z" />
-        <ellipse cx="0" cy="0.5" rx="12.5" ry="7" />
-      </g>
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8.54" stroke="currentColor" strokeWidth="3.182" />
     </svg>
   );
 }
