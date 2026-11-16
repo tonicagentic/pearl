@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import {
   BriefcaseIcon,
   CalendarIcon,
-  CircleDollarSignIcon,
   ClipboardListIcon,
   Code2Icon,
   HeartIcon,
@@ -50,8 +49,8 @@ function comingSoon(label: string) {
 
 /**
  * Capabilities section: Coder, Computer Use, Email, Calendar, and the other
- * product capabilities. GitHub, Vercel, and the other build tools open from
- * inside Coder.
+ * product capabilities. Money is its own group above this section. GitHub,
+ * Vercel, and the other build tools open from inside Coder.
  */
 export function CodeSection({
   emailDetail,
@@ -95,15 +94,6 @@ export function CodeSection({
         label="Research"
         detail="Deep research with cited findings"
         onPress={() => router.push("/plugins/researcher")}
-        showSeparator
-      />
-      <SettingsRow
-        icon={
-          <Icon as={CircleDollarSignIcon} className="size-5 text-emerald-500" />
-        }
-        label="Finance"
-        detail="Money, taxes, and financial context"
-        onPress={() => router.push("/plugins/tax")}
         showSeparator
       />
       <SettingsRow

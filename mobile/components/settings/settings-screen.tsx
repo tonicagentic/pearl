@@ -3,6 +3,7 @@ import { Alert, Platform } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import {
   BrainIcon,
+  CircleDollarSignIcon,
   CircleUserIcon,
   CloudIcon,
   CoinsIcon,
@@ -256,6 +257,17 @@ export function SettingsScreen() {
           label="Skills"
           detail="Custom and published"
           onPress={() => router.push("/skills")}
+        />
+      </SettingsCard>
+
+      <SettingsCard>
+        <SettingsRow
+          icon={
+            <Icon as={CircleDollarSignIcon} className="size-5 text-emerald-500" />
+          }
+          label="Money"
+          detail="Pearl Money"
+          onPress={() => router.push("/money")}
         />
       </SettingsCard>
 
