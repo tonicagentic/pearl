@@ -12,6 +12,12 @@ export type PendingAttachmentDraft = {
     | { type: "text"; text: string }
     | { type: "file"; data: string; mimeType: string; filename?: string }
   )[];
+  /**
+   * Local file URI from the picker / camera / paste cache. Used to open the
+   * platform file viewer before send. Composer content often only holds a
+   * remote URL or extracted text, so this must be kept beside the draft.
+   */
+  readonly previewUri?: string;
 };
 
 const byChat = new Map<string, PendingAttachmentDraft[]>();
@@ -62,4 +68,25 @@ export function removePendingAttachment(
     (item) => !(item.name === name && item.contentType === contentType),
   );
   setPendingAttachments(chatKey, next);
+}
+
+/**
+ * When the composer remounts and sync rewrites drafts from attachment
+ * content, keep any previewUri that was stored for the same chip.
+ */
+export function mergePreviewUris(
+  previous: readonly PendingAttachmentDraft[],
+  next: readonly PendingAttachmentDraft[],
+): PendingAttachmentDraft[] {
+  return next.map((draft) => {
+    if (draft.previewUri) return draft;
+    const match = previous.find(
+      (item) =>
+        item.name === draft.name &&
+        item.contentType === draft.contentType &&
+        Boolean(item.previewUri),
+    );
+    if (!match?.previewUri) return draft;
+    return { ...draft, previewUri: match.previewUri };
+  });
 }

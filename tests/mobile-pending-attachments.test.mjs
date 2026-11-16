@@ -10,6 +10,7 @@ const {
   chatAttachmentKey,
   clearPendingAttachments,
   getPendingAttachments,
+  mergePreviewUris,
   removePendingAttachment,
   setPendingAttachments,
   PENDING_ATTACHMENTS_DRAFT_KEY,
@@ -51,4 +52,28 @@ test("pending attachments persist per chat and clear only when asked", () => {
 test("null chat id maps to the draft key", () => {
   assert.equal(chatAttachmentKey(null), PENDING_ATTACHMENTS_DRAFT_KEY);
   assert.equal(chatAttachmentKey(undefined), PENDING_ATTACHMENTS_DRAFT_KEY);
+});
+
+test("mergePreviewUris keeps local picker URIs across composer sync rewrites", () => {
+  const previous = [
+    {
+      name: "report.pdf",
+      contentType: "application/pdf",
+      type: "document",
+      content: [{ type: "text", text: "[Attached PDF: report.pdf]" }],
+      previewUri: "file:///tmp/report.pdf",
+    },
+  ];
+  const next = [
+    {
+      name: "report.pdf",
+      contentType: "application/pdf",
+      type: "document",
+      content: [{ type: "text", text: "[Attached PDF: report.pdf — page 1]" }],
+    },
+  ];
+  const merged = mergePreviewUris(previous, next);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].previewUri, "file:///tmp/report.pdf");
+  assert.match(merged[0].content[0].text, /page 1/);
 });

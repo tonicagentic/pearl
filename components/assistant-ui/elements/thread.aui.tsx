@@ -1164,6 +1164,8 @@ const UserMessage: FC = () => {
 };
 
 const EditComposer: FC = () => {
+  const { onComposerPaste } = useLargePasteComposer();
+
   return (
     <MessagePrimitive.Root
       data-slot="aui_edit-composer-wrapper"
@@ -1173,6 +1175,7 @@ const EditComposer: FC = () => {
         <ComposerPrimitive.Input
           className="aui-edit-composer-input text-foreground min-h-14 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-base outline-none"
           autoFocus
+          onPaste={onComposerPaste}
         />
         <div className="aui-edit-composer-footer mx-2.5 mb-2.5 flex items-center gap-1.5 self-end">
           <ComposerPrimitive.Cancel asChild>
