@@ -132,7 +132,7 @@ function AuthenticatedLayout() {
                       : {}
                   }
                 >
-                  <Stack.Protected guard={signedOut}>
+                  <Stack.Protected guard={signedOut} redirectTo="/">
                     <Stack.Screen
                       name="sign-in"
                       options={{
@@ -150,7 +150,7 @@ function AuthenticatedLayout() {
                     />
                   </Stack.Protected>
 
-                  <Stack.Protected guard={appReady}>
+                  <Stack.Protected guard={appReady} redirectTo="/sign-in">
                     <Stack.Screen
                       name="(home)"
                       options={{
@@ -165,6 +165,10 @@ function AuthenticatedLayout() {
                         title: "History",
                         headerShown: false,
                       }}
+                    />
+                    <Stack.Screen
+                      name="billing"
+                      options={{ headerShown: false }}
                     />
                     <Stack.Screen
                       name="repos"
