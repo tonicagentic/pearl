@@ -10,6 +10,7 @@ import {
 } from "@assistant-ui/react-markdown";
 import remarkGfm from "remark-gfm";
 import {
+  Children,
   type ComponentPropsWithoutRef,
   type FC,
   isValidElement,
@@ -24,6 +25,10 @@ import { CheckIcon, CopyIcon, FileIcon } from "lucide-react";
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { useCanvas } from "@/components/assistant-ui/elements/canvas-context";
+import {
+  FilePreviewCard,
+  isFilePreviewCardElement,
+} from "@/components/assistant-ui/elements/file-preview-card";
 import { MermaidBlock } from "@/components/assistant-ui/elements/mermaid-block";
 import { cn } from "@/lib/utils";
 import {
@@ -176,17 +181,28 @@ const defaultComponents = memoizeMarkdownComponents({
       {...props}
     />
   ),
-  p: ({ className, ...props }) => (
-    <p
-      className={cn(
-        "aui-md-p my-3 text-[15px] leading-6 first:mt-0 last:mb-0",
-        className,
-      )}
-      {...props}
-    />
-  ),
+  p: ({ className, children, ...props }) => {
+    const kids = Children.toArray(children);
+    const hasCard = kids.some(
+      (child) =>
+        isValidElement(child) &&
+        (child.type === FilePreviewCard || isFilePreviewCardElement(child)),
+    );
+    const Comp = hasCard ? "div" : "p";
+    return (
+      <Comp
+        className={cn(
+          "aui-md-p my-3 text-[15px] leading-6 first:mt-0 last:mb-0",
+          hasCard && "flex flex-col gap-2",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </Comp>
+    );
+  },
   a: function MarkdownLink({ className, children, ...props }) {
-    const { openPath } = useCanvas();
     // The agent links referenced files with the file:// scheme (see
     // agent/instructions.md) so the reader can open them on the canvas,
     // like the artifact card. Other links stay ordinary hyperlinks.
@@ -215,22 +231,7 @@ const defaultComponents = memoizeMarkdownComponents({
 
     if (href?.startsWith("file://")) {
       const path = decodeURIComponent(href.slice("file://".length));
-      return (
-        <a
-          className={cn(
-            "aui-md-a text-primary hover:text-primary/80 cursor-pointer underline underline-offset-2",
-            className,
-          )}
-          title={`Open ${path}`}
-          onClick={(event) => {
-            event.preventDefault();
-            openPath(path);
-          }}
-          {...props}
-        >
-          {children}
-        </a>
-      );
+      return <FilePreviewCard path={path} className={className} />;
     }
     return (
       <a

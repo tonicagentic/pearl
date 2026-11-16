@@ -3,8 +3,8 @@ import {
   isCitationLabel,
   linkChildrenToText,
 } from "@/components/assistant-ui/elements/citation";
+import { FilePreviewCard } from "@/components/assistant-ui/elements/file-preview-card";
 import { openWebUrl } from "@/src/open-web-url";
-import { useWorkspaceOptional } from "@/src/workspace-context";
 import { traceStream } from "@/src/stream-trace";
 import type { TextMessagePartProps } from "@assistant-ui/react-native";
 import {
@@ -19,6 +19,7 @@ import {
 } from "react";
 import {
   Platform,
+  Pressable,
   Text as RNText,
   TextInput,
   type TextStyle,
@@ -59,9 +60,14 @@ const BLOCK_GAP = 8;
 /** U+25CF BLACK CIRCLE — fuller than U+2022 • at the same point size. */
 const LIST_BULLET = "\u25CF";
 
-/** View hosts (lists) cannot nest inside the selectable Text/TextInput tree. */
+/** View hosts (lists, file cards) cannot nest inside the selectable Text tree. */
 function isViewHost(node: ReactNode): node is ReactElement {
-  return isValidElement(node) && node.type === View;
+  if (!isValidElement(node)) return false;
+  return (
+    node.type === View ||
+    node.type === Pressable ||
+    node.type === FilePreviewCard
+  );
 }
 
 /**
@@ -129,33 +135,10 @@ export class TaskListTokenizer extends MarkedTokenizer {
 
 const taskListTokenizer = new TaskListTokenizer();
 
-/** In-app opener for agent `file://` workspace links (matches web canvas). */
-function WorkspaceFileLink({
-  href,
-  children,
-  styles,
-  title,
-}: {
-  readonly href: string;
-  readonly children: string | ReactNode[];
-  readonly styles?: TextStyle;
-  readonly title?: string;
-}) {
-  const workspace = useWorkspaceOptional();
+/** Preview card for agent `file://` workspace links (matches web canvas). */
+function WorkspaceFileCard({ href }: { readonly href: string }) {
   const path = decodeURIComponent(href.replace(/^file:\/\//i, ""));
-
-  return (
-    <RNText
-      accessibilityRole="link"
-      accessibilityLabel={title || `Open ${path}`}
-      onPress={() => {
-        void workspace?.openPath(path);
-      }}
-      style={styles}
-    >
-      {children}
-    </RNText>
-  );
+  return <FilePreviewCard path={path} />;
 }
 
 /**
@@ -175,8 +158,15 @@ class MarkdownRenderer extends Renderer {
     return `md-${this.keyIndex++}`;
   }
 
-  /** Paragraphs are nested Text, not Views — required for cross-block select. */
+  /** Paragraphs are nested Text unless they host a file card (View). */
   override paragraph(children: ReactNode[], styles?: ViewStyle): ReactNode {
+    if (children.some(isViewHost)) {
+      return (
+        <View key={this.getKey()} style={{ gap: 8 }}>
+          {wrapListItemBody(children, styles as TextStyle)}
+        </View>
+      );
+    }
     return (
       <RNText key={this.getKey()} style={styles as TextStyle}>
         {children}
@@ -321,16 +311,7 @@ class MarkdownRenderer extends Renderer {
       );
     }
     if (/^file:\/\//i.test(href)) {
-      return (
-        <WorkspaceFileLink
-          key={this.getKey()}
-          href={href}
-          styles={styles}
-          title={title?.trim() || undefined}
-        >
-          {children}
-        </WorkspaceFileLink>
-      );
+      return <WorkspaceFileCard key={this.getKey()} href={href} />;
     }
     return super.link(children, href, styles, title);
   }

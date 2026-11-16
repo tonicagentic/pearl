@@ -6,6 +6,12 @@ import {
   designFileExtension,
   isDesignFilePath,
 } from "../agent/lib/design-files.ts";
+import {
+  fileBasename,
+  mimeTypeForPath,
+  prefersInAppPreview,
+  previewKindLabel,
+} from "../lib/design/file-preview.ts";
 import { previewKindForPath } from "../lib/design/preview-kind.ts";
 import { wrapMermaidAsSvgFixture } from "../lib/design/render.ts";
 import { parseDesignScene } from "../lib/design/scene.ts";
@@ -47,6 +53,17 @@ describe("design file helpers", () => {
     assert.equal(previewKindForPath("/workspace/a.pdf"), "pdf");
     assert.equal(previewKindForPath("/workspace/a.png"), "image");
     assert.equal(previewKindForPath("/workspace/a.txt"), "text");
+  });
+
+  it("labels kinds and picks native vs in-app preview", () => {
+    assert.equal(fileBasename("/workspace/docs/a.md"), "a.md");
+    assert.equal(previewKindLabel("image"), "Image");
+    assert.equal(mimeTypeForPath("/workspace/a.png"), "image/png");
+    assert.equal(mimeTypeForPath("/workspace/a.pdf"), "application/pdf");
+    assert.equal(prefersInAppPreview("/workspace/a.md"), true);
+    assert.equal(prefersInAppPreview("/workspace/a.html"), true);
+    assert.equal(prefersInAppPreview("/workspace/a.png"), false);
+    assert.equal(prefersInAppPreview("/workspace/a.svg"), false);
   });
 
   it("wraps Mermaid source as an SVG fixture for offline tests", () => {

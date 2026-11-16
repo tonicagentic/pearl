@@ -878,8 +878,10 @@ function CanvasFilePreview({
         );
       }
       return (
-        <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
-          {content}
+        <CanvasSplitLine className="text-foreground/55 text-sm">
+          {kind === "pdf"
+            ? "This PDF is not available as a preview URL."
+            : "This image is not available as a preview URL."}
         </CanvasSplitLine>
       );
     }

@@ -20,7 +20,9 @@ import type {
   WorkspaceState,
   WorkspaceTab,
 } from "../../lib/browser/types";
+import { fetchChatFileContent } from "./chat-files";
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
+import { previewWorkspaceFile } from "./preview-workspace-file";
 
 type WorkspaceContextValue = {
   readonly workspace: WorkspaceState;
@@ -30,13 +32,18 @@ type WorkspaceContextValue = {
   readonly controlMode: BrowserControlMode;
   readonly viewUrl: string | null;
   readonly chatId: string | null;
+  /**
+   * When true, Computer should show the workspace reader instead of the
+   * file/window list (set when a chat card opens an in-app file).
+   */
+  readonly preferDetail: boolean;
   openFile: (args: {
     readonly id?: string;
     readonly path: string;
     readonly content: string;
     readonly version?: number;
   }) => void;
-  /** Open a workspace path; fetches chat file content when not provided. */
+  /** Open a workspace path; tries the native viewer, then the in-app reader. */
   openPath: (path: string, content?: string) => Promise<void>;
   openBrowserPages: (pages: readonly BrowserTabInfo[]) => void;
   selectWorkspaceTab: (tabId: string) => void;
@@ -45,6 +52,8 @@ type WorkspaceContextValue = {
   setControlMode: (mode: BrowserControlMode) => void;
   ensureViewUrl: () => Promise<void>;
   setChatId: (chatId: string | null) => void;
+  clearPreferDetail: () => void;
+  requestDetail: () => void;
 };
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -62,6 +71,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [controlMode, setControlMode] = useState<BrowserControlMode>("agent");
   const [viewUrl, setViewUrl] = useState<string | null>(null);
   const [chatId, setChatId] = useState<string | null>(null);
+  const [preferDetail, setPreferDetail] = useState(false);
 
   const openFile = useCallback(
     (args: {
@@ -80,40 +90,30 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           version: args.version ?? 1,
         }),
       );
+      setPreferDetail(true);
     },
     [],
   );
 
   const openPath = useCallback(
     async (path: string, content?: string) => {
-      if (content !== undefined) {
-        openFile({ path, content });
-        return;
+      let text = content;
+      let fileId: string | undefined;
+      if (text === undefined) {
+        if (!chatId) return;
+        const fetched = await fetchChatFileContent(chatId, path);
+        if (fetched == null) return;
+        text = fetched;
       }
-      if (!chatId) return;
-      try {
-        const listRes = await fetch(
-          `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/files`,
-          { headers: authHeaders() },
-        );
-        if (!listRes.ok) return;
-        const list = (await listRes.json()) as {
-          files?: readonly { id: string; path: string }[];
-        };
-        const file = list.files?.find(
-          (f) => f.path === path || f.path.endsWith(`/${path}`),
-        );
-        if (!file) return;
-        const textRes = await fetch(
-          `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/files?fileId=${encodeURIComponent(file.id)}`,
-          { headers: authHeaders() },
-        );
-        if (!textRes.ok) return;
-        const text = await textRes.text();
-        openFile({ id: `file:${file.id}`, path: file.path, content: text });
-      } catch {
-        // Leave the workspace as it is when the file cannot be fetched.
-      }
+
+      const openedNative = await previewWorkspaceFile({ path, content: text });
+      if (openedNative) return;
+
+      openFile({
+        id: fileId ?? `ref:${path}`,
+        path,
+        content: text,
+      });
     },
     [chatId, openFile],
   );
@@ -134,6 +134,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const selectWorkspaceTab = useCallback((tabId: string) => {
     setWorkspace((prev) => selectTab(prev, tabId));
+    setPreferDetail(true);
   }, []);
 
   const closeWorkspaceTab = useCallback((tabId: string) => {
@@ -142,6 +143,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const closeWorkspace = useCallback(() => {
     setWorkspace(emptyWorkspace());
+  }, []);
+
+  const clearPreferDetail = useCallback(() => {
+    setPreferDetail(false);
+  }, []);
+
+  const requestDetail = useCallback(() => {
+    setPreferDetail(true);
   }, []);
 
   const ensureViewUrl = useCallback(async () => {
@@ -168,6 +177,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       controlMode,
       viewUrl,
       chatId,
+      preferDetail,
       openFile,
       openPath,
       openBrowserPages,
@@ -177,12 +187,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setControlMode,
       ensureViewUrl,
       setChatId,
+      clearPreferDetail,
+      requestDetail,
     }),
     [
       workspace,
       controlMode,
       viewUrl,
       chatId,
+      preferDetail,
       openFile,
       openPath,
       openBrowserPages,
@@ -190,6 +203,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       closeWorkspaceTab,
       closeWorkspace,
       ensureViewUrl,
+      clearPreferDetail,
+      requestDetail,
     ],
   );
 

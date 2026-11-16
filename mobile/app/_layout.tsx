@@ -7,6 +7,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
+import { ObserveErrorFallback } from "@/components/observe-error-fallback";
 import { PushNotificationsBridge } from "@/components/push-notifications-bridge";
 import { applyUpdatesOnLaunch } from "@/src/apply-updates";
 import { AuthProvider, useAuth } from "@/src/auth";
@@ -27,7 +28,32 @@ import {
   saveModelSelection,
   saveVectorModelSelection,
 } from "@/src/model-preferences";
+import { Observe, ObserveRoot, observeAvailable } from "@/src/observe";
 import { WorkspaceProvider } from "@/src/workspace-context";
+
+function agentHostnameForTraces(): string | null {
+  const raw = process.env.EXPO_PUBLIC_AGENT_URL?.trim();
+  if (!raw) return null;
+  try {
+    return new URL(raw).hostname || null;
+  } catch {
+    return null;
+  }
+}
+
+if (observeAvailable) {
+  const observeNetworkHost = agentHostnameForTraces();
+  Observe.configure({
+    integrations: {
+      "expo-router": {
+        filteredParams: ["token", "url", "error"],
+      },
+    },
+    networkTraces: observeNetworkHost
+      ? { filter: { hosts: [observeNetworkHost] } }
+      : false,
+  });
+}
 
 /** Prefer Mail home when the router has no deeper path to restore. */
 export const unstable_settings = {
@@ -37,9 +63,15 @@ export const unstable_settings = {
 /** Root stack: auth gates, then Mail-style home (chat/settings live inside). */
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <AuthenticatedLayout />
-    </AuthProvider>
+    <ObserveRoot
+      errorBoundaryFallback={({ resetError }) => (
+        <ObserveErrorFallback resetError={resetError} />
+      )}
+    >
+      <AuthProvider>
+        <AuthenticatedLayout />
+      </AuthProvider>
+    </ObserveRoot>
   );
 }
 

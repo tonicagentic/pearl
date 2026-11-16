@@ -2,6 +2,7 @@ import { Stack } from "expo-router";
 
 import { SignInScreen } from "@/components/sign-in-screen";
 import { useAuth } from "@/src/auth";
+import { ObserveInteractiveMarker } from "@/src/observe";
 
 /**
  * Signed-out entry: email sign-in / sign-up.
@@ -18,6 +19,7 @@ export default function SignInRoute() {
 
   return (
     <>
+      <ObserveInteractiveMarker />
       <Stack.Screen options={{ headerShown: false }} />
       <SignInScreen />
     </>

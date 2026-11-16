@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
+import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 
 import { revealChatThread } from "@/components/chat-history-push";
@@ -14,6 +15,9 @@ import {
   setActiveChatIdForPush,
   setAppIconBadge,
 } from "@/src/push-notifications";
+
+/** Expo Go lacks full push / Observe natives — skip registration there. */
+const isExpoGo = Constants.appOwnership === "expo";
 
 /**
  * Registers the Expo push token after sign-in, opens the named chat when a
@@ -30,6 +34,7 @@ export function PushNotificationsBridge() {
   patchPresenceRef.current = patchChatPresence;
 
   useEffect(() => {
+    if (isExpoGo) return;
     installPushNotificationHandler();
   }, []);
 
@@ -38,7 +43,7 @@ export function PushNotificationsBridge() {
   }, [activeChatId]);
 
   useEffect(() => {
-    if (restoring || !signedIn) {
+    if (isExpoGo || restoring || !signedIn) {
       return;
     }
     void registerForPushNotifications();

@@ -1,6 +1,8 @@
 import { Platform } from "react-native";
 import { Stack } from "expo-router";
 
+import { ObserveInteractiveMarker } from "@/src/observe";
+
 /**
  * Signed-in home stack: Mail home plus chat/profile/detail so the
  * Profile control shares one UINavigationBar and morphs natively.
@@ -8,7 +10,9 @@ import { Stack } from "expo-router";
  */
 export default function HomeLayout() {
   return (
-    <Stack>
+    <>
+      <ObserveInteractiveMarker />
+      <Stack>
       <Stack.Screen
         name="index"
         options={{
@@ -126,6 +130,7 @@ export default function HomeLayout() {
         name="projects/[id]/plans/[planId]"
         options={{ title: "Plan", headerShown: true }}
       />
-    </Stack>
+      </Stack>
+    </>
   );
 }
