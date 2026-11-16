@@ -36,6 +36,7 @@
   ],
   "exclude": [
     "node_modules",
-    "mobile"
+    "mobile",
+    "pearl-tasks"
   ]
 }

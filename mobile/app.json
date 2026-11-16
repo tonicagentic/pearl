@@ -10,12 +10,20 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tonicagentic.pearl",
+      "associatedDomains": [
+        "webcredentials:pearl.tonicagentic.com"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "Pearl uses the microphone so you can talk during a live conversation.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         }
+      },
+      "entitlements": {
+        "keychain-access-groups": [
+          "$(AppIdentifierPrefix)com.tonicagentic.pearl.shared"
+        ]
       },
       "buildNumber": "2"
     },

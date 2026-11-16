@@ -211,6 +211,13 @@
       "when": 1794761985551,
       "tag": "0032_normal_queen_noir",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1794862500667,
+      "tag": "0033_issue_project",
+      "breakpoints": true
     }
   ]
 }

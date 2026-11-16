@@ -48,8 +48,18 @@ const productionTrustedOrigins = [
     : null,
   "https://my-agent-pi-eight.vercel.app",
   "https://pearl.tonicagentic.com",
+  // Companion apps (shared account)
+  process.env.FINANCE_APP_URL?.trim() || null,
+  "pearlmoney://",
+  "pearlmoney://*",
+  "pearltasks://",
+  "pearltasks://*",
 ].filter((origin, index, list): origin is string => {
   if (!origin) return false;
+  // Custom schemes are not valid URL origins; keep them as-is.
+  if (origin.includes("://") && !/^https?:\/\//i.test(origin)) {
+    return list.indexOf(origin) === index;
+  }
   try {
     const normalized = new URL(origin).origin;
     return list.findIndex((entry) => {
@@ -88,6 +98,12 @@ const trustedOrigins =
         "http://172.30.*:*",
         "http://172.31.*:*",
         "http://192.168.*:*",
+        "pearlmoney://",
+        "pearlmoney://*",
+        "pearltasks://",
+        "pearltasks://*",
+        "exp://",
+        "exp://**",
       ];
 const allowedHosts = [
   "localhost:3000",

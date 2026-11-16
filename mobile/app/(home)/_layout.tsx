@@ -34,6 +34,14 @@ export default function HomeLayout() {
         }}
       />
       <Stack.Screen
+        name="tasks"
+        options={{
+          title: "Pearl Tasks",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
         name="issues/[id]"
         options={{
           title: "Task",

@@ -8,6 +8,7 @@ import {
   CoinsIcon,
   InfoIcon,
   IdCardIcon,
+  ListTodoIcon,
   LogOutIcon,
   NotebookPenIcon,
   ShapesIcon,
@@ -256,6 +257,15 @@ export function SettingsScreen() {
           label="Skills"
           detail="Custom and published"
           onPress={() => router.push("/skills")}
+        />
+      </SettingsCard>
+
+      <SettingsCard>
+        <SettingsRow
+          icon={<Icon as={ListTodoIcon} className="size-5 text-teal-500" />}
+          label="Tasks"
+          detail="Pearl Tasks"
+          onPress={() => router.push("/tasks")}
         />
       </SettingsCard>
 

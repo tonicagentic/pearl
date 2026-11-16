@@ -17,6 +17,7 @@ export type IssueDto = {
   resolvedAt: string | null;
   areaId: string;
   areaName: string;
+  projectId: string | null;
   state: IssueState;
   dueSoon?: boolean;
 };
@@ -82,6 +83,7 @@ export type CreateIssueInput = {
   readonly title: string;
   readonly areaName?: string;
   readonly description?: string;
+  readonly projectId?: string | null;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;
 };
@@ -129,6 +131,7 @@ export async function setIssueResolvedRequest(id: string, resolved: boolean): Pr
 export type UpdateIssueInput = {
   readonly title?: string;
   readonly description?: string | null;
+  readonly projectId?: string | null;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;
 };
