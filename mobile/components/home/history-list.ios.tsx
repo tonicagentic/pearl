@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
 import {
   Button,
   ContextMenu,
@@ -42,6 +43,7 @@ import {
   chatListPresence,
 } from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
+import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
 
 /** Fixed leading slot so titles stay aligned with or without a presence mark. */
@@ -87,25 +89,34 @@ export function HistoryListIOS({
     listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
   ];
 
-  const [projectNames, setProjectNames] = useState<ReadonlyMap<string, string>>(
-    () => new Map(),
+  const [projects, setProjects] = useState<readonly ProjectDto[] | null>(null);
+  const orderedProjects = useMemo(
+    () =>
+      [...(projects ?? [])].sort((a, b) =>
+        b.updatedAt.localeCompare(a.updatedAt),
+      ),
+    [projects],
+  );
+  const projectNames = useMemo(
+    () => new Map(orderedProjects.map((project) => [project.id, project.name])),
+    [orderedProjects],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    void import("@/src/projects-client")
-      .then(({ fetchProjects }) => fetchProjects())
-      .then((projects) => {
-        if (cancelled) return;
-        setProjectNames(
-          new Map(projects.map((project) => [project.id, project.name])),
-        );
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void fetchProjects()
+        .then((rows) => {
+          if (!cancelled) setProjects(rows);
+        })
+        .catch(() => {
+          if (!cancelled) setProjects((current) => current ?? []);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   const openChat = useCallback(
     (chatId: string) => {
@@ -130,7 +141,9 @@ export function HistoryListIOS({
         ? "Couldn’t load history"
         : "Sign in to see chats";
 
-  if (showEmptyCard) {
+  const showProjects = orderedProjects.length > 0;
+
+  if (showEmptyCard && !showProjects) {
     return (
       <View
         style={{
@@ -153,10 +166,15 @@ export function HistoryListIOS({
         backgroundColor,
         paddingBottom: bottomInset,
         // Keep SwiftUI List drawing inside this flex slot — viewport
-        // measurement made the Host paint over the pills / header above.
+        // measurement made the Host paint over the header above.
         overflow: "hidden",
       }}
     >
+      {showEmptyCard ? (
+        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+          <EmptyChatsCard />
+        </View>
+      ) : null}
       <Host style={{ flex: 1, backgroundColor }}>
         <List
           modifiers={[
@@ -165,6 +183,7 @@ export function HistoryListIOS({
             listRowSpacing(0),
           ]}
         >
+          {showEmptyCard ? null : (
           <Section>
             {selectionError ? (
               <SwiftText
@@ -226,9 +245,69 @@ export function HistoryListIOS({
               />
             ) : null}
           </Section>
+          )}
+          {showProjects ? (
+            <Section title="Projects">
+              <List.ForEach
+                data={orderedProjects}
+                keyExtractor={(project) => project.id}
+                estimatedItemSize={52}
+              >
+                {({ item: project }) => (
+                  <ProjectRow
+                    project={project}
+                    mutedColor={mutedColor}
+                    rowBackground={rowBackground}
+                  />
+                )}
+              </List.ForEach>
+            </Section>
+          ) : null}
         </List>
       </Host>
     </View>
+  );
+}
+
+function ProjectRow({
+  project,
+  mutedColor,
+  rowBackground,
+}: {
+  readonly project: ProjectDto;
+  readonly mutedColor: string;
+  readonly rowBackground: string;
+}) {
+  return (
+    <Button
+      onPress={() =>
+        router.push(`/projects/${encodeURIComponent(project.id)}`)
+      }
+      modifiers={[
+        buttonStyle("plain"),
+        listRowBackground(rowBackground),
+        listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
+      ]}
+    >
+      <HStack
+        spacing={12}
+        alignment="center"
+        modifiers={[padding({ vertical: 2 })]}
+      >
+        <Image
+          systemName="folder.fill"
+          size={14}
+          modifiers={[
+            frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
+            tint(mutedColor),
+          ]}
+        />
+        <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
+          {project.name}
+        </SwiftText>
+        <Spacer />
+      </HStack>
+    </Button>
   );
 }
 

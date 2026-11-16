@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
   Platform,
@@ -6,12 +6,14 @@ import {
   Text,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { EmptyChatsCard } from "@/components/home/empty-chats-card";
+import { ProjectMark } from "@/components/project-mark";
+import { Text as AppText } from "@/components/ui/text";
 import {
   HistoryListIOS,
   type HistoryChatActionHandlers,
@@ -30,7 +32,7 @@ import {
   chatPresenceAccessibilityLabel,
 } from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
-import { fetchProjects } from "@/src/projects-client";
+import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 
 export type { HistoryChatActionHandlers };
 
@@ -110,8 +112,17 @@ function HistoryListAndroid({
     selectChat,
     selectionError,
   } = useChats();
-  const [projectNames, setProjectNames] = useState<ReadonlyMap<string, string>>(
-    () => new Map(),
+  const [projects, setProjects] = useState<readonly ProjectDto[] | null>(null);
+  const orderedProjects = useMemo(
+    () =>
+      [...(projects ?? [])].sort((a, b) =>
+        b.updatedAt.localeCompare(a.updatedAt),
+      ),
+    [projects],
+  );
+  const projectNames = useMemo(
+    () => new Map(orderedProjects.map((project) => [project.id, project.name])),
+    [orderedProjects],
   );
   const pageBackground = useCSSVariable("--color-background") as
     | string
@@ -127,22 +138,21 @@ function HistoryListAndroid({
     !chatsError &&
     !selectionError;
 
-  useEffect(() => {
-    let cancelled = false;
-    void fetchProjects()
-      .then((projects) => {
-        if (cancelled) return;
-        setProjectNames(
-          new Map(projects.map((project) => [project.id, project.name])),
-        );
-      })
-      .catch(() => {
-        // Badges are best-effort; linking still works without names.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void fetchProjects()
+        .then((rows) => {
+          if (!cancelled) setProjects(rows);
+        })
+        .catch(() => {
+          if (!cancelled) setProjects((current) => current ?? []);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   const openChatActions = (chat: ChatListItem) => {
     if (!chatActions) return;
@@ -286,18 +296,49 @@ function HistoryListAndroid({
             )
           }
           ListFooterComponent={
-            hasMoreChats ? (
-              <Pressable
-                accessibilityRole="button"
-                className="min-h-12 justify-center rounded-lg px-3"
-                disabled={chatsLoading}
-                onPress={() => void loadMoreChats()}
-              >
-                <Text className="text-sm text-muted-foreground">
-                  {chatsLoading ? "Loading…" : "Load more"}
-                </Text>
-              </Pressable>
-            ) : undefined
+            <>
+              {hasMoreChats ? (
+                <Pressable
+                  accessibilityRole="button"
+                  className="min-h-12 justify-center rounded-lg px-3"
+                  disabled={chatsLoading}
+                  onPress={() => void loadMoreChats()}
+                >
+                  <Text className="text-sm text-muted-foreground">
+                    {chatsLoading ? "Loading…" : "Load more"}
+                  </Text>
+                </Pressable>
+              ) : null}
+              {orderedProjects.length > 0 ? (
+                <View className="mt-6">
+                  <AppText
+                    variant="secondary"
+                    weight="medium"
+                    className="mb-1 px-3"
+                  >
+                    Projects
+                  </AppText>
+                  {orderedProjects.map((project) => (
+                    <Pressable
+                      key={project.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={project.name}
+                      className="min-h-12 flex-row items-center gap-3 px-3 py-2"
+                      onPress={() =>
+                        router.push(
+                          `/projects/${encodeURIComponent(project.id)}`,
+                        )
+                      }
+                    >
+                      <ProjectMark name={project.name} size="sm" />
+                      <AppText variant="body" weight="medium" numberOfLines={1}>
+                        {project.name}
+                      </AppText>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+            </>
           }
         />
       </View>

@@ -1,44 +1,45 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentRef,
+} from "react";
 import { Alert, AppState, Platform, Pressable, View } from "react-native";
 import { Stack, router, useFocusEffect } from "expo-router";
-import { PlusIcon, UserIcon } from "lucide-react-native";
+import { UserIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import {
   HistoryScreen,
   type HistoryChatActionHandlers,
 } from "@/components/home/app-drawer";
+import { ComposeOverlay } from "@/components/home/compose-overlay";
 import {
-  HomeCategoryPills,
-  type HomeCategory,
-} from "@/components/home/home-category-pills";
-import { HOME_DOCK_CLEARANCE, HomeDock } from "@/components/home/home-dock";
-import { HistorySearchScreen } from "@/components/home/history-search-screen";
-import {
-  IssuesScreen,
-  type IssuesScreenHandle,
-} from "@/components/home/issues-screen";
+  HOME_COMPOSER_CLEARANCE,
+  HomeComposerDock,
+} from "@/components/home/home-composer-dock";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
-import {
-  ProjectsScreen,
-  type ProjectsScreenHandle,
-} from "@/components/home/projects-screen";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
+import { WalkthroughOverlay } from "@/components/home/walkthrough-overlay";
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
+import { setComposeHandoff } from "@/src/compose-handoff";
 import { initials as viewerInitials } from "@/src/initials";
 
 const IS_IOS = Platform.OS === "ios";
-/** Native bottom toolbar owns inset on iOS; Android uses the floating dock. */
-const LIST_BOTTOM_INSET = IS_IOS ? 0 : HOME_DOCK_CLEARANCE;
+const LIST_BOTTOM_INSET = HOME_COMPOSER_CLEARANCE;
 
 /**
- * Mail-style home: stack Profile control, category pills below, list + dock.
+ * Mail-style home: Profile, recent chats with projects underneath, and a
+ * full-width Ask Pearl composer that expands like search and settles into a
+ * thread on send.
  */
 export function MailHomeScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
@@ -58,21 +59,18 @@ export function MailHomeScreen() {
     reloadChats,
   } = useChats();
 
-  const [category, setCategory] = useState<HomeCategory>("chats");
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [composeActive, setComposeActive] = useState(false);
+  const [composeDraft, setComposeDraft] = useState("");
   const [costOpen, setCostOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectTargetId, setProjectTargetId] = useState<string | null>(null);
   const homeFocusedRef = useRef(false);
-  const tasksRef = useRef<IssuesScreenHandle>(null);
-  const projectsRef = useRef<ProjectsScreenHandle>(null);
+  const composerRef = useRef<ComponentRef<typeof View>>(null);
+  const chipsRef = useRef<ComponentRef<typeof View>>(null);
 
   useFocusEffect(
     useCallback(() => {
       homeFocusedRef.current = true;
-      // Silent so popping a thread does not rebuild the SwiftUI list. Adaptive
-      // polls in ChatsProvider keep presence fresh, including on /chat.
       void reloadChats({ silent: true });
       return () => {
         homeFocusedRef.current = false;
@@ -94,35 +92,34 @@ export function MailHomeScreen() {
     router.push("/chat");
   }, []);
 
-  const handleNewChat = useCallback(() => {
-    if (!billingReady) {
-      // Stay on chats — the empty state owns checkout.
-      setCategory("chats");
-      return;
-    }
-    // Drop any home search keyboard before the push so it cannot hand off
-    // into the chat transition.
+  const closeCompose = useCallback(() => {
+    setComposeActive(false);
+    setComposeDraft("");
     dismissKeyboard();
-    newChat();
-    router.push("/chat");
-  }, [billingReady, newChat]);
-
-  const closeSearch = useCallback(() => {
-    setSearchOpen(false);
-    setSearchQuery("");
   }, []);
 
-  const handleCompose = useCallback(() => {
-    if (category === "tasks") {
-      tasksRef.current?.openComposer();
-      return;
-    }
-    if (category === "projects") {
-      projectsRef.current?.openComposer();
-      return;
-    }
-    handleNewChat();
-  }, [category, handleNewChat]);
+  const activateCompose = useCallback(() => {
+    if (!billingReady) return;
+    setComposeActive(true);
+  }, [billingReady]);
+
+  const settleThread = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      if (!billingReady) return;
+      setComposeHandoff(trimmed);
+      setComposeActive(false);
+      setComposeDraft("");
+      dismissKeyboard();
+      newChat();
+      router.push({
+        pathname: "/chat",
+        params: { settle: "1" },
+      });
+    },
+    [billingReady, newChat],
+  );
 
   const promptRename = useCallback(
     (chat: ChatListItem) => {
@@ -227,27 +224,16 @@ export function MailHomeScreen() {
     ],
   );
 
-  const showCategoryCreate =
-    !searchOpen && (category === "tasks" || category === "projects");
-
-  const openCategoryCreate = useCallback(() => {
-    if (category === "tasks") tasksRef.current?.openComposer();
-    else if (category === "projects") projectsRef.current?.openComposer();
-  }, [category]);
-
   return (
     <View style={{ flex: 1, backgroundColor }}>
       <Stack.Screen
         options={{
-          // iOS: keep header up so Stack.SearchBar / bottom SearchBarSlot stay live.
-          headerShown: IS_IOS ? true : !searchOpen,
+          headerShown: true,
           title: "",
           headerShadowVisible: false,
           headerTransparent: false,
           headerTintColor: foregroundColor,
           headerStyle: { backgroundColor },
-          // iOS: Stack.Toolbar owns the morphing Profile control — leave
-          // headerLeft unset so we don't get a second chrome button.
           headerLeft: IS_IOS
             ? undefined
             : () => (
@@ -270,25 +256,9 @@ export function MailHomeScreen() {
                   )}
                 </Pressable>
               ),
-          headerRight:
-            IS_IOS || !showCategoryCreate
-              ? undefined
-              : () => (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      category === "tasks" ? "New task" : "New project"
-                    }
-                    className="h-10 w-10 items-center justify-center"
-                    onPress={openCategoryCreate}
-                  >
-                    <Icon as={PlusIcon} className="size-5 text-foreground" />
-                  </Pressable>
-                ),
         }}
       />
-      {/* Keep mounted while blurred so Profile morphs into chat/settings. */}
-      {IS_IOS && !searchOpen ? (
+      {IS_IOS ? (
         <Stack.Toolbar placement="left">
           {profileInitials ? (
             <Stack.Toolbar.Button
@@ -306,126 +276,47 @@ export function MailHomeScreen() {
           )}
         </Stack.Toolbar>
       ) : null}
-      {IS_IOS && !searchOpen && showCategoryCreate ? (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon="plus"
-            accessibilityLabel={
-              category === "tasks" ? "New task" : "New project"
-            }
-            onPress={openCategoryCreate}
-          />
-        </Stack.Toolbar>
-      ) : null}
-
-      {!searchOpen ? (
-        <View
-          style={{
-            zIndex: 2,
-            backgroundColor,
-            paddingHorizontal: 16,
-            paddingTop: 10,
-            paddingBottom: 8,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <HomeCategoryPills value={category} onChange={setCategory} />
-          </View>
-          {__DEV__ ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Thread samples"
-              hitSlop={8}
-              className="rounded-full bg-muted px-3 py-2 active:opacity-70"
-              onPress={() => router.push("/thread-samples")}
-            >
-              <Text variant="secondary" weight="medium" tone="default">
-                Samples
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-
       <View
         style={{ flex: 1, zIndex: 0, overflow: "hidden" }}
-        accessibilityElementsHidden={searchOpen}
+        accessibilityElementsHidden={composeActive}
       >
-        {category === "chats" ? (
-          billingReady ? (
-            <HistoryScreen
-              onOpenChat={openChat}
-              chatActions={chatActions}
-              visible={!searchOpen}
-              bottomInset={LIST_BOTTOM_INSET}
-            />
-          ) : (
-            <BillingGateScreen onReady={markBillingReady} />
-          )
-        ) : null}
-        {category === "tasks" ? (
-          <IssuesScreen ref={tasksRef} bottomInset={LIST_BOTTOM_INSET} />
-        ) : null}
-        {category === "projects" ? (
-          <ProjectsScreen ref={projectsRef} bottomInset={LIST_BOTTOM_INSET} />
-        ) : null}
+        {billingReady ? (
+          <HistoryScreen
+            onOpenChat={openChat}
+            chatActions={chatActions}
+            visible={!composeActive}
+            bottomInset={LIST_BOTTOM_INSET}
+          />
+        ) : (
+          <BillingGateScreen onReady={markBillingReady} />
+        )}
       </View>
 
-      <HistorySearchScreen
-        visible={searchOpen}
-        query={searchQuery}
-        onClose={closeSearch}
-        onOpenChat={() => {
-          router.push("/chat");
-        }}
-      />
-
-      {IS_IOS ? (
-        <Stack.SearchBar
-          placeholder="Search"
-          hideWhenScrolling
-          onChangeText={(event) => {
-            setSearchQuery(event.nativeEvent.text);
-          }}
-          onFocus={() => setSearchOpen(true)}
-          onOpen={() => setSearchOpen(true)}
-          onCancelButtonPress={closeSearch}
-          onClose={closeSearch}
-        />
-      ) : null}
-      {IS_IOS ? (
-        <Stack.Toolbar placement="bottom">
-          {/* Wide search: no separateBackground on the slot (that forces
-              compact integratedButton). Fixed-width Spacer — a flexible
-              Spacer steals the width — plus compose separateBackground. */}
-          <Stack.Toolbar.SearchBarSlot />
-          <Stack.Toolbar.Spacer width={10} sharesBackground={false} />
-          <Stack.Toolbar.Button
-            icon="square.and.pencil"
-            separateBackground
-            accessibilityLabel={
-              category === "tasks"
-                ? "New task"
-                : category === "projects"
-                  ? "New project"
-                  : "New chat"
-            }
-            onPress={handleCompose}
+      {billingReady ? (
+        <>
+          <ComposeOverlay
+            visible={composeActive}
+            onPick={settleThread}
+            chipsRef={chipsRef}
           />
-        </Stack.Toolbar>
-      ) : (
-        <HomeDock
-          searchActive={searchOpen}
-          searchValue={searchQuery}
-          onSearchChangeText={setSearchQuery}
-          onSearchActivate={() => setSearchOpen(true)}
-          onSearchClose={closeSearch}
-          onCompose={handleCompose}
-        />
-      )}
+          <HomeComposerDock
+            active={composeActive}
+            value={composeDraft}
+            onChangeText={setComposeDraft}
+            onActivate={activateCompose}
+            onClose={closeCompose}
+            onSend={settleThread}
+            dockRef={composerRef}
+          />
+        </>
+      ) : null}
+
+      <WalkthroughOverlay
+        composerRef={composerRef}
+        chipsRef={chipsRef}
+        composeActive={composeActive}
+        onActivateCompose={activateCompose}
+      />
 
       <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
       <ProjectPickerModal
