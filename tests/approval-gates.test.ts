@@ -68,14 +68,30 @@ test("approval policies: always() demands a human decision every call", async ()
 });
 
 test("approval policies: once() auto-allows only after an explicit approval", async () => {
+  // once() remembers via eve's private approval-evaluation handle, not
+  // approvedTools. Stub that handle the way evaluateApproval installs it.
+  const evaluationKey = Symbol.for("eve.approval-evaluation");
+  let accepted = false;
+  const evaluation = {
+    recheck: false,
+    read: () => ({
+      entry: accepted
+        ? { outcome: "accepted" as const, interactionId: "interaction_1" }
+        : undefined,
+      pending: false,
+    }),
+    ask: () => "user-approval" as const,
+  };
+
   const policy = once();
-  const pending = await policy(fakeCtx({}));
+  const pending = await policy(fakeCtx({ [evaluationKey]: evaluation }));
   assert.equal(pending, "user-approval");
 
+  accepted = true;
   const afterApproval = await policy(
-    fakeCtx({ approvedTools: new Set(["send_notification"]), callId: "call_2" }),
+    fakeCtx({ [evaluationKey]: evaluation, callId: "call_2" }),
   );
-  assert.notEqual(afterApproval, "user-approval");
+  assert.equal(afterApproval, "approved");
 });
 
 test("approval policies: never() is not-applicable (default no-gate)", async () => {

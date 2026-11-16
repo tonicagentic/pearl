@@ -133,7 +133,7 @@ test("read-only allowlists exclude write and log tools", () => {
   assert.equal(looksLikeWriteOrLogTool("list-profit-and-loss"), false);
 });
 
-test("read-only Gmail allowlist stays free of create_draft; compose list adds only it", () => {
+test("read-only Gmail allowlist stays free of writes; compose adds drafts and labels", () => {
   assert.equal(
     CONNECTION_READONLY_ALLOWLISTS.gmail.includes("create_draft"),
     false,
@@ -142,7 +142,7 @@ test("read-only Gmail allowlist stays free of create_draft; compose list adds on
     CONNECTION_COMPOSE_ALLOWLISTS.gmail.filter(
       (name) => !CONNECTION_READONLY_ALLOWLISTS.gmail.includes(name),
     ),
-    ["create_draft"],
+    [...CONNECTION_WRITE_TOOLS.gmail],
   );
   assert.equal(CONNECTION_WRITE_TOOLS.gmail.includes("send_message"), false);
 });
