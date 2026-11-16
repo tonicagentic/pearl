@@ -108,6 +108,8 @@ type ChatsContextValue = {
   readonly activeTitle: string;
   readonly chats: readonly ChatListItem[];
   readonly chatsLoading: boolean;
+  /** True after the first history fetch settles, even if the list mounts later. */
+  readonly chatsReady: boolean;
   readonly chatsError: string | null;
   readonly hasMoreChats: boolean;
   readonly loadMoreChats: () => Promise<void>;
@@ -213,6 +215,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const [chats, setChats] = useState<readonly ChatListItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [chatsLoading, setChatsLoading] = useState(false);
+  const [chatsReady, setChatsReady] = useState(false);
   const [chatsError, setChatsError] = useState<string | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
@@ -361,6 +364,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       setChatsError("Could not load history. Check your connection and retry.");
     } finally {
       if (!silent) setChatsLoading(false);
+      // The chats list can mount after this fetch (billing gate). A loading
+      // edge the list itself never saw must not keep the empty state hidden.
+      setChatsReady(true);
     }
   }, []);
 
@@ -1090,6 +1096,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       activeTitle,
       chats,
       chatsLoading,
+      chatsReady,
       chatsError,
       hasMoreChats: cursor !== null,
       loadMoreChats,
@@ -1119,6 +1126,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       activeTitle,
       chats,
       chatsLoading,
+      chatsReady,
       chatsError,
       cursor,
       loadMoreChats,

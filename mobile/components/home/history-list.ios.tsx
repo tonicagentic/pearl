@@ -32,6 +32,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { useCSSVariable } from "uniwind";
 
+import { EmptyChatsCard } from "@/components/home/empty-chats-card";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
@@ -64,6 +65,7 @@ export function HistoryListIOS({
   const {
     chats,
     chatsLoading,
+    chatsReady,
     chatsError,
     hasMoreChats,
     loadMoreChats,
@@ -114,13 +116,35 @@ export function HistoryListIOS({
     [onOpenChat, selectChat],
   );
 
-  const emptyLabel = chatsLoading
-    ? "Loading history…"
-    : chatsError
-      ? "Couldn’t load history"
-      : signedIn
-        ? "No chats yet"
+  const showEmptyCard =
+    chatsReady &&
+    signedIn &&
+    chats.length === 0 &&
+    !chatsLoading &&
+    !chatsError &&
+    !selectionError;
+  const emptyLabel =
+    chatsLoading || (signedIn && !chatsReady)
+      ? "Loading history…"
+      : chatsError
+        ? "Couldn’t load history"
         : "Sign in to see chats";
+
+  if (showEmptyCard) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor,
+          paddingBottom: bottomInset,
+          paddingHorizontal: 16,
+          paddingTop: 8,
+        }}
+      >
+        <EmptyChatsCard />
+      </View>
+    );
+  }
 
   return (
     <View

@@ -11,6 +11,7 @@ import { FlatList } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
+import { EmptyChatsCard } from "@/components/home/empty-chats-card";
 import {
   HistoryListIOS,
   type HistoryChatActionHandlers,
@@ -101,6 +102,7 @@ function HistoryListAndroid({
     chats,
     activeChatId,
     chatsLoading,
+    chatsReady,
     chatsError,
     hasMoreChats,
     loadMoreChats,
@@ -117,6 +119,13 @@ function HistoryListAndroid({
   const backgroundColor = pageBackground;
   const borderColor = useCSSVariable("--color-border") as string | undefined;
   const mutedDot = borderColor ?? "#3A3A3C";
+  const showEmptyCard =
+    chatsReady &&
+    signedIn &&
+    chats.length === 0 &&
+    !chatsLoading &&
+    !chatsError &&
+    !selectionError;
 
   useEffect(() => {
     let cancelled = false;
@@ -223,56 +232,58 @@ function HistoryListAndroid({
             </>
           }
           ListEmptyComponent={
-            <View
-              className="px-3 py-8"
-              accessible
-              accessibilityRole="summary"
-              accessibilityLabel={
-                chatsLoading
-                  ? "Loading history"
-                  : chatsError
-                    ? "Could not load history"
-                    : signedIn
-                      ? "No chats yet"
+            showEmptyCard ? (
+              <View className="pt-2">
+                <EmptyChatsCard />
+              </View>
+            ) : (
+              <View
+                className="px-3 py-8"
+                accessible
+                accessibilityRole="summary"
+                accessibilityLabel={
+                  chatsLoading || (signedIn && !chatsReady)
+                    ? "Loading history"
+                    : chatsError
+                      ? "Could not load history"
                       : "Sign in to see your chats"
-              }
-            >
-              {chatsLoading ? (
-                <Text className="text-muted-foreground text-sm">
-                  Loading history…
-                </Text>
-              ) : chatsError ? (
-                <>
-                  <Text className="text-base font-medium text-foreground">
-                    Couldn’t load history
+                }
+              >
+                {chatsLoading || (signedIn && !chatsReady) ? (
+                  <Text className="text-muted-foreground text-sm">
+                    Loading history…
                   </Text>
-                  <Text className="text-muted-foreground mt-1.5 text-sm leading-5">
-                    Check your connection and try again.
-                  </Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Retry loading history"
-                    className="mt-4 min-h-11 justify-center self-start"
-                    onPress={() => void reloadChats()}
-                  >
-                    <Text className="text-sm font-medium text-foreground">
-                      Try again
+                ) : chatsError ? (
+                  <>
+                    <Text className="text-base font-medium text-foreground">
+                      Couldn’t load history
                     </Text>
-                  </Pressable>
-                </>
-              ) : (
-                <>
-                  <Text className="text-base font-medium text-foreground">
-                    {signedIn ? "No chats yet" : "Sign in to see chats"}
-                  </Text>
-                  <Text className="text-muted-foreground mt-1.5 text-sm leading-5">
-                    {signedIn
-                      ? "Start a conversation and it will show up here."
-                      : "Your recent conversations appear here after you sign in."}
-                  </Text>
-                </>
-              )}
-            </View>
+                    <Text className="text-muted-foreground mt-1.5 text-sm leading-5">
+                      Check your connection and try again.
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Retry loading history"
+                      className="mt-4 min-h-11 justify-center self-start"
+                      onPress={() => void reloadChats()}
+                    >
+                      <Text className="text-sm font-medium text-foreground">
+                        Try again
+                      </Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <Text className="text-base font-medium text-foreground">
+                      Sign in to see chats
+                    </Text>
+                    <Text className="text-muted-foreground mt-1.5 text-sm leading-5">
+                      Your recent conversations appear here after you sign in.
+                    </Text>
+                  </>
+                )}
+              </View>
+            )
           }
           ListFooterComponent={
             hasMoreChats ? (
