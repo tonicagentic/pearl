@@ -191,7 +191,14 @@ function HistoryListAndroid({
         <FlatList
           className="flex-1"
           contentContainerClassName="px-4 pt-0"
-          contentContainerStyle={{ paddingBottom: 32 + bottomInset }}
+          contentContainerStyle={{
+            paddingBottom: 32 + bottomInset,
+            flexGrow: showEmptyCard && orderedProjects.length === 0 ? 1 : undefined,
+            justifyContent:
+              showEmptyCard && orderedProjects.length === 0
+                ? "center"
+                : undefined,
+          }}
           data={chats}
           extraData={`${activeChatId}:${chats.map((chat) => chat.presence ?? (chat.waitingForInput ? "waiting" : "idle")).join("")}`}
           keyExtractor={(chat) => chat.id}
@@ -243,9 +250,7 @@ function HistoryListAndroid({
           }
           ListEmptyComponent={
             showEmptyCard ? (
-              <View className="pt-2">
-                <EmptyChatsCard />
-              </View>
+              <EmptyChatsCard />
             ) : (
               <View
                 className="px-3 py-8"

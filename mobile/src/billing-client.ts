@@ -5,12 +5,16 @@ export type MobileBillingStatus = {
   readonly allowed: boolean;
   readonly exempt: boolean;
   readonly trial: boolean;
+  readonly guest?: boolean;
   readonly needsCheckout: boolean;
+  readonly needsSignup?: boolean;
   readonly reason: string | null;
   readonly message: string | null;
   readonly usageCapCents: number | null;
   readonly spentCents: number;
   readonly remainingCents: number | null;
+  readonly guestMessageCount?: number;
+  readonly guestMessageLimit?: number;
   readonly hasPortal: boolean;
   readonly bySource: readonly {
     readonly source: string;

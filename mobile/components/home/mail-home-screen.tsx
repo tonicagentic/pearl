@@ -15,31 +15,30 @@ import {
   HistoryScreen,
   type HistoryChatActionHandlers,
 } from "@/components/home/app-drawer";
-import { ComposeOverlay } from "@/components/home/compose-overlay";
 import {
   HOME_COMPOSER_CLEARANCE,
   HomeComposerDock,
 } from "@/components/home/home-composer-dock";
+import {
+  SIGN_IN_CARD_CLEARANCE,
+  SignInForNewChatCard,
+} from "@/components/home/sign-in-for-new-chat-card";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { WalkthroughOverlay } from "@/components/home/walkthrough-overlay";
-import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
-import { setComposeHandoff } from "@/src/compose-handoff";
 import { initials as viewerInitials } from "@/src/initials";
 
 const IS_IOS = Platform.OS === "ios";
-const LIST_BOTTOM_INSET = HOME_COMPOSER_CLEARANCE;
 
 /**
  * Mail-style home: Profile, recent chats with projects underneath, and a
- * full-width Ask Pearl composer that expands like search and settles into a
- * thread on send.
+ * full-width Ask Pearl control that opens a new chat.
  */
 export function MailHomeScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
@@ -48,9 +47,17 @@ export function MailHomeScreen() {
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
-  const { billingReady, markBillingReady, viewerEmail, viewerName } = useAuth();
-  const profileInitials = viewerInitials(viewerName, viewerEmail);
+  const { billingReady, isAnonymous, markBillingReady, viewerEmail, viewerName } =
+    useAuth();
+  const profileInitials = isAnonymous
+    ? null
+    : viewerInitials(viewerName, viewerEmail);
+  const openProfile = useCallback(() => {
+    router.push(isAnonymous ? "/sign-in" : "/settings");
+  }, [isAnonymous]);
   const {
+    chats,
+    chatsReady,
     newChat,
     deleteChat,
     renameChat,
@@ -59,14 +66,13 @@ export function MailHomeScreen() {
     reloadChats,
   } = useChats();
 
-  const [composeActive, setComposeActive] = useState(false);
-  const [composeDraft, setComposeDraft] = useState("");
   const [costOpen, setCostOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectTargetId, setProjectTargetId] = useState<string | null>(null);
   const homeFocusedRef = useRef(false);
   const composerRef = useRef<ComponentRef<typeof View>>(null);
-  const chipsRef = useRef<ComponentRef<typeof View>>(null);
+  const openedGuestChat = useRef(false);
+  const [holdingGuestHome, setHoldingGuestHome] = useState(isAnonymous);
 
   useFocusEffect(
     useCallback(() => {
@@ -92,34 +98,44 @@ export function MailHomeScreen() {
     router.push("/chat");
   }, []);
 
-  const closeCompose = useCallback(() => {
-    setComposeActive(false);
-    setComposeDraft("");
-    dismissKeyboard();
-  }, []);
+  const guestHasThread = isAnonymous && chats.length > 0;
+  const listBottomInset = guestHasThread
+    ? SIGN_IN_CARD_CLEARANCE
+    : HOME_COMPOSER_CLEARANCE;
 
-  const activateCompose = useCallback(() => {
+  const openNewChat = useCallback(() => {
     if (!billingReady) return;
-    setComposeActive(true);
-  }, [billingReady]);
-
-  const settleThread = useCallback(
-    (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed) return;
-      if (!billingReady) return;
-      setComposeHandoff(trimmed);
-      setComposeActive(false);
-      setComposeDraft("");
-      dismissKeyboard();
-      newChat();
-      router.push({
-        pathname: "/chat",
-        params: { settle: "1" },
+    // Guests get a single thread. Ask Pearl reopens it instead of starting another.
+    const existing = isAnonymous ? chats[0] : undefined;
+    if (existing) {
+      void selectChat(existing.id).then((ok) => {
+        if (ok) router.push("/chat");
       });
-    },
-    [billingReady, newChat],
-  );
+      return;
+    }
+    newChat();
+    router.push("/chat");
+  }, [billingReady, chats, isAnonymous, newChat, selectChat]);
+
+  useEffect(() => {
+    if (!isAnonymous) {
+      setHoldingGuestHome(false);
+      return;
+    }
+    if (!billingReady || !chatsReady || openedGuestChat.current) return;
+    openedGuestChat.current = true;
+    const existing = chats[0];
+    const open = existing
+      ? selectChat(existing.id).then((ok) => ok)
+      : Promise.resolve(true);
+    void open.then((ok) => {
+      if (!existing) newChat();
+      if (ok) {
+        router.push({ pathname: "/chat", params: { guestEntry: "1" } });
+      }
+      setHoldingGuestHome(false);
+    });
+  }, [billingReady, chats, chatsReady, isAnonymous, newChat, selectChat]);
 
   const promptRename = useCallback(
     (chat: ChatListItem) => {
@@ -239,11 +255,23 @@ export function MailHomeScreen() {
             : () => (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Profile"
-                  className="h-10 w-10 items-center justify-center"
-                  onPress={() => router.push("/settings")}
+                  accessibilityLabel={isAnonymous ? "Sign in" : "Profile"}
+                  className={
+                    isAnonymous
+                      ? "h-10 items-center justify-center px-1"
+                      : "h-10 w-10 items-center justify-center"
+                  }
+                  onPress={openProfile}
                 >
-                  {profileInitials ? (
+                  {isAnonymous ? (
+                    <Text
+                      variant="label"
+                      weight="semibold"
+                      className="text-foreground"
+                    >
+                      Sign in
+                    </Text>
+                  ) : profileInitials ? (
                     <Text
                       variant="label"
                       weight="semibold"
@@ -260,10 +288,17 @@ export function MailHomeScreen() {
       />
       {IS_IOS ? (
         <Stack.Toolbar placement="left">
-          {profileInitials ? (
+          {isAnonymous ? (
+            <Stack.Toolbar.Button
+              accessibilityLabel="Sign in"
+              onPress={openProfile}
+            >
+              Sign in
+            </Stack.Toolbar.Button>
+          ) : profileInitials ? (
             <Stack.Toolbar.Button
               accessibilityLabel="Profile"
-              onPress={() => router.push("/settings")}
+              onPress={openProfile}
             >
               {profileInitials}
             </Stack.Toolbar.Button>
@@ -271,52 +306,34 @@ export function MailHomeScreen() {
             <Stack.Toolbar.Button
               icon="person"
               accessibilityLabel="Profile"
-              onPress={() => router.push("/settings")}
+              onPress={openProfile}
             />
           )}
         </Stack.Toolbar>
       ) : null}
-      <View
-        style={{ flex: 1, zIndex: 0, overflow: "hidden" }}
-        accessibilityElementsHidden={composeActive}
-      >
-        {billingReady ? (
+      <View style={{ flex: 1, zIndex: 0, overflow: "hidden" }}>
+        {holdingGuestHome ? null : billingReady ? (
           <HistoryScreen
             onOpenChat={openChat}
             chatActions={chatActions}
-            visible={!composeActive}
-            bottomInset={LIST_BOTTOM_INSET}
+            bottomInset={listBottomInset}
           />
         ) : (
           <BillingGateScreen onReady={markBillingReady} />
         )}
       </View>
 
-      {billingReady ? (
-        <>
-          <ComposeOverlay
-            visible={composeActive}
-            onPick={settleThread}
-            chipsRef={chipsRef}
-          />
-          <HomeComposerDock
-            active={composeActive}
-            value={composeDraft}
-            onChangeText={setComposeDraft}
-            onActivate={activateCompose}
-            onClose={closeCompose}
-            onSend={settleThread}
-            dockRef={composerRef}
-          />
-        </>
+      {billingReady && !holdingGuestHome ? (
+        guestHasThread ? (
+          <SignInForNewChatCard />
+        ) : (
+          <HomeComposerDock onPress={openNewChat} dockRef={composerRef} />
+        )
       ) : null}
 
-      <WalkthroughOverlay
-        composerRef={composerRef}
-        chipsRef={chipsRef}
-        composeActive={composeActive}
-        onActivateCompose={activateCompose}
-      />
+      {holdingGuestHome || guestHasThread ? null : (
+        <WalkthroughOverlay composerRef={composerRef} />
+      )}
 
       <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
       <ProjectPickerModal

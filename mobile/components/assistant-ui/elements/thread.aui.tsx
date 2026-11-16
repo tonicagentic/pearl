@@ -64,7 +64,6 @@ import {
   BranchPickerPrimitive,
   ComposerPrimitive,
   MessagePrimitive,
-  SuggestionPrimitive,
   ThreadPrimitive,
   type TextMessagePartComponent,
   type ThreadMessage as ThreadMessageType,
@@ -199,6 +198,8 @@ export type ThreadProps = {
    * authorization banner, approval buttons, choice options, or free-text.
    */
   waitingAction?: WaitingAction | null;
+  /** Guest hit the free-message limit — don't steal focus into the composer. */
+  signupBlocked?: boolean | undefined;
 };
 
 export type ThreadViewportSnapshot = {
@@ -360,6 +361,7 @@ export const Thread: FC<ThreadProps> = ({
   history,
   notice,
   waitingAction,
+  signupBlocked = false,
 }) => {
   const aui = useAui();
   const isRunning = useAuiState((s) => s.thread.isRunning);
@@ -658,19 +660,11 @@ export const Thread: FC<ThreadProps> = ({
         onLayout={floatsComposer ? measureComposerOverlay : undefined}
         style={{ opacity: chromeRevealed ? 1 : 0 }}
       >
-        <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
-          <View
-            pointerEvents={floatsComposer ? "box-none" : undefined}
-            className="px-4 pb-4"
-          >
-            <ThreadSuggestions />
-          </View>
-        </AuiIf>
         <ThreadFollowupSuggestions />
         <ComposerDock
           floats={floatsComposer}
           waitingAction={waitingAction}
-          autoFocus={autoFocus && chromeRevealed}
+          autoFocus={autoFocus && chromeRevealed && !signupBlocked}
           focusNewChatKey={chromeRevealed ? focusNewChatKey : -1}
           conversationId={conversationId}
         />
@@ -718,7 +712,13 @@ const ComposerDock: FC<{
   autoFocus?: boolean;
   focusNewChatKey: number;
   conversationId?: string | null;
-}> = ({ floats, waitingAction, autoFocus, focusNewChatKey, conversationId }) => {
+}> = ({
+  floats,
+  waitingAction,
+  autoFocus,
+  focusNewChatKey,
+  conversationId,
+}) => {
   const insets = useSafeAreaInsets();
   const keyboardHeight = useContext(KeyboardHeightContext);
   const chromeApi = useContext(ComposerChromeContext);
@@ -1082,26 +1082,6 @@ const ThreadHistorySkeleton: FC = () => (
       <View className="bg-muted h-4 w-2/3 rounded" />
     </View>
   </View>
-);
-
-const ThreadSuggestions: FC = () => (
-  <View className="aui-thread-welcome-suggestions w-full flex-row flex-wrap items-center justify-center gap-2">
-    <ThreadPrimitive.Suggestions>
-      {() => <ThreadSuggestionItem />}
-    </ThreadPrimitive.Suggestions>
-  </View>
-);
-
-const ThreadSuggestionItem: FC = () => (
-  <SuggestionPrimitive.Trigger
-    send
-    className="aui-thread-welcome-suggestion border-border/60 active:bg-muted flex-row items-center gap-1.5 rounded-full border px-3.5 py-1.5"
-  >
-    <SuggestionPrimitive.Title className="aui-thread-welcome-suggestion-text-1 text-foreground text-sm" />
-    <AuiIf condition={(s) => !!s.suggestion.label}>
-      <SuggestionPrimitive.Description className="aui-thread-welcome-suggestion-text-2 text-muted-foreground text-sm" />
-    </AuiIf>
-  </SuggestionPrimitive.Trigger>
 );
 
 const ComposerInputHeightContext = createContext<SharedValue<number> | null>(null);

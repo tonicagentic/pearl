@@ -76,7 +76,7 @@ export default function RootLayout() {
 }
 
 function AuthenticatedLayout() {
-  const { signedIn, restoring, viewerEmail } = useAuth();
+  const { isAnonymous, signedIn, restoring, viewerEmail } = useAuth();
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -122,6 +122,8 @@ function AuthenticatedLayout() {
                   // Remount per auth zone so home is the initial route, not a
                   // push on top of sign-in (animation: "none" alone is ignored
                   // for Protected guard swaps on iOS native-stack).
+                  // Guests stay on home; sign-in stays registered so Profile
+                  // can push it without dropping the guest session.
                   key={signedIn ? "app" : "auth"}
                   screenOptions={({ route }) =>
                     route.name === "(home)" || route.name === "sign-in"
@@ -132,14 +134,20 @@ function AuthenticatedLayout() {
                       : {}
                   }
                 >
-                  <Stack.Protected guard={signedOut} redirectTo="/">
+                  <Stack.Protected
+                    guard={signedOut || isAnonymous}
+                    redirectTo="/"
+                  >
                     <Stack.Screen
                       name="sign-in"
                       options={{
                         headerShown: false,
                         animation: "none",
+                        gestureEnabled: true,
                       }}
                     />
+                  </Stack.Protected>
+                  <Stack.Protected guard={signedOut} redirectTo="/">
                     <Stack.Screen
                       name="reset-password"
                       options={{
@@ -197,70 +205,6 @@ function AuthenticatedLayout() {
                         headerShown: true,
                         headerBackButtonDisplayMode: "minimal",
                       }}
-                    />
-                    <Stack.Screen
-                      name="skills"
-                      options={{ title: "Skills", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="plugins/index"
-                      options={{ title: "Plugins", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="plugins/[id]"
-                      options={{ title: "Plugin", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="email"
-                      options={{
-                        title: "Email",
-                        headerShown: true,
-                        headerBackButtonDisplayMode: "minimal",
-                      }}
-                    />
-                    <Stack.Screen
-                      name="calendar"
-                      options={{
-                        title: "Calendar",
-                        headerShown: true,
-                        headerBackButtonDisplayMode: "minimal",
-                      }}
-                    />
-                    <Stack.Screen
-                      name="models"
-                      options={{ title: "Models", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="account"
-                      options={{ title: "Account", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="identity"
-                      options={{ title: "Identity", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="memory"
-                      options={{ title: "Memory", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="computer-use"
-                      options={{ title: "Computer Use", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="usage"
-                      options={{
-                        title: "Usage",
-                        headerShown: true,
-                        headerBackButtonDisplayMode: "minimal",
-                      }}
-                    />
-                    <Stack.Screen
-                      name="about"
-                      options={{ title: "About", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="self-host"
-                      options={{ title: "Self-host", headerShown: true }}
                     />
                     <Stack.Protected guard={__DEV__}>
                       <Stack.Screen

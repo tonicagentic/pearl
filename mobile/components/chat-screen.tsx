@@ -17,6 +17,7 @@ import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
+import { SignupSheet } from "@/components/signup-sheet";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { ComputerPanel } from "@/components/computer-panel";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
@@ -75,7 +76,13 @@ export function ChatScreen({
     | string
     | undefined;
   const foregroundColor = useCSSVariable("--color-foreground") as string | undefined;
-  const { billingReady, markBillingReady } = useAuth();
+  const {
+    billingReady,
+    markBillingReady,
+    needsSignup,
+    isAnonymous,
+    refreshGuestGate,
+  } = useAuth();
   // Match Thread list clearance under the transparent iOS nav.
   const computerTopInset =
     Platform.OS === "ios" ? insets.top + 44 : 0;
@@ -98,6 +105,7 @@ export function ChatScreen({
   } = useChats();
   const { setChatId, tabs } = useWorkspace();
   const [mainTab, setMainTab] = useState<MainTab>("chat");
+  const [signupOpen, setSignupOpen] = useState(false);
   const tabCountRef = useRef(tabs.length);
   const navigation = useNavigation();
   // Defer new-chat autofocus until the stack push finishes so keyboard +
@@ -107,6 +115,10 @@ export function ChatScreen({
   useEffect(() => {
     setChatId(activeChatId);
   }, [activeChatId, setChatId]);
+
+  useEffect(() => {
+    if (!isAnonymous && signupOpen) setSignupOpen(false);
+  }, [isAnonymous, signupOpen]);
 
   useEffect(() => {
     // Only gate the new-chat autofocus path.
@@ -520,6 +532,12 @@ export function ChatScreen({
         const ctx = sendCtxRef.current;
         const { store: activeStore } = ctx;
         setSendError(null);
+        if (needsSignup) {
+          setSignupOpen(true);
+          throw new MessageNotSentError(
+            "Sign up to continue chatting.",
+          );
+        }
         if (ctx.composerBlocked) {
           throw new MessageNotSentError(
             "This chat is waiting for authorization or approval.",
@@ -604,6 +622,7 @@ export function ChatScreen({
             // deliveryId can arrive before delivery.consumed; clear pending so
             // a follow-up is not blocked by the stale prepareSend marker.
             ctx.clearPendingMessage(activeStore);
+            if (isAnonymous) void refreshGuestGate();
             void import("@/src/pending-attachments").then(
               ({ clearPendingAttachments, chatAttachmentKey }) => {
                 clearPendingAttachments(chatAttachmentKey(ctx.activeChatId));
@@ -714,7 +733,16 @@ export function ChatScreen({
       },
     }),
     // Rebuild only when the thread snapshot the runtime compares changes.
-    [projectedMessages, isBusy, status, composerBlocked, unresolvedSend],
+    [
+      projectedMessages,
+      isBusy,
+      status,
+      composerBlocked,
+      unresolvedSend,
+      needsSignup,
+      isAnonymous,
+      refreshGuestGate,
+    ],
   );
 
   // Carry out (and similar) creates a chat with a durable pending marker but no
@@ -979,13 +1007,15 @@ export function ChatScreen({
                           Platform.OS === "ios" &&
                           activeChatId === null &&
                           chromeRevealed &&
-                          navSettled
+                          navSettled &&
+                          !needsSignup
                         }
                         chromeRevealed={chromeRevealed}
                         conversationId={activeChatId}
                         focusNewChatKey={newChatEntry}
                         notice={notice}
                         waitingAction={waitingAction}
+                        signupBlocked={needsSignup}
                       />
                     )}
                   </AssistantRuntimeProvider>
@@ -1008,6 +1038,10 @@ export function ChatScreen({
                       projectPickWaiter.current = null;
                       waiter?.resolve(project.id);
                     }}
+                  />
+                  <SignupSheet
+                    open={signupOpen}
+                    onClose={() => setSignupOpen(false)}
                   />
                 </SubagentInspectProvider>
               </ConversationProvider>

@@ -1,6 +1,5 @@
 import { Platform } from "react-native";
 import { Stack } from "expo-router";
-
 import { ObserveInteractiveMarker } from "@/src/observe";
 
 /**
@@ -129,6 +128,70 @@ export default function HomeLayout() {
       <Stack.Screen
         name="projects/[id]/plans/[planId]"
         options={{ title: "Plan", headerShown: true }}
+      />
+      <Stack.Screen
+        name="account"
+        options={{ title: "Account", headerShown: true }}
+      />
+      <Stack.Screen
+        name="identity"
+        options={{ title: "Identity", headerShown: true }}
+      />
+      <Stack.Screen
+        name="memory"
+        options={{ title: "Memory", headerShown: true }}
+      />
+      <Stack.Screen
+        name="skills"
+        options={{ title: "Skills", headerShown: true }}
+      />
+      <Stack.Screen
+        name="plugins/index"
+        options={{ title: "Plugins", headerShown: true }}
+      />
+      <Stack.Screen
+        name="plugins/[id]"
+        options={{ title: "Plugin", headerShown: true }}
+      />
+      <Stack.Screen
+        name="email"
+        options={{
+          title: "Email",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="calendar"
+        options={{
+          title: "Calendar",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="models"
+        options={{ title: "Models", headerShown: true }}
+      />
+      <Stack.Screen
+        name="computer-use"
+        options={{ title: "Computer Use", headerShown: true }}
+      />
+      <Stack.Screen
+        name="usage"
+        options={{
+          title: "Usage",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="about"
+        options={{ title: "About", headerShown: true }}
+      />
+      <Stack.Screen
+        name="self-host"
+        options={{ title: "Self-host", headerShown: true }}
       />
       </Stack>
     </>

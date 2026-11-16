@@ -42,6 +42,13 @@ export type AuthHandOff = {
 
 type AuthContextValue = {
   readonly signedIn: boolean;
+  /** True while the session belongs to a better-auth anonymous guest. */
+  readonly isAnonymous: boolean;
+  /**
+   * Guest hit the free-message limit — show the signup card instead of the
+   * Subscribe empty state.
+   */
+  readonly needsSignup: boolean;
   /** Email of the signed-in account. */
   readonly viewerEmail: string | null;
   /** better-auth `user.name` for the Profile initials / Account screen. */
@@ -50,7 +57,8 @@ type AuthContextValue = {
   readonly restoring: boolean;
   /**
    * False until billing status says the user may chat (free pass, active
-   * subscription, or billing disabled on the deployment).
+   * subscription, friend trial, or billing disabled on the deployment).
+   * Guests stay ready so the signup card can own the stop.
    */
   readonly billingReady: boolean;
   /**
@@ -82,6 +90,8 @@ type AuthContextValue = {
    * Null when the probe fails — caller should keep the current flow.
    */
   readonly checkEmailExists: (email: string) => Promise<boolean | null>;
+  /** Re-check guest message allowance after a send. */
+  readonly refreshGuestGate: () => Promise<void>;
   readonly completeAuthHandOff: () => void;
   readonly markBillingReady: () => void;
   /** Updates the cached display name after Account saves. */
@@ -103,6 +113,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 type AuthTokenResult = {
   readonly credential: string | null;
   readonly name: string | null;
+  readonly isAnonymous: boolean;
 };
 
 function nameFromAuthUser(user: unknown): string | null {
@@ -111,8 +122,15 @@ function nameFromAuthUser(user: unknown): string | null {
   return typeof name === "string" && name.trim() ? name.trim() : null;
 }
 
+function isAnonymousFromUser(user: unknown): boolean {
+  if (!user || typeof user !== "object") return false;
+  return Boolean((user as { isAnonymous?: unknown }).isAnonymous);
+}
+
 export function AuthProvider({ children }: { readonly children: ReactNode }) {
   const [signedIn, setSignedIn] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [needsSignup, setNeedsSignup] = useState(false);
   const [viewerEmail, setViewerEmail] = useState<string | null>(null);
   const [viewerName, setViewerName] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(true);
@@ -126,16 +144,30 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       const status = await fetchBillingStatus();
       if (!status || !status.enabled) {
         setBillingReady(true);
+        setNeedsSignup(false);
         return;
       }
-      setBillingReady(Boolean(status.exempt || status.allowed));
+      if (status.guest) {
+        setIsAnonymous(true);
+        setNeedsSignup(Boolean(status.needsSignup));
+        // Guests always keep chat chrome; the signup card owns the stop.
+        setBillingReady(true);
+        return;
+      }
+      setIsAnonymous(false);
+      setNeedsSignup(false);
+      setBillingReady(Boolean(status.exempt || status.allowed || status.trial));
     } catch {
       // If status cannot be loaded, let the server turn gate decide.
       setBillingReady(true);
     }
   }, []);
 
-  const refreshViewerName = useCallback(async (credential: string) => {
+  const refreshGuestGate = useCallback(async () => {
+    await refreshBillingGate();
+  }, [refreshBillingGate]);
+
+  const readSessionUser = useCallback(async (credential: string) => {
     try {
       const response = await fetch(`${AGENT_URL}/api/auth/get-session`, {
         method: "GET",
@@ -144,19 +176,56 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         },
         cache: "no-store",
       });
-      if (!response.ok) return;
+      if (!response.ok) return null;
       const body = (await response.json().catch(() => null)) as {
         user?: unknown;
       } | null;
-      const name = nameFromAuthUser(body?.user);
-      if (name) setViewerName(name);
+      return body?.user ?? null;
     } catch {
-      // Initials fall back to the email local-part until name loads.
+      return null;
+    }
+  }, []);
+
+  const refreshViewerName = useCallback(
+    async (credential: string) => {
+      const user = await readSessionUser(credential);
+      const name = nameFromAuthUser(user);
+      if (name) setViewerName(name);
+      if (user) setIsAnonymous(isAnonymousFromUser(user));
+    },
+    [readSessionUser],
+  );
+
+  const signInAnonymous = useCallback(async (): Promise<AuthTokenResult | null> => {
+    try {
+      const timeout = AbortSignal.timeout(45_000);
+      const response = await fetch(`${AGENT_URL}/api/auth/sign-in/anonymous`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: "{}",
+        signal: timeout,
+      });
+      const body = (await response.json().catch(() => null)) as {
+        token?: string;
+        user?: unknown;
+      } | null;
+      const credential = body?.token ?? null;
+      if (!response.ok || !credential) return null;
+      return {
+        credential,
+        name: nameFromAuthUser(body?.user),
+        isAnonymous: true,
+      };
+    } catch {
+      return null;
     }
   }, []);
 
   // Cold-start restore: agent URL first (so API calls hit the right host),
-  // then the stored session, so a signed-in user lands straight in the chat.
+  // then the stored session. With no session, create a silent guest so the
+  // first launch lands in chat instead of the sign-in gate.
   useEffect(() => {
     let cancelled = false;
 
@@ -165,17 +234,33 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         await restoreAgentUrl();
         if (cancelled) return;
         const session = await loadSession();
-        if (cancelled || !session) return;
-        setAuthCookie(session.cookie);
-        setViewerEmail(session.email || null);
-        setSignedIn(true);
-        await refreshBillingGate();
-        // Name for initials — do not block restoring / home paint on this.
-        if (!cancelled) {
-          void refreshViewerName(session.cookie);
+        if (cancelled) return;
+        if (session) {
+          setAuthCookie(session.cookie);
+          setViewerEmail(session.email || null);
+          const user = await readSessionUser(session.cookie);
+          if (cancelled) return;
+          setIsAnonymous(isAnonymousFromUser(user));
+          const name = nameFromAuthUser(user);
+          if (name) setViewerName(name);
+          setSignedIn(true);
+          await refreshBillingGate();
+          return;
+        }
+
+        const guest = await signInAnonymous();
+        if (cancelled) return;
+        if (guest?.credential) {
+          await saveSession(guest.credential, guest.name ?? "Guest");
+          setAuthCookie(guest.credential);
+          setViewerEmail(null);
+          setViewerName(guest.name);
+          setIsAnonymous(true);
+          setSignedIn(true);
+          await refreshBillingGate();
         }
       } catch {
-        // Corrupt or unreadable storage: fall through to the sign-in screen.
+        // Corrupt storage or guest create failed: fall through to sign-in.
       } finally {
         if (!cancelled) {
           setRestoring(false);
@@ -186,7 +271,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [refreshBillingGate, refreshViewerName]);
+  }, [readSessionUser, refreshBillingGate, signInAnonymous]);
 
   const commitSession = useCallback(
     async (
@@ -194,10 +279,13 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       email: string,
       handOffFrom?: AuthCtaFrame | null,
       name?: string | null,
+      anonymous = false,
     ) => {
       await saveSession(credential, email);
       setAuthCookie(credential);
-      setViewerEmail(email);
+      setViewerEmail(anonymous ? null : email);
+      setIsAnonymous(anonymous);
+      setNeedsSignup(false);
       if (name) {
         setViewerName(name);
       } else {
@@ -221,12 +309,18 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       options?: { readonly requireToken?: boolean },
     ): Promise<AuthTokenResult> => {
       const timeout = AbortSignal.timeout(45_000);
+      // Carry the guest bearer so better-auth can link chats onto the new
+      // account before deleting the anonymous user.
+      const guestCredential = getAuthCookie();
       // Do not set Origin here: iOS URLSession strips/replaces it with "null".
       // Production stamps the canonical app origin in /api/auth before CSRF.
       const response = await fetch(`${AGENT_URL}/api/auth/${path}`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          ...(guestCredential
+            ? { authorization: `Bearer ${guestCredential}` }
+            : {}),
         },
         body: JSON.stringify({ email, password, name: email.split("@")[0] }),
         signal: timeout,
@@ -258,6 +352,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       return {
         credential,
         name: nameFromAuthUser(body?.user),
+        isAnonymous: isAnonymousFromUser(body?.user),
       };
     },
     [],
@@ -282,6 +377,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
           email,
           handOffFrom,
           result.name,
+          false,
         );
       } catch (cause) {
         setSignInState("error");
@@ -324,6 +420,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
           email,
           handOffFrom,
           result.name,
+          false,
         );
       } catch (cause) {
         setSignInState("error");
@@ -455,6 +552,8 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     void clearSession();
     setViewerEmail(null);
     setViewerName(null);
+    setIsAnonymous(false);
+    setNeedsSignup(false);
     setAuthHandOff(null);
     setSignInState("idle");
     setSignInError(null);
@@ -467,6 +566,8 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   const value = useMemo(
     () => ({
       signedIn,
+      isAnonymous,
+      needsSignup,
       viewerEmail,
       viewerName,
       restoring,
@@ -479,6 +580,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       requestPasswordReset,
       resetPassword,
       checkEmailExists,
+      refreshGuestGate,
       completeAuthHandOff,
       markBillingReady,
       setViewerName,
@@ -486,6 +588,8 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     }),
     [
       signedIn,
+      isAnonymous,
+      needsSignup,
       viewerEmail,
       viewerName,
       restoring,
@@ -498,6 +602,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       requestPasswordReset,
       resetPassword,
       checkEmailExists,
+      refreshGuestGate,
       completeAuthHandOff,
       markBillingReady,
       signOut,

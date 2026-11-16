@@ -150,8 +150,8 @@ export function HistoryListIOS({
           flex: 1,
           backgroundColor,
           paddingBottom: bottomInset,
-          paddingHorizontal: 16,
-          paddingTop: 8,
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
         <EmptyChatsCard />
@@ -171,7 +171,13 @@ export function HistoryListIOS({
       }}
     >
       {showEmptyCard ? (
-        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+        <View
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 28,
+          }}
+        >
           <EmptyChatsCard />
         </View>
       ) : null}

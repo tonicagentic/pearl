@@ -3,9 +3,11 @@ import {
   Modal,
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   View,
   type LayoutRectangle,
 } from "react-native";
+import { useIsFocused } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Text } from "@/components/ui/text";
@@ -15,26 +17,10 @@ import {
   markWalkthroughDone,
 } from "@/src/walkthrough-store";
 
-type StepId = "composer" | "prompts";
-
-type Step = {
-  readonly id: StepId;
-  readonly title: string;
-  readonly body: string;
-};
-
-const STEPS: readonly Step[] = [
-  {
-    id: "composer",
-    title: "Ask Pearl",
-    body: "Start a conversation whenever you want.",
-  },
-  {
-    id: "prompts",
-    title: "Try one of these",
-    body: "Tap a prompt to send it, or type your own.",
-  },
-];
+const STEP = {
+  title: "New chat",
+  body: "Start a conversation whenever you want.",
+} as const;
 
 const ACCENT = "#4A90E2";
 
@@ -44,19 +30,14 @@ const ACCENT = "#4A90E2";
  */
 export function WalkthroughOverlay({
   composerRef,
-  chipsRef,
-  composeActive,
-  onActivateCompose,
 }: {
   readonly composerRef: React.RefObject<ComponentRef<typeof View> | null>;
-  readonly chipsRef: React.RefObject<ComponentRef<typeof View> | null>;
-  readonly composeActive: boolean;
-  readonly onActivateCompose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const focused = useIsFocused();
+  const { height: windowHeight } = useWindowDimensions();
   const { isAnonymous, restoring } = useAuth();
   const [ready, setReady] = useState(false);
-  const [stepIndex, setStepIndex] = useState(0);
   const [hole, setHole] = useState<LayoutRectangle | null>(null);
 
   useEffect(() => {
@@ -73,11 +54,8 @@ export function WalkthroughOverlay({
     };
   }, [isAnonymous, restoring]);
 
-  const step = STEPS[stepIndex] ?? STEPS[0];
-
   const measure = useCallback(() => {
-    const target =
-      step.id === "composer" ? composerRef.current : chipsRef.current;
+    const target = composerRef.current;
     if (!target) {
       setHole(null);
       return;
@@ -87,29 +65,20 @@ export function WalkthroughOverlay({
         setHole({ x, y, width, height });
       },
     );
-  }, [chipsRef, composerRef, step.id]);
+  }, [composerRef]);
 
   useEffect(() => {
     if (!ready) return;
     const id = requestAnimationFrame(() => measure());
     return () => cancelAnimationFrame(id);
-  }, [measure, ready, stepIndex, composeActive]);
+  }, [measure, ready]);
 
   const finish = useCallback(() => {
     setReady(false);
     void markWalkthroughDone();
   }, []);
 
-  const advance = useCallback(() => {
-    if (step.id === "composer") {
-      onActivateCompose();
-      setStepIndex(1);
-      return;
-    }
-    finish();
-  }, [finish, onActivateCompose, step.id]);
-
-  if (!ready) return null;
+  if (!ready || !focused) return null;
 
   const pad = 6;
   const ring = hole
@@ -121,9 +90,14 @@ export function WalkthroughOverlay({
       }
     : null;
 
-  const bubbleTop = ring
-    ? ring.top + ring.height + 14
-    : insets.top + 120;
+  const bubbleHeight = 200;
+  const belowTop = ring ? ring.top + ring.height + 14 : insets.top + 120;
+  const placeAbove = ring
+    ? belowTop + bubbleHeight > windowHeight - insets.bottom
+    : false;
+  const bubbleTop = placeAbove && ring
+    ? Math.max(insets.top + 12, ring.top - bubbleHeight - 12)
+    : belowTop;
 
   return (
     <Modal transparent animationType="fade" visible statusBarTranslucent>
@@ -152,17 +126,17 @@ export function WalkthroughOverlay({
             },
           ]}
         >
-          <View style={styles.caret} />
+          <View style={placeAbove ? styles.caretBelow : styles.caret} />
           <Text variant="title" className="mb-1.5">
-            {step.title}
+            {STEP.title}
           </Text>
           <Text variant="body" tone="muted" className="mb-4 leading-[22px]">
-            {step.body}
+            {STEP.body}
           </Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Continue"
-            onPress={advance}
+            onPress={finish}
             style={styles.cta}
           >
             <Text
@@ -210,6 +184,15 @@ const styles = StyleSheet.create({
   caret: {
     position: "absolute",
     top: -8,
+    alignSelf: "center",
+    width: 16,
+    height: 16,
+    backgroundColor: "#FFFFFF",
+    transform: [{ rotate: "45deg" }],
+  },
+  caretBelow: {
+    position: "absolute",
+    bottom: -8,
     alignSelf: "center",
     width: 16,
     height: 16,

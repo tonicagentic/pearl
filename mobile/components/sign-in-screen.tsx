@@ -10,8 +10,10 @@ import {
   type TextInputInstance,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ChevronLeftIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
+import { Icon } from "@/components/ui/icon";
 import { Text, TEXT_METRICS } from "@/components/ui/text";
 import { useAuth, type AuthCtaFrame } from "@/src/auth";
 
@@ -24,12 +26,12 @@ const INPUT_LINE = 34;
 /** Email-first sign-up / sign-in gate (Cosmos-style stepped chrome). */
 export function SignInScreen({
   onCtaFrame,
-  onBack: _onBack,
+  onBack,
   handOffActive = false,
 }: {
   /** Latest measured CTA frame for the composer morph. */
   onCtaFrame?: (frame: AuthCtaFrame) => void;
-  /** Unused — kept for call-site compatibility. */
+  /** Dismiss when this screen was opened on top of the app (guest sign-in). */
   onBack?: () => void;
   /** Hide interactive chrome while the morph overlay owns the transition. */
   handOffActive?: boolean;
@@ -255,6 +257,24 @@ export function SignInScreen({
           style={[styles.column, { opacity: handOffActive ? 0 : 1 }]}
         >
           <View style={styles.topBar}>
+            {onBack && !handOffActive ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                disabled={busy}
+                hitSlop={12}
+                onPress={onBack}
+                style={styles.backHit}
+              >
+                <Icon
+                  as={ChevronLeftIcon}
+                  className="size-5 text-foreground"
+                />
+                <Text variant="body" weight="medium">
+                  Back
+                </Text>
+              </Pressable>
+            ) : null}
             <View style={styles.progressRow}>
               {Array.from({ length: stepCount }, (_, i) => (
                 <View
@@ -510,6 +530,14 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 3,
     borderRadius: 2,
+  },
+  backHit: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+    marginLeft: -6,
   },
   cornerHit: {
     minHeight: 44,
