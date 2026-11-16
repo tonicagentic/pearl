@@ -26,6 +26,7 @@ export type ProfileFormInput = {
   readonly healthNotes?: string | null;
   readonly primaryResidence?: string | null;
   readonly additionalHomes?: string | null;
+  readonly planPreferences?: string | null;
 };
 
 function trimOrNull(value: string | null | undefined): string | null {
@@ -81,6 +82,7 @@ export function normalizeProfileInput(input: ProfileFormInput): {
   readonly healthNotes: string | null;
   readonly primaryResidence: string | null;
   readonly additionalHomes: string | null;
+  readonly planPreferences: string | null;
 } {
   const displayName = trimOrNull(input.displayName);
   const birthdate = trimOrNull(input.birthdate);
@@ -96,6 +98,7 @@ export function normalizeProfileInput(input: ProfileFormInput): {
   const healthNotes = trimOrNull(input.healthNotes);
   const primaryResidence = trimOrNull(input.primaryResidence);
   const additionalHomes = trimOrNull(input.additionalHomes);
+  const planPreferences = trimOrNull(input.planPreferences);
 
   if (birthdate && !ISO_DATE.test(birthdate)) {
     throw new Error("Birthdate must be YYYY-MM-DD.");
@@ -132,6 +135,7 @@ export function normalizeProfileInput(input: ProfileFormInput): {
   for (const [field, value] of [
     ["measurements", measurements],
     ["healthNotes", healthNotes],
+    ["planPreferences", planPreferences],
   ] as const) {
     const error = validateNotes(field, value);
     if (error) {
@@ -154,6 +158,7 @@ export function normalizeProfileInput(input: ProfileFormInput): {
     healthNotes,
     primaryResidence,
     additionalHomes,
+    planPreferences,
   };
 }
 

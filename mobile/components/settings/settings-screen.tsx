@@ -4,7 +4,6 @@ import { router, useFocusEffect } from "expo-router";
 import {
   BrainIcon,
   CircleDollarSignIcon,
-  CircleUserIcon,
   CloudIcon,
   CoinsIcon,
   InfoIcon,
@@ -229,13 +228,6 @@ export function SettingsScreen() {
           label="Account"
           detail={viewerEmail ?? "Email and password"}
           onPress={() => router.push("/account")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={CircleUserIcon} className="size-5 text-sky-500" />}
-          label="Identity"
-          detail="Name, body, health, home"
-          onPress={() => router.push("/identity")}
           showSeparator
         />
         <SettingsRow

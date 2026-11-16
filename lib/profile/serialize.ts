@@ -18,6 +18,7 @@ export type ProfileDto = {
   readonly healthNotes: string | null;
   readonly primaryResidence: string | null;
   readonly additionalHomes: string | null;
+  readonly planPreferences: string | null;
   readonly updatedAt: string | null;
 };
 
@@ -52,6 +53,7 @@ export function toProfileDto(row: UserProfile | null): ProfileDto | null {
     healthNotes: row.healthNotes,
     primaryResidence: row.primaryResidence,
     additionalHomes: row.additionalHomes,
+    planPreferences: row.planPreferences,
     updatedAt: row.updatedAt ? row.updatedAt.toISOString() : null,
   };
 }

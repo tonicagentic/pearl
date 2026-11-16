@@ -16,6 +16,8 @@ import {
 import * as Linking from "expo-linking";
 import { Stack, router, useFocusEffect } from "expo-router";
 
+import { AnswersScreen } from "@/components/settings/answers-screen";
+import { ResearchScreen } from "@/components/settings/research-screen";
 import { CoderToolsList } from "@/components/settings/code-section";
 import { SettingsButton } from "@/components/settings/native";
 import { PluginLogo } from "@/components/settings/plugin-logo";
@@ -64,6 +66,10 @@ import {
   listMailboxes,
   type MailboxClientSummary,
 } from "@/src/mailboxes-client";
+import {
+  fetchSandboxSettings,
+  type SandboxSettings,
+} from "@/src/sandbox-settings-client";
 
 const FILTER_THRESHOLD = 12;
 
@@ -96,6 +102,13 @@ export function PluginDetailScreen({
 }: {
   readonly plugin: ResolvedPlugin;
 }) {
+  if (plugin.id === "search") {
+    return <AnswersScreen />;
+  }
+  if (plugin.id === "researcher") {
+    return <ResearchScreen />;
+  }
+
   const builtinCapabilities =
     plugin.kind === "builtin" ? capabilitiesForPlugin(plugin.id) : null;
 
@@ -143,7 +156,12 @@ export function PluginDetailScreen({
                 heading="What Pearl can do"
               />
             ) : null}
-            {plugin.id === "coder" ? <CoderTools /> : null}
+            {plugin.id === "coder" ? (
+              <>
+                <CoderSandbox />
+                <CoderTools />
+              </>
+            ) : null}
           </>
         ) : (
           <StatusCard
@@ -274,6 +292,94 @@ function GmailMailboxSummaryPanel() {
           }
         />
       ) : null}
+    </View>
+  );
+}
+
+function CoderSandbox() {
+  const [settings, setSettings] = useState<SandboxSettings | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void fetchSandboxSettings()
+        .then((next) => {
+          if (!cancelled) setSettings(next);
+        })
+        .catch(() => {
+          if (!cancelled) setSettings(null);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
+  const lifetime = settings ? `${settings.coderTimeoutMinutes} min` : "…";
+  const compute = settings
+    ? `${settings.coderVcpus} vCPU${settings.coderVcpus === 1 ? "" : "s"}`
+    : "…";
+
+  return (
+    <View className="gap-1.5">
+      <Text variant="secondary" weight="medium" className="px-1">
+        Sandboxes
+      </Text>
+      <Text variant="secondary" className="px-1">
+        Coder checks out the repo in a Vercel Sandbox, runs the project there,
+        and publishes a preview URL. The machine has Node, git, and pnpm. It
+        does not include Chrome, Xcode, or Docker. It stops when its lifetime
+        ends.
+      </Text>
+      <SettingsCard>
+        <SandboxFact label="Lifetime" value={lifetime} showSeparator />
+        <SandboxFact label="Compute" value={compute} showSeparator />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Change sandbox settings in Computer Use"
+          className="active:bg-muted/80"
+          onPress={() => router.push("/computer-use")}
+        >
+          <View className="min-h-[52px] flex-row items-center gap-3 px-4 py-3">
+            <Text variant="label" className="min-w-0 flex-1">
+              Computer Use
+            </Text>
+            <Text variant="body" tone="muted">
+              Change
+            </Text>
+            <Text
+              variant="title"
+              tone="muted"
+              weight="light"
+              className="opacity-40"
+            >
+              ›
+            </Text>
+          </View>
+        </Pressable>
+      </SettingsCard>
+    </View>
+  );
+}
+
+function SandboxFact({
+  label,
+  value,
+  showSeparator,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly showSeparator?: boolean;
+}) {
+  return (
+    <View>
+      <View className="min-h-[52px] flex-row items-center justify-between gap-3 px-4 py-3">
+        <Text variant="label">{label}</Text>
+        <Text variant="body" tone="muted">
+          {value}
+        </Text>
+      </View>
+      {showSeparator ? <View className="ml-4 h-px bg-border" /> : null}
     </View>
   );
 }

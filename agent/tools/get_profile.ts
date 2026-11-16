@@ -12,10 +12,11 @@ import { getProfileForPrincipal } from "#lib/user-profile.js";
  */
 export default defineTool({
   description:
-    "Load this user's structured identity profile (name, birthdate/age, " +
-    "nationality, physical features, health notes, home). Call when fit, " +
-    "sizing, health advice, or personal/home context matters — not on every " +
-    "turn. Returns found:false when nothing is saved yet.",
+    "Load this user's structured profile (name, birthdate/age, nationality, " +
+    "physical features, clothing sizes, health notes, home, and plan " +
+    "preferences such as travel and planning horizon). Call when fit, " +
+    "sizing, shopping, travel, planning, health, or home context matters. " +
+    "Returns found:false when nothing is saved yet.",
   async execute(_input, ctx) {
     try {
       const result = await getProfileForPrincipal(ctx.session.auth.current);

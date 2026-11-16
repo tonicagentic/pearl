@@ -5,13 +5,14 @@ import {
   CalendarIcon,
   ClipboardListIcon,
   Code2Icon,
+  FolderOpenIcon,
   HeartIcon,
+  ImageIcon,
+  LayoutTemplateIcon,
   MailIcon,
   MessageCircleQuestionIcon,
   MonitorIcon,
-  PaletteIcon,
   PenLineIcon,
-  PlaneIcon,
   ScanSearchIcon,
   ShoppingBagIcon,
 } from "lucide-react-native";
@@ -48,9 +49,10 @@ function comingSoon(label: string) {
 }
 
 /**
- * Capabilities section: Coder, Computer Use, Email, Calendar, and the other
- * product capabilities. Money is its own group above this section. GitHub,
- * Vercel, and the other build tools open from inside Coder.
+ * Capabilities section: Answers first, then Coder, Computer Use, Email,
+ * Calendar, and the other product capabilities. Money is its own group
+ * above this section. GitHub, Vercel, and the other build tools open
+ * from inside Coder.
  */
 export function CodeSection({
   emailDetail,
@@ -61,6 +63,18 @@ export function CodeSection({
 }) {
   return (
     <Section title="Capabilities">
+      <SettingsRow
+        icon={
+          <Icon
+            as={MessageCircleQuestionIcon}
+            className="size-5 text-sky-500"
+          />
+        }
+        label="Answers"
+        detail="Web and connected accounts"
+        onPress={() => router.push("/answers")}
+        showSeparator
+      />
       <SettingsRow
         icon={<Icon as={Code2Icon} className="size-5 text-emerald-600" />}
         label="Coder"
@@ -92,27 +106,15 @@ export function CodeSection({
       <SettingsRow
         icon={<Icon as={ScanSearchIcon} className="size-5 text-violet-500" />}
         label="Research"
-        detail="Deep research with cited findings"
-        onPress={() => router.push("/plugins/researcher")}
+        detail="Deep research with citations"
+        onPress={() => router.push("/research")}
         showSeparator
       />
       <SettingsRow
         icon={<Icon as={ClipboardListIcon} className="size-5 text-amber-500" />}
-        label="Planning"
-        detail="Research and write durable plans"
-        onPress={() => router.push("/plugins/plan")}
-        showSeparator
-      />
-      <SettingsRow
-        icon={
-          <Icon
-            as={MessageCircleQuestionIcon}
-            className="size-5 text-sky-500"
-          />
-        }
-        label="Answers"
-        detail="Look up facts and sources"
-        onPress={() => router.push("/plugins/search")}
+        label="Plan"
+        detail="Travel and how you plan"
+        onPress={() => router.push("/plan")}
         showSeparator
       />
       <SettingsRow
@@ -125,29 +127,38 @@ export function CodeSection({
       <SettingsRow
         icon={<Icon as={PenLineIcon} className="size-5 text-indigo-500" />}
         label="Drafting"
-        detail="Coming soon"
-        onPress={() => comingSoon("Drafting")}
-        showSeparator
-      />
-      <SettingsRow
-        icon={<Icon as={PlaneIcon} className="size-5 text-sky-600" />}
-        label="Travel"
-        detail="Coming soon"
-        onPress={() => comingSoon("Travel")}
+        detail="Writing and style"
+        onPress={() => router.push("/drafting")}
         showSeparator
       />
       <SettingsRow
         icon={<Icon as={ShoppingBagIcon} className="size-5 text-orange-500" />}
-        label="Shopping"
-        detail="Coming soon"
-        onPress={() => comingSoon("Shopping")}
+        label="Shop"
+        detail="Clothing sizes"
+        onPress={() => router.push("/shop")}
         showSeparator
       />
       <SettingsRow
-        icon={<Icon as={PaletteIcon} className="size-5 text-fuchsia-500" />}
+        icon={<Icon as={ImageIcon} className="size-5 text-fuchsia-500" />}
         label="Visualize"
-        detail="Layouts, visuals, and design"
-        onPress={() => router.push("/plugins/designer")}
+        detail="Graphics, diagrams, images"
+        onPress={() => router.push("/visualize")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={
+          <Icon as={LayoutTemplateIcon} className="size-5 text-violet-500" />
+        }
+        label="Design"
+        detail="Presentations, documents, layouts"
+        onPress={() => router.push("/design")}
+        showSeparator
+      />
+      <SettingsRow
+        icon={<Icon as={FolderOpenIcon} className="size-5 text-sky-600" />}
+        label="Files"
+        detail="Analysis and storage"
+        onPress={() => router.push("/files")}
         showSeparator
       />
       <SettingsRow

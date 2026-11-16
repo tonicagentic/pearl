@@ -436,6 +436,7 @@ export const userProfile = pgTable("user_profile", {
   healthNotes: text("health_notes"),
   primaryResidence: text("primary_residence"),
   additionalHomes: text("additional_homes"),
+  planPreferences: text("plan_preferences"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

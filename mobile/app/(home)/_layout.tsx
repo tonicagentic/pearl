@@ -4,6 +4,7 @@ import { Stack } from "expo-router";
 /**
  * Signed-in home stack: Mail home plus chat/profile/detail so the
  * Profile control shares one UINavigationBar and morphs natively.
+ * Profile destinations live here too so back stays on this stack.
  */
 export default function HomeLayout() {
   return (
@@ -37,6 +38,70 @@ export default function HomeLayout() {
         name="money"
         options={{
           title: "Pearl Money",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="answers"
+        options={{
+          title: "Answers",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="drafting"
+        options={{
+          title: "Drafting",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="research"
+        options={{
+          title: "Research",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="visualize"
+        options={{
+          title: "Visualize",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="design"
+        options={{
+          title: "Design",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="files"
+        options={{
+          title: "Files",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="plan"
+        options={{
+          title: "Plan",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="shop"
+        options={{
+          title: "Shop",
           headerShown: true,
           headerBackButtonDisplayMode: "minimal",
         }}
