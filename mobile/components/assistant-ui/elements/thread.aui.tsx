@@ -272,6 +272,9 @@ const COMPOSER_EXPANDED_INPUT_MAX = 192;
 const COMPOSER_SHELL_STYLE = {
   borderRadius: COMPOSER_SHELL_RADIUS,
   borderCurve: "continuous",
+  // Clip GlassView to one continuous corner — without this the glass surface
+  // and shell radius anti-alias as a double edge at the pill corners.
+  overflow: "hidden",
 } as const;
 const GLASS_SURFACE_STYLE = {
   position: "absolute",
@@ -1457,29 +1460,16 @@ const Composer: FC<{
     };
   });
 
-  // Paste + mode/model fade in beside the attachment chip; they stay left-
-  // anchored (no flexGrow swap that slid the brain across the bar).
-  // Separate style objects — one SharedValue style must not drive two hosts.
-  const pasteChipStyle = useAnimatedStyle(() => {
-    const progress = composerChromeProgress(
-      keyboardHeight?.value ?? 0,
-      chromeApi?.stickyExpanded.value ?? 0,
-      keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
-    );
-    return {
-      opacity: progress,
-      width: interpolate(progress, [0, 1], [0, COMPOSER_CHIP]),
-      marginLeft: interpolate(progress, [0, 1], [0, COMPOSER_ROW_GAP]),
-    };
-  });
+  // Mode/model fades in beside the attachment chip; stay left-anchored
+  // (no flexGrow swap that slid the brain across the bar).
   const modelChipStyle = useAnimatedStyle(() => {
     const progress = composerChromeProgress(
       keyboardHeight?.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
       keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
     );
-    // No overflow:hidden — it clips the SwiftUI Mode/Model popover into a
-    // Mode/Agent fragment over the composer. Fade + width hide the chip instead.
+    // Fade + width hide the chip — avoid a second overflow clip that would
+    // fight the shell's continuous corner.
     return {
       opacity: progress,
       width: interpolate(progress, [0, 1], [0, COMPOSER_CHIP]),
@@ -1670,14 +1660,6 @@ const Composer: FC<{
                   preparing={preparingAttachment}
                   onPreparingChange={setPreparingAttachment}
                   conversationId={conversationId}
-                  renderPaste={(paste) => (
-                    <Animated.View
-                      style={pasteChipStyle}
-                      pointerEvents="box-none"
-                    >
-                      {paste}
-                    </Animated.View>
-                  )}
                 />
                 <Animated.View style={modelChipStyle} pointerEvents="box-none">
                   <ComposerModeModelPicker disabled={preparingAttachment} />

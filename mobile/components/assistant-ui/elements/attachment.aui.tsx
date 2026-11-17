@@ -1,10 +1,6 @@
 import { Icon } from "@/components/ui/icon";
 import { AttachmentMenu } from "./attachment-menu";
 import {
-  ComposerPasteControl,
-  type ComposerPastePayload,
-} from "./composer-paste-control";
-import {
   AttachmentPrimitive,
   AuiIf,
   ComposerPrimitive,
@@ -22,8 +18,6 @@ import {
   useRef,
   useState,
   type FC,
-  type ReactElement,
-  type ReactNode,
 } from "react";
 import {
   Alert,
@@ -39,7 +33,6 @@ import { useCSSVariable } from "uniwind";
 
 import { Text } from "@/components/ui/text";
 
-import { writeClipboardImageToCache } from "@/src/clipboard-paste";
 import { uploadImageAttachment } from "@/src/image-attachment";
 import { uploadPdfAttachment } from "@/src/pdf-attachment";
 import {
@@ -351,19 +344,10 @@ export const ComposerAddAttachment: FC<{
   preparing: boolean;
   onPreparingChange: (preparing: boolean) => void;
   conversationId?: string | null;
-  /**
-   * When false, only the attachment control is rendered. Use with a separate
-   * paste morph chip on iOS so the collapsed bar stays [+][Ask anything][Live].
-   */
-  includePaste?: boolean;
-  /** Wrap the paste control (iOS morph: fade/width with the keyboard). */
-  renderPaste?: (paste: ReactElement) => ReactNode;
 }> = ({
   preparing,
   onPreparingChange,
   conversationId = null,
-  includePaste = true,
-  renderPaste,
 }) => {
   const aui = useAui();
   const canAttach = useAuiState((s) => s.composer.isEditing);
@@ -562,77 +546,13 @@ export const ComposerAddAttachment: FC<{
       .finally(() => onPreparingChange(false));
   };
 
-  const pasteClipboardImage = async (dataUrl: string) => {
-    if (imageCount >= MAX_IMAGES)
-      throw new Error(`You can attach up to ${MAX_IMAGES} photos.`);
-    const cached = await writeClipboardImageToCache({ dataUrl });
-    await addImageAsset(
-      {
-        uri: cached.uri,
-        width: MAX_IMAGE_EDGE,
-        height: MAX_IMAGE_EDGE,
-        fileName: cached.name,
-      } as ImagePicker.ImagePickerAsset,
-      cached.uri,
-    );
-  };
-
-  const pasteText = (text: string) => {
-    const current = aui.composer.getState().text ?? "";
-    const next =
-      current.length === 0
-        ? text
-        : current.endsWith("\n") || text.startsWith("\n")
-          ? `${current}${text}`
-          : `${current}${current.endsWith(" ") ? "" : " "}${text}`;
-    aui.composer.setText(next);
-  };
-
-  const handlePaste = useCallback(
-    (payload: ComposerPastePayload) => {
-      if (preparing || !canAttach) return;
-      if (payload.kind === "text") {
-        pasteText(payload.text);
-        return;
-      }
-      onPreparingChange(true);
-      void pasteClipboardImage(payload.dataUrl)
-        .catch((cause) => {
-          Alert.alert(
-            "Could not paste image",
-            cause instanceof Error ? cause.message : "Try again.",
-          );
-        })
-        .finally(() => onPreparingChange(false));
-    },
-    // aui / imageCount / canAttach read at call time via closures above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canAttach, imageCount, onPreparingChange, preparing],
-  );
-
-  const paste = (
-    <ComposerPasteControl
-      disabled={preparing || !canAttach}
-      onPaste={handlePaste}
-    />
-  );
-
   return (
-    <View className="flex-row items-center">
-      <AttachmentMenu
-        disabled={preparing || !canAttach}
-        onTakePhoto={() => runPicker(takePhoto)}
-        onChoosePhoto={() => runPicker(pickImages)}
-        onChooseFile={() => runPicker(pickFile)}
-      />
-      {includePaste
-        ? renderPaste
-          ? renderPaste(paste)
-          : (
-              <View className="ml-1.5">{paste}</View>
-            )
-        : null}
-    </View>
+    <AttachmentMenu
+      disabled={preparing || !canAttach}
+      onTakePhoto={() => runPicker(takePhoto)}
+      onChoosePhoto={() => runPicker(pickImages)}
+      onChooseFile={() => runPicker(pickFile)}
+    />
   );
 };
 
