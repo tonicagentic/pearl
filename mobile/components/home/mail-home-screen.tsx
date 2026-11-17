@@ -247,9 +247,10 @@ export function MailHomeScreen() {
           headerShown: true,
           title: "",
           headerShadowVisible: false,
-          headerTransparent: false,
+          // Let recent threads scroll under the profile chrome with soft edge fade.
+          headerTransparent: IS_IOS,
           headerTintColor: foregroundColor,
-          headerStyle: { backgroundColor },
+          headerStyle: IS_IOS ? undefined : { backgroundColor },
           headerLeft: IS_IOS
             ? undefined
             : () => (
@@ -259,7 +260,7 @@ export function MailHomeScreen() {
                   className={
                     isAnonymous
                       ? "h-10 items-center justify-center px-1"
-                      : "h-10 w-10 items-center justify-center"
+                      : "bg-muted h-9 w-9 items-center justify-center rounded-full"
                   }
                   onPress={openProfile}
                 >
@@ -295,19 +296,34 @@ export function MailHomeScreen() {
             >
               Sign in
             </Stack.Toolbar.Button>
-          ) : profileInitials ? (
-            <Stack.Toolbar.Button
-              accessibilityLabel="Profile"
-              onPress={openProfile}
-            >
-              {profileInitials}
-            </Stack.Toolbar.Button>
           ) : (
-            <Stack.Toolbar.Button
-              icon="person"
-              accessibilityLabel="Profile"
-              onPress={openProfile}
-            />
+            // Fixed square hit target so liquid glass forms a circle instead of
+            // a text-width pill around two-letter initials.
+            <Stack.Toolbar.View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Profile"
+                onPress={openProfile}
+                style={{
+                  width: 36,
+                  height: 36,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {profileInitials ? (
+                  <Text
+                    variant="label"
+                    weight="semibold"
+                    style={{ color: foregroundColor }}
+                  >
+                    {profileInitials}
+                  </Text>
+                ) : (
+                  <Icon as={UserIcon} className="size-5 text-foreground" />
+                )}
+              </Pressable>
+            </Stack.Toolbar.View>
           )}
         </Stack.Toolbar>
       ) : null}

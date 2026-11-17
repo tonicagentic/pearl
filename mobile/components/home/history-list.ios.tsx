@@ -29,6 +29,7 @@ import {
   opacity,
   padding,
   scrollContentBackground,
+  scrollEdgeEffectStyle,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useCSSVariable } from "uniwind";
@@ -79,7 +80,10 @@ export function HistoryListIOS({
     | string
     | undefined;
   const backgroundColor = pageBackground ?? "#FFFFFF";
+  // Transparent list chrome so rows can fade under the nav + composer; keep
+  // opaque row fills for swipe/context targets.
   const rowBackground = backgroundColor;
+  const clearRow = "#00000000";
   const mutedForeground = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
@@ -163,8 +167,9 @@ export function HistoryListIOS({
     <View
       style={{
         flex: 1,
-        backgroundColor,
-        paddingBottom: bottomInset,
+        // Transparent — opaque fills here blocked scroll fade under the
+        // header and left a solid pad above the floating composer.
+        backgroundColor: "transparent",
         // Keep SwiftUI List drawing inside this flex slot — viewport
         // measurement made the Host paint over the header above.
         overflow: "hidden",
@@ -181,11 +186,12 @@ export function HistoryListIOS({
           <EmptyChatsCard />
         </View>
       ) : null}
-      <Host style={{ flex: 1, backgroundColor }}>
+      <Host style={{ flex: 1, backgroundColor: "transparent" }}>
         <List
           modifiers={[
             listStyle("plain"),
             scrollContentBackground("hidden"),
+            scrollEdgeEffectStyle("soft"),
             listRowSpacing(0),
           ]}
         >
@@ -267,6 +273,22 @@ export function HistoryListIOS({
                   />
                 )}
               </List.ForEach>
+            </Section>
+          ) : null}
+          {bottomInset > 0 ? (
+            <Section>
+              <HStack
+                modifiers={[
+                  frame({ height: bottomInset, maxWidth: 9999 }),
+                  listRowBackground(clearRow),
+                  listRowInsets({
+                    top: 0,
+                    bottom: 0,
+                    leading: 0,
+                    trailing: 0,
+                  }),
+                ]}
+              />
             </Section>
           ) : null}
         </List>
