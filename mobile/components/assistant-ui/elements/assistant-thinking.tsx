@@ -49,6 +49,17 @@ export function AssistantThinking() {
     waitKind === "question";
   const personWaitLabel = waitKind ? pendingWaitLabel(waitKind) : null;
   const answerPhase = isTrailingContentPhase(splitAssistantBlocks(parts));
+  // Don't clear chrome the instant a text part mounts — wait until at least
+  // one finished word (trailing whitespace) or the turn has settled with copy.
+  const answerHasPaintedWord = parts.some(
+    (part) =>
+      part.type === "text" &&
+      typeof part.text === "string" &&
+      (/\S+\s/.test(part.text) ||
+        (statusType !== "running" && part.text.trim().length > 0)),
+  );
+  const answerOwnsChrome =
+    answerPhase && answerHasPaintedWord && !askingQuestions && !personWaitLabel;
 
   const derived = useMemo(
     () =>
@@ -65,11 +76,11 @@ export function AssistantThinking() {
         personWaitLabel: askingQuestions
           ? ASKING_QUESTIONS_LABEL
           : personWaitLabel,
-        answerPhase: answerPhase && !askingQuestions && !personWaitLabel,
+        answerPhase: answerOwnsChrome,
       }),
     [
       agents,
-      answerPhase,
+      answerOwnsChrome,
       askingQuestions,
       events,
       parts,
@@ -96,11 +107,18 @@ export function AssistantThinking() {
     if (s.message.status?.type !== "running") return false;
     const msgParts = s.message.parts as readonly AssistantMessagePart[];
     const blocks = splitAssistantBlocks(msgParts);
-    if (isTrailingContentPhase(blocks)) return false;
-    return blocks.length > 0 && blocks[blocks.length - 1]?.kind === "timeline";
+    if (blocks.length === 0) return false;
+    if (blocks[blocks.length - 1]?.kind === "timeline") return true;
+    // Content exists but no finished word yet — timeline still owns chrome.
+    return !msgParts.some(
+      (part) =>
+        part.type === "text" &&
+        typeof part.text === "string" &&
+        /\S+\s/.test(part.text),
+    );
   });
 
-  if (answerPhase && !parkedOnPerson) return null;
+  if (answerOwnsChrome && !parkedOnPerson) return null;
   if (trailingTimelineLive && !askingQuestions && !parkedOnPerson) {
     return null;
   }

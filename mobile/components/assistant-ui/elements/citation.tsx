@@ -10,16 +10,17 @@ import {
   Modal,
   Platform,
   Pressable,
-  StyleSheet,
   View,
 } from "react-native";
-import Animated from "react-native-reanimated";
 import { useAuiState } from "@assistant-ui/react-native";
+import * as Haptics from "expo-haptics";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCSSVariable } from "uniwind";
 
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { openWebUrl } from "@/src/open-web-url";
-import { stepEnter, threadMeta, useMotion } from "./surfaces";
+import { threadMeta } from "./surfaces";
 
 /** Portal to document.body on Expo web only — avoid pulling react-dom into native. */
 function portalToBody(node: ReactNode): ReactNode {
@@ -146,6 +147,10 @@ function CitationPreviewCard({
   );
 }
 
+/**
+ * Bottom-sheet chrome shared by native Modal and Expo web portal — matches
+ * AttachmentPreviewSheet (slide + grab handle + safe-area padding).
+ */
 function CitationPeekBody({
   href,
   title,
@@ -162,25 +167,38 @@ function CitationPeekBody({
   /** Expo web portals to body — keep the sheet phone-width, not full desktop. */
   readonly constrainWidth?: boolean;
 }) {
+  const insets = useSafeAreaInsets();
+  const backgroundColor = useCSSVariable("--color-background") as
+    | string
+    | undefined;
+
   return (
     <View
       className={cn(
-        "flex-1 justify-end bg-black/40 pt-24",
+        "flex-1 justify-end",
         constrainWidth ? "items-center" : undefined,
       )}
     >
       <Pressable
+        accessibilityRole="button"
         accessibilityLabel="Dismiss citation preview"
+        className="absolute inset-0 bg-foreground/50"
         onPress={onDismiss}
-        style={StyleSheet.absoluteFillObject}
       />
       <View
+        style={{
+          backgroundColor,
+          paddingBottom: Math.max(insets.bottom, 16),
+        }}
         className={cn(
-          "px-4 pb-10",
+          "rounded-t-3xl border-t border-border/60",
           constrainWidth ? "w-full max-w-[390px]" : "w-full",
         )}
       >
-        <View className="border-border bg-card rounded-2xl border p-4 shadow-lg">
+        <View className="items-center pt-2.5 pb-1">
+          <View className="h-1 w-9 rounded-full bg-border" />
+        </View>
+        <View className="px-5 pb-4 pt-2">
           <CitationPreviewCard href={href} title={title} onOpen={onOpen} />
           <Pressable
             accessibilityRole="button"
@@ -189,7 +207,7 @@ function CitationPeekBody({
             className="bg-foreground/8 mt-3 items-center rounded-xl py-2.5 active:opacity-80"
           >
             <Text variant="secondary" weight="medium">
-              Open source
+              Open link
             </Text>
           </Pressable>
         </View>
@@ -200,7 +218,7 @@ function CitationPeekBody({
 
 /**
  * RN Modal on Expo web lands as position:relative in-flow and blows out the
- * thread. Portal a fixed overlay on web; keep Modal on native.
+ * thread. Portal a fixed overlay on web; slide-up sheet Modal on native.
  */
 function CitationPeek({
   open,
@@ -242,7 +260,7 @@ function CitationPeek({
     <Modal
       visible
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={onDismiss}
     >
       {body}
@@ -279,6 +297,16 @@ export function CitationChip({
     setOpen(false);
     openWebUrl(href);
   }, [href]);
+  const togglePeek = useCallback(() => {
+    setOpen((prev) => {
+      if (!prev) {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+          () => {},
+        );
+      }
+      return !prev;
+    });
+  }, []);
 
   return (
     <>
@@ -287,7 +315,7 @@ export function CitationChip({
         accessibilityLabel={`Source ${label}: ${displayTitle}`}
         accessibilityState={{ expanded: open }}
         hitSlop={6}
-        onPress={() => setOpen((prev) => !prev)}
+        onPress={togglePeek}
         className={cn(
           // inline-flex keeps the chip in the markdown text run on Expo web
           "bg-muted ms-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded px-1 align-super active:opacity-70",
@@ -331,19 +359,21 @@ export function MessageSources({ className }: ComponentProps<typeof View>) {
       .filter((text) => text.length > 0)
       .join("\n");
   });
+  // Wait until the turn settles so Sources enter with copy/share, not mid-stream.
+  const settled = useAuiState(
+    (s) =>
+      !(s.message.role === "assistant" && s.message.status?.type === "running"),
+  );
 
   const refs = useMemo(() => {
     if (!markdown) return EMPTY_CITATION_REFS;
     return extractCitationRefs(markdown);
   }, [markdown]);
-  const motion = useMotion();
-  const nativeMotion = motion && Platform.OS !== "web";
 
-  if (refs.length === 0) return null;
+  if (!settled || refs.length === 0) return null;
 
   return (
-    <Animated.View
-      entering={nativeMotion ? stepEnter : undefined}
+    <View
       data-slot="message-sources"
       className={cn("flex-col gap-1.5 pt-1", className)}
     >
@@ -387,7 +417,7 @@ export function MessageSources({ className }: ComponentProps<typeof View>) {
           );
         })}
       </View>
-    </Animated.View>
+    </View>
   );
 }
 

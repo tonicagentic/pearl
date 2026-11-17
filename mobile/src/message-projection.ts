@@ -132,7 +132,9 @@ function assistantPart(part: EveMessagePart): Part | null {
     case "text":
     case "reasoning":
       return {
-        type: part.type, text: typeof part.text === "string" ? part.text : "",
+        type: part.type,
+        text: typeof part.text === "string" ? part.text : "",
+        ...(part.id ? { id: part.id } : {}),
         ...(part.state === "done" ? { status: { type: "complete" as const } } : {}),
       };
     case "tool":

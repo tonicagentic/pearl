@@ -159,8 +159,8 @@ export const THINK_SWAP_Y = 8;
 export const THINK_SWAP_BLUR = 2;
 /** streaming-text `--stream-gap` */
 export const STREAM_GAP_MS = 60;
-/** streaming-text `--stream-fade` */
-export const STREAM_FADE_MS = 350;
+/** streaming-text `--stream-fade` (match web StreamingText st-fade 400ms) */
+export const STREAM_FADE_MS = 400;
 /** streaming-text `--stream-blur` */
 export const STREAM_BLUR = 1;
 /** streaming-text `--stream-ease` */

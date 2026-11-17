@@ -31,7 +31,7 @@ export type StreamingTextProps = {
   cursor?: StreamingTextCursor;
   /** Render bold, inline code, lists and fenced code. Off shows the raw text. */
   markdown?: boolean;
-  /** How fast buffered words appear. Speeds up when >~2s of text is waiting. */
+  /** How fast trickle deltas appear. Large coalesced blobs snap forward. */
   wordsPerSecond?: number;
   className?: string;
 };

@@ -26,6 +26,12 @@ import { StackScreen } from "@/components/ui/stack-screen";
 import { useAuth } from "@/src/auth";
 import { getAgentMode } from "@/src/agent-mode";
 import { withPendingAssistant } from "@/src/stream-presentation";
+import { applyLiveReplyOverlay } from "@/src/apply-live-reply";
+import {
+  getLiveReplyVersion,
+  reconcileLiveReplyWithSnapshot,
+  subscribeLiveReplyText,
+} from "@/src/live-reply-text";
 import { buildTurnClientContext } from "@/src/turn-client-context";
 import { useWorkspace } from "@/src/workspace-context";
 import {
@@ -300,6 +306,13 @@ export function ChatScreen({
     [conversation],
   );
   const isBusy = status === "busy";
+  // Keep projection "running" if the store briefly idles while the last
+  // assistant is still marked streaming — otherwise SettledMarkdown dumps
+  // the reply and skips word reveal on Expo Go.
+  const lastAssistantStreaming =
+    messages[messages.length - 1]?.role === "assistant" &&
+    messages[messages.length - 1]?.metadata?.status === "streaming";
+  const isRunning = isBusy || Boolean(lastAssistantStreaming);
   const hasError = Boolean(storeError);
   const confirmed = localSend ? hasConfirmedSend(events, localSend) : false;
   const waitingForAction = hasPendingAction(conversation);
@@ -441,10 +454,20 @@ export function ChatScreen({
     () => spokenTurnsPendingImport(spokenTurns, messages),
     [spokenTurns, messages],
   );
+  // Per-delta text ahead of eve line commits — paints smaller chunks on device.
+  const liveReplyVersion = useSyncExternalStore(
+    subscribeLiveReplyText,
+    getLiveReplyVersion,
+    getLiveReplyVersion,
+  );
+
+  useEffect(() => {
+    reconcileLiveReplyWithSnapshot(messages);
+  }, [messages]);
 
   const projectedMessages = useMemo(() => {
     const projected = projectSendMessages(
-      toThreadMessages({ messages }, { isRunning: isBusy, hasError }),
+      toThreadMessages({ messages }, { isRunning, hasError }),
       messages,
       confirmed ? null : hasError && localSend
         ? { ...localSend, phase: "uncertain" }
@@ -453,11 +476,26 @@ export function ChatScreen({
     const base = withPendingAssistant(
       projected as Parameters<typeof withPendingAssistant>[0],
       messages,
-      isBusy,
+      isRunning,
       awaitingReply,
     );
-    return appendSpokenTurnMessages(base as ThreadMessageLike[], pendingSpoken);
-  }, [messages, localSend, confirmed, isBusy, hasError, awaitingReply, pendingSpoken]);
+    const withLive = applyLiveReplyOverlay(
+      base as Parameters<typeof applyLiveReplyOverlay>[0],
+    );
+    return appendSpokenTurnMessages(
+      withLive as ThreadMessageLike[],
+      pendingSpoken,
+    );
+  }, [
+    messages,
+    localSend,
+    confirmed,
+    isRunning,
+    hasError,
+    awaitingReply,
+    pendingSpoken,
+    liveReplyVersion,
+  ]);
 
   useEffect(() => {
     if (!expectingAssistant) return;
@@ -524,7 +562,7 @@ export function ChatScreen({
       // positional fallback ids (the projection omits ids on purpose) and
       // honors the per-message status it carries.
       convertMessage: (message: ThreadMessageLike) => message,
-      isRunning: isBusy,
+      isRunning,
       isDisabled: status === "resuming",
       // HITL, in-flight prepare, or unconfirmed prior turn — don't invite a throw.
       isSendDisabled: composerBlocked || unresolvedSend,
@@ -735,7 +773,7 @@ export function ChatScreen({
     // Rebuild only when the thread snapshot the runtime compares changes.
     [
       projectedMessages,
-      isBusy,
+      isRunning,
       status,
       composerBlocked,
       unresolvedSend,

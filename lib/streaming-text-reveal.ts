@@ -34,13 +34,52 @@ export type StreamingReveal = {
   readonly writing: boolean;
   /** Character offset — words starting before this were present at mount. */
   readonly fadeFrom: number;
+  /** Word index — only tokens at/after this get st-fade (catch-up floor). */
+  readonly fadeFromWord: number;
   readonly tokens: readonly Token[];
   readonly visibleCount: number;
 };
 
 /**
- * Pace buffered words at `wordsPerSecond`, catching up faster when more than
- * ~2s of text is waiting. Complete-on-mount replies show at once.
+ * Survive React remounts during high-frequency delta re-renders. Without this,
+ * each remount re-inits shown at `ready - rate` and rAF never finishes the
+ * last second of words (cursor-only / single-word stall on mobile).
+ *
+ * Only the live (`streaming`) instance mutates this. Settled markdown must not
+ * reset it during render — user bubbles also call this hook with streaming=false.
+ */
+let turnShown = 0;
+let turnTickAt = 0;
+let turnFadeFromWord = 0;
+let turnFadeFromChar = 0;
+
+function nowMs(): number {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+function resetTurn(): void {
+  turnShown = 0;
+  turnTickAt = nowMs();
+  turnFadeFromWord = 0;
+  turnFadeFromChar = 0;
+}
+
+function applyCatchUpFloor(ready: number, rate: number, tokens: readonly Token[]): void {
+  const floor = ready > rate ? ready - rate : 0;
+  turnShown = Math.max(turnShown, floor);
+  if (floor > turnFadeFromWord) {
+    turnFadeFromWord = floor;
+    turnFadeFromChar = tokens[floor]?.start ?? 0;
+  }
+}
+
+/**
+ * Pace words at `wordsPerSecond` while the stream is live (desktop chat feel).
+ * Huge mid-stream jumps skip ahead but keep ~1s of tail to animate. When the
+ * turn ends, snap the remainder — no theatrical post-complete catch-up.
+ *
+ * Progress is wall-clock + module-level so remounts / cancelled rAFs cannot
+ * pin the UI on a lone cursor while hundreds of words sit buffered.
  */
 export function useStreamingReveal(
   text: string,
@@ -48,65 +87,68 @@ export function useStreamingReveal(
   wordsPerSecond: number = DEFAULT_WORDS_PER_SECOND,
 ): StreamingReveal {
   const tokens = useMemo(() => tokenize(text), [text]);
-  // While streaming, the last token may be cut mid-word until whitespace follows.
-  const ready =
-    streaming && tokens.length > 0 && !/\s$/.test(text)
-      ? tokens.length - 1
-      : tokens.length;
+  // Count the in-progress last token too — holding it back left mobile blank
+  // for the whole first-word lead-in. Partial words grow in place via clip.
+  const ready = tokens.length;
+  const rate = Math.max(wordsPerSecond, 1);
 
-  const [shown, setShown] = useState(() => (streaming ? 0 : ready));
-  const [fadeFrom] = useState(() => (streaming ? 0 : text.length));
-  const shownRef = useRef(shown);
-  const carryRef = useRef(0);
-  const live = useRef({ ready, wordsPerSecond, streaming });
-
-  useEffect(() => {
-    live.current = { ready, wordsPerSecond, streaming };
-  });
-
-  useEffect(() => {
-    let raf = 0;
-    let last =
-      typeof performance !== "undefined" ? performance.now() : Date.now();
-    const tick = (now: number) => {
-      const dt = Math.min(0.1, (now - last) / 1000);
-      last = now;
-      const target = live.current.ready;
-      const n = Math.min(shownRef.current, target);
-      const behind = target - n;
-      if (behind <= 0) {
-        shownRef.current = n;
-        carryRef.current = 0;
-        // Stay scheduled while the turn is live so the next token can resume
-        // without waiting for a ready-dep remount of this effect.
-        if (live.current.streaming) {
-          raf = requestAnimationFrame(tick);
-        }
-        return;
+  if (streaming) {
+    const t = nowMs();
+    if (turnTickAt === 0) {
+      applyCatchUpFloor(ready, rate, tokens);
+      turnTickAt = t;
+    } else {
+      const dt = Math.min(0.1, (t - turnTickAt) / 1000);
+      turnTickAt = t;
+      applyCatchUpFloor(ready, rate, tokens);
+      if (turnShown < ready) {
+        turnShown = Math.min(ready, turnShown + dt * rate);
       }
-      carryRef.current += dt * Math.max(live.current.wordsPerSecond, behind / 2);
-      const step = Math.min(behind, Math.floor(carryRef.current));
-      carryRef.current -= step;
-      if (step > 0) {
-        shownRef.current = n + step;
-        setShown(n + step);
+    }
+  }
+
+  const shownTarget = streaming ? Math.min(ready, Math.floor(turnShown)) : ready;
+
+  const [shown, setShown] = useState(shownTarget);
+  const shownRef = useRef(shown);
+  const liveReady = useRef(ready);
+  const liveTokens = useRef(tokens);
+  liveReady.current = ready;
+  liveTokens.current = tokens;
+
+  // Keep React state in lockstep with module progress (drives re-renders).
+  if (shown !== shownTarget) {
+    shownRef.current = shownTarget;
+    setShown(shownTarget);
+  }
+
+  // rAF pump while streaming so the last ~1s keeps ticking without new deltas.
+  // Do not reset module progress in the rAF cleanup — remounts would wipe it.
+  useEffect(() => {
+    if (!streaming) {
+      resetTurn();
+      return undefined;
+    }
+    let raf = 0;
+    const tick = () => {
+      const t = nowMs();
+      const dt = Math.min(0.1, (t - turnTickAt) / 1000);
+      turnTickAt = t;
+      const r = liveReady.current;
+      applyCatchUpFloor(r, rate, liveTokens.current);
+      if (turnShown < r) {
+        turnShown = Math.min(r, turnShown + dt * rate);
+      }
+      const next = Math.min(r, Math.floor(turnShown));
+      if (next !== shownRef.current) {
+        shownRef.current = next;
+        setShown(next);
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [ready, streaming]);
-
-  // If the stream finishes with a backlog, keep the loop alive via ready bumps;
-  // also snap forward when not streaming and we somehow lag (e.g. fast mount).
-  useEffect(() => {
-    if (streaming) return;
-    if (shownRef.current < ready) {
-      shownRef.current = ready;
-      setShown(ready);
-      carryRef.current = 0;
-    }
-  }, [streaming, ready]);
+  }, [streaming, rate]);
 
   const visibleCount = Math.min(shown, ready);
   const lastToken = visibleCount > 0 ? tokens[visibleCount - 1]! : null;
@@ -115,6 +157,8 @@ export function useStreamingReveal(
     ? lastToken.start + lastToken.text.trimEnd().length
     : 0;
   const writing = streaming || visibleCount < ready;
+  const fadeFrom = streaming ? turnFadeFromChar : text.length;
+  const fadeFromWord = streaming ? turnFadeFromWord : ready;
 
   return {
     visibleText: text.slice(0, revealed),
@@ -122,7 +166,13 @@ export function useStreamingReveal(
     clip,
     writing,
     fadeFrom,
+    fadeFromWord,
     tokens,
     visibleCount,
   };
+}
+
+/** Test helper — clear cross-turn module progress. */
+export function __resetStreamingRevealForTests(): void {
+  resetTurn();
 }

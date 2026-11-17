@@ -1901,6 +1901,16 @@ const AssistantMessage: FC = () => {
     [messageParts],
   );
   const lastTimeline = lastTimelineBlockIndex(blocks);
+  const statusType = useAuiState((s) => s.message.status?.type);
+  // Keep timeline live until the answer has painted a finished word — otherwise
+  // chrome dies as soon as a text part mounts and the body is still blank.
+  const answerHasPaintedWord = messageParts.some(
+    (part) =>
+      part.type === "text" &&
+      typeof part.text === "string" &&
+      (/\S+\s/.test(part.text) ||
+        (statusType !== "running" && part.text.trim().length > 0)),
+  );
   // Stable per-index maps so PartByIndex can bail out when only sibling
   // chrome re-renders. Rebuilt when the part list or tool renderers change.
   const componentsByIndex = useMemo(() => {
@@ -1923,7 +1933,7 @@ const AssistantMessage: FC = () => {
 
   return (
     <MessagePrimitive.Root className="aui-assistant-message-root gap-2">
-      {/* 8px stack: timeline meta → answer → sources → actions. */}
+      {/* 8px stack: timeline meta → answer; sources join the footer with actions. */}
       <View className="aui-assistant-message-content gap-2">
         <TurnElapsedProvider>
           {/* Todos sit above interleaved content so the checklist stays
@@ -1938,7 +1948,7 @@ const AssistantMessage: FC = () => {
                   isLast={blockIndex === lastTimeline}
                   live={
                     blockIndex === lastTimeline &&
-                    lastTimeline === blocks.length - 1
+                    (lastTimeline === blocks.length - 1 || !answerHasPaintedWord)
                   }
                 />
               );
@@ -1962,7 +1972,6 @@ const AssistantMessage: FC = () => {
           })}
           <AssistantThinking />
         </TurnElapsedProvider>
-        <MessageSources />
       </View>
       <AssistantMessageFooter />
     </MessagePrimitive.Root>
@@ -1970,17 +1979,32 @@ const AssistantMessage: FC = () => {
 };
 
 const AssistantMessageFooter: FC = () => {
+  const motion = useMotion();
   const branchCount = useAuiState((s) => s.message.branchCount);
   const settled = useAuiState(
     (s) =>
       !(s.message.role === "assistant" && s.message.status?.type === "running"),
   );
   if (branchCount <= 1 && !settled) return null;
+  // Sources wait for settle and enter with copy/share (not mid-stream).
+  if (!settled) {
+    return (
+      <View className="aui-assistant-message-footer flex-row items-center">
+        <BranchPicker />
+      </View>
+    );
+  }
   return (
-    <View className="aui-assistant-message-footer flex-row items-center">
-      <BranchPicker />
-      <AssistantActionBar />
-    </View>
+    <Animated.View
+      entering={motion ? actionBarEnter : undefined}
+      className="aui-assistant-message-footer gap-2"
+    >
+      <MessageSources />
+      <View className="flex-row items-center">
+        <BranchPicker />
+        <AssistantActionBar />
+      </View>
+    </Animated.View>
   );
 };
 
@@ -2012,36 +2036,24 @@ const ShareMarkdown: FC = () => {
   );
 };
 
-const AssistantActionBar: FC = () => {
-  const motion = useMotion();
-  return (
-    <AuiIf
-      condition={(s) =>
-        !(s.message.role === "assistant" && s.message.status?.type === "running")
-      }
+const AssistantActionBar: FC = () => (
+  <View className="aui-assistant-action-bar-root flex-row gap-1">
+    <ActionBarPrimitive.Copy
+      copyToClipboard={copyToClipboard}
+      className={assistantActionButtonClassName}
+      hitSlop={assistantActionHitSlop}
+      accessibilityLabel="Copy"
     >
-      <Animated.View
-        entering={motion ? actionBarEnter : undefined}
-        className="aui-assistant-action-bar-root flex-row gap-1"
-      >
-        <ActionBarPrimitive.Copy
-          copyToClipboard={copyToClipboard}
-          className={assistantActionButtonClassName}
-          hitSlop={assistantActionHitSlop}
-          accessibilityLabel="Copy"
-        >
-          {({ isCopied }) => (
-            <Icon
-              as={isCopied ? CheckIcon : CopyIcon}
-              className="text-muted-foreground size-4"
-            />
-          )}
-        </ActionBarPrimitive.Copy>
-        <ShareMarkdown />
-      </Animated.View>
-    </AuiIf>
-  );
-};
+      {({ isCopied }) => (
+        <Icon
+          as={isCopied ? CheckIcon : CopyIcon}
+          className="text-muted-foreground size-4"
+        />
+      )}
+    </ActionBarPrimitive.Copy>
+    <ShareMarkdown />
+  </View>
+);
 
 const UserMessage: FC = () => {
   const motion = useMotion();

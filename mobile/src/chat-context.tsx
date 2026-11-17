@@ -18,6 +18,11 @@ import {
 
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
 import { beginStreamTrace, traceStream } from "./stream-trace";
+import {
+  clearLiveReplyText,
+  pushLiveReplyDelta,
+  reconcileLiveReplyWithSnapshot,
+} from "./live-reply-text";
 import { pendingMessageLabel, hasPendingAction } from "./message-projection";
 import type { LiveSpokenDraft, SpokenTurn } from "../../lib/chat/spoken-turns";
 import {
@@ -448,9 +453,28 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     store.setCallbacks({
       onEvent: (event) => {
         if (event.type === "content.delta") {
-          const delta = event.data.delta;
-          if (typeof delta === "string") traceStream("delta", delta.length);
+          const data = event.data as {
+            readonly delta?: unknown;
+            readonly partId?: unknown;
+            readonly kind?: unknown;
+          };
+          const delta = data.delta;
+          if (typeof delta === "string") {
+            traceStream("delta", delta.length);
+            if (typeof data.partId === "string") {
+              pushLiveReplyDelta({
+                turnId:
+                  typeof event.scope?.turnId === "string"
+                    ? event.scope.turnId
+                    : undefined,
+                partId: data.partId,
+                kind: typeof data.kind === "string" ? data.kind : undefined,
+                delta,
+              });
+            }
+          }
         } else if (event.type === "turn.settled") {
+          clearLiveReplyText();
           traceStream("settled");
         }
         if (!binding.id) return;
