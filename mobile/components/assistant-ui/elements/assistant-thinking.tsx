@@ -98,8 +98,18 @@ export function AssistantThinking() {
   const seconds = Number.parseInt(elapsed ?? "0", 10);
   const stalled = Number.isFinite(seconds) && seconds > STALL_WARNING_S;
   const parkedOnPerson = personWaitLabel != null || askingQuestions;
+  const trailingTimelineLive = useAuiState((s) => {
+    if (s.message.status?.type !== "running") return false;
+    const msgParts = s.message.parts as readonly AssistantMessagePart[];
+    const blocks = splitAssistantBlocks(msgParts);
+    if (isTrailingContentPhase(blocks)) return false;
+    return blocks.length > 0 && blocks[blocks.length - 1]?.kind === "timeline";
+  });
 
   if (answerPhase && !parkedOnPerson && !stalled) return null;
+  if (trailingTimelineLive && !stalled && !askingQuestions && !parkedOnPerson) {
+    return null;
+  }
   if (label === undefined && !stalled) return null;
 
   return (

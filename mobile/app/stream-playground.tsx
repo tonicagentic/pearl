@@ -18,6 +18,7 @@ import {
   STREAM_PLAY_SCENARIOS,
   conversationAt,
   eventTypeAt,
+  rebaseEvents,
   streamPlayScenario,
   type StreamPlayScenarioId,
 } from "@/src/stream-playground";
@@ -78,6 +79,7 @@ export default function StreamPlaygroundScreen() {
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<Speed>(1);
+  const [replayEpochMs, setReplayEpochMs] = useState<number>(() => Date.now());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bump to remount playback state when the scenario changes (avoids
   // setState-in-effect when switching pills).
@@ -95,6 +97,7 @@ export default function StreamPlaygroundScreen() {
     setScenarioId(id);
     setIndex(0);
     setPlaying(false);
+    setReplayEpochMs(Date.now());
     setPlaybackKey((key) => key + 1);
   }, [clearTimer]);
 
@@ -102,6 +105,7 @@ export default function StreamPlaygroundScreen() {
     clearTimer();
     setIndex(0);
     setPlaying(false);
+    setReplayEpochMs(Date.now());
     setPlaybackKey((key) => key + 1);
   }, [clearTimer]);
 
@@ -125,8 +129,8 @@ export default function StreamPlaygroundScreen() {
   }, [clearTimer, index, playbackKey, playing, scenario.events, speed]);
 
   const conversation = useMemo(
-    () => conversationAt(scenario.events, index),
-    [index, scenario.events],
+    () => conversationAt(scenario.events, index, replayEpochMs),
+    [index, replayEpochMs, scenario.events],
   );
   const isRunning =
     index > 0 &&
@@ -140,8 +144,8 @@ export default function StreamPlaygroundScreen() {
     [conversation, isRunning],
   );
   const playedEvents = useMemo(
-    () => scenario.events.slice(0, index).map((entry) => entry.event),
-    [index, scenario.events],
+    () => rebaseEvents(scenario.events.slice(0, index), replayEpochMs),
+    [index, replayEpochMs, scenario.events],
   );
 
   const adapter = useMemo(
@@ -214,8 +218,9 @@ export default function StreamPlaygroundScreen() {
             label={playing ? "Pause" : "Play"}
             active={playing}
             onPress={() => {
-              if (index >= scenario.events.length) {
+              if (index === 0 || index >= scenario.events.length) {
                 setIndex(0);
+                setReplayEpochMs(Date.now());
                 setPlaybackKey((key) => key + 1);
                 setPlaying(true);
                 return;
@@ -229,6 +234,7 @@ export default function StreamPlaygroundScreen() {
             onPress={() => {
               clearTimer();
               setPlaying(false);
+              if (index === 0) setReplayEpochMs(Date.now());
               setIndex((prev) =>
                 Math.min(prev + 1, scenario.events.length),
               );

@@ -239,9 +239,6 @@ export function ToolTimeline({
     );
   }
 
-  const liveLabel = elapsed ? `${activeLabel} · ${elapsed}` : activeLabel;
-  const settledLabel = elapsed ? `${restingLabel} · ${elapsed}` : restingLabel;
-
   return (
     <Collapsible
       data-slot="tool-timeline"
@@ -257,10 +254,15 @@ export function ToolTimeline({
       >
         <span className="inline-flex max-w-full items-center gap-1.5 text-start">
           <ThinkingStatesLabel
-            label={streaming ? liveLabel : settledLabel}
+            label={streaming ? activeLabel : restingLabel}
             shimmer={streaming}
             className="min-w-0 truncate"
           />
+          {elapsed !== undefined && (
+            <span className="shrink-0 tabular-nums opacity-80">
+              {`· ${elapsed}`}
+            </span>
+          )}
           <DiffCounts added={headerAdded} removed={headerRemoved} />
         </span>
         <ChevronDownIcon

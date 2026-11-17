@@ -439,39 +439,63 @@ export function CollapsePanel({
 }) {
   const motion = useMotion();
   const [contentHeight, setContentHeight] = useState(0);
+  const [settledOpen, setSettledOpen] = useState(open);
   const height = useSharedValue(0);
   const opacity = useSharedValue(open ? 1 : 0);
-  const measuredRef = useRef(false);
+  const prevOpenRef = useRef(open);
 
   useEffect(() => {
-    if (contentHeight <= 0) return;
-    // First measure: snap so an initially-open panel isn't height-0 for a frame.
-    if (!measuredRef.current) {
-      measuredRef.current = true;
-      height.value = open ? contentHeight : 0;
+    const toggled = prevOpenRef.current !== open;
+    prevOpenRef.current = open;
+
+    if (!motion || !toggled) {
+      setSettledOpen(open);
+      if (contentHeight > 0) {
+        height.value = open ? contentHeight : 0;
+      }
       opacity.value = open ? 1 : 0;
       return;
     }
-    if (!motion) {
-      height.value = open ? contentHeight : 0;
-      opacity.value = open ? 1 : 0;
-      return;
+
+    if (open) {
+      if (contentHeight <= 0) {
+        setSettledOpen(true);
+        opacity.value = 1;
+        return;
+      }
+      height.value = withTiming(contentHeight, {
+        duration: COLLAPSE_MS,
+        easing: collapseEase,
+      });
+      opacity.value = withTiming(1, {
+        duration: COLLAPSE_MS,
+        easing: collapseEase,
+      });
+      const done = setTimeout(() => setSettledOpen(true), COLLAPSE_MS);
+      return () => clearTimeout(done);
     }
-    height.value = withTiming(open ? contentHeight : 0, {
+
+    setSettledOpen(false);
+    height.value = withTiming(0, {
       duration: COLLAPSE_MS,
       easing: collapseEase,
     });
-    opacity.value = withTiming(open ? 1 : 0, {
+    opacity.value = withTiming(0, {
       duration: COLLAPSE_MS,
       easing: collapseEase,
     });
+    return undefined;
   }, [open, contentHeight, motion, height, opacity]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    height: height.value,
-    opacity: opacity.value,
-    overflow: "hidden" as const,
-  }));
+  const animatedStyle = useAnimatedStyle(() =>
+    settledOpen
+      ? { opacity: 1 }
+      : {
+          height: height.value,
+          opacity: opacity.value,
+          overflow: "hidden" as const,
+        },
+  );
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     const next = Math.ceil(event.nativeEvent.layout.height);
@@ -517,18 +541,6 @@ export function SwapLabel({
 }) {
   const motion = useMotion();
   const [progress] = useState(() => new Animated.Value(active));
-  const [box, setBox] = useState({ width: 0, height: 0 });
-  const mergeLayout = useCallback((width: number, height: number) => {
-    setBox((prev) => {
-      const next = {
-        width: Math.max(prev.width, Math.ceil(width)),
-        height: Math.max(prev.height, Math.ceil(height)),
-      };
-      return next.width === prev.width && next.height === prev.height
-        ? prev
-        : next;
-    });
-  }, []);
 
   useEffect(() => {
     if (!motion) {
@@ -577,63 +589,53 @@ export function SwapLabel({
   };
 
   if (!motion) {
-    return <View className={cn("shrink-0", className)}>{children[active]}</View>;
+    return (
+      <View className={cn("min-w-0 flex-shrink", className)}>
+        {children[active]}
+      </View>
+    );
   }
 
-  const sized =
-    box.width > 0
-      ? { width: box.width, height: box.height }
-      : undefined;
-
+  // Keep the active layer in normal flow so container size always fits the
+  // active string (no stale narrow-width lock or 0x0 wrap trap on RN Web);
+  // the outgoing layer floats in place over it while fading/sliding out.
   return (
-    <View className={cn("shrink-0", className)}>
-      <View
-        pointerEvents="none"
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={{ position: "absolute", opacity: 0 }}
+    <View
+      className={cn(
+        "relative min-w-0 flex-shrink justify-center overflow-visible",
+        className,
+      )}
+    >
+      <Animated.View
+        pointerEvents={active === 0 ? "auto" : "none"}
+        style={[
+          layer0,
+          active === 0
+            ? { position: "relative" }
+            : { position: "absolute", left: 0, top: 0, right: 0 },
+        ]}
+        accessibilityElementsHidden={active !== 0}
+        importantForAccessibility={
+          active === 0 ? "yes" : "no-hide-descendants"
+        }
       >
-        <View
-          onLayout={(event) => {
-            const { width, height } = event.nativeEvent.layout;
-            mergeLayout(width, height);
-          }}
-        >
-          {children[0]}
-        </View>
-        <View
-          onLayout={(event) => {
-            const { width, height } = event.nativeEvent.layout;
-            mergeLayout(width, height);
-          }}
-        >
-          {children[1]}
-        </View>
-      </View>
-      <View className="relative justify-center overflow-hidden" style={sized}>
-        <Animated.View
-          className="absolute left-0 top-0"
-          pointerEvents={active === 0 ? "auto" : "none"}
-          style={layer0}
-          accessibilityElementsHidden={active !== 0}
-          importantForAccessibility={
-            active === 0 ? "yes" : "no-hide-descendants"
-          }
-        >
-          {children[0]}
-        </Animated.View>
-        <Animated.View
-          className="absolute left-0 top-0"
-          pointerEvents={active === 1 ? "auto" : "none"}
-          style={layer1}
-          accessibilityElementsHidden={active !== 1}
-          importantForAccessibility={
-            active === 1 ? "yes" : "no-hide-descendants"
-          }
-        >
-          {children[1]}
-        </Animated.View>
-      </View>
+        {children[0]}
+      </Animated.View>
+      <Animated.View
+        pointerEvents={active === 1 ? "auto" : "none"}
+        style={[
+          layer1,
+          active === 1
+            ? { position: "relative" }
+            : { position: "absolute", left: 0, top: 0, right: 0 },
+        ]}
+        accessibilityElementsHidden={active !== 1}
+        importantForAccessibility={
+          active === 1 ? "yes" : "no-hide-descendants"
+        }
+      >
+        {children[1]}
+      </Animated.View>
     </View>
   );
 }

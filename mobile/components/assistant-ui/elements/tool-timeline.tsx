@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { ChevronDownIcon } from "lucide-react-native";
-import { Pressable, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -171,6 +171,7 @@ function StepRow({
   readonly elapsed?: string;
 }) {
   const motion = useMotion();
+  const nativeMotion = motion && Platform.OS !== "web";
   const expandable = typeof step.detail === "string" && step.detail.length > 0;
   // Live reasoning reads "Thinking…" like Cursor; settled stays "Thought".
   const verb =
@@ -181,8 +182,8 @@ function StepRow({
 
   return (
     <Animated.View
-      entering={motion ? stepEnter : undefined}
-      layout={motion ? layoutTransition : undefined}
+      entering={nativeMotion ? stepEnter : undefined}
+      layout={nativeMotion ? layoutTransition : undefined}
     >
       <Pressable
         className={cn(
@@ -288,8 +289,8 @@ export function ToolTimeline({
     Math.max(0, Math.min(visibleSteps, steps.length)),
   );
 
-  const rootEntering = motion ? thinkSwapEnter : undefined;
-  const liveHeader = elapsed ? `${activeLabel} · ${elapsed}` : activeLabel;
+  const rootEntering =
+    motion && Platform.OS !== "web" ? thinkSwapEnter : undefined;
 
   // A single step needs no collapse chrome: render it inline.
   if (steps.length === 1) {
@@ -322,37 +323,43 @@ export function ToolTimeline({
         accessibilityState={{ expanded: open }}
         onPress={() => onOpenChange(!open)}
       >
-        <View className="min-w-0 flex-1 flex-row flex-wrap items-baseline gap-x-2">
+        <View className="min-w-0 flex-1 flex-row flex-wrap items-baseline gap-x-1.5">
           {streaming ? (
-            <ThinkingStatesLabel
-              label={liveHeader}
-              textClassName={threadMetaCall}
-              className="min-w-0"
-            />
+            <>
+              <ThinkingStatesLabel
+                label={activeLabel}
+                textClassName={threadMetaCall}
+                className="min-w-0"
+              />
+              {elapsed ? (
+                <Text
+                  variant="label"
+                  className={cn(threadMetaDetail, "tabular-nums")}
+                >
+                  {`· ${elapsed}`}
+                </Text>
+              ) : null}
+            </>
           ) : (
-            <View className="min-w-0 flex-1 flex-row flex-wrap items-baseline gap-x-2">
+            <>
               {typeof restingLabel === "string" ? (
                 <ThinkingStatesLabel
-                  label={
-                    elapsed ? `${restingLabel} · ${elapsed}` : restingLabel
-                  }
+                  label={restingLabel}
                   shimmer={false}
                   textClassName={threadMetaCall}
                 />
               ) : (
-                <>
-                  {restingLabel}
-                  {elapsed ? (
-                    <Text
-                      variant="label"
-                      className={cn(threadMetaDetail, "tabular-nums")}
-                    >
-                      {`· ${elapsed}`}
-                    </Text>
-                  ) : null}
-                </>
+                restingLabel
               )}
-            </View>
+              {elapsed ? (
+                <Text
+                  variant="label"
+                  className={cn(threadMetaDetail, "tabular-nums")}
+                >
+                  {`· ${elapsed}`}
+                </Text>
+              ) : null}
+            </>
           )}
           <DiffCounts added={headerAdded} removed={headerRemoved} />
         </View>

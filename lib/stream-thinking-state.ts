@@ -240,9 +240,6 @@ function runningToolLabel(
     if (part?.type !== "tool-call") continue;
     if (part.status?.type && part.status.type !== "running") continue;
     if (part.toolName === "todo") continue;
-    if (typeof part.label === "string" && part.label.trim()) {
-      return part.label.trim();
-    }
     const tool = asToolPart(part);
     if (!tool) continue;
     return statusLabelForTool(tool, { live: true });

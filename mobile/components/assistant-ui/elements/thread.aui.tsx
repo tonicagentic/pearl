@@ -2029,7 +2029,9 @@ const UserMessage: FC = () => {
   );
   if (internalMessage) return null;
   return (
-    <Animated.View entering={motion ? messageEnter : undefined}>
+    <Animated.View
+      entering={motion && Platform.OS !== "web" ? messageEnter : undefined}
+    >
       <MessagePrimitive.Root className="aui-user-message-root items-end gap-y-1.5">
         <UserMessageAttachments />
         <View className="aui-user-message-content bg-card max-w-[85%] rounded-2xl px-4 py-2.5">

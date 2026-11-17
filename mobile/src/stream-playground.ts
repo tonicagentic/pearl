@@ -149,6 +149,21 @@ function reasoningToolsScript(): TimedStreamEvent[] {
       },
     },
     {
+      atMs: 1850,
+      raw: {
+        type: "content.completed",
+        scope: runScope,
+        data: {
+          partId: "r1",
+          kind: "reasoning",
+          phase: "reasoning",
+          runId: RUN,
+          value:
+            "**Gather context**\nNeed the right sources first.\n\n**Draft outline**\nSketch the answer shape.\n",
+        },
+      },
+    },
+    {
       atMs: 1900,
       raw: {
         type: "call.requested",
@@ -211,7 +226,13 @@ function reasoningToolsScript(): TimedStreamEvent[] {
       raw: {
         type: "content.completed",
         scope: runScope,
-        data: { partId: "t1", kind: "text", phase: "final" },
+        data: {
+          partId: "t1",
+          kind: "text",
+          phase: "reply",
+          runId: RUN,
+          value: "Here is what I found about thinking states.",
+        },
       },
     },
     {
@@ -457,9 +478,37 @@ export function streamPlayScenario(
 export function conversationAt(
   events: readonly TimedStreamEvent[],
   count: number,
+  baseMs?: number,
 ): ConversationState {
-  const slice = events.slice(0, Math.max(0, Math.min(count, events.length)));
-  return conversationOf(slice.map((entry) => entry.event));
+  const slice = rebaseEvents(
+    events.slice(0, Math.max(0, Math.min(count, events.length))),
+    baseMs,
+  );
+  return conversationOf(slice);
+}
+
+/**
+ * Re-stamp fixture `meta.at` relative to `baseMs` so TurnElapsedProvider
+ * counts from 0s during interactive playback instead of showing age since
+ * a static calendar date.
+ */
+export function rebaseEvents(
+  events: readonly TimedStreamEvent[],
+  baseMs?: number,
+): SessionStreamEvent[] {
+  if (baseMs === undefined) return events.map((entry) => entry.event);
+  return events.map((entry) => {
+    const raw = entry.event as unknown as Record<string, unknown> & {
+      readonly meta?: Record<string, unknown>;
+    };
+    return {
+      ...raw,
+      meta: {
+        ...raw.meta,
+        at: new Date(baseMs + entry.atMs).toISOString(),
+      },
+    } as unknown as SessionStreamEvent;
+  });
 }
 
 export function eventTypeAt(

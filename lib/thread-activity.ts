@@ -223,7 +223,7 @@ export function extractPartialArgString(
 ): string | undefined {
   if (!argsText || !key) return undefined;
   const pattern = new RegExp(
-    `"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`,
+    `"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)(?:"|$)`,
   );
   const match = argsText.match(pattern);
   if (!match?.[1]) return undefined;
@@ -625,8 +625,13 @@ export function statusLabelForTool(
   part: ActivityToolPart,
   options: { readonly live?: boolean } = {},
 ): string {
-  if (typeof part.label === "string" && part.label.trim()) {
-    return part.label.trim();
+  const customLabel =
+    typeof part.label === "string" ? part.label.trim() : "";
+  if (
+    customLabel &&
+    customLabel.toLowerCase() !== humanizeToolName(part.toolName).toLowerCase()
+  ) {
+    return customLabel;
   }
   const step = toActivityStep(part, { live: options.live ?? true });
   return step.chip ? `${step.verb} ${step.chip}` : step.verb;

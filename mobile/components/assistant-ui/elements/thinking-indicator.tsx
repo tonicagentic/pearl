@@ -24,7 +24,7 @@ export function ThinkingIndicator({
       accessibilityLabel={elapsed ? `${display}, ${elapsed}` : display}
       className={cn("flex-row items-baseline gap-1.5 py-1.5", className)}
     >
-      <View className="min-h-[15px] justify-center overflow-visible">
+      <View className="min-h-[15px] min-w-0 flex-shrink justify-center overflow-visible">
         <ThinkingStatesLabel label={display} textClassName={threadMeta} />
       </View>
       {elapsed !== undefined ? (

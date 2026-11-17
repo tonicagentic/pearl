@@ -158,6 +158,29 @@ function AuthenticatedLayout() {
                     />
                   </Stack.Protected>
 
+                  <Stack.Protected guard={__DEV__}>
+                    <Stack.Screen
+                      name="json-render-smoke"
+                      options={{ title: "json-render smoke" }}
+                    />
+                    <Stack.Screen
+                      name="thread-samples"
+                      options={{
+                        title: "Thread samples",
+                        headerShown: true,
+                        headerBackButtonDisplayMode: "minimal",
+                      }}
+                    />
+                    <Stack.Screen
+                      name="thread-inspector"
+                      options={{
+                        title: "RN Thread Inspector",
+                        headerShown: true,
+                        headerBackButtonDisplayMode: "minimal",
+                      }}
+                    />
+                  </Stack.Protected>
+
                   <Stack.Protected guard={appReady} redirectTo="/sign-in">
                     <Stack.Screen
                       name="(home)"
@@ -206,20 +229,6 @@ function AuthenticatedLayout() {
                         headerBackButtonDisplayMode: "minimal",
                       }}
                     />
-                    <Stack.Protected guard={__DEV__}>
-                      <Stack.Screen
-                        name="json-render-smoke"
-                        options={{ title: "json-render smoke" }}
-                      />
-                      <Stack.Screen
-                        name="thread-samples"
-                        options={{
-                          title: "Thread samples",
-                          headerShown: true,
-                          headerBackButtonDisplayMode: "minimal",
-                        }}
-                      />
-                    </Stack.Protected>
                     {/* Reachable via pearl:///stream-playground; Settings gates
                         visibility to __DEV__ or unlocked internal builds. */}
                     <Stack.Screen
