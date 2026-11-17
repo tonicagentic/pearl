@@ -342,8 +342,11 @@ describe("statusLabelForTool", () => {
 });
 
 describe("withElapsed", () => {
-  it("appends a middle-dot duration", () => {
-    assert.equal(withElapsed("Edited app.json", "12s"), "Edited app.json · 12s");
+  it("prepends a worked-for duration", () => {
+    assert.equal(
+      withElapsed("Edited app.json", "12s"),
+      "Worked for 12s · Edited app.json",
+    );
     assert.equal(withElapsed("Thinking"), "Thinking");
   });
 });

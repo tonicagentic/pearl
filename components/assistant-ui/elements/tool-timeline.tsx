@@ -8,6 +8,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { formatWorkedFor } from "@/lib/thread-activity";
 import {
   collapsePanel,
   ShimmerLabel,
@@ -126,21 +127,33 @@ function StepRow({
           }
         : {})}
     >
+      {elapsed !== undefined ? (
+        <span className="text-muted-foreground shrink-0 tabular-nums">
+          {formatWorkedFor(elapsed)}
+        </span>
+      ) : null}
       {active ? (
         <ThinkingStatesLabel
           label={verb}
-          className="relative inline-block shrink-0 text-muted-foreground"
+          className={cn(
+            "relative inline-block shrink-0",
+            elapsed !== undefined
+              ? "text-muted-foreground/55"
+              : "text-muted-foreground",
+          )}
         />
       ) : (
         <ShimmerLabel
           active={false}
-          className="relative inline-block shrink-0 text-muted-foreground"
+          className={cn(
+            "relative inline-block shrink-0",
+            elapsed !== undefined
+              ? "text-muted-foreground/55"
+              : "text-muted-foreground",
+          )}
         >
           {verb}
         </ShimmerLabel>
-      )}
-      {elapsed !== undefined && (
-        <span className="tabular-nums opacity-80">{elapsed}</span>
       )}
       {/* File chips open the canvas; long commands/patterns truncate. */}
       {showChip && step.filePath && onOpenFile ? (
@@ -257,6 +270,11 @@ export function ToolTimeline({
             threadMeta,
           )}
         >
+          {elapsed !== undefined ? (
+            <span className="text-muted-foreground shrink-0 tabular-nums">
+              {formatWorkedFor(elapsed)}
+            </span>
+          ) : null}
           <ThinkingStatesLabel
             label={
               streaming
@@ -266,13 +284,11 @@ export function ToolTimeline({
                 : restingLabel
             }
             shimmer={streaming && !open}
-            className="min-w-0"
+            className={cn(
+              "min-w-0",
+              elapsed !== undefined && "text-muted-foreground/55",
+            )}
           />
-          {elapsed !== undefined && (
-            <span className="shrink-0 tabular-nums opacity-80">
-              {`· ${elapsed}`}
-            </span>
-          )}
           <DiffCounts added={headerAdded} removed={headerRemoved} />
           {open ? (
             <ChevronDownIcon

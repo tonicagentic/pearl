@@ -8,6 +8,7 @@ import { useCanvas } from "@/components/assistant-ui/elements/canvas-context";
 import { DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
 import {
   composeActivityHeader,
+  SETTLED_DURATION_MIN_MS,
   toActivityStep,
   type ActivityPart,
 } from "@/lib/thread-activity";
@@ -136,7 +137,9 @@ export function SessionTimeline() {
       end = ts;
     }
     if (start === undefined || end === undefined) return undefined;
-    return formatDuration(end - start);
+    const ms = end - start;
+    if (ms < SETTLED_DURATION_MIN_MS) return undefined;
+    return formatDuration(ms);
   }, [events, streaming, turnId]);
 
   const steps = toTimelineSteps(toolCalls, streaming);

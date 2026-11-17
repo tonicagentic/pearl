@@ -637,8 +637,16 @@ export function statusLabelForTool(
   return step.chip ? `${step.verb} ${step.chip}` : step.verb;
 }
 
-/** Append `· {elapsed}` when a duration is present. */
+/** Hide settled duration below this — short turns read as noise. */
+export const SETTLED_DURATION_MIN_MS = 3_000;
+
+/** Visible duration phrase for collapsed timeline chrome (leads the summary). */
+export function formatWorkedFor(elapsed: string): string {
+  return `Worked for ${elapsed}`;
+}
+
+/** Prepend a worked-for duration when present. */
 export function withElapsed(label: string, elapsed?: string): string {
   if (!elapsed) return label;
-  return `${label} · ${elapsed}`;
+  return `${formatWorkedFor(elapsed)} · ${label}`;
 }

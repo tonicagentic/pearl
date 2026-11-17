@@ -19,6 +19,7 @@ import { useEveEvents } from "@/src/chat-context";
 import { formatDurationMs, turnEventSpan } from "@/src/turn-duration";
 import {
   composeActivityHeader,
+  SETTLED_DURATION_MIN_MS,
   toActivityStep,
   type ActivityPart,
 } from "../../../../lib/thread-activity";
@@ -70,7 +71,8 @@ function formatDuration(ms: number): string {
   return `${Math.round(hours)}h ${minutes % 60}m`;
 }
 
-function formatSettledDuration(ms: number): string {
+function formatSettledDuration(ms: number): string | undefined {
+  if (ms < SETTLED_DURATION_MIN_MS) return undefined;
   if (ms < 60_000) return formatDurationMs(ms);
   return formatDuration(ms);
 }
@@ -240,6 +242,7 @@ export const SessionTimelineSegment: FC<{
         restingLabel={
           <ActivityPhrase
             bits={[...(showLive ? openHeader.bits : header.bits)]}
+            emphasis={duration ? "detail" : "call"}
           />
         }
         activeLabel={activeLabel}

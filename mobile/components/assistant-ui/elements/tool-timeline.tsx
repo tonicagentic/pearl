@@ -16,6 +16,7 @@ import { useCSSVariable } from "uniwind";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
+import { formatWorkedFor } from "../../../../lib/thread-activity";
 import {
   CollapsePanel,
   ShimmerLabel,
@@ -77,12 +78,16 @@ export function ActivityPhrase({
   bits,
   prefix,
   numberOfLines = 2,
+  /** When `detail`, the whole phrase sits under a leading call (e.g. Worked for). */
+  emphasis = "call",
 }: {
   readonly bits: readonly ActivityBit[];
   readonly prefix?: ReactNode;
   readonly numberOfLines?: number;
+  readonly emphasis?: "call" | "detail";
 }) {
   if (bits.length === 0 && prefix == null) return null;
+  const verbClass = emphasis === "call" ? threadMetaCall : threadMetaDetail;
   return (
     <Text variant="body" numberOfLines={numberOfLines}>
       {prefix}
@@ -93,7 +98,7 @@ export function ActivityPhrase({
               {", "}
             </Text>
           ) : null}
-          <Text variant="body" className={threadMetaCall}>
+          <Text variant="body" className={verbClass}>
             {bit.verb}
           </Text>
           {bit.detail ? (
@@ -247,28 +252,34 @@ function StepRow({
           expandable ? { top: 8, bottom: 8, left: 4, right: 4 } : undefined
         }
       >
+        {elapsed !== undefined ? (
+          <Text
+            variant="body"
+            className={cn(threadMetaCall, "shrink-0 tabular-nums")}
+          >
+            {formatWorkedFor(elapsed)}
+          </Text>
+        ) : null}
         {active ? (
           <ThinkingStatesLabel
             label={verb}
-            textClassName={cn(threadMetaCall, "shrink-0")}
+            textClassName={cn(
+              elapsed !== undefined ? threadMetaDetail : threadMetaCall,
+              "shrink-0",
+            )}
           />
         ) : (
           <ShimmerLabel
             active={false}
             variant="body"
-            className={cn(threadMetaCall, "shrink-0")}
+            className={cn(
+              elapsed !== undefined ? threadMetaDetail : threadMetaCall,
+              "shrink-0",
+            )}
           >
             {verb}
           </ShimmerLabel>
         )}
-        {elapsed !== undefined ? (
-          <Text
-            variant="body"
-            className={cn(threadMetaDetail, "tabular-nums")}
-          >
-            {elapsed}
-          </Text>
-        ) : null}
         {showChip ? (
           step.kind === "skill" ? (
             <View
@@ -383,6 +394,14 @@ export function ToolTimeline({
         hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
       >
         <View className="min-w-0 flex-row flex-nowrap items-center gap-x-1.5">
+          {elapsed ? (
+            <Text
+              variant="body"
+              className={cn(threadMetaCall, "shrink-0 tabular-nums")}
+            >
+              {formatWorkedFor(elapsed)}
+            </Text>
+          ) : null}
           {streaming ? (
             // While expanded, the last StepRow owns the live label — keep the
             // header on the activity summary so the same "Searching…" line
@@ -392,7 +411,7 @@ export function ToolTimeline({
                 <ShimmerLabel
                   active
                   variant="body"
-                  className={threadMetaCall}
+                  className={elapsed ? threadMetaDetail : threadMetaCall}
                   numberOfLines={1}
                 >
                   {restingLabel}
@@ -403,7 +422,7 @@ export function ToolTimeline({
             ) : (
               <ThinkingStatesLabel
                 label={activeLabel}
-                textClassName={threadMetaCall}
+                textClassName={elapsed ? threadMetaDetail : threadMetaCall}
                 className="min-w-0"
               />
             )
@@ -411,19 +430,11 @@ export function ToolTimeline({
             <ThinkingStatesLabel
               label={restingLabel}
               shimmer={false}
-              textClassName={threadMetaCall}
+              textClassName={elapsed ? threadMetaDetail : threadMetaCall}
             />
           ) : (
             restingLabel
           )}
-          {elapsed ? (
-            <Text
-              variant="body"
-              className={cn(threadMetaDetail, "shrink-0 tabular-nums")}
-            >
-              {`· ${elapsed}`}
-            </Text>
-          ) : null}
           <DiffCounts added={headerAdded} removed={headerRemoved} />
           {open ? <MetaChevron open /> : null}
         </View>
