@@ -12,7 +12,7 @@ import {
   collapsePanel,
   ShimmerLabel,
   stepEnter,
-  SwapLabel,
+  ThinkingStatesLabel,
   threadDiffAdd,
   threadDiffRemove,
   threadMeta,
@@ -126,12 +126,19 @@ function StepRow({
           }
         : {})}
     >
-      <ShimmerLabel
-        active={active}
-        className="relative inline-block shrink-0 text-muted-foreground"
-      >
-        {verb}
-      </ShimmerLabel>
+      {active ? (
+        <ThinkingStatesLabel
+          label={verb}
+          className="relative inline-block shrink-0 text-muted-foreground"
+        />
+      ) : (
+        <ShimmerLabel
+          active={false}
+          className="relative inline-block shrink-0 text-muted-foreground"
+        >
+          {verb}
+        </ShimmerLabel>
+      )}
       {elapsed !== undefined && (
         <span className="tabular-nums opacity-80">{elapsed}</span>
       )}
@@ -248,22 +255,14 @@ export function ToolTimeline({
           threadMeta,
         )}
       >
-        <SwapLabel
-          active={streaming ? 0 : 1}
-          className="text-start"
-        >
-          <ShimmerLabel
-            active={streaming}
-            className="relative inline-flex max-w-full items-center gap-1.5"
-          >
-            <span className="min-w-0 truncate">{liveLabel}</span>
-            <DiffCounts added={headerAdded} removed={headerRemoved} />
-          </ShimmerLabel>
-          <span className="inline-flex max-w-full items-center gap-1.5">
-            <span className="min-w-0 truncate">{settledLabel}</span>
-            <DiffCounts added={headerAdded} removed={headerRemoved} />
-          </span>
-        </SwapLabel>
+        <span className="inline-flex max-w-full items-center gap-1.5 text-start">
+          <ThinkingStatesLabel
+            label={streaming ? liveLabel : settledLabel}
+            shimmer={streaming}
+            className="min-w-0 truncate"
+          />
+          <DiffCounts added={headerAdded} removed={headerRemoved} />
+        </span>
         <ChevronDownIcon
           className={cn(
             "size-3.5 shrink-0 opacity-50 transition-transform duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",

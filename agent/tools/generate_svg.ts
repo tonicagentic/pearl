@@ -49,6 +49,22 @@ const tool = defineTool({
     "author. Prefer write_file for exact simple geometry. The vector model " +
     "comes from Models settings (Vector picker), not from this tool's " +
     "arguments. Does not vectorize, edit, or animate existing files.",
+  label: {
+    start(input) {
+      const path =
+        typeof input.filePath === "string" && input.filePath.trim()
+          ? input.filePath.trim().split("/").pop()
+          : undefined;
+      return path ? `Generating SVG · ${path}` : "Generating SVG";
+    },
+    complete(input) {
+      const path =
+        typeof input.filePath === "string" && input.filePath.trim()
+          ? input.filePath.trim().split("/").pop()
+          : undefined;
+      return path ? `Wrote SVG · ${path}` : "Wrote SVG";
+    },
+  },
   async execute(input, ctx) {
     if (isPlanMode()) {
       return {

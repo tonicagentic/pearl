@@ -16,7 +16,7 @@ import {
   COLLAPSE_MS,
   CollapsePanel,
   ShimmerLabel,
-  SwapLabel,
+  ThinkingStatesLabel,
   collapseEase,
   layoutTransition,
   stepEnter,
@@ -196,13 +196,20 @@ function StepRow({
           expandable ? { top: 6, bottom: 6, left: 4, right: 4 } : undefined
         }
       >
-        <ShimmerLabel
-          active={active}
-          variant="label"
-          className={cn(threadMetaCall, "shrink-0")}
-        >
-          {label}
-        </ShimmerLabel>
+        {active ? (
+          <ThinkingStatesLabel
+            label={label}
+            textClassName={cn(threadMetaCall, "shrink-0")}
+          />
+        ) : (
+          <ShimmerLabel
+            active={false}
+            variant="label"
+            className={cn(threadMetaCall, "shrink-0")}
+          >
+            {label}
+          </ShimmerLabel>
+        )}
         {showChip ? (
           step.kind === "skill" ? (
             <View
@@ -315,31 +322,40 @@ export function ToolTimeline({
         accessibilityState={{ expanded: open }}
         onPress={() => onOpenChange(!open)}
       >
-        <SwapLabel active={streaming ? 0 : 1} className="min-w-0 flex-1 text-start">
-          <View className="min-w-0 flex-1 flex-row flex-wrap items-baseline gap-x-2">
-            <ShimmerLabel
-              active
-              variant="label"
-              className={threadMetaCall}
-              numberOfLines={2}
-            >
-              {liveHeader}
-            </ShimmerLabel>
-            <DiffCounts added={headerAdded} removed={headerRemoved} />
-          </View>
-          <View className="min-w-0 flex-1 flex-row flex-wrap items-baseline gap-x-2">
-            {restingLabel}
-            {elapsed ? (
-              <Text
-                variant="label"
-                className={cn(threadMetaDetail, "tabular-nums")}
-              >
-                {`· ${elapsed}`}
-              </Text>
-            ) : null}
-            <DiffCounts added={headerAdded} removed={headerRemoved} />
-          </View>
-        </SwapLabel>
+        <View className="min-w-0 flex-1 flex-row flex-wrap items-baseline gap-x-2">
+          {streaming ? (
+            <ThinkingStatesLabel
+              label={liveHeader}
+              textClassName={threadMetaCall}
+              className="min-w-0"
+            />
+          ) : (
+            <View className="min-w-0 flex-1 flex-row flex-wrap items-baseline gap-x-2">
+              {typeof restingLabel === "string" ? (
+                <ThinkingStatesLabel
+                  label={
+                    elapsed ? `${restingLabel} · ${elapsed}` : restingLabel
+                  }
+                  shimmer={false}
+                  textClassName={threadMetaCall}
+                />
+              ) : (
+                <>
+                  {restingLabel}
+                  {elapsed ? (
+                    <Text
+                      variant="label"
+                      className={cn(threadMetaDetail, "tabular-nums")}
+                    >
+                      {`· ${elapsed}`}
+                    </Text>
+                  ) : null}
+                </>
+              )}
+            </View>
+          )}
+          <DiffCounts added={headerAdded} removed={headerRemoved} />
+        </View>
         <MetaChevron open={open} />
       </Pressable>
       <CollapsePanel open={open}>

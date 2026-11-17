@@ -28,6 +28,20 @@ const tool = defineTool({
       .nullish()
       .describe("1-indexed page to read. Omit to list available pages."),
   }),
+  label: {
+    start(input) {
+      if (typeof input.page === "number" && Number.isFinite(input.page)) {
+        return `Reading attachment page ${input.page}`;
+      }
+      return "Listing attachment pages";
+    },
+    complete(input) {
+      if (typeof input.page === "number" && Number.isFinite(input.page)) {
+        return `Read attachment page ${input.page}`;
+      }
+      return "Listed attachment pages";
+    },
+  },
   async execute(input, ctx) {
     const chatId = await getChatIdByEveSessionId(ctx.session.id);
 

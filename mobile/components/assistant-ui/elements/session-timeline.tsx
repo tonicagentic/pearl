@@ -13,6 +13,8 @@ import {
   toActivityStep,
   type ActivityPart,
 } from "../../../../lib/thread-activity";
+import { deriveLiveThinkingState } from "../../../../lib/stream-thinking-state";
+import { useChatConversation } from "@/src/conversation-context";
 import { TimelineDurationEventsContext } from "./timeline-duration-events";
 import {
   ActivityPhrase,
@@ -133,6 +135,7 @@ export const SessionTimelineSegment: FC<{
 
   const liveEvents = useEveEvents();
   const events = overrideEvents ?? liveEvents;
+  const { conversation } = useChatConversation();
   // Questions own the status line ("Asking questions"); fold the timeline.
   // Approvals / sign-in keep the live shimmer until the user answers.
   const showLive =
@@ -154,6 +157,29 @@ export const SessionTimelineSegment: FC<{
     () => composeActivityHeader(toolCalls, { live: showLive }),
     [toolCalls, showLive],
   );
+  const liveHeader = useMemo(() => {
+    if (!showLive) return header.text;
+    const liveState = deriveLiveThinkingState({
+      events: events as unknown as Parameters<
+        typeof deriveLiveThinkingState
+      >[0]["events"],
+      parts: toolCalls,
+      agents: conversation.agents as unknown as Parameters<
+        typeof deriveLiveThinkingState
+      >[0]["agents"],
+      statusType: streaming ? "running" : statusType,
+      waitingLabel: header.text || "Thinking",
+    });
+    return liveState.label ?? header.text;
+  }, [
+    conversation.agents,
+    events,
+    header.text,
+    showLive,
+    statusType,
+    streaming,
+    toolCalls,
+  ]);
 
   if (steps.length === 0) return null;
 
@@ -171,7 +197,7 @@ export const SessionTimelineSegment: FC<{
       open={userOpen ?? showLive}
       onOpenChange={setUserOpen}
       restingLabel={<ActivityPhrase bits={[...header.bits]} />}
-      activeLabel={header.text}
+      activeLabel={liveHeader}
       headerAdded={header.added}
       headerRemoved={header.removed}
       elapsed={duration}

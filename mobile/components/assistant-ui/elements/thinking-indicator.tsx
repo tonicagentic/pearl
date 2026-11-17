@@ -1,15 +1,8 @@
 import { View } from "react-native";
-import Animated from "react-native-reanimated";
 
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
-import {
-  ShimmerLabel,
-  thinkSwapEnter,
-  thinkSwapExit,
-  threadMeta,
-  useMotion,
-} from "./surfaces";
+import { ThinkingStatesLabel, threadMeta } from "./surfaces";
 
 /** thinking-states: shimmer while held, swap with blur-rise on label change. */
 export function ThinkingIndicator({
@@ -21,34 +14,24 @@ export function ThinkingIndicator({
   elapsed?: string;
   className?: string;
 }) {
-  const motion = useMotion();
   // Cursor uses an ellipsis on the live status ("Thinking…").
   const display =
     label === "Thinking" || label === "Working" ? "Thinking…" : label;
 
   return (
-    <Animated.View
-      exiting={motion ? thinkSwapExit : undefined}
+    <View
       accessibilityRole="text"
       accessibilityLabel={elapsed ? `${display}, ${elapsed}` : display}
       className={cn("flex-row items-baseline gap-1.5 py-1.5", className)}
     >
       <View className="min-h-[15px] justify-center overflow-visible">
-        <Animated.View
-          key={display}
-          entering={motion ? thinkSwapEnter : undefined}
-          exiting={motion ? thinkSwapExit : undefined}
-        >
-          <ShimmerLabel active variant="label" className={threadMeta}>
-            {display}
-          </ShimmerLabel>
-        </Animated.View>
+        <ThinkingStatesLabel label={display} textClassName={threadMeta} />
       </View>
       {elapsed !== undefined ? (
         <Text variant="label" className={cn(threadMeta, "tabular-nums")}>
           {elapsed}
         </Text>
       ) : null}
-    </Animated.View>
+    </View>
   );
 }

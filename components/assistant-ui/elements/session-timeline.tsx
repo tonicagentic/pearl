@@ -11,6 +11,7 @@ import {
   toActivityStep,
   type ActivityPart,
 } from "@/lib/thread-activity";
+import { deriveLiveThinkingState } from "@/lib/stream-thinking-state";
 
 import {
   ToolTimeline,
@@ -146,6 +147,18 @@ export function SessionTimeline() {
     () => composeActivityHeader(toolCalls, { live: streaming }),
     [toolCalls, streaming],
   );
+  const liveHeader = useMemo(() => {
+    if (!streaming) return header.text;
+    const live = deriveLiveThinkingState({
+      events: events as unknown as Parameters<
+        typeof deriveLiveThinkingState
+      >[0]["events"],
+      parts: toolCalls,
+      statusType: "running",
+      waitingLabel: header.text || "Thinking",
+    });
+    return live.label ?? header.text;
+  }, [events, header.text, streaming, toolCalls]);
 
   if (steps.length === 0) return null;
 
@@ -159,7 +172,7 @@ export function SessionTimeline() {
       open={userOpen ?? streaming}
       onOpenChange={setUserOpen}
       restingLabel={header.text}
-      activeLabel={header.text}
+      activeLabel={liveHeader}
       headerAdded={header.added}
       headerRemoved={header.removed}
       elapsed={duration}

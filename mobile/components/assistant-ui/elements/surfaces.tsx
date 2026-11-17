@@ -637,3 +637,66 @@ export function SwapLabel({
     </View>
   );
 }
+
+/**
+ * Dynamic-string thinking-states swapper. Writes into alternating slots and
+ * reuses SwapLabel motion (outgoing up, 50ms gap, incoming rise + shimmer).
+ */
+export function ThinkingStatesLabel({
+  label,
+  shimmer = true,
+  className,
+  textClassName,
+}: {
+  label: string;
+  shimmer?: boolean;
+  className?: string;
+  textClassName?: string;
+}) {
+  const motion = useMotion();
+  const [active, setActive] = useState<0 | 1>(0);
+  const activeRef = useRef<0 | 1>(0);
+  const [slots, setSlots] = useState<[string, string]>([label, label]);
+  const currentRef = useRef(label);
+
+  useEffect(() => {
+    if (label === currentRef.current) return;
+    currentRef.current = label;
+    if (!motion) {
+      setSlots([label, label]);
+      activeRef.current = 0;
+      setActive(0);
+      return;
+    }
+    const next: 0 | 1 = activeRef.current === 0 ? 1 : 0;
+    setSlots((prev) => {
+      const copy: [string, string] = [prev[0], prev[1]];
+      copy[next] = label;
+      return copy;
+    });
+    const timer = setTimeout(() => {
+      activeRef.current = next;
+      setActive(next);
+    }, THINK_GAP_MS);
+    return () => clearTimeout(timer);
+  }, [label, motion]);
+
+  return (
+    <SwapLabel active={active} className={className}>
+      <ShimmerLabel
+        active={shimmer && active === 0}
+        variant="label"
+        className={textClassName}
+      >
+        {slots[0]}
+      </ShimmerLabel>
+      <ShimmerLabel
+        active={shimmer && active === 1}
+        variant="label"
+        className={textClassName}
+      >
+        {slots[1]}
+      </ShimmerLabel>
+    </SwapLabel>
+  );
+}

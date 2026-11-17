@@ -33,6 +33,10 @@ export type ActivityToolPart = {
   readonly type: "tool-call";
   readonly toolName: string;
   readonly args?: unknown;
+  /** Streaming JSON text while `call.input` is still open (`args` may be empty). */
+  readonly argsText?: string;
+  /** Live activity text from tool `label` / `call.progress`. */
+  readonly label?: string;
   readonly result?: unknown;
   readonly status?: { readonly type?: ActivityStatusType };
 };
@@ -197,8 +201,58 @@ function pairFor(toolName: string): VerbPair {
   );
 }
 
+const PARTIAL_ARG_KEYS = [
+  "filePath",
+  "query",
+  "pattern",
+  "command",
+  "url",
+  "skill",
+  "recipient",
+  "title",
+  "name",
+  "attachmentId",
+  "taskId",
+  "message",
+] as const;
+
+/** Best-effort string field extract from partial JSON while args stream. */
+export function extractPartialArgString(
+  argsText: string | undefined,
+  key: string,
+): string | undefined {
+  if (!argsText || !key) return undefined;
+  const pattern = new RegExp(
+    `"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`,
+  );
+  const match = argsText.match(pattern);
+  if (!match?.[1]) return undefined;
+  try {
+    return JSON.parse(`"${match[1]}"`) as string;
+  } catch {
+    return match[1];
+  }
+}
+
+function partialArgsFromText(
+  argsText: string | undefined,
+): Record<string, string> {
+  if (!argsText) return {};
+  const out: Record<string, string> = {};
+  for (const key of PARTIAL_ARG_KEYS) {
+    const value = extractPartialArgString(argsText, key);
+    if (value) out[key] = value;
+  }
+  return out;
+}
+
 function argsOf(part: ActivityToolPart): Record<string, unknown> {
-  return (part.args ?? {}) as Record<string, unknown>;
+  const base =
+    part.args && typeof part.args === "object" && !Array.isArray(part.args)
+      ? (part.args as Record<string, unknown>)
+      : {};
+  if (Object.keys(base).length > 0) return base;
+  return partialArgsFromText(part.argsText);
 }
 
 /** `L85–104` when offset/limit describe a span; empty otherwise. */
@@ -571,6 +625,9 @@ export function statusLabelForTool(
   part: ActivityToolPart,
   options: { readonly live?: boolean } = {},
 ): string {
+  if (typeof part.label === "string" && part.label.trim()) {
+    return part.label.trim();
+  }
   const step = toActivityStep(part, { live: options.live ?? true });
   return step.chip ? `${step.verb} ${step.chip}` : step.verb;
 }

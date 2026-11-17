@@ -15,10 +15,10 @@ import { Loader2, X } from "lucide-react";
 // - Stall watchdog: no stream events for 45s while in flight reads as a
 //   warning, so a dead gateway call shows as text instead of an endless
 //   spinner.
-// - Waiting for you: unanswered input requests are tracked so this banner
+// - Waiting for you: unanswered interactions are tracked so this banner
 //   stays out of the way (the composer WaitingActionCard owns HITL copy).
-//   A parked turn emits input.requested, then turn.completed, then
-//   session.waiting — pending input must survive turn.completed.
+//   A parked turn emits interaction.opened, then turn.paused / turn.settled,
+//   then session.waiting — pending input must survive turn.paused.
 //
 // Turn failures surface separately through useEveError (EveErrorToast).
 
@@ -34,13 +34,14 @@ type StreamEvent = {
   readonly type?: string;
   readonly meta?: { readonly at?: string };
   readonly data?: {
-    readonly requests?: readonly {
-      requestId?: string;
+    readonly interactionId?: string;
+    readonly request?: {
       kind?: string;
-      action?: { callId?: string; toolName?: string };
-    }[];
-    readonly resolutions?: readonly { requestId?: string }[];
+      title?: string;
+    };
     readonly callId?: string;
+    readonly outcome?: string;
+    readonly deliveryId?: string;
   };
 };
 
@@ -61,7 +62,7 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
   }, [isRunning]);
 
   // Derive the phase in one forward pass over the authoritative stream:
-  // unanswered input requests (the agent is paused on the user), the
+  // unanswered interactions (the agent is paused on the user), the
   // in-flight turn's start time, and the newest event timestamp.
   const pendingById = new Map<string, PendingRequest>();
   let workingStartedAt: number | null = null;
@@ -79,26 +80,23 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
       if (Number.isFinite(parsed)) lastAt = parsed;
     }
 
-    if (event.type === "input.requested") {
-      for (const request of event.data?.requests ?? []) {
-        if (!request.requestId) continue;
-        pendingById.set(request.requestId, {
-          requestId: request.requestId,
-          toolName: request.action?.toolName,
-          kind: request.kind,
-        });
-      }
+    if (event.type === "interaction.opened") {
+      const interactionId = event.data?.interactionId;
+      if (!interactionId) continue;
+      pendingById.set(interactionId, {
+        requestId: interactionId,
+        kind: event.data?.request?.kind,
+      });
       continue;
     }
 
-    if (event.type === "input.resolved") {
-      for (const resolution of event.data?.resolutions ?? []) {
-        if (resolution.requestId) pendingById.delete(resolution.requestId);
-      }
+    if (event.type === "interaction.settled") {
+      const interactionId = event.data?.interactionId;
+      if (interactionId) pendingById.delete(interactionId);
       continue;
     }
 
-    if (event.type === "message.received") {
+    if (event.type === "delivery.consumed" || event.type === "delivery.admitted") {
       receivedCount += 1;
       const parsed = Date.parse(event.meta?.at ?? "");
       if (Number.isFinite(parsed)) lastReceivedAt = parsed;
@@ -112,15 +110,20 @@ export function SessionStatusBanner({ isRunning }: { readonly isRunning: boolean
       continue;
     }
 
-    if (
-      event.type === "turn.completed" ||
-      event.type === "turn.cancelled" ||
-      event.type === "turn.failed"
-    ) {
-      // Keep pending input across turn.completed — a HITL park emits
-      // input.requested then turn.completed then session.waiting.
+    if (event.type === "turn.paused") {
+      // Keep pending interactions across turn.paused — HITL parks here.
       workingStartedAt = null;
-      if (event.type === "turn.cancelled" || event.type === "turn.failed") {
+      continue;
+    }
+
+    if (event.type === "turn.settled") {
+      workingStartedAt = null;
+      const outcome = event.data?.outcome;
+      if (
+        outcome === "cancelled" ||
+        outcome === "failed" ||
+        outcome === "error"
+      ) {
         pendingById.clear();
       }
     }

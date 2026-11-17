@@ -703,6 +703,9 @@ function AssistantChatSurfaceInner({
     },
     prepareSend,
     isDisabled,
+    // Follow child agent sessions so live subagent tool/status phases
+    // reach the thinking-states line and session timeline.
+    followAgents: true,
   };
   const runtime = useEveAgentRuntime(runtimeOptions);
 

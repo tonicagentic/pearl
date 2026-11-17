@@ -93,6 +93,7 @@ function convertToolPart(part: EveToolPart): Part {
     args: part.state === "streaming" ? {} : argsObject(part.input),
     argsText:
       part.state === "streaming" ? part.inputText : argsText(part.input),
+    ...(part.label ? { label: part.label } : {}),
     ...(part.interaction
       ? { approval: toolApprovalFromInteraction(part.interaction) }
       : {}),

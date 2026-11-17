@@ -38,9 +38,10 @@ export const labelSwapIn = "translate-y-0 opacity-100 blur-none";
 export const labelSwapOut =
   "pointer-events-none -translate-y-1.5 select-none opacity-0 blur-[2px]";
 
-/** Motion tokens mirrored from mobile (Reanimated FadeInDown / label swap). */
+/** Motion tokens mirrored from mobile / transitions.dev thinking-states. */
 export const THINK_SWAP_MS = 150;
-export const THINK_SWAP_Y = 6;
+export const THINK_GAP_MS = 50;
+export const THINK_SWAP_Y = 8;
 export const STEP_ENTER_MS = 220;
 export const MESSAGE_ENTER_MS = 220;
 
@@ -52,9 +53,13 @@ export const messageEnter =
 export const stepEnter =
   "fade-in slide-in-from-bottom-[6px] animate-in fill-mode-both duration-[220ms] ease-out motion-reduce:animate-none";
 
-/** Thinking label swap enter. */
+/** Thinking label swap enter (after --think-gap). */
 export const thinkSwapEnter =
-  "fade-in slide-in-from-bottom-[6px] animate-in fill-mode-both duration-[150ms] ease-out motion-reduce:animate-none";
+  "fade-in slide-in-from-bottom-[8px] animate-in fill-mode-both duration-[150ms] ease-in-out delay-[50ms] motion-reduce:animate-none motion-reduce:delay-0";
+
+/** Thinking label swap exit: float up + blur + fade. */
+export const thinkSwapExit =
+  "animate-out fade-out slide-out-to-top-[8px] fill-mode-both duration-[150ms] ease-in-out blur-[2px] motion-reduce:animate-none";
 
 export const collapsePanel =
   "h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] data-[ending-style]:h-0 data-[starting-style]:h-0 motion-reduce:transition-none";
@@ -151,6 +156,107 @@ export function SwapLabel({
           {layer}
         </span>
       ))}
+    </span>
+  );
+}
+
+/**
+ * Dynamic string swapper matching transitions.dev thinking-states:
+ * outgoing floats up + blurs out (150ms), 50ms gap, incoming rises +
+ * unblurs with shimmer; container width eases so elapsed badges glide.
+ */
+export function ThinkingStatesLabel({
+  label,
+  shimmer = true,
+  className,
+}: {
+  label: string;
+  shimmer?: boolean;
+  className?: string;
+}) {
+  const slotA = useRef<HTMLSpanElement>(null);
+  const slotB = useRef<HTMLSpanElement>(null);
+  const [active, setActive] = useState<0 | 1>(0);
+  const activeRef = useRef<0 | 1>(0);
+  const [slots, setSlots] = useState<[string, string]>([label, label]);
+  const currentRef = useRef(label);
+  const [width, setWidth] = useState<number | null>(null);
+  const gapTimer = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (label === currentRef.current) return;
+    currentRef.current = label;
+
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (gapTimer.current !== null) {
+      window.clearTimeout(gapTimer.current);
+      gapTimer.current = null;
+    }
+
+    if (reduced) {
+      setSlots([label, label]);
+      activeRef.current = 0;
+      setActive(0);
+      return;
+    }
+
+    const next: 0 | 1 = activeRef.current === 0 ? 1 : 0;
+    setSlots((prev) => {
+      const copy: [string, string] = [prev[0], prev[1]];
+      copy[next] = label;
+      return copy;
+    });
+    // 50ms gap before flipping the active slot so outgoing finishes first.
+    gapTimer.current = window.setTimeout(() => {
+      activeRef.current = next;
+      setActive(next);
+      gapTimer.current = null;
+    }, THINK_GAP_MS);
+
+    return () => {
+      if (gapTimer.current !== null) {
+        window.clearTimeout(gapTimer.current);
+        gapTimer.current = null;
+      }
+    };
+  }, [label]);
+
+  useLayoutEffect(() => {
+    const target = (active === 0 ? slotA : slotB).current;
+    if (!target) return undefined;
+    const measure = () =>
+      setWidth(Math.ceil(target.getBoundingClientRect().width));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [active, slots]);
+
+  return (
+    <span
+      style={width === null ? undefined : { width }}
+      className={cn(
+        "grid overflow-x-clip transition-[width] duration-150 ease-in-out motion-reduce:transition-none",
+        className,
+      )}
+    >
+      <span
+        ref={slotA}
+        aria-hidden={active !== 0}
+        className={cn(labelSwap, active === 0 ? labelSwapIn : labelSwapOut)}
+      >
+        <ShimmerLabel active={shimmer && active === 0}>{slots[0]}</ShimmerLabel>
+      </span>
+      <span
+        ref={slotB}
+        aria-hidden={active !== 1}
+        className={cn(labelSwap, active === 1 ? labelSwapIn : labelSwapOut)}
+      >
+        <ShimmerLabel active={shimmer && active === 1}>{slots[1]}</ShimmerLabel>
+      </span>
     </span>
   );
 }

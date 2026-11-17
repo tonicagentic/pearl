@@ -115,3 +115,55 @@ test("runs without a matching name are not completed by another subagent", () =>
   const runs = deriveSubagentRuns([CALLED, otherDone], AT + 5_000);
   assert.equal(runs[0].state, "running");
 });
+
+test("v27 task.started + child.opened start a running run", () => {
+  const started = {
+    type: "task.started",
+    meta: { at: "2026-09-20T19:59:57.551Z" },
+    data: {
+      kind: "background",
+      name: "editor",
+      taskId: "task_x",
+      startedBy: { callId: "call_editor" },
+    },
+  };
+  const opened = {
+    type: "child.opened",
+    meta: { at: "2026-09-20T19:59:58.000Z" },
+    data: {
+      name: "editor",
+      sessionId: "sess_child",
+      stream: "https://example.test/stream",
+      owner: { taskId: "task_x" },
+    },
+  };
+  const runs = deriveSubagentRuns([started, opened], AT + 5_000);
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].state, "running");
+  assert.equal(runs[0].callId, "call_editor");
+  assert.equal(runs[0].name, "editor");
+});
+
+test("v27 task.ended settles the run", () => {
+  const started = {
+    type: "task.started",
+    meta: { at: "2026-09-20T19:59:57.551Z" },
+    data: {
+      kind: "background",
+      name: "editor",
+      taskId: "task_x",
+      startedBy: { callId: "call_editor" },
+    },
+  };
+  const ended = {
+    type: "task.ended",
+    meta: { at: "2026-09-20T20:01:00.000Z" },
+    data: { taskId: "task_x", outcome: "completed" },
+  };
+  const runs = deriveSubagentRuns(
+    [started, ended],
+    Date.parse(ended.meta.at) + 1_000,
+  );
+  assert.equal(runs[0].state, "ready");
+  assert.equal((runs[0].result as { outcome: string }).outcome, "completed");
+});

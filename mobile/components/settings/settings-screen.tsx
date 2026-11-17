@@ -295,6 +295,17 @@ export function SettingsScreen() {
             showSeparator
           />
         )}
+        {__DEV__ || !isHostedLocked() ? (
+          <SettingsRow
+            icon={
+              <Icon as={SparklesIcon} className="size-5 text-sky-500" />
+            }
+            label="Stream playground"
+            detail="Replay eve thinking-states"
+            onPress={() => router.push("/stream-playground")}
+            showSeparator
+          />
+        ) : null}
         <SettingsRow
           icon={<Icon as={InfoIcon} className="size-5 text-muted-foreground" />}
           label="About Pearl"

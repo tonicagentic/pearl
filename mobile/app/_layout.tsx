@@ -220,6 +220,16 @@ function AuthenticatedLayout() {
                         }}
                       />
                     </Stack.Protected>
+                    {/* Reachable via pearl:///stream-playground; Settings gates
+                        visibility to __DEV__ or unlocked internal builds. */}
+                    <Stack.Screen
+                      name="stream-playground"
+                      options={{
+                        title: "Stream playground",
+                        headerShown: true,
+                        headerBackButtonDisplayMode: "minimal",
+                      }}
+                    />
                     <Stack.Screen
                       name="browser"
                       options={{
