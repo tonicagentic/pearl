@@ -35,6 +35,7 @@ import { TurnElapsedProvider } from "@/components/assistant-ui/elements/turn-ela
 import { MessageSources } from "@/components/assistant-ui/elements/citation";
 import {
   ShimmerLabel,
+  actionBarEnter,
   inkButton,
   messageEnter,
   useAnnounce,
@@ -1961,7 +1962,7 @@ const AssistantMessage: FC = () => {
         </TurnElapsedProvider>
         <MessageSources />
       </View>
-      <View className="aui-assistant-message-footer min-h-7 flex-row items-center pt-1.5">
+      <View className="aui-assistant-message-footer min-h-7 flex-row items-center pt-1">
         <BranchPicker />
         <AssistantActionBar />
       </View>
@@ -1969,10 +1970,10 @@ const AssistantMessage: FC = () => {
   );
 };
 
-// Compact action glyphs (~20px) in a 32px visual button; hitSlop keeps ~44pt.
+// Compact action glyphs (~16px) in a 28px visual button; hitSlop keeps ~44pt.
 const assistantActionButtonClassName =
-  "aui-assistant-action-button active:bg-muted size-8 items-center justify-center rounded-md";
-const assistantActionHitSlop = { top: 6, bottom: 6, left: 6, right: 6 };
+  "aui-assistant-action-button active:bg-muted size-7 items-center justify-center rounded-md";
+const assistantActionHitSlop = { top: 8, bottom: 8, left: 8, right: 8 };
 
 const ShareMarkdown: FC = () => {
   const markdown = useAuiState((s) =>
@@ -1992,35 +1993,41 @@ const ShareMarkdown: FC = () => {
       hitSlop={assistantActionHitSlop}
       onPress={() => void Share.share({ message: markdown, title: "Pearl response" }).catch(() => {})}
     >
-      <Icon as={Share2Icon} className="text-muted-foreground size-5" />
+      <Icon as={Share2Icon} className="text-muted-foreground size-4" />
     </Pressable>
   );
 };
 
-const AssistantActionBar: FC = () => (
-  <AuiIf
-    condition={(s) =>
-      !(s.message.role === "assistant" && s.message.status?.type === "running")
-    }
-  >
-    <View className="aui-assistant-action-bar-root flex-row gap-1">
-      <ActionBarPrimitive.Copy
-        copyToClipboard={copyToClipboard}
-        className={assistantActionButtonClassName}
-        hitSlop={assistantActionHitSlop}
-        accessibilityLabel="Copy"
+const AssistantActionBar: FC = () => {
+  const motion = useMotion();
+  return (
+    <AuiIf
+      condition={(s) =>
+        !(s.message.role === "assistant" && s.message.status?.type === "running")
+      }
+    >
+      <Animated.View
+        entering={motion ? actionBarEnter : undefined}
+        className="aui-assistant-action-bar-root flex-row gap-1"
       >
-        {({ isCopied }) => (
-          <Icon
-            as={isCopied ? CheckIcon : CopyIcon}
-            className="text-muted-foreground size-5"
-          />
-        )}
-      </ActionBarPrimitive.Copy>
-      <ShareMarkdown />
-    </View>
-  </AuiIf>
-);
+        <ActionBarPrimitive.Copy
+          copyToClipboard={copyToClipboard}
+          className={assistantActionButtonClassName}
+          hitSlop={assistantActionHitSlop}
+          accessibilityLabel="Copy"
+        >
+          {({ isCopied }) => (
+            <Icon
+              as={isCopied ? CheckIcon : CopyIcon}
+              className="text-muted-foreground size-4"
+            />
+          )}
+        </ActionBarPrimitive.Copy>
+        <ShareMarkdown />
+      </Animated.View>
+    </AuiIf>
+  );
+};
 
 const UserMessage: FC = () => {
   const motion = useMotion();

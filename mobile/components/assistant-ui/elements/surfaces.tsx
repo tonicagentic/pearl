@@ -202,6 +202,17 @@ export const messageEnter = FadeInDown.duration(MESSAGE_ENTER_MS)
     transform: [{ translateY: MESSAGE_ENTER_Y }],
   });
 
+/** Copy / share bar after the assistant message settles. */
+export const ACTION_BAR_ENTER_MS = 240;
+export const ACTION_BAR_ENTER_Y = 5;
+export const actionBarEnter = FadeInDown.duration(ACTION_BAR_ENTER_MS)
+  .delay(60)
+  .easing(STREAM_EASE)
+  .withInitialValues({
+    opacity: 0,
+    transform: [{ translateY: ACTION_BAR_ENTER_Y }],
+  });
+
 export const layoutTransition = LinearTransition.duration(COLLAPSE_MS).easing(
   collapseEase,
 );
