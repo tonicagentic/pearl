@@ -54,7 +54,7 @@ export function SignInButton({
       {pending ? (
         <Loader2Icon className="size-3.5 animate-spin" />
       ) : (
-        <PearlIcon className="size-3.5" />
+        <PearlIcon className="size-6" />
       )}
       {pending ? "Opening..." : (children ?? "Sign in with Vercel")}
     </Button>

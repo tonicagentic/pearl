@@ -36,6 +36,19 @@ const tool = defineTool({
     "loading graphic-design (or another design skill). Geometric marks and " +
     "type-led posters should be SVG via write_file instead. The image model " +
     "comes from Models settings, not from this tool's arguments.",
+  label: {
+    start(input) {
+      const prompt = typeof input.prompt === "string" ? input.prompt.trim() : "";
+      if (prompt) {
+        const short = prompt.length > 40 ? `${prompt.slice(0, 39)}…` : prompt;
+        return `Generating image · ${short}`;
+      }
+      return "Generating image";
+    },
+    complete() {
+      return "Generated image";
+    },
+  },
   async execute(input, ctx) {
     if (isPlanMode()) {
       return {

@@ -1,72 +1,37 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuiState } from "@assistant-ui/react";
 import { useEveEvents } from "@assistant-ui/eve";
 
 import { useCanvas } from "@/components/assistant-ui/elements/canvas-context";
 import { DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
+import {
+  composeActivityHeader,
+  SETTLED_DURATION_MIN_MS,
+  toActivityStep,
+  type ActivityPart,
+} from "@/lib/thread-activity";
+import {
+  createThinkingStateDweller,
+  deriveLiveThinkingState,
+} from "@/lib/stream-thinking-state";
 
 import {
   ToolTimeline,
-  type TimelineStat,
   type TimelineStep,
 } from "@/components/assistant-ui/elements/tool-timeline";
-import { useElapsedLabel } from "@/components/assistant-ui/elements/use-elapsed-label";
 
 // The runtime part state for a tool call or reasoning (shape per docs:
 // elements/tool-timeline).
-type ToolCallState = {
-  readonly type: "tool-call";
-  readonly toolName: string;
-  readonly args?: unknown;
-  readonly result?: unknown;
-  readonly toolCallId?: string;
-  readonly status?: { readonly type?: string };
-};
-
-type ReasoningState = {
-  readonly type: "reasoning";
-  readonly text?: string;
-};
-
-type TimelinePart = ToolCallState | ReasoningState;
-
-const TOOL_META: Record<string, { verb: string }> = {
-  edit_file: { verb: "Edited" },
-  read_file: { verb: "Read" },
-  web_search: { verb: "Searched" },
-  web_fetch: { verb: "Opened" },
-  browser: { verb: "Browsed" },
-  exa_agent_run: { verb: "Researched" },
-  file__save_memory: { verb: "Remembered" },
-  file__remove_memory: { verb: "Forgot" },
-  load_skill: { verb: "Loaded" },
-  get_weather: { verb: "Checked" },
-  get_profile: { verb: "Loaded profile" },
-  bash: { verb: "Ran" },
-  glob: { verb: "Listed" },
-  grep: { verb: "Searched" },
-  task_cancel: { verb: "Cancelled" },
-  send_notification: { verb: "Notified" },
-  read_attachment: { verb: "Read attachment" },
-  create_issue: { verb: "Create issue" },
-  list_issues: { verb: "List issues" },
-  resolve_issue: { verb: "Resolve issue" },
-  deploy_vercel: { verb: "Deployed" },
-  merge_pr: { verb: "Merged" },
-  eas_build: { verb: "Started EAS build" },
-  eas_submit: { verb: "Submitted to EAS" },
-  run_with_env: { verb: "Ran with env" },
-  preview_check: { verb: "Checked preview" },
-  deployment_logs: { verb: "Opened logs" },
-};
+type TimelinePart = ActivityPart;
 
 /** Tools that keep their own card instead of a timeline step. */
 export function isStandaloneTool(toolName: string): boolean {
   return (
     toolName === "todo" ||
     toolName === "write_file" ||
+    toolName === "generate_image" ||
     DELEGATION_TOOLS.has(toolName)
   );
 }
@@ -104,131 +69,33 @@ export function isTimelineToolCall(part: {
   );
 }
 
-function humanizeToolName(toolName: string): string {
-  const bare = toolName.includes("__")
-    ? (toolName.split("__").pop() ?? toolName)
-    : toolName;
-  const spaced = bare.replace(/[_-]+/g, " ").trim();
-  if (!spaced) return toolName;
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
-
-function basename(path: string): string {
-  return path.split("/").pop() || path;
-}
-
-/** Hostname (+ useful path) for a page URL; empty when the value is not a URL. */
-function siteChip(raw: string): string {
-  try {
-    const url = new URL(raw);
-    const host = url.hostname.replace(/^www\./, "");
-    const path = url.pathname === "/" ? "" : url.pathname.replace(/\/$/, "");
-    if (!path) return host;
-    const clipped =
-      path.length > 48 ? `${path.slice(0, 45).replace(/\/?$/, "")}…` : path;
-    return `${host}${clipped}`;
-  } catch {
-    return "";
-  }
-}
-
-function chipFor(part: ToolCallState): string {
-  const args = (part.args ?? {}) as Record<string, unknown>;
-  if (typeof args.filePath === "string") return basename(args.filePath);
-  if (typeof args.command === "string") return args.command;
-  if (typeof args.pattern === "string") return args.pattern;
-  if (typeof args.query === "string") return args.query;
-  if (typeof args.skill === "string") return args.skill;
-  if (typeof args.recipient === "string") return args.recipient;
-  if (typeof args.attachmentId === "string") return args.attachmentId;
-  if (typeof args.taskId === "string") return args.taskId;
-  if (typeof args.url === "string") {
-    const site = siteChip(args.url);
-    if (site) return site;
-  }
-  if (typeof args.message === "string") {
-    return args.message.split("\n")[0].slice(0, 200);
-  }
-  if (typeof args.title === "string") return args.title;
-  if (typeof args.name === "string") return args.name;
-  return humanizeToolName(part.toolName);
-}
-
-function toStep(part: TimelinePart): TimelineStep {
-  const args = (part.type === "tool-call" ? (part.args ?? {}) : {}) as {
-    filePath?: unknown;
-    skill?: unknown;
-  };
-  const filePath =
-    typeof args.filePath === "string" ? args.filePath : undefined;
-  if (part.type === "reasoning") {
-    // Trace-style: title only. Prose stays behind expand, not in a chip.
+function toTimelineSteps(
+  parts: readonly TimelinePart[],
+  live: boolean,
+): TimelineStep[] {
+  return parts.map((part, index) => {
+    const stepLive = live && index === parts.length - 1;
+    const step = toActivityStep(part, { live: stepLive });
     return {
-      verb: "Thought",
-      chip: "",
-      detail: part.text,
-      filePath,
+      verb: step.verb,
+      chip: step.chip,
+      detail: step.detail,
+      filePath: step.filePath,
+      added: step.added,
+      removed: step.removed,
+      kind: step.kind,
+      failed: step.failed,
     };
-  }
-  const meta = TOOL_META[part.toolName];
-  if (part.toolName === "load_skill") {
-    const skillName =
-      typeof args.skill === "string" && args.skill.trim()
-        ? args.skill.trim()
-        : chipFor(part);
-    const failed =
-      part.result !== undefined &&
-      typeof part.result === "object" &&
-      part.result !== null &&
-      "error" in (part.result as object);
-    return {
-      verb: failed ? "Skill failed" : "Skill",
-      chip: skillName.slice(0, 200),
-      detail: failed
-        ? String(
-            (part.result as { error?: unknown }).error ?? "Could not load skill",
-          )
-        : `Loaded ${skillName}`,
-      filePath,
-    };
-  }
-  return {
-    verb: meta?.verb ?? humanizeToolName(part.toolName),
-    chip: chipFor(part).slice(0, 200),
-    filePath,
-  };
-}
-
-function toStats(parts: readonly TimelinePart[]): TimelineStat[] {
-  return parts
-    .filter(
-      (part): part is ToolCallState =>
-        part.type === "tool-call" && part.toolName === "edit_file",
-    )
-    .map((part) => {
-      const args = (part.args ?? {}) as {
-        filePath?: string;
-        oldText?: string;
-        newText?: string;
-      };
-      return {
-        file: basename(args.filePath ?? "file"),
-        added: args.newText?.length,
-        removed: args.oldText?.length,
-        filePath: args.filePath,
-      };
-    });
+  });
 }
 
 // A whole working turn summarized as one collapsed line: a verb and a chip
-// per tool step, ending in file-change stats (docs:
+// per tool step, with line diffs on edit rows and the header (docs:
 // elements/tool-timeline). Rendered beside the message parts; the covered
 // tool parts render null so nothing shows twice.
 export function SessionTimeline() {
   const { openPath } = useCanvas();
-  // Open-state contract from the docs' step-panel design: the timeline follows
-  // streaming (open while the turn runs, folded into the resting label after)
-  // until the reader toggles it once, after which their choice sticks.
+  // Always start collapsed — the header shows the most recent live state.
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const streaming = useAuiState((s) => s.message.status?.type === "running");
   const turnId = useAuiState(
@@ -271,37 +138,65 @@ export function SessionTimeline() {
       end = ts;
     }
     if (start === undefined || end === undefined) return undefined;
-    return formatDuration(end - start);
+    const ms = end - start;
+    if (ms < SETTLED_DURATION_MIN_MS) return undefined;
+    return formatDuration(ms);
   }, [events, streaming, turnId]);
 
-  // Live tick while streaming; the settled badge comes from the event log.
-  const liveElapsed = useElapsedLabel(streaming);
+  const steps = toTimelineSteps(toolCalls, streaming);
+  const header = useMemo(
+    () => composeActivityHeader(toolCalls, { live: streaming }),
+    [toolCalls, streaming],
+  );
+  // Expanded header drops the live trailing step so StepRow owns that line.
+  const openHeaderText = useMemo(() => {
+    if (!streaming || toolCalls.length === 0) return header.text;
+    const prior = toolCalls.slice(0, -1);
+    if (prior.length === 0) return "Working…";
+    return composeActivityHeader(prior, { live: false }).text;
+  }, [header.text, streaming, toolCalls]);
+  const derivedLiveHeader = useMemo(() => {
+    if (!streaming) return header.text;
+    const live = deriveLiveThinkingState({
+      events: events as unknown as Parameters<
+        typeof deriveLiveThinkingState
+      >[0]["events"],
+      parts: toolCalls,
+      statusType: "running",
+      waitingLabel: header.text || "Thinking",
+    });
+    return live.label ?? header.text;
+  }, [events, header.text, streaming, toolCalls]);
 
-  const steps = toolCalls.map(toStep);
-  const stats = toStats(toolCalls);
+  const dwellerRef = useRef(createThinkingStateDweller());
+  const [activeLabel, setActiveLabel] = useState(derivedLiveHeader);
+
+  useEffect(() => {
+    if (!streaming) {
+      setActiveLabel(header.text);
+      return undefined;
+    }
+    setActiveLabel(dwellerRef.current.next(derivedLiveHeader) ?? header.text);
+    const timer = window.setInterval(() => {
+      setActiveLabel(dwellerRef.current.flush() ?? header.text);
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [derivedLiveHeader, header.text, streaming]);
 
   if (steps.length === 0) return null;
-
-  const duration = streaming ? liveElapsed : settledDuration;
-  const restingLabel = settledDuration
-    ? `Worked for ${settledDuration}`
-    : `${steps.length} step${steps.length === 1 ? "" : "s"}${
-        stats.length > 0
-          ? ` · ${stats.length} file change${stats.length === 1 ? "" : "s"}`
-          : ""
-      }`;
 
   return (
     <ToolTimeline
       steps={steps}
       visibleSteps={steps.length}
       streaming={streaming}
-      open={userOpen ?? streaming}
+      open={userOpen ?? false}
       onOpenChange={setUserOpen}
-      restingLabel={restingLabel}
-      activeLabel="Working"
-      elapsed={duration}
-      stats={stats}
+      restingLabel={streaming ? openHeaderText : header.text}
+      activeLabel={activeLabel}
+      headerAdded={header.added}
+      headerRemoved={header.removed}
+      elapsed={streaming ? undefined : settledDuration}
       onOpenFile={openPath}
     />
   );

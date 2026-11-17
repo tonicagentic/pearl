@@ -133,6 +133,10 @@ export async function reserveSpend(input: {
   if (!access.allowed && access.reason) {
     return { ok: false, reason: access.reason };
   }
+  // Guests within the free-message allowance have no spend period yet.
+  if (access.guest) {
+    return { ok: true, reservationId: "noop" };
+  }
   if (!access.periodStart || access.usageCapCents === null) {
     return { ok: false, reason: "unpaid" };
   }

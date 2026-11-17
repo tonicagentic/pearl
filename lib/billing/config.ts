@@ -3,14 +3,17 @@
  * mode and PEARL_BILLING is not explicitly "off". Self-hosters who want
  * production persistence without Pearl invoices set PEARL_BILLING=off.
  *
- * Friend-beta trial: emails on PEARL_TRIAL_ALLOWLIST skip Stripe and share a
- * soft spend cap (default $20/month of operator AI cost). Exempt accounts
- * (operator free pass) are separate and uncapped.
+ * Friend trial: every non-paying, non-exempt account shares a soft spend cap
+ * (default $20/month of operator AI cost). PEARL_TRIAL_ALLOWLIST remains for
+ * docs / review accounts. Exempt accounts (operator free pass) are uncapped.
+ * Anonymous guests get a short free message allowance before sign-up.
  */
 
 export const DEFAULT_USAGE_CAP_CENTS = 5000;
 export const DEFAULT_TRIAL_CAP_CENTS = 2000;
 export const SUBSCRIPTION_PRICE_CENTS = 1000;
+/** Guest (anonymous) users may send this many turns before signup. */
+export const GUEST_MESSAGE_LIMIT = 3;
 
 /** Rough reservation for a model turn before real usage lands. */
 export const DEFAULT_TURN_RESERVATION_CENTS = 50;
@@ -93,6 +96,7 @@ export type BillingBlockReason =
   | "payment_failed"
   | "cap_reached"
   | "trial_cap_reached"
+  | "guest_limit_reached"
   | "billing_misconfigured";
 
 /** Comma-separated allowlist of emails for the friend-beta trial. */
@@ -137,6 +141,8 @@ export function blockMessage(reason: BillingBlockReason): string {
       return "You reached your usage spend cap for this period. Raise the cap in Settings to continue.";
     case "trial_cap_reached":
       return "You used the included $20 of usage for this month. Access opens again next month.";
+    case "guest_limit_reached":
+      return "Sign up to continue chatting. Your conversation will stay with your account.";
     case "billing_misconfigured":
       return "Billing is not configured on this deployment. Try again later.";
   }

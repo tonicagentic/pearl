@@ -1,17 +1,15 @@
 import { useCallback, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  View,
-} from "react-native";
+import { ActivityIndicator, Alert, Platform } from "react-native";
 import { useFocusEffect } from "expo-router";
 
-import { SheetScaffold } from "@/components/settings/sheet-scaffold";
-import { SettingsCard } from "@/components/ui/settings-card";
-import { Text } from "@/components/ui/text";
-import { TextField } from "@/components/ui/text-field";
+import {
+  SettingsButton,
+  SettingsField,
+  SettingsForm,
+  SettingsFormText,
+  SettingsLabeledValue,
+  SettingsSection,
+} from "@/components/settings/native";
 import {
   addMemory,
   clearMemories,
@@ -140,176 +138,113 @@ export function MemoryScreen() {
   const entries = snapshot?.entries ?? [];
 
   return (
-    <SheetScaffold>
-      <Text variant="secondary" className="px-1">
-        Facts Pearl keeps across chats. It reads these before every
-        conversation. Ask in chat to remember something, or add it here.
-      </Text>
-
+    <SettingsForm
+      footer={
+        <SettingsFormText tone="secondary">
+          Facts Pearl keeps across chats. It reads these before every
+          conversation. Ask in chat to remember something, or add it here.
+        </SettingsFormText>
+      }
+    >
       {error ? (
-        <Text
-          accessibilityRole="alert"
-          variant="secondary"
-          tone="destructive"
-          className="px-1"
-        >
-          {error}
-        </Text>
+        <SettingsFormText tone="destructive">{error}</SettingsFormText>
       ) : null}
 
-      <SettingsCard>
-        <View className="gap-3 px-4 py-4">
-          <TextField
-            editable={!busy}
-            maxLength={2048}
-            multiline
-            onChangeText={setDraft}
-            placeholder="A fact or preference to keep"
-            style={{ minHeight: 88, paddingTop: 14, paddingBottom: 14 }}
-            textAlignVertical="top"
-            value={draft}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Remember"
-            className="min-h-11 items-center justify-center rounded-2xl bg-foreground disabled:opacity-40"
-            disabled={busy || draft.trim().length === 0}
-            onPress={() => void remember()}
-          >
-            <Text variant="label" className="text-background">
-              {busy ? "Saving…" : "Remember"}
-            </Text>
-          </Pressable>
-        </View>
-      </SettingsCard>
+      <SettingsSection title="Add">
+        <SettingsField
+          label="Memory"
+          multiline
+          onChangeText={setDraft}
+          placeholder="A fact or preference to keep"
+          value={draft}
+        />
+        <SettingsButton
+          disabled={busy || draft.trim().length === 0}
+          label={busy && editingIndex === null ? "Saving…" : "Remember"}
+          onPress={() => void remember()}
+        />
+      </SettingsSection>
 
       {snapshot && snapshot.entries.length > 0 ? (
-        <Text variant="secondary" className="px-1">
-          {snapshot.recallCharacters.toLocaleString("en-US")} of{" "}
-          {snapshot.recallLimit.toLocaleString("en-US")} characters Pearl can
-          recall
-        </Text>
+        <SettingsFormText tone="secondary">
+          {`${snapshot.recallCharacters.toLocaleString("en-US")} of ${snapshot.recallLimit.toLocaleString("en-US")} characters Pearl can recall`}
+        </SettingsFormText>
       ) : null}
 
       {snapshot === null && !error ? (
         <ActivityIndicator accessibilityLabel="Loading memories" />
       ) : snapshot === null ? null : entries.length === 0 ? (
-        <View className="rounded-[18px] bg-card px-4 py-4">
-          <Text variant="body" tone="muted">
-            No memories yet. Add one above, or ask Pearl to remember a
-            preference in chat.
-          </Text>
-        </View>
+        <SettingsFormText tone="secondary">
+          No memories yet. Add one above, or ask Pearl to remember a preference
+          in chat.
+        </SettingsFormText>
       ) : (
-        <SettingsCard>
-          {entries.map((entry, index) => {
-            const editing = editingIndex === entry.index;
-            return (
-              <View key={entry.index}>
-                <View className="gap-3 px-4 py-3">
-                  {editing ? (
-                    <TextField
-                      editable={!busy}
-                      maxLength={2048}
-                      multiline
-                      onChangeText={setEditingText}
-                      style={{ minHeight: 88, paddingTop: 14, paddingBottom: 14 }}
-                      textAlignVertical="top"
-                      value={editingText}
-                    />
-                  ) : (
-                    <Text variant="label" weight="regular">
-                      {entry.text}
-                    </Text>
-                  )}
-                  <View className="flex-row flex-wrap gap-2">
-                    {editing ? (
-                      <>
-                        <ActionChip
-                          disabled={busy || editingText.trim().length === 0}
-                          label={busy ? "Saving…" : "Save"}
-                          onPress={() => void saveEdit(entry.index)}
-                        />
-                        <ActionChip
-                          disabled={busy}
-                          label="Cancel"
-                          onPress={() => {
-                            setEditingIndex(null);
-                            setEditingText("");
-                          }}
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <ActionChip
-                          disabled={busy}
-                          label="Edit"
-                          onPress={() => {
-                            setError(null);
-                            setEditingIndex(entry.index);
-                            setEditingText(entry.text);
-                          }}
-                        />
-                        <ActionChip
-                          destructive
-                          disabled={busy}
-                          label="Forget"
-                          onPress={() => void forget(entry)}
-                        />
-                      </>
-                    )}
-                  </View>
-                </View>
-                {index < entries.length - 1 ? (
-                  <View className="ml-4 h-px bg-border" />
-                ) : null}
-              </View>
-            );
-          })}
-        </SettingsCard>
+        entries.map((entry) => {
+          const editing = editingIndex === entry.index;
+          return (
+            <SettingsSection key={entry.index} title={`Memory ${entry.index + 1}`}>
+              {editing ? (
+                <SettingsField
+                  label="Text"
+                  multiline
+                  onChangeText={setEditingText}
+                  value={editingText}
+                />
+              ) : (
+                <SettingsLabeledValue label="Text" value={entry.text} />
+              )}
+              {editing ? (
+                <>
+                  <SettingsButton
+                    disabled={busy || editingText.trim().length === 0}
+                    label={busy ? "Saving…" : "Save"}
+                    onPress={() => void saveEdit(entry.index)}
+                  />
+                  <SettingsButton
+                    disabled={busy}
+                    label="Cancel"
+                    onPress={() => {
+                      setEditingIndex(null);
+                      setEditingText("");
+                    }}
+                    variant="plain"
+                  />
+                </>
+              ) : (
+                <>
+                  <SettingsButton
+                    disabled={busy}
+                    label="Edit"
+                    onPress={() => {
+                      setError(null);
+                      setEditingIndex(entry.index);
+                      setEditingText(entry.text);
+                    }}
+                  />
+                  <SettingsButton
+                    destructive
+                    disabled={busy}
+                    label="Forget"
+                    onPress={() => void forget(entry)}
+                  />
+                </>
+              )}
+            </SettingsSection>
+          );
+        })
       )}
 
       {entries.length > 0 ? (
-        <Pressable
-          accessibilityRole="button"
-          className="min-h-11 items-center justify-center"
-          disabled={busy}
-          onPress={() => void forgetAll()}
-        >
-          <Text variant="label" tone="destructive" weight="regular">
-            Forget all
-          </Text>
-        </Pressable>
+        <SettingsSection>
+          <SettingsButton
+            destructive
+            disabled={busy}
+            label="Forget all"
+            onPress={() => void forgetAll()}
+            variant="plain"
+          />
+        </SettingsSection>
       ) : null}
-    </SheetScaffold>
-  );
-}
-
-function ActionChip({
-  label,
-  onPress,
-  disabled,
-  destructive,
-}: {
-  readonly label: string;
-  readonly onPress: () => void;
-  readonly disabled?: boolean;
-  readonly destructive?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      className="min-h-10 justify-center rounded-xl border border-border/60 px-3 active:bg-muted/60 disabled:opacity-40"
-      disabled={disabled}
-      onPress={onPress}
-    >
-      <Text
-        variant="secondary"
-        weight="medium"
-        tone={destructive ? "destructive" : "default"}
-      >
-        {label}
-      </Text>
-    </Pressable>
+    </SettingsForm>
   );
 }

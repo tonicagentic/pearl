@@ -23,7 +23,7 @@ export type ProjectsScreenHandle = {
   readonly openComposer: () => void;
 };
 
-/** Projects list for the Mail home shell (Chats / Tasks / Projects). */
+/** Projects list for the Mail home shell (Chats / Projects). */
 export const ProjectsScreen = forwardRef<
   ProjectsScreenHandle,
   {

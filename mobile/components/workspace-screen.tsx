@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   Text,
@@ -14,7 +15,9 @@ import {
   XIcon,
 } from "lucide-react-native";
 import { Icon } from "@/components/ui/icon";
+import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
 import { cn } from "@/lib/utils";
+import { isContentUrl } from "../../lib/design/file-preview";
 import { previewKindForPath } from "../../lib/design/preview-kind";
 import {
   shareWorkspaceFile,
@@ -46,6 +49,33 @@ function basename(path: string): string {
   return path.split("/").pop() || path;
 }
 
+function HtmlFilePreview({
+  content,
+  WebView,
+}: {
+  readonly content: string;
+  readonly WebView: WebViewComponent | null;
+}) {
+  if (!WebView) {
+    return (
+      <ScrollView className="flex-1 px-4 py-3">
+        <Text selectable className="text-foreground text-sm leading-6">
+          {content}
+        </Text>
+      </ScrollView>
+    );
+  }
+  return (
+    <WebView
+      source={{ html: content }}
+      style={{ flex: 1, backgroundColor: "#fff" }}
+      originWhitelist={["*"]}
+      javaScriptEnabled={false}
+      scalesPageToFit
+    />
+  );
+}
+
 /** Render workspace SVG as an image tree (WebView, JS off) instead of raw XML. */
 function SvgFilePreview({
   path,
@@ -75,6 +105,74 @@ function SvgFilePreview({
       javaScriptEnabled={false}
       scalesPageToFit
     />
+  );
+}
+
+function FileBody({
+  path,
+  content,
+  WebView,
+}: {
+  readonly path: string;
+  readonly content: string;
+  readonly WebView: WebViewComponent | null;
+}) {
+  const kind = previewKindForPath(path);
+  const trimmed = content.trim();
+
+  switch (kind) {
+    case "markdown":
+      return (
+        <ScrollView className="flex-1 px-4 py-3">
+          <MarkdownText
+            type="text"
+            text={content}
+            status={{ type: "complete" }}
+          />
+        </ScrollView>
+      );
+    case "html":
+      return <HtmlFilePreview content={content} WebView={WebView} />;
+    case "svg":
+      return (
+        <SvgFilePreview path={path} content={content} WebView={WebView} />
+      );
+    case "image":
+      if (isContentUrl(trimmed)) {
+        return (
+          <View className="flex-1 items-center justify-center bg-black/5 p-4">
+            <Image
+              source={{ uri: trimmed }}
+              accessibilityLabel={basename(path)}
+              className="h-full w-full"
+              resizeMode="contain"
+            />
+          </View>
+        );
+      }
+      break;
+    case "pdf":
+      if (isContentUrl(trimmed) && WebView) {
+        return (
+          <WebView
+            source={{ uri: trimmed }}
+            style={{ flex: 1 }}
+            startInLoadingState
+          />
+        );
+      }
+      break;
+    default:
+      break;
+  }
+
+  return (
+    <ScrollView className="flex-1 px-4 py-3">
+      <Text className="text-muted-foreground mb-2 text-xs">{path}</Text>
+      <Text selectable className="text-foreground text-sm leading-6">
+        {content}
+      </Text>
+    </ScrollView>
   );
 }
 
@@ -283,22 +381,11 @@ export function WorkspacePanel({
             </View>
           )
         ) : active?.kind === "file" ? (
-          previewKindForPath(active.path) === "svg" ? (
-            <SvgFilePreview
-              path={active.path}
-              content={active.content}
-              WebView={WebView}
-            />
-          ) : (
-            <ScrollView className="flex-1 px-4 py-3">
-              <Text className="text-muted-foreground mb-2 text-xs">
-                {active.path}
-              </Text>
-              <Text selectable className="text-foreground text-sm leading-6">
-                {active.content}
-              </Text>
-            </ScrollView>
-          )
+          <FileBody
+            path={active.path}
+            content={active.content}
+            WebView={WebView}
+          />
         ) : null}
       </View>
     </View>

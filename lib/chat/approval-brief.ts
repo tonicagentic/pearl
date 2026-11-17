@@ -121,16 +121,20 @@ function shipBrief(
       return gatedGitBrief(args);
     case "deploy_vercel":
       return deployBrief(args);
-    case "eas_update":
-      return easUpdateBrief(args);
-    case "eas_build":
-      return easBuildBrief(args);
-    case "eas_submit":
-      return easSubmitBrief(args);
     case "merge_pr":
       return mergePrBrief(args);
-    case "expo_simulator":
-      return expoSimulatorBrief(args);
+    case "simulator_start":
+      return simulatorStartBrief(args);
+    case "simulator_stop":
+      return simulatorStopBrief(args);
+    case "build_run":
+      return buildRunBrief(args);
+    case "build_submit":
+      return buildSubmitBrief(args);
+    case "build_cancel":
+      return buildCancelBrief(args);
+    case "workflow_run":
+      return workflowRunBrief(args);
     case "run_with_env":
       return runWithEnvBrief(args);
     default:
@@ -188,40 +192,79 @@ function deployBrief(args: Record<string, unknown>): ApprovalBrief {
   return { headline: card.title, detail: lines.join("\n") };
 }
 
-function easUpdateBrief(args: Record<string, unknown>): ApprovalBrief {
-  const owner = asString(args.owner) ?? "owner";
-  const repo = asString(args.repo) ?? "repo";
-  const channel = asString(args.channel) || "preview";
-  const card = buildApprovalCard({
-    action: "eas_update",
-    owner,
-    repo,
-    target: channel,
-    detail: asString(args.expoProjectId),
-  });
-  const lines = [card.summary];
-  const message = asString(args.message);
-  if (message) lines.push(`Message: ${truncate(message, MAX_VALUE_CHARS)}`);
-  return { headline: card.title, detail: lines.join("\n") };
+function expoAppLabel(args: Record<string, unknown>): string {
+  return (
+    asString(args.appFullName) ||
+    asString(args.appId) ||
+    asString(args.expoProjectId) ||
+    "Expo project"
+  );
 }
 
-function easBuildBrief(args: Record<string, unknown>): ApprovalBrief {
-  const profile = asString(args.profile) || "production";
-  const cwd = asString(args.workingDirectory);
-  const lines = [`EAS iOS build profile: ${profile}`];
-  if (cwd) lines.push(`Working directory: ${cwd}`);
+function simulatorStartBrief(args: Record<string, unknown>): ApprovalBrief {
+  const app = expoAppLabel(args);
+  const lines = [`Expo project: ${app}`];
+  const platform = asString(args.platform);
+  const buildId = asString(args.buildId);
+  if (platform) lines.push(`Platform: ${platform}`);
+  if (buildId) lines.push(`Build: ${buildId}`);
   return {
-    headline: `Start EAS iOS build (${profile})?`,
+    headline: `Start Expo simulator (${app})?`,
     detail: lines.join("\n"),
   };
 }
 
-function easSubmitBrief(args: Record<string, unknown>): ApprovalBrief {
-  const buildId = asString(args.buildId) ?? "unknown";
-  const destination = asString(args.destination) || "testflight";
+function simulatorStopBrief(args: Record<string, unknown>): ApprovalBrief {
+  const sessionId =
+    asString(args.simulatorSessionId) ||
+    asString(args.sessionId) ||
+    "session";
   return {
-    headline: `Submit EAS build to ${destination}?`,
-    detail: `Build id: ${buildId}\nDestination: ${destination}`,
+    headline: "Stop Expo simulator?",
+    detail: `Session: ${sessionId}`,
+  };
+}
+
+function buildRunBrief(args: Record<string, unknown>): ApprovalBrief {
+  const app = expoAppLabel(args);
+  const profile = asString(args.profile) || asString(args.buildProfile) || "production";
+  const platform = asString(args.platform) || "ios";
+  return {
+    headline: `Start EAS ${platform} build (${profile})?`,
+    detail: `Expo project: ${app}\nProfile: ${profile}\nPlatform: ${platform}`,
+  };
+}
+
+function buildSubmitBrief(args: Record<string, unknown>): ApprovalBrief {
+  const app = expoAppLabel(args);
+  const buildId = asString(args.buildId) ?? "unknown";
+  return {
+    headline: "Submit EAS build to the store?",
+    detail: `Expo project: ${app}\nBuild id: ${buildId}`,
+  };
+}
+
+function buildCancelBrief(args: Record<string, unknown>): ApprovalBrief {
+  const buildId = asString(args.buildId) ?? "unknown";
+  return {
+    headline: "Cancel EAS build?",
+    detail: `Build id: ${buildId}`,
+  };
+}
+
+function workflowRunBrief(args: Record<string, unknown>): ApprovalBrief {
+  const app = expoAppLabel(args);
+  const workflow =
+    asString(args.workflowId) ||
+    asString(args.fileName) ||
+    asString(args.workflow) ||
+    "workflow";
+  const gitRef = asString(args.gitRef) || asString(args.ref);
+  const lines = [`Expo project: ${app}`, `Workflow: ${workflow}`];
+  if (gitRef) lines.push(`Git ref: ${gitRef}`);
+  return {
+    headline: `Run EAS workflow (${workflow})?`,
+    detail: lines.join("\n"),
   };
 }
 
@@ -242,26 +285,6 @@ function mergePrBrief(args: Record<string, unknown>): ApprovalBrief {
   });
   const lines = [card.summary];
   if (title) lines.push(`Title: ${truncate(title, MAX_VALUE_CHARS)}`);
-  return { headline: card.title, detail: lines.join("\n") };
-}
-
-function expoSimulatorBrief(args: Record<string, unknown>): ApprovalBrief {
-  const owner = asString(args.owner) ?? "owner";
-  const repo = asString(args.repo) ?? "repo";
-  const expoProjectId = asString(args.expoProjectId);
-  const sessionName = asString(args.sessionName);
-  const buildId = asString(args.buildId);
-  const card = buildApprovalCard({
-    action: "simulator_start",
-    owner,
-    repo,
-    target: expoProjectId || "Expo project",
-    detail: sessionName,
-  });
-  const lines = [card.summary];
-  if (expoProjectId) lines.push(`Expo project: ${expoProjectId}`);
-  if (sessionName) lines.push(`Session: ${sessionName}`);
-  if (buildId) lines.push(`Build: ${buildId}`);
   return { headline: card.title, detail: lines.join("\n") };
 }
 

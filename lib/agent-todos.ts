@@ -28,6 +28,8 @@ type TodoToolPart = {
   readonly type?: string;
   readonly toolName?: string;
   readonly args?: unknown;
+  /** Streaming JSON while `call.input` is still open. */
+  readonly argsText?: string;
   readonly result?: unknown;
   readonly status?: { readonly type?: string };
 };
@@ -58,20 +60,84 @@ function parseJson(value: string): unknown {
   }
 }
 
+function todoFromRecord(entry: Record<string, unknown>): AgentTodo | null {
+  if (typeof entry.content !== "string") return null;
+  const content = entry.content.trim();
+  if (!content || !isStatus(entry.status) || !isPriority(entry.priority)) {
+    return null;
+  }
+  return { content, status: entry.status, priority: entry.priority };
+}
+
+/**
+ * Recover complete todo objects from a truncated `argsText` stream. Stops at
+ * the first incomplete object so partial trailing JSON never yields junk.
+ */
+function parsePartialTodosJson(text: string): AgentTodo[] {
+  const marker = text.match(/"todos"\s*:\s*\[/);
+  if (!marker || marker.index === undefined) return [];
+  let cursor = marker.index + marker[0].length;
+  const items: AgentTodo[] = [];
+
+  while (cursor < text.length) {
+    while (cursor < text.length && /[\s,]/.test(text[cursor]!)) cursor += 1;
+    if (cursor >= text.length || text[cursor] === "]") break;
+    if (text[cursor] !== "{") break;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    let end = -1;
+    for (let i = cursor; i < text.length; i += 1) {
+      const ch = text[i]!;
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+      if (ch === "{") depth += 1;
+      else if (ch === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    if (end < 0) break;
+
+    const parsed = parseJson(text.slice(cursor, end + 1));
+    if (!isRecord(parsed)) break;
+    const item = todoFromRecord(parsed);
+    if (!item) break;
+    items.push(item);
+    cursor = end + 1;
+  }
+
+  return items;
+}
+
 /** Items from one tool payload. Accepts the args object, the result object, or a JSON string of either. */
 export function parseAgentTodos(value: unknown): AgentTodo[] {
-  const record = typeof value === "string" ? parseJson(value) : value;
-  if (!isRecord(record) || !Array.isArray(record.todos)) return [];
+  if (typeof value === "string") {
+    const full = parseJson(value);
+    if (isRecord(full) && Array.isArray(full.todos)) {
+      return parseAgentTodos(full);
+    }
+    return parsePartialTodosJson(value);
+  }
+  if (!isRecord(value) || !Array.isArray(value.todos)) return [];
 
   const items: AgentTodo[] = [];
-  for (const entry of record.todos) {
+  for (const entry of value.todos) {
     if (!isRecord(entry)) continue;
-    if (typeof entry.content !== "string") continue;
-    const content = entry.content.trim();
-    if (!content || !isStatus(entry.status) || !isPriority(entry.priority)) {
-      continue;
-    }
-    items.push({ content, status: entry.status, priority: entry.priority });
+    const item = todoFromRecord(entry);
+    if (item) items.push(item);
   }
   return items;
 }
@@ -79,7 +145,13 @@ export function parseAgentTodos(value: unknown): AgentTodo[] {
 function itemsFromPart(part: TodoToolPart): AgentTodo[] {
   const fromResult = parseAgentTodos(part.result);
   if (fromResult.length > 0) return fromResult;
-  return parseAgentTodos(part.args);
+  const fromArgs = parseAgentTodos(part.args);
+  if (fromArgs.length > 0) return fromArgs;
+  // Prefer a complete-enough streaming payload over waiting for settle.
+  if (typeof part.argsText === "string" && part.argsText.trim()) {
+    return parseAgentTodos(part.argsText);
+  }
+  return [];
 }
 
 /**

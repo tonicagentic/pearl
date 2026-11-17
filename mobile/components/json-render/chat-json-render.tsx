@@ -59,21 +59,29 @@ export const AssistantInlineText: FC = memo(function AssistantInlineText() {
       ? part.text
       : "";
   });
-  const statusType = useAuiState((s) =>
-    s.part.type === "text" ? s.part.status?.type : undefined,
-  );
+  // Match web StreamingMarkdownText: settled parts hand off to Marked; missing
+  // part status follows the turn so live deltas still pace.
+  const partStreaming = useAuiState((s) => {
+    const part = s.part;
+    if (part.type !== "text") return false;
+    const partStatus = part.status?.type;
+    if (partStatus === "complete" || partStatus === "incomplete") return false;
+    if (partStatus === "running") return true;
+    return (
+      s.message.role === "assistant" && s.message.status?.type === "running"
+    );
+  });
   const messageRunning = useAuiState(
     (s) =>
       s.message.role === "assistant" && s.message.status?.type === "running",
   );
-  const running = messageRunning || statusType === "running";
-  const textStatus = running
+  const textStatus = partStreaming
     ? ({ type: "running" } as const)
     : ({ type: "complete" } as const);
 
   const parsed = useMemo(
-    () => parseInlineSpec(text, { complete: !running }),
-    [text, running],
+    () => parseInlineSpec(text, { complete: !messageRunning }),
+    [text, messageRunning],
   );
 
   if (!parsed.hasSpec || !parsed.spec) {
@@ -98,7 +106,7 @@ export const AssistantInlineText: FC = memo(function AssistantInlineText() {
           <SpecBlock
             key="spec"
             spec={parsed.spec!}
-            loading={running}
+            loading={messageRunning}
             onReply={(message) => {
               aui.thread.append(message);
             }}

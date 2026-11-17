@@ -1,0 +1,78 @@
+/**
+ * Travel and general plan preferences, stored as labeled lines on
+ * `user_profile.plan_preferences`. Keep the mobile copy in
+ * `mobile/src/plan-preferences.ts` in sync.
+ */
+
+export type PlanPreferenceParts = {
+  readonly airport: string;
+  readonly seat: string;
+  readonly cabin: string;
+  readonly airlines: string;
+  readonly hotels: string;
+  readonly horizon: string;
+  readonly depth: string;
+  readonly notes: string;
+};
+
+const PLAN_KEYS = [
+  ["airport", "Home airport"],
+  ["seat", "Seat"],
+  ["cabin", "Cabin"],
+  ["airlines", "Airlines"],
+  ["hotels", "Hotels"],
+  ["horizon", "Horizon"],
+  ["depth", "Depth"],
+] as const;
+
+const LABEL_TO_KEY = new Map(
+  PLAN_KEYS.map(([key, label]) => [label.toLowerCase(), key]),
+);
+
+export function emptyPlanPreferences(): PlanPreferenceParts {
+  return {
+    airport: "",
+    seat: "",
+    cabin: "",
+    airlines: "",
+    hotels: "",
+    horizon: "",
+    depth: "",
+    notes: "",
+  };
+}
+
+export function parsePlanPreferences(
+  stored: string | null | undefined,
+): PlanPreferenceParts {
+  const next = emptyPlanPreferences();
+  const raw = (stored ?? "").trim();
+  if (!raw) return next;
+
+  const leftover: string[] = [];
+  const mutable: { -readonly [K in keyof PlanPreferenceParts]: string } = {
+    ...next,
+  };
+  for (const line of raw.split(/\r?\n/)) {
+    const match = /^\s*([^:]+)\s*:\s*(.+)\s*$/.exec(line);
+    const key = match ? LABEL_TO_KEY.get(match[1]!.trim().toLowerCase()) : undefined;
+    if (!key || !match) {
+      if (line.trim()) leftover.push(line.trim());
+      continue;
+    }
+    mutable[key] = match[2]!.trim();
+  }
+  mutable.notes = leftover.join("\n");
+  return mutable;
+}
+
+export function formatPlanPreferences(parts: PlanPreferenceParts): string {
+  const lines: string[] = [];
+  for (const [key, label] of PLAN_KEYS) {
+    const value = parts[key].trim();
+    if (value) lines.push(`${label}: ${value}`);
+  }
+  const notes = parts.notes.trim();
+  if (notes) lines.push(notes);
+  return lines.join("\n");
+}

@@ -173,6 +173,49 @@ export async function fetchVercelProjectsCatalog(): Promise<VercelProjectsCatalo
   return (await response.json()) as VercelProjectsCatalog;
 }
 
+export type CatalogExpoAccount = {
+  readonly id: string;
+  readonly name: string;
+  readonly isPersonal: boolean;
+};
+
+export type CatalogExpoProject = {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly fullName: string;
+  readonly accountId: string;
+  readonly accountName: string;
+  readonly dashboardUrl: string;
+};
+
+export type ExpoProjectsCatalog =
+  | {
+      readonly connected: true;
+      readonly username: string;
+      readonly accounts: readonly CatalogExpoAccount[];
+      readonly projects: readonly CatalogExpoProject[];
+      readonly truncated: boolean;
+    }
+  | {
+      readonly connected: false;
+      readonly projects: readonly [];
+      readonly truncated: false;
+      readonly message: string;
+    };
+
+/** Expo personal account + organizations and their projects. */
+export async function fetchExpoProjectsCatalog(): Promise<ExpoProjectsCatalog> {
+  const response = await fetch(`${AGENT_URL}/api/connections/expo/projects`, {
+    headers: authHeaders(),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    await parseError(response, "Could not load Expo projects");
+  }
+  return (await response.json()) as ExpoProjectsCatalog;
+}
+
 /** Domains, integrations, and storage across personal + teams. */
 export async function fetchVercelResourcesCatalog(): Promise<VercelResourcesCatalog> {
   const response = await fetch(

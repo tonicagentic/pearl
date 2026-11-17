@@ -18,7 +18,11 @@ export default defineDynamic((ctx) => {
       return defineMcpClientConnection({
         url: "https://mcp.vercel.com",
         description:
-          "Read the signed-in user's Vercel teams, projects, and deployment metadata; no logs or changes.",
+          "Read the signed-in user's Vercel teams, projects, and deployment " +
+          "metadata; no logs or changes. Call list_teams first, then " +
+          "list_projects for the personal account and every returned team " +
+          "(pass teamId or slug), following each page. One list_projects call " +
+          "is only one team.",
         instanceKey: `vercel:${connector}:readonly`,
         auth: connect({ connector, autoProvision: false }),
         tools: { allow: [...CONNECTION_READONLY_ALLOWLISTS.vercel] },

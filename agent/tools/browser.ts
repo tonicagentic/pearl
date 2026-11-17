@@ -55,6 +55,38 @@ const tool = defineTool({
     "navigate before click/type. If the result says the user has control, stop " +
     "and wait — do not retry. Call confirm_step before submit, pay, send, or delete.",
   inputSchema: actionSchema,
+  label: {
+    start(input) {
+      switch (input.action) {
+        case "navigate":
+          return input.url ? `Opening ${input.url}` : "Opening a page";
+        case "snapshot":
+          return "Reading the page";
+        case "click":
+          return "Clicking on the page";
+        case "type":
+          return "Typing on the page";
+        case "press":
+          return `Pressing ${input.key}`;
+        case "scroll":
+          return `Scrolling ${input.direction}`;
+        case "tabs":
+          return "Managing browser tabs";
+        default:
+          return "Browsing";
+      }
+    },
+    complete(input) {
+      switch (input.action) {
+        case "navigate":
+          return "Opened the page";
+        case "snapshot":
+          return "Captured the page";
+        default:
+          return "Finished browser step";
+      }
+    },
+  },
   async execute(input, ctx) {
     const setup = await getSetupStatus();
     if (!setup.appReady || setup.storageMode !== "database") {

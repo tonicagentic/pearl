@@ -211,7 +211,7 @@ describe("composer model lists", () => {
   });
 
   it("keeps image models on a separate allowlist from chat models", () => {
-    assert.equal(WEB_DEFAULT_IMAGE_KEY, "gpt-image-1");
+    assert.equal(WEB_DEFAULT_IMAGE_KEY, "grok-imagine-2");
     assert.equal(MOBILE_DEFAULT_IMAGE_KEY, WEB_DEFAULT_IMAGE_KEY);
     assert.deepEqual(MOBILE_IMAGE_MODELS, WEB_IMAGE_MODELS);
     assert.deepEqual(
@@ -297,7 +297,7 @@ describe("readClientVectorModelSelection", () => {
       undefined,
     );
     assert.equal(
-      readClientVectorModelSelection([vectorMarkerMessage("gpt-image-1")]),
+      readClientVectorModelSelection([vectorMarkerMessage("grok-imagine-2")]),
       undefined,
     );
   });

@@ -93,6 +93,7 @@ function convertToolPart(part: EveToolPart): Part {
     args: part.state === "streaming" ? {} : argsObject(part.input),
     argsText:
       part.state === "streaming" ? part.inputText : argsText(part.input),
+    ...(part.label ? { label: part.label } : {}),
     ...(part.interaction
       ? { approval: toolApprovalFromInteraction(part.interaction) }
       : {}),
@@ -131,7 +132,9 @@ function assistantPart(part: EveMessagePart): Part | null {
     case "text":
     case "reasoning":
       return {
-        type: part.type, text: typeof part.text === "string" ? part.text : "",
+        type: part.type,
+        text: typeof part.text === "string" ? part.text : "",
+        ...(part.id ? { id: part.id } : {}),
         ...(part.state === "done" ? { status: { type: "complete" as const } } : {}),
       };
     case "tool":

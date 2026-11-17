@@ -34,12 +34,12 @@ export const MODEL_SELECTION_MARKER = "eveModelSelection";
 // reverse). Only models expected to honor the US / ZDR / no-training gateway
 // policy belong here; generate_image fails closed when no compliant provider
 // is available for the chosen id.
-export const DEFAULT_IMAGE_MODEL = "openai/gpt-image-1";
+export const DEFAULT_IMAGE_MODEL = "spacexai/grok-imagine-image-2.0";
 
 export const CLIENT_IMAGE_MODEL_KEYS = {
-  "gpt-image-1": "openai/gpt-image-1",
-  "imagen-4": "google/imagen-4.0-generate-001",
-  "grok-imagine": "xai/grok-imagine-image",
+  "grok-imagine-2": "spacexai/grok-imagine-image-2.0",
+  "muse-image": "meta/muse-image-1.0",
+  "mai-image": "microsoft/mai-image-2.6",
 } as const;
 
 export type ClientImageModelKey = keyof typeof CLIENT_IMAGE_MODEL_KEYS;

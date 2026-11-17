@@ -1,22 +1,26 @@
 import {
   Alert,
-  Modal,
   Pressable,
   ScrollView,
   View,
   type PressableProps,
 } from "react-native";
 import {
+  BottomSheetModal,
+  type BottomSheetModal as BottomSheetModalRef,
+} from "@expo/ui/community/bottom-sheet";
+import {
   BrainIcon,
   CheckIcon,
   ListTodoIcon,
   SparklesIcon,
 } from "lucide-react-native";
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { KeyboardController } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useComposerChrome } from "@/components/assistant-ui/elements/composer-chrome";
+import { composerControlHitSlop } from "@/components/assistant-ui/elements/icon-button";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { focusComposerInput } from "@/src/composer-input-focus";
@@ -34,6 +38,8 @@ import {
   subscribeModelSelection,
   type ComposerModel,
 } from "@/src/model-selection";
+
+const SHEET_SNAP_POINTS = ["85%"] as const;
 
 const MODES: readonly {
   readonly key: AgentMode;
@@ -56,18 +62,20 @@ const MODES: readonly {
 ];
 
 /**
- * Mode + model picker for iOS. Uses a RN Modal sheet instead of SwiftUI
- * Popover — Popover content was painting inside the composer Host and
- * clipping as a Mode/Agent fragment over the dock.
+ * Mode + model picker for iOS. Uses Expo UI BottomSheetModal — the prior
+ * SwiftUI Popover painted inside the composer Host and clipped as a
+ * Mode/Agent fragment over the dock.
  */
 export function ComposerModeModelPicker({
   disabled = false,
 }: {
   disabled?: boolean;
 }) {
+  const sheetRef = useRef<BottomSheetModalRef>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const restoreKeyboard = useRef(false);
   const chrome = useComposerChrome();
+  const insets = useSafeAreaInsets();
   const selectedModeKey = useSyncExternalStore(
     subscribeAgentMode,
     getAgentMode,
@@ -84,20 +92,26 @@ export function ComposerModeModelPicker({
     COMPOSER_MODELS.find((model) => model.key === selectedModelKey) ??
     COMPOSER_MODELS[0];
 
-  const openMenu = () => {
+  const openMenu = useCallback(() => {
     if (disabled) return;
     chrome?.pinExpanded();
     restoreKeyboard.current = KeyboardController.isVisible();
     setMenuOpen(true);
-  };
+    sheetRef.current?.present();
+  }, [chrome, disabled]);
 
-  const closeMenu = () => {
+  const finishClose = useCallback(() => {
     setMenuOpen(false);
     chrome?.scheduleCollapse();
     if (!restoreKeyboard.current) return;
     restoreKeyboard.current = false;
     setTimeout(() => focusComposerInput(), 60);
-  };
+  }, [chrome]);
+
+  const closeMenu = useCallback(() => {
+    sheetRef.current?.dismiss();
+    finishClose();
+  }, [finishClose]);
 
   return (
     <View>
@@ -107,6 +121,7 @@ export function ComposerModeModelPicker({
         accessibilityState={{ expanded: menuOpen, disabled }}
         className="bg-muted size-8 items-center justify-center rounded-full"
         disabled={disabled}
+        hitSlop={composerControlHitSlop}
         onPress={openMenu}
         onTouchStart={() => chrome?.pinExpanded()}
         style={disabled ? { opacity: 0.5 } : undefined}
@@ -114,122 +129,79 @@ export function ComposerModeModelPicker({
         <Icon as={BrainIcon} size={14} className="text-foreground" />
       </Pressable>
 
-      <ModeModelMenu
-        open={menuOpen}
-        selectedModeKey={selectedMode.key}
-        selectedModelKey={selectedModel.key}
-        onClose={closeMenu}
-        onSelectMode={(key) => {
-          setAgentMode(key);
-          closeMenu();
-        }}
-        onSelectModel={(key) => {
-          void setModelSelection(key).catch(() =>
-            Alert.alert(
-              "Could not save model choice",
-              "Try selecting the model again.",
-            ),
-          );
-          closeMenu();
-        }}
-      />
-    </View>
-  );
-}
-
-function ModeModelMenu({
-  open,
-  selectedModeKey,
-  selectedModelKey,
-  onClose,
-  onSelectMode,
-  onSelectModel,
-}: {
-  readonly open: boolean;
-  readonly selectedModeKey: AgentMode;
-  readonly selectedModelKey: string;
-  readonly onClose: () => void;
-  readonly onSelectMode: (key: AgentMode) => void;
-  readonly onSelectModel: (key: string) => void;
-}) {
-  const insets = useSafeAreaInsets();
-
-  if (!open) {
-    return null;
-  }
-
-  return (
-    <Modal transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end bg-foreground/50">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close mode and model menu"
-          className="flex-1"
-          onPress={onClose}
-        />
-        <View
-          className="max-h-[85%] rounded-t-2xl border-t border-border bg-background"
-          style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+      <BottomSheetModal
+        ref={sheetRef}
+        snapPoints={[...SHEET_SNAP_POINTS]}
+        enablePanDownToClose
+        onClose={finishClose}
+      >
+        <ScrollView
+          nestedScrollEnabled
+          className="px-4"
+          contentContainerClassName="gap-5 pb-2"
+          contentContainerStyle={{
+            paddingBottom: Math.max(insets.bottom, 16),
+          }}
+          keyboardShouldPersistTaps="handled"
         >
-          <View className="items-center py-2">
-            <View className="h-1 w-10 rounded-full bg-border" />
+          <View className="gap-2">
+            <View className="px-1">
+              <Text variant="secondary" className="uppercase tracking-[0.04em]">
+                Mode
+              </Text>
+            </View>
+            <View className="overflow-hidden rounded-xl border border-border/60 bg-popover p-1">
+              {MODES.map((mode) => (
+                <ModeOption
+                  key={mode.key}
+                  mode={mode}
+                  isSelected={mode.key === selectedModeKey}
+                  onPress={() => {
+                    setAgentMode(mode.key);
+                    closeMenu();
+                  }}
+                />
+              ))}
+            </View>
           </View>
-          <ScrollView
-            className="px-4"
-            contentContainerClassName="gap-5 pb-2"
-            keyboardShouldPersistTaps="handled"
-          >
-            <View className="gap-2">
+          {COMPOSER_MODEL_SECTIONS.map((section) => (
+            <View key={section.id} className="gap-2">
               <View className="px-1">
                 <Text
                   variant="secondary"
                   className="uppercase tracking-[0.04em]"
                 >
-                  Mode
+                  {section.title}
                 </Text>
+                {section.description ? (
+                  <Text variant="secondary" className="mt-1">
+                    {section.description}
+                  </Text>
+                ) : null}
               </View>
               <View className="overflow-hidden rounded-xl border border-border/60 bg-popover p-1">
-                {MODES.map((mode) => (
-                  <ModeOption
-                    key={mode.key}
-                    mode={mode}
-                    isSelected={mode.key === selectedModeKey}
-                    onPress={() => onSelectMode(mode.key)}
+                {section.models.map((model: ComposerModel) => (
+                  <ModelOption
+                    key={model.key}
+                    model={model}
+                    isSelected={model.key === selectedModelKey}
+                    onPress={() => {
+                      void setModelSelection(model.key).catch(() =>
+                        Alert.alert(
+                          "Could not save model choice",
+                          "Try selecting the model again.",
+                        ),
+                      );
+                      closeMenu();
+                    }}
                   />
                 ))}
               </View>
             </View>
-            {COMPOSER_MODEL_SECTIONS.map((section) => (
-              <View key={section.id} className="gap-2">
-                <View className="px-1">
-                  <Text
-                    variant="secondary"
-                    className="uppercase tracking-[0.04em]"
-                  >
-                    {section.title}
-                  </Text>
-                  {section.description ? (
-                    <Text variant="secondary" className="mt-1">
-                      {section.description}
-                    </Text>
-                  ) : null}
-                </View>
-                <View className="overflow-hidden rounded-xl border border-border/60 bg-popover p-1">
-                  {section.models.map((model: ComposerModel) => (
-                    <ModelOption
-                      key={model.key}
-                      model={model}
-                      isSelected={model.key === selectedModelKey}
-                      onPress={() => onSelectModel(model.key)}
-                    />
-                  ))}
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
+          ))}
+        </ScrollView>
+      </BottomSheetModal>
+    </View>
   );
 }
 

@@ -10,6 +10,7 @@ import {
 import { ComposerOwnsHitlContext } from "@/components/assistant-ui/elements/composer-owns-hitl";
 import { ComposerModeModelPicker } from "@/components/mode-model-picker";
 import {
+  composerControlHitSlop,
   groupedIconButtonHitSlop,
   iconButtonClassName,
   iconButtonHitSlop,
@@ -34,6 +35,7 @@ import { TurnElapsedProvider } from "@/components/assistant-ui/elements/turn-ela
 import { MessageSources } from "@/components/assistant-ui/elements/citation";
 import {
   ShimmerLabel,
+  actionBarEnter,
   inkButton,
   messageEnter,
   useAnnounce,
@@ -64,7 +66,6 @@ import {
   BranchPickerPrimitive,
   ComposerPrimitive,
   MessagePrimitive,
-  SuggestionPrimitive,
   ThreadPrimitive,
   type TextMessagePartComponent,
   type ThreadMessage as ThreadMessageType,
@@ -117,6 +118,7 @@ import {
   Share,
   TextInput,
   useColorScheme,
+  useWindowDimensions,
   View,
   type TextInputInstance,
   type ViewProps,
@@ -131,6 +133,7 @@ import Animated, {
   Extrapolation,
   interpolate,
   runOnJS,
+  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -199,6 +202,8 @@ export type ThreadProps = {
    * authorization banner, approval buttons, choice options, or free-text.
    */
   waitingAction?: WaitingAction | null;
+  /** Guest hit the free-message limit — don't steal focus into the composer. */
+  signupBlocked?: boolean | undefined;
 };
 
 export type ThreadViewportSnapshot = {
@@ -267,6 +272,9 @@ const COMPOSER_EXPANDED_INPUT_MAX = 192;
 const COMPOSER_SHELL_STYLE = {
   borderRadius: COMPOSER_SHELL_RADIUS,
   borderCurve: "continuous",
+  // Clip GlassView to one continuous corner — without this the glass surface
+  // and shell radius anti-alias as a double edge at the pill corners.
+  overflow: "hidden",
 } as const;
 const GLASS_SURFACE_STYLE = {
   position: "absolute",
@@ -277,34 +285,36 @@ const GLASS_SURFACE_STYLE = {
   ...COMPOSER_SHELL_STYLE,
 } as const;
 const COMPOSER_HOLD_SPRING = { damping: 22, stiffness: 420 } as const;
-const iosComposerHitSlop = 6;
+const iosComposerHitSlop = composerControlHitSlop;
 
 const lightComposerImpact = () => {
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 };
 const KeyboardHeightContext = createContext<SharedValue<number> | null>(null);
+/** Full keyboard height, latched when a show starts, so a drag morphs across the whole travel. */
+const KeyboardSpanContext = createContext<SharedValue<number> | null>(null);
 
 const ThreadComponentsContext =
   createContext<ThreadComponents>(EMPTY_COMPONENTS);
 
-/** 0 = minimized, 1 = expanded. Tracks interactive keyboard drag. */
-function composerKeyboardProgress(keyboardHeight: number): number {
+/** 0 = minimized, 1 = expanded. Tracks the finger across the whole keyboard travel. */
+function composerKeyboardProgress(keyboardHeight: number, span: number): number {
   "worklet";
-  return interpolate(
-    keyboardHeight,
-    [0, COMPOSER_MORPH_RANGE],
-    [0, 1],
-    Extrapolation.CLAMP,
-  );
+  const range = Math.max(span, COMPOSER_MORPH_RANGE);
+  return interpolate(keyboardHeight, [0, range], [0, 1], Extrapolation.CLAMP);
 }
 
 /** Chrome morph: keyboard progress, held open while sticky after menus steal focus. */
 function composerChromeProgress(
   keyboardHeight: number,
   stickyExpanded: number,
+  span: number,
 ): number {
   "worklet";
-  return Math.max(composerKeyboardProgress(keyboardHeight), stickyExpanded);
+  return Math.max(
+    composerKeyboardProgress(keyboardHeight, span),
+    stickyExpanded,
+  );
 }
 
 const ThreadViewportContext = createContext<ThreadViewportStore>({
@@ -360,6 +370,7 @@ export const Thread: FC<ThreadProps> = ({
   history,
   notice,
   waitingAction,
+  signupBlocked = false,
 }) => {
   const aui = useAui();
   const isRunning = useAuiState((s) => s.thread.isRunning);
@@ -609,7 +620,8 @@ export const Thread: FC<ThreadProps> = ({
             } : {})}
             className="aui-message-group flex-1"
             contentContainerClassName={cn(
-              "gap-4 px-4",
+              // 12px between turns; assistant internals use gap-2 (8px).
+              "gap-3 px-4",
               !floatsComposer && "pt-4 pb-6",
               Rail && "pl-10",
             )}
@@ -658,19 +670,11 @@ export const Thread: FC<ThreadProps> = ({
         onLayout={floatsComposer ? measureComposerOverlay : undefined}
         style={{ opacity: chromeRevealed ? 1 : 0 }}
       >
-        <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
-          <View
-            pointerEvents={floatsComposer ? "box-none" : undefined}
-            className="px-4 pb-4"
-          >
-            <ThreadSuggestions />
-          </View>
-        </AuiIf>
         <ThreadFollowupSuggestions />
         <ComposerDock
           floats={floatsComposer}
           waitingAction={waitingAction}
-          autoFocus={autoFocus && chromeRevealed}
+          autoFocus={autoFocus && chromeRevealed && !signupBlocked}
           focusNewChatKey={chromeRevealed ? focusNewChatKey : -1}
           conversationId={conversationId}
         />
@@ -718,9 +722,16 @@ const ComposerDock: FC<{
   autoFocus?: boolean;
   focusNewChatKey: number;
   conversationId?: string | null;
-}> = ({ floats, waitingAction, autoFocus, focusNewChatKey, conversationId }) => {
+}> = ({
+  floats,
+  waitingAction,
+  autoFocus,
+  focusNewChatKey,
+  conversationId,
+}) => {
   const insets = useSafeAreaInsets();
   const keyboardHeight = useContext(KeyboardHeightContext);
+  const keyboardSpan = useContext(KeyboardSpanContext);
   const chromeApi = useContext(ComposerChromeContext);
   const safeBottom = insets.bottom;
   const minimizedBottom = Math.max(COMPOSER_MINIMIZED_BOTTOM_GAP, safeBottom - 8);
@@ -740,12 +751,15 @@ const ComposerDock: FC<{
       };
     }
     const lifted = keyboardHeight?.value ?? 0;
+    const span = keyboardSpan?.value ?? COMPOSER_MORPH_RANGE;
     const chrome = composerChromeProgress(
       lifted,
       chromeApi?.stickyExpanded.value ?? 0,
+      span,
     );
-    const keyboardProgress = composerKeyboardProgress(lifted);
-    const aboveKeyboard = COMPOSER_EDGE + Math.max(0, safeBottom - lifted);
+    const keyboardProgress = composerKeyboardProgress(lifted, span);
+    // Monotonic: tuck near the home indicator when closed, then a fixed
+    // float above the keyboard spacer — no dip/rise mid-drag.
     return {
       paddingHorizontal: interpolate(
         chrome,
@@ -753,8 +767,12 @@ const ComposerDock: FC<{
         [COMPOSER_MINIMIZED_EDGE, COMPOSER_EDGE],
         Extrapolation.CLAMP,
       ),
-      paddingBottom:
-        minimizedBottom + (aboveKeyboard - minimizedBottom) * keyboardProgress,
+      paddingBottom: interpolate(
+        keyboardProgress,
+        [0, 1],
+        [minimizedBottom, COMPOSER_EDGE],
+        Extrapolation.CLAMP,
+      ),
     };
   });
 
@@ -796,6 +814,13 @@ const IosKeyboardLayout: FC<{
       : KeyboardController.isVisible()
         ? KeyboardController.state().height
         : 0,
+  );
+  const keyboardSpan = useSharedValue(
+    seedAtZero
+      ? COMPOSER_MORPH_RANGE
+      : KeyboardController.isVisible()
+        ? Math.max(COMPOSER_MORPH_RANGE, KeyboardController.state().height)
+        : COMPOSER_MORPH_RANGE,
   );
   // Sticky is only for native menus stealing focus — keyboard height alone
   // drives the morph while the field is selected.
@@ -870,7 +895,12 @@ const IosKeyboardLayout: FC<{
   useKeyboardHandler({
     onStart: (event) => {
       "worklet";
-      keyboardHeight.value = Math.max(0, event.height);
+      // Destination height only. Writing it onto keyboardHeight snaps the
+      // text field open, then the in-flight frames shrink it again.
+      const destination = Math.max(0, event.height);
+      if (destination > COMPOSER_MORPH_RANGE) {
+        keyboardSpan.value = destination;
+      }
     },
     onMove: (event) => {
       "worklet";
@@ -888,7 +918,7 @@ const IosKeyboardLayout: FC<{
       // Do not latch sticky from keyboard motion — that left chrome stuck
       // expanded after dismiss. Menus pin explicitly via pinExpanded.
     },
-  }, [collapseNow]);
+  }, [collapseNow, keyboardSpan]);
   const spacerStyle = useAnimatedStyle(() => ({
     // Tracks interactive drag; composer dock morphs against the same value.
     height: Math.max(0, keyboardHeight.value),
@@ -896,12 +926,14 @@ const IosKeyboardLayout: FC<{
 
   return (
     <KeyboardHeightContext.Provider value={keyboardHeight}>
+      <KeyboardSpanContext.Provider value={keyboardSpan}>
       <ComposerChromeContext.Provider value={chromeApi}>
         <View className="flex-1">
           {children}
           <Animated.View pointerEvents="none" style={spacerStyle} />
         </View>
       </ComposerChromeContext.Provider>
+      </KeyboardSpanContext.Provider>
     </KeyboardHeightContext.Provider>
   );
 };
@@ -910,14 +942,52 @@ const DefaultWelcome: FC = () => null;
 
 const IosWelcome: FC = () => {
   const keyboardHeight = useContext(KeyboardHeightContext)!;
+  const chromeApi = useContext(ComposerChromeContext);
+  const dismissScrollY = useSharedValue(0);
   const fadeStyle = useAnimatedStyle(() => ({
     // Fade any custom welcome content before the shrinking viewport moves it.
     opacity: interpolate(keyboardHeight.value, [0, 100], [1, 0], Extrapolation.CLAMP),
   }));
+  const pinStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dismissScrollY.value }],
+    flex: 1,
+    justifyContent: "center" as const,
+  }));
+  const onDismissScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      dismissScrollY.value = event.contentOffset.y;
+    },
+  });
+  const onDismissScrollEndDrag = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!KeyboardController.isVisible()) return;
+      const { contentOffset, velocity } = event.nativeEvent;
+      if (contentOffset.y < -28 || (velocity?.y ?? 0) < -0.6) {
+        chromeApi?.collapseNow();
+        void KeyboardController.dismiss();
+      }
+    },
+    [chromeApi],
+  );
+  // Empty new-chat has no message FlatList — this bounce scroll owns interactive
+  // keyboard dismiss over the transcript area (composer has its own twin).
   return (
-    <Animated.View style={[{ flex: 1, justifyContent: "center" }, fadeStyle]}>
-      <WelcomeSlot />
-    </Animated.View>
+    <Animated.ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ flexGrow: 1 }}
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="always"
+      alwaysBounceVertical
+      bounces
+      showsVerticalScrollIndicator={false}
+      scrollEventThrottle={16}
+      onScroll={onDismissScroll}
+      onScrollEndDrag={onDismissScrollEndDrag}
+    >
+      <Animated.View style={[pinStyle, fadeStyle]}>
+        <WelcomeSlot />
+      </Animated.View>
+    </Animated.ScrollView>
   );
 };
 
@@ -1084,26 +1154,6 @@ const ThreadHistorySkeleton: FC = () => (
   </View>
 );
 
-const ThreadSuggestions: FC = () => (
-  <View className="aui-thread-welcome-suggestions w-full flex-row flex-wrap items-center justify-center gap-2">
-    <ThreadPrimitive.Suggestions>
-      {() => <ThreadSuggestionItem />}
-    </ThreadPrimitive.Suggestions>
-  </View>
-);
-
-const ThreadSuggestionItem: FC = () => (
-  <SuggestionPrimitive.Trigger
-    send
-    className="aui-thread-welcome-suggestion border-border/60 active:bg-muted flex-row items-center gap-1.5 rounded-full border px-3.5 py-1.5"
-  >
-    <SuggestionPrimitive.Title className="aui-thread-welcome-suggestion-text-1 text-foreground text-sm" />
-    <AuiIf condition={(s) => !!s.suggestion.label}>
-      <SuggestionPrimitive.Description className="aui-thread-welcome-suggestion-text-2 text-muted-foreground text-sm" />
-    </AuiIf>
-  </SuggestionPrimitive.Trigger>
-);
-
 const ComposerInputHeightContext = createContext<SharedValue<number> | null>(null);
 
 // The placeholder color is a class to prop mapping that reads the CSSOM, so it applies from the first render after hydration.
@@ -1115,7 +1165,14 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
   const storeText = useAuiState((s) => s.composer.text);
   const expandedHeight = useContext(ComposerInputHeightContext);
   const keyboardHeight = useContext(KeyboardHeightContext);
+  const keyboardSpan = useContext(KeyboardSpanContext);
   const chromeApi = useContext(ComposerChromeContext);
+  const { width: windowWidth } = useWindowDimensions();
+  // Ignore content-size reports from the narrow collapsed frame (~mini width).
+  const minExpandedMeasureWidth = Math.max(
+    180,
+    windowWidth - COMPOSER_MINIMIZED_EDGE * 2 - 48,
+  );
   // The field owns its text while a keystroke is in flight. The AUI store lags
   // under fast iOS input; writing that stale value back restored characters
   // the user had just deleted and jumped the caret. Accept an external write
@@ -1126,6 +1183,9 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
   const publishedRef = useRef(storeText);
   const awaitingEchoRef = useRef(false);
   const nativeInput = useRef<TextInputInstance>(null);
+  // Short fields pass downward drags to the dismiss ScrollView; only scroll
+  // the UITextView once text fills the expanded max height.
+  const [inputScrolls, setInputScrolls] = useState(false);
   useEffect(() => {
     if (storeText === publishedRef.current) {
       awaitingEchoRef.current = false;
@@ -1144,6 +1204,7 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
     const progress = composerChromeProgress(
       keyboardHeight?.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
+      keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
     );
     return {
       paddingTop: interpolate(progress, [0, 1], [COMPOSER_COLLAPSED_INPUT_PAD_Y, 8]),
@@ -1204,19 +1265,36 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
         awaitingEchoRef.current = true;
         setValue(next);
         aui.composer.setText(next);
+        if (next.length === 0) {
+          setInputScrolls(false);
+          if (expandedHeight && expandedHeight.value !== COMPOSER_EXPANDED_INPUT_MIN) {
+            expandedHeight.value = COMPOSER_EXPANDED_INPUT_MIN;
+          }
+        }
       }}
       onContentSizeChange={(event) => {
         if (!expandedHeight) return;
-        // Match expanded pt-2 + pb-1 so the measured frame stays flush with the text.
+        // Empty field stays one line. A narrow collapsed frame wraps the
+        // placeholder and reports a tall size that then collapses.
+        if (value.length === 0) {
+          if (expandedHeight.value !== COMPOSER_EXPANDED_INPUT_MIN) {
+            expandedHeight.value = COMPOSER_EXPANDED_INPUT_MIN;
+          }
+          setInputScrolls((current) => (current ? false : current));
+          return;
+        }
+        const { height, width } = event.nativeEvent.contentSize;
+        if (width > 0 && width < minExpandedMeasureWidth - 24) return;
+        const measured = Math.ceil(height) + 12;
         const next = Math.min(
           COMPOSER_EXPANDED_INPUT_MAX,
-          Math.max(
-            COMPOSER_EXPANDED_INPUT_MIN,
-            Math.ceil(event.nativeEvent.contentSize.height) + 12,
-          ),
+          Math.max(COMPOSER_EXPANDED_INPUT_MIN, measured),
         );
         if (expandedHeight.value !== next) expandedHeight.value = next;
+        const atMax = measured >= COMPOSER_EXPANDED_INPUT_MAX;
+        setInputScrolls((current) => (current === atMax ? current : atMax));
       }}
+      scrollEnabled={inputScrolls}
       {...inputProps}
       style={[iosPadStyle, composerTypeStyle]}
     />
@@ -1245,14 +1323,19 @@ const Composer: FC<{
     ThreadComponentsContext,
   );
   const keyboardHeight = useContext(KeyboardHeightContext);
+  const keyboardSpan = useContext(KeyboardSpanContext);
   const chromeApi = useContext(ComposerChromeContext);
   // Start with a readable surface until the iOS accessibility setting is known.
   const [reducedTransparency, setReducedTransparency] = useState(true);
   const [preparingAttachment, setPreparingAttachment] = useState(false);
   const [liveOpen, setLiveOpen] = useState(false);
   const motion = useMotion();
+  const { width: windowWidth } = useWindowDimensions();
   const pressed = useSharedValue(0);
   const shellWidth = useSharedValue(0);
+  // Cancels rubber-band scroll so the shell stays glued to the keyboard while
+  // a downward drag dismisses it (UI-thread only — no async onLayout lag).
+  const dismissScrollY = useSharedValue(0);
   const expandedHeight = useSharedValue(COMPOSER_EXPANDED_INPUT_MIN);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdActive = useRef(false);
@@ -1266,6 +1349,30 @@ const Composer: FC<{
     chromeApi?.setLiveActive(false);
     setLiveOpen(false);
   }, [chromeApi]);
+  const dismissComposerKeyboard = useCallback(() => {
+    chromeApi?.collapseNow();
+    void KeyboardController.dismiss();
+  }, [chromeApi]);
+  const onDismissScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      dismissScrollY.value = event.contentOffset.y;
+    },
+  });
+  const onDismissScrollEndDrag = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!KeyboardController.isVisible()) return;
+      const { contentOffset, velocity } = event.nativeEvent;
+      // Quick flick or deep rubber-band on the composer finishes the dismiss
+      // so the keyboard does not snap back when interactive drag falls short.
+      if (contentOffset.y < -28 || (velocity?.y ?? 0) < -0.6) {
+        dismissComposerKeyboard();
+      }
+    },
+    [dismissComposerKeyboard],
+  );
+  const dismissPinStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dismissScrollY.value }],
+  }));
   useEffect(() => {
     if (!CAN_USE_LIQUID_GLASS) return;
     let mounted = true;
@@ -1298,6 +1405,7 @@ const Composer: FC<{
     const progress = composerChromeProgress(
       keyboardHeight?.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
+      keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
     );
     const bump =
       holdEnabled && progress >= 0.5
@@ -1312,6 +1420,7 @@ const Composer: FC<{
         ? composerChromeProgress(
             keyboardHeight.value,
             chromeApi?.stickyExpanded.value ?? 0,
+            keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
           )
         : 1;
     // Collapsed hold shrink only — scaling the focused field dismisses the keyboard.
@@ -1331,6 +1440,7 @@ const Composer: FC<{
     const progress = composerChromeProgress(
       keyboardHeight?.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
+      keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
     );
     return {
       height: interpolate(progress, [0, 1], [0, expandedHeight.value]),
@@ -1341,6 +1451,7 @@ const Composer: FC<{
     const progress = composerChromeProgress(
       keyboardHeight?.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
+      keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
     );
     return {
       marginTop: interpolate(progress, [0, 1], [0, 16]),
@@ -1349,27 +1460,16 @@ const Composer: FC<{
     };
   });
 
-  const miniTrackStyle = useAnimatedStyle(() => {
+  // Mode/model fades in beside the attachment chip; stay left-anchored
+  // (no flexGrow swap that slid the brain across the bar).
+  const modelChipStyle = useAnimatedStyle(() => {
     const progress = composerChromeProgress(
       keyboardHeight?.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
+      keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
     );
-    return {
-      flexGrow: interpolate(progress, [0, 1], [1, 0]),
-      flexBasis: interpolate(progress, [0, 1], [1, 0]),
-      minWidth: interpolate(progress, [0, 1], [24, 0]),
-      height: COMPOSER_MIN_INPUT,
-      marginHorizontal: interpolate(progress, [0, 1], [COMPOSER_ROW_GAP, 0]),
-    };
-  });
-
-  const modelStyle = useAnimatedStyle(() => {
-    const progress = composerChromeProgress(
-      keyboardHeight?.value ?? 0,
-      chromeApi?.stickyExpanded.value ?? 0,
-    );
-    // No overflow:hidden — it clips the SwiftUI Mode/Model popover into a
-    // Mode/Agent fragment over the composer. Fade + width hide the chip instead.
+    // Fade + width hide the chip — avoid a second overflow clip that would
+    // fight the shell's continuous corner.
     return {
       opacity: progress,
       width: interpolate(progress, [0, 1], [0, COMPOSER_CHIP]),
@@ -1377,28 +1477,25 @@ const Composer: FC<{
     };
   });
 
-  const endSpacerStyle = useAnimatedStyle(() => {
-    const progress = composerChromeProgress(
-      keyboardHeight?.value ?? 0,
-      chromeApi?.stickyExpanded.value ?? 0,
-    );
-    return {
-      flexGrow: interpolate(progress, [0, 1], [0, 1]),
-      flexBasis: interpolate(progress, [0, 1], [0, 1]),
-      minWidth: interpolate(progress, [0, 1], [0, 8]),
-      height: 1,
-    };
-  });
-
   const inputFrameStyle = useAnimatedStyle(() => {
     const progress = composerChromeProgress(
       keyboardHeight?.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
+      keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
     );
     // Positioned inside the in-flow stack (not the shell), so top:0 lines up
     // with the spacer/action row — avoids padding-box drift that left the
     // collapsed field sitting high in the pill.
-    const contentWidth = Math.max(0, shellWidth.value - 16);
+    // Fall back to window width before the first onLayout so the TextInput
+    // never measures at width 0 and spikes expandedHeight.
+    const fallbackWidth = Math.max(
+      0,
+      windowWidth - COMPOSER_MINIMIZED_EDGE * 2 - 16,
+    );
+    const contentWidth = Math.max(
+      0,
+      (shellWidth.value > 0 ? shellWidth.value : fallbackWidth) - 16,
+    );
     const miniLeft = COMPOSER_CHIP + COMPOSER_ROW_GAP;
     const miniWidth = Math.max(
       0,
@@ -1526,6 +1623,19 @@ const Composer: FC<{
   // One TextInput is absolutely positioned so keyboard drag never remounts it.
   return (
     <ComposerInputHeightContext.Provider value={expandedHeight}>
+      <Animated.ScrollView
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="always"
+        alwaysBounceVertical
+        bounces
+        scrollsToTop={false}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        directionalLockEnabled
+        onScroll={onDismissScroll}
+        onScrollEndDrag={onDismissScrollEndDrag}
+      >
+      <Animated.View style={dismissPinStyle}>
       <ComposerPrimitive.Root className="aui-composer-root w-full">
         <Animated.View style={outerPressStyle}>
           <Animated.View
@@ -1545,25 +1655,16 @@ const Composer: FC<{
               <Animated.View
                 className="aui-composer-action-wrapper flex-row items-center"
                 style={actionRowStyle}
-                onTouchStart={() => {
-                  // Hold full chrome only when the keyboard is up — pin while
-                  // collapsed would expand the morph under attachment/model sheets.
-                  if (KeyboardController.isVisible()) {
-                    chromeApi?.pinExpanded();
-                    focusComposerInput();
-                  }
-                }}
               >
                 <ComposerAddAttachment
                   preparing={preparingAttachment}
                   onPreparingChange={setPreparingAttachment}
                   conversationId={conversationId}
                 />
-                <Animated.View pointerEvents="none" style={miniTrackStyle} />
-                <Animated.View style={modelStyle} pointerEvents="box-none">
+                <Animated.View style={modelChipStyle} pointerEvents="box-none">
                   <ComposerModeModelPicker disabled={preparingAttachment} />
                 </Animated.View>
-                <Animated.View pointerEvents="none" style={endSpacerStyle} />
+                <View style={{ flexGrow: 1, flexBasis: 0, minWidth: 8 }} />
                 <ComposerTrailingControls
                   preparingAttachment={preparingAttachment}
                   onOpenLive={openLive}
@@ -1576,6 +1677,8 @@ const Composer: FC<{
           </Animated.View>
         </Animated.View>
       </ComposerPrimitive.Root>
+      </Animated.View>
+      </Animated.ScrollView>
     </ComposerInputHeightContext.Provider>
   );
 };
@@ -1780,6 +1883,16 @@ const AssistantMessage: FC = () => {
     [messageParts],
   );
   const lastTimeline = lastTimelineBlockIndex(blocks);
+  const statusType = useAuiState((s) => s.message.status?.type);
+  // Keep timeline live until the answer has painted a finished word — otherwise
+  // chrome dies as soon as a text part mounts and the body is still blank.
+  const answerHasPaintedWord = messageParts.some(
+    (part) =>
+      part.type === "text" &&
+      typeof part.text === "string" &&
+      (/\S+\s/.test(part.text) ||
+        (statusType !== "running" && part.text.trim().length > 0)),
+  );
   // Stable per-index maps so PartByIndex can bail out when only sibling
   // chrome re-renders. Rebuilt when the part list or tool renderers change.
   const componentsByIndex = useMemo(() => {
@@ -1801,9 +1914,13 @@ const AssistantMessage: FC = () => {
   }, [blocks, ToolFallbackComponent, TaskGroupComponent]);
 
   return (
-    <MessagePrimitive.Root className="aui-assistant-message-root">
+    <MessagePrimitive.Root className="aui-assistant-message-root gap-2">
+      {/* 8px stack: timeline meta → answer; sources join the footer with actions. */}
       <View className="aui-assistant-message-content gap-2">
         <TurnElapsedProvider>
+          {/* Todos sit above interleaved content so the checklist stays
+              visible while the agent works (parity with web placement). */}
+          <SessionTodoList />
           {blocks.map((block, blockIndex) => {
             if (block.kind === "timeline") {
               return (
@@ -1813,7 +1930,7 @@ const AssistantMessage: FC = () => {
                   isLast={blockIndex === lastTimeline}
                   live={
                     blockIndex === lastTimeline &&
-                    lastTimeline === blocks.length - 1
+                    (lastTimeline === blocks.length - 1 || !answerHasPaintedWord)
                   }
                 />
               );
@@ -1835,23 +1952,53 @@ const AssistantMessage: FC = () => {
               </View>
             );
           })}
-          <SessionTodoList />
           <AssistantThinking />
         </TurnElapsedProvider>
-        <MessageSources />
       </View>
-      <View className="aui-assistant-message-footer min-h-7 flex-row items-center pt-1.5">
-        <BranchPicker />
-        <AssistantActionBar />
-      </View>
+      <AssistantMessageFooter />
     </MessagePrimitive.Root>
   );
 };
 
-// Compact action glyphs (~20px) in a 32px visual button; hitSlop keeps ~44pt.
+const AssistantMessageFooter: FC = () => {
+  const motion = useMotion();
+  const branchCount = useAuiState((s) => s.message.branchCount);
+  const settled = useAuiState(
+    (s) =>
+      !(s.message.role === "assistant" && s.message.status?.type === "running"),
+  );
+  // Only enter-animate Sources/copy after an in-session settle — not when
+  // opening a previous thread that already finished.
+  const sawRunningRef = useRef(false);
+  if (!settled) sawRunningRef.current = true;
+  const enterFromLiveSettle = sawRunningRef.current && settled;
+  if (branchCount <= 1 && !settled) return null;
+  // Sources wait for settle and enter with copy/share (not mid-stream).
+  if (!settled) {
+    return (
+      <View className="aui-assistant-message-footer flex-row items-center">
+        <BranchPicker />
+      </View>
+    );
+  }
+  return (
+    <Animated.View
+      entering={motion && enterFromLiveSettle ? actionBarEnter : undefined}
+      className="aui-assistant-message-footer gap-2"
+    >
+      <MessageSources />
+      <View className="flex-row items-center">
+        <BranchPicker />
+        <AssistantActionBar />
+      </View>
+    </Animated.View>
+  );
+};
+
+// Compact action glyphs (~16px) in a 28px visual button; hitSlop keeps ~44pt.
 const assistantActionButtonClassName =
-  "aui-assistant-action-button active:bg-muted size-8 items-center justify-center rounded-md";
-const assistantActionHitSlop = { top: 6, bottom: 6, left: 6, right: 6 };
+  "aui-assistant-action-button active:bg-muted size-7 items-center justify-center rounded-md";
+const assistantActionHitSlop = { top: 8, bottom: 8, left: 8, right: 8 };
 
 const ShareMarkdown: FC = () => {
   const markdown = useAuiState((s) =>
@@ -1871,54 +2018,62 @@ const ShareMarkdown: FC = () => {
       hitSlop={assistantActionHitSlop}
       onPress={() => void Share.share({ message: markdown, title: "Pearl response" }).catch(() => {})}
     >
-      <Icon as={Share2Icon} className="text-muted-foreground size-5" />
+      <Icon as={Share2Icon} className="text-muted-foreground size-4" />
     </Pressable>
   );
 };
 
 const AssistantActionBar: FC = () => (
-  <AuiIf
-    condition={(s) =>
-      !(s.message.role === "assistant" && s.message.status?.type === "running")
-    }
-  >
-    <View className="aui-assistant-action-bar-root flex-row gap-1">
-      <ActionBarPrimitive.Copy
-        copyToClipboard={copyToClipboard}
-        className={assistantActionButtonClassName}
-        hitSlop={assistantActionHitSlop}
-        accessibilityLabel="Copy"
-      >
-        {({ isCopied }) => (
-          <Icon
-            as={isCopied ? CheckIcon : CopyIcon}
-            className="text-muted-foreground size-5"
-          />
-        )}
-      </ActionBarPrimitive.Copy>
-      <ShareMarkdown />
-    </View>
-  </AuiIf>
+  <View className="aui-assistant-action-bar-root flex-row gap-1">
+    <ActionBarPrimitive.Copy
+      copyToClipboard={copyToClipboard}
+      className={assistantActionButtonClassName}
+      hitSlop={assistantActionHitSlop}
+      accessibilityLabel="Copy"
+    >
+      {({ isCopied }) => (
+        <Icon
+          as={isCopied ? CheckIcon : CopyIcon}
+          className="text-muted-foreground size-4"
+        />
+      )}
+    </ActionBarPrimitive.Copy>
+    <ShareMarkdown />
+  </View>
 );
 
 const UserMessage: FC = () => {
   const motion = useMotion();
+  const branchCount = useAuiState((s) => s.message.branchCount);
+  const threadRunning = useAuiState((s) => s.thread.isRunning);
+  const isLast = useAuiState((s) => s.message.isLast);
   const internalMessage = useAuiState((s) =>
     s.message.role === "user" && s.message.parts.some((part) =>
       part.type === "text" && isTaskNotification(part.text ?? ""),
     ),
   );
   if (internalMessage) return null;
+  // Enter only for a just-sent trailing user bubble during a live turn —
+  // loading a previous thread must not FadeInDown every historical message.
+  const enterFromLiveSend =
+    motion && Platform.OS !== "web" && threadRunning && isLast;
   return (
-    <Animated.View entering={motion ? messageEnter : undefined}>
-      <MessagePrimitive.Root className="aui-user-message-root items-end gap-y-1.5">
+    <Animated.View entering={enterFromLiveSend ? messageEnter : undefined}>
+      <MessagePrimitive.Root
+        className={cn(
+          "aui-user-message-root items-end",
+          branchCount > 1 && "gap-y-1.5",
+        )}
+      >
         <UserMessageAttachments />
-        <View className="aui-user-message-content bg-card max-w-[85%] rounded-2xl px-4 py-2.5">
+        <View className="aui-user-message-content bg-muted max-w-[85%] rounded-2xl px-4 py-2.5">
           <MessagePrimitive.Parts components={{ Text: UserText, Image, File }} />
         </View>
-        <View className="aui-user-message-footer flex-row items-center justify-end gap-2">
-          <BranchPicker />
-        </View>
+        {branchCount > 1 ? (
+          <View className="aui-user-message-footer flex-row items-center justify-end gap-2">
+            <BranchPicker />
+          </View>
+        ) : null}
       </MessagePrimitive.Root>
     </Animated.View>
   );

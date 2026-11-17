@@ -1,44 +1,45 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Alert, AppState, Platform, Pressable, View } from "react-native";
 import { Stack, router, useFocusEffect } from "expo-router";
-import { PlusIcon, UserIcon } from "lucide-react-native";
+import { UserIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import {
   HistoryScreen,
   type HistoryChatActionHandlers,
 } from "@/components/home/app-drawer";
+import { CreateProjectModal } from "@/components/home/create-project-modal";
 import {
-  HomeCategoryPills,
-  type HomeCategory,
-} from "@/components/home/home-category-pills";
-import { HOME_DOCK_CLEARANCE, HomeDock } from "@/components/home/home-dock";
-import { HistorySearchScreen } from "@/components/home/history-search-screen";
+  HOME_COMPOSE_FAB_CLEARANCE,
+  HomeComposeFab,
+} from "@/components/home/home-composer-dock";
 import {
-  IssuesScreen,
-  type IssuesScreenHandle,
-} from "@/components/home/issues-screen";
+  SIGN_IN_CARD_CLEARANCE,
+  SignInForNewChatCard,
+} from "@/components/home/sign-in-for-new-chat-card";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
-import {
-  ProjectsScreen,
-  type ProjectsScreenHandle,
-} from "@/components/home/projects-screen";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
-import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
+import { chatListPresence } from "@/src/chat-presence";
 import type { ChatListItem } from "@/src/chats-client";
 import { initials as viewerInitials } from "@/src/initials";
+import type { ProjectDto } from "@/src/projects-client";
 
 const IS_IOS = Platform.OS === "ios";
-/** Native bottom toolbar owns inset on iOS; Android uses the floating dock. */
-const LIST_BOTTOM_INSET = IS_IOS ? 0 : HOME_DOCK_CLEARANCE;
 
 /**
- * Mail-style home: stack Profile control, category pills below, list + dock.
+ * Mail-style home: Profile, bottom-right compose, recent chats with projects
+ * underneath.
  */
 export function MailHomeScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
@@ -47,9 +48,17 @@ export function MailHomeScreen() {
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
-  const { billingReady, markBillingReady, viewerEmail, viewerName } = useAuth();
-  const profileInitials = viewerInitials(viewerName, viewerEmail);
+  const { billingReady, isAnonymous, markBillingReady, viewerEmail, viewerName } =
+    useAuth();
+  const profileInitials = isAnonymous
+    ? null
+    : viewerInitials(viewerName, viewerEmail);
+  const openProfile = useCallback(() => {
+    router.push(isAnonymous ? "/sign-in" : "/settings");
+  }, [isAnonymous]);
   const {
+    chats,
+    chatsReady,
     newChat,
     deleteChat,
     renameChat,
@@ -58,22 +67,19 @@ export function MailHomeScreen() {
     reloadChats,
   } = useChats();
 
-  const [category, setCategory] = useState<HomeCategory>("chats");
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [costOpen, setCostOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectTargetId, setProjectTargetId] = useState<string | null>(null);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const homeFocusedRef = useRef(false);
-  const tasksRef = useRef<IssuesScreenHandle>(null);
-  const projectsRef = useRef<ProjectsScreenHandle>(null);
+  // Cold-start once: open new chat by default, or home when something is unread.
+  const didLaunchRef = useRef(false);
+  const [holdingLaunchHome, setHoldingLaunchHome] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       homeFocusedRef.current = true;
-      // Focus: full refresh. Adaptive silent polls live in ChatsProvider so
-      // presence stays fresh on /chat too.
-      void reloadChats();
+      void reloadChats({ silent: true });
       return () => {
         homeFocusedRef.current = false;
       };
@@ -94,35 +100,74 @@ export function MailHomeScreen() {
     router.push("/chat");
   }, []);
 
-  const handleNewChat = useCallback(() => {
-    if (!billingReady) {
-      // Stay on chats — the empty state owns checkout.
-      setCategory("chats");
+  const guestHasThread = isAnonymous && chats.length > 0;
+  const listBottomInset = guestHasThread
+    ? SIGN_IN_CARD_CLEARANCE
+    : HOME_COMPOSE_FAB_CLEARANCE;
+
+  const openNewChat = useCallback(() => {
+    if (!billingReady) return;
+    // Guests get a single thread. Ask Pearl reopens it instead of starting another.
+    const existing = isAnonymous ? chats[0] : undefined;
+    if (existing) {
+      void selectChat(existing.id).then((ok) => {
+        if (ok) router.push("/chat");
+      });
       return;
     }
-    // Drop any home search keyboard before the push so it cannot hand off
-    // into the chat transition.
-    dismissKeyboard();
     newChat();
     router.push("/chat");
-  }, [billingReady, newChat]);
+  }, [billingReady, chats, isAnonymous, newChat, selectChat]);
 
-  const closeSearch = useCallback(() => {
-    setSearchOpen(false);
-    setSearchQuery("");
+  const openCreateProject = useCallback(() => {
+    if (!billingReady || isAnonymous) return;
+    setCreateProjectOpen(true);
+  }, [billingReady, isAnonymous]);
+
+  const onProjectCreated = useCallback((project: ProjectDto) => {
+    setCreateProjectOpen(false);
+    router.push(`/projects/${encodeURIComponent(project.id)}`);
   }, []);
 
-  const handleCompose = useCallback(() => {
-    if (category === "tasks") {
-      tasksRef.current?.openComposer();
+  useEffect(() => {
+    if (!billingReady || !chatsReady || didLaunchRef.current) return;
+    didLaunchRef.current = true;
+
+    // Guests keep a single thread — reopen it, or start one if empty.
+    if (isAnonymous) {
+      const existing = chats[0];
+      const open = existing
+        ? selectChat(existing.id).then((ok) => ok)
+        : Promise.resolve(true);
+      void open.then((ok) => {
+        if (!existing) newChat();
+        if (ok) {
+          router.push({ pathname: "/chat", params: { guestEntry: "1" } });
+        }
+        setHoldingLaunchHome(false);
+      });
       return;
     }
-    if (category === "projects") {
-      projectsRef.current?.openComposer();
+
+    // Signed-in: land on new chat unless another thread has an unread reply.
+    const hasUnread = chats.some(
+      (chat) => chatListPresence(chat) === "unread",
+    );
+    if (hasUnread) {
+      setHoldingLaunchHome(false);
       return;
     }
-    handleNewChat();
-  }, [category, handleNewChat]);
+    newChat();
+    router.push({ pathname: "/chat", params: { settle: "1" } });
+    setHoldingLaunchHome(false);
+  }, [
+    billingReady,
+    chats,
+    chatsReady,
+    isAnonymous,
+    newChat,
+    selectChat,
+  ]);
 
   const promptRename = useCallback(
     (chat: ChatListItem) => {
@@ -227,37 +272,39 @@ export function MailHomeScreen() {
     ],
   );
 
-  const showCategoryCreate =
-    !searchOpen && (category === "tasks" || category === "projects");
-
-  const openCategoryCreate = useCallback(() => {
-    if (category === "tasks") tasksRef.current?.openComposer();
-    else if (category === "projects") projectsRef.current?.openComposer();
-  }, [category]);
-
   return (
     <View style={{ flex: 1, backgroundColor }}>
       <Stack.Screen
         options={{
-          // iOS: keep header up so Stack.SearchBar / bottom SearchBarSlot stay live.
-          headerShown: IS_IOS ? true : !searchOpen,
+          headerShown: true,
           title: "",
           headerShadowVisible: false,
-          headerTransparent: false,
+          // Let recent threads scroll under the profile chrome with soft edge fade.
+          headerTransparent: IS_IOS,
           headerTintColor: foregroundColor,
-          headerStyle: { backgroundColor },
-          // iOS: Stack.Toolbar owns the morphing Profile control — leave
-          // headerLeft unset so we don't get a second chrome button.
+          headerStyle: IS_IOS ? undefined : { backgroundColor },
           headerLeft: IS_IOS
             ? undefined
             : () => (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Profile"
-                  className="h-10 w-10 items-center justify-center"
-                  onPress={() => router.push("/settings")}
+                  accessibilityLabel={isAnonymous ? "Sign in" : "Profile"}
+                  className={
+                    isAnonymous
+                      ? "h-10 items-center justify-center px-1"
+                      : "bg-muted h-9 w-9 items-center justify-center rounded-full"
+                  }
+                  onPress={openProfile}
                 >
-                  {profileInitials ? (
+                  {isAnonymous ? (
+                    <Text
+                      variant="label"
+                      weight="semibold"
+                      className="text-foreground"
+                    >
+                      Sign in
+                    </Text>
+                  ) : profileInitials ? (
                     <Text
                       variant="label"
                       weight="semibold"
@@ -270,164 +317,75 @@ export function MailHomeScreen() {
                   )}
                 </Pressable>
               ),
-          headerRight:
-            IS_IOS || !showCategoryCreate
-              ? undefined
-              : () => (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      category === "tasks" ? "New task" : "New project"
-                    }
-                    className="h-10 w-10 items-center justify-center"
-                    onPress={openCategoryCreate}
-                  >
-                    <Icon as={PlusIcon} className="size-5 text-foreground" />
-                  </Pressable>
-                ),
         }}
       />
-      {/* Keep mounted while blurred so Profile morphs into chat/settings. */}
-      {IS_IOS && !searchOpen ? (
+      {IS_IOS ? (
         <Stack.Toolbar placement="left">
-          {profileInitials ? (
+          {isAnonymous ? (
             <Stack.Toolbar.Button
-              accessibilityLabel="Profile"
-              onPress={() => router.push("/settings")}
+              accessibilityLabel="Sign in"
+              onPress={openProfile}
             >
-              {profileInitials}
+              Sign in
             </Stack.Toolbar.Button>
           ) : (
-            <Stack.Toolbar.Button
-              icon="person"
-              accessibilityLabel="Profile"
-              onPress={() => router.push("/settings")}
-            />
+            // Fixed square hit target so liquid glass forms a circle instead of
+            // a text-width pill around two-letter initials.
+            <Stack.Toolbar.View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Profile"
+                onPress={openProfile}
+                style={{
+                  width: 36,
+                  height: 36,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {profileInitials ? (
+                  <Text
+                    variant="label"
+                    weight="semibold"
+                    style={{ color: foregroundColor }}
+                  >
+                    {profileInitials}
+                  </Text>
+                ) : (
+                  <Icon as={UserIcon} className="size-5 text-foreground" />
+                )}
+              </Pressable>
+            </Stack.Toolbar.View>
           )}
         </Stack.Toolbar>
       ) : null}
-      {IS_IOS && !searchOpen && showCategoryCreate ? (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon="plus"
-            accessibilityLabel={
-              category === "tasks" ? "New task" : "New project"
-            }
-            onPress={openCategoryCreate}
+      <View style={{ flex: 1, zIndex: 0, overflow: "hidden" }}>
+        {!billingReady ? (
+          <BillingGateScreen onReady={markBillingReady} />
+        ) : holdingLaunchHome ? null : (
+          <HistoryScreen
+            onOpenChat={openChat}
+            chatActions={chatActions}
+            bottomInset={listBottomInset}
+            onCreateProject={isAnonymous ? undefined : openCreateProject}
           />
-        </Stack.Toolbar>
-      ) : null}
-
-      {!searchOpen ? (
-        <View
-          style={{
-            zIndex: 2,
-            backgroundColor,
-            paddingHorizontal: 16,
-            paddingTop: 10,
-            paddingBottom: 8,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <HomeCategoryPills value={category} onChange={setCategory} />
-          </View>
-          {__DEV__ ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Thread samples"
-              hitSlop={8}
-              className="rounded-full bg-muted px-3 py-2 active:opacity-70"
-              onPress={() => router.push("/thread-samples")}
-            >
-              <Text variant="secondary" weight="medium" tone="default">
-                Samples
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-
-      <View
-        style={{ flex: 1, zIndex: 0, overflow: "hidden" }}
-        accessibilityElementsHidden={searchOpen}
-      >
-        {category === "chats" ? (
-          billingReady ? (
-            <HistoryScreen
-              onOpenChat={openChat}
-              chatActions={chatActions}
-              visible={!searchOpen}
-              bottomInset={LIST_BOTTOM_INSET}
-            />
-          ) : (
-            <BillingGateScreen onReady={markBillingReady} />
-          )
-        ) : null}
-        {category === "tasks" ? (
-          <IssuesScreen ref={tasksRef} bottomInset={LIST_BOTTOM_INSET} />
-        ) : null}
-        {category === "projects" ? (
-          <ProjectsScreen ref={projectsRef} bottomInset={LIST_BOTTOM_INSET} />
-        ) : null}
+        )}
       </View>
 
-      <HistorySearchScreen
-        visible={searchOpen}
-        query={searchQuery}
-        onClose={closeSearch}
-        onOpenChat={() => {
-          router.push("/chat");
-        }}
-      />
-
-      {IS_IOS ? (
-        <Stack.SearchBar
-          placeholder="Search"
-          hideWhenScrolling
-          onChangeText={(event) => {
-            setSearchQuery(event.nativeEvent.text);
-          }}
-          onFocus={() => setSearchOpen(true)}
-          onOpen={() => setSearchOpen(true)}
-          onCancelButtonPress={closeSearch}
-          onClose={closeSearch}
-        />
+      {billingReady && !holdingLaunchHome && guestHasThread ? (
+        <SignInForNewChatCard />
       ) : null}
-      {IS_IOS ? (
-        <Stack.Toolbar placement="bottom">
-          {/* Wide search: no separateBackground on the slot (that forces
-              compact integratedButton). Fixed-width Spacer — a flexible
-              Spacer steals the width — plus compose separateBackground. */}
-          <Stack.Toolbar.SearchBarSlot />
-          <Stack.Toolbar.Spacer width={10} sharesBackground={false} />
-          <Stack.Toolbar.Button
-            icon="square.and.pencil"
-            separateBackground
-            accessibilityLabel={
-              category === "tasks"
-                ? "New task"
-                : category === "projects"
-                  ? "New project"
-                  : "New chat"
-            }
-            onPress={handleCompose}
-          />
-        </Stack.Toolbar>
-      ) : (
-        <HomeDock
-          searchActive={searchOpen}
-          searchValue={searchQuery}
-          onSearchChangeText={setSearchQuery}
-          onSearchActivate={() => setSearchOpen(true)}
-          onSearchClose={closeSearch}
-          onCompose={handleCompose}
-        />
-      )}
+
+      {billingReady && !holdingLaunchHome && !guestHasThread ? (
+        <HomeComposeFab onPress={openNewChat} />
+      ) : null}
 
       <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
+      <CreateProjectModal
+        open={createProjectOpen}
+        onClose={() => setCreateProjectOpen(false)}
+        onCreated={onProjectCreated}
+      />
       <ProjectPickerModal
         open={projectPickerOpen}
         onClose={() => {

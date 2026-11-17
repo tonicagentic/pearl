@@ -59,6 +59,7 @@ import {
   WriteFileToolUI,
 } from "@/components/assistant-ui/elements/file-tool.aui";
 import { BrowserToolUI } from "@/components/assistant-ui/elements/browser-tool.aui";
+import { GenerateImageToolUI } from "@/components/assistant-ui/elements/generate-image-tool.aui";
 import {
   CanvasProvider,
   useCanvas,
@@ -703,6 +704,9 @@ function AssistantChatSurfaceInner({
     },
     prepareSend,
     isDisabled,
+    // Follow child agent sessions so live subagent tool/status phases
+    // reach the thinking-states line and session timeline.
+    followAgents: true,
   };
   const runtime = useEveAgentRuntime(runtimeOptions);
 
@@ -765,6 +769,7 @@ function AssistantChatSurfaceInner({
           <EditFileToolUI />
           <ReadFileToolUI />
           <BrowserToolUI />
+          <GenerateImageToolUI />
           <SessionStatusBanner isRunning={isRunning} />
           {(activeChat?.spokenTurns?.length ?? 0) > 0 ? (
             <div className="border-border/60 bg-muted/40 text-muted-foreground mx-3 mb-2 rounded-xl border px-3 py-2 text-[13px] leading-relaxed">
@@ -878,8 +883,10 @@ function CanvasFilePreview({
         );
       }
       return (
-        <CanvasSplitLine className="font-mono text-xs whitespace-pre-wrap">
-          {content}
+        <CanvasSplitLine className="text-foreground/55 text-sm">
+          {kind === "pdf"
+            ? "This PDF is not available as a preview URL."
+            : "This image is not available as a preview URL."}
         </CanvasSplitLine>
       );
     }

@@ -7,6 +7,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
+import { ObserveErrorFallback } from "@/components/observe-error-fallback";
 import { PushNotificationsBridge } from "@/components/push-notifications-bridge";
 import { applyUpdatesOnLaunch } from "@/src/apply-updates";
 import { AuthProvider, useAuth } from "@/src/auth";
@@ -27,7 +28,32 @@ import {
   saveModelSelection,
   saveVectorModelSelection,
 } from "@/src/model-preferences";
+import { Observe, ObserveRoot, observeAvailable } from "@/src/observe";
 import { WorkspaceProvider } from "@/src/workspace-context";
+
+function agentHostnameForTraces(): string | null {
+  const raw = process.env.EXPO_PUBLIC_AGENT_URL?.trim();
+  if (!raw) return null;
+  try {
+    return new URL(raw).hostname || null;
+  } catch {
+    return null;
+  }
+}
+
+if (observeAvailable) {
+  const observeNetworkHost = agentHostnameForTraces();
+  Observe.configure({
+    integrations: {
+      "expo-router": {
+        filteredParams: ["token", "url", "error"],
+      },
+    },
+    networkTraces: observeNetworkHost
+      ? { filter: { hosts: [observeNetworkHost] } }
+      : false,
+  });
+}
 
 /** Prefer Mail home when the router has no deeper path to restore. */
 export const unstable_settings = {
@@ -37,14 +63,20 @@ export const unstable_settings = {
 /** Root stack: auth gates, then Mail-style home (chat/settings live inside). */
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <AuthenticatedLayout />
-    </AuthProvider>
+    <ObserveRoot
+      errorBoundaryFallback={({ resetError }) => (
+        <ObserveErrorFallback resetError={resetError} />
+      )}
+    >
+      <AuthProvider>
+        <AuthenticatedLayout />
+      </AuthProvider>
+    </ObserveRoot>
   );
 }
 
 function AuthenticatedLayout() {
-  const { signedIn, restoring, viewerEmail } = useAuth();
+  const { isAnonymous, signedIn, restoring, viewerEmail } = useAuth();
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -90,6 +122,8 @@ function AuthenticatedLayout() {
                   // Remount per auth zone so home is the initial route, not a
                   // push on top of sign-in (animation: "none" alone is ignored
                   // for Protected guard swaps on iOS native-stack).
+                  // Guests stay on home; sign-in stays registered so Profile
+                  // can push it without dropping the guest session.
                   key={signedIn ? "app" : "auth"}
                   screenOptions={({ route }) =>
                     route.name === "(home)" || route.name === "sign-in"
@@ -100,14 +134,20 @@ function AuthenticatedLayout() {
                       : {}
                   }
                 >
-                  <Stack.Protected guard={signedOut}>
+                  <Stack.Protected
+                    guard={signedOut || isAnonymous}
+                    redirectTo="/"
+                  >
                     <Stack.Screen
                       name="sign-in"
                       options={{
                         headerShown: false,
                         animation: "none",
+                        gestureEnabled: true,
                       }}
                     />
+                  </Stack.Protected>
+                  <Stack.Protected guard={signedOut} redirectTo="/">
                     <Stack.Screen
                       name="reset-password"
                       options={{
@@ -118,7 +158,30 @@ function AuthenticatedLayout() {
                     />
                   </Stack.Protected>
 
-                  <Stack.Protected guard={appReady}>
+                  <Stack.Protected guard={__DEV__}>
+                    <Stack.Screen
+                      name="json-render-smoke"
+                      options={{ title: "json-render smoke" }}
+                    />
+                    <Stack.Screen
+                      name="thread-samples"
+                      options={{
+                        title: "Thread samples",
+                        headerShown: true,
+                        headerBackButtonDisplayMode: "minimal",
+                      }}
+                    />
+                    <Stack.Screen
+                      name="thread-inspector"
+                      options={{
+                        title: "RN Thread Inspector",
+                        headerShown: true,
+                        headerBackButtonDisplayMode: "minimal",
+                      }}
+                    />
+                  </Stack.Protected>
+
+                  <Stack.Protected guard={appReady} redirectTo="/sign-in">
                     <Stack.Screen
                       name="(home)"
                       options={{
@@ -162,84 +225,16 @@ function AuthenticatedLayout() {
                         headerBackButtonDisplayMode: "minimal",
                       }}
                     />
+                    {/* Reachable via pearl:///stream-playground; Settings gates
+                        visibility to __DEV__ or unlocked internal builds. */}
                     <Stack.Screen
-                      name="skills"
-                      options={{ title: "Skills", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="plugins/index"
-                      options={{ title: "Plugins", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="plugins/[id]"
-                      options={{ title: "Plugin", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="email"
+                      name="stream-playground"
                       options={{
-                        title: "Email",
+                        title: "Stream playground",
                         headerShown: true,
                         headerBackButtonDisplayMode: "minimal",
                       }}
                     />
-                    <Stack.Screen
-                      name="calendar"
-                      options={{
-                        title: "Calendar",
-                        headerShown: true,
-                        headerBackButtonDisplayMode: "minimal",
-                      }}
-                    />
-                    <Stack.Screen
-                      name="models"
-                      options={{ title: "Models", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="account"
-                      options={{ title: "Account", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="identity"
-                      options={{ title: "Identity", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="memory"
-                      options={{ title: "Memory", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="computer-use"
-                      options={{ title: "Computer Use", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="usage"
-                      options={{
-                        title: "Usage",
-                        headerShown: true,
-                        headerBackButtonDisplayMode: "minimal",
-                      }}
-                    />
-                    <Stack.Screen
-                      name="about"
-                      options={{ title: "About", headerShown: true }}
-                    />
-                    <Stack.Screen
-                      name="self-host"
-                      options={{ title: "Self-host", headerShown: true }}
-                    />
-                    <Stack.Protected guard={__DEV__}>
-                      <Stack.Screen
-                        name="json-render-smoke"
-                        options={{ title: "json-render smoke" }}
-                      />
-                      <Stack.Screen
-                        name="thread-samples"
-                        options={{
-                          title: "Thread samples",
-                          headerShown: true,
-                          headerBackButtonDisplayMode: "minimal",
-                        }}
-                      />
-                    </Stack.Protected>
                     <Stack.Screen
                       name="browser"
                       options={{

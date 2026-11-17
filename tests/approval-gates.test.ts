@@ -45,10 +45,6 @@ const DESTRUCTIVE_PATTERNS: readonly RegExp[] = [
 const CODER_ALWAYS_GATED = new Set([
   "deploy_vercel",
   "merge_pr",
-  "eas_build",
-  "eas_submit",
-  "eas_update",
-  "expo_simulator",
   "run_with_env",
   "gated_git",
 ]);

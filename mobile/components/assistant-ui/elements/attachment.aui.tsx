@@ -12,7 +12,13 @@ import * as DocumentPicker from "expo-document-picker";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { FileIcon, XIcon } from "lucide-react-native";
-import { useEffect, useRef, useState, type FC } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FC,
+} from "react";
 import {
   Alert,
   Image,
@@ -38,9 +44,12 @@ import {
   chatAttachmentKey,
   clearPendingAttachments,
   getPendingAttachments,
+  mergePreviewUris,
   setPendingAttachments,
   type PendingAttachmentDraft,
 } from "@/src/pending-attachments";
+import { previewComposerAttachment } from "@/src/preview-composer-attachment";
+
 // Match live-camera sizing so photo turns stay under the gateway body cap.
 const MAX_IMAGE_EDGE = 1280;
 const MAX_IMAGES = 4;
@@ -210,18 +219,49 @@ const AttachmentName: FC = () => (
   </View>
 );
 
-const ComposerAttachment: FC = () => {
+/** Badge-only hit expansion — never cover the thumbnail preview target. */
+const removeHitSlop = { top: 6, right: 6, bottom: 6, left: 6 };
+
+const ComposerAttachment: FC<{
+  conversationId?: string | null;
+}> = ({ conversationId = null }) => {
   const uri = useAttachmentImageUri();
   const text = useAttachmentTextPreview();
   const meta = useAttachmentMeta();
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const chatKey = chatAttachmentKey(conversationId);
+
+  const openPreview = useCallback(() => {
+    if (opening) return;
+    setOpening(true);
+    void (async () => {
+      try {
+        const pending = getPendingAttachments(chatKey).find(
+          (item) =>
+            item.name === meta.name &&
+            item.contentType === (meta.contentType ?? "application/octet-stream"),
+        );
+        const opened = await previewComposerAttachment({
+          name: meta.name,
+          contentType: meta.contentType,
+          previewUri: pending?.previewUri,
+          imageUri: uri,
+        });
+        if (!opened) setPreviewOpen(true);
+      } finally {
+        setOpening(false);
+      }
+    })();
+  }, [chatKey, meta.contentType, meta.name, opening, uri]);
 
   return (
     <AttachmentPrimitive.Root className="aui-composer-attachment-root relative">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`View ${meta.name}`}
-        onPress={() => setPreviewOpen(true)}
+        accessibilityLabel={`Preview ${meta.name}`}
+        disabled={opening}
+        onPress={openPreview}
       >
         {uri ? (
           <Image
@@ -234,7 +274,7 @@ const ComposerAttachment: FC = () => {
         )}
       </Pressable>
       <AttachmentPrimitive.Remove
-        className="aui-composer-attachment-remove bg-foreground absolute -top-1.5 -right-1.5 size-5 items-center justify-center rounded-full"
+        className="aui-composer-attachment-remove bg-foreground absolute -top-1.5 -right-1.5 z-10 size-5 items-center justify-center rounded-full"
         hitSlop={removeHitSlop}
         accessibilityLabel="Remove attachment"
       >
@@ -252,18 +292,22 @@ const ComposerAttachment: FC = () => {
   );
 };
 
-const removeHitSlop = { top: 0, right: 0, bottom: 34, left: 34 };
-
 function PendingAttachmentsSync({ chatKey }: { readonly chatKey: string }) {
   const attachments = useAuiState((s) => s.composer.attachments);
   const seenComposerAttachments = useRef(false);
   useEffect(() => {
-    const drafts: PendingAttachmentDraft[] = attachments.map((attachment) => ({
-      name: attachment.name,
-      contentType: attachment.contentType ?? "application/octet-stream",
-      type: attachment.type === "image" ? "image" : "document",
-      content: [...(attachment.content ?? [])] as PendingAttachmentDraft["content"],
-    }));
+    const previous = getPendingAttachments(chatKey);
+    const drafts: PendingAttachmentDraft[] = mergePreviewUris(
+      previous,
+      attachments.map((attachment) => ({
+        name: attachment.name,
+        contentType: attachment.contentType ?? "application/octet-stream",
+        type: attachment.type === "image" ? "image" : "document",
+        content: [
+          ...(attachment.content ?? []),
+        ] as PendingAttachmentDraft["content"],
+      })),
+    );
     if (drafts.length > 0) {
       seenComposerAttachments.current = true;
       setPendingAttachments(chatKey, drafts);
@@ -288,7 +332,7 @@ export const ComposerAttachments: FC<{
       <AuiIf condition={(s) => s.composer.attachments.length > 0}>
         <View className="aui-composer-attachments flex-row flex-wrap gap-2 px-1 pt-1">
           <ComposerPrimitive.Attachments>
-            {() => <ComposerAttachment />}
+            {() => <ComposerAttachment conversationId={conversationId} />}
           </ComposerPrimitive.Attachments>
         </View>
       </AuiIf>
@@ -300,7 +344,11 @@ export const ComposerAddAttachment: FC<{
   preparing: boolean;
   onPreparingChange: (preparing: boolean) => void;
   conversationId?: string | null;
-}> = ({ preparing, onPreparingChange, conversationId = null }) => {
+}> = ({
+  preparing,
+  onPreparingChange,
+  conversationId = null,
+}) => {
   const aui = useAui();
   const canAttach = useAuiState((s) => s.composer.isEditing);
   const attachmentCount = useAuiState((s) => s.composer.attachments.length);
@@ -338,7 +386,10 @@ export const ComposerAddAttachment: FC<{
     appendPendingAttachment(chatKey, draft);
   };
 
-  const addImageAsset = async (asset: ImagePicker.ImagePickerAsset) => {
+  const addImageAsset = async (
+    asset: ImagePicker.ImagePickerAsset,
+    previewUri?: string,
+  ) => {
     const base64 = await encodeJpeg(asset);
     if (!base64 || Math.ceil((base64.length * 3) / 4) > MAX_IMAGE_BYTES) {
       throw new Error("Photo is too large after resizing (1 MB limit).");
@@ -371,6 +422,7 @@ export const ComposerAddAttachment: FC<{
       contentType: "image/jpeg",
       type: "image",
       content: [{ type: "image", image: imageUri }],
+      previewUri: previewUri ?? asset.uri,
     };
     remember(draft);
     await aui.composer.addAttachment({
@@ -447,6 +499,7 @@ export const ComposerAddAttachment: FC<{
         contentType: "application/pdf",
         type: "document",
         content: [{ type: "text", text: summary }],
+        previewUri: asset.uri,
       };
       remember(draft);
       await aui.composer.addAttachment({
@@ -469,6 +522,7 @@ export const ComposerAddAttachment: FC<{
       contentType: uploaded.mediaType,
       type: "document",
       content: [{ type: "text", text: uploaded.summary }],
+      previewUri: asset.uri,
     };
     remember(draft);
     await aui.composer.addAttachment({

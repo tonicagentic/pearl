@@ -8,11 +8,12 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { formatWorkedFor } from "@/lib/thread-activity";
 import {
   collapsePanel,
   ShimmerLabel,
   stepEnter,
-  SwapLabel,
+  ThinkingStatesLabel,
   threadDiffAdd,
   threadDiffRemove,
   threadMeta,
@@ -26,14 +27,10 @@ export interface TimelineStep {
   detail?: string;
   /** The file this step touched; set when the chip opens the canvas. */
   filePath?: string;
-}
-
-export interface TimelineStat {
-  file: string;
+  kind?: "skill";
+  failed?: boolean;
   added?: number;
   removed?: number;
-  /** The touched path; set when the chip opens the canvas. */
-  filePath?: string;
 }
 
 export interface ToolTimelineProps {
@@ -44,7 +41,8 @@ export interface ToolTimelineProps {
   onOpenChange: (open: boolean) => void;
   restingLabel: string;
   activeLabel: string;
-  stats: TimelineStat[];
+  headerAdded?: number;
+  headerRemoved?: number;
   /** Opens a referenced file on the canvas; set when the chat can resolve it. */
   onOpenFile?: (path: string) => void;
   /** Elapsed badge: live while streaming, the settled duration after. */
@@ -57,6 +55,30 @@ const rowClasses = cn(
   "flex min-h-6 items-center gap-1.5 py-0.5",
   threadMeta,
 );
+
+function DiffCounts({
+  added,
+  removed,
+}: {
+  added?: number;
+  removed?: number;
+}) {
+  if (!added && !removed) return null;
+  return (
+    <span className="inline-flex items-center gap-1.5 tabular-nums">
+      {added && added > 0 ? (
+        <span className={threadDiffAdd}>+{added}</span>
+      ) : null}
+      {removed && removed > 0 ? (
+        <span className={threadDiffRemove}>−{removed}</span>
+      ) : null}
+    </span>
+  );
+}
+
+function isReasoningVerb(verb: string): boolean {
+  return verb === "Thought" || verb === "Thinking…" || verb === "Thinking";
+}
 
 function StepRow({
   step,
@@ -78,7 +100,8 @@ function StepRow({
 }) {
   const expandable = typeof step.detail === "string" && step.detail.length > 0;
   // Streaming steps read progressive ("Thinking"); settled ones past tense.
-  const verb = active && step.verb === "Thought" ? "Thinking" : step.verb;
+  const verb =
+    active && step.verb === "Thought" ? "Thinking" : step.verb;
   const showChip = step.chip.length > 0;
 
   const row = (
@@ -104,14 +127,33 @@ function StepRow({
           }
         : {})}
     >
-      <ShimmerLabel
-        active={active}
-        className="relative inline-block shrink-0 text-muted-foreground"
-      >
-        {verb}
-      </ShimmerLabel>
-      {elapsed !== undefined && (
-        <span className="tabular-nums opacity-80">{elapsed}</span>
+      {elapsed !== undefined ? (
+        <span className="text-muted-foreground shrink-0 tabular-nums">
+          {formatWorkedFor(elapsed)}
+        </span>
+      ) : null}
+      {active ? (
+        <ThinkingStatesLabel
+          label={verb}
+          className={cn(
+            "relative inline-block shrink-0",
+            elapsed !== undefined
+              ? "text-muted-foreground/55"
+              : "text-muted-foreground",
+          )}
+        />
+      ) : (
+        <ShimmerLabel
+          active={false}
+          className={cn(
+            "relative inline-block shrink-0",
+            elapsed !== undefined
+              ? "text-muted-foreground/55"
+              : "text-muted-foreground",
+          )}
+        >
+          {verb}
+        </ShimmerLabel>
       )}
       {/* File chips open the canvas; long commands/patterns truncate. */}
       {showChip && step.filePath && onOpenFile ? (
@@ -129,14 +171,14 @@ function StepRow({
       ) : showChip ? (
         <span className="text-muted-foreground min-w-0 truncate">{step.chip}</span>
       ) : null}
-      {expandable && (
+      <DiffCounts added={step.added} removed={step.removed} />
+      {expandable && expanded ? (
         <ChevronDownIcon
-          className={cn(
-            "size-3.5 shrink-0 opacity-50 transition-transform duration-200 motion-reduce:transition-none",
-            expanded && "rotate-180",
-          )}
+          aria-hidden
+          strokeWidth={2.25}
+          className="size-4 shrink-0 opacity-55 fade-in zoom-in-75 animate-in duration-150 motion-reduce:animate-none"
         />
-      )}
+      ) : null}
     </div>
   );
 
@@ -159,43 +201,6 @@ function StepRow({
   );
 }
 
-function StatLine({
-  stats,
-  onOpenFile,
-}: {
-  stats: TimelineStat[];
-  onOpenFile?: (path: string) => void;
-}) {
-  if (stats.length === 0) return null;
-
-  const totalAdded = stats.reduce((sum, stat) => sum + (stat.added ?? 0), 0);
-  const totalRemoved = stats.reduce((sum, stat) => sum + (stat.removed ?? 0), 0);
-  const files = stats.length;
-  const summary = `Edited ${files} file${files === 1 ? "" : "s"}`;
-
-  return (
-    <div className={cn("flex flex-wrap items-center gap-x-1.5 gap-y-0.5 py-0.5", threadMeta)}>
-      <span className="min-w-0 truncate">{summary}</span>
-      {(totalAdded > 0 || totalRemoved > 0) && (
-        <span className="inline-flex items-center gap-1.5 tabular-nums">
-          {totalAdded > 0 && <span className={threadDiffAdd}>+{totalAdded}</span>}
-          {totalRemoved > 0 && (
-            <span className={threadDiffRemove}>-{totalRemoved}</span>
-          )}
-        </span>
-      )}
-      {stats.some((stat) => stat.filePath) && onOpenFile ? (
-        <span className="sr-only">
-          {stats
-            .filter((stat) => stat.filePath)
-            .map((stat) => stat.file)
-            .join(", ")}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
 export function ToolTimeline({
   steps,
   visibleSteps,
@@ -204,7 +209,8 @@ export function ToolTimeline({
   onOpenChange,
   restingLabel,
   activeLabel,
-  stats,
+  headerAdded,
+  headerRemoved,
   onOpenFile,
   elapsed,
   className,
@@ -228,8 +234,8 @@ export function ToolTimeline({
   // A single step needs no collapse chrome: render it inline (still
   // expandable if it carries a detail).
   if (steps.length === 1) {
-    const step = steps[0];
-    const stepElapsed = step.verb === "Thought" ? elapsed : undefined;
+    const step = steps[0]!;
+    const stepElapsed = isReasoningVerb(step.verb) ? elapsed : undefined;
     return (
       <div data-slot="tool-timeline" className={cn("w-full", className)}>
         <StepRow
@@ -241,13 +247,9 @@ export function ToolTimeline({
           onOpenFile={onOpenFile}
           elapsed={stepElapsed}
         />
-        <StatLine stats={stats} onOpenFile={onOpenFile} />
       </div>
     );
   }
-
-  const settledWithDuration =
-    !streaming && elapsed !== undefined && restingLabel.startsWith("Worked");
 
   return (
     <Collapsible
@@ -258,33 +260,47 @@ export function ToolTimeline({
     >
       <CollapsibleTrigger
         className={cn(
-          "group/trigger hover:text-foreground/70 flex items-center gap-1 rounded-md py-0.5 transition-colors outline-none",
+          "group/trigger hover:text-foreground/70 flex items-center gap-1.5 rounded-md py-0.5 transition-colors outline-none",
           threadMeta,
         )}
       >
-        <SwapLabel
-          active={streaming ? 0 : 1}
-          className="text-start"
-        >
-          <ShimmerLabel
-            active={streaming}
-            className="relative inline-block"
-          >
-            {elapsed ? `${activeLabel} ${elapsed}` : activeLabel}
-          </ShimmerLabel>
-          <>{restingLabel}</>
-        </SwapLabel>
-        <ChevronDownIcon
+        <span
           className={cn(
-            "size-3.5 shrink-0 opacity-50 transition-transform duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
-            "group-data-open/trigger:rotate-180 group-data-panel-open/trigger:rotate-180",
+            "inline-flex max-w-full items-center gap-1.5 text-start",
+            threadMeta,
           )}
-        />
-        {/* Keep a hidden duration for accessibility when the resting label already includes it. */}
-        {settledWithDuration ? <span className="sr-only">{elapsed}</span> : null}
+        >
+          {elapsed !== undefined ? (
+            <span className="text-muted-foreground shrink-0 tabular-nums">
+              {formatWorkedFor(elapsed)}
+            </span>
+          ) : null}
+          <ThinkingStatesLabel
+            label={
+              streaming
+                ? open
+                  ? restingLabel
+                  : activeLabel
+                : restingLabel
+            }
+            shimmer={streaming && !open}
+            className={cn(
+              "min-w-0",
+              elapsed !== undefined && "text-muted-foreground/55",
+            )}
+          />
+          <DiffCounts added={headerAdded} removed={headerRemoved} />
+          {open ? (
+            <ChevronDownIcon
+              aria-hidden
+              strokeWidth={2.25}
+              className="size-4 shrink-0 opacity-55 fade-in zoom-in-75 animate-in duration-150 motion-reduce:animate-none"
+            />
+          ) : null}
+        </span>
       </CollapsibleTrigger>
       <CollapsibleContent className={cn(collapsePanel, "outline-none")}>
-        <div className="flex flex-col gap-1 pt-1.5">
+        <div className="flex flex-col gap-1 ps-3 pt-1.5">
           {steps
             .slice(0, Math.max(0, Math.min(visibleSteps, steps.length)))
             .map((step, index, shown) => (
@@ -298,7 +314,6 @@ export function ToolTimeline({
                 onOpenFile={onOpenFile}
               />
             ))}
-          <StatLine stats={stats} onOpenFile={onOpenFile} />
         </div>
       </CollapsibleContent>
     </Collapsible>

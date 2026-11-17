@@ -72,6 +72,44 @@ const CONNECTION_CAPABILITIES: Record<
       "Preview or production deploy with the Coder agent",
     ],
   },
+  expo: {
+    canDo: [
+      "List Expo orgs and projects on your account",
+      "Search and read Expo documentation",
+      "Inspect EAS builds, workflows, Observe metrics, and TestFlight",
+      "Take simulator screenshots and find views by testID",
+    ],
+    needsApproval: [
+      "Start or stop a cloud simulator",
+      "Run or cancel EAS builds and workflows",
+      "Submit a build to the stores",
+      "Tap, type, or scroll on a connected device",
+    ],
+  },
+  neon: {
+    canDo: [
+      "List Neon organizations, projects, and branches",
+      "Inspect schemas, tables, and database diagnostics",
+      "Search and read Neon documentation",
+    ],
+    needsApproval: [
+      "Run SQL (including SELECT via run_sql)",
+      "Create, update, or delete projects, branches, and databases",
+      "Apply schema migrations or change Auth / Functions / storage",
+    ],
+  },
+  betterstack: {
+    canDo: [
+      "List monitors, heartbeats, incidents, and on-call schedules",
+      "Inspect status pages, telemetry sources, dashboards, and errors",
+      "Search Better Stack documentation and run read queries",
+    ],
+    needsApproval: [
+      "Create or change monitors, heartbeats, and status pages",
+      "Acknowledge, escalate, resolve, or reopen incidents",
+      "Create or edit dashboards, charts, and team membership",
+    ],
+  },
   tempo: {
     canDo: [
       "Search and resolve people, companies, and deals in Tempo",
@@ -110,16 +148,6 @@ const BUILTIN_CAPABILITIES: Partial<
     ],
     needsApproval: [
       "Create, update, or retire a concept schema (always asks before saving)",
-    ],
-  },
-  expo: {
-    canDo: [
-      "Start an Expo cloud iOS simulator and show the preview on Computer",
-      "Publish an EAS Update to a pinned app’s channel",
-      "Start an EAS iOS build and submit to TestFlight when asked",
-    ],
-    needsApproval: [
-      "Simulator start, EAS Update, EAS build, and EAS submit (always)",
     ],
   },
 };

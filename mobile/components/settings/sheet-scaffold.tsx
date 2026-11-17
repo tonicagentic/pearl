@@ -6,7 +6,9 @@ import { useCSSVariable } from "uniwind";
 /**
  * Scroll body for stack screens that use the native header for the title.
  * The header already clears the status bar; keep a top pad so the first row
- * is not flush, and let iOS adjust content insets automatically.
+ * is not flush. Do not inset the bottom safe area here — that would shrink
+ * the ScrollView and leave a dead strip; iOS contentInsetAdjustmentBehavior
+ * already pads scrolled content above the home indicator.
  */
 export function SheetScaffold({
   children,
@@ -26,7 +28,7 @@ export function SheetScaffold({
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor }}
-      edges={["left", "right", "bottom"]}
+      edges={["left", "right"]}
     >
       <ScrollView
         className="flex-1"

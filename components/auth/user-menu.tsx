@@ -170,7 +170,7 @@ function UserAvatar({ viewer }: { readonly viewer: Viewer }) {
 
   return (
     <span className="flex size-7 items-center justify-center rounded-md border border-border bg-background">
-      <PearlIcon className="size-3 text-muted-foreground" />
+      <PearlIcon className="size-6 text-muted-foreground" />
     </span>
   );
 }

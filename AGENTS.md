@@ -27,6 +27,54 @@ The OIDC token lives ~12 hours from issue; `eve dev`/`next dev` normally
 refreshes it in memory, so an outage that outlives a restart means the file
 itself is stale.
 
+## Mobile chat streaming (Expo)
+
+Desktop parity for assistant replies on Expo: pace at ~20 wps, render Marked
+on the revealed prefix while live, fade only the paced tail, then hand off to
+selectable settled Marked (no whole-reply FadeIn dump).
+
+### Do not regress these
+
+1. **Live deltas ahead of line commits.** eve folds `content.delta` into
+   `snapshot.messages` only at NDJSON `endOfLine`. Mobile accumulates every
+   delta in `mobile/src/live-reply-text.ts` via `onEvent`, then
+   `applyLiveReplyOverlay` in `chat-screen` merges it into projected messages.
+   Treat omitted `kind` as text (eve often skips it); reject explicit non-text
+   (`reasoning`, …).
+
+2. **Reveal progress must survive remounts.** High-frequency delta re-renders
+   remount the markdown tree. `useStreamingReveal` in
+   `lib/streaming-text-reveal.ts` keeps module-level wall-clock progress
+   (`turnShown` / `turnFadeFromWord`). Never restart the rAF loop on every
+   `ready` change — that left the UI on a lone `●` cursor with a huge
+   buffered backlog. Only the live (`streaming`) instance mutates that
+   module state; settled/user bubbles must not reset it during render.
+   First paint of a turn snaps any already-buffered text with **no fade**
+   (opening a previous thread must not replay word-fade). Pace/fade only after
+   live growth. User `messageEnter` / Sources `actionBarEnter` only for
+   in-session live sends/settles — not transcript hydrate.
+
+3. **Marked while streaming + per-word fade.**
+   `StreamingMarkdownText` in `mobile/.../markdown-text.tsx` runs
+   `react-native-marked` on the clipped visible prefix
+   (`stabilizeStreamingMarkdown` closes dangling `**` / `` ` `` so raw
+   markers do not flash). `StreamingMarkdownRenderer` wraps leaf words in
+   `StreamingWord` and fades only indices `>= fadeFromWord` (catch-up floor).
+   Settled path stays selectable (`TextInput` on iOS).
+
+4. **Thinking chrome until a painted word.** Keep timeline/thinking visible
+   until the answer has a finished word (`/\S+\s/`) so chrome does not die
+   into a blank body. See `assistant-thinking.tsx` / `thread.aui.tsx`.
+
+### Symptom → check
+
+- Long blank + single `●` while Stop is active → reveal remount/rAF regress
+  or live buffer rejecting deltas (`kind` gating).
+- Raw `**` / `- ` mid-stream → stabilize helper or Marked path bypassed
+  (plain `StreamingWord` only).
+- Whole answer dumps at settle → switching to settled Marked before
+  `reveal.writing` is false, or a FadeIn wrapper on settle.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know

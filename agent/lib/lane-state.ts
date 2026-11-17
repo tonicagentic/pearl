@@ -1,6 +1,9 @@
 import { defineState } from "eve/context";
 
-import type { PearlLane } from "@/lib/pearl-lane";
+import {
+  laneNeedsImageSurface,
+  type PearlLane,
+} from "@/lib/pearl-lane";
 
 /**
  * Lane chosen by the parent model router for this model call.
@@ -33,16 +36,7 @@ export function analysisSurfaceEnabled(): boolean {
 }
 
 export function imageSurfaceEnabled(turnHint?: string): boolean {
-  const lane = currentPearlLane();
-  if (lane === null) return true;
-  if (
-    turnHint &&
-    /\b(image|illustration|logo|svg|icon|poster|graphic)\b/i.test(turnHint)
-  ) {
-    return true;
-  }
-  // Keep image tools off voice/think/tools/analysis unless the turn asks.
-  return false;
+  return laneNeedsImageSurface(currentPearlLane(), turnHint ?? "");
 }
 
 function contentText(content: unknown): string {

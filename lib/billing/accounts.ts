@@ -3,14 +3,16 @@ import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import {
   DEFAULT_USAGE_CAP_CENTS,
   getTrialCapCents,
+  GUEST_MESSAGE_LIMIT,
   isBillingExplicitlyOff,
   isBillingProvidersConfigured,
-  isEmailOnTrialAllowlist,
   type BillingBlockReason,
 } from "@/lib/billing/config";
 import { db } from "@/lib/db/client";
 import {
   billingAccount,
+  chat,
+  chatEvent,
   usageEvent,
   usageReservation,
   user,
@@ -20,8 +22,10 @@ import { getSetupStatus } from "@/lib/setup";
 export type BillingAccess = {
   readonly enabled: boolean;
   readonly exempt: boolean;
-  /** Allowlisted friend-beta trial (no Stripe, soft monthly cap). */
+  /** Friend trial (no Stripe, soft monthly cap). */
   readonly trial: boolean;
+  /** Temporary anonymous guest before sign-up. */
+  readonly guest: boolean;
   readonly allowed: boolean;
   readonly reason: BillingBlockReason | null;
   readonly status: string | null;
@@ -32,6 +36,9 @@ export type BillingAccess = {
   readonly metronomeCustomerId: string | null;
   readonly spentCents: number;
   readonly reservedCents: number;
+  /** Guest turns already started (anonymous users only). */
+  readonly guestMessageCount: number;
+  readonly guestMessageLimit: number;
 };
 
 const ACTIVE_STATUSES = new Set(["active", "trialing"]);
@@ -50,12 +57,14 @@ export async function isBillingActive(): Promise<boolean> {
 
 export async function getUserBillingFlags(userId: string): Promise<{
   readonly exempt: boolean;
+  readonly isAnonymous: boolean;
   readonly email: string;
   readonly name: string;
 } | null> {
   const [row] = await db
     .select({
       billingExempt: user.billingExempt,
+      isAnonymous: user.isAnonymous,
       email: user.email,
       name: user.name,
     })
@@ -69,9 +78,27 @@ export async function getUserBillingFlags(userId: string): Promise<{
 
   return {
     exempt: row.billingExempt,
+    isAnonymous: row.isAnonymous,
     email: row.email,
     name: row.name,
   };
+}
+
+/** Count `turn.started` events across every chat owned by this user. */
+export async function countGuestUserMessages(userId: string): Promise<number> {
+  const [row] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+    })
+    .from(chatEvent)
+    .innerJoin(chat, eq(chatEvent.chatId, chat.id))
+    .where(
+      and(
+        eq(chat.userId, userId),
+        sql`${chatEvent.event} ->> 'type' = 'turn.started'`,
+      ),
+    );
+  return Number(row?.total ?? 0);
 }
 
 export async function getBillingAccount(userId: string) {
@@ -219,6 +246,7 @@ function emptyAccess(
   return {
     exempt: false,
     trial: false,
+    guest: false,
     reason: null,
     status: null,
     usageCapCents: null,
@@ -228,8 +256,42 @@ function emptyAccess(
     metronomeCustomerId: null,
     spentCents: 0,
     reservedCents: 0,
+    guestMessageCount: 0,
+    guestMessageLimit: GUEST_MESSAGE_LIMIT,
     ...partial,
   };
+}
+
+async function friendTrialAccess(userId: string): Promise<BillingAccess> {
+  const period = calendarMonthPeriod();
+  const spentCents = await sumSpentCents(userId, period.start);
+  const reservedCents = await sumReservedCents(userId, period.start);
+  const usageCapCents = getTrialCapCents();
+  if (spentCents + reservedCents >= usageCapCents) {
+    return emptyAccess({
+      enabled: true,
+      trial: true,
+      allowed: false,
+      reason: "trial_cap_reached",
+      status: "trial",
+      usageCapCents,
+      periodStart: period.start,
+      periodEnd: period.end,
+      spentCents,
+      reservedCents,
+    });
+  }
+  return emptyAccess({
+    enabled: true,
+    trial: true,
+    allowed: true,
+    status: "trial",
+    usageCapCents,
+    periodStart: period.start,
+    periodEnd: period.end,
+    spentCents,
+    reservedCents,
+  });
 }
 
 export async function getBillingAccess(
@@ -263,41 +325,28 @@ export async function getBillingAccess(
     });
   }
 
+  // Anonymous guests: three free turns, then the signup card — never Stripe.
+  if (flags.isAnonymous) {
+    const guestMessageCount = await countGuestUserMessages(userId);
+    const allowed = guestMessageCount < GUEST_MESSAGE_LIMIT;
+    return emptyAccess({
+      enabled: true,
+      guest: true,
+      allowed,
+      reason: allowed ? null : "guest_limit_reached",
+      status: "guest",
+      guestMessageCount,
+      guestMessageLimit: GUEST_MESSAGE_LIMIT,
+    });
+  }
+
   const account = await getBillingAccount(userId);
   const paying = Boolean(account && ACTIVE_STATUSES.has(account.status));
 
-  // Friend-beta trial: allowlisted, no active subscription, soft monthly cap.
-  // Stripe is not required for this path.
-  if (!paying && isEmailOnTrialAllowlist(flags.email)) {
-    const period = calendarMonthPeriod();
-    const spentCents = await sumSpentCents(userId, period.start);
-    const reservedCents = await sumReservedCents(userId, period.start);
-    const usageCapCents = getTrialCapCents();
-    if (spentCents + reservedCents >= usageCapCents) {
-      return emptyAccess({
-        enabled: true,
-        trial: true,
-        allowed: false,
-        reason: "trial_cap_reached",
-        status: "trial",
-        usageCapCents,
-        periodStart: period.start,
-        periodEnd: period.end,
-        spentCents,
-        reservedCents,
-      });
-    }
-    return emptyAccess({
-      enabled: true,
-      trial: true,
-      allowed: true,
-      status: "trial",
-      usageCapCents,
-      periodStart: period.start,
-      periodEnd: period.end,
-      spentCents,
-      reservedCents,
-    });
+  // Every non-paying account gets the friend trial (soft monthly cap).
+  // Stripe is only for people who subscribe.
+  if (!paying) {
+    return friendTrialAccess(userId);
   }
 
   if (!isBillingProvidersConfigured()) {

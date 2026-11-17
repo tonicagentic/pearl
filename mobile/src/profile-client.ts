@@ -20,6 +20,7 @@ export type ProfileDto = {
   healthNotes: string | null;
   primaryResidence: string | null;
   additionalHomes: string | null;
+  planPreferences: string | null;
   updatedAt: string | null;
 };
 
@@ -38,6 +39,7 @@ export type ProfileFormInput = {
   healthNotes?: string | null;
   primaryResidence?: string | null;
   additionalHomes?: string | null;
+  planPreferences?: string | null;
 };
 
 function authHeaders(): Record<string, string> {

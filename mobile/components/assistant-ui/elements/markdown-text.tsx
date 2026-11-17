@@ -1,11 +1,21 @@
-import { useHydrated } from "@/components/assistant-ui/elements/surfaces";
 import {
+  STREAM_EASE,
+  STREAM_FADE_MS,
+  useHydrated,
+  useMotion,
+} from "@/components/assistant-ui/elements/surfaces";
+import {
+  CitationChip,
   isCitationLabel,
   linkChildrenToText,
 } from "@/components/assistant-ui/elements/citation";
+import { FilePreviewCard } from "@/components/assistant-ui/elements/file-preview-card";
 import { openWebUrl } from "@/src/open-web-url";
-import { useWorkspaceOptional } from "@/src/workspace-context";
 import { traceStream } from "@/src/stream-trace";
+import {
+  useStreamingReveal,
+  type StreamingReveal,
+} from "../../../../lib/streaming-text-reveal";
 import type { TextMessagePartProps } from "@assistant-ui/react-native";
 import {
   type FC,
@@ -16,15 +26,24 @@ import {
   type ReactNode,
   useEffect,
   useMemo,
+  useRef,
 } from "react";
 import {
   Platform,
+  Pressable,
   Text as RNText,
   TextInput,
   type TextStyle,
   View,
   type ViewStyle,
 } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 import {
   type MarkedStyles,
   MarkedTokenizer,
@@ -59,9 +78,14 @@ const BLOCK_GAP = 8;
 /** U+25CF BLACK CIRCLE — fuller than U+2022 • at the same point size. */
 const LIST_BULLET = "\u25CF";
 
-/** View hosts (lists) cannot nest inside the selectable Text/TextInput tree. */
+/** View hosts (lists, file cards) cannot nest inside the selectable Text tree. */
 function isViewHost(node: ReactNode): node is ReactElement {
-  return isValidElement(node) && node.type === View;
+  if (!isValidElement(node)) return false;
+  return (
+    node.type === View ||
+    node.type === Pressable ||
+    node.type === FilePreviewCard
+  );
 }
 
 /**
@@ -129,33 +153,10 @@ export class TaskListTokenizer extends MarkedTokenizer {
 
 const taskListTokenizer = new TaskListTokenizer();
 
-/** In-app opener for agent `file://` workspace links (matches web canvas). */
-function WorkspaceFileLink({
-  href,
-  children,
-  styles,
-  title,
-}: {
-  readonly href: string;
-  readonly children: string | ReactNode[];
-  readonly styles?: TextStyle;
-  readonly title?: string;
-}) {
-  const workspace = useWorkspaceOptional();
+/** Preview card for agent `file://` workspace links (matches web canvas). */
+function WorkspaceFileCard({ href }: { readonly href: string }) {
   const path = decodeURIComponent(href.replace(/^file:\/\//i, ""));
-
-  return (
-    <RNText
-      accessibilityRole="link"
-      accessibilityLabel={title || `Open ${path}`}
-      onPress={() => {
-        void workspace?.openPath(path);
-      }}
-      style={styles}
-    >
-      {children}
-    </RNText>
-  );
+  return <FilePreviewCard path={path} />;
 }
 
 /**
@@ -175,8 +176,15 @@ class MarkdownRenderer extends Renderer {
     return `md-${this.keyIndex++}`;
   }
 
-  /** Paragraphs are nested Text, not Views — required for cross-block select. */
+  /** Paragraphs are nested Text unless they host a file card (View). */
   override paragraph(children: ReactNode[], styles?: ViewStyle): ReactNode {
+    if (children.some(isViewHost)) {
+      return (
+        <View key={this.getKey()} style={{ gap: 8 }}>
+          {wrapListItemBody(children, styles as TextStyle)}
+        </View>
+      );
+    }
     return (
       <RNText key={this.getKey()} style={styles as TextStyle}>
         {children}
@@ -294,17 +302,13 @@ class MarkdownRenderer extends Renderer {
   ): ReactNode {
     const label = linkChildrenToText(children);
     if (/^https?:\/\//i.test(href) && isCitationLabel(label)) {
-      const index = label.replace(/^\s*\[|\]\s*$/g, "");
       return (
-        <RNText
+        <CitationChip
           key={this.getKey()}
-          accessibilityRole="link"
-          accessibilityLabel={`Source ${index}`}
-          onPress={() => openWebUrl(href)}
-          style={[{ fontWeight: "600" }, styles]}
-        >
-          {`[${index}]`}
-        </RNText>
+          index={label}
+          href={href}
+          title={title}
+        />
       );
     }
     if (/^https?:\/\//i.test(href)) {
@@ -321,16 +325,7 @@ class MarkdownRenderer extends Renderer {
       );
     }
     if (/^file:\/\//i.test(href)) {
-      return (
-        <WorkspaceFileLink
-          key={this.getKey()}
-          href={href}
-          styles={styles}
-          title={title?.trim() || undefined}
-        >
-          {children}
-        </WorkspaceFileLink>
-      );
+      return <WorkspaceFileCard key={this.getKey()} href={href} />;
     }
     return super.link(children, href, styles, title);
   }
@@ -511,44 +506,209 @@ function useMarkdownTypeStyle(variant: MarkdownTextVariant | undefined) {
   return { fallbackClass, typeStyle } as const;
 }
 
+/** Dot cursor — mirrors StreamingText's st-pulse; nested Text (not View). */
+function StreamingDotCursor({ style }: { readonly style: TextStyle }) {
+  const motion = useMotion();
+  const pulse = useSharedValue(0.45);
+  useEffect(() => {
+    if (!motion) {
+      pulse.value = 1;
+      return;
+    }
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+  }, [motion, pulse]);
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: pulse.value,
+  }));
+  return (
+    <Animated.Text
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[style, { fontSize: 7, lineHeight: style.lineHeight }, animatedStyle]}
+    >
+      {" ●"}
+    </Animated.Text>
+  );
+}
+
 /**
- * Streaming answers paint as plain Text — Marked over the growing buffer on
- * every line boundary freezes the JS thread. Settled messages use the full
- * markdown path. Do not use useDeferredValue here (it blanked the body).
+ * Desktop `st-fade`: opacity 0→1 + light rise (blur approximated — RN Text
+ * filter support is uneven). Nested inside a parent Text so wrapping matches
+ * web's continuous markdown flow instead of flex-wrap chips.
  */
-const StreamingMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
+function StreamingWord({
+  word,
+  style,
+  fade,
+}: {
+  readonly word: string;
+  readonly style: TextStyle;
+  readonly fade: boolean;
+}) {
+  const progress = useSharedValue(fade ? 0 : 1);
+  useEffect(() => {
+    if (!fade) {
+      progress.value = 1;
+      return;
+    }
+    progress.value = withTiming(1, {
+      duration: STREAM_FADE_MS,
+      easing: STREAM_EASE,
+    });
+  }, [fade, progress]);
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ translateY: (1 - progress.value) * 3 }],
+  }));
+  if (!fade) {
+    return <RNText style={style}>{word}</RNText>;
+  }
+  return <Animated.Text style={[style, animatedStyle]}>{word}</Animated.Text>;
+}
+
+/**
+ * Marked leaf text → per-word st-fade for the paced tail (desktop StreamingText).
+ * Word indices are stable as the visible prefix grows so earlier words do not
+ * remount/re-fade on every delta.
+ */
+class StreamingMarkdownRenderer extends MarkdownRenderer {
+  wordIndex = 0;
+  fadeFromWord = 0;
+  motion = false;
+
+  beginPaint(fadeFromWord: number, motion: boolean) {
+    this.keyIndex = 0;
+    this.wordIndex = 0;
+    this.fadeFromWord = fadeFromWord;
+    this.motion = motion;
+  }
+
+  override text(text: string | ReactNode[], styles?: TextStyle): ReactNode {
+    if (typeof text !== "string") {
+      return super.text(text, styles);
+    }
+    if (!text) return null;
+    const style = (styles ?? {}) as TextStyle;
+    const nodes: ReactNode[] = [];
+    const re = /\S+\s*/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      const idx = this.wordIndex++;
+      nodes.push(
+        <StreamingWord
+          key={`sw-${idx}`}
+          word={m[0]}
+          style={style}
+          fade={this.motion && idx >= this.fadeFromWord}
+        />,
+      );
+    }
+    if (nodes.length === 0) {
+      return <RNText key={this.getKey()} style={style}>{text}</RNText>;
+    }
+    return (
+      <RNText key={this.getKey()} style={style}>
+        {nodes}
+      </RNText>
+    );
+  }
+}
+
+/**
+ * Close dangling inline markers so Marked can paint bold/code while the
+ * model is mid-token (avoids flashing raw `**` during the paced reveal).
+ */
+function stabilizeStreamingMarkdown(src: string): string {
+  let s = src;
+  // Unclosed fence — show body as plain until the closer lands.
+  const fence = "```";
+  const fenceCount = s.split(fence).length - 1;
+  if (fenceCount % 2 === 1) {
+    s += `\n${fence}`;
+  }
+  const ticks = (s.match(/`/g) || []).length;
+  if (ticks % 2 === 1) s += "`";
+  const bolds = (s.match(/\*\*/g) || []).length;
+  if (bolds % 2 === 1) s += "**";
+  return s;
+}
+
+/**
+ * Streaming answers: Marked on the revealed prefix (desktop StreamingMarkdownText)
+ * with per-word st-fade on the paced tail. Settled messages keep selectable Marked.
+ */
+const StreamingMarkdownText: FC<
+  MarkdownTextProps & {
+    readonly reveal: StreamingReveal;
+    /** False for transcript hydrate — no per-word st-fade replay. */
+    readonly animateFade: boolean;
+  }
+> = ({ text, variant, reveal, animateFade }) => {
   useEffect(() => {
     traceStream("paint", text.length);
   }, [text.length]);
-  const { fallbackClass, typeStyle } = useMarkdownTypeStyle(variant);
+  const { typeStyle } = useMarkdownTypeStyle(variant);
+  const motion = useMotion();
+  const baseOptions = useMarkdownOptions(variant);
+  const { revealed, clip, writing, fadeFromWord } = reveal;
 
-  if (!text) {
+  // Partial last word via clip — matches StreamingText smoother.
+  const displayText = stabilizeStreamingMarkdown(
+    clip > 0 ? text.slice(0, clip) : text.slice(0, revealed),
+  );
+
+  const rendererRef = useRef<StreamingMarkdownRenderer | null>(null);
+  if (!rendererRef.current) {
+    rendererRef.current = new StreamingMarkdownRenderer(displayText);
+  }
+  rendererRef.current.beginPaint(
+    fadeFromWord,
+    Boolean(motion && animateFade),
+  );
+
+  const options = useMemo(
+    () => ({ ...baseOptions, renderer: rendererRef.current! }),
+    [baseOptions],
+  );
+  const elements = useMarkdown(displayText || " ", options);
+
+  if (!text && !writing) {
     return <View className="aui-md-root" />;
   }
 
+  const wordStyle = {
+    fontSize: typeStyle.fontSize,
+    lineHeight: typeStyle.lineHeight,
+    color: typeStyle.color ?? "#0d0d0d",
+  } as TextStyle;
+
   return (
-    <View className="aui-md-root">
-      {Platform.OS === "ios" ? (
-        <TextInput
-          multiline
-          editable={false}
-          readOnly
-          scrollEnabled={false}
-          selectionColor={SELECTION_COLOR}
-          style={typeStyle}
-          className={fallbackClass}
-          value={text}
-        />
-      ) : (
-        <Text
-          selectable
-          selectionColor={SELECTION_COLOR}
-          variant={variant === "muted" ? "body" : "label"}
-          tone={variant === "muted" ? "muted" : "default"}
-        >
-          {text}
-        </Text>
-      )}
+    <View
+      className="aui-md-root"
+      style={{ gap: BLOCK_GAP }}
+      accessibilityState={{ busy: writing }}
+    >
+      {displayText
+        ? elements.map((element, index) => {
+            if (isViewHost(element)) {
+              return <Fragment key={`md-v-${index}`}>{element}</Fragment>;
+            }
+            return (
+              <RNText key={`md-t-${index}`} style={typeStyle}>
+                {element}
+              </RNText>
+            );
+          })
+        : null}
+      {writing ? (
+        <RNText style={wordStyle}>
+          <StreamingDotCursor style={wordStyle} />
+        </RNText>
+      ) : null}
     </View>
   );
 };
@@ -611,12 +771,27 @@ const SettledMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
 };
 
 const MarkdownTextImpl: FC<MarkdownTextProps> = (props) => {
-  const streaming = (props.status?.type ?? "running") === "running";
-  return streaming ? (
-    <StreamingMarkdownText {...props} />
-  ) : (
-    <SettledMarkdownText {...props} />
-  );
+  // Only an explicit running status paces/fades. Missing status is settled
+  // (history hydrate / parts without state) — defaulting to running made
+  // reopened threads replay word-by-word. Live rows pass status running.
+  const turnStreaming = props.status?.type === "running";
+  const reveal = useStreamingReveal(props.text, turnStreaming);
+  // Fade only while the turn is live and new words are still arriving —
+  // opening a previous thread must not replay st-fade through stored text.
+  const animateFade =
+    turnStreaming && reveal.fadeFromWord < reveal.visibleCount;
+  // Keep the paced Marked path until the smoother catches up — then hand off
+  // to selectable settled Marked without a whole-reply FadeIn dump.
+  if (turnStreaming || reveal.writing) {
+    return (
+      <StreamingMarkdownText
+        {...props}
+        reveal={reveal}
+        animateFade={animateFade}
+      />
+    );
+  }
+  return <SettledMarkdownText {...props} />;
 };
 
 export const MarkdownText = memo(MarkdownTextImpl);

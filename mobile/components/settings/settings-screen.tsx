@@ -1,35 +1,43 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { Alert, Platform } from "react-native";
+import { useCallback, useState, useSyncExternalStore } from "react";
+import { Alert, Platform, Pressable, StyleSheet, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import {
   BrainIcon,
+  CalendarIcon,
   CircleDollarSignIcon,
-  CircleUserIcon,
+  ClipboardListIcon,
   CloudIcon,
+  Code2Icon,
   CoinsIcon,
-  InfoIcon,
+  FileSearchIcon,
+  HardDriveIcon,
+  ImageIcon,
   IdCardIcon,
+  LayoutTemplateIcon,
   ListTodoIcon,
   LogOutIcon,
+  MailIcon,
+  MessageCircleQuestionIcon,
   NotebookPenIcon,
+  PenLineIcon,
+  ScanSearchIcon,
   ShapesIcon,
   SparklesIcon,
-  Trash2Icon,
   WalletIcon,
 } from "lucide-react-native";
 
-import { CodeSection } from "@/components/settings/code-section";
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { Icon } from "@/components/ui/icon";
+import { Section } from "@/components/ui/section";
 import { SettingsCard } from "@/components/ui/settings-card";
 import { SettingsRow } from "@/components/ui/settings-row";
 import { Text } from "@/components/ui/text";
 import { agentHostname } from "@/src/agent-url";
 import { getAppVersionDetail } from "@/src/app-version";
 import { useAuth } from "@/src/auth";
+import { initials } from "@/src/initials";
 import {
   fetchBillingStatus,
-  startBillingCheckout,
   type MobileBillingStatus,
 } from "@/src/billing-client";
 import {
@@ -40,9 +48,7 @@ import { listCalendarAccounts } from "@/src/calendar-accounts-client";
 import { listMailboxes } from "@/src/mailboxes-client";
 import { fetchMemories } from "@/src/memory-client";
 import {
-  AGENT_URL,
   getAgentUrl,
-  getAuthCookie,
   isHostedLocked,
   subscribeAgentUrlBinding,
 } from "@/src/eve-transport";
@@ -52,10 +58,9 @@ import {
   subscribeModelSelection,
 } from "@/src/model-selection";
 import { fetchUsageSummary, formatSpendCents } from "@/src/usage-client";
-import * as Linking from "expo-linking";
 
 export function SettingsScreen() {
-  const { viewerEmail, signOut } = useAuth();
+  const { viewerEmail, viewerName, signOut } = useAuth();
   const selectedKey = useSyncExternalStore(
     subscribeModelSelection,
     getModelSelection,
@@ -177,66 +182,120 @@ export function SettingsScreen() {
     ]);
   };
 
-  const confirmDeleteAccount = () => {
-    const run = async () => {
-      try {
-        const credential = getAuthCookie();
-        const response = await fetch(`${AGENT_URL}/api/account`, {
-          method: "DELETE",
-          headers: {
-            "content-type": "application/json",
-            Origin: AGENT_URL,
-            ...(credential ? { authorization: `Bearer ${credential}` } : {}),
-          },
-        });
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as {
-            error?: string;
-          } | null;
-          throw new Error(body?.error ?? `Delete failed (${response.status}).`);
-        }
-        signOut();
-      } catch (cause) {
-        const message =
-          cause instanceof Error ? cause.message : "Could not delete account.";
-        if (Platform.OS === "web") {
-          window.alert(message);
-        } else {
-          Alert.alert("Could not delete account", message);
-        }
-      }
-    };
-
-    const title = "Delete your Pearl account?";
-    const body =
-      "This removes your chats, projects, and connection grants on this host. It cannot be undone.";
-    if (Platform.OS === "web") {
-      if (typeof window !== "undefined" && window.confirm(`${title}\n\n${body}`)) {
-        void run();
-      }
-      return;
-    }
-    Alert.alert(title, body, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete account", style: "destructive", onPress: () => void run() },
-    ]);
-  };
-
   return (
     <SheetScaffold>
-      <SettingsCard>
-        <SettingsRow
-          icon={<Icon as={IdCardIcon} className="size-5 text-blue-500" />}
-          label="Account"
-          detail={viewerEmail ?? "Email and password"}
+      <Section title="Account">
+        <AccountRow
+          name={viewerName}
+          email={viewerEmail}
           onPress={() => router.push("/account")}
+        />
+        <SettingsRow
+          icon={<Icon as={MailIcon} className="size-5 text-sky-600" />}
+          label="Email"
+          detail={emailDetail}
+          onPress={() => router.push("/email")}
           showSeparator
         />
         <SettingsRow
-          icon={<Icon as={CircleUserIcon} className="size-5 text-sky-500" />}
-          label="Identity"
-          detail="Name, body, health, home"
-          onPress={() => router.push("/identity")}
+          icon={<Icon as={CalendarIcon} className="size-5 text-rose-500" />}
+          label="Calendar"
+          detail={calendarRowDetail}
+          onPress={() => router.push("/calendar")}
+        />
+      </Section>
+
+      <SettingsCard>
+        <SettingsRow
+          icon={
+            <Icon as={CircleDollarSignIcon} className="size-5 text-emerald-500" />
+          }
+          label="Money"
+          detail="Pearl Money"
+          onPress={() => router.push("/money")}
+          showSeparator
+        />
+        <SettingsRow
+          icon={<Icon as={ListTodoIcon} className="size-5 text-teal-500" />}
+          label="Tasks"
+          detail="Pearl Tasks"
+          onPress={() => router.push("/tasks")}
+        />
+      </SettingsCard>
+
+      <Section title="Think">
+        <SettingsRow
+          icon={
+            <Icon
+              as={MessageCircleQuestionIcon}
+              className="size-5 text-sky-500"
+            />
+          }
+          label="Answers"
+          detail="Web and connected accounts"
+          onPress={() => router.push("/answers")}
+          showSeparator
+        />
+        <SettingsRow
+          icon={<Icon as={ScanSearchIcon} className="size-5 text-violet-500" />}
+          label="Research"
+          detail="Deep research with citations"
+          onPress={() => router.push("/research")}
+          showSeparator
+        />
+        <SettingsRow
+          icon={<Icon as={ClipboardListIcon} className="size-5 text-amber-500" />}
+          label="Plan"
+          detail="Travel and how you plan"
+          onPress={() => router.push("/plan")}
+          showSeparator
+        />
+        <SettingsRow
+          icon={<Icon as={PenLineIcon} className="size-5 text-indigo-500" />}
+          label="Drafting"
+          detail="Writing and style"
+          onPress={() => router.push("/drafting")}
+          showSeparator
+        />
+        <SettingsRow
+          icon={<Icon as={FileSearchIcon} className="size-5 text-sky-600" />}
+          label="Analysis"
+          detail="PDF, images, tables, text"
+          onPress={() => router.push("/analysis")}
+        />
+      </Section>
+
+      <Section title="Make">
+        <SettingsRow
+          icon={<Icon as={Code2Icon} className="size-5 text-emerald-600" />}
+          label="Coder"
+          detail="Build, PR, deploy"
+          onPress={() => router.push("/plugins/coder")}
+          showSeparator
+        />
+        <SettingsRow
+          icon={<Icon as={ImageIcon} className="size-5 text-fuchsia-500" />}
+          label="Visualize"
+          detail="Graphics, diagrams, images"
+          onPress={() => router.push("/visualize")}
+          showSeparator
+        />
+        <SettingsRow
+          icon={
+            <Icon as={LayoutTemplateIcon} className="size-5 text-violet-500" />
+          }
+          label="Design"
+          detail="Presentations, documents, layouts"
+          onPress={() => router.push("/design")}
+        />
+      </Section>
+
+      <Section title="Agent">
+        <SettingsRow
+          icon={<Icon as={SparklesIcon} className="size-5 text-violet-500" />}
+          label="Models"
+          detail={selectedLabel}
+          onPress={() => router.push("/models")}
           showSeparator
         />
         <SettingsRow
@@ -259,39 +318,9 @@ export function SettingsScreen() {
           detail="Custom and published"
           onPress={() => router.push("/skills")}
         />
-      </SettingsCard>
+      </Section>
 
-      <SettingsCard>
-        <SettingsRow
-          icon={
-            <Icon as={CircleDollarSignIcon} className="size-5 text-emerald-500" />
-          }
-          label="Money"
-          detail="Pearl Money"
-          onPress={() => router.push("/money")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={ListTodoIcon} className="size-5 text-teal-500" />}
-          label="Tasks"
-          detail="Pearl Tasks"
-          onPress={() => router.push("/tasks")}
-        />
-      </SettingsCard>
-
-      <CodeSection
-        emailDetail={emailDetail}
-        calendarDetail={calendarRowDetail}
-      />
-
-      <SettingsCard>
-        <SettingsRow
-          icon={<Icon as={SparklesIcon} className="size-5 text-violet-500" />}
-          label="Models"
-          detail={selectedLabel}
-          onPress={() => router.push("/models")}
-          showSeparator
-        />
+      <Section title="Usage">
         <SettingsRow
           icon={<Icon as={CoinsIcon} className="size-5 text-amber-500" />}
           label="Usage"
@@ -299,8 +328,18 @@ export function SettingsScreen() {
           onPress={() => router.push("/usage")}
           showSeparator
         />
+        <SettingsRow
+          icon={<Icon as={HardDriveIcon} className="size-5 text-sky-600" />}
+          label="Storage"
+          detail="Chat, saved files, Drive"
+          onPress={() => router.push("/storage")}
+          showSeparator
+        />
         <BillingRow />
-        {isHostedLocked() ? null : (
+      </Section>
+
+      {isHostedLocked() ? null : (
+        <SettingsCard>
           <SettingsRow
             icon={
               <Icon as={CloudIcon} className="size-5 text-muted-foreground" />
@@ -308,28 +347,16 @@ export function SettingsScreen() {
             label="Self-host"
             detail={agentHostLabel}
             onPress={() => router.push("/self-host")}
-            showSeparator
           />
-        )}
-        <SettingsRow
-          icon={<Icon as={InfoIcon} className="size-5 text-muted-foreground" />}
-          label="About Pearl"
-          detail={getAppVersionDetail()}
-          onPress={() => router.push("/about")}
-          showSeparator
-        />
+        </SettingsCard>
+      )}
+
+      <SettingsCard>
         <SettingsRow
           icon={<Icon as={LogOutIcon} className="size-5 text-destructive" />}
           label="Sign out"
           labelDestructive
           onPress={confirmSignOut}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={Trash2Icon} className="size-5 text-destructive" />}
-          label="Delete account"
-          labelDestructive
-          onPress={confirmDeleteAccount}
         />
       </SettingsCard>
 
@@ -339,6 +366,81 @@ export function SettingsScreen() {
     </SheetScaffold>
   );
 }
+
+function accountTitle(
+  name: string | null,
+  email: string | null,
+): string {
+  const trimmed = name?.trim();
+  if (trimmed) return trimmed;
+  const local = email?.split("@")[0]?.trim();
+  if (local) return local;
+  return "Account";
+}
+
+/** Taller Profile row: name, email, and the same destination as Account. */
+function AccountRow({
+  name,
+  email,
+  onPress,
+}: {
+  readonly name: string | null;
+  readonly email: string | null;
+  readonly onPress: () => void;
+}) {
+  const title = accountTitle(name, email);
+  const mark = initials(name, email);
+  return (
+    <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={email ? `${title}, ${email}` : title}
+        className="active:bg-muted/80"
+        onPress={onPress}
+        style={accountStyles.row}
+      >
+        <View className="size-14 items-center justify-center rounded-[16px] bg-muted">
+          {mark ? (
+            <Text variant="title" weight="semibold">
+              {mark}
+            </Text>
+          ) : (
+            <Icon as={IdCardIcon} className="size-7 text-blue-500" />
+          )}
+        </View>
+        <View className="min-w-0 flex-1 gap-0.5">
+          <Text variant="title" numberOfLines={1}>
+            {title}
+          </Text>
+          <Text variant="secondary" numberOfLines={1}>
+            {email ?? "Email and password"}
+          </Text>
+        </View>
+        <Text variant="title" tone="muted" weight="light" className="opacity-40">
+          ›
+        </Text>
+      </Pressable>
+      <View
+        className="ml-[84px] bg-border"
+        style={accountStyles.separatorHairline}
+      />
+    </View>
+  );
+}
+
+const accountStyles = StyleSheet.create({
+  row: {
+    minHeight: 84,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  separatorHairline: {
+    height: StyleSheet.hairlineWidth,
+  },
+});
 
 function memoryCountLabel(count: number): string {
   if (count === 0) return "None yet";
@@ -353,17 +455,18 @@ function formatCents(cents: number | null | undefined): string {
 
 function BillingRow() {
   const [status, setStatus] = useState<MobileBillingStatus | null>(null);
-  const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    void fetchBillingStatus().then((next) => {
-      if (!cancelled) setStatus(next);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void fetchBillingStatus().then((next) => {
+        if (!cancelled) setStatus(next);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   const detail = (() => {
     if (!status || !status.enabled) return "Off";
@@ -376,62 +479,12 @@ function BillingRow() {
     return `${formatCents(status.spentCents)} of ${formatCents(status.usageCapCents)}`;
   })();
 
-  const onPress = async () => {
-    if (!status?.enabled || pending) return;
-    if (status.exempt) {
-      Alert.alert("Billing", "This account has a free pass and is not billed.");
-      return;
-    }
-    if (status.trial) {
-      Alert.alert(
-        "Friend beta",
-        status.message ??
-          `Included ${formatCents(status.usageCapCents)} / month. Spent ${formatCents(status.spentCents)} this period.`,
-      );
-      return;
-    }
-    setPending(true);
-    try {
-      if (status.needsCheckout) {
-        await Linking.openURL(await startBillingCheckout());
-        return;
-      }
-      if (status.hasPortal) {
-        const token = getAuthCookie();
-        const response = await fetch(`${AGENT_URL}/api/billing/portal`, {
-          method: "POST",
-          headers: {
-            ...(token ? { authorization: `Bearer ${token}` } : {}),
-          },
-        });
-        const body = (await response.json()) as { url?: string; error?: string };
-        if (!response.ok || !body.url) {
-          throw new Error(body.error ?? "Could not open billing portal.");
-        }
-        await Linking.openURL(body.url);
-        return;
-      }
-      Alert.alert(
-        "Billing",
-        `Spent ${formatCents(status.spentCents)} of ${formatCents(status.usageCapCents)} this period.`,
-      );
-    } catch (cause) {
-      Alert.alert(
-        "Billing",
-        cause instanceof Error ? cause.message : "Could not open billing.",
-      );
-    } finally {
-      setPending(false);
-    }
-  };
-
   return (
     <SettingsRow
       icon={<Icon as={WalletIcon} className="size-5 text-foreground" />}
       label="Billing"
-      detail={pending ? "Opening…" : detail}
-      onPress={() => void onPress()}
-      showSeparator
+      detail={detail}
+      onPress={() => router.push("/billing")}
     />
   );
 }

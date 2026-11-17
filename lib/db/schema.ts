@@ -21,6 +21,9 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
+  // Temporary guest from better-auth anonymous sign-in. Linked onto a real
+  // account at sign-up / sign-in; then the guest row is deleted.
+  isAnonymous: boolean("is_anonymous").notNull().default(false),
   // Free pass: no Stripe subscription, no usage invoice, no spend cap.
   // Backfilled true for every row that existed when billing shipped; new
   // accounts default false and must subscribe.
@@ -444,6 +447,7 @@ export const userProfile = pgTable("user_profile", {
   healthNotes: text("health_notes"),
   primaryResidence: text("primary_residence"),
   additionalHomes: text("additional_homes"),
+  planPreferences: text("plan_preferences"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

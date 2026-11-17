@@ -276,6 +276,9 @@ export async function listAllVercelProjects(args: {
     projects.length = ALL_PROJECTS_MAX;
     truncated = true;
   }
+  if (context.teamsTruncated) {
+    truncated = true;
+  }
 
   projects.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
 

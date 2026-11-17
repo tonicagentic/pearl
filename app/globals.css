@@ -172,11 +172,12 @@ html[data-eve-chat-sidebar="closed"] [data-desktop-sidebar] {
 }
 
 @keyframes t-shimmer {
+  /* Sweep left → right (transitions.dev thinking-states). */
   0% {
-    background-position: 0% 0;
+    background-position: 100% 0;
   }
   100% {
-    background-position: 100% 0;
+    background-position: 0% 0;
   }
 }
 

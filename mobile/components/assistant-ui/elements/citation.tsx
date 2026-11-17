@@ -1,11 +1,34 @@
-import { useMemo, type ComponentProps, type ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
+import {
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  View,
+} from "react-native";
 import { useAuiState } from "@assistant-ui/react-native";
+import * as Haptics from "expo-haptics";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCSSVariable } from "uniwind";
 
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { openWebUrl } from "@/src/open-web-url";
 import { threadMeta } from "./surfaces";
+
+/** Portal to document.body on Expo web only — avoid pulling react-dom into native. */
+function portalToBody(node: ReactNode): ReactNode {
+  if (Platform.OS !== "web" || typeof document === "undefined") return node;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- web-only
+  const { createPortal } = require("react-dom") as typeof import("react-dom");
+  return createPortal(node, document.body);
+}
 
 export type CitationRef = {
   readonly index: string;
@@ -38,13 +61,221 @@ export function isCitationLabel(text: string): boolean {
   return /^\s*\[?\d+\]?\s*$/.test(text);
 }
 
-function hostnameOf(url: string): string {
+export function normalizeCitationIndex(index: string): string {
+  return index.replace(/^\s*\[|\]\s*$/g, "");
+}
+
+export function hostnameOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {
     return url;
   }
 }
+
+export function faviconUrl(hostname: string): string {
+  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=32`;
+}
+
+function FaviconMark({
+  hostname,
+  size = 16,
+}: {
+  readonly hostname: string;
+  readonly size?: number;
+}) {
+  const [failed, setFailed] = useState(false);
+  const letter = (hostname.charAt(0) || "?").toUpperCase();
+
+  if (failed) {
+    return (
+      <View
+        className="bg-muted items-center justify-center rounded"
+        style={{ width: size, height: size }}
+      >
+        <Text
+          variant="caption"
+          weight="medium"
+          className="leading-none"
+          style={{ fontSize: Math.max(9, size * 0.55) }}
+        >
+          {letter}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri: faviconUrl(hostname) }}
+      accessibilityIgnoresInvertColors
+      onError={() => setFailed(true)}
+      style={{ width: size, height: size, borderRadius: 3 }}
+    />
+  );
+}
+
+function CitationPreviewCard({
+  href,
+  title,
+  onOpen,
+}: {
+  readonly href: string;
+  readonly title?: string;
+  readonly onOpen: () => void;
+}) {
+  const host = hostnameOf(href);
+  const displayTitle = title?.trim() || host;
+
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`${displayTitle}, ${host}`}
+      onPress={onOpen}
+      className="flex-row gap-3 rounded-md active:opacity-80"
+    >
+      <FaviconMark hostname={host} size={20} />
+      <View className="min-w-0 flex-1 gap-0.5">
+        <Text variant="body" weight="medium" numberOfLines={2}>
+          {displayTitle}
+        </Text>
+        <Text variant="caption" tone="muted" numberOfLines={1}>
+          {host}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
+/**
+ * Bottom-sheet chrome shared by native Modal and Expo web portal — matches
+ * AttachmentPreviewSheet (slide + grab handle + safe-area padding).
+ */
+function CitationPeekBody({
+  href,
+  title,
+  displayTitle,
+  onDismiss,
+  onOpen,
+  constrainWidth,
+}: {
+  readonly href: string;
+  readonly title?: string;
+  readonly displayTitle: string;
+  readonly onDismiss: () => void;
+  readonly onOpen: () => void;
+  /** Expo web portals to body — keep the sheet phone-width, not full desktop. */
+  readonly constrainWidth?: boolean;
+}) {
+  const insets = useSafeAreaInsets();
+  const backgroundColor = useCSSVariable("--color-background") as
+    | string
+    | undefined;
+
+  return (
+    <View
+      className={cn(
+        "flex-1 justify-end",
+        constrainWidth ? "items-center" : undefined,
+      )}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss citation preview"
+        className="absolute inset-0 bg-foreground/50"
+        onPress={onDismiss}
+      />
+      <View
+        style={{
+          backgroundColor,
+          paddingBottom: Math.max(insets.bottom, 16),
+        }}
+        className={cn(
+          "rounded-t-3xl border-t border-border/60",
+          constrainWidth ? "w-full max-w-[390px]" : "w-full",
+        )}
+      >
+        <View className="items-center pt-2.5 pb-1">
+          <View className="h-1 w-9 rounded-full bg-border" />
+        </View>
+        <View className="px-5 pb-4 pt-2">
+          <CitationPreviewCard href={href} title={title} onOpen={onOpen} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${displayTitle}`}
+            onPress={onOpen}
+            className="bg-foreground/8 mt-3 items-center rounded-xl py-2.5 active:opacity-80"
+          >
+            <Text variant="secondary" weight="medium">
+              Open link
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * RN Modal on Expo web lands as position:relative in-flow and blows out the
+ * thread. Portal a fixed overlay on web; slide-up sheet Modal on native.
+ */
+function CitationPeek({
+  open,
+  href,
+  title,
+  displayTitle,
+  onDismiss,
+  onOpen,
+}: {
+  readonly open: boolean;
+  readonly href: string;
+  readonly title?: string;
+  readonly displayTitle: string;
+  readonly onDismiss: () => void;
+  readonly onOpen: () => void;
+}) {
+  if (!open) return null;
+
+  const body = (
+    <CitationPeekBody
+      href={href}
+      title={title}
+      displayTitle={displayTitle}
+      onDismiss={onDismiss}
+      onOpen={onOpen}
+      constrainWidth={Platform.OS === "web"}
+    />
+  );
+
+  if (Platform.OS === "web") {
+    return portalToBody(
+      <View accessibilityViewIsModal style={webPeekOverlayStyle}>
+        {body}
+      </View>,
+    );
+  }
+
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="slide"
+      onRequestClose={onDismiss}
+    >
+      {body}
+    </Modal>
+  );
+}
+
+const webPeekOverlayStyle = {
+  position: "fixed" as const,
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  zIndex: 9999,
+};
 
 export function CitationChip({
   index,
@@ -57,28 +288,58 @@ export function CitationChip({
   readonly title?: string;
   readonly className?: string;
 }) {
-  const label = index.replace(/^\s*\[|\]\s*$/g, "");
+  const label = normalizeCitationIndex(index);
   const displayTitle = title?.trim() || hostnameOf(href);
+  const [open, setOpen] = useState(false);
+
+  const dismiss = useCallback(() => setOpen(false), []);
+  const openSource = useCallback(() => {
+    setOpen(false);
+    openWebUrl(href);
+  }, [href]);
+  const togglePeek = useCallback(() => {
+    setOpen((prev) => {
+      if (!prev) {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+          () => {},
+        );
+      }
+      return !prev;
+    });
+  }, []);
 
   return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityLabel={`Source ${label}: ${displayTitle}`}
-      hitSlop={6}
-      onPress={() => openWebUrl(href)}
-      className={cn(
-        "bg-muted ms-0.5 h-4 min-w-4 items-center justify-center rounded px-1 active:opacity-70",
-        className,
-      )}
-    >
-      <Text
-        variant="caption"
-        weight="medium"
-        className="leading-none tabular-nums"
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Source ${label}: ${displayTitle}`}
+        accessibilityState={{ expanded: open }}
+        hitSlop={6}
+        onPress={togglePeek}
+        className={cn(
+          // inline-flex keeps the chip in the markdown text run on Expo web
+          "bg-muted ms-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded px-1 align-super active:opacity-70",
+          open && "opacity-90",
+          className,
+        )}
       >
-        {label}
-      </Text>
-    </Pressable>
+        <Text
+          variant="caption"
+          weight="medium"
+          className="leading-none tabular-nums"
+        >
+          {label}
+        </Text>
+      </Pressable>
+      <CitationPeek
+        open={open}
+        href={href}
+        title={title}
+        displayTitle={displayTitle}
+        onDismiss={dismiss}
+        onOpen={openSource}
+      />
+    </>
   );
 }
 
@@ -98,50 +359,63 @@ export function MessageSources({ className }: ComponentProps<typeof View>) {
       .filter((text) => text.length > 0)
       .join("\n");
   });
+  // Wait until the turn settles so Sources enter with copy/share, not mid-stream.
+  const settled = useAuiState(
+    (s) =>
+      !(s.message.role === "assistant" && s.message.status?.type === "running"),
+  );
 
   const refs = useMemo(() => {
     if (!markdown) return EMPTY_CITATION_REFS;
     return extractCitationRefs(markdown);
   }, [markdown]);
 
-  if (refs.length === 0) return null;
+  if (!settled || refs.length === 0) return null;
 
   return (
     <View
       data-slot="message-sources"
       className={cn("flex-col gap-1.5 pt-1", className)}
     >
-      <Text variant="label" weight="medium" className={threadMeta}>
+      <Text variant="body" weight="medium" className={threadMeta}>
         Sources
       </Text>
-      <View className="flex-col gap-1">
-        {refs.map((ref) => (
-          <View key={ref.index} className="min-w-0 flex-row items-baseline gap-2">
-            <View className="bg-muted h-4 min-w-4 shrink-0 items-center justify-center rounded px-1">
-              <Text
-                variant="caption"
-                weight="medium"
-                className="leading-none tabular-nums"
-              >
-                {ref.index}
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel={ref.title ?? ref.url}
-              onPress={() => openWebUrl(ref.url)}
-              className="min-w-0 flex-1 active:opacity-70"
+      <View className="flex-col gap-1.5">
+        {refs.map((ref) => {
+          const host = hostnameOf(ref.url);
+          const displayTitle = ref.title?.trim() || host;
+          return (
+            <View
+              key={ref.index}
+              className="min-w-0 flex-row items-center gap-2"
             >
-              <Text variant="label" className={threadMeta} numberOfLines={1}>
-                {ref.title?.trim() || hostnameOf(ref.url)}
-                <Text variant="label" tone="muted" className="opacity-70">
-                  {" "}
-                  · {hostnameOf(ref.url)}
+              <View className="bg-muted h-4 min-w-4 shrink-0 items-center justify-center rounded px-1">
+                <Text
+                  variant="caption"
+                  weight="medium"
+                  className="leading-none tabular-nums"
+                >
+                  {ref.index}
                 </Text>
-              </Text>
-            </Pressable>
-          </View>
-        ))}
+              </View>
+              <FaviconMark hostname={host} size={14} />
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={ref.title ?? ref.url}
+                onPress={() => openWebUrl(ref.url)}
+                className="min-w-0 flex-1 active:opacity-70"
+              >
+                <Text variant="body" className={threadMeta} numberOfLines={1}>
+                  {displayTitle}
+                  <Text variant="body" tone="muted" className="opacity-70">
+                    {" "}
+                    · {host}
+                  </Text>
+                </Text>
+              </Pressable>
+            </View>
+          );
+        })}
       </View>
     </View>
   );

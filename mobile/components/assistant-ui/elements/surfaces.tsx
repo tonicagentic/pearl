@@ -11,7 +11,6 @@ import {
 import {
   AccessibilityInfo,
   Animated,
-  Easing as RnEasing,
   Platform,
   View,
   type LayoutChangeEvent,
@@ -33,6 +32,7 @@ import Reanimated, {
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
@@ -50,7 +50,8 @@ export const mono = "tracking-tight";
 
 /**
  * Thinking / tool chrome — Cursor-like muted status (softer than answer copy).
- * Pair with `Text variant="label"` so meta matches message size; mute via tone.
+ * Pair with `Text variant="body"` (15px) so meta sits slightly under message
+ * `label` (17px); mute via tone / these color classes.
  */
 export const threadMeta = "text-muted-foreground/75";
 
@@ -158,8 +159,8 @@ export const THINK_SWAP_Y = 8;
 export const THINK_SWAP_BLUR = 2;
 /** streaming-text `--stream-gap` */
 export const STREAM_GAP_MS = 60;
-/** streaming-text `--stream-fade` */
-export const STREAM_FADE_MS = 350;
+/** streaming-text `--stream-fade` (match web StreamingText st-fade 400ms) */
+export const STREAM_FADE_MS = 400;
 /** streaming-text `--stream-blur` */
 export const STREAM_BLUR = 1;
 /** streaming-text `--stream-ease` */
@@ -200,6 +201,17 @@ export const messageEnter = FadeInDown.duration(MESSAGE_ENTER_MS)
   .withInitialValues({
     opacity: 0,
     transform: [{ translateY: MESSAGE_ENTER_Y }],
+  });
+
+/** Copy / share bar after the assistant message settles. */
+export const ACTION_BAR_ENTER_MS = 240;
+export const ACTION_BAR_ENTER_Y = 5;
+export const actionBarEnter = FadeInDown.duration(ACTION_BAR_ENTER_MS)
+  .delay(60)
+  .easing(STREAM_EASE)
+  .withInitialValues({
+    opacity: 0,
+    transform: [{ translateY: ACTION_BAR_ENTER_Y }],
   });
 
 export const layoutTransition = LinearTransition.duration(COLLAPSE_MS).easing(
@@ -439,39 +451,63 @@ export function CollapsePanel({
 }) {
   const motion = useMotion();
   const [contentHeight, setContentHeight] = useState(0);
+  const [settledOpen, setSettledOpen] = useState(open);
   const height = useSharedValue(0);
   const opacity = useSharedValue(open ? 1 : 0);
-  const measuredRef = useRef(false);
+  const prevOpenRef = useRef(open);
 
   useEffect(() => {
-    if (contentHeight <= 0) return;
-    // First measure: snap so an initially-open panel isn't height-0 for a frame.
-    if (!measuredRef.current) {
-      measuredRef.current = true;
-      height.value = open ? contentHeight : 0;
+    const toggled = prevOpenRef.current !== open;
+    prevOpenRef.current = open;
+
+    if (!motion || !toggled) {
+      setSettledOpen(open);
+      if (contentHeight > 0) {
+        height.value = open ? contentHeight : 0;
+      }
       opacity.value = open ? 1 : 0;
       return;
     }
-    if (!motion) {
-      height.value = open ? contentHeight : 0;
-      opacity.value = open ? 1 : 0;
-      return;
+
+    if (open) {
+      if (contentHeight <= 0) {
+        setSettledOpen(true);
+        opacity.value = 1;
+        return;
+      }
+      height.value = withTiming(contentHeight, {
+        duration: COLLAPSE_MS,
+        easing: collapseEase,
+      });
+      opacity.value = withTiming(1, {
+        duration: COLLAPSE_MS,
+        easing: collapseEase,
+      });
+      const done = setTimeout(() => setSettledOpen(true), COLLAPSE_MS);
+      return () => clearTimeout(done);
     }
-    height.value = withTiming(open ? contentHeight : 0, {
+
+    setSettledOpen(false);
+    height.value = withTiming(0, {
       duration: COLLAPSE_MS,
       easing: collapseEase,
     });
-    opacity.value = withTiming(open ? 1 : 0, {
+    opacity.value = withTiming(0, {
       duration: COLLAPSE_MS,
       easing: collapseEase,
     });
+    return undefined;
   }, [open, contentHeight, motion, height, opacity]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    height: height.value,
-    opacity: opacity.value,
-    overflow: "hidden" as const,
-  }));
+  const animatedStyle = useAnimatedStyle(() =>
+    settledOpen
+      ? { opacity: 1 }
+      : {
+          height: height.value,
+          opacity: opacity.value,
+          overflow: "hidden" as const,
+        },
+  );
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     const next = Math.ceil(event.nativeEvent.layout.height);
@@ -502,138 +538,248 @@ export function CollapsePanel({
   );
 }
 
+const thinkSwapTiming = {
+  duration: THINK_SWAP_MS,
+  easing: Easing.inOut(Easing.ease),
+} as const;
+
 /**
- * thinking-states / text-states-swap: outgoing exits up, incoming rises
- * after --think-gap, both over --think-swap with ease-in-out.
+ * transitions.dev thinking-states: outgoing exits up immediately over
+ * `--think-swap`; incoming snaps below, then after `--think-gap` rises in
+ * over the same duration so both halves overlap (one swap, not two).
  */
-export function SwapLabel({
-  active,
-  children,
+export function ThinkingStatesLabel({
+  label,
+  shimmer = true,
   className,
+  textClassName,
 }: {
-  active: 0 | 1;
-  children: [ReactNode, ReactNode];
+  label: string;
+  shimmer?: boolean;
   className?: string;
+  textClassName?: string;
 }) {
   const motion = useMotion();
-  const [progress] = useState(() => new Animated.Value(active));
-  const [box, setBox] = useState({ width: 0, height: 0 });
-  const mergeLayout = useCallback((width: number, height: number) => {
-    setBox((prev) => {
-      const next = {
-        width: Math.max(prev.width, Math.ceil(width)),
-        height: Math.max(prev.height, Math.ceil(height)),
-      };
-      return next.width === prev.width && next.height === prev.height
-        ? prev
-        : next;
-    });
-  }, []);
+  const [active, setActive] = useState<0 | 1>(0);
+  const activeRef = useRef<0 | 1>(0);
+  const [slots, setSlots] = useState<[string, string]>([label, label]);
+  const currentRef = useRef(label);
+  const widthTargetRef = useRef(0);
+
+  // First paint starts planted below (same as a swap enter) so the initial
+  // Planning next moves / Thinking status rises in instead of popping.
+  const opacity0 = useSharedValue(motion ? 0 : 1);
+  const y0 = useSharedValue(motion ? THINK_SWAP_Y : 0);
+  const opacity1 = useSharedValue(0);
+  const y1 = useSharedValue(THINK_SWAP_Y);
+  const widthSv = useSharedValue(0);
+
+  const runEnter = useCallback(
+    (slot: 0 | 1) => {
+      const inOpacity = slot === 0 ? opacity0 : opacity1;
+      const inY = slot === 0 ? y0 : y1;
+      cancelAnimation(inOpacity);
+      cancelAnimation(inY);
+      inOpacity.value = 0;
+      inY.value = THINK_SWAP_Y;
+      inOpacity.value = withDelay(THINK_GAP_MS, withTiming(1, thinkSwapTiming));
+      inY.value = withDelay(THINK_GAP_MS, withTiming(0, thinkSwapTiming));
+    },
+    [opacity0, opacity1, y0, y1],
+  );
+
+  const runSwap = useCallback(
+    (from: 0 | 1, to: 0 | 1) => {
+      const outOpacity = from === 0 ? opacity0 : opacity1;
+      const outY = from === 0 ? y0 : y1;
+
+      cancelAnimation(outOpacity);
+      cancelAnimation(outY);
+
+      // Exit outgoing immediately (up + fade).
+      outOpacity.value = withTiming(0, thinkSwapTiming);
+      outY.value = withTiming(-THINK_SWAP_Y, thinkSwapTiming);
+
+      // Incoming half matches first-paint enter.
+      runEnter(to);
+    },
+    [opacity0, opacity1, runEnter, y0, y1],
+  );
 
   useEffect(() => {
     if (!motion) {
-      progress.setValue(active);
+      opacity0.value = 1;
+      y0.value = 0;
       return;
     }
+    // Only animate first paint while still planted; later swaps own motion.
+    if (opacity0.value !== 0 || y0.value !== THINK_SWAP_Y) return;
+    runEnter(0);
+  }, [motion, opacity0, runEnter, y0]);
+
+  useEffect(() => {
+    if (label === currentRef.current) return;
+    const previous = currentRef.current;
+    currentRef.current = label;
+
+    if (!motion) {
+      setSlots([label, label]);
+      activeRef.current = 0;
+      setActive(0);
+      opacity0.value = 1;
+      y0.value = 0;
+      opacity1.value = 0;
+      y1.value = THINK_SWAP_Y;
+      return;
+    }
+
+    // Streaming tool chips grow in place — don't swap on every glyph.
+    const streamingRefine =
+      label.startsWith(previous) || previous.startsWith(label);
+    if (streamingRefine) {
+      const slot = activeRef.current;
+      setSlots((prev) => {
+        const copy: [string, string] = [prev[0], prev[1]];
+        copy[slot] = label;
+        return copy;
+      });
+      return;
+    }
+
+    const from = activeRef.current;
+    const to: 0 | 1 = from === 0 ? 1 : 0;
+    setSlots((prev) => {
+      const copy: [string, string] = [prev[0], prev[1]];
+      copy[to] = label;
+      return copy;
+    });
+    runSwap(from, to);
     const timer = setTimeout(() => {
-      Animated.timing(progress, {
-        toValue: active,
-        duration: THINK_SWAP_MS,
-        easing: RnEasing.inOut(RnEasing.ease),
-        useNativeDriver: Platform.OS !== "web",
-        isInteraction: false,
-      }).start();
+      activeRef.current = to;
+      setActive(to);
     }, THINK_GAP_MS);
     return () => clearTimeout(timer);
-  }, [active, motion, progress]);
+  }, [label, motion, opacity0, opacity1, runSwap, y0, y1]);
 
-  const layer0 = {
-    opacity: progress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [1, 0],
-    }),
-    transform: [
-      {
-        translateY: progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, -THINK_SWAP_Y],
-        }),
-      },
-    ],
-  };
-  const layer1 = {
-    opacity: progress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, 1],
-    }),
-    transform: [
-      {
-        translateY: progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [THINK_SWAP_Y, 0],
-        }),
-      },
-    ],
-  };
+  const onMeasure = useCallback(
+    (event: LayoutChangeEvent) => {
+      const nextWidth = Math.ceil(event.nativeEvent.layout.width);
+      if (nextWidth <= 0 || nextWidth === widthTargetRef.current) return;
+      const prevWidth = widthTargetRef.current;
+      // Snap wider so streaming tool chips never clip mid-word; ease shrinks.
+      const animate = prevWidth > 0 && motion && nextWidth < prevWidth;
+      widthTargetRef.current = nextWidth;
+      cancelAnimation(widthSv);
+      if (!animate) {
+        widthSv.value = nextWidth;
+        return;
+      }
+      widthSv.value = withTiming(nextWidth, thinkSwapTiming);
+    },
+    [motion, widthSv],
+  );
+
+  const layer0Style = useAnimatedStyle(() => ({
+    opacity: opacity0.value,
+    transform: [{ translateY: y0.value }],
+  }));
+  const layer1Style = useAnimatedStyle(() => ({
+    opacity: opacity1.value,
+    transform: [{ translateY: y1.value }],
+  }));
+  const boxStyle = useAnimatedStyle(() =>
+    widthSv.value > 0 ? { width: widthSv.value } : ({} as { width?: number }),
+  );
 
   if (!motion) {
-    return <View className={cn("shrink-0", className)}>{children[active]}</View>;
+    return (
+      <View className={cn("min-w-0 flex-shrink", className)}>
+        <ShimmerLabel
+          active={false}
+          variant="body"
+          numberOfLines={1}
+          className={textClassName}
+        >
+          {label}
+        </ShimmerLabel>
+      </View>
+    );
   }
 
-  const sized =
-    box.width > 0
-      ? { width: box.width, height: box.height }
-      : undefined;
+  const layerPos = {
+    position: "absolute" as const,
+    left: 0,
+    top: 0,
+  };
 
   return (
-    <View className={cn("shrink-0", className)}>
+    <View className={cn("relative min-w-0 flex-shrink", className)}>
+      {/* Intrinsic sizer lives OUTSIDE the clipped width box — measuring
+          inside overflow+fixed width locked streaming chips at the first
+          short width ("Searching p"). */}
       <View
         pointerEvents="none"
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        style={{ position: "absolute", opacity: 0 }}
+        style={{ position: "absolute", opacity: 0, left: 0, top: 0 }}
+        onLayout={onMeasure}
       >
-        <View
-          onLayout={(event) => {
-            const { width, height } = event.nativeEvent.layout;
-            mergeLayout(width, height);
-          }}
+        <ShimmerLabel
+          active={false}
+          variant="body"
+          numberOfLines={1}
+          className={textClassName}
         >
-          {children[0]}
-        </View>
-        <View
-          onLayout={(event) => {
-            const { width, height } = event.nativeEvent.layout;
-            mergeLayout(width, height);
-          }}
-        >
-          {children[1]}
-        </View>
+          {label}
+        </ShimmerLabel>
       </View>
-      <View className="relative justify-center overflow-hidden" style={sized}>
-        <Animated.View
-          className="absolute left-0 top-0"
+      <Reanimated.View className="overflow-hidden" style={boxStyle}>
+        {/* In-flow height spacer (opacity 0); width comes from boxStyle. */}
+        <View style={{ opacity: 0 }} pointerEvents="none">
+          <ShimmerLabel
+            active={false}
+            variant="body"
+            numberOfLines={1}
+            className={textClassName}
+          >
+            {slots[active]}
+          </ShimmerLabel>
+        </View>
+        <Reanimated.View
           pointerEvents={active === 0 ? "auto" : "none"}
-          style={layer0}
+          style={[layer0Style, layerPos]}
           accessibilityElementsHidden={active !== 0}
           importantForAccessibility={
             active === 0 ? "yes" : "no-hide-descendants"
           }
         >
-          {children[0]}
-        </Animated.View>
-        <Animated.View
-          className="absolute left-0 top-0"
+          <ShimmerLabel
+            active={shimmer && active === 0}
+            variant="body"
+            numberOfLines={1}
+            className={textClassName}
+          >
+            {slots[0]}
+          </ShimmerLabel>
+        </Reanimated.View>
+        <Reanimated.View
           pointerEvents={active === 1 ? "auto" : "none"}
-          style={layer1}
+          style={[layer1Style, layerPos]}
           accessibilityElementsHidden={active !== 1}
           importantForAccessibility={
             active === 1 ? "yes" : "no-hide-descendants"
           }
         >
-          {children[1]}
-        </Animated.View>
-      </View>
+          <ShimmerLabel
+            active={shimmer && active === 1}
+            variant="body"
+            numberOfLines={1}
+            className={textClassName}
+          >
+            {slots[1]}
+          </ShimmerLabel>
+        </Reanimated.View>
+      </Reanimated.View>
     </View>
   );
 }

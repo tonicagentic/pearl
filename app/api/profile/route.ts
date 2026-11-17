@@ -55,6 +55,7 @@ function bodyToInput(body: Record<string, unknown>): ProfileFormInput {
     healthNotes: stringOrNull(body.healthNotes),
     primaryResidence: stringOrNull(body.primaryResidence),
     additionalHomes: stringOrNull(body.additionalHomes),
+    planPreferences: stringOrNull(body.planPreferences),
   };
 }
 

@@ -24,6 +24,10 @@ export type MeasurementParts = {
   readonly hips: string;
   readonly inseam: string;
   readonly shoe: string;
+  readonly shirt: string;
+  readonly pants: string;
+  readonly dress: string;
+  readonly jacket: string;
   readonly notes: string;
 };
 
@@ -148,6 +152,10 @@ const MEASUREMENT_KEYS = [
   "hips",
   "inseam",
   "shoe",
+  "shirt",
+  "pants",
+  "dress",
+  "jacket",
 ] as const;
 
 export function parseMeasurements(
@@ -159,6 +167,10 @@ export function parseMeasurements(
     hips: "",
     inseam: "",
     shoe: "",
+    shirt: "",
+    pants: "",
+    dress: "",
+    jacket: "",
     notes: "",
   };
   const raw = (stored ?? "").trim();
@@ -171,7 +183,10 @@ export function parseMeasurements(
   const leftover: string[] = [];
 
   for (const line of lines) {
-    const match = /^\s*(chest|waist|hips|inseam|shoe)\s*:\s*(.+)\s*$/i.exec(line);
+    const match =
+      /^\s*(chest|waist|hips|inseam|shoe|shirt|pants|dress|jacket)\s*:\s*(.+)\s*$/i.exec(
+        line,
+      );
     if (!match) {
       if (line.trim()) leftover.push(line.trim());
       continue;

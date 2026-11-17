@@ -9,7 +9,7 @@ const SKIP_TYPES = new Set(["message.received", "delivery.consumed"]);
 
 /**
  * First and last `meta.at` among events for `turnId` (data.turnId), skipping
- * user-side delivery markers. Used for live anchors and settled "Worked for".
+ * user-side delivery markers. Used for live anchors and settled duration.
  */
 export function turnEventSpan(
   events: readonly unknown[],

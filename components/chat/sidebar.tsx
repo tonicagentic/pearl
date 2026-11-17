@@ -115,7 +115,7 @@ export function ChatSidebar({
             }}
             type="button"
           >
-            <PearlIcon className="size-3.5 text-foreground" />
+            <PearlIcon className="size-6 text-foreground" />
           </button>
           {onToggleSidebar ? (
             <Button

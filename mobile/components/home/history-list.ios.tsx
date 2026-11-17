@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
 import {
   Button,
   ContextMenu,
@@ -7,7 +8,7 @@ import {
   HStack,
   Image,
   List,
-  RNHostView,
+  ProgressView,
   Section,
   Spacer,
   SwipeActions,
@@ -16,19 +17,23 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   buttonStyle,
+  clipped,
   font,
   foregroundStyle,
+  frame,
   lineLimit,
   listRowBackground,
   listRowInsets,
-  listRowSpacing,
   listStyle,
+  opacity,
   padding,
   scrollContentBackground,
+  scrollEdgeEffectStyle,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useCSSVariable } from "uniwind";
 
+import { EmptyChatsCard } from "@/components/home/empty-chats-card";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
@@ -38,31 +43,38 @@ import {
   chatListPresence,
 } from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
-import {
-  MATRIX_DOT_LOADER_SIZE,
-  MatrixDotLoader,
-} from "@/components/ui/matrix-dot-loader";
-
+import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
+
+/** Fixed leading slot so titles stay aligned with or without a presence mark. */
+const PRESENCE_SLOT = 14;
 
 export type { HistoryChatActionHandlers } from "@/components/home/history-list";
 
+/** Keep Recents short so the Projects group stays on the first screen. */
+const RECENT_PREVIEW_COUNT = 6;
+
 /**
- * iOS home: plain List with swipe delete + context menu actions.
+ * iOS home: inset-grouped List — Recents, then Projects — with swipe delete
+ * and context menu actions.
  */
 export function HistoryListIOS({
   onOpenChat,
   actions,
   bottomInset = 0,
+  onCreateProject,
 }: {
   readonly onOpenChat: () => void;
   readonly actions: HistoryChatActionHandlers;
   readonly bottomInset?: number;
+  /** Opens the shared new-project composer from the empty Projects row. */
+  readonly onCreateProject?: () => void;
 }) {
   const { signedIn } = useAuth();
   const {
     chats,
     chatsLoading,
+    chatsReady,
     chatsError,
     hasMoreChats,
     loadMoreChats,
@@ -74,35 +86,52 @@ export function HistoryListIOS({
     | string
     | undefined;
   const backgroundColor = pageBackground ?? "#FFFFFF";
-  const rowBackground = backgroundColor;
+  // Spacer rows stay clear so the composer clearance does not paint a card.
+  const clearRow = "#00000000";
   const mutedForeground = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
   const mutedColor = mutedForeground ?? "#8E8E93";
+  // Let insetGrouped own row fills; only pin insets for status/empty rows.
   const rowChrome = [
-    listRowBackground(rowBackground),
     listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
   ];
 
-  const [projectNames, setProjectNames] = useState<ReadonlyMap<string, string>>(
-    () => new Map(),
+  const [projects, setProjects] = useState<readonly ProjectDto[] | null>(null);
+  const [recentsExpanded, setRecentsExpanded] = useState(false);
+  const orderedProjects = useMemo(
+    () =>
+      [...(projects ?? [])].sort((a, b) =>
+        b.updatedAt.localeCompare(a.updatedAt),
+      ),
+    [projects],
   );
+  const projectNames = useMemo(
+    () => new Map(orderedProjects.map((project) => [project.id, project.name])),
+    [orderedProjects],
+  );
+  const visibleChats = useMemo(() => {
+    if (recentsExpanded || chats.length <= RECENT_PREVIEW_COUNT) return chats;
+    return chats.slice(0, RECENT_PREVIEW_COUNT);
+  }, [chats, recentsExpanded]);
+  const canExpandRecents =
+    !recentsExpanded && chats.length > RECENT_PREVIEW_COUNT;
 
-  useEffect(() => {
-    let cancelled = false;
-    void import("@/src/projects-client")
-      .then(({ fetchProjects }) => fetchProjects())
-      .then((projects) => {
-        if (cancelled) return;
-        setProjectNames(
-          new Map(projects.map((project) => [project.id, project.name])),
-        );
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void fetchProjects()
+        .then((rows) => {
+          if (!cancelled) setProjects(rows);
+        })
+        .catch(() => {
+          if (!cancelled) setProjects((current) => current ?? []);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   const openChat = useCallback(
     (chatId: string) => {
@@ -113,34 +142,73 @@ export function HistoryListIOS({
     [onOpenChat, selectChat],
   );
 
-  const emptyLabel = chatsLoading
-    ? "Loading history…"
-    : chatsError
-      ? "Couldn’t load history"
-      : signedIn
-        ? "No chats yet"
+  const showEmptyCard =
+    chatsReady &&
+    signedIn &&
+    chats.length === 0 &&
+    !chatsLoading &&
+    !chatsError &&
+    !selectionError;
+  const emptyLabel =
+    chatsLoading || (signedIn && !chatsReady)
+      ? "Loading history…"
+      : chatsError
+        ? "Couldn’t load history"
         : "Sign in to see chats";
+
+  // Show the Projects group once the fetch settles — empty state included —
+  // so it is not mistaken for a missing section.
+  const showProjects = projects !== null;
+
+  if (showEmptyCard && !showProjects) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor,
+          paddingBottom: bottomInset,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <EmptyChatsCard />
+      </View>
+    );
+  }
 
   return (
     <View
       style={{
         flex: 1,
+        // Pearl background shows through the inset-grouped cards; hiding the
+        // system list chrome avoids iOS's default grouped gray.
         backgroundColor,
-        paddingBottom: bottomInset,
         // Keep SwiftUI List drawing inside this flex slot — viewport
-        // measurement made the Host paint over the pills / header above.
+        // measurement made the Host paint over the header above.
         overflow: "hidden",
       }}
     >
+      {showEmptyCard ? (
+        <View
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 28,
+          }}
+        >
+          <EmptyChatsCard />
+        </View>
+      ) : null}
       <Host style={{ flex: 1, backgroundColor }}>
         <List
           modifiers={[
-            listStyle("plain"),
+            listStyle("insetGrouped"),
             scrollContentBackground("hidden"),
-            listRowSpacing(0),
+            scrollEdgeEffectStyle("soft"),
           ]}
         >
-          <Section>
+          {showEmptyCard ? null : (
+          <Section title="Recents">
             {selectionError ? (
               <SwiftText
                 modifiers={[
@@ -172,15 +240,15 @@ export function HistoryListIOS({
               </SwiftText>
             ) : (
               <List.ForEach
-                data={chats}
+                data={visibleChats}
                 keyExtractor={(chat) => chat.id}
                 estimatedItemSize={64}
+                recycling={false}
               >
                 {({ item: chat }) => (
                   <RecentChatRow
                     chat={chat}
                     mutedColor={mutedColor}
-                    rowBackground={rowBackground}
                     projectName={
                       chat.projectId
                         ? (projectNames.get(chat.projectId) ?? "Project")
@@ -193,7 +261,13 @@ export function HistoryListIOS({
               </List.ForEach>
             )}
 
-            {hasMoreChats ? (
+            {canExpandRecents ? (
+              <Button
+                label="Show more"
+                onPress={() => setRecentsExpanded(true)}
+                modifiers={[buttonStyle("plain"), ...rowChrome]}
+              />
+            ) : hasMoreChats ? (
               <Button
                 label={chatsLoading ? "Loading…" : "Load more"}
                 onPress={() => void loadMoreChats()}
@@ -201,23 +275,144 @@ export function HistoryListIOS({
               />
             ) : null}
           </Section>
+          )}
+          {showProjects ? (
+            <Section
+              header={
+                <HStack alignment="center">
+                  <SwiftText
+                    modifiers={[
+                      font({ size: 13 }),
+                      foregroundStyle({
+                        type: "hierarchical",
+                        style: "secondary",
+                      }),
+                    ]}
+                  >
+                    Projects
+                  </SwiftText>
+                  <Spacer />
+                  {onCreateProject ? (
+                    <Button
+                      onPress={onCreateProject}
+                      modifiers={[buttonStyle("plain")]}
+                    >
+                      <Image
+                        systemName="plus"
+                        size={14}
+                        modifiers={[tint(mutedColor)]}
+                      />
+                    </Button>
+                  ) : null}
+                </HStack>
+              }
+            >
+              {orderedProjects.length === 0 ? (
+                onCreateProject ? (
+                  <Button
+                    label="New Project"
+                    systemImage="folder.badge.plus"
+                    onPress={onCreateProject}
+                    modifiers={[buttonStyle("plain"), ...rowChrome]}
+                  />
+                ) : (
+                  <SwiftText
+                    modifiers={[
+                      foregroundStyle({
+                        type: "hierarchical",
+                        style: "secondary",
+                      }),
+                      font({ size: 15 }),
+                      ...rowChrome,
+                    ]}
+                  >
+                    No projects yet
+                  </SwiftText>
+                )
+              ) : (
+                <List.ForEach
+                  data={orderedProjects}
+                  keyExtractor={(project) => project.id}
+                  estimatedItemSize={52}
+                  recycling={false}
+                >
+                  {({ item: project }) => (
+                    <ProjectRow project={project} mutedColor={mutedColor} />
+                  )}
+                </List.ForEach>
+              )}
+            </Section>
+          ) : null}
+          {bottomInset > 0 ? (
+            <Section>
+              <HStack
+                modifiers={[
+                  frame({ height: bottomInset, maxWidth: 9999 }),
+                  listRowBackground(clearRow),
+                  listRowInsets({
+                    top: 0,
+                    bottom: 0,
+                    leading: 0,
+                    trailing: 0,
+                  }),
+                ]}
+              />
+            </Section>
+          ) : null}
         </List>
       </Host>
     </View>
   );
 }
 
+function ProjectRow({
+  project,
+  mutedColor,
+}: {
+  readonly project: ProjectDto;
+  readonly mutedColor: string;
+}) {
+  return (
+    <Button
+      onPress={() =>
+        router.push(`/projects/${encodeURIComponent(project.id)}`)
+      }
+      modifiers={[
+        buttonStyle("plain"),
+        listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
+      ]}
+    >
+      <HStack
+        spacing={12}
+        alignment="center"
+        modifiers={[padding({ vertical: 2 })]}
+      >
+        <Image
+          systemName="folder.fill"
+          size={14}
+          modifiers={[
+            frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
+            tint(mutedColor),
+          ]}
+        />
+        <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
+          {project.name}
+        </SwiftText>
+        <Spacer />
+      </HStack>
+    </Button>
+  );
+}
+
 function RecentChatRow({
   chat,
   mutedColor,
-  rowBackground,
   projectName,
   onOpen,
   actions,
 }: {
   readonly chat: ChatListItem;
   readonly mutedColor: string;
-  readonly rowBackground: string;
   readonly projectName: string | null;
   readonly onOpen: () => void;
   readonly actions: HistoryChatActionHandlers;
@@ -231,31 +426,29 @@ function RecentChatRow({
       : presence === "unread"
         ? CHAT_PRESENCE_BLUE
         : null;
-  const statusMark = (
-    <RNHostView matchContents>
-      <View
-        style={{
-          width: MATRIX_DOT_LOADER_SIZE,
-          height: MATRIX_DOT_LOADER_SIZE,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {presence === "working" ? (
-          <MatrixDotLoader
-            baseColor={mutedColor}
-            activeColor={CHAT_PRESENCE_BLUE}
-          />
-        ) : markTint ? (
-          <Image
-            systemName="circle.fill"
-            size={8}
-            modifiers={[tint(markTint)]}
-          />
-        ) : null}
-      </View>
-    </RNHostView>
-  );
+  // Stay in SwiftUI. A React Native host (and a Reanimated pulse inside it)
+  // remeasures the row every frame, so after popping a thread the list goes
+  // sluggish and stops taking taps.
+  const statusMark =
+    presence === "working" ? (
+      <ProgressView
+        modifiers={[
+          frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
+          clipped(true),
+          tint(mutedColor),
+        ]}
+      />
+    ) : (
+      <Image
+        systemName="circle.fill"
+        size={8}
+        modifiers={[
+          frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
+          tint(markTint ?? mutedColor),
+          opacity(markTint ? 1 : 0),
+        ]}
+      />
+    );
   const row = (
     <Button onPress={onOpen} modifiers={[buttonStyle("plain")]}>
       <HStack
@@ -269,15 +462,25 @@ function RecentChatRow({
             {chat.title}
           </SwiftText>
           {projectName ? (
-            <SwiftText
-              modifiers={[
-                lineLimit(1),
-                font({ size: 12 }),
-                foregroundStyle({ type: "hierarchical", style: "secondary" }),
-              ]}
-            >
-              {projectName}
-            </SwiftText>
+            <HStack spacing={4} alignment="center">
+              <Image
+                systemName="folder.fill"
+                size={11}
+                modifiers={[tint(mutedColor)]}
+              />
+              <SwiftText
+                modifiers={[
+                  lineLimit(1),
+                  font({ size: 12 }),
+                  foregroundStyle({
+                    type: "hierarchical",
+                    style: "secondary",
+                  }),
+                ]}
+              >
+                {projectName}
+              </SwiftText>
+            </HStack>
           ) : null}
         </VStack>
         <Spacer />
@@ -298,7 +501,6 @@ function RecentChatRow({
   return (
     <SwipeActions
       modifiers={[
-        listRowBackground(rowBackground),
         listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
       ]}
     >
@@ -335,6 +537,13 @@ function RecentChatRow({
           />
         </ContextMenu.Items>
       </ContextMenu>
+      <SwipeActions.Actions edge="leading">
+        <Button
+          label={projectId ? "Move" : "Project"}
+          systemImage={projectId ? "folder" : "folder.badge.plus"}
+          onPress={() => actions.onMoveToProject(chat)}
+        />
+      </SwipeActions.Actions>
       <SwipeActions.Actions edge="trailing" allowsFullSwipe>
         <Button
           label="Delete"

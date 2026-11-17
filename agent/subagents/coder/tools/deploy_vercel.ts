@@ -31,7 +31,8 @@ export default defineTool({
     "Deploy the current sandbox checkout to the signed-in user's Vercel " +
     "account. Preview is the default; production only when target is " +
     "production. Always needs approval — the card must name owner/repo and " +
-    "the target. Production deploy and eas_update are always separate " +
+    "the target. Production deploy and Expo build or workflow runs are " +
+    "always separate " +
     "approvals. When owner/repo is Pearl (alex/my-agent), production warns " +
     "that the phone API will change.",
   inputSchema: z.object({

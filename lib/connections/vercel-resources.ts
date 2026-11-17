@@ -409,6 +409,12 @@ export async function listAllVercelResources(args: {
   );
   stores.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 
+  if (context.teamsTruncated) {
+    truncated.domains = true;
+    truncated.integrations = true;
+    truncated.stores = true;
+  }
+
   return {
     connected: true,
     username: context.username,

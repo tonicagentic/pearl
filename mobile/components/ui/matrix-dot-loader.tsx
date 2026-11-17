@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AccessibilityInfo, View, type ViewStyle } from "react-native";
 import Animated, {
   Easing,
+  interpolateColor,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -124,43 +125,21 @@ function MatrixDot({
     );
   }, [delayMs, progress]);
 
+  // Color mix has to stay inside the worklet. Calling a JS helper from
+  // useAnimatedStyle throws on the UI runtime and takes the app down.
   const style = useAnimatedStyle(() => {
-    const t = progress.value;
-    const r = mixChannel(baseColor, activeColor, t, 0);
-    const g = mixChannel(baseColor, activeColor, t, 1);
-    const b = mixChannel(baseColor, activeColor, t, 2);
     return {
       width: DOT,
       height: DOT,
-      backgroundColor: `rgb(${r},${g},${b})`,
+      backgroundColor: interpolateColor(
+        progress.value,
+        [0, 1],
+        [baseColor, activeColor],
+      ),
     };
   }, [baseColor, activeColor]);
 
   return <Animated.View style={style} />;
-}
-
-function mixChannel(
-  fromHex: string,
-  toHex: string,
-  t: number,
-  channel: 0 | 1 | 2,
-): number {
-  const a = hexChannel(fromHex, channel);
-  const b = hexChannel(toHex, channel);
-  return Math.round(a + (b - a) * Math.min(1, Math.max(0, t)));
-}
-
-function hexChannel(hex: string, channel: 0 | 1 | 2): number {
-  const raw = hex.replace("#", "");
-  const full =
-    raw.length === 3
-      ? raw
-          .split("")
-          .map((c) => c + c)
-          .join("")
-      : raw;
-  const value = Number.parseInt(full.slice(channel * 2, channel * 2 + 2), 16);
-  return Number.isFinite(value) ? value : 0;
 }
 
 /** Layout slot matching the matrix so idle/waiting/unread columns align. */

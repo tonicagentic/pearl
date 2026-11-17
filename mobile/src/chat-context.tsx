@@ -18,6 +18,11 @@ import {
 
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
 import { beginStreamTrace, traceStream } from "./stream-trace";
+import {
+  clearLiveReplyText,
+  pushLiveReplyDelta,
+  reconcileLiveReplyWithSnapshot,
+} from "./live-reply-text";
 import { pendingMessageLabel, hasPendingAction } from "./message-projection";
 import type { LiveSpokenDraft, SpokenTurn } from "../../lib/chat/spoken-turns";
 import {
@@ -49,6 +54,30 @@ const RETAINED_STORE_LIMIT = 10;
 const PRESENCE_POLL_MS = 5_000;
 /** Faster backstop while any Recents row is live. */
 const PRESENCE_POLL_ACTIVE_MS = 1_500;
+
+/** Row fields the recents list actually renders. A new array with the same
+ * rows still rebuilds the SwiftUI list, so unchanged polls must keep identity. */
+function sameChatRows(
+  current: readonly ChatListItem[],
+  next: readonly ChatListItem[],
+): boolean {
+  if (current.length !== next.length) return false;
+  for (let i = 0; i < current.length; i += 1) {
+    const a = current[i]!;
+    const b = next[i]!;
+    if (
+      a.id !== b.id ||
+      a.title !== b.title ||
+      a.updatedAt !== b.updatedAt ||
+      (a.projectId ?? null) !== (b.projectId ?? null) ||
+      (a.presence ?? "idle") !== (b.presence ?? "idle") ||
+      Boolean(a.waitingForInput) !== Boolean(b.waitingForInput)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /** True when newly appended events can open or close a person-wait. */
 function eventsMayChangeWait(
@@ -84,6 +113,8 @@ type ChatsContextValue = {
   readonly activeTitle: string;
   readonly chats: readonly ChatListItem[];
   readonly chatsLoading: boolean;
+  /** True after the first history fetch settles, even if the list mounts later. */
+  readonly chatsReady: boolean;
   readonly chatsError: string | null;
   readonly hasMoreChats: boolean;
   readonly loadMoreChats: () => Promise<void>;
@@ -189,6 +220,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const [chats, setChats] = useState<readonly ChatListItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [chatsLoading, setChatsLoading] = useState(false);
+  const [chatsReady, setChatsReady] = useState(false);
   const [chatsError, setChatsError] = useState<string | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
@@ -260,8 +292,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   );
 
   const buildStore = useCallback((chat: ActiveChat | null) => {
-    // Do not replay saved pre-v27 events as initialEvents — open the stored
-    // session and resume() so the server upconverts older history.
+    // Hydrate from saved events so reopening paints the transcript immediately
+    // (same as web). resume() then only catches up past that prefix — without
+    // initialEvents, resume replayed history live and paced word-by-word.
     const store = new SessionStore({
       baseUrl: AGENT_URL,
       // Follow coder / researcher / etc. child sessions so their approvals and
@@ -271,6 +304,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         const credential = getAuthCookie();
         return credential ? { authorization: `Bearer ${credential}` } : ({} as Record<string, string>);
       },
+      ...(chat?.events?.length
+        ? { initialEvents: chat.events }
+        : {}),
       ...(chat?.session
         ? { initialSession: chat.session as ClientSessionState }
         : {}),
@@ -304,7 +340,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       const page = await listChats(null);
       setChats((current) => {
         if (!silent || current.length === 0) {
-          return page.chats;
+          return sameChatRows(current, page.chats) ? current : page.chats;
         }
         // Merge page-1 into any already-loaded pages so a presence poll or
         // turn-end snapshot does not drop history the user scrolled into.
@@ -321,7 +357,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           merged.push(updated ?? chat);
           seen.add(chat.id);
         }
-        return merged;
+        // A new array rebuilds the SwiftUI list and drops taps. Keep the
+        // previous rows when titles, presence, and order did not change.
+        return sameChatRows(current, merged) ? current : merged;
       });
       // Only reset the cursor on a full replace; silent merges keep pagination.
       if (!silent) {
@@ -335,6 +373,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       setChatsError("Could not load history. Check your connection and retry.");
     } finally {
       if (!silent) setChatsLoading(false);
+      // The chats list can mount after this fetch (billing gate). A loading
+      // edge the list itself never saw must not keep the empty state hidden.
+      setChatsReady(true);
     }
   }, []);
 
@@ -416,9 +457,28 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     store.setCallbacks({
       onEvent: (event) => {
         if (event.type === "content.delta") {
-          const delta = event.data.delta;
-          if (typeof delta === "string") traceStream("delta", delta.length);
+          const data = event.data as {
+            readonly delta?: unknown;
+            readonly partId?: unknown;
+            readonly kind?: unknown;
+          };
+          const delta = data.delta;
+          if (typeof delta === "string") {
+            traceStream("delta", delta.length);
+            if (typeof data.partId === "string") {
+              pushLiveReplyDelta({
+                turnId:
+                  typeof event.scope?.turnId === "string"
+                    ? event.scope.turnId
+                    : undefined,
+                partId: data.partId,
+                kind: typeof data.kind === "string" ? data.kind : undefined,
+                delta,
+              });
+            }
+          }
         } else if (event.type === "turn.settled") {
+          clearLiveReplyText();
           traceStream("settled");
         }
         if (!binding.id) return;
@@ -559,9 +619,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     return () => {
       flush();
       const stillWorking =
-        store.snapshot.status === "busy" ||
-        store.snapshot.status === "resuming" ||
-        Boolean(binding.pendingMessage);
+        store.snapshot.status === "busy" || Boolean(binding.pendingMessage);
       if (stillWorking) {
         // Warm path: keep observe()+callbacks so the transcript keeps syncing
         // while the user is in another chat. Presence also comes from the
@@ -583,9 +641,11 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           lastEvents = events;
           const chatId = binding.id;
           if (chatId) {
+            // "resuming" is history catch-up, not a live turn. Painting it as
+            // working mounts a spinner on the row under the open thread.
             patchChatPresence(
               chatId,
-              waiting ? "waiting" : busy ? "working" : "idle",
+              waiting ? "waiting" : status === "busy" ? "working" : "idle",
             );
           }
           if (busy && !waiting) return;
@@ -972,7 +1032,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       lastEvents = events;
       const presence: ChatPresence = waiting
         ? "waiting"
-        : busy
+        : status === "busy"
           ? "working"
           : "idle";
       // A turn that just finished while this chat is open stays read.
@@ -1064,6 +1124,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       activeTitle,
       chats,
       chatsLoading,
+      chatsReady,
       chatsError,
       hasMoreChats: cursor !== null,
       loadMoreChats,
@@ -1093,6 +1154,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       activeTitle,
       chats,
       chatsLoading,
+      chatsReady,
       chatsError,
       cursor,
       loadMoreChats,

@@ -31,6 +31,9 @@ config.resolver.extraNodeModules = {
   ),
   // Same hierarchical-lookup gap as @json-render: `../lib` imports `eve/client`.
   eve: path.resolve(mobileNodeModules, "eve"),
+  // `../lib/streaming-text-reveal` imports `react`; resolve from mobile, not the
+  // web root (adding root node_modules breaks native ExpoAsset).
+  react: path.resolve(mobileNodeModules, "react"),
 };
 
 // uniwind styles React Native components by redirecting every

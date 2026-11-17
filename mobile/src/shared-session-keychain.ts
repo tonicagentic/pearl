@@ -15,6 +15,7 @@ let cachedKeychain: KeychainModule | null | undefined;
 function loadKeychain(): KeychainModule | null {
   if (cachedKeychain !== undefined) return cachedKeychain;
 
+  // Expo Go has no RNKeychainManager; importing the package would crash auth.
   if (
     !NativeModules.RNKeychainManager &&
     !(NativeModules as { RNKeychain?: unknown }).RNKeychain
@@ -66,9 +67,12 @@ export async function readSharedSessionToken(): Promise<string | null> {
   const options = keychainOptions(Keychain);
   if (!options) return null;
   try {
-    const credentials = await Keychain.getGenericPassword(options);
-    if (!credentials) return null;
-    return credentials.password || null;
+    const result = await Keychain.getGenericPassword({
+      service: options.service,
+      accessGroup: options.accessGroup,
+    });
+    if (!result) return null;
+    return result.password || null;
   } catch {
     return null;
   }
@@ -80,7 +84,10 @@ export async function clearSharedSessionToken(): Promise<void> {
   const options = keychainOptions(Keychain);
   if (!options) return;
   try {
-    await Keychain.resetGenericPassword(options);
+    await Keychain.resetGenericPassword({
+      service: options.service,
+      accessGroup: options.accessGroup,
+    });
   } catch {
     // ignore
   }

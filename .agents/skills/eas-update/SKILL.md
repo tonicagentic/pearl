@@ -36,7 +36,7 @@ Typical current mapping (verify before each publish; it drifts):
 
 | Install / channel | Profile (`eas.json`) | Runtime to publish |
 | ----------------- | -------------------- | ------------------ |
-| Internal preview  | `preview` → channel `preview` | whatever that preview IPA was built with (often `0.1.0-alpha.6`) |
+| Internal preview  | `preview` → channel `preview` | whatever that preview IPA was built with (often `0.1.0-alpha.7`) |
 | Store / prod binary | `production` → channel `production` | whatever that production IPA was built with (may differ from preview) |
 
 Preview and production can have **different** runtimes. Publishing once with

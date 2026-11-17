@@ -8,7 +8,7 @@
 export type PearlLane = "voice" | "tools" | "analysis" | "think";
 
 export const PEARL_LANE_LABELS: Record<PearlLane, string> = {
-  voice: "Thinking",
+  voice: "Planning next moves",
   tools: "Checking your tools",
   analysis: "Reading the notes",
   think: "Thinking this through",
@@ -89,7 +89,11 @@ export function laneNeedsImageSurface(
   lane: PearlLane | null,
   turnText: string,
 ): boolean {
-  if (/\b(image|illustration|logo|svg|icon|poster|graphic)\b/i.test(turnText)) {
+  if (
+    /\b(image|illustration|logo|svg|icon|poster|graphic|photo|photograph|picture|drawing)\b/i.test(
+      turnText,
+    )
+  ) {
     return true;
   }
   return lane === null;

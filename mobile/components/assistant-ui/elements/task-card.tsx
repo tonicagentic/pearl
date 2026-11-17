@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { Ban, CheckIcon, Loader2, XIcon } from "lucide-react-native";
-import { Pressable, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
+import Animated from "react-native-reanimated";
 
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
-import { mono, paper } from "./surfaces";
+import { mono, paper, stepEnter, useMotion } from "./surfaces";
 
 // RN port of the web task-card element (components/assistant-ui/elements/
 // task-card.tsx): a compact status row for delegated subagent work, with an
@@ -115,8 +116,11 @@ export function TaskCard({
   readonly className?: string;
   readonly onPress?: () => void;
 }) {
+  const motion = useMotion();
+  const nativeMotion = motion && Platform.OS !== "web";
   return (
-    <View
+    <Animated.View
+      entering={nativeMotion ? stepEnter : undefined}
       className={cn(
         paper,
         "w-full flex-col overflow-hidden rounded-2xl",
@@ -142,6 +146,6 @@ export function TaskCard({
           )}
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 }

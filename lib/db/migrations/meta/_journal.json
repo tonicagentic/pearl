@@ -215,8 +215,29 @@
     {
       "idx": 33,
       "version": "7",
-      "when": 1794862500667,
-      "tag": "0033_issue_project",
+      "when": 1795300000000,
+      "tag": "0033_plan_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795400000000,
+      "tag": "0034_anonymous_users",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1794850116129,
+      "tag": "0035_even_hellfire_club",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1794956678693,
+      "tag": "0037_stormy_vin_gonzales",
       "breakpoints": true
     }
   ]

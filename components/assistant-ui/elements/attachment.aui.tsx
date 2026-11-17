@@ -2,9 +2,13 @@
 
 import {
   type PropsWithChildren,
+  useCallback,
+  useEffect,
   useState,
   type FC,
   isValidElement,
+  type MouseEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
   XIcon,
@@ -62,6 +66,7 @@ const AttachmentPreview: FC<AttachmentPreviewProps> = ({ src }) => {
   );
 };
 
+/** Message-only image dialog; composer opens the staged file in a new tab. */
 const AttachmentPreviewDialog: FC<PropsWithChildren> = ({ children }) => {
   const src = useAttachmentSrc();
 
@@ -108,6 +113,154 @@ const AttachmentThumb: FC = () => {
   );
 };
 
+/**
+ * Object URL for any staged File (image, PDF, text). Separate from the image
+ * thumb hook so non-image composer chips can still open a native browser tab.
+ */
+function useAttachmentFileObjectUrl(): string | undefined {
+  const file = useAuiState((s) =>
+    s.attachment.file instanceof File ? s.attachment.file : undefined,
+  );
+  const [entry, setEntry] = useState<{ file: File; url: string } | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    if (!file) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEntry(undefined);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setEntry({ file, url: objectUrl });
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [file]);
+
+  return entry !== undefined && entry.file === file ? entry.url : undefined;
+}
+
+function useComposerPreviewUrl(): string | undefined {
+  const objectUrl = useAttachmentFileObjectUrl();
+  const imageSrc = useAttachmentSrc();
+  return objectUrl ?? imageSrc;
+}
+
+const ComposerAttachmentTile: FC<{
+  typeLabel: string;
+  isUploading: boolean;
+  isError: boolean;
+}> = ({ typeLabel, isUploading, isError }) => {
+  const previewUrl = useComposerPreviewUrl();
+  const name = useAuiState((s) => s.attachment.name);
+
+  const openPreview = useCallback(
+    (event?: MouseEvent | ReactKeyboardEvent) => {
+      event?.preventDefault();
+      event?.stopPropagation();
+      if (!previewUrl) return;
+      window.open(previewUrl, "_blank", "noopener,noreferrer");
+    },
+    [previewUrl],
+  );
+
+  return (
+    <div
+      className={cn(
+        "aui-attachment-tile bg-muted hover:after:bg-foreground/10 focus-visible:ring-ring/50 relative size-14 cursor-pointer overflow-hidden rounded-[calc(var(--composer-radius,1.5rem)-var(--composer-padding,8px))] transition-transform outline-none after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:ring-1 after:ring-border after:transition-colors after:ring-inset focus-visible:ring-1 active:scale-[0.96] motion-reduce:transition-none",
+        isError && "after:ring-destructive/60 dark:after:ring-destructive/60",
+        !previewUrl && "cursor-default",
+      )}
+      role="button"
+      tabIndex={0}
+      onClick={openPreview}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          openPreview(e);
+        } else if (e.key === " ") {
+          e.preventDefault();
+        }
+      }}
+      onKeyUp={(e) => {
+        if (e.key === " ") openPreview(e);
+      }}
+      aria-label={
+        previewUrl
+          ? `Preview ${name || typeLabel} attachment`
+          : `${typeLabel} attachment${
+              isError ? ", upload failed" : isUploading ? ", uploading" : ""
+            }`
+      }
+    >
+      <AttachmentThumb />
+      {isUploading && (
+        <div
+          aria-hidden="true"
+          className="aui-attachment-tile-uploading bg-background/60 animate-in fade-in-0 absolute inset-0 flex items-center justify-center backdrop-blur-[2px] motion-reduce:animate-none"
+        >
+          <Loader2Icon className="text-muted-foreground size-4 animate-spin" />
+        </div>
+      )}
+      {isError && (
+        <div
+          aria-hidden="true"
+          className="aui-attachment-tile-error bg-background/70 animate-in fade-in-0 absolute inset-0 flex items-center justify-center backdrop-blur-[2px] motion-reduce:animate-none"
+        >
+          <AlertCircleIcon className="text-destructive size-4" />
+        </div>
+      )}
+    </div>
+  );
+};
+
+const MessageAttachmentTile: FC<{
+  typeLabel: string;
+  isUploading: boolean;
+  isError: boolean;
+}> = ({ typeLabel, isUploading, isError }) => (
+  <div
+    className={cn(
+      "aui-attachment-tile bg-muted hover:after:bg-foreground/10 focus-visible:ring-ring/50 relative size-14 cursor-pointer overflow-hidden rounded-[calc(var(--composer-radius,1.5rem)-var(--composer-padding,8px))] transition-transform outline-none after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:ring-1 after:ring-border after:transition-colors after:ring-inset focus-visible:ring-1 active:scale-[0.96] motion-reduce:transition-none",
+      isError && "after:ring-destructive/60 dark:after:ring-destructive/60",
+    )}
+    role="button"
+    tabIndex={0}
+    onKeyDown={(e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        e.currentTarget.click();
+      } else if (e.key === " ") {
+        e.preventDefault();
+      }
+    }}
+    onKeyUp={(e) => {
+      if (e.key === " ") e.currentTarget.click();
+    }}
+    aria-label={`${typeLabel} attachment${
+      isError ? ", upload failed" : isUploading ? ", uploading" : ""
+    }`}
+  >
+    <AttachmentThumb />
+    {isUploading && (
+      <div
+        aria-hidden="true"
+        className="aui-attachment-tile-uploading bg-background/60 animate-in fade-in-0 absolute inset-0 flex items-center justify-center backdrop-blur-[2px] motion-reduce:animate-none"
+      >
+        <Loader2Icon className="text-muted-foreground size-4 animate-spin" />
+      </div>
+    )}
+    {isError && (
+      <div
+        aria-hidden="true"
+        className="aui-attachment-tile-error bg-background/70 animate-in fade-in-0 absolute inset-0 flex items-center justify-center backdrop-blur-[2px] motion-reduce:animate-none"
+      >
+        <AlertCircleIcon className="text-destructive size-4" />
+      </div>
+    )}
+  </div>
+);
+
 const AttachmentUI: FC = () => {
   const aui = useAui();
   const isComposer = aui.attachment.source !== "message";
@@ -145,6 +298,20 @@ const AttachmentUI: FC = () => {
       : undefined,
   );
 
+  const tile = isComposer ? (
+    <ComposerAttachmentTile
+      typeLabel={typeLabel}
+      isUploading={isUploading}
+      isError={isError}
+    />
+  ) : (
+    <MessageAttachmentTile
+      typeLabel={typeLabel}
+      isUploading={isUploading}
+      isError={isError}
+    />
+  );
+
   return (
     <TooltipProvider>
       <Tooltip>
@@ -158,51 +325,13 @@ const AttachmentUI: FC = () => {
               "aui-attachment-root-message only:*:first:size-24",
           )}
         >
-          <AttachmentPreviewDialog>
-            <TooltipTrigger asChild>
-              <div
-                className={cn(
-                  "aui-attachment-tile bg-muted hover:after:bg-foreground/10 focus-visible:ring-ring/50 relative size-14 cursor-pointer overflow-hidden rounded-[calc(var(--composer-radius,1.5rem)-var(--composer-padding,8px))] transition-transform outline-none after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:ring-1 after:ring-border after:transition-colors after:ring-inset focus-visible:ring-1 active:scale-[0.96] motion-reduce:transition-none",
-                  isError &&
-                    "after:ring-destructive/60 dark:after:ring-destructive/60",
-                )}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    e.currentTarget.click();
-                  } else if (e.key === " ") {
-                    e.preventDefault();
-                  }
-                }}
-                onKeyUp={(e) => {
-                  if (e.key === " ") e.currentTarget.click();
-                }}
-                aria-label={`${typeLabel} attachment${
-                  isError ? ", upload failed" : isUploading ? ", uploading" : ""
-                }`}
-              >
-                <AttachmentThumb />
-                {isUploading && (
-                  <div
-                    aria-hidden="true"
-                    className="aui-attachment-tile-uploading bg-background/60 animate-in fade-in-0 absolute inset-0 flex items-center justify-center backdrop-blur-[2px] motion-reduce:animate-none"
-                  >
-                    <Loader2Icon className="text-muted-foreground size-4 animate-spin" />
-                  </div>
-                )}
-                {isError && (
-                  <div
-                    aria-hidden="true"
-                    className="aui-attachment-tile-error bg-background/70 animate-in fade-in-0 absolute inset-0 flex items-center justify-center backdrop-blur-[2px] motion-reduce:animate-none"
-                  >
-                    <AlertCircleIcon className="text-destructive size-4" />
-                  </div>
-                )}
-              </div>
-            </TooltipTrigger>
-          </AttachmentPreviewDialog>
+          {isComposer ? (
+            <TooltipTrigger asChild>{tile}</TooltipTrigger>
+          ) : (
+            <AttachmentPreviewDialog>
+              <TooltipTrigger asChild>{tile}</TooltipTrigger>
+            </AttachmentPreviewDialog>
+          )}
           {isComposer && <AttachmentRemove />}
         </AttachmentPrimitive.Root>
         <TooltipContent side="top">
@@ -221,8 +350,13 @@ const AttachmentRemove: FC = () => {
     <AttachmentPrimitive.Remove asChild>
       <TooltipIconButton
         tooltip="Remove file"
-        className="aui-attachment-tile-remove absolute end-1 top-1 size-5 rounded-full bg-foreground/60! text-background after:absolute after:-inset-1.5 hover:bg-foreground/75! hover:text-background! active:scale-[0.96] motion-reduce:transition-none"
+        // Sit outside the tile (no expanded hit area over the thumbnail) so
+        // preview clicks never remove the attachment.
+        className="aui-attachment-tile-remove absolute -end-1.5 -top-1.5 z-10 size-5 rounded-full bg-foreground text-background hover:bg-foreground/90 hover:text-background active:scale-[0.96] motion-reduce:transition-none"
         side="top"
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
       >
         <XIcon className="aui-attachment-remove-icon size-3 stroke-[2.5]" />
       </TooltipIconButton>

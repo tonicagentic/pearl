@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  CONNECTION_BETTERSTACK_ALLOWLIST,
+  CONNECTION_BETTERSTACK_DIAGNOSTIC_TOOLS,
   CONNECTION_COMPOSE_ALLOWLISTS,
+  CONNECTION_EXPO_ALLOWLIST,
+  CONNECTION_EXPO_DIAGNOSTIC_TOOLS,
+  CONNECTION_NEON_ALLOWLIST,
+  CONNECTION_NEON_DIAGNOSTIC_TOOLS,
   CONNECTION_READONLY_ALLOWLISTS,
   CONNECTION_SHEETS_ALLOWLIST,
   CONNECTION_TEMPO_ALLOWLIST,
@@ -23,8 +29,11 @@ import {
   isConnectionId,
 } from "../lib/connections/catalog.ts";
 import {
+  BETTERSTACK_OAUTH_SCOPES,
+  EXPO_OAUTH_SCOPES,
   GITHUB_OAUTH_SCOPES,
   GMAIL_OAUTH_SCOPES,
+  NEON_OAUTH_SCOPES,
   SHEETS_OAUTH_SCOPES,
   XERO_OAUTH_SCOPES,
   connectionTokenParams,
@@ -37,12 +46,18 @@ test("only fixed provider ids are accepted", () => {
     "drive",
     "github",
     "vercel",
+    "expo",
+    "neon",
+    "betterstack",
     "xero",
     "tempo",
     "sheets",
   ]);
   assert.equal(isConnectionId("github"), true);
   assert.equal(isConnectionId("gmail"), true);
+  assert.equal(isConnectionId("expo"), true);
+  assert.equal(isConnectionId("neon"), true);
+  assert.equal(isConnectionId("betterstack"), true);
   assert.equal(isConnectionId("xero"), true);
   assert.equal(isConnectionId("notion"), false);
   assert.equal(isConnectionId("other"), false);
@@ -93,6 +108,25 @@ test("opt-in Google, GitHub, Vercel, and Xero need connector env vars", () => {
       .connector,
     "vercel/test",
   );
+  assert.equal(connectionConfiguration("expo", {}).connector, null);
+  assert.equal(
+    connectionConfiguration("expo", { EXPO_CONNECTOR: "expo/pearl-expo" })
+      .connector,
+    "expo/pearl-expo",
+  );
+  assert.equal(connectionConfiguration("neon", {}).connector, null);
+  assert.equal(
+    connectionConfiguration("neon", { NEON_CONNECTOR: "mcp.neon.tech/pearl-neon" })
+      .connector,
+    "mcp.neon.tech/pearl-neon",
+  );
+  assert.equal(connectionConfiguration("betterstack", {}).connector, null);
+  assert.equal(
+    connectionConfiguration("betterstack", {
+      BETTERSTACK_CONNECTOR: "mcp.betterstack.com/pearl-betterstack",
+    }).connector,
+    "mcp.betterstack.com/pearl-betterstack",
+  );
   assert.equal(connectionConfiguration("xero", {}).connector, null);
   assert.equal(
     connectionConfiguration("xero", { XERO_CONNECTOR: "xero/pearl-xero" })
@@ -133,7 +167,7 @@ test("read-only allowlists exclude write and log tools", () => {
   assert.equal(looksLikeWriteOrLogTool("list-profit-and-loss"), false);
 });
 
-test("read-only Gmail allowlist stays free of writes; compose adds drafts and labels", () => {
+test("read-only Gmail allowlist stays free of create_draft; compose list adds writes", () => {
   assert.equal(
     CONNECTION_READONLY_ALLOWLISTS.gmail.includes("create_draft"),
     false,
@@ -172,6 +206,86 @@ test("Sheets and Tempo write tools are the ones that need approval", () => {
       );
     assert.equal(isRead, !looksWrite, `${name} is misclassified`);
   }
+});
+
+test("Expo allowlist splits reads, diagnostics, and approval-gated writes", () => {
+  for (const name of CONNECTION_READONLY_ALLOWLISTS.expo) {
+    assert.equal(
+      looksLikeWriteOrLogTool(name),
+      false,
+      `expo readonly includes write/log tool ${name}`,
+    );
+    assert.equal(CONNECTION_WRITE_TOOLS.expo.includes(name), false, name);
+  }
+  for (const name of CONNECTION_EXPO_DIAGNOSTIC_TOOLS) {
+    assert.ok(looksLikeWriteOrLogTool(name), name);
+    assert.ok(CONNECTION_EXPO_ALLOWLIST.includes(name), name);
+    assert.equal(
+      CONNECTION_READONLY_ALLOWLISTS.expo.includes(name),
+      false,
+      name,
+    );
+  }
+  for (const name of CONNECTION_WRITE_TOOLS.expo) {
+    assert.ok(CONNECTION_EXPO_ALLOWLIST.includes(name), name);
+    assert.equal(
+      CONNECTION_READONLY_ALLOWLISTS.expo.includes(name),
+      false,
+      name,
+    );
+  }
+  assert.ok(CONNECTION_WRITE_TOOLS.expo.includes("simulator_start"));
+  assert.ok(CONNECTION_WRITE_TOOLS.expo.includes("build_run"));
+  assert.equal(CONNECTION_EXPO_ALLOWLIST.includes("sandbox_exec"), false);
+  assert.equal(
+    CONNECTION_EXPO_ALLOWLIST.includes("appstore_reply_review"),
+    false,
+  );
+  assert.deepEqual(connectionTokenParams("expo").scopes, [...EXPO_OAUTH_SCOPES]);
+  assert.deepEqual(EXPO_OAUTH_SCOPES, ["mcp:access"]);
+});
+
+test("Neon allowlist splits reads, diagnostics, and approval-gated writes", () => {
+  for (const name of CONNECTION_READONLY_ALLOWLISTS.neon) {
+    assert.equal(
+      looksLikeWriteOrLogTool(name),
+      false,
+      `neon readonly includes write/log tool ${name}`,
+    );
+    assert.equal(CONNECTION_WRITE_TOOLS.neon.includes(name), false, name);
+  }
+  for (const name of CONNECTION_NEON_DIAGNOSTIC_TOOLS) {
+    assert.ok(looksLikeWriteOrLogTool(name), name);
+    assert.ok(CONNECTION_NEON_ALLOWLIST.includes(name), name);
+  }
+  assert.ok(CONNECTION_WRITE_TOOLS.neon.includes("run_sql"));
+  assert.ok(CONNECTION_WRITE_TOOLS.neon.includes("create_project"));
+  assert.equal(
+    CONNECTION_READONLY_ALLOWLISTS.neon.includes("run_sql"),
+    false,
+  );
+  assert.deepEqual(connectionTokenParams("neon").scopes, [...NEON_OAUTH_SCOPES]);
+});
+
+test("Better Stack allowlist splits reads, diagnostics, and approval-gated writes", () => {
+  for (const name of CONNECTION_READONLY_ALLOWLISTS.betterstack) {
+    assert.equal(
+      looksLikeWriteOrLogTool(name),
+      false,
+      `betterstack readonly includes write/log tool ${name}`,
+    );
+    assert.equal(CONNECTION_WRITE_TOOLS.betterstack.includes(name), false, name);
+  }
+  for (const name of CONNECTION_BETTERSTACK_DIAGNOSTIC_TOOLS) {
+    assert.ok(looksLikeWriteOrLogTool(name), name);
+    assert.ok(CONNECTION_BETTERSTACK_ALLOWLIST.includes(name), name);
+  }
+  assert.ok(CONNECTION_WRITE_TOOLS.betterstack.includes("create_incident"));
+  assert.ok(CONNECTION_WRITE_TOOLS.betterstack.includes("acknowledge_incident"));
+  assert.ok(CONNECTION_READONLY_ALLOWLISTS.betterstack.includes("monitors"));
+  assert.deepEqual(connectionTokenParams("betterstack").scopes, [
+    ...BETTERSTACK_OAUTH_SCOPES,
+  ]);
 });
 
 test("write approval asks for writes, denies in plan mode, passes reads", () => {

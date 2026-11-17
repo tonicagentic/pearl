@@ -1,0 +1,890 @@
+import type { ThreadMessageLike } from "@assistant-ui/react";
+import {
+  conversationOf,
+  type ConversationState,
+  type SessionStreamEvent,
+} from "eve/client";
+import { eventsFromReplaySample } from "@/lib/sample-stream-replay";
+
+export type WebReplayScenarioId =
+  | "reasoning-tools"
+  | "rapid-burst"
+  | "approval-park"
+  | "todos"
+  | "gallery";
+
+export type TimedWebStreamEvent = {
+  readonly atMs: number;
+  readonly event: SessionStreamEvent;
+};
+
+export type WebReplayScenario = {
+  readonly id: WebReplayScenarioId;
+  readonly title: string;
+  readonly description: string;
+  readonly events: readonly TimedWebStreamEvent[];
+};
+
+type RawEvent = {
+  readonly type: string;
+  readonly scope?: Record<string, string>;
+  readonly data: Record<string, unknown>;
+};
+
+const TURN = "turn_inspect";
+const RUN = "run_inspect";
+const turnScope = { turnId: TURN };
+const runScope = { runId: RUN, turnId: TURN };
+
+function stamp(
+  events: readonly { readonly atMs: number; readonly raw: RawEvent }[],
+): TimedWebStreamEvent[] {
+  const base = Date.parse("2026-06-01T12:00:00.000Z");
+  return events.map((entry, line) => ({
+    atMs: entry.atMs,
+    event: {
+      ...entry.raw,
+      meta: {
+        at: new Date(base + entry.atMs).toISOString(),
+        position: { index: 0, line },
+      },
+    } as unknown as SessionStreamEvent,
+  }));
+}
+
+function prelude(prompt: string): { atMs: number; raw: RawEvent }[] {
+  return [
+    { atMs: 0, raw: { type: "session.started", data: {} } },
+    { atMs: 20, raw: { type: "delivery.admitted", data: { deliveryId: "d1" } } },
+    {
+      atMs: 40,
+      raw: {
+        type: "delivery.consumed",
+        scope: turnScope,
+        data: {
+          deliveryId: "d1",
+          turnId: TURN,
+          parts: [{ kind: "text", text: prompt }],
+        },
+      },
+    },
+    {
+      atMs: 60,
+      raw: {
+        type: "turn.started",
+        scope: turnScope,
+        data: { turnId: TURN, cause: { deliveryId: "d1" }, follows: null },
+      },
+    },
+    {
+      atMs: 80,
+      raw: {
+        type: "model.requested",
+        scope: turnScope,
+        data: { runId: RUN, owner: { turnId: TURN } },
+      },
+    },
+    {
+      atMs: 100,
+      raw: {
+        type: "model.started",
+        scope: runScope,
+        data: { runId: RUN, modelId: "test-model", attempt: 0 },
+      },
+    },
+  ];
+}
+
+const CORE_WEB_REPLAY_SCENARIOS: WebReplayScenario[] = [
+  {
+    id: "reasoning-tools",
+    title: "Reasoning + Tools",
+    description:
+      "Multi-heading reasoning, streaming argsText tool chip, settled timeline, and reply.",
+    events: stamp([
+      ...prelude("Tighten the spacing and typography of the message thread."),
+      {
+        atMs: 500,
+        raw: {
+          type: "content.delta",
+          scope: runScope,
+          data: {
+            partId: "r1",
+            kind: "reasoning",
+            delta:
+              "**Inspect thread layout**\nChecking message padding, line height, and timeline hierarchy.\n",
+          },
+        },
+      },
+      {
+        atMs: 1300,
+        raw: {
+          type: "content.delta",
+          scope: runScope,
+          data: {
+            partId: "r1",
+            delta:
+              "\n**Verify shimmer direction**\nConfirming left-to-right gradient sweep on thinking-states.\n",
+          },
+        },
+      },
+      {
+        atMs: 2100,
+        raw: {
+          type: "call.input",
+          scope: runScope,
+          data: {
+            callId: "c_read",
+            kind: "tool",
+            name: "read_file",
+            delta: '{"filePath":"components/assistant-ui/elements/thread.aui',
+          },
+        },
+      },
+      {
+        atMs: 2500,
+        raw: {
+          type: "call.input",
+          scope: runScope,
+          data: { callId: "c_read", delta: '.tsx","offset":780,"limit":40}' },
+        },
+      },
+      {
+        atMs: 2650,
+        raw: {
+          type: "content.completed",
+          scope: runScope,
+          data: {
+            partId: "r1",
+            kind: "reasoning",
+            phase: "reasoning",
+            runId: RUN,
+            value:
+              "**Inspect thread layout**\nChecking message padding, line height, and timeline hierarchy.\n\n**Verify shimmer direction**\nConfirming left-to-right gradient sweep on thinking-states.\n",
+          },
+        },
+      },
+      {
+        atMs: 2700,
+        raw: {
+          type: "call.requested",
+          scope: runScope,
+          data: {
+            callId: "c_read",
+            capability: { kind: "tool", name: "read_file" },
+            owner: { runId: RUN },
+            input: {
+              filePath: "components/assistant-ui/elements/thread.aui.tsx",
+              offset: 780,
+              limit: 40,
+            },
+          },
+        },
+      },
+      {
+        atMs: 2800,
+        raw: {
+          type: "call.started",
+          scope: runScope,
+          data: { callId: "c_read" },
+        },
+      },
+      {
+        atMs: 3600,
+        raw: {
+          type: "call.settled",
+          scope: runScope,
+          data: {
+            callId: "c_read",
+            outcome: "completed",
+            output: { content: "// AssistantMessage" },
+          },
+        },
+      },
+      {
+        atMs: 4100,
+        raw: {
+          type: "content.delta",
+          scope: runScope,
+          data: {
+            partId: "t1",
+            kind: "text",
+            delta:
+              "Everything in `AssistantMessage` shares the `15px / 24px` (`leading-6`) type scale, with `gap-3` between blocks and `px-2` horizontal alignment.",
+          },
+        },
+      },
+      {
+        atMs: 4500,
+        raw: {
+          type: "content.completed",
+          scope: runScope,
+          data: {
+            partId: "t1",
+            kind: "text",
+            phase: "reply",
+            runId: RUN,
+            value:
+              "Everything in `AssistantMessage` shares the `15px / 24px` (`leading-6`) type scale, with `gap-3` between blocks and `px-2` horizontal alignment.",
+          },
+        },
+      },
+      {
+        atMs: 4700,
+        raw: {
+          type: "turn.settled",
+          scope: turnScope,
+          data: { turnId: TURN, outcome: "completed" },
+        },
+      },
+    ]),
+  },
+  {
+    id: "rapid-burst",
+    title: "Rapid Burst",
+    description:
+      "Fast reasoning headings to inspect 2000ms dwell coalescing and 150ms + 50ms swaps.",
+    events: (() => {
+      const headings = [
+        "Scan tokens",
+        "Check vertical rhythm",
+        "Compare mobile scale",
+        "Check diff badges",
+        "Verify width transition",
+      ];
+      const list = prelude("Stress-test the thinking-states animation.");
+      let t = 250;
+      for (const [i, heading] of headings.entries()) {
+        list.push({
+          atMs: t,
+          raw: {
+            type: "content.delta",
+            scope: runScope,
+            data: {
+              partId: "r1",
+              ...(i === 0 ? { kind: "reasoning" } : {}),
+              delta: `**${heading}**\n`,
+            },
+          },
+        });
+        t += 150;
+      }
+      list.push(
+        {
+          atMs: t + 900,
+          raw: {
+            type: "content.delta",
+            scope: runScope,
+            data: {
+              partId: "t1",
+              kind: "text",
+              delta: "Dwell coalescing kept the status transitions calm.",
+            },
+          },
+        },
+        {
+          atMs: t + 1200,
+          raw: {
+            type: "turn.settled",
+            scope: turnScope,
+            data: { turnId: TURN, outcome: "completed" },
+          },
+        },
+      );
+      return stamp(list);
+    })(),
+  },
+  {
+    id: "approval-park",
+    title: "Approval Park",
+    description:
+      "Inspect the WaitingActionDock and inline ToolFallback approval states.",
+    events: stamp([
+      ...prelude("Send the updated summary email to Alex."),
+      {
+        atMs: 350,
+        raw: {
+          type: "call.requested",
+          scope: runScope,
+          data: {
+            callId: "c_mail",
+            capability: { kind: "tool", name: "gmail_send" },
+            owner: { runId: RUN },
+            input: {
+              to: "alex@tingiris.com",
+              subject: "Thread UI polish notes",
+              body: "Ready for a final visual pass.",
+            },
+          },
+        },
+      },
+      {
+        atMs: 500,
+        raw: {
+          type: "interaction.opened",
+          scope: turnScope,
+          data: {
+            interactionId: "int_mail",
+            subject: { callId: "c_mail" },
+            audience: { principalIds: ["u1"] },
+            request: {
+              kind: "approval",
+              display: "decision",
+              prompt: "Send email to alex@tingiris.com?",
+              options: [
+                { id: "approve", label: "Approve", kind: "accept" },
+                { id: "deny", label: "Cancel", kind: "decline" },
+              ],
+            },
+          },
+        },
+      },
+      {
+        atMs: 700,
+        raw: {
+          type: "turn.paused",
+          scope: turnScope,
+          data: {
+            turnId: TURN,
+            awaiting: [{ interactionId: "int_mail" }],
+          },
+        },
+      },
+    ]),
+  },
+  {
+    id: "todos",
+    title: "Todos",
+    description:
+      "Streaming todo list mounts early, then rows check off with progress.",
+    events: stamp([
+      ...prelude("Ship the thread enter motion and live agent todos."),
+      {
+        atMs: 400,
+        raw: {
+          type: "call.input",
+          scope: runScope,
+          data: {
+            callId: "c_todo_1",
+            kind: "tool",
+            name: "todo",
+            delta:
+              '{"todos":[{"content":"Add stepEnter mounts","status":"in_progress","priority":"high"},{"content":"Wire Planning next moves","status":"pending","priority":"high"},{"content":"Add todo replay fixtures","status":"pending","priority":"medium"}',
+          },
+        },
+      },
+      {
+        atMs: 700,
+        raw: {
+          type: "call.input",
+          scope: runScope,
+          data: { callId: "c_todo_1", delta: "]}" },
+        },
+      },
+      {
+        atMs: 850,
+        raw: {
+          type: "call.requested",
+          scope: runScope,
+          data: {
+            callId: "c_todo_1",
+            capability: { kind: "tool", name: "todo" },
+            owner: { runId: RUN },
+            input: {
+              todos: [
+                {
+                  content: "Add stepEnter mounts",
+                  status: "in_progress",
+                  priority: "high",
+                },
+                {
+                  content: "Wire Planning next moves",
+                  status: "pending",
+                  priority: "high",
+                },
+                {
+                  content: "Add todo replay fixtures",
+                  status: "pending",
+                  priority: "medium",
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        atMs: 950,
+        raw: {
+          type: "call.started",
+          scope: runScope,
+          data: { callId: "c_todo_1" },
+        },
+      },
+      {
+        atMs: 1200,
+        raw: {
+          type: "call.settled",
+          scope: runScope,
+          data: {
+            callId: "c_todo_1",
+            outcome: "completed",
+            output: {
+              todos: [
+                {
+                  content: "Add stepEnter mounts",
+                  status: "in_progress",
+                  priority: "high",
+                },
+                {
+                  content: "Wire Planning next moves",
+                  status: "pending",
+                  priority: "high",
+                },
+                {
+                  content: "Add todo replay fixtures",
+                  status: "pending",
+                  priority: "medium",
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        atMs: 2200,
+        raw: {
+          type: "call.requested",
+          scope: runScope,
+          data: {
+            callId: "c_todo_2",
+            capability: { kind: "tool", name: "todo" },
+            owner: { runId: RUN },
+            input: {
+              todos: [
+                {
+                  content: "Add stepEnter mounts",
+                  status: "completed",
+                  priority: "high",
+                },
+                {
+                  content: "Wire Planning next moves",
+                  status: "in_progress",
+                  priority: "high",
+                },
+                {
+                  content: "Add todo replay fixtures",
+                  status: "pending",
+                  priority: "medium",
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        atMs: 2300,
+        raw: {
+          type: "call.started",
+          scope: runScope,
+          data: { callId: "c_todo_2" },
+        },
+      },
+      {
+        atMs: 2600,
+        raw: {
+          type: "call.settled",
+          scope: runScope,
+          data: {
+            callId: "c_todo_2",
+            outcome: "completed",
+            output: {
+              todos: [
+                {
+                  content: "Add stepEnter mounts",
+                  status: "completed",
+                  priority: "high",
+                },
+                {
+                  content: "Wire Planning next moves",
+                  status: "in_progress",
+                  priority: "high",
+                },
+                {
+                  content: "Add todo replay fixtures",
+                  status: "pending",
+                  priority: "medium",
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        atMs: 3600,
+        raw: {
+          type: "call.requested",
+          scope: runScope,
+          data: {
+            callId: "c_todo_3",
+            capability: { kind: "tool", name: "todo" },
+            owner: { runId: RUN },
+            input: {
+              todos: [
+                {
+                  content: "Add stepEnter mounts",
+                  status: "completed",
+                  priority: "high",
+                },
+                {
+                  content: "Wire Planning next moves",
+                  status: "completed",
+                  priority: "high",
+                },
+                {
+                  content: "Add todo replay fixtures",
+                  status: "completed",
+                  priority: "medium",
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        atMs: 3700,
+        raw: {
+          type: "call.started",
+          scope: runScope,
+          data: { callId: "c_todo_3" },
+        },
+      },
+      {
+        atMs: 4000,
+        raw: {
+          type: "call.settled",
+          scope: runScope,
+          data: {
+            callId: "c_todo_3",
+            outcome: "completed",
+            output: {
+              todos: [
+                {
+                  content: "Add stepEnter mounts",
+                  status: "completed",
+                  priority: "high",
+                },
+                {
+                  content: "Wire Planning next moves",
+                  status: "completed",
+                  priority: "high",
+                },
+                {
+                  content: "Add todo replay fixtures",
+                  status: "completed",
+                  priority: "medium",
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        atMs: 4500,
+        raw: {
+          type: "content.delta",
+          scope: runScope,
+          data: {
+            partId: "t1",
+            kind: "text",
+            delta:
+              "Checklist is live — mounts enter with motion and rows check off as work settles.",
+          },
+        },
+      },
+      {
+        atMs: 4900,
+        raw: {
+          type: "content.completed",
+          scope: runScope,
+          data: {
+            partId: "t1",
+            kind: "text",
+            phase: "reply",
+            runId: RUN,
+            value:
+              "Checklist is live — mounts enter with motion and rows check off as work settles.",
+          },
+        },
+      },
+      {
+        atMs: 5100,
+        raw: {
+          type: "turn.settled",
+          scope: turnScope,
+          data: { turnId: TURN, outcome: "completed" },
+        },
+      },
+    ]),
+  },
+];
+
+export function webReplayScenario(id: WebReplayScenarioId): WebReplayScenario {
+  return (
+    WEB_REPLAY_SCENARIOS.find((s) => s.id === id) ?? WEB_REPLAY_SCENARIOS[0]!
+  );
+}
+
+export function rebaseEvents(
+  events: readonly TimedWebStreamEvent[],
+  baseMs?: number,
+): SessionStreamEvent[] {
+  if (baseMs === undefined) return events.map((entry) => entry.event);
+  return events.map((entry) => {
+    const raw = entry.event as unknown as Record<string, unknown> & {
+      readonly meta?: Record<string, unknown>;
+    };
+    return {
+      ...raw,
+      meta: {
+        ...raw.meta,
+        at: new Date(baseMs + entry.atMs).toISOString(),
+      },
+    } as unknown as SessionStreamEvent;
+  });
+}
+
+export function conversationAt(
+  events: readonly TimedWebStreamEvent[],
+  count: number,
+  baseMs?: number,
+): ConversationState {
+  const slice = rebaseEvents(
+    events.slice(0, Math.max(0, Math.min(count, events.length))),
+    baseMs,
+  );
+  return conversationOf(slice);
+}
+
+/**
+ * Static full-coverage gallery exercising every message thread UI component
+ * simultaneously for CSS / spacing / typography inspection.
+ */
+export const GALLERY_MESSAGES: readonly ThreadMessageLike[] = [
+  {
+    id: "gal_user_1",
+    role: "user",
+    createdAt: new Date("2026-11-16T16:10:00.000Z"),
+    content: [
+      {
+        type: "text",
+        text: "Review the message thread spacing, timeline steps, inline code blocks, and live thinking state.",
+      },
+    ],
+  },
+  {
+    id: "gal_asst_settled",
+    role: "assistant",
+    createdAt: new Date("2026-11-16T16:10:12.000Z"),
+    status: { type: "complete", reason: "stop" },
+    metadata: { custom: { turnId: "gal_turn_1" } },
+    content: [
+      {
+        type: "reasoning",
+        text: "Comparing web threadMeta (`15px / 24px`) against the mobile thread metrics.\n\n1. User bubble: `rounded-[20px] bg-(--user-bubble-bg) px-4 py-2.5`\n2. Assistant column: `px-2 text-[15px] leading-6 gap-3`\n3. Timeline trigger + rows: `min-h-6 py-0.5 gap-1.5`",
+      },
+      {
+        type: "tool-call",
+        toolCallId: "gal_skill",
+        toolName: "load_skill",
+        args: { skill: "web-design-guidelines" },
+        result: { loaded: true },
+      },
+      {
+        type: "tool-call",
+        toolCallId: "gal_read",
+        toolName: "read_file",
+        args: {
+          filePath: "components/assistant-ui/elements/thread.aui.tsx",
+          offset: 775,
+          limit: 45,
+        },
+        result: { lines: 45 },
+      },
+      {
+        type: "tool-call",
+        toolCallId: "gal_search",
+        toolName: "grep",
+        args: { pattern: "threadMeta|threadText" },
+        result: { matches: 14 },
+      },
+      {
+        type: "tool-call",
+        toolCallId: "gal_bash",
+        toolName: "bash",
+        args: { command: "pnpm typecheck" },
+        result: { exitCode: 0 },
+      },
+      {
+        type: "tool-call",
+        toolCallId: "gal_edit",
+        toolName: "edit_file",
+        args: {
+          filePath: "components/assistant-ui/elements/assistant-thinking.tsx",
+          oldText: "const a = 1;\nconst b = 2;",
+          newText:
+            "const a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;\nconst e = 5;",
+        },
+        result: { ok: true },
+      },
+      {
+        type: "text",
+        text: [
+          "### Thread Anatomy Check",
+          "",
+          "All timeline steps, prose paragraphs, lists, and code blocks share the same **`15px` (`leading-6`)** baseline:",
+          "",
+          "- **User bubble**: `max-w-[78%] rounded-[20px] px-4 py-2.5`",
+          "- **Session timeline**: collapsed summary with `+5 −2` diff counters and expandable reasoning",
+          "- **Thinking states**: `150ms` exit/enter with `50ms` gap and `2000ms` LTR shimmer",
+          "",
+          "```tsx",
+          "export function ThinkingIndicator({ label, elapsed }: Props) {",
+          "  return <ThinkingStatesLabel label={label} />;",
+          "}",
+          "```",
+          "",
+          "| Token | Value | Role |",
+          "| --- | --- | --- |",
+          "| `--think-hold` | `2000ms` | Min visible label before next swap |",
+          "| `--think-swap` | `150ms` | Blur + slide swap |",
+          "| `--think-gap` | `50ms` | Outgoing lead gap |",
+          "| `--shimmer-dur` | `2000ms` | LTR highlight sweep |",
+          "",
+          "> Tip: toggle dark mode or switch column width above while inspecting elements in DevTools.",
+          "",
+          "Spacing tokens follow the design system notes in [1](https://react.dev/reference/rsc \"React docs\") and the Expo layout guide [2](https://docs.expo.dev \"Expo docs\").",
+        ].join("\n"),
+      },
+    ],
+  },
+  {
+    id: "gal_user_2",
+    role: "user",
+    createdAt: new Date("2026-11-16T16:11:00.000Z"),
+    content: [
+      {
+        type: "text",
+        text: "Show a live streaming thinking state with a delegated task card too.",
+      },
+    ],
+  },
+  {
+    id: "gal_asst_live",
+    role: "assistant",
+    createdAt: new Date("2026-11-16T16:11:02.000Z"),
+    status: { type: "running" },
+    content: [
+      {
+        type: "reasoning",
+        text: "**Refining bubble spacing**\nChecking alignment between the thinking status line and the user bubble edge.",
+      },
+      {
+        type: "tool-call",
+        toolCallId: "gal_task",
+        toolName: "coder",
+        args: { task: "Polish thread visual hierarchy" },
+      },
+      {
+        type: "tool-call",
+        toolCallId: "gal_read_live",
+        toolName: "read_file",
+        args: {},
+        argsText: '{"filePath":"components/assistant-ui/elements/surfaces.tsx',
+      },
+    ],
+  },
+  {
+    id: "gal_user_image",
+    role: "user",
+    createdAt: new Date("2026-11-16T16:12:00.000Z"),
+    content: [
+      {
+        type: "text",
+        text: "Make a photo of a quiet coastal road at dusk, 16:9.",
+      },
+    ],
+  },
+  {
+    id: "gal_asst_image",
+    role: "assistant",
+    createdAt: new Date("2026-11-16T16:12:02.000Z"),
+    status: { type: "running" },
+    metadata: { custom: { turnId: "gal_turn_image" } },
+    content: [
+      {
+        type: "tool-call",
+        toolCallId: "gal_image_running",
+        toolName: "generate_image",
+        args: {
+          prompt:
+            "Quiet coastal road at dusk, soft amber light, long shadows, photographic",
+          aspectRatio: "16:9",
+        },
+        status: { type: "running" },
+      },
+      {
+        type: "tool-call",
+        toolCallId: "gal_image_done",
+        toolName: "generate_image",
+        args: {
+          prompt: "Quiet coastal road at dusk",
+          size: "1024x1024",
+        },
+        result: {
+          success: true,
+          url: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=512&h=512&fit=crop",
+          downloadUrl:
+            "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=512&h=512&fit=crop",
+          pathname: "design/generated/coastal-road.png",
+          contentType: "image/jpeg",
+          model: "spacexai/grok-imagine-image-2.0",
+          prompt: "Quiet coastal road at dusk",
+        },
+        status: { type: "complete" },
+      },
+      {
+        type: "tool-call",
+        toolCallId: "gal_image_failed",
+        toolName: "generate_image",
+        args: {
+          prompt: "A photo that the provider cannot fulfill",
+          aspectRatio: "1:1",
+        },
+        result: {
+          success: false,
+          error:
+            'Image model "spacexai/grok-imagine-image-2.0" has no provider that meets the US / zero-data-retention policy.',
+          url: "",
+          downloadUrl: "",
+          model: "spacexai/grok-imagine-image-2.0",
+          prompt: "A photo that the provider cannot fulfill",
+        },
+        status: { type: "complete" },
+      },
+    ],
+  },
+];
+
+export const WEB_REPLAY_SCENARIOS: readonly WebReplayScenario[] = [
+  ...CORE_WEB_REPLAY_SCENARIOS,
+  {
+    id: "gallery",
+    title: "Design Gallery",
+    description:
+      "Stream replay synthesized from the static design-gallery messages.",
+    events: eventsFromReplaySample({
+      id: "gallery",
+      messages: GALLERY_MESSAGES,
+    }),
+  },
+];

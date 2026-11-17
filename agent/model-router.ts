@@ -46,7 +46,9 @@ export const PEARL_LANES = {
   analysis: {
     primary: "paperinstruments/ultramarine-1-flash",
     fallback: "zai/glm-5.3-flash",
-    reasoning: "low" as const,
+    // Medium so live thinking-states can show concise topic headings without
+    // slowing the voice lane (which stays on low).
+    reasoning: "medium" as const,
     profile:
       "Professional knowledge work: documents, research synthesis, finance, " +
       "legal, operations, diligence. Finished, concise analysis — not chat voice.",
@@ -54,7 +56,7 @@ export const PEARL_LANES = {
   think: {
     primary: "openai/gpt-6.1-sol-fast",
     fallback: "openai/gpt-6.1-sol",
-    reasoning: "low" as const,
+    reasoning: "medium" as const,
     profile:
       "Drafting and open-ended judgment where the prose is the product. " +
       "Writing, rewriting, and careful thinking aloud.",

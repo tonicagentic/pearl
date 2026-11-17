@@ -289,7 +289,8 @@ function stageIndexForTool(hint: ToolNameHint): number {
     name === "preview_check" ||
     name === "publish_dev_server" ||
     name === "deploy_vercel" ||
-    name === "expo_simulator" ||
+    name === "simulator_start" ||
+    name === "pin_expo_preview" ||
     name === "deployment_logs" ||
     name === "report_handoff"
   ) {

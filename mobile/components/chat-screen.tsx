@@ -3,20 +3,29 @@ import { Alert, Platform, Pressable, View } from "react-native";
 import { Stack, useNavigation } from "expo-router";
 import * as Haptics from "expo-haptics";
 import {
+  BottomSheetModal,
+  BottomSheetView,
+  type BottomSheetModal as BottomSheetModalRef,
+} from "@expo/ui/community/bottom-sheet";
+import {
   AssistantRuntimeProvider,
   MessageNotSentError,
   useExternalStoreRuntime,
   type AppendMessage,
   type ThreadMessageLike,
 } from "@assistant-ui/react-native";
-import { MonitorIcon, MoreHorizontalIcon } from "lucide-react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  MonitorIcon,
+  MoreHorizontalIcon,
+  SquarePenIcon,
+} from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
+import { SignupSheet } from "@/components/signup-sheet";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { ComputerPanel } from "@/components/computer-panel";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
@@ -25,6 +34,12 @@ import { StackScreen } from "@/components/ui/stack-screen";
 import { useAuth } from "@/src/auth";
 import { getAgentMode } from "@/src/agent-mode";
 import { withPendingAssistant } from "@/src/stream-presentation";
+import { applyLiveReplyOverlay } from "@/src/apply-live-reply";
+import {
+  getLiveReplyVersion,
+  reconcileLiveReplyWithSnapshot,
+  subscribeLiveReplyText,
+} from "@/src/live-reply-text";
 import { buildTurnClientContext } from "@/src/turn-client-context";
 import { useWorkspace } from "@/src/workspace-context";
 import {
@@ -55,7 +70,7 @@ import { SubagentRunsProvider } from "@/components/assistant-ui/elements/task-ca
 import { toThreadMessages } from "@/src/eve-transport";
 import { isEveSessionInactive } from "../../lib/chat/eve-session-recovery";
 
-type MainTab = "chat" | "computer";
+const COMPUTER_SHEET_SNAP_POINTS = ["92%"] as const;
 
 /**
  * Nested chat thread (route `/chat`): assistant-ui Thread over the eve session.
@@ -70,15 +85,17 @@ export function ChatScreen({
   // The safe-area container is a native codegen view, so uniwind's className
   // binding cannot reach it; paint the theme background through style instead
   // so the color extends under the status bar.
-  const insets = useSafeAreaInsets();
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
   const foregroundColor = useCSSVariable("--color-foreground") as string | undefined;
-  const { billingReady, markBillingReady } = useAuth();
-  // Match Thread list clearance under the transparent iOS nav.
-  const computerTopInset =
-    Platform.OS === "ios" ? insets.top + 44 : 0;
+  const {
+    billingReady,
+    markBillingReady,
+    needsSignup,
+    isAnonymous,
+    refreshGuestGate,
+  } = useAuth();
   const {
     store,
     activeChatId,
@@ -86,6 +103,7 @@ export function ChatScreen({
     setActiveProjectId,
     setChatProject,
     newChatEntry,
+    newChat,
     activeTitle,
     persistenceError,
     retrySync,
@@ -96,17 +114,34 @@ export function ChatScreen({
     recoverDeadSession,
     spokenTurns,
   } = useChats();
-  const { setChatId, tabs } = useWorkspace();
-  const [mainTab, setMainTab] = useState<MainTab>("chat");
+  const { setChatId, tabs, preferDetail } = useWorkspace();
+  const [computerOpen, setComputerOpen] = useState(false);
+  const computerSheetRef = useRef<BottomSheetModalRef>(null);
+  const [signupOpen, setSignupOpen] = useState(false);
   const tabCountRef = useRef(tabs.length);
   const navigation = useNavigation();
   // Defer new-chat autofocus until the stack push finishes so keyboard +
   // composer morph do not fight the transition.
   const [navSettled, setNavSettled] = useState(false);
 
+  const presentComputer = useCallback(() => {
+    dismissKeyboard();
+    computerSheetRef.current?.present();
+    setComputerOpen(true);
+  }, []);
+
+  const dismissComputer = useCallback(() => {
+    computerSheetRef.current?.dismiss();
+    setComputerOpen(false);
+  }, []);
+
   useEffect(() => {
     setChatId(activeChatId);
   }, [activeChatId, setChatId]);
+
+  useEffect(() => {
+    if (!isAnonymous && signupOpen) setSignupOpen(false);
+  }, [isAnonymous, signupOpen]);
 
   useEffect(() => {
     // Only gate the new-chat autofocus path.
@@ -135,13 +170,19 @@ export function ChatScreen({
     };
   }, [navigation, activeChatId, chromeRevealed, newChatEntry]);
 
-  // Auto-open Computer when the agent opens the first tab; return to Chat when empty.
+  // Auto-present Computer when the agent opens the first tab; dismiss when empty.
   useEffect(() => {
     const prev = tabCountRef.current;
     tabCountRef.current = tabs.length;
-    if (prev === 0 && tabs.length > 0) setMainTab("computer");
-    else if (tabs.length === 0 && prev > 0) setMainTab("chat");
-  }, [tabs.length]);
+    if (prev === 0 && tabs.length > 0) presentComputer();
+    else if (tabs.length === 0 && prev > 0) dismissComputer();
+  }, [dismissComputer, presentComputer, tabs.length]);
+
+  // Chat-launched file opens should surface the Computer sheet.
+  useEffect(() => {
+    if (!preferDetail) return;
+    presentComputer();
+  }, [preferDetail, presentComputer]);
 
   const projectPickWaiter = useRef<{
     resolve: (projectId: string) => void;
@@ -288,6 +329,13 @@ export function ChatScreen({
     [conversation],
   );
   const isBusy = status === "busy";
+  // Keep projection "running" if the store briefly idles while the last
+  // assistant is still marked streaming — otherwise SettledMarkdown dumps
+  // the reply and skips word reveal on Expo Go.
+  const lastAssistantStreaming =
+    messages[messages.length - 1]?.role === "assistant" &&
+    messages[messages.length - 1]?.metadata?.status === "streaming";
+  const isRunning = isBusy || Boolean(lastAssistantStreaming);
   const hasError = Boolean(storeError);
   const confirmed = localSend ? hasConfirmedSend(events, localSend) : false;
   const waitingForAction = hasPendingAction(conversation);
@@ -429,10 +477,20 @@ export function ChatScreen({
     () => spokenTurnsPendingImport(spokenTurns, messages),
     [spokenTurns, messages],
   );
+  // Per-delta text ahead of eve line commits — paints smaller chunks on device.
+  const liveReplyVersion = useSyncExternalStore(
+    subscribeLiveReplyText,
+    getLiveReplyVersion,
+    getLiveReplyVersion,
+  );
+
+  useEffect(() => {
+    reconcileLiveReplyWithSnapshot(messages);
+  }, [messages]);
 
   const projectedMessages = useMemo(() => {
     const projected = projectSendMessages(
-      toThreadMessages({ messages }, { isRunning: isBusy, hasError }),
+      toThreadMessages({ messages }, { isRunning, hasError }),
       messages,
       confirmed ? null : hasError && localSend
         ? { ...localSend, phase: "uncertain" }
@@ -441,11 +499,26 @@ export function ChatScreen({
     const base = withPendingAssistant(
       projected as Parameters<typeof withPendingAssistant>[0],
       messages,
-      isBusy,
+      isRunning,
       awaitingReply,
     );
-    return appendSpokenTurnMessages(base as ThreadMessageLike[], pendingSpoken);
-  }, [messages, localSend, confirmed, isBusy, hasError, awaitingReply, pendingSpoken]);
+    const withLive = applyLiveReplyOverlay(
+      base as Parameters<typeof applyLiveReplyOverlay>[0],
+    );
+    return appendSpokenTurnMessages(
+      withLive as ThreadMessageLike[],
+      pendingSpoken,
+    );
+  }, [
+    messages,
+    localSend,
+    confirmed,
+    isRunning,
+    hasError,
+    awaitingReply,
+    pendingSpoken,
+    liveReplyVersion,
+  ]);
 
   useEffect(() => {
     if (!expectingAssistant) return;
@@ -512,7 +585,7 @@ export function ChatScreen({
       // positional fallback ids (the projection omits ids on purpose) and
       // honors the per-message status it carries.
       convertMessage: (message: ThreadMessageLike) => message,
-      isRunning: isBusy,
+      isRunning,
       isDisabled: status === "resuming",
       // HITL, in-flight prepare, or unconfirmed prior turn — don't invite a throw.
       isSendDisabled: composerBlocked || unresolvedSend,
@@ -520,6 +593,12 @@ export function ChatScreen({
         const ctx = sendCtxRef.current;
         const { store: activeStore } = ctx;
         setSendError(null);
+        if (needsSignup) {
+          setSignupOpen(true);
+          throw new MessageNotSentError(
+            "Sign up to continue chatting.",
+          );
+        }
         if (ctx.composerBlocked) {
           throw new MessageNotSentError(
             "This chat is waiting for authorization or approval.",
@@ -604,6 +683,7 @@ export function ChatScreen({
             // deliveryId can arrive before delivery.consumed; clear pending so
             // a follow-up is not blocked by the stale prepareSend marker.
             ctx.clearPendingMessage(activeStore);
+            if (isAnonymous) void refreshGuestGate();
             void import("@/src/pending-attachments").then(
               ({ clearPendingAttachments, chatAttachmentKey }) => {
                 clearPendingAttachments(chatAttachmentKey(ctx.activeChatId));
@@ -714,7 +794,16 @@ export function ChatScreen({
       },
     }),
     // Rebuild only when the thread snapshot the runtime compares changes.
-    [projectedMessages, isBusy, status, composerBlocked, unresolvedSend],
+    [
+      projectedMessages,
+      isRunning,
+      status,
+      composerBlocked,
+      unresolvedSend,
+      needsSignup,
+      isAnonymous,
+      refreshGuestGate,
+    ],
   );
 
   // Carry out (and similar) creates a chat with a durable pending marker but no
@@ -839,16 +928,22 @@ export function ChatScreen({
               : null;
 
   const toggleComputer = useCallback(() => {
-    setMainTab((current) => (current === "computer" ? "chat" : "computer"));
-  }, []);
-  const computerBadge = tabs.length > 0 && mainTab === "chat";
+    if (computerOpen) dismissComputer();
+    else presentComputer();
+  }, [computerOpen, dismissComputer, presentComputer]);
+  const openCompose = useCallback(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    dismissComputer();
+    newChat();
+  }, [dismissComputer, newChat]);
+  const computerBadge = tabs.length > 0 && !computerOpen;
 
   return (
     <StackScreen>
       <Stack.Screen
         options={{
           headerShown: true,
-          title: activeTitle,
+          title: "",
           headerBackButtonDisplayMode: "minimal",
           // Thread content draws under the bar and pads itself so the first
           // message rests below the nav; scrolling can fade under it.
@@ -863,31 +958,47 @@ export function ChatScreen({
             Platform.OS === "web"
               ? () => (
                   <View className="flex-row items-center">
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        computerBadge
-                          ? "Computer, open activity available"
-                          : "Computer"
-                      }
-                      accessibilityState={{ selected: mainTab === "computer" }}
-                      className="h-10 w-10 items-center justify-center"
-                      onPress={toggleComputer}
-                    >
-                      <View>
-                        <Icon
-                          as={MonitorIcon}
-                          className={
-                            mainTab === "computer"
-                              ? "size-5 text-foreground"
-                              : "size-5 text-muted-foreground"
+                    {activeChatId ? (
+                      <>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="New chat"
+                          className="h-10 w-10 items-center justify-center"
+                          onPress={openCompose}
+                        >
+                          <Icon
+                            as={SquarePenIcon}
+                            className="size-5 text-foreground"
+                          />
+                        </Pressable>
+                        <View className="w-2" />
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            computerBadge
+                              ? "Computer, open activity available"
+                              : "Computer"
                           }
-                        />
-                        {computerBadge ? (
-                          <View className="bg-primary absolute -right-0.5 -top-0.5 size-1.5 rounded-full" />
-                        ) : null}
-                      </View>
-                    </Pressable>
+                          accessibilityState={{ selected: computerOpen }}
+                          className="h-10 w-10 items-center justify-center"
+                          onPress={toggleComputer}
+                        >
+                          <View>
+                            <Icon
+                              as={MonitorIcon}
+                              className={
+                                computerOpen
+                                  ? "size-5 text-foreground"
+                                  : "size-5 text-muted-foreground"
+                              }
+                            />
+                            {computerBadge ? (
+                              <View className="bg-primary absolute -right-0.5 -top-0.5 size-1.5 rounded-full" />
+                            ) : null}
+                          </View>
+                        </Pressable>
+                      </>
+                    ) : null}
                     {projectedMessages.length > 0 ? (
                       <Pressable
                         accessibilityRole="button"
@@ -909,15 +1020,25 @@ export function ChatScreen({
       {Platform.OS !== "web" ? (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button
+            icon="square.and.pencil"
+            accessibilityLabel="New chat"
+            onPress={openCompose}
+            tintColor={foregroundColor}
+            separateBackground
+            hidden={!activeChatId}
+          />
+          <Stack.Toolbar.Spacer width={8} hidden={!activeChatId} />
+          <Stack.Toolbar.Button
             icon="desktopcomputer"
             accessibilityLabel={
               computerBadge
                 ? "Computer, open activity available"
                 : "Computer"
             }
-            selected={mainTab === "computer"}
+            selected={computerOpen}
             onPress={toggleComputer}
             tintColor={foregroundColor}
+            hidden={!activeChatId}
           >
             {computerBadge ? <Stack.Toolbar.Badge /> : null}
           </Stack.Toolbar.Button>
@@ -968,26 +1089,34 @@ export function ChatScreen({
                 <SubagentInspectProvider>
                   <AssistantRuntimeProvider runtime={runtime}>
                     <EveAuthorization />
-                    {mainTab === "computer" ? (
-                      <ComputerPanel
-                        topInset={computerTopInset}
-                        visible={mainTab === "computer"}
-                      />
-                    ) : (
-                      <Thread
-                        autoFocus={
-                          Platform.OS === "ios" &&
-                          activeChatId === null &&
-                          chromeRevealed &&
-                          navSettled
-                        }
-                        chromeRevealed={chromeRevealed}
-                        conversationId={activeChatId}
-                        focusNewChatKey={newChatEntry}
-                        notice={notice}
-                        waitingAction={waitingAction}
-                      />
-                    )}
+                    <Thread
+                      autoFocus={
+                        Platform.OS === "ios" &&
+                        activeChatId === null &&
+                        chromeRevealed &&
+                        navSettled &&
+                        !needsSignup
+                      }
+                      chromeRevealed={chromeRevealed}
+                      conversationId={activeChatId}
+                      focusNewChatKey={newChatEntry}
+                      notice={notice}
+                      waitingAction={waitingAction}
+                      signupBlocked={needsSignup}
+                    />
+                    <BottomSheetModal
+                      ref={computerSheetRef}
+                      snapPoints={[...COMPUTER_SHEET_SNAP_POINTS]}
+                      enablePanDownToClose
+                      onChange={(index) => {
+                        setComputerOpen(index >= 0);
+                      }}
+                      onClose={() => setComputerOpen(false)}
+                    >
+                      <BottomSheetView style={{ flex: 1 }}>
+                        <ComputerPanel visible={computerOpen} />
+                      </BottomSheetView>
+                    </BottomSheetModal>
                   </AssistantRuntimeProvider>
                   <SubagentInspectHost onAnswer={answerInteraction} />
                   <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
@@ -1008,6 +1137,10 @@ export function ChatScreen({
                       projectPickWaiter.current = null;
                       waiter?.resolve(project.id);
                     }}
+                  />
+                  <SignupSheet
+                    open={signupOpen}
+                    onClose={() => setSignupOpen(false)}
                   />
                 </SubagentInspectProvider>
               </ConversationProvider>

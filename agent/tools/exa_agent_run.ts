@@ -262,6 +262,27 @@ const tool = defineTool({
   description:
     "Deep company research and lead-list generation backed by the Exa Agent API. Exa decomposes the query, searches, verifies, enriches, and returns structured output with citations. Use for company deep dives, competitor analysis, ICP-based lead lists, and market research. For quick single lookups prefer web_search instead.",
   inputSchema,
+  label: {
+    start(input) {
+      const query = typeof input.query === "string" ? input.query.trim() : "";
+      if (query) {
+        const short = query.length > 48 ? `${query.slice(0, 47)}…` : query;
+        return `Researching ${short}`;
+      }
+      return "Researching with Exa";
+    },
+    complete(_input, output) {
+      if (
+        output &&
+        typeof output === "object" &&
+        "status" in output &&
+        (output as { status?: string }).status === "error"
+      ) {
+        return "Research failed";
+      }
+      return "Finished Exa research";
+    },
+  },
   async execute(input, ctx) {
     // Coerce nulls to undefined, then guard.
     const query = input.query ?? undefined;

@@ -69,3 +69,34 @@ export async function sendPasswordResetEmail(options: {
     html,
   });
 }
+
+/** Email verification / change confirmation used by Better Auth. */
+export async function sendVerificationLinkEmail(options: {
+  readonly to: string;
+  readonly url: string;
+  readonly subject?: string;
+}): Promise<void> {
+  const subject = options.subject ?? "Verify your Pearl email";
+  const text = [
+    subject,
+    "",
+    "Click the link below to continue. This link expires in one hour.",
+    "",
+    options.url,
+    "",
+    "If you did not request this, you can ignore this email.",
+  ].join("\n");
+
+  const html = `
+    <p>${subject}</p>
+    <p><a href="${options.url}">Continue</a></p>
+    <p>This link expires in one hour. If you did not request this, you can ignore this email.</p>
+  `.trim();
+
+  await sendEmail({
+    to: options.to,
+    subject,
+    text,
+    html,
+  });
+}

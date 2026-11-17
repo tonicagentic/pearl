@@ -21,7 +21,7 @@ const TurnElapsedContext = createContext<string | undefined>(undefined);
 /**
  * One elapsed clock for Thinking + SessionTimeline on the same assistant
  * message. Anchors to the first turn-scoped event when available; pauses
- * across requires-action and while the final answer streams so “Worked for”
+ * across requires-action and while the final answer streams so the settled header
  * freezes when prose starts.
  */
 export function TurnElapsedProvider({ children }: { readonly children: ReactNode }) {
@@ -40,7 +40,7 @@ export function TurnElapsedProvider({ children }: { readonly children: ReactNode
   const running = statusType === "running";
   const awaitingInput = statusType === "requires-action";
   // Keep the provider active while answering so the frozen label stays available
-  // for “Worked for”, but pause the ticker once prose (or a card) is trailing.
+  // for the settled duration, but pause the ticker once prose (or a card) is trailing.
   const active = running || awaitingInput;
   const paused = awaitingInput || (running && answerPhase);
 

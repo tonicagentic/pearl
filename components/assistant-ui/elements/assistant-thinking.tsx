@@ -1,44 +1,43 @@
 "use client";
 
 import { useAuiState } from "@assistant-ui/react";
-import { useSyncExternalStore } from "react";
+import { useEveEvents } from "@assistant-ui/eve";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
-import { useElapsedLabel } from "@/components/assistant-ui/elements/use-elapsed-label";
 import {
   getWaitingLabel,
   subscribeWaitingLabel,
 } from "@/lib/waiting-label";
+import {
+  createThinkingStateDweller,
+  deriveLiveThinkingState,
+  type ThinkingMessagePart,
+} from "@/lib/stream-thinking-state";
 
-import { isTimelineToolCall } from "./session-timeline";
+// In-thread agent status driven by the shared eve stream state machine.
+// Stays live across pre-content, reasoning, streaming tool calls, and
+// subagent phases — yielding only when reply prose is actively streaming
+// or the turn settles. Raw reasoning stays collapsed in SessionTimeline.
 
-// In-thread agent status, following the assistant-ui thinking-indicator
-// runtime recipe (assistant-ui.com/elements/thinking-indicator): the label is
-// the pending tool call's name, falling back to "Thinking" while the run is
-// active and nothing visible has arrived yet. Once the assistant streams real
-// content the selector returns undefined and the indicator yields to it —
-// inside the same assistant message row, so there is no remount.
-//
-// Coexistence with the SessionTimeline (which renders right below this and
-// names every reasoning/tool step live): once the timeline has signal for the
-// turn, it owns the live view and this indicator steps back — otherwise every
-// covered tool call would read twice ("Running edit_file" above a shimmering
-// "Edited" step). The indicator keeps two jobs: the pre-content phase (before
-// any part exists) and uncovered tools like write_file, whose streaming the
-// timeline does not summarize. The stall watchdog still wins over the
-// timeline: after 45s without progress the escalation must surface even
-// though the timeline is showing live steps.
-//
-// The elapsed badge needs its own timer (docs: metadata.timing only finalizes
-// once the message stops streaming). The clock starts in an effect, which also
-// keeps the Cache Components shell deterministic (no wall clock at render).
-//
-// Stall watchdog: after 45s of running without visible progress the label
-// escalates so a dead gateway call reads as text, not an endless shimmer.
-
-const STALL_WARNING_S = 45;
-const STALL_LABEL = "Still working — the model may be slow or unreachable.";
-/** Selector sentinel — must stay a stable primitive for useAuiState. */
-const WAITING_PHASE = "waiting";
+function isAnswerPhase(parts: readonly ThinkingMessagePart[]): boolean {
+  for (let i = parts.length - 1; i >= 0; i -= 1) {
+    const part = parts[i];
+    if (!part) continue;
+    if (part.type === "tool-call") return false;
+    if (part.type === "reasoning") return false;
+    if (
+      part.type === "text" &&
+      typeof part.text === "string" &&
+      part.text.trim().length > 0
+    ) {
+      return true;
+    }
+    if (part.type === "file" || part.type === "image" || part.type === "data") {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function AssistantThinking() {
   const waitingLabel = useSyncExternalStore(
@@ -46,54 +45,42 @@ export function AssistantThinking() {
     getWaitingLabel,
     getWaitingLabel,
   );
-  // useAuiState compares with Object.is — return strings/undefined only.
-  const phase = useAuiState((s) => {
-    if (s.message.status?.type !== "running") return undefined;
-    const pending = s.message.parts.find(
-      (part) =>
-        part.type === "tool-call" &&
-        part.status.type === "running" &&
-        part.toolName !== "todo",
-    );
-    if (pending?.type === "tool-call") {
-      return `Running ${pending.toolName}`;
-    }
-    // The runtime emits a placeholder "indicator" part while a message has no
-    // content yet; only real content parts hand the row over to the message.
-    const hasContent = s.message.parts.some(
-      (part) =>
-        part.type === "text" ||
-        part.type === "reasoning" ||
-        part.type === "tool-call" ||
-        part.type === "file" ||
-        part.type === "image",
-    );
-    return hasContent ? undefined : WAITING_PHASE;
-  });
+  const events = useEveEvents();
+  const statusType = useAuiState((s) => s.message.status?.type);
+  const parts = useAuiState(
+    (s) => s.message.parts as readonly ThinkingMessagePart[],
+  );
 
-  // Whether the timeline below is already carrying a live view of this turn.
-  const timelineLive = useAuiState((s) => {
-    if (s.message.status?.type !== "running") return false;
-    return s.message.parts.some(
-      (part) => part.type === "reasoning" || isTimelineToolCall(part),
-    );
-  });
+  const answerPhase = useMemo(() => isAnswerPhase(parts), [parts]);
+  const derived = useMemo(
+    () =>
+      deriveLiveThinkingState({
+        events: events as unknown as Parameters<
+          typeof deriveLiveThinkingState
+        >[0]["events"],
+        parts,
+        statusType,
+        waitingLabel,
+        answerPhase,
+      }),
+    [answerPhase, events, parts, statusType, waitingLabel],
+  );
 
-  const label = phase === WAITING_PHASE ? waitingLabel : phase;
+  const dwellerRef = useRef(createThinkingStateDweller());
+  const [label, setLabel] = useState<string | undefined>(derived.label);
 
-  const elapsed = useElapsedLabel(label !== undefined);
+  useEffect(() => {
+    setLabel(dwellerRef.current.next(derived.label));
+    if (derived.label === undefined) return undefined;
+    const timer = window.setInterval(() => {
+      setLabel(dwellerRef.current.flush());
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [derived.label]);
+
   if (label === undefined) return null;
 
-  const seconds = Number.parseInt(elapsed ?? "0", 10);
-  const stalled = Number.isFinite(seconds) && seconds > STALL_WARNING_S;
-  // The timeline owns the live steps; only the stall escalation overrides it.
-  if (timelineLive && !stalled) return null;
-
   return (
-    <ThinkingIndicator
-      label={stalled ? STALL_LABEL : label}
-      elapsed={elapsed}
-      data-testid="assistant-thinking"
-    />
+    <ThinkingIndicator label={label} data-testid="assistant-thinking" />
   );
 }

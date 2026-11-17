@@ -1,4 +1,5 @@
 import { useLocalSearchParams, router, Stack } from "expo-router";
+import { ObserveInteractiveMarker } from "@/src/observe";
 import { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -67,47 +68,55 @@ export default function ResetPasswordRoute() {
 
   if (linkError === "INVALID_TOKEN" || (!token && !done)) {
     return (
-      <SafeAreaView style={[StyleSheet.absoluteFill, { backgroundColor }]}>
-        <Stack.Screen options={{ title: "Reset password", headerShown: true }} />
-        <View style={styles.center}>
-          <Text variant="display" className="text-center tracking-tight">
-            Link expired
-          </Text>
-          <Text variant="body" tone="muted" className="mb-1 text-center leading-[22px]">
-            This password reset link is invalid or has expired. Request a new
-            one from sign in.
-          </Text>
-          <Button
-            label="Back to sign in"
-            onPress={() => router.replace("/sign-in")}
-          />
-        </View>
-      </SafeAreaView>
+      <>
+        <ObserveInteractiveMarker />
+        <SafeAreaView style={[StyleSheet.absoluteFill, { backgroundColor }]}>
+          <Stack.Screen options={{ title: "Reset password", headerShown: true }} />
+          <View style={styles.center}>
+            <Text variant="display" className="text-center tracking-tight">
+              Link expired
+            </Text>
+            <Text variant="body" tone="muted" className="mb-1 text-center leading-[22px]">
+              This password reset link is invalid or has expired. Request a new
+              one from sign in.
+            </Text>
+            <Button
+              label="Back to sign in"
+              onPress={() => router.replace("/sign-in")}
+            />
+          </View>
+        </SafeAreaView>
+      </>
     );
   }
 
   if (done) {
     return (
-      <SafeAreaView style={[StyleSheet.absoluteFill, { backgroundColor }]}>
-        <Stack.Screen options={{ title: "Reset password", headerShown: true }} />
-        <View style={styles.center}>
-          <Text variant="display" className="text-center tracking-tight">
-            Password updated
-          </Text>
-          <Text variant="body" tone="muted" className="mb-1 text-center leading-[22px]">
-            Sign in with your new password.
-          </Text>
-          <Button
-            label="Sign in"
-            onPress={() => router.replace("/sign-in")}
-          />
-        </View>
-      </SafeAreaView>
+      <>
+        <ObserveInteractiveMarker />
+        <SafeAreaView style={[StyleSheet.absoluteFill, { backgroundColor }]}>
+          <Stack.Screen options={{ title: "Reset password", headerShown: true }} />
+          <View style={styles.center}>
+            <Text variant="display" className="text-center tracking-tight">
+              Password updated
+            </Text>
+            <Text variant="body" tone="muted" className="mb-1 text-center leading-[22px]">
+              Sign in with your new password.
+            </Text>
+            <Button
+              label="Sign in"
+              onPress={() => router.replace("/sign-in")}
+            />
+          </View>
+        </SafeAreaView>
+      </>
     );
   }
 
   return (
-    <SafeAreaView style={[StyleSheet.absoluteFill, { backgroundColor }]}>
+    <>
+      <ObserveInteractiveMarker />
+      <SafeAreaView style={[StyleSheet.absoluteFill, { backgroundColor }]}>
       <Stack.Screen options={{ title: "Reset password", headerShown: true }} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -171,6 +180,7 @@ export default function ResetPasswordRoute() {
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+    </>
   );
 }
 

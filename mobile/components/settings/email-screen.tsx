@@ -4,15 +4,17 @@ import {
   Alert,
   AppState,
   Platform,
-  Pressable,
-  View,
 } from "react-native";
 import * as Linking from "expo-linking";
 import { Stack, useFocusEffect } from "expo-router";
 
-import { SheetScaffold } from "@/components/settings/sheet-scaffold";
-import { SettingsCard } from "@/components/ui/settings-card";
-import { Text } from "@/components/ui/text";
+import {
+  SettingsButton,
+  SettingsForm,
+  SettingsFormText,
+  SettingsLabeledValue,
+  SettingsSection,
+} from "@/components/settings/native";
 import {
   authorizeMailbox,
   listMailboxes,
@@ -69,19 +71,16 @@ export function EmailScreen() {
     readonly MailboxClientSummary[] | null
   >(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | "add" | null>(null);
   const [userCode, setUserCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
   const waitingForReturn = useRef(false);
-  const busy = (loading && !refreshing) || busyId !== null;
+  const busy = loading || busyId !== null;
   const capabilities = capabilitiesForConnection("gmail");
 
-  const load = useCallback(async (opts?: { refresh?: boolean }) => {
-    const isRefresh = opts?.refresh === true;
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+  const load = useCallback(async () => {
+    setLoading(true);
     setError(null);
     try {
       const next = await listMailboxes();
@@ -98,10 +97,7 @@ export function EmailScreen() {
         );
       }
     } finally {
-      if (mounted.current) {
-        setLoading(false);
-        setRefreshing(false);
-      }
+      if (mounted.current) setLoading(false);
     }
   }, []);
 
@@ -216,76 +212,101 @@ export function EmailScreen() {
           headerBackButtonDisplayMode: "minimal",
         }}
       />
-      <SheetScaffold
-        refreshing={refreshing}
-        onRefresh={() => void load({ refresh: true })}
+      <SettingsForm
+        footer={
+          <SettingsFormText tone="secondary">
+            Each address is authorized separately through Google. Pearl never
+            stores provider tokens on this device. Archive and mark-read need a
+            one-time reconnect if an account was linked before those permissions
+            were added.
+          </SettingsFormText>
+        }
       >
-        <Text variant="body" className="px-1">
+        <SettingsFormText>
           Connect Gmail so Pearl can search and read threads, draft replies,
           send only after you approve, and archive or label mail in batches you
           confirm.
-        </Text>
+        </SettingsFormText>
 
-        <View className="flex-row flex-wrap gap-2 px-1">
-          <ActionChip
+        <SettingsSection title="Accounts">
+          <SettingsLabeledValue
+            label="Connected"
+            value={
+              mailboxes == null
+                ? "Loading…"
+                : connectedCount === 0
+                  ? "None connected"
+                  : `${connectedCount} connected`
+            }
+          />
+          {userCode ? (
+            <SettingsLabeledValue label="Code" value={userCode} />
+          ) : null}
+          <SettingsButton
             disabled={busy}
             label={busyId === "add" ? "Opening…" : "Add Gmail account"}
             onPress={() => void authorize()}
           />
-          <ActionChip
+          <SettingsButton
             disabled={busy}
-            label={loading && !refreshing ? "Checking…" : "Refresh"}
-            onPress={() => void load({ refresh: true })}
+            label={loading ? "Checking…" : "Refresh"}
+            onPress={() => void load()}
+            variant="plain"
           />
-        </View>
-
-        <Text variant="secondary" className="px-1">
-          {mailboxes == null
-            ? "Loading…"
-            : connectedCount === 0
-              ? "None connected"
-              : `${connectedCount} connected`}
-        </Text>
-
-        {userCode ? (
-          <View className="gap-1 rounded-[18px] bg-card px-4 py-3">
-            <Text variant="label" weight="semibold" selectable>
-              Code: {userCode}
-            </Text>
-            <Text variant="secondary">
-              Enter this code on the authorization page if prompted.
-            </Text>
-          </View>
-        ) : null}
+        </SettingsSection>
 
         {error ? (
-          <Text variant="secondary" tone="destructive" className="px-1" accessibilityRole="alert">
-            {error}
-          </Text>
+          <SettingsFormText tone="destructive">{error}</SettingsFormText>
         ) : null}
 
         {loading && mailboxes == null ? (
           <ActivityIndicator accessibilityLabel="Loading mailboxes" />
         ) : null}
 
-        {mailboxes && mailboxes.length > 0 ? (
-          <SettingsCard>
-            {mailboxes.map((mailbox, index) => (
-              <MailboxRow
-                key={mailbox.id}
-                mailbox={mailbox}
-                busy={busy}
-                busyId={busyId}
-                showSeparator={index < mailboxes.length - 1}
-                onConnect={() => void authorize(mailbox.id)}
-                onDisconnect={() => confirmDisconnect(mailbox)}
+        {mailboxes?.map((mailbox) => {
+          const email = mailbox.emailLabel?.trim() || null;
+          const nickname = mailbox.nickname?.trim() || null;
+          const title = nickname || email || displayName(mailbox);
+          const rowBusy = busyId === mailbox.id;
+          return (
+            <SettingsSection key={mailbox.id} title={title}>
+              {nickname && email ? (
+                <SettingsLabeledValue label="Email" value={email} />
+              ) : null}
+              <SettingsLabeledValue
+                label="Status"
+                value={
+                  statusLabel(mailbox.status) +
+                  (mailbox.status === "connected" && !mailbox.canModify
+                    ? " · reconnect for archive and mark-read"
+                    : "")
+                }
               />
-            ))}
-          </SettingsCard>
-        ) : null}
+              {mailbox.status === "connected" ? (
+                <SettingsButton
+                  disabled={busy}
+                  label={rowBusy ? "Opening…" : "Update"}
+                  onPress={() => void authorize(mailbox.id)}
+                />
+              ) : mailbox.status !== "unavailable" ? (
+                <SettingsButton
+                  disabled={busy}
+                  label={rowBusy ? "Opening…" : "Connect"}
+                  onPress={() => void authorize(mailbox.id)}
+                />
+              ) : null}
+              <SettingsButton
+                destructive
+                disabled={busy}
+                label={rowBusy ? "…" : "Disconnect"}
+                onPress={() => confirmDisconnect(mailbox)}
+              />
+            </SettingsSection>
+          );
+        })}
 
         {capabilities ? (
-          <EmailCapabilitiesCard
+          <CapabilitiesSection
             capabilities={capabilities}
             heading={
               connectedCount > 0
@@ -294,19 +315,12 @@ export function EmailScreen() {
             }
           />
         ) : null}
-
-        <Text variant="secondary" className="px-1">
-          Each address is authorized separately through Google. Pearl never
-          stores provider tokens on this device. Archive and mark-read need a
-          one-time reconnect if an account was linked before those permissions
-          were added.
-        </Text>
-      </SheetScaffold>
+      </SettingsForm>
     </>
   );
 }
 
-function EmailCapabilitiesCard({
+function CapabilitiesSection({
   capabilities,
   heading,
 }: {
@@ -314,129 +328,22 @@ function EmailCapabilitiesCard({
   readonly heading: string;
 }) {
   return (
-    <View className="gap-3 rounded-[18px] bg-card px-4 py-4">
-      <Text variant="label">{heading}</Text>
-      <BulletList items={capabilities.canDo} />
-      {capabilities.needsApproval.length > 0 ? (
-        <View className="gap-2 pt-1">
-          <Text variant="body" weight="medium">
-            Needs your approval
-          </Text>
-          <BulletList items={capabilities.needsApproval} />
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function BulletList({ items }: { readonly items: readonly string[] }) {
-  return (
-    <View className="gap-2">
-      {items.map((item) => (
-        <View key={item} className="flex-row gap-2">
-          <Text variant="body" tone="muted">
-            •
-          </Text>
-          <Text variant="body" tone="muted" className="min-w-0 flex-1">
-            {item}
-          </Text>
-        </View>
+    <SettingsSection title={heading}>
+      {capabilities.canDo.map((item) => (
+        <SettingsFormText key={item} tone="secondary">
+          {`• ${item}`}
+        </SettingsFormText>
       ))}
-    </View>
-  );
-}
-
-function MailboxRow({
-  mailbox,
-  busy,
-  busyId,
-  showSeparator,
-  onConnect,
-  onDisconnect,
-}: {
-  readonly mailbox: MailboxClientSummary;
-  readonly busy: boolean;
-  readonly busyId: string | "add" | null;
-  readonly showSeparator: boolean;
-  readonly onConnect: () => void;
-  readonly onDisconnect: () => void;
-}) {
-  const rowBusy = busyId === mailbox.id;
-  const email = mailbox.emailLabel?.trim() || null;
-  const nickname = mailbox.nickname?.trim() || null;
-  const title = nickname || email || displayName(mailbox);
-  return (
-    <View>
-      <View className="gap-2 px-4 py-3">
-        <Text variant="label" numberOfLines={2}
-          selectable>
-          {title}
-        </Text>
-        {nickname && email ? (
-          <Text variant="secondary" numberOfLines={1}
-            selectable>
-            {email}
-          </Text>
-        ) : null}
-        <Text variant="secondary">
-          {statusLabel(mailbox.status)}
-          {mailbox.status === "connected" && !mailbox.canModify
-            ? " · reconnect for archive and mark-read"
-            : ""}
-        </Text>
-        <View className="flex-row flex-wrap gap-2 pt-1">
-          {mailbox.status === "connected" ? (
-            <ActionChip
-              disabled={busy}
-              label={rowBusy ? "Opening…" : "Update"}
-              onPress={onConnect}
-            />
-          ) : mailbox.status !== "unavailable" ? (
-            <ActionChip
-              disabled={busy}
-              label={rowBusy ? "Opening…" : "Connect"}
-              onPress={onConnect}
-            />
-          ) : null}
-          <ActionChip
-            destructive
-            disabled={busy}
-            label={rowBusy ? "…" : "Disconnect"}
-            onPress={onDisconnect}
-          />
-        </View>
-      </View>
-      {showSeparator ? <View className="ml-4 h-px bg-border" /> : null}
-    </View>
-  );
-}
-
-function ActionChip({
-  label,
-  onPress,
-  disabled,
-  destructive,
-}: {
-  readonly label: string;
-  readonly onPress: () => void;
-  readonly disabled?: boolean;
-  readonly destructive?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={disabled}
-      onPress={onPress}
-      className={`min-h-10 justify-center rounded-[10px] px-3 disabled:opacity-50 ${
-        destructive ? "bg-destructive/10" : "bg-muted"
-      }`}
-    >
-      <Text
-        variant="body"
-        tone={destructive ? "destructive" : "default"}
-      >
-        {label}
-      </Text>
-    </Pressable>
+      {capabilities.needsApproval.length > 0 ? (
+        <>
+          <SettingsFormText>Needs your approval</SettingsFormText>
+          {capabilities.needsApproval.map((item) => (
+            <SettingsFormText key={item} tone="secondary">
+              {`• ${item}`}
+            </SettingsFormText>
+          ))}
+        </>
+      ) : null}
+    </SettingsSection>
   );
 }

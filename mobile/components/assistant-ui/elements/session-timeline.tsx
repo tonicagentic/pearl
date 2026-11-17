@@ -1,4 +1,13 @@
-import { useContext, useMemo, useState, type FC } from "react";
+import {
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FC,
+} from "react";
+import { Platform } from "react-native";
+import Animated from "react-native-reanimated";
 import { useAuiState } from "@assistant-ui/react-native";
 
 import {
@@ -8,19 +17,24 @@ import {
 } from "@/src/assistant-blocks";
 import { useEveEvents } from "@/src/chat-context";
 import { formatDurationMs, turnEventSpan } from "@/src/turn-duration";
-import { getToolPresentation } from "./tool-presentation";
+import {
+  composeActivityHeader,
+  SETTLED_DURATION_MIN_MS,
+  toActivityStep,
+  type ActivityPart,
+} from "../../../../lib/thread-activity";
+import {
+  createThinkingStateDweller,
+  deriveLiveThinkingState,
+} from "../../../../lib/stream-thinking-state";
+import { useChatConversation } from "@/src/conversation-context";
 import { TimelineDurationEventsContext } from "./timeline-duration-events";
 import {
   ActivityPhrase,
   ToolTimeline,
-  type ActivityBit,
-  type TimelineStat,
   type TimelineStep,
 } from "./tool-timeline";
-import { threadMetaCall, threadMetaDetail } from "./surfaces";
-import { Text } from "@/components/ui/text";
-import { useTurnElapsed } from "./turn-elapsed";
-
+import { stepEnter, useMotion } from "./surfaces";
 export {
   TimelineDurationEventsContext,
   TimelineDurationEventsProvider,
@@ -43,275 +57,9 @@ export {
 } from "@/src/assistant-blocks";
 
 // Timeline steps are split at visible content boundaries so earlier tools
-// stay above mid-turn text and live Working stays on the trailing segment.
+// stay above mid-turn text and live activity stays on the trailing segment.
 
-type ToolCallState = {
-  readonly type: "tool-call";
-  readonly toolName: string;
-  readonly args?: unknown;
-  readonly result?: unknown;
-  readonly toolCallId?: string;
-  readonly status?: { readonly type?: string };
-};
-
-type ReasoningState = {
-  readonly type: "reasoning";
-  readonly text?: string;
-};
-
-type TimelinePart = ToolCallState | ReasoningState;
-
-const TOOL_META: Record<string, { verb: string }> = {
-  edit_file: { verb: "Edited" },
-  read_file: { verb: "Read" },
-  web_search: { verb: "Searched" },
-  web_fetch: { verb: "Opened" },
-  browser: { verb: "Browsed" },
-  exa_agent_run: { verb: "Researched" },
-  file__save_memory: { verb: "Remembered" },
-  file__remove_memory: { verb: "Forgot" },
-  load_skill: { verb: "Loaded" },
-  get_weather: { verb: "Checked" },
-  get_profile: { verb: "Loaded profile" },
-  bash: { verb: "Ran" },
-  glob: { verb: "Listed" },
-  grep: { verb: "Searched" },
-  task_cancel: { verb: "Cancelled" },
-  send_notification: { verb: "Notified" },
-  read_attachment: { verb: "Read attachment" },
-  deploy_vercel: { verb: "Deployed" },
-  merge_pr: { verb: "Merged" },
-  eas_build: { verb: "Started EAS build" },
-  eas_submit: { verb: "Submitted to EAS" },
-  run_with_env: { verb: "Ran with env" },
-  preview_check: { verb: "Checked preview" },
-  deployment_logs: { verb: "Opened logs" },
-};
-
-function basename(path: string): string {
-  return path.split("/").pop() || path;
-}
-
-function siteChip(raw: string): string {
-  try {
-    const url = new URL(raw);
-    const host = url.hostname.replace(/^www\./, "");
-    const path = url.pathname === "/" ? "" : url.pathname.replace(/\/$/, "");
-    if (!path) return host;
-    const clipped =
-      path.length > 48 ? `${path.slice(0, 45).replace(/\/?$/, "")}…` : path;
-    return `${host}${clipped}`;
-  } catch {
-    return "";
-  }
-}
-
-function chipFor(part: ToolCallState): string {
-  const args = (part.args ?? {}) as Record<string, unknown>;
-  if (typeof args.filePath === "string") return basename(args.filePath);
-  if (typeof args.command === "string") return args.command;
-  if (typeof args.pattern === "string") return args.pattern;
-  if (typeof args.query === "string") return args.query;
-  if (typeof args.skill === "string") return args.skill;
-  if (typeof args.recipient === "string") return args.recipient;
-  if (typeof args.attachmentId === "string") return args.attachmentId;
-  if (typeof args.taskId === "string") return args.taskId;
-  if (typeof args.url === "string") {
-    const site = siteChip(args.url);
-    if (site) return site;
-  }
-  if (typeof args.message === "string") {
-    return args.message.split("\n")[0].slice(0, 200);
-  }
-  if (typeof args.title === "string") return args.title;
-  if (typeof args.name === "string") return args.name;
-  return getToolPresentation(part.toolName).label;
-}
-
-function toStep(part: TimelinePart): TimelineStep {
-  const args = (part.type === "tool-call" ? (part.args ?? {}) : {}) as {
-    filePath?: unknown;
-    skill?: unknown;
-  };
-  const filePath =
-    typeof args.filePath === "string" ? args.filePath : undefined;
-  if (part.type === "reasoning") {
-    return {
-      verb: "Thought",
-      chip: "",
-      detail: part.text,
-      filePath,
-    };
-  }
-  const meta = TOOL_META[part.toolName];
-  if (part.toolName === "load_skill") {
-    const skillName =
-      typeof args.skill === "string" && args.skill.trim()
-        ? args.skill.trim()
-        : chipFor(part);
-    const failed =
-      part.result !== undefined &&
-      typeof part.result === "object" &&
-      part.result !== null &&
-      "error" in (part.result as object);
-    return {
-      verb: failed ? "Skill failed" : "Skill",
-      chip: skillName.slice(0, 200),
-      detail: failed
-        ? String((part.result as { error?: unknown }).error ?? "Could not load skill")
-        : `Loaded ${skillName}`,
-      filePath,
-      kind: "skill",
-      failed,
-    };
-  }
-  return {
-    verb: meta?.verb ?? getToolPresentation(part.toolName).label,
-    chip: chipFor(part).slice(0, 200),
-    filePath,
-  };
-}
-
-function lineCount(text: string | undefined): number | undefined {
-  if (text === undefined) return undefined;
-  if (text.length === 0) return 0;
-  return text.split("\n").length;
-}
-
-function toStats(parts: readonly TimelinePart[]): TimelineStat[] {
-  return parts
-    .filter(
-      (part): part is ToolCallState =>
-        part.type === "tool-call" && part.toolName === "edit_file",
-    )
-    .map((part) => {
-      const args = (part.args ?? {}) as {
-        filePath?: string;
-        oldText?: string;
-        newText?: string;
-      };
-      return {
-        file: basename(args.filePath ?? "file"),
-        added: lineCount(args.newText),
-        removed: lineCount(args.oldText),
-        filePath: args.filePath,
-      };
-    });
-}
-
-/** Cursor-style activity summaries: "Explored 2 files, ran 1 command." */
-function summarizeActivity(parts: readonly TimelinePart[]): {
-  readonly explored: number;
-  readonly ran: number;
-  readonly searched: number;
-  readonly edited: number;
-  readonly lastEditFile?: string;
-} {
-  let explored = 0;
-  let ran = 0;
-  let searched = 0;
-  let edited = 0;
-  let lastEditFile: string | undefined;
-  for (const part of parts) {
-    if (part.type !== "tool-call") continue;
-    switch (part.toolName) {
-      case "read_file":
-      case "glob":
-      case "read_attachment":
-        explored += 1;
-        break;
-      case "bash":
-      case "run_with_env":
-        ran += 1;
-        break;
-      case "grep":
-      case "web_search":
-      case "exa_agent_run":
-        searched += 1;
-        break;
-      case "edit_file": {
-        edited += 1;
-        const path = (part.args as { filePath?: unknown } | undefined)?.filePath;
-        if (typeof path === "string") lastEditFile = basename(path);
-        break;
-      }
-      default:
-        break;
-    }
-  }
-  return { explored, ran, searched, edited, lastEditFile };
-}
-
-function activityBits(
-  summary: ReturnType<typeof summarizeActivity>,
-): ActivityBit[] {
-  const bits: ActivityBit[] = [];
-  const push = (verb: string, detail: string) => {
-    bits.push({
-      verb: bits.length === 0 ? verb : verb.toLowerCase(),
-      detail,
-    });
-  };
-  if (summary.explored > 0) {
-    push(
-      "Explored",
-      `${summary.explored} file${summary.explored === 1 ? "" : "s"}`,
-    );
-  }
-  if (summary.searched > 0) {
-    push(
-      "Searched",
-      `${summary.searched} time${summary.searched === 1 ? "" : "s"}`,
-    );
-  }
-  if (summary.ran > 0) {
-    push(
-      "Ran",
-      `${summary.ran} command${summary.ran === 1 ? "" : "s"}`,
-    );
-  }
-  if (summary.edited > 0 && !summary.lastEditFile) {
-    push(
-      "Edited",
-      `${summary.edited} file${summary.edited === 1 ? "" : "s"}`,
-    );
-  }
-  return bits;
-}
-
-function formatActivitySummary(
-  summary: ReturnType<typeof summarizeActivity>,
-): string {
-  const bits = activityBits(summary);
-  if (bits.length === 0) return "";
-  return `${bits.map((bit) => `${bit.verb} ${bit.detail}`).join(", ")}.`;
-}
-
-function liveActivityLabel(
-  parts: readonly TimelinePart[],
-  summary: ReturnType<typeof summarizeActivity>,
-): string {
-  const last = [...parts].reverse().find((part) => part.type === "tool-call");
-  if (last?.type === "tool-call" && last.toolName === "edit_file") {
-    const file =
-      summary.lastEditFile ??
-      chipFor(last) ??
-      "file";
-    const explored =
-      summary.explored > 0
-        ? `, explored ${summary.explored} file${summary.explored === 1 ? "" : "s"}`
-        : "";
-    return `Editing ${file}${explored}`;
-  }
-  const overview = formatActivitySummary(summary).replace(/\.$/, "");
-  if (overview) return overview;
-  if (last?.type === "tool-call") {
-    const meta = TOOL_META[last.toolName];
-    const chip = chipFor(last);
-    if (chip) return `${meta?.verb ?? "Running"} ${chip}`;
-  }
-  return "Thinking…";
-}
+type TimelinePart = ActivityPart;
 
 function formatDuration(ms: number): string {
   const seconds = Math.max(0, Math.round(ms / 1000));
@@ -323,7 +71,8 @@ function formatDuration(ms: number): string {
   return `${Math.round(hours)}h ${minutes % 60}m`;
 }
 
-function formatSettledDuration(ms: number): string {
+function formatSettledDuration(ms: number): string | undefined {
+  if (ms < SETTLED_DURATION_MIN_MS) return undefined;
   if (ms < 60_000) return formatDurationMs(ms);
   return formatDuration(ms);
 }
@@ -344,24 +93,43 @@ function asTimelineParts(
   return out;
 }
 
+function toTimelineSteps(
+  parts: readonly TimelinePart[],
+  live: boolean,
+): TimelineStep[] {
+  return parts.map((part, index) => {
+    const stepLive = live && index === parts.length - 1;
+    const step = toActivityStep(part, { live: stepLive });
+    return {
+      verb: step.verb,
+      chip: step.chip,
+      detail: step.detail,
+      filePath: step.filePath,
+      added: step.added,
+      removed: step.removed,
+      kind: step.kind,
+      failed: step.failed,
+    };
+  });
+}
+
 /**
  * One timeline segment for a contiguous slice of reasoning/tool parts.
- * Only the last segment may shimmer Working / show Worked-for.
+ * Only the last segment may shimmer live activity or show the turn duration.
  */
 export const SessionTimelineSegment: FC<{
   readonly indices: readonly number[];
-  /** Last timeline segment in the turn (owns settled “Worked for”). */
+  /** Last timeline segment in the turn (owns settled duration). */
   readonly isLast: boolean;
   /**
-   * Trailing work cluster — only this segment may shimmer Working.
+   * Trailing work cluster — only this segment may shimmer live activity.
    * Defaults to `isLast` for the deprecated whole-turn SessionTimeline.
    */
   readonly live?: boolean;
 }> = ({ indices, isLast, live = isLast }) => {
   const overrideEvents = useContext(TimelineDurationEventsContext);
-  const [userOpen, setUserOpen] = useState<boolean | null>(
-    () => (overrideEvents != null ? true : null),
-  );
+  // Always start collapsed — the header shows the most recent live state.
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const statusType = useAuiState((s) => s.message.status?.type);
   const streaming = statusType === "running";
   const awaitingInput = statusType === "requires-action";
@@ -379,6 +147,7 @@ export const SessionTimelineSegment: FC<{
 
   const liveEvents = useEveEvents();
   const events = overrideEvents ?? liveEvents;
+  const { conversation } = useChatConversation();
   // Questions own the status line ("Asking questions"); fold the timeline.
   // Approvals / sign-in keep the live shimmer until the user answers.
   const showLive =
@@ -394,53 +163,94 @@ export const SessionTimelineSegment: FC<{
     return formatSettledDuration(span.endMs - span.startMs);
   }, [events, streaming, awaitingInput, turnId, isLast, showLive]);
 
-  const liveElapsed = useTurnElapsed();
-  const steps = toolCalls.map(toStep);
-  const stats = toStats(toolCalls);
-  const activity = useMemo(() => summarizeActivity(toolCalls), [toolCalls]);
+  const steps = toTimelineSteps(toolCalls, showLive);
+  const header = useMemo(
+    () => composeActivityHeader(toolCalls, { live: showLive }),
+    [toolCalls, showLive],
+  );
+  // While the panel is open the last StepRow owns the live line. Header
+  // summarizes only finished steps so "Searching…" is not printed twice.
+  const openHeader = useMemo(() => {
+    if (!showLive || toolCalls.length === 0) return header;
+    const prior = toolCalls.slice(0, -1);
+    if (prior.length === 0) {
+      return {
+        bits: [{ verb: "Working…", detail: "" }],
+        text: "Working…",
+        added: header.added,
+        removed: header.removed,
+      };
+    }
+    return composeActivityHeader(prior, { live: false });
+  }, [header, showLive, toolCalls]);
+  const derivedLiveHeader = useMemo(() => {
+    if (!showLive) return header.text;
+    const liveState = deriveLiveThinkingState({
+      events: events as unknown as Parameters<
+        typeof deriveLiveThinkingState
+      >[0]["events"],
+      parts: toolCalls,
+      agents: conversation.agents as unknown as Parameters<
+        typeof deriveLiveThinkingState
+      >[0]["agents"],
+      statusType: streaming ? "running" : statusType,
+      waitingLabel: header.text || "Thinking",
+    });
+    return liveState.label ?? header.text;
+  }, [
+    conversation.agents,
+    events,
+    header.text,
+    showLive,
+    statusType,
+    streaming,
+    toolCalls,
+  ]);
+
+  const dwellerRef = useRef(createThinkingStateDweller());
+  const [activeLabel, setActiveLabel] = useState(derivedLiveHeader);
+
+  useEffect(() => {
+    if (!showLive) {
+      setActiveLabel(header.text);
+      return undefined;
+    }
+    setActiveLabel(dwellerRef.current.next(derivedLiveHeader) ?? header.text);
+    const timer = setInterval(() => {
+      setActiveLabel(dwellerRef.current.flush() ?? header.text);
+    }, 100);
+    return () => clearInterval(timer);
+  }, [derivedLiveHeader, header.text, showLive]);
+
+  const motion = useMotion();
+  const nativeMotion = motion && Platform.OS !== "web";
 
   if (steps.length === 0) return null;
 
-  const workedFor =
-    isLast && !showLive
-      ? (settledDuration ?? (streaming ? liveElapsed : undefined))
-      : undefined;
-  const duration = showLive ? liveElapsed : workedFor;
-  const bits = activityBits(activity);
-  const restingLabel =
-    bits.length > 0 || workedFor ? (
-      <ActivityPhrase
-        bits={bits}
-        prefix={
-          workedFor ? (
-            <>
-              <Text className={threadMetaCall}>Thought</Text>
-              <Text className={threadMetaDetail}>{` ${workedFor}`}</Text>
-              {bits.length > 0 ? (
-                <Text className={threadMetaDetail}> · </Text>
-              ) : null}
-            </>
-          ) : undefined
-        }
-      />
-    ) : (
-      <Text variant="label" className={threadMetaDetail}>
-        {`${steps.length} step${steps.length === 1 ? "" : "s"}`}
-      </Text>
-    );
+  // Settled duration only — no live Ns ticks while streaming.
+  const duration =
+    isLast && !showLive ? settledDuration : undefined;
 
   return (
-    <ToolTimeline
-      steps={steps}
-      visibleSteps={steps.length}
-      streaming={showLive}
-      open={userOpen ?? showLive}
-      onOpenChange={setUserOpen}
-      restingLabel={restingLabel}
-      activeLabel={liveActivityLabel(toolCalls, activity)}
-      elapsed={showLive ? duration : undefined}
-      stats={stats}
-    />
+    <Animated.View entering={nativeMotion ? stepEnter : undefined}>
+      <ToolTimeline
+        steps={steps}
+        visibleSteps={steps.length}
+        streaming={showLive}
+        open={userOpen ?? false}
+        onOpenChange={setUserOpen}
+        restingLabel={
+          <ActivityPhrase
+            bits={[...(showLive ? openHeader.bits : header.bits)]}
+            emphasis={duration ? "detail" : "call"}
+          />
+        }
+        activeLabel={activeLabel}
+        headerAdded={header.added}
+        headerRemoved={header.removed}
+        elapsed={duration}
+      />
+    </Animated.View>
   );
 };
 

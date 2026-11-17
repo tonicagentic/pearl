@@ -10,7 +10,8 @@ import {
 } from "@assistant-ui/react-native";
 import { CheckIcon, XIcon } from "lucide-react-native";
 import { type FC, useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, TextInput, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text, textVariants } from "@/components/ui/text";
 import {
@@ -18,12 +19,15 @@ import {
   inkButton,
   mono,
   monoStyle,
+  stepEnter,
   textButtonHitSlop,
   useAnnounce,
   useHydrated,
+  useMotion,
   webLiveRegion,
 } from "./surfaces";
 import { getToolPresentation } from "./tool-presentation";
+import { GenerateImageToolCard } from "./generate-image-tool";
 import { formatUnknownValue } from "../utils/task";
 import { useWorkspaceOptional } from "@/src/workspace-context";
 import { useComposerOwnsHitl } from "@/components/assistant-ui/elements/composer-owns-hitl";
@@ -450,6 +454,8 @@ export const ToolFallbackApproval: FC<
 function FilePreview({ path, content }: { path: string; content: string }) {
   const workspace = useWorkspaceOptional();
   const [open, setOpen] = useState(false);
+  const motion = useMotion();
+  const nativeMotion = motion && Platform.OS !== "web";
 
   const openPreview = () => {
     if (workspace) {
@@ -460,11 +466,13 @@ function FilePreview({ path, content }: { path: string; content: string }) {
   };
 
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Open ${path}`} className="min-h-11 justify-center ps-6" onPress={openPreview}>
-      <Text variant="secondary" tone="primary" numberOfLines={1}>
-        Open {path}
-      </Text>
-    </Pressable>
+    <Animated.View entering={nativeMotion ? stepEnter : undefined}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Open ${path}`} className="min-h-11 justify-center ps-6" onPress={openPreview}>
+        <Text variant="secondary" tone="primary" numberOfLines={1}>
+          Open {path}
+        </Text>
+      </Pressable>
+    </Animated.View>
     <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
       <SafeAreaView className="bg-background flex-1 p-4">
         <Pressable accessibilityRole="button" className="min-h-11 justify-center" onPress={() => setOpen(false)}>
@@ -590,6 +598,24 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
       >
         {approval!.prompt}
       </Text>
+    );
+  }
+
+  if (toolName === "generate_image") {
+    return (
+      <GenerateImageToolCard
+        args={
+          args && typeof args === "object" && !Array.isArray(args)
+            ? (args as {
+                prompt?: string;
+                size?: string;
+                aspectRatio?: string;
+              })
+            : undefined
+        }
+        result={result}
+        status={status}
+      />
     );
   }
 

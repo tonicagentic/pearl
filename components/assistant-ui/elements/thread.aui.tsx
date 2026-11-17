@@ -23,6 +23,7 @@ import { Image } from "@/components/assistant-ui/elements/image";
 import { AssistantInlineText } from "@/components/json-render/chat-json-render";
 import { proseFromMessageText } from "@/lib/json-render/inline-spec";
 import {
+  CitationInteractionProvider,
   MessageSources,
   SourcePart,
 } from "@/components/assistant-ui/elements/citation";
@@ -793,101 +794,103 @@ const AssistantMessage: FC = () => {
       data-role="assistant"
       className={cn(messageEnter, "relative -mb-7.5 pb-7.5 [contain-intrinsic-size:auto_200px] [content-visibility:auto]")}
     >
-      <div
-        data-slot="aui_assistant-message-content"
-        className="text-foreground flex flex-col gap-3 px-2 text-[15px] leading-6 wrap-break-word"
-      >
-        <AssistantThinking />
-        <SessionTimeline />
-        <SessionTodoList />
-        <MessageError />
-        <MessagePrimitive.GroupedParts
-          groupBy={groupPartByType({
-            reasoning: ["group-chainOfThought", "group-reasoning"],
-            "tool-call": ["group-chainOfThought", "group-tool"],
-            "standalone-tool-call": [],
-          })}
+      <CitationInteractionProvider>
+        <div
+          data-slot="aui_assistant-message-content"
+          className="text-foreground flex flex-col gap-3 px-2 text-[15px] leading-6 wrap-break-word"
         >
-          {({ part, children }) => {
-            switch (part.type) {
-              case "group-standalone-tool-call":
-                // Adjacent standalone tool parts (write_file + edit_file)
-                // coalesce into this group; render them inline in order.
-                return <>{children}</>;
-              case "group-chainOfThought":
-                // Reasoning and timeline-covered tool steps render nothing
-                // here; a chain only shows children when it holds something
-                // the timeline does not summarize (a delegated task card).
-                if (part.indices.every(isTimelineCovered)) return null;
-                return <>{children}</>;
-              case "group-tool": {
-                if (part.indices.every(isTimelineCovered)) {
-                  // Every tool in the group is summarized by the timeline.
-                  return null;
-                }
-                const groupParts = part.indices.map(
-                  (index) => messageParts[index],
-                );
-                const isDelegationGroup =
-                  groupParts.length > 0 &&
-                  groupParts.every(
-                    (groupPart) =>
-                      groupPart?.type === "tool-call" &&
-                      DELEGATION_TOOLS.has(groupPart.toolName),
+          <AssistantThinking />
+          <SessionTimeline />
+          <SessionTodoList />
+          <MessageError />
+          <MessagePrimitive.GroupedParts
+            groupBy={groupPartByType({
+              reasoning: ["group-chainOfThought", "group-reasoning"],
+              "tool-call": ["group-chainOfThought", "group-tool"],
+              "standalone-tool-call": [],
+            })}
+          >
+            {({ part, children }) => {
+              switch (part.type) {
+                case "group-standalone-tool-call":
+                  // Adjacent standalone tool parts (write_file + edit_file)
+                  // coalesce into this group; render them inline in order.
+                  return <>{children}</>;
+                case "group-chainOfThought":
+                  // Reasoning and timeline-covered tool steps render nothing
+                  // here; a chain only shows children when it holds something
+                  // the timeline does not summarize (a delegated task card).
+                  if (part.indices.every(isTimelineCovered)) return null;
+                  return <>{children}</>;
+                case "group-tool": {
+                  if (part.indices.every(isTimelineCovered)) {
+                    // Every tool in the group is summarized by the timeline.
+                    return null;
+                  }
+                  const groupParts = part.indices.map(
+                    (index) => messageParts[index],
                   );
-                if (isDelegationGroup) {
-                  // Delegated tasks render as task cards (docs:
-                  // elements/task-card) instead of a tool group.
-                  if (TaskGroup) return <TaskGroup group={part} />;
+                  const isDelegationGroup =
+                    groupParts.length > 0 &&
+                    groupParts.every(
+                      (groupPart) =>
+                        groupPart?.type === "tool-call" &&
+                        DELEGATION_TOOLS.has(groupPart.toolName),
+                    );
+                  if (isDelegationGroup) {
+                    // Delegated tasks render as task cards (docs:
+                    // elements/task-card) instead of a tool group.
+                    if (TaskGroup) return <TaskGroup group={part} />;
+                    return null;
+                  }
+                  // Approvals and other non-timeline tools render inline.
+                  return <>{children}</>;
+                }
+                case "group-reasoning":
+                  // Reasoning is summarized by the timeline.
                   return null;
-                }
-                // Approvals and other non-timeline tools render inline.
-                return <>{children}</>;
+                case "text":
+                  return <AssistantInlineText />;
+                case "source":
+                  return <SourcePart />;
+                case "reasoning":
+                  // Summarized by the timeline.
+                  return null;
+                case "tool-call":
+                  if (part.toolName === "todo") return null;
+                  if (isTimelineToolCall(part)) {
+                    // Summarized by the timeline above; edit_file's renderer
+                    // still mounts through its tool UI for the canvas mirror.
+                    return part.toolName === "edit_file" ? part.toolUI : null;
+                  }
+                  return part.toolUI ?? <ToolFallbackComponent {...part} />;
+                case "data":
+                  return part.dataRendererUI;
+                case "file":
+                  return (
+                    <div data-slot="aui_assistant-message-file" className="py-1">
+                      <File {...part} />
+                    </div>
+                  );
+                case "image":
+                  return (
+                    <div data-slot="aui_assistant-message-image" className="py-1">
+                      <Image {...part} />
+                    </div>
+                  );
+                case "indicator":
+                  // The live status line (AssistantThinking above the parts)
+                  // covers this state with a label and elapsed time.
+                  return null;
+                default:
+                  return null;
               }
-              case "group-reasoning":
-                // Reasoning is summarized by the timeline.
-                return null;
-              case "text":
-                return <AssistantInlineText />;
-              case "source":
-                return <SourcePart />;
-              case "reasoning":
-                // Summarized by the timeline.
-                return null;
-              case "tool-call":
-                if (part.toolName === "todo") return null;
-                if (isTimelineToolCall(part)) {
-                  // Summarized by the timeline above; edit_file's renderer
-                  // still mounts through its tool UI for the canvas mirror.
-                  return part.toolName === "edit_file" ? part.toolUI : null;
-                }
-                return part.toolUI ?? <ToolFallbackComponent {...part} />;
-              case "data":
-                return part.dataRendererUI;
-              case "file":
-                return (
-                  <div data-slot="aui_assistant-message-file" className="py-1">
-                    <File {...part} />
-                  </div>
-                );
-              case "image":
-                return (
-                  <div data-slot="aui_assistant-message-image" className="py-1">
-                    <Image {...part} />
-                  </div>
-                );
-              case "indicator":
-                // The live status line (AssistantThinking above the parts)
-                // covers this state with a label and elapsed time.
-                return null;
-              default:
-                return null;
-            }
-          }}
-        </MessagePrimitive.GroupedParts>
-        <MessageSources />
-        <MessageError />
-      </div>
+            }}
+          </MessagePrimitive.GroupedParts>
+          <MessageSources />
+          <MessageError />
+        </div>
+      </CitationInteractionProvider>
 
       <div
         data-slot="aui_assistant-message-footer"
@@ -937,7 +940,7 @@ const AssistantActionBar: FC = () => {
     <ActionBarPrimitive.Root
       hideWhenRunning
       autohide="not-last"
-      className="aui-assistant-action-bar-root text-muted-foreground animate-in fade-in col-start-3 row-start-2 -ms-1 flex gap-1 duration-200"
+      className="aui-assistant-action-bar-root text-muted-foreground animate-in fade-in slide-in-from-bottom-1 zoom-in-95 fill-mode-both col-start-3 row-start-2 -ms-1 flex gap-1 duration-200 [animation-delay:60ms]"
     >
       <AssistantProseCopy />
       <ActionBarPrimitive.Reload asChild>
@@ -1164,6 +1167,8 @@ const UserMessage: FC = () => {
 };
 
 const EditComposer: FC = () => {
+  const { onComposerPaste } = useLargePasteComposer();
+
   return (
     <MessagePrimitive.Root
       data-slot="aui_edit-composer-wrapper"
@@ -1173,6 +1178,7 @@ const EditComposer: FC = () => {
         <ComposerPrimitive.Input
           className="aui-edit-composer-input text-foreground min-h-14 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-base outline-none"
           autoFocus
+          onPaste={onComposerPaste}
         />
         <div className="aui-edit-composer-footer mx-2.5 mb-2.5 flex items-center gap-1.5 self-end">
           <ComposerPrimitive.Cancel asChild>
