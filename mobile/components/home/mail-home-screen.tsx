@@ -31,6 +31,7 @@ import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
+import { chatListPresence } from "@/src/chat-presence";
 import type { ChatListItem } from "@/src/chats-client";
 import { initials as viewerInitials } from "@/src/initials";
 
@@ -71,8 +72,9 @@ export function MailHomeScreen() {
   const [projectTargetId, setProjectTargetId] = useState<string | null>(null);
   const homeFocusedRef = useRef(false);
   const composerRef = useRef<ComponentRef<typeof View>>(null);
-  const openedGuestChat = useRef(false);
-  const [holdingGuestHome, setHoldingGuestHome] = useState(isAnonymous);
+  // Cold-start once: open new chat by default, or home when something is unread.
+  const didLaunchRef = useRef(false);
+  const [holdingLaunchHome, setHoldingLaunchHome] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
@@ -118,24 +120,44 @@ export function MailHomeScreen() {
   }, [billingReady, chats, isAnonymous, newChat, selectChat]);
 
   useEffect(() => {
-    if (!isAnonymous) {
-      setHoldingGuestHome(false);
+    if (!billingReady || !chatsReady || didLaunchRef.current) return;
+    didLaunchRef.current = true;
+
+    // Guests keep a single thread — reopen it, or start one if empty.
+    if (isAnonymous) {
+      const existing = chats[0];
+      const open = existing
+        ? selectChat(existing.id).then((ok) => ok)
+        : Promise.resolve(true);
+      void open.then((ok) => {
+        if (!existing) newChat();
+        if (ok) {
+          router.push({ pathname: "/chat", params: { guestEntry: "1" } });
+        }
+        setHoldingLaunchHome(false);
+      });
       return;
     }
-    if (!billingReady || !chatsReady || openedGuestChat.current) return;
-    openedGuestChat.current = true;
-    const existing = chats[0];
-    const open = existing
-      ? selectChat(existing.id).then((ok) => ok)
-      : Promise.resolve(true);
-    void open.then((ok) => {
-      if (!existing) newChat();
-      if (ok) {
-        router.push({ pathname: "/chat", params: { guestEntry: "1" } });
-      }
-      setHoldingGuestHome(false);
-    });
-  }, [billingReady, chats, chatsReady, isAnonymous, newChat, selectChat]);
+
+    // Signed-in: land on new chat unless another thread has an unread reply.
+    const hasUnread = chats.some(
+      (chat) => chatListPresence(chat) === "unread",
+    );
+    if (hasUnread) {
+      setHoldingLaunchHome(false);
+      return;
+    }
+    newChat();
+    router.push({ pathname: "/chat", params: { settle: "1" } });
+    setHoldingLaunchHome(false);
+  }, [
+    billingReady,
+    chats,
+    chatsReady,
+    isAnonymous,
+    newChat,
+    selectChat,
+  ]);
 
   const promptRename = useCallback(
     (chat: ChatListItem) => {
@@ -328,18 +350,18 @@ export function MailHomeScreen() {
         </Stack.Toolbar>
       ) : null}
       <View style={{ flex: 1, zIndex: 0, overflow: "hidden" }}>
-        {holdingGuestHome ? null : billingReady ? (
+        {!billingReady ? (
+          <BillingGateScreen onReady={markBillingReady} />
+        ) : holdingLaunchHome ? null : (
           <HistoryScreen
             onOpenChat={openChat}
             chatActions={chatActions}
             bottomInset={listBottomInset}
           />
-        ) : (
-          <BillingGateScreen onReady={markBillingReady} />
         )}
       </View>
 
-      {billingReady && !holdingGuestHome ? (
+      {billingReady && !holdingLaunchHome ? (
         guestHasThread ? (
           <SignInForNewChatCard />
         ) : (
@@ -347,7 +369,7 @@ export function MailHomeScreen() {
         )
       ) : null}
 
-      {holdingGuestHome || guestHasThread ? null : (
+      {holdingLaunchHome || guestHasThread ? null : (
         <WalkthroughOverlay composerRef={composerRef} />
       )}
 
