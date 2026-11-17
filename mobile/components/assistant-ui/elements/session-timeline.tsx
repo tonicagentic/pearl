@@ -1,4 +1,11 @@
-import { useContext, useMemo, useState, type FC } from "react";
+import {
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FC,
+} from "react";
 import { useAuiState } from "@assistant-ui/react-native";
 
 import {
@@ -13,7 +20,10 @@ import {
   toActivityStep,
   type ActivityPart,
 } from "../../../../lib/thread-activity";
-import { deriveLiveThinkingState } from "../../../../lib/stream-thinking-state";
+import {
+  createThinkingStateDweller,
+  deriveLiveThinkingState,
+} from "../../../../lib/stream-thinking-state";
 import { useChatConversation } from "@/src/conversation-context";
 import { TimelineDurationEventsContext } from "./timeline-duration-events";
 import {
@@ -21,8 +31,6 @@ import {
   ToolTimeline,
   type TimelineStep,
 } from "./tool-timeline";
-import { useTurnElapsed } from "./turn-elapsed";
-
 export {
   TimelineDurationEventsContext,
   TimelineDurationEventsProvider,
@@ -115,9 +123,8 @@ export const SessionTimelineSegment: FC<{
   readonly live?: boolean;
 }> = ({ indices, isLast, live = isLast }) => {
   const overrideEvents = useContext(TimelineDurationEventsContext);
-  const [userOpen, setUserOpen] = useState<boolean | null>(
-    () => (overrideEvents != null ? true : null),
-  );
+  // Always start collapsed — the header shows the most recent live state.
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const statusType = useAuiState((s) => s.message.status?.type);
   const streaming = statusType === "running";
   const awaitingInput = statusType === "requires-action";
@@ -151,13 +158,27 @@ export const SessionTimelineSegment: FC<{
     return formatSettledDuration(span.endMs - span.startMs);
   }, [events, streaming, awaitingInput, turnId, isLast, showLive]);
 
-  const liveElapsed = useTurnElapsed();
   const steps = toTimelineSteps(toolCalls, showLive);
   const header = useMemo(
     () => composeActivityHeader(toolCalls, { live: showLive }),
     [toolCalls, showLive],
   );
-  const liveHeader = useMemo(() => {
+  // While the panel is open the last StepRow owns the live line. Header
+  // summarizes only finished steps so "Searching…" is not printed twice.
+  const openHeader = useMemo(() => {
+    if (!showLive || toolCalls.length === 0) return header;
+    const prior = toolCalls.slice(0, -1);
+    if (prior.length === 0) {
+      return {
+        bits: [{ verb: "Working…", detail: "" }],
+        text: "Working…",
+        added: header.added,
+        removed: header.removed,
+      };
+    }
+    return composeActivityHeader(prior, { live: false });
+  }, [header, showLive, toolCalls]);
+  const derivedLiveHeader = useMemo(() => {
     if (!showLive) return header.text;
     const liveState = deriveLiveThinkingState({
       events: events as unknown as Parameters<
@@ -181,23 +202,40 @@ export const SessionTimelineSegment: FC<{
     toolCalls,
   ]);
 
+  const dwellerRef = useRef(createThinkingStateDweller());
+  const [activeLabel, setActiveLabel] = useState(derivedLiveHeader);
+
+  useEffect(() => {
+    if (!showLive) {
+      setActiveLabel(header.text);
+      return undefined;
+    }
+    setActiveLabel(dwellerRef.current.next(derivedLiveHeader) ?? header.text);
+    const timer = setInterval(() => {
+      setActiveLabel(dwellerRef.current.flush() ?? header.text);
+    }, 100);
+    return () => clearInterval(timer);
+  }, [derivedLiveHeader, header.text, showLive]);
+
   if (steps.length === 0) return null;
 
-  const workedFor =
-    isLast && !showLive
-      ? (settledDuration ?? (streaming ? liveElapsed : undefined))
-      : undefined;
-  const duration = showLive ? liveElapsed : workedFor;
+  // Settled duration only — no live Ns ticks while streaming.
+  const duration =
+    isLast && !showLive ? settledDuration : undefined;
 
   return (
     <ToolTimeline
       steps={steps}
       visibleSteps={steps.length}
       streaming={showLive}
-      open={userOpen ?? showLive}
+      open={userOpen ?? false}
       onOpenChange={setUserOpen}
-      restingLabel={<ActivityPhrase bits={[...header.bits]} />}
-      activeLabel={liveHeader}
+      restingLabel={
+        <ActivityPhrase
+          bits={[...(showLive ? openHeader.bits : header.bits)]}
+        />
+      }
+      activeLabel={activeLabel}
       headerAdded={header.added}
       headerRemoved={header.removed}
       elapsed={duration}

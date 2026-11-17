@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuiState } from "@assistant-ui/react";
 import { useEveEvents } from "@assistant-ui/eve";
 
@@ -11,13 +11,15 @@ import {
   toActivityStep,
   type ActivityPart,
 } from "@/lib/thread-activity";
-import { deriveLiveThinkingState } from "@/lib/stream-thinking-state";
+import {
+  createThinkingStateDweller,
+  deriveLiveThinkingState,
+} from "@/lib/stream-thinking-state";
 
 import {
   ToolTimeline,
   type TimelineStep,
 } from "@/components/assistant-ui/elements/tool-timeline";
-import { useElapsedLabel } from "@/components/assistant-ui/elements/use-elapsed-label";
 
 // The runtime part state for a tool call or reasoning (shape per docs:
 // elements/tool-timeline).
@@ -91,9 +93,7 @@ function toTimelineSteps(
 // tool parts render null so nothing shows twice.
 export function SessionTimeline() {
   const { openPath } = useCanvas();
-  // Open-state contract from the docs' step-panel design: the timeline follows
-  // streaming (open while the turn runs, folded into the resting label after)
-  // until the reader toggles it once, after which their choice sticks.
+  // Always start collapsed — the header shows the most recent live state.
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const streaming = useAuiState((s) => s.message.status?.type === "running");
   const turnId = useAuiState(
@@ -139,15 +139,19 @@ export function SessionTimeline() {
     return formatDuration(end - start);
   }, [events, streaming, turnId]);
 
-  // Live tick while streaming; the settled badge comes from the event log.
-  const liveElapsed = useElapsedLabel(streaming);
-
   const steps = toTimelineSteps(toolCalls, streaming);
   const header = useMemo(
     () => composeActivityHeader(toolCalls, { live: streaming }),
     [toolCalls, streaming],
   );
-  const liveHeader = useMemo(() => {
+  // Expanded header drops the live trailing step so StepRow owns that line.
+  const openHeaderText = useMemo(() => {
+    if (!streaming || toolCalls.length === 0) return header.text;
+    const prior = toolCalls.slice(0, -1);
+    if (prior.length === 0) return "Working…";
+    return composeActivityHeader(prior, { live: false }).text;
+  }, [header.text, streaming, toolCalls]);
+  const derivedLiveHeader = useMemo(() => {
     if (!streaming) return header.text;
     const live = deriveLiveThinkingState({
       events: events as unknown as Parameters<
@@ -160,22 +164,35 @@ export function SessionTimeline() {
     return live.label ?? header.text;
   }, [events, header.text, streaming, toolCalls]);
 
-  if (steps.length === 0) return null;
+  const dwellerRef = useRef(createThinkingStateDweller());
+  const [activeLabel, setActiveLabel] = useState(derivedLiveHeader);
 
-  const duration = streaming ? liveElapsed : settledDuration;
+  useEffect(() => {
+    if (!streaming) {
+      setActiveLabel(header.text);
+      return undefined;
+    }
+    setActiveLabel(dwellerRef.current.next(derivedLiveHeader) ?? header.text);
+    const timer = window.setInterval(() => {
+      setActiveLabel(dwellerRef.current.flush() ?? header.text);
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [derivedLiveHeader, header.text, streaming]);
+
+  if (steps.length === 0) return null;
 
   return (
     <ToolTimeline
       steps={steps}
       visibleSteps={steps.length}
       streaming={streaming}
-      open={userOpen ?? streaming}
+      open={userOpen ?? false}
       onOpenChange={setUserOpen}
-      restingLabel={header.text}
-      activeLabel={liveHeader}
+      restingLabel={streaming ? openHeaderText : header.text}
+      activeLabel={activeLabel}
       headerAdded={header.added}
       headerRemoved={header.removed}
-      elapsed={duration}
+      elapsed={streaming ? undefined : settledDuration}
       onOpenFile={openPath}
     />
   );

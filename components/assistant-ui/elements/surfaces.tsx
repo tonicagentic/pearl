@@ -29,14 +29,24 @@ export const iconSwapIn = "scale-100 opacity-100 blur-none";
 
 export const iconSwapOut = "scale-[0.25] opacity-0 blur-[4px]";
 
-/** Match thinking-states (~150ms) opacity + blur swap. */
+/**
+ * transitions.dev thinking-states / text-states-swap.
+ * Outgoing exits up + blur; incoming is planted below (`enter-start`, no
+ * transition), then released after `--think-gap` so both halves overlap for
+ * one `--think-swap` (not two sequential swaps).
+ */
 export const labelSwap =
-  "col-start-1 row-start-1 flex w-max items-center gap-1.5 leading-none transition-[opacity,filter,transform] duration-150 ease-in-out motion-reduce:transition-none";
+  "col-start-1 row-start-1 flex w-max items-center gap-1.5 whitespace-nowrap leading-none transition-[opacity,filter,transform] duration-150 ease-in-out will-change-[transform,filter,opacity] motion-reduce:transition-none";
 
 export const labelSwapIn = "translate-y-0 opacity-100 blur-none";
 
+/** `--think-distance` 8px up + `--think-blur` 2px. */
 export const labelSwapOut =
-  "pointer-events-none -translate-y-1.5 select-none opacity-0 blur-[2px]";
+  "pointer-events-none -translate-y-2 select-none opacity-0 blur-[2px]";
+
+/** Incoming rest state before release — transition disabled so it snaps below. */
+export const labelSwapEnterStart =
+  "pointer-events-none translate-y-2 select-none opacity-0 blur-[2px] ![transition:none]";
 
 /** Motion tokens mirrored from mobile / transitions.dev thinking-states. */
 export const THINK_SWAP_MS = 150;
@@ -160,10 +170,19 @@ export function SwapLabel({
   );
 }
 
+type ThinkSlotPhase = "in" | "exit" | "enter-start";
+
+function thinkSlotClass(phase: ThinkSlotPhase): string {
+  if (phase === "in") return labelSwapIn;
+  if (phase === "enter-start") return labelSwapEnterStart;
+  return labelSwapOut;
+}
+
 /**
  * Dynamic string swapper matching transitions.dev thinking-states:
- * outgoing floats up + blurs out (150ms), 50ms gap, incoming rises +
- * unblurs with shimmer; container width eases so elapsed badges glide.
+ * outgoing exits up + blur immediately; incoming snaps below (enter-start),
+ * then after `--think-gap` rises + unblurs with shimmer. Width eases over
+ * `--think-swap` so neighboring chrome glides with the line.
  */
 export function ThinkingStatesLabel({
   label,
@@ -179,6 +198,10 @@ export function ThinkingStatesLabel({
   const [active, setActive] = useState<0 | 1>(0);
   const activeRef = useRef<0 | 1>(0);
   const [slots, setSlots] = useState<[string, string]>([label, label]);
+  const [phases, setPhases] = useState<[ThinkSlotPhase, ThinkSlotPhase]>([
+    "in",
+    "exit",
+  ]);
   const currentRef = useRef(label);
   const [width, setWidth] = useState<number | null>(null);
   const gapTimer = useRef<number | null>(null);
@@ -198,19 +221,33 @@ export function ThinkingStatesLabel({
 
     if (reduced) {
       setSlots([label, label]);
+      setPhases(["in", "exit"]);
       activeRef.current = 0;
       setActive(0);
       return;
     }
 
-    const next: 0 | 1 = activeRef.current === 0 ? 1 : 0;
+    const from = activeRef.current;
+    const next: 0 | 1 = from === 0 ? 1 : 0;
     setSlots((prev) => {
       const copy: [string, string] = [prev[0], prev[1]];
       copy[next] = label;
       return copy;
     });
-    // 50ms gap before flipping the active slot so outgoing finishes first.
+    // Exit outgoing immediately; plant incoming below with transition:none.
+    setPhases((prev) => {
+      const copy: [ThinkSlotPhase, ThinkSlotPhase] = [prev[0], prev[1]];
+      copy[from] = "exit";
+      copy[next] = "enter-start";
+      return copy;
+    });
+    // After --think-gap, release incoming so it rises over --think-swap.
     gapTimer.current = window.setTimeout(() => {
+      setPhases((prev) => {
+        const copy: [ThinkSlotPhase, ThinkSlotPhase] = [prev[0], prev[1]];
+        copy[next] = "in";
+        return copy;
+      });
       activeRef.current = next;
       setActive(next);
       gapTimer.current = null;
@@ -233,7 +270,7 @@ export function ThinkingStatesLabel({
     const observer = new ResizeObserver(measure);
     observer.observe(target);
     return () => observer.disconnect();
-  }, [active, slots]);
+  }, [active, slots, phases]);
 
   return (
     <span
@@ -246,16 +283,20 @@ export function ThinkingStatesLabel({
       <span
         ref={slotA}
         aria-hidden={active !== 0}
-        className={cn(labelSwap, active === 0 ? labelSwapIn : labelSwapOut)}
+        className={cn(labelSwap, thinkSlotClass(phases[0]))}
       >
-        <ShimmerLabel active={shimmer && active === 0}>{slots[0]}</ShimmerLabel>
+        <ShimmerLabel active={shimmer && phases[0] !== "enter-start"}>
+          {slots[0]}
+        </ShimmerLabel>
       </span>
       <span
         ref={slotB}
         aria-hidden={active !== 1}
-        className={cn(labelSwap, active === 1 ? labelSwapIn : labelSwapOut)}
+        className={cn(labelSwap, thinkSlotClass(phases[1]))}
       >
-        <ShimmerLabel active={shimmer && active === 1}>{slots[1]}</ShimmerLabel>
+        <ShimmerLabel active={shimmer && phases[1] !== "enter-start"}>
+          {slots[1]}
+        </ShimmerLabel>
       </span>
     </span>
   );

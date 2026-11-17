@@ -4,7 +4,6 @@ import { useAuiState } from "@assistant-ui/react";
 import { useEveEvents } from "@assistant-ui/eve";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
-import { useElapsedLabel } from "@/components/assistant-ui/elements/use-elapsed-label";
 import {
   getWaitingLabel,
   subscribeWaitingLabel,
@@ -19,12 +18,6 @@ import {
 // Stays live across pre-content, reasoning, streaming tool calls, and
 // subagent phases — yielding only when reply prose is actively streaming
 // or the turn settles. Raw reasoning stays collapsed in SessionTimeline.
-//
-// Stall watchdog: after 45s of running without visible progress the label
-// escalates so a dead gateway call reads as text, not an endless shimmer.
-
-const STALL_WARNING_S = 45;
-const STALL_LABEL = "Still working — the model may be slow or unreachable.";
 
 function isAnswerPhase(parts: readonly ThinkingMessagePart[]): boolean {
   for (let i = parts.length - 1; i >= 0; i -= 1) {
@@ -85,17 +78,9 @@ export function AssistantThinking() {
     return () => window.clearInterval(timer);
   }, [derived.label]);
 
-  const elapsed = useElapsedLabel(label !== undefined);
   if (label === undefined) return null;
 
-  const seconds = Number.parseInt(elapsed ?? "0", 10);
-  const stalled = Number.isFinite(seconds) && seconds > STALL_WARNING_S;
-
   return (
-    <ThinkingIndicator
-      label={stalled ? STALL_LABEL : label}
-      elapsed={elapsed}
-      data-testid="assistant-thinking"
-    />
+    <ThinkingIndicator label={label} data-testid="assistant-thinking" />
   );
 }

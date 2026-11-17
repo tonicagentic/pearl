@@ -3,7 +3,7 @@
  *
  * Maps eve v27 stream events + assistant message parts into one user-facing
  * status phrase. Keeps the status line calm with dwell coalescing so rapid
- * deltas do not thrash the 150ms thinking-states swap.
+ * deltas do not thrash the thinking-states swap (150ms + 50ms gap).
  */
 
 import {
@@ -14,7 +14,8 @@ import {
 
 export { extractPartialArgString };
 
-export const THINKING_STATE_DWELL_MS = 650;
+/** Minimum visible hold before the next swap — matches `--think-hold`. */
+export const THINKING_STATE_DWELL_MS = 2000;
 export const DEFAULT_THINKING_LABEL = "Thinking";
 
 export type ThinkingStatusType =
@@ -403,8 +404,12 @@ export function deriveLiveThinkingState(
 }
 
 /**
- * Hold an intermediate label for at least `dwellMs` so rapid stream ticks
- * do not thrash the thinking-states swap animation.
+ * Pace thinking-state swaps to feel intentional.
+ *
+ * Each committed label stays visible for at least `dwellMs` (think-hold).
+ * While holding, only the latest incoming label is kept in a single `pending`
+ * slot — intermediates that arrive while we are behind the stream are
+ * skipped. Clearing (`undefined`) is immediate so answer handoff does not wait.
  */
 export function createThinkingStateDweller({
   dwellMs = THINKING_STATE_DWELL_MS,
@@ -415,6 +420,7 @@ export function createThinkingStateDweller({
 } = {}) {
   let held: string | undefined;
   let heldAt = 0;
+  /** Latest label waiting to replace `held` once the dwell window elapses. */
   let pending: string | undefined;
 
   return {
@@ -442,6 +448,7 @@ export function createThinkingStateDweller({
         pending = undefined;
         return held;
       }
+      // Overwrite pending so only the newest behind-the-stream label survives.
       pending = label;
       return held;
     },

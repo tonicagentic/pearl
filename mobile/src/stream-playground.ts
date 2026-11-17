@@ -460,7 +460,8 @@ export const STREAM_PLAY_SCENARIOS: readonly StreamPlayScenario[] = [
   {
     id: "rapid-burst",
     title: "Rapid Burst",
-    description: "Fast heading/tool transitions to stress dwell coalescing.",
+    description:
+      "Fast heading/tool transitions to stress 2000ms dwell coalescing.",
     events: rapidBurstScript(),
   },
 ];

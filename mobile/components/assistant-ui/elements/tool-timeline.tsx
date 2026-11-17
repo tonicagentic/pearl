@@ -177,8 +177,6 @@ function StepRow({
   const verb =
     active && step.verb === "Thought" ? "Thinking…" : step.verb;
   const showChip = step.chip.length > 0;
-  // Keep the ellipsis on Thinking… when the duration sits beside it.
-  const label = elapsed !== undefined ? `${verb} ${elapsed}` : verb;
 
   return (
     <Animated.View
@@ -199,7 +197,7 @@ function StepRow({
       >
         {active ? (
           <ThinkingStatesLabel
-            label={label}
+            label={verb}
             textClassName={cn(threadMetaCall, "shrink-0")}
           />
         ) : (
@@ -208,9 +206,17 @@ function StepRow({
             variant="label"
             className={cn(threadMetaCall, "shrink-0")}
           >
-            {label}
+            {verb}
           </ShimmerLabel>
         )}
+        {elapsed !== undefined ? (
+          <Text
+            variant="label"
+            className={cn(threadMetaDetail, "tabular-nums")}
+          >
+            {elapsed}
+          </Text>
+        ) : null}
         {showChip ? (
           step.kind === "skill" ? (
             <View
@@ -323,44 +329,48 @@ export function ToolTimeline({
         accessibilityState={{ expanded: open }}
         onPress={() => onOpenChange(!open)}
       >
-        <View className="min-w-0 flex-1 flex-row flex-wrap items-baseline gap-x-1.5">
+        <View className="min-w-0 flex-1 flex-row flex-nowrap items-baseline gap-x-1.5">
           {streaming ? (
-            <>
+            // While expanded, the last StepRow owns the live label — keep the
+            // header on the activity summary so the same "Searching…" line
+            // does not appear twice.
+            open ? (
+              typeof restingLabel === "string" ? (
+                <ShimmerLabel
+                  active
+                  variant="label"
+                  className={threadMetaCall}
+                  numberOfLines={1}
+                >
+                  {restingLabel}
+                </ShimmerLabel>
+              ) : (
+                restingLabel
+              )
+            ) : (
               <ThinkingStatesLabel
                 label={activeLabel}
                 textClassName={threadMetaCall}
                 className="min-w-0"
               />
-              {elapsed ? (
-                <Text
-                  variant="label"
-                  className={cn(threadMetaDetail, "tabular-nums")}
-                >
-                  {`· ${elapsed}`}
-                </Text>
-              ) : null}
-            </>
+            )
+          ) : typeof restingLabel === "string" ? (
+            <ThinkingStatesLabel
+              label={restingLabel}
+              shimmer={false}
+              textClassName={threadMetaCall}
+            />
           ) : (
-            <>
-              {typeof restingLabel === "string" ? (
-                <ThinkingStatesLabel
-                  label={restingLabel}
-                  shimmer={false}
-                  textClassName={threadMetaCall}
-                />
-              ) : (
-                restingLabel
-              )}
-              {elapsed ? (
-                <Text
-                  variant="label"
-                  className={cn(threadMetaDetail, "tabular-nums")}
-                >
-                  {`· ${elapsed}`}
-                </Text>
-              ) : null}
-            </>
+            restingLabel
           )}
+          {elapsed ? (
+            <Text
+              variant="label"
+              className={cn(threadMetaDetail, "shrink-0 tabular-nums")}
+            >
+              {`· ${elapsed}`}
+            </Text>
+          ) : null}
           <DiffCounts added={headerAdded} removed={headerRemoved} />
         </View>
         <MetaChevron open={open} />
@@ -368,7 +378,9 @@ export function ToolTimeline({
       <CollapsePanel open={open}>
         <Animated.View
           className="flex-col gap-0.5 pb-1 pt-1"
-          layout={motion ? layoutTransition : undefined}
+          layout={
+            motion && Platform.OS !== "web" ? layoutTransition : undefined
+          }
         >
           {shown.map((step, index) => (
             <StepRow

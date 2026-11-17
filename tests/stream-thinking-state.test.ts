@@ -164,6 +164,22 @@ describe("createThinkingStateDweller", () => {
     assert.equal(dwell.flush(), "Check inbox");
   });
 
+  it("skips transient labels when the stream outruns the hold", () => {
+    let t = 0;
+    const dwell = createThinkingStateDweller({
+      dwellMs: THINKING_STATE_DWELL_MS,
+      now: () => t,
+    });
+    assert.equal(dwell.next("A"), "A");
+    t += 50;
+    assert.equal(dwell.next("B"), "A");
+    t += 50;
+    assert.equal(dwell.next("C"), "A");
+    assert.equal(dwell.peek(), "A");
+    t += THINKING_STATE_DWELL_MS;
+    assert.equal(dwell.flush(), "C");
+  });
+
   it("clears immediately on undefined", () => {
     const dwell = createThinkingStateDweller({ now: () => 0 });
     dwell.next("Thinking");

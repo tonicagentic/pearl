@@ -254,8 +254,14 @@ export function ToolTimeline({
       >
         <span className="inline-flex max-w-full items-center gap-1.5 text-start">
           <ThinkingStatesLabel
-            label={streaming ? activeLabel : restingLabel}
-            shimmer={streaming}
+            label={
+              streaming
+                ? open
+                  ? restingLabel
+                  : activeLabel
+                : restingLabel
+            }
+            shimmer={streaming && !open}
             className="min-w-0 truncate"
           />
           {elapsed !== undefined && (

@@ -11,7 +11,6 @@ import {
 import {
   AccessibilityInfo,
   Animated,
-  Easing as RnEasing,
   Platform,
   View,
   type LayoutChangeEvent,
@@ -33,6 +32,7 @@ import Reanimated, {
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
@@ -526,123 +526,15 @@ export function CollapsePanel({
   );
 }
 
-/**
- * thinking-states / text-states-swap: outgoing exits up, incoming rises
- * after --think-gap, both over --think-swap with ease-in-out.
- */
-export function SwapLabel({
-  active,
-  children,
-  className,
-}: {
-  active: 0 | 1;
-  children: [ReactNode, ReactNode];
-  className?: string;
-}) {
-  const motion = useMotion();
-  const [progress] = useState(() => new Animated.Value(active));
-
-  useEffect(() => {
-    if (!motion) {
-      progress.setValue(active);
-      return;
-    }
-    const timer = setTimeout(() => {
-      Animated.timing(progress, {
-        toValue: active,
-        duration: THINK_SWAP_MS,
-        easing: RnEasing.inOut(RnEasing.ease),
-        useNativeDriver: Platform.OS !== "web",
-        isInteraction: false,
-      }).start();
-    }, THINK_GAP_MS);
-    return () => clearTimeout(timer);
-  }, [active, motion, progress]);
-
-  const layer0 = {
-    opacity: progress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [1, 0],
-    }),
-    transform: [
-      {
-        translateY: progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, -THINK_SWAP_Y],
-        }),
-      },
-    ],
-  };
-  const layer1 = {
-    opacity: progress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, 1],
-    }),
-    transform: [
-      {
-        translateY: progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [THINK_SWAP_Y, 0],
-        }),
-      },
-    ],
-  };
-
-  if (!motion) {
-    return (
-      <View className={cn("min-w-0 flex-shrink", className)}>
-        {children[active]}
-      </View>
-    );
-  }
-
-  // Keep the active layer in normal flow so container size always fits the
-  // active string (no stale narrow-width lock or 0x0 wrap trap on RN Web);
-  // the outgoing layer floats in place over it while fading/sliding out.
-  return (
-    <View
-      className={cn(
-        "relative min-w-0 flex-shrink justify-center overflow-visible",
-        className,
-      )}
-    >
-      <Animated.View
-        pointerEvents={active === 0 ? "auto" : "none"}
-        style={[
-          layer0,
-          active === 0
-            ? { position: "relative" }
-            : { position: "absolute", left: 0, top: 0, right: 0 },
-        ]}
-        accessibilityElementsHidden={active !== 0}
-        importantForAccessibility={
-          active === 0 ? "yes" : "no-hide-descendants"
-        }
-      >
-        {children[0]}
-      </Animated.View>
-      <Animated.View
-        pointerEvents={active === 1 ? "auto" : "none"}
-        style={[
-          layer1,
-          active === 1
-            ? { position: "relative" }
-            : { position: "absolute", left: 0, top: 0, right: 0 },
-        ]}
-        accessibilityElementsHidden={active !== 1}
-        importantForAccessibility={
-          active === 1 ? "yes" : "no-hide-descendants"
-        }
-      >
-        {children[1]}
-      </Animated.View>
-    </View>
-  );
-}
+const thinkSwapTiming = {
+  duration: THINK_SWAP_MS,
+  easing: Easing.inOut(Easing.ease),
+} as const;
 
 /**
- * Dynamic-string thinking-states swapper. Writes into alternating slots and
- * reuses SwapLabel motion (outgoing up, 50ms gap, incoming rise + shimmer).
+ * transitions.dev thinking-states: outgoing exits up immediately over
+ * `--think-swap`; incoming snaps below, then after `--think-gap` rises in
+ * over the same duration so both halves overlap (one swap, not two).
  */
 export function ThinkingStatesLabel({
   label,
@@ -660,45 +552,173 @@ export function ThinkingStatesLabel({
   const activeRef = useRef<0 | 1>(0);
   const [slots, setSlots] = useState<[string, string]>([label, label]);
   const currentRef = useRef(label);
+  const widthTargetRef = useRef(0);
+
+  const opacity0 = useSharedValue(1);
+  const y0 = useSharedValue(0);
+  const opacity1 = useSharedValue(0);
+  const y1 = useSharedValue(THINK_SWAP_Y);
+  const widthSv = useSharedValue(0);
+
+  const runSwap = useCallback(
+    (from: 0 | 1, to: 0 | 1) => {
+      const outOpacity = from === 0 ? opacity0 : opacity1;
+      const outY = from === 0 ? y0 : y1;
+      const inOpacity = to === 0 ? opacity0 : opacity1;
+      const inY = to === 0 ? y0 : y1;
+
+      cancelAnimation(outOpacity);
+      cancelAnimation(outY);
+      cancelAnimation(inOpacity);
+      cancelAnimation(inY);
+
+      // Exit outgoing immediately (up + fade).
+      outOpacity.value = withTiming(0, thinkSwapTiming);
+      outY.value = withTiming(-THINK_SWAP_Y, thinkSwapTiming);
+
+      // Plant incoming below with no transition, then release after gap.
+      inOpacity.value = 0;
+      inY.value = THINK_SWAP_Y;
+      inOpacity.value = withDelay(THINK_GAP_MS, withTiming(1, thinkSwapTiming));
+      inY.value = withDelay(THINK_GAP_MS, withTiming(0, thinkSwapTiming));
+    },
+    [opacity0, opacity1, y0, y1],
+  );
 
   useEffect(() => {
     if (label === currentRef.current) return;
     currentRef.current = label;
+
     if (!motion) {
       setSlots([label, label]);
       activeRef.current = 0;
       setActive(0);
+      opacity0.value = 1;
+      y0.value = 0;
+      opacity1.value = 0;
+      y1.value = THINK_SWAP_Y;
       return;
     }
-    const next: 0 | 1 = activeRef.current === 0 ? 1 : 0;
+
+    const from = activeRef.current;
+    const to: 0 | 1 = from === 0 ? 1 : 0;
     setSlots((prev) => {
       const copy: [string, string] = [prev[0], prev[1]];
-      copy[next] = label;
+      copy[to] = label;
       return copy;
     });
+    runSwap(from, to);
     const timer = setTimeout(() => {
-      activeRef.current = next;
-      setActive(next);
+      activeRef.current = to;
+      setActive(to);
     }, THINK_GAP_MS);
     return () => clearTimeout(timer);
-  }, [label, motion]);
+  }, [label, motion, opacity0, opacity1, runSwap, y0, y1]);
+
+  const onMeasure = useCallback(
+    (event: LayoutChangeEvent) => {
+      const nextWidth = Math.ceil(event.nativeEvent.layout.width);
+      if (nextWidth <= 0 || nextWidth === widthTargetRef.current) return;
+      const animate = widthTargetRef.current > 0 && motion;
+      widthTargetRef.current = nextWidth;
+      cancelAnimation(widthSv);
+      if (!animate) {
+        widthSv.value = nextWidth;
+        return;
+      }
+      widthSv.value = withTiming(nextWidth, thinkSwapTiming);
+    },
+    [motion, widthSv],
+  );
+
+  const layer0Style = useAnimatedStyle(() => ({
+    opacity: opacity0.value,
+    transform: [{ translateY: y0.value }],
+  }));
+  const layer1Style = useAnimatedStyle(() => ({
+    opacity: opacity1.value,
+    transform: [{ translateY: y1.value }],
+  }));
+  const boxStyle = useAnimatedStyle(() =>
+    widthSv.value > 0 ? { width: widthSv.value } : ({} as { width?: number }),
+  );
+
+  if (!motion) {
+    return (
+      <View className={cn("min-w-0 flex-shrink", className)}>
+        <ShimmerLabel
+          active={false}
+          variant="label"
+          numberOfLines={1}
+          className={textClassName}
+        >
+          {label}
+        </ShimmerLabel>
+      </View>
+    );
+  }
+
+  const layerPos = {
+    position: "absolute" as const,
+    left: 0,
+    top: 0,
+  };
 
   return (
-    <SwapLabel active={active} className={className}>
-      <ShimmerLabel
-        active={shimmer && active === 0}
-        variant="label"
-        className={textClassName}
+    <Reanimated.View
+      className={cn("relative min-w-0 flex-shrink overflow-hidden", className)}
+      style={boxStyle}
+    >
+      <View
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={{ opacity: 0 }}
+        onLayout={onMeasure}
       >
-        {slots[0]}
-      </ShimmerLabel>
-      <ShimmerLabel
-        active={shimmer && active === 1}
-        variant="label"
-        className={textClassName}
+        <ShimmerLabel
+          active={false}
+          variant="label"
+          numberOfLines={1}
+          className={textClassName}
+        >
+          {slots[active]}
+        </ShimmerLabel>
+      </View>
+      <Reanimated.View
+        pointerEvents={active === 0 ? "auto" : "none"}
+        style={[layer0Style, layerPos]}
+        accessibilityElementsHidden={active !== 0}
+        importantForAccessibility={
+          active === 0 ? "yes" : "no-hide-descendants"
+        }
       >
-        {slots[1]}
-      </ShimmerLabel>
-    </SwapLabel>
+        <ShimmerLabel
+          active={shimmer && active === 0}
+          variant="label"
+          numberOfLines={1}
+          className={textClassName}
+        >
+          {slots[0]}
+        </ShimmerLabel>
+      </Reanimated.View>
+      <Reanimated.View
+        pointerEvents={active === 1 ? "auto" : "none"}
+        style={[layer1Style, layerPos]}
+        accessibilityElementsHidden={active !== 1}
+        importantForAccessibility={
+          active === 1 ? "yes" : "no-hide-descendants"
+        }
+      >
+        <ShimmerLabel
+          active={shimmer && active === 1}
+          variant="label"
+          numberOfLines={1}
+          className={textClassName}
+        >
+          {slots[1]}
+        </ShimmerLabel>
+      </Reanimated.View>
+    </Reanimated.View>
   );
 }

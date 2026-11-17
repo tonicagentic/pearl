@@ -240,7 +240,7 @@ export const WEB_REPLAY_SCENARIOS: readonly WebReplayScenario[] = [
     id: "rapid-burst",
     title: "Rapid Burst",
     description:
-      "Fast reasoning headings to inspect 650ms dwell coalescing and 150ms + 50ms swaps.",
+      "Fast reasoning headings to inspect 2000ms dwell coalescing and 150ms + 50ms swaps.",
     events: (() => {
       const headings = [
         "Scan tokens",
@@ -478,6 +478,7 @@ export const GALLERY_MESSAGES: readonly ThreadMessageLike[] = [
           "",
           "| Token | Value | Role |",
           "| --- | --- | --- |",
+          "| `--think-hold` | `2000ms` | Min visible label before next swap |",
           "| `--think-swap` | `150ms` | Blur + slide swap |",
           "| `--think-gap` | `50ms` | Outgoing lead gap |",
           "| `--shimmer-dur` | `2000ms` | LTR highlight sweep |",

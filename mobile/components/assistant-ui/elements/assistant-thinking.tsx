@@ -8,7 +8,6 @@ import {
   splitAssistantBlocks,
   type AssistantMessagePart,
 } from "@/components/assistant-ui/elements/session-timeline";
-import { useTurnElapsed } from "@/components/assistant-ui/elements/turn-elapsed";
 import { useChatConversation } from "@/src/conversation-context";
 import { useEveEvents } from "@/src/chat-context";
 import { pendingWaitLabel } from "@/src/message-projection";
@@ -22,8 +21,6 @@ import {
   type ThinkingMessagePart,
 } from "../../../../lib/stream-thinking-state";
 
-const STALL_WARNING_S = 45;
-const STALL_LABEL = "Still working — the model may be slow or unreachable.";
 const ASKING_QUESTIONS_LABEL = "Asking questions";
 
 /**
@@ -94,9 +91,6 @@ export function AssistantThinking() {
     return () => clearInterval(timer);
   }, [derived.label]);
 
-  const elapsed = useTurnElapsed();
-  const seconds = Number.parseInt(elapsed ?? "0", 10);
-  const stalled = Number.isFinite(seconds) && seconds > STALL_WARNING_S;
   const parkedOnPerson = personWaitLabel != null || askingQuestions;
   const trailingTimelineLive = useAuiState((s) => {
     if (s.message.status?.type !== "running") return false;
@@ -106,18 +100,11 @@ export function AssistantThinking() {
     return blocks.length > 0 && blocks[blocks.length - 1]?.kind === "timeline";
   });
 
-  if (answerPhase && !parkedOnPerson && !stalled) return null;
-  if (trailingTimelineLive && !stalled && !askingQuestions && !parkedOnPerson) {
+  if (answerPhase && !parkedOnPerson) return null;
+  if (trailingTimelineLive && !askingQuestions && !parkedOnPerson) {
     return null;
   }
-  if (label === undefined && !stalled) return null;
+  if (label === undefined) return null;
 
-  return (
-    <ThinkingIndicator
-      label={
-        stalled && !parkedOnPerson ? STALL_LABEL : (label ?? "Thinking…")
-      }
-      elapsed={parkedOnPerson ? undefined : elapsed}
-    />
-  );
+  return <ThinkingIndicator label={label} />;
 }
