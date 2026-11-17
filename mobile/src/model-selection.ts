@@ -78,9 +78,9 @@ export const IMAGE_MODEL_SECTION: ComposerModelSection = {
   title: "Image",
   description: "Used by generate_image for pictorial graphics.",
   models: [
-    { key: "gpt-image-1", label: "GPT Image 1", company: "OpenAI" },
-    { key: "imagen-4", label: "Imagen 4", company: "Google" },
-    { key: "grok-imagine", label: "Grok Imagine", company: "xAI" },
+    { key: "grok-imagine-2", label: "Grok Imagine 2.0", company: "xAI" },
+    { key: "muse-image", label: "Muse Image 1.0", company: "Meta" },
+    { key: "mai-image", label: "MAI Image 2.6", company: "Microsoft" },
   ],
 };
 

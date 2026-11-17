@@ -8,6 +8,7 @@ import {
 import { convertEveMessages } from "@assistant-ui/eve";
 
 import { CanvasProvider } from "@/components/assistant-ui/elements/canvas-context";
+import { GenerateImageToolUI } from "@/components/assistant-ui/elements/generate-image-tool.aui";
 import {
   SubagentRunsProvider,
   TaskGroup,
@@ -297,6 +298,7 @@ function ThreadInspectorWorkbench() {
         >
           <AssistantRuntimeProvider key={mode} runtime={runtime}>
             <CanvasProvider chatId={null}>
+              <GenerateImageToolUI />
               <SubagentRunsProvider>
                 <Thread components={{ TaskGroup }} />
               </SubagentRunsProvider>

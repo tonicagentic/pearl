@@ -89,7 +89,11 @@ export function laneNeedsImageSurface(
   lane: PearlLane | null,
   turnText: string,
 ): boolean {
-  if (/\b(image|illustration|logo|svg|icon|poster|graphic)\b/i.test(turnText)) {
+  if (
+    /\b(image|illustration|logo|svg|icon|poster|graphic|photo|photograph|picture|drawing)\b/i.test(
+      turnText,
+    )
+  ) {
     return true;
   }
   return lane === null;

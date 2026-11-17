@@ -803,6 +803,76 @@ export const GALLERY_MESSAGES: readonly ThreadMessageLike[] = [
       },
     ],
   },
+  {
+    id: "gal_user_image",
+    role: "user",
+    createdAt: new Date("2026-11-16T16:12:00.000Z"),
+    content: [
+      {
+        type: "text",
+        text: "Make a photo of a quiet coastal road at dusk, 16:9.",
+      },
+    ],
+  },
+  {
+    id: "gal_asst_image",
+    role: "assistant",
+    createdAt: new Date("2026-11-16T16:12:02.000Z"),
+    status: { type: "running" },
+    metadata: { custom: { turnId: "gal_turn_image" } },
+    content: [
+      {
+        type: "tool-call",
+        toolCallId: "gal_image_running",
+        toolName: "generate_image",
+        args: {
+          prompt:
+            "Quiet coastal road at dusk, soft amber light, long shadows, photographic",
+          aspectRatio: "16:9",
+        },
+        status: { type: "running" },
+      },
+      {
+        type: "tool-call",
+        toolCallId: "gal_image_done",
+        toolName: "generate_image",
+        args: {
+          prompt: "Quiet coastal road at dusk",
+          size: "1024x1024",
+        },
+        result: {
+          success: true,
+          url: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=512&h=512&fit=crop",
+          downloadUrl:
+            "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=512&h=512&fit=crop",
+          pathname: "design/generated/coastal-road.png",
+          contentType: "image/jpeg",
+          model: "spacexai/grok-imagine-image-2.0",
+          prompt: "Quiet coastal road at dusk",
+        },
+        status: { type: "complete" },
+      },
+      {
+        type: "tool-call",
+        toolCallId: "gal_image_failed",
+        toolName: "generate_image",
+        args: {
+          prompt: "A photo that the provider cannot fulfill",
+          aspectRatio: "1:1",
+        },
+        result: {
+          success: false,
+          error:
+            'Image model "spacexai/grok-imagine-image-2.0" has no provider that meets the US / zero-data-retention policy.',
+          url: "",
+          downloadUrl: "",
+          model: "spacexai/grok-imagine-image-2.0",
+          prompt: "A photo that the provider cannot fulfill",
+        },
+        status: { type: "complete" },
+      },
+    ],
+  },
 ];
 
 export const WEB_REPLAY_SCENARIOS: readonly WebReplayScenario[] = [

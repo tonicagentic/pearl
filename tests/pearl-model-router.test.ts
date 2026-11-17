@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   classifyPearlHeuristic,
+  laneNeedsImageSurface,
   waitingLabelForText,
 } from "../lib/pearl-lane.ts";
 import {
@@ -101,6 +102,28 @@ describe("waitingLabelForText", () => {
 
   it("falls back to Thinking for chat", () => {
     assert.equal(waitingLabelForText("hi"), "Planning next moves");
+  });
+});
+
+describe("laneNeedsImageSurface", () => {
+  it("exposes image tools for photo and picture asks on voice", () => {
+    assert.equal(
+      laneNeedsImageSurface("voice", "Can you make a photo of a cat?"),
+      true,
+    );
+    assert.equal(
+      laneNeedsImageSurface("voice", "Draw a picture of the Golden Gate"),
+      true,
+    );
+  });
+
+  it("keeps image tools off ordinary chat on a routed lane", () => {
+    assert.equal(laneNeedsImageSurface("voice", "hey, what do you think?"), false);
+    assert.equal(laneNeedsImageSurface("think", "Draft a blog post"), false);
+  });
+
+  it("exposes every surface when no Auto lane is set", () => {
+    assert.equal(laneNeedsImageSurface(null, "hey"), true);
   });
 });
 

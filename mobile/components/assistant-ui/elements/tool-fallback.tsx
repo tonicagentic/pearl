@@ -27,6 +27,7 @@ import {
   webLiveRegion,
 } from "./surfaces";
 import { getToolPresentation } from "./tool-presentation";
+import { GenerateImageToolCard } from "./generate-image-tool";
 import { formatUnknownValue } from "../utils/task";
 import { useWorkspaceOptional } from "@/src/workspace-context";
 import { useComposerOwnsHitl } from "@/components/assistant-ui/elements/composer-owns-hitl";
@@ -597,6 +598,24 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
       >
         {approval!.prompt}
       </Text>
+    );
+  }
+
+  if (toolName === "generate_image") {
+    return (
+      <GenerateImageToolCard
+        args={
+          args && typeof args === "object" && !Array.isArray(args)
+            ? (args as {
+                prompt?: string;
+                size?: string;
+                aspectRatio?: string;
+              })
+            : undefined
+        }
+        result={result}
+        status={status}
+      />
     );
   }
 
