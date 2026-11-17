@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator } from "react-native";
+import { ActivityIndicator, Alert, Platform } from "react-native";
 
 import {
   SettingsButton,
@@ -15,11 +15,12 @@ import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
 import { sessionInvalid } from "@/src/session-store";
 
 /**
- * Account settings: better-auth name + email, and an in-app password change.
- * Identity’s display name stays separate (fit / health context).
+ * Account settings: better-auth name + email, an in-app password change,
+ * and account deletion. Identity’s display name stays separate (fit / health
+ * context).
  */
 export function AccountScreen() {
-  const { viewerEmail, viewerName, setViewerName } = useAuth();
+  const { viewerEmail, viewerName, setViewerName, signOut } = useAuth();
   const [name, setName] = useState(viewerName ?? "");
   const [nameReady, setNameReady] = useState(Boolean(viewerName));
   const [nameSaving, setNameSaving] = useState(false);
@@ -137,6 +138,51 @@ export function AccountScreen() {
     })();
   }, [confirmPassword, currentPassword, newPassword, passwordSaving]);
 
+  const confirmDeleteAccount = useCallback(() => {
+    const run = async () => {
+      try {
+        const credential = getAuthCookie();
+        const response = await fetch(`${AGENT_URL}/api/account`, {
+          method: "DELETE",
+          headers: {
+            "content-type": "application/json",
+            Origin: AGENT_URL,
+            ...(credential ? { authorization: `Bearer ${credential}` } : {}),
+          },
+        });
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          throw new Error(body?.error ?? `Delete failed (${response.status}).`);
+        }
+        signOut();
+      } catch (cause) {
+        const message =
+          cause instanceof Error ? cause.message : "Could not delete account.";
+        if (Platform.OS === "web") {
+          window.alert(message);
+        } else {
+          Alert.alert("Could not delete account", message);
+        }
+      }
+    };
+
+    const title = "Delete your Pearl account?";
+    const body =
+      "This removes your chats, projects, and connection grants on this host. It cannot be undone.";
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && window.confirm(`${title}\n\n${body}`)) {
+        void run();
+      }
+      return;
+    }
+    Alert.alert(title, body, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete account", style: "destructive", onPress: () => void run() },
+    ]);
+  }, [signOut]);
+
   if (!nameReady) {
     return <ActivityIndicator accessibilityLabel="Loading account" />;
   }
@@ -211,6 +257,14 @@ export function AccountScreen() {
           disabled={passwordSaving}
           label={passwordSaving ? "Updating…" : "Change password"}
           onPress={onChangePassword}
+        />
+      </SettingsSection>
+
+      <SettingsSection>
+        <SettingsButton
+          destructive
+          label="Delete account"
+          onPress={confirmDeleteAccount}
         />
       </SettingsSection>
     </SettingsForm>

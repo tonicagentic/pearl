@@ -198,10 +198,6 @@ function AuthenticatedLayout() {
                       }}
                     />
                     <Stack.Screen
-                      name="billing"
-                      options={{ headerShown: false }}
-                    />
-                    <Stack.Screen
                       name="repos"
                       options={{ headerShown: false }}
                     />

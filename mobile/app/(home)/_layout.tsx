@@ -86,9 +86,17 @@ export default function HomeLayout() {
         }}
       />
       <Stack.Screen
-        name="files"
+        name="analysis"
         options={{
-          title: "Files",
+          title: "Analysis",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="storage"
+        options={{
+          title: "Storage",
           headerShown: true,
           headerBackButtonDisplayMode: "minimal",
         }}
@@ -181,6 +189,14 @@ export default function HomeLayout() {
         name="usage"
         options={{
           title: "Usage",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="billing"
+        options={{
+          title: "Billing",
           headerShown: true,
           headerBackButtonDisplayMode: "minimal",
         }}

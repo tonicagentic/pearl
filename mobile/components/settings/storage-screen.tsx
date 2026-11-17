@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
-import { FolderOpenIcon } from "lucide-react-native";
+import { HardDriveIcon } from "lucide-react-native";
 
 import {
   CapabilityDetail,
@@ -13,8 +13,8 @@ import {
   type ConnectionStatus,
 } from "@/src/connections-client";
 
-/** Profile → Files. What Pearl can read, and where files live. */
-export function FilesScreen() {
+/** Profile → Storage. Where attached, saved, and connected files live. */
+export function StorageScreen() {
   const [drive, setDrive] = useState<ConnectionStatus | null | undefined>(
     undefined,
   );
@@ -36,43 +36,19 @@ export function FilesScreen() {
     }, []),
   );
 
-  const driveRow = driveStatus(drive);
-
   return (
     <CapabilityDetail
-      title="Files"
-      detail="Analysis and storage"
-      body="Pearl reads files you attach and files it has saved, and can open Google Drive when that account is connected."
+      title="Storage"
+      detail="Chat, saved files, Drive"
+      body="Files you attach stay with the conversation. Pearl can also keep assets it saved, and open Google Drive when that account is connected."
       mark={
         <CapabilityMark backgroundClassName="bg-sky-500/15">
-          <Icon as={FolderOpenIcon} className="size-7 text-sky-600" />
+          <Icon as={HardDriveIcon} className="size-7 text-sky-600" />
         </CapabilityMark>
       }
       sections={[
         {
-          title: "Analysis",
-          intro: "Types Pearl can open from a chat attachment.",
-          rows: [
-            {
-              label: "PDF",
-              detail: "Read page by page, including long documents.",
-            },
-            {
-              label: "Images",
-              detail: "JPEG, PNG, GIF, and WebP.",
-            },
-            {
-              label: "Tables and data",
-              detail: "CSV and JSON, including patterns and totals.",
-            },
-            {
-              label: "Text",
-              detail: "Plain text and Markdown.",
-            },
-          ],
-        },
-        {
-          title: "Storage",
+          title: "Places",
           rows: [
             {
               label: "This chat",
@@ -84,7 +60,7 @@ export function FilesScreen() {
               detail: "Assets Pearl stores and can list again later.",
               trailing: "On",
             },
-            driveRow,
+            driveStatus(drive),
             {
               label: "iCloud Drive",
               detail: "Files and folders in iCloud.",
