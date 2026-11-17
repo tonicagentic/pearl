@@ -1985,6 +1985,11 @@ const AssistantMessageFooter: FC = () => {
     (s) =>
       !(s.message.role === "assistant" && s.message.status?.type === "running"),
   );
+  // Only enter-animate Sources/copy after an in-session settle — not when
+  // opening a previous thread that already finished.
+  const sawRunningRef = useRef(false);
+  if (!settled) sawRunningRef.current = true;
+  const enterFromLiveSettle = sawRunningRef.current && settled;
   if (branchCount <= 1 && !settled) return null;
   // Sources wait for settle and enter with copy/share (not mid-stream).
   if (!settled) {
@@ -1996,7 +2001,7 @@ const AssistantMessageFooter: FC = () => {
   }
   return (
     <Animated.View
-      entering={motion ? actionBarEnter : undefined}
+      entering={motion && enterFromLiveSettle ? actionBarEnter : undefined}
       className="aui-assistant-message-footer gap-2"
     >
       <MessageSources />
@@ -2058,16 +2063,20 @@ const AssistantActionBar: FC = () => (
 const UserMessage: FC = () => {
   const motion = useMotion();
   const branchCount = useAuiState((s) => s.message.branchCount);
+  const threadRunning = useAuiState((s) => s.thread.isRunning);
+  const isLast = useAuiState((s) => s.message.isLast);
   const internalMessage = useAuiState((s) =>
     s.message.role === "user" && s.message.parts.some((part) =>
       part.type === "text" && isTaskNotification(part.text ?? ""),
     ),
   );
   if (internalMessage) return null;
+  // Enter only for a just-sent trailing user bubble during a live turn —
+  // loading a previous thread must not FadeInDown every historical message.
+  const enterFromLiveSend =
+    motion && Platform.OS !== "web" && threadRunning && isLast;
   return (
-    <Animated.View
-      entering={motion && Platform.OS !== "web" ? messageEnter : undefined}
-    >
+    <Animated.View entering={enterFromLiveSend ? messageEnter : undefined}>
       <MessagePrimitive.Root
         className={cn(
           "aui-user-message-root items-end",

@@ -49,6 +49,10 @@ selectable settled Marked (no whole-reply FadeIn dump).
    `ready` change — that left the UI on a lone `●` cursor with a huge
    buffered backlog. Only the live (`streaming`) instance mutates that
    module state; settled/user bubbles must not reset it during render.
+   First paint of a turn snaps any already-buffered text with **no fade**
+   (opening a previous thread must not replay word-fade). Pace/fade only after
+   live growth. User `messageEnter` / Sources `actionBarEnter` only for
+   in-session live sends/settles — not transcript hydrate.
 
 3. **Marked while streaming + per-word fade.**
    `StreamingMarkdownText` in `mobile/.../markdown-text.tsx` runs

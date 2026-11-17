@@ -642,8 +642,12 @@ function stabilizeStreamingMarkdown(src: string): string {
  * with per-word st-fade on the paced tail. Settled messages keep selectable Marked.
  */
 const StreamingMarkdownText: FC<
-  MarkdownTextProps & { readonly reveal: StreamingReveal }
-> = ({ text, variant, reveal }) => {
+  MarkdownTextProps & {
+    readonly reveal: StreamingReveal;
+    /** False for transcript hydrate — no per-word st-fade replay. */
+    readonly animateFade: boolean;
+  }
+> = ({ text, variant, reveal, animateFade }) => {
   useEffect(() => {
     traceStream("paint", text.length);
   }, [text.length]);
@@ -661,7 +665,10 @@ const StreamingMarkdownText: FC<
   if (!rendererRef.current) {
     rendererRef.current = new StreamingMarkdownRenderer(displayText);
   }
-  rendererRef.current.beginPaint(fadeFromWord, motion);
+  rendererRef.current.beginPaint(
+    fadeFromWord,
+    Boolean(motion && animateFade),
+  );
 
   const options = useMemo(
     () => ({ ...baseOptions, renderer: rendererRef.current! }),
@@ -768,10 +775,20 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = (props) => {
   // history mounts with status complete and reveals instantly via the hook.
   const turnStreaming = (props.status?.type ?? "running") === "running";
   const reveal = useStreamingReveal(props.text, turnStreaming);
+  // Fade only while the turn is live and new words are still arriving —
+  // opening a previous thread must not replay st-fade through stored text.
+  const animateFade =
+    turnStreaming && reveal.fadeFromWord < reveal.visibleCount;
   // Keep the paced Marked path until the smoother catches up — then hand off
   // to selectable settled Marked without a whole-reply FadeIn dump.
   if (turnStreaming || reveal.writing) {
-    return <StreamingMarkdownText {...props} reveal={reveal} />;
+    return (
+      <StreamingMarkdownText
+        {...props}
+        reveal={reveal}
+        animateFade={animateFade}
+      />
+    );
   }
   return <SettledMarkdownText {...props} />;
 };
