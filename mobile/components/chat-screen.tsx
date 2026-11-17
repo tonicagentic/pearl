@@ -958,43 +958,47 @@ export function ChatScreen({
             Platform.OS === "web"
               ? () => (
                   <View className="flex-row items-center">
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="New chat"
-                      className="h-10 w-10 items-center justify-center"
-                      onPress={openCompose}
-                    >
-                      <Icon
-                        as={SquarePenIcon}
-                        className="size-5 text-foreground"
-                      />
-                    </Pressable>
-                    <View className="w-2" />
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        computerBadge
-                          ? "Computer, open activity available"
-                          : "Computer"
-                      }
-                      accessibilityState={{ selected: computerOpen }}
-                      className="h-10 w-10 items-center justify-center"
-                      onPress={toggleComputer}
-                    >
-                      <View>
-                        <Icon
-                          as={MonitorIcon}
-                          className={
-                            computerOpen
-                              ? "size-5 text-foreground"
-                              : "size-5 text-muted-foreground"
+                    {activeChatId ? (
+                      <>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="New chat"
+                          className="h-10 w-10 items-center justify-center"
+                          onPress={openCompose}
+                        >
+                          <Icon
+                            as={SquarePenIcon}
+                            className="size-5 text-foreground"
+                          />
+                        </Pressable>
+                        <View className="w-2" />
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            computerBadge
+                              ? "Computer, open activity available"
+                              : "Computer"
                           }
-                        />
-                        {computerBadge ? (
-                          <View className="bg-primary absolute -right-0.5 -top-0.5 size-1.5 rounded-full" />
-                        ) : null}
-                      </View>
-                    </Pressable>
+                          accessibilityState={{ selected: computerOpen }}
+                          className="h-10 w-10 items-center justify-center"
+                          onPress={toggleComputer}
+                        >
+                          <View>
+                            <Icon
+                              as={MonitorIcon}
+                              className={
+                                computerOpen
+                                  ? "size-5 text-foreground"
+                                  : "size-5 text-muted-foreground"
+                              }
+                            />
+                            {computerBadge ? (
+                              <View className="bg-primary absolute -right-0.5 -top-0.5 size-1.5 rounded-full" />
+                            ) : null}
+                          </View>
+                        </Pressable>
+                      </>
+                    ) : null}
                     {projectedMessages.length > 0 ? (
                       <Pressable
                         accessibilityRole="button"
@@ -1021,8 +1025,9 @@ export function ChatScreen({
             onPress={openCompose}
             tintColor={foregroundColor}
             separateBackground
+            hidden={!activeChatId}
           />
-          <Stack.Toolbar.Spacer width={8} />
+          <Stack.Toolbar.Spacer width={8} hidden={!activeChatId} />
           <Stack.Toolbar.Button
             icon="desktopcomputer"
             accessibilityLabel={
@@ -1033,6 +1038,7 @@ export function ChatScreen({
             selected={computerOpen}
             onPress={toggleComputer}
             tintColor={foregroundColor}
+            hidden={!activeChatId}
           >
             {computerBadge ? <Stack.Toolbar.Badge /> : null}
           </Stack.Toolbar.Button>
