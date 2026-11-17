@@ -16,7 +16,10 @@ export type ThreadSampleId =
   | "prod-twitch"
   | "prod-mail"
   | "prod-pearl"
-  | "prod-cacio";
+  | "prod-cacio"
+  | "prod-coder"
+  | "prod-logo"
+  | "prod-kaiser";
 
 type SampleWaitingAction = Exclude<
   WaitingAction,
