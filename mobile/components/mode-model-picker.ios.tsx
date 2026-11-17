@@ -17,6 +17,7 @@ import { KeyboardController } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useComposerChrome } from "@/components/assistant-ui/elements/composer-chrome";
+import { composerControlHitSlop } from "@/components/assistant-ui/elements/icon-button";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { focusComposerInput } from "@/src/composer-input-focus";
@@ -107,6 +108,7 @@ export function ComposerModeModelPicker({
         accessibilityState={{ expanded: menuOpen, disabled }}
         className="bg-muted size-8 items-center justify-center rounded-full"
         disabled={disabled}
+        hitSlop={composerControlHitSlop}
         onPress={openMenu}
         onTouchStart={() => chrome?.pinExpanded()}
         style={disabled ? { opacity: 0.5 } : undefined}

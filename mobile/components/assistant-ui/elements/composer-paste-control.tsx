@@ -1,11 +1,11 @@
 import * as Clipboard from "expo-clipboard";
 import { ClipboardPasteIcon } from "lucide-react-native";
 import { useCallback, type FC } from "react";
-import { Alert, Platform, Pressable, View } from "react-native";
+import { Alert, Platform, Pressable, StyleSheet, View } from "react-native";
 
 import { Icon } from "@/components/ui/icon";
 import { normalizeClipboardText } from "@/src/clipboard-paste";
-import { iconButtonHitSlop } from "./icon-button";
+import { composerControlHitSlop, iconButtonHitSlop } from "./icon-button";
 
 export type ComposerPastePayload =
   | { readonly kind: "image"; readonly dataUrl: string }
@@ -73,14 +73,20 @@ export const ComposerPasteControl: FC<ComposerPasteControlProps> = ({
   }, [disabled, emitImage, emitText]);
 
   if (Platform.OS === "ios" && Clipboard.isPasteButtonAvailable) {
+    // UIPasteControl paints system blue regardless of baseBackgroundColor in
+    // Expo Go / recent iOS — keep the control for permission-free paste but
+    // cover it with the same muted capsule as AttachmentMenu.
     return (
       <View
         pointerEvents={disabled ? "none" : "auto"}
         style={{ opacity: disabled ? 0.5 : 1 }}
-        className="size-8 overflow-hidden rounded-full"
+        className="bg-muted size-8 items-center justify-center overflow-hidden rounded-full"
       >
         <Clipboard.ClipboardPasteButton
           acceptedContentTypes={["plain-text", "html", "image", "url"]}
+          backgroundColor="#00000000"
+          foregroundColor="#00000000"
+          cornerStyle="capsule"
           displayMode="iconOnly"
           imageOptions={{ format: "jpeg", jpegQuality: 0.9 }}
           onPress={(data) => {
@@ -99,8 +105,20 @@ export const ComposerPasteControl: FC<ComposerPasteControlProps> = ({
             });
             if (text) emitText(text);
           }}
-          style={{ width: 32, height: 32 }}
+          hitSlop={composerControlHitSlop}
+          style={StyleSheet.absoluteFill}
         />
+        <View
+          pointerEvents="none"
+          style={StyleSheet.absoluteFill}
+          className="bg-muted items-center justify-center rounded-full"
+        >
+          <Icon
+            as={ClipboardPasteIcon}
+            size={14}
+            className="text-foreground"
+          />
+        </View>
       </View>
     );
   }

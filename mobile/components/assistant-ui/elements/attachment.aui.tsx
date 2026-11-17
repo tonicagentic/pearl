@@ -16,7 +16,15 @@ import * as DocumentPicker from "expo-document-picker";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { FileIcon, XIcon } from "lucide-react-native";
-import { useCallback, useEffect, useRef, useState, type FC } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FC,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import {
   Alert,
   Image,
@@ -343,7 +351,20 @@ export const ComposerAddAttachment: FC<{
   preparing: boolean;
   onPreparingChange: (preparing: boolean) => void;
   conversationId?: string | null;
-}> = ({ preparing, onPreparingChange, conversationId = null }) => {
+  /**
+   * When false, only the attachment control is rendered. Use with a separate
+   * paste morph chip on iOS so the collapsed bar stays [+][Ask anything][Live].
+   */
+  includePaste?: boolean;
+  /** Wrap the paste control (iOS morph: fade/width with the keyboard). */
+  renderPaste?: (paste: ReactElement) => ReactNode;
+}> = ({
+  preparing,
+  onPreparingChange,
+  conversationId = null,
+  includePaste = true,
+  renderPaste,
+}) => {
   const aui = useAui();
   const canAttach = useAuiState((s) => s.composer.isEditing);
   const attachmentCount = useAuiState((s) => s.composer.attachments.length);
@@ -589,18 +610,28 @@ export const ComposerAddAttachment: FC<{
     [canAttach, imageCount, onPreparingChange, preparing],
   );
 
+  const paste = (
+    <ComposerPasteControl
+      disabled={preparing || !canAttach}
+      onPaste={handlePaste}
+    />
+  );
+
   return (
-    <View className="flex-row items-center gap-1">
+    <View className="flex-row items-center">
       <AttachmentMenu
         disabled={preparing || !canAttach}
         onTakePhoto={() => runPicker(takePhoto)}
         onChoosePhoto={() => runPicker(pickImages)}
         onChooseFile={() => runPicker(pickFile)}
       />
-      <ComposerPasteControl
-        disabled={preparing || !canAttach}
-        onPaste={handlePaste}
-      />
+      {includePaste
+        ? renderPaste
+          ? renderPaste(paste)
+          : (
+              <View className="ml-1.5">{paste}</View>
+            )
+        : null}
     </View>
   );
 };

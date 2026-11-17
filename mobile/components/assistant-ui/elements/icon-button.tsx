@@ -7,6 +7,9 @@ export const iconButtonClassName =
 
 export const iconButtonHitSlop = 10;
 
+/** Extra touch area around the 32px chat-composer controls. */
+export const composerControlHitSlop = 8;
+
 // Fills the gap-1 between grouped icon buttons without reaching the neighbor.
 export const groupedIconButtonHitSlop = {
   top: 10,

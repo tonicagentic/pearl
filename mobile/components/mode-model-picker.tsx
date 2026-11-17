@@ -15,6 +15,7 @@ import {
 import { useState, useSyncExternalStore } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { composerControlHitSlop } from "@/components/assistant-ui/elements/icon-button";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import {
@@ -83,6 +84,7 @@ export function ComposerModeModelPicker({
         accessibilityState={{ expanded: menuOpen, disabled }}
         className="bg-muted active:bg-muted/80 size-11 items-center justify-center rounded-full"
         disabled={disabled}
+        hitSlop={composerControlHitSlop}
         onPress={() => setMenuOpen(true)}
         style={disabled ? { opacity: 0.5 } : undefined}
       >
