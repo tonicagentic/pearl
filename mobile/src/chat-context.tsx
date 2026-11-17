@@ -292,8 +292,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   );
 
   const buildStore = useCallback((chat: ActiveChat | null) => {
-    // Do not replay saved pre-v27 events as initialEvents — open the stored
-    // session and resume() so the server upconverts older history.
+    // Hydrate from saved events so reopening paints the transcript immediately
+    // (same as web). resume() then only catches up past that prefix — without
+    // initialEvents, resume replayed history live and paced word-by-word.
     const store = new SessionStore({
       baseUrl: AGENT_URL,
       // Follow coder / researcher / etc. child sessions so their approvals and
@@ -303,6 +304,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         const credential = getAuthCookie();
         return credential ? { authorization: `Bearer ${credential}` } : ({} as Record<string, string>);
       },
+      ...(chat?.events?.length
+        ? { initialEvents: chat.events }
+        : {}),
       ...(chat?.session
         ? { initialSession: chat.session as ClientSessionState }
         : {}),

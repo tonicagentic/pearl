@@ -771,9 +771,10 @@ const SettledMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
 };
 
 const MarkdownTextImpl: FC<MarkdownTextProps> = (props) => {
-  // Missing status → treat as live (inspectors / pending rows). Complete
-  // history mounts with status complete and reveals instantly via the hook.
-  const turnStreaming = (props.status?.type ?? "running") === "running";
+  // Only an explicit running status paces/fades. Missing status is settled
+  // (history hydrate / parts without state) — defaulting to running made
+  // reopened threads replay word-by-word. Live rows pass status running.
+  const turnStreaming = props.status?.type === "running";
   const reveal = useStreamingReveal(props.text, turnStreaming);
   // Fade only while the turn is live and new words are still arriving —
   // opening a previous thread must not replay st-fade through stored text.

@@ -139,14 +139,18 @@ export function useStreamingReveal(
   }
 
   // rAF pump while streaming so the last ~1s keeps ticking without new deltas.
-  // Do not reset module progress in the rAF cleanup — remounts would wipe it.
+  // Remount mid-stream must keep module progress (cancel rAF only). Leaving
+  // streaming entirely — or unmounting the live turn — resets so the next
+  // thread open first-paints with a snap instead of continuing the old pace.
   useEffect(() => {
     if (!streaming) {
       resetTurn();
       return undefined;
     }
     let raf = 0;
+    let active = true;
     const tick = () => {
+      if (!active) return;
       const t = nowMs();
       const dt = Math.min(0.1, (t - turnTickAt) / 1000);
       turnTickAt = t;
@@ -163,7 +167,10 @@ export function useStreamingReveal(
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      active = false;
+      cancelAnimationFrame(raf);
+    };
   }, [streaming, rate]);
 
   const visibleCount = Math.min(shown, ready);
