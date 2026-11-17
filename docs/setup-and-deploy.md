@@ -526,3 +526,4 @@ env vars have been pulled again. Tempo also needs `TEMPO_MCP_URL`.
 - [System environment variables](https://vercel.com/docs/environment-variables/system-environment-variables)
 - [Sign in with Vercel prerequisites](https://vercel.com/docs/sign-in-with-vercel/getting-started#prerequisites)
 - [Sign in with Vercel scopes](https://vercel.com/docs/sign-in-with-vercel/scopes-and-permissions)
+- [Shared account SSO (Pearl + Pearl Money + Pearl Tasks)](shared-account-sso.md)

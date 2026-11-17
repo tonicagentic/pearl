@@ -15,9 +15,35 @@ import {
   resolveIssue,
   updateIssue,
 } from "@/lib/db/issues";
+import { getProject } from "@/lib/db/projects";
 import { issueState, todayIso } from "@/lib/issues";
 import { getSetupStatus } from "@/lib/setup";
 import { getServerViewer } from "@/lib/session";
+
+/** Accept a project id the viewer owns, or null to clear. Absent → undefined. */
+async function ownedProjectIdOrNull(
+  userId: string,
+  value: unknown,
+): Promise<string | null | undefined> {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error("projectId must be a string or null.");
+  }
+
+  const owned = await getProject(userId, value);
+  if (!owned) {
+    throw new Error("Unknown project id.");
+  }
+
+  return owned.id;
+}
 
 /**
  * Issues data for the mobile app: the same principal-scoped projection the
@@ -126,6 +152,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Dates must be YYYY-MM-DD." }, { status: 400 });
       }
 
+      const projectId = await ownedProjectIdOrNull(viewer.id, body.projectId);
+
       // The create_issue tool matches areas by name and creates
       // unknown ones — keep the same behavior here so capture never dead-ends.
       const existing = await findAreaByName(viewer.id, areaName);
@@ -137,6 +165,7 @@ export async function POST(request: Request) {
         description:
           typeof body.description === "string" ? body.description.trim() || null : null,
         areaId: area.id,
+        projectId: projectId ?? null,
         dueDate,
         reviewDate,
       });
@@ -208,6 +237,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Dates must be YYYY-MM-DD." }, { status: 400 });
       }
 
+      const projectId = await ownedProjectIdOrNull(viewer.id, body.projectId);
+
       await updateIssue(viewer.id, id, {
         ...(typeof body.title === "string" && body.title.trim()
           ? { title: body.title.trim() }
@@ -218,6 +249,7 @@ export async function POST(request: Request) {
                 typeof body.description === "string" ? body.description.trim() || null : null,
             }
           : {}),
+        ...(projectId !== undefined ? { projectId } : {}),
         ...(dueDate !== undefined ? { dueDate } : {}),
         ...(reviewDate !== undefined ? { reviewDate } : {}),
       });

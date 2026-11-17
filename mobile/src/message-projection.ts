@@ -470,13 +470,24 @@ function pendingFromHit(hit: OpenPartHit): PendingApproval | null {
       prompt: request.prompt ?? defaultPrompt,
       input,
     });
+    // Custom one-line prompts skip arg fields in the brief; still surface a
+    // short summary/path/statement under the Approve / Deny buttons.
+    const detail =
+      brief.detail ??
+      (typeof input?.summary === "string"
+        ? input.summary
+        : typeof input?.filePath === "string"
+          ? input.filePath
+          : typeof input?.statement === "string"
+            ? input.statement
+            : undefined);
     return {
       requestId: interaction.interactionId,
       toolName,
       kind,
       display,
       prompt: brief.headline,
-      ...(brief.detail ? { detail: brief.detail } : {}),
+      ...(detail ? { detail } : {}),
       options,
       allowFreeform,
       ...(dismissible ? { dismissible: true } : {}),

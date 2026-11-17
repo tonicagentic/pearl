@@ -13,7 +13,11 @@ export function GET() {
     .map((value) => value.trim())
     .filter(Boolean);
 
-  const packages = ["com.tonicagentic.pearl", "com.tonicagentic.pearlmoney"];
+  const packages = [
+    "com.tonicagentic.pearl",
+    "com.tonicagentic.pearlmoney",
+    "com.tonicagentic.pearltasks",
+  ];
 
   const body =
     fingerprints.length === 0

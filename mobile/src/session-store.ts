@@ -1,9 +1,9 @@
 // Durable session storage: the better-auth bearer credential (and email)
 // live in the device Keychain via expo-secure-store, so a signed-in session
 // survives app restarts. The bearer is also mirrored into a shared Keychain
-// access group so Pearl Money can reuse the same session on this device.
-// The in-memory mirror in eve-transport stays the request-time source; this
-// module is the disk copy.
+// access group so Pearl Money / Pearl Tasks can reuse the same session on
+// this device. The in-memory mirror in eve-transport stays the request-time
+// source; this module is the disk copy.
 //
 // Expiry is not tracked locally: a stale credential simply starts failing with
 // 401s, and callers report that through sessionInvalid() so the auth provider
@@ -40,7 +40,7 @@ export async function loadSession(): Promise<StoredSession | null> {
     return { cookie, email: email ?? "" };
   }
 
-  // Adopt a session written by Pearl Money (or a prior Pearl install).
+  // Adopt a session written by Pearl Money / Pearl Tasks (or a prior Pearl install).
   const shared = await readSharedSessionToken();
   if (!shared) {
     return null;

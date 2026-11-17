@@ -318,6 +318,11 @@ export const issue = pgTable(
     areaId: text("area_id")
       .notNull()
       .references(() => area.id, { onDelete: "cascade" }),
+    // Optional project workspace. Deleting a project unfiles the task back
+    // to the inbox (set null). Late reference: project is declared below.
+    projectId: text("project_id").references((): AnyPgColumn => project.id, {
+      onDelete: "set null",
+    }),
     status: text("status", { enum: ["open", "resolved"] })
       .notNull()
       .default("open"),
@@ -329,7 +334,10 @@ export const issue = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at"),
   },
-  (table) => [index("idx_issue_user_status").on(table.userId, table.status)],
+  (table) => [
+    index("idx_issue_user_status").on(table.userId, table.status),
+    index("idx_issue_user_project").on(table.userId, table.projectId),
+  ],
 );
 
 export type Issue = typeof issue.$inferSelect;
