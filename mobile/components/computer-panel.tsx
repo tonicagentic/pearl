@@ -242,6 +242,7 @@ export function ComputerPanel({
         className="flex-1"
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
       >
         <View className="mb-4 mt-2 flex-row items-center gap-2">
           <Icon as={MonitorIcon} className="text-foreground size-5" />
