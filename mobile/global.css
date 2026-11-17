@@ -68,3 +68,53 @@
     }
   }
 }
+
+/* transitions.dev shimmer-text — Expo web ShimmerLabel uses .t-shimmer.
+   Native uses MaskedView; this CSS is web-only. Prefer Uniwind color tokens. */
+.t-shimmer,
+.shimmer-text {
+  position: relative;
+  display: inline-block;
+  color: var(--color-muted-foreground, var(--muted-foreground, #7c7c7c));
+}
+
+.t-shimmer::before,
+.shimmer-text::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    var(--color-foreground, var(--foreground, #0d0d0d)) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: 400% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: t-shimmer 2000ms linear infinite;
+  will-change: background-position;
+}
+
+@keyframes t-shimmer {
+  /* Sweep left → right (transitions.dev thinking-states). */
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-shimmer::before,
+  .shimmer-text::before {
+    animation: none !important;
+  }
+}
