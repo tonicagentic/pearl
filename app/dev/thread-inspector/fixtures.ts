@@ -4,12 +4,14 @@ import {
   type ConversationState,
   type SessionStreamEvent,
 } from "eve/client";
+import { eventsFromReplaySample } from "@/lib/sample-stream-replay";
 
 export type WebReplayScenarioId =
   | "reasoning-tools"
   | "rapid-burst"
   | "approval-park"
-  | "todos";
+  | "todos"
+  | "gallery";
 
 export type TimedWebStreamEvent = {
   readonly atMs: number;
@@ -93,7 +95,7 @@ function prelude(prompt: string): { atMs: number; raw: RawEvent }[] {
   ];
 }
 
-export const WEB_REPLAY_SCENARIOS: readonly WebReplayScenario[] = [
+const CORE_WEB_REPLAY_SCENARIOS: WebReplayScenario[] = [
   {
     id: "reasoning-tools",
     title: "Reasoning + Tools",
@@ -798,5 +800,19 @@ export const GALLERY_MESSAGES: readonly ThreadMessageLike[] = [
         argsText: '{"filePath":"components/assistant-ui/elements/surfaces.tsx',
       },
     ],
+  },
+];
+
+export const WEB_REPLAY_SCENARIOS: readonly WebReplayScenario[] = [
+  ...CORE_WEB_REPLAY_SCENARIOS,
+  {
+    id: "gallery",
+    title: "Design Gallery",
+    description:
+      "Stream replay synthesized from the static design-gallery messages.",
+    events: eventsFromReplaySample({
+      id: "gallery",
+      messages: GALLERY_MESSAGES,
+    }),
   },
 ];

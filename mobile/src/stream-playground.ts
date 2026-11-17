@@ -10,11 +10,15 @@ import {
   type SessionStreamEvent,
 } from "eve/client";
 
+import { THREAD_SAMPLES, type ThreadSampleId } from "./thread-samples";
+import { eventsFromThreadSample } from "./sample-stream-replay";
+
 export type StreamPlayScenarioId =
   | "reasoning-tools"
   | "compaction-retry-subagent"
   | "rapid-burst"
-  | "todos";
+  | "todos"
+  | ThreadSampleId;
 
 export type TimedStreamEvent = {
   readonly atMs: number;
@@ -634,7 +638,7 @@ function todosScript(): TimedStreamEvent[] {
   ]);
 }
 
-export const STREAM_PLAY_SCENARIOS: readonly StreamPlayScenario[] = [
+const CORE_STREAM_PLAY_SCENARIOS: readonly StreamPlayScenario[] = [
   {
     id: "reasoning-tools",
     title: "Reasoning + Tools",
@@ -662,6 +666,20 @@ export const STREAM_PLAY_SCENARIOS: readonly StreamPlayScenario[] = [
       "Streaming todo list mounts early, then rows check off with progress.",
     events: todosScript(),
   },
+];
+
+/** Every static thread sample, synthesized into a paced stream script. */
+const SAMPLE_STREAM_PLAY_SCENARIOS: readonly StreamPlayScenario[] =
+  THREAD_SAMPLES.map((sample) => ({
+    id: sample.id,
+    title: sample.label,
+    description: `Stream replay synthesized from the “${sample.label}” sample.`,
+    events: eventsFromThreadSample(sample),
+  }));
+
+export const STREAM_PLAY_SCENARIOS: readonly StreamPlayScenario[] = [
+  ...CORE_STREAM_PLAY_SCENARIOS,
+  ...SAMPLE_STREAM_PLAY_SCENARIOS,
 ];
 
 export function streamPlayScenario(

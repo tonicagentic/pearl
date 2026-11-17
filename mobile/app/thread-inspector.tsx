@@ -260,20 +260,34 @@ export default function ThreadInspectorScreen() {
         </View>
 
         {mode === "samples" ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerClassName="gap-1.5"
-          >
-            {THREAD_SAMPLES.map((entry) => (
-              <Pill
-                key={entry.id}
-                label={entry.label}
-                active={entry.id === sampleId}
-                onPress={() => setSampleId(entry.id)}
-              />
-            ))}
-          </ScrollView>
+          <View className="gap-1.5">
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerClassName="gap-1.5"
+            >
+              {THREAD_SAMPLES.map((entry) => (
+                <Pill
+                  key={entry.id}
+                  label={entry.label}
+                  active={entry.id === sampleId}
+                  onPress={() => setSampleId(entry.id)}
+                />
+              ))}
+            </ScrollView>
+            <Pill
+              label="Replay this sample"
+              onPress={() => {
+                clearTimer();
+                setPlaying(false);
+                setIndex(0);
+                setReplayEpochMs(Date.now());
+                setScenarioId(sampleId);
+                setMode("replay");
+                setPlaying(true);
+              }}
+            />
+          </View>
         ) : (
           <View className="gap-1.5">
             <ScrollView
