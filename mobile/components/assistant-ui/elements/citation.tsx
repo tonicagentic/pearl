@@ -1,11 +1,12 @@
 import { useMemo, type ComponentProps, type ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { useAuiState } from "@assistant-ui/react-native";
 
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { openWebUrl } from "@/src/open-web-url";
-import { threadMeta } from "./surfaces";
+import { stepEnter, threadMeta, useMotion } from "./surfaces";
 
 export type CitationRef = {
   readonly index: string;
@@ -103,11 +104,14 @@ export function MessageSources({ className }: ComponentProps<typeof View>) {
     if (!markdown) return EMPTY_CITATION_REFS;
     return extractCitationRefs(markdown);
   }, [markdown]);
+  const motion = useMotion();
+  const nativeMotion = motion && Platform.OS !== "web";
 
   if (refs.length === 0) return null;
 
   return (
-    <View
+    <Animated.View
+      entering={nativeMotion ? stepEnter : undefined}
       data-slot="message-sources"
       className={cn("flex-col gap-1.5 pt-1", className)}
     >
@@ -143,7 +147,7 @@ export function MessageSources({ className }: ComponentProps<typeof View>) {
           </View>
         ))}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

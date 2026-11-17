@@ -46,9 +46,9 @@ describe("lineSpanLabel", () => {
 });
 
 describe("toActivityStep", () => {
-  it("names a live reasoning block Thinking…", () => {
+  it("names a live reasoning block Thinking", () => {
     const step = toActivityStep(reasoning("plan"), { live: true });
-    assert.equal(step.verb, "Thinking…");
+    assert.equal(step.verb, "Thinking");
     assert.equal(step.chip, "");
   });
 
@@ -174,10 +174,10 @@ describe("toActivityStep", () => {
 });
 
 describe("composeActivityHeader", () => {
-  it("uses Thinking… / Thought for reasoning-only segments", () => {
+  it("uses Thinking / Thought for reasoning-only segments", () => {
     assert.equal(
       composeActivityHeader([reasoning()], { live: true }).text,
-      "Thinking…",
+      "Thinking",
     );
     assert.equal(composeActivityHeader([reasoning()]).text, "Thought");
   });
@@ -344,7 +344,7 @@ describe("statusLabelForTool", () => {
 describe("withElapsed", () => {
   it("appends a middle-dot duration", () => {
     assert.equal(withElapsed("Edited app.json", "12s"), "Edited app.json · 12s");
-    assert.equal(withElapsed("Thinking…"), "Thinking…");
+    assert.equal(withElapsed("Thinking"), "Thinking");
   });
 });
 

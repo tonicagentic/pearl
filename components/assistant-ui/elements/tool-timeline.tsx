@@ -98,9 +98,9 @@ function StepRow({
   elapsed?: string;
 }) {
   const expandable = typeof step.detail === "string" && step.detail.length > 0;
-  // Streaming steps read progressive ("Thinking…"); settled ones past tense.
+  // Streaming steps read progressive ("Thinking"); settled ones past tense.
   const verb =
-    active && step.verb === "Thought" ? "Thinking…" : step.verb;
+    active && step.verb === "Thought" ? "Thinking" : step.verb;
   const showChip = step.chip.length > 0;
 
   const row = (
@@ -159,14 +159,13 @@ function StepRow({
         <span className="text-muted-foreground min-w-0 truncate">{step.chip}</span>
       ) : null}
       <DiffCounts added={step.added} removed={step.removed} />
-      {expandable && (
+      {expandable && expanded ? (
         <ChevronDownIcon
-          className={cn(
-            "size-3.5 shrink-0 opacity-50 transition-transform duration-200 motion-reduce:transition-none",
-            expanded && "rotate-180",
-          )}
+          aria-hidden
+          strokeWidth={2.25}
+          className="size-4 shrink-0 opacity-55 fade-in zoom-in-75 animate-in duration-150 motion-reduce:animate-none"
         />
-      )}
+      ) : null}
     </div>
   );
 
@@ -248,11 +247,16 @@ export function ToolTimeline({
     >
       <CollapsibleTrigger
         className={cn(
-          "group/trigger hover:text-foreground/70 flex items-center gap-1 rounded-md py-0.5 transition-colors outline-none",
+          "group/trigger hover:text-foreground/70 flex items-center gap-1.5 rounded-md py-0.5 transition-colors outline-none",
           threadMeta,
         )}
       >
-        <span className="inline-flex max-w-full items-center gap-1.5 text-start">
+        <span
+          className={cn(
+            "inline-flex max-w-full items-center gap-1.5 text-start",
+            threadMeta,
+          )}
+        >
           <ThinkingStatesLabel
             label={
               streaming
@@ -262,7 +266,7 @@ export function ToolTimeline({
                 : restingLabel
             }
             shimmer={streaming && !open}
-            className="min-w-0 truncate"
+            className="min-w-0"
           />
           {elapsed !== undefined && (
             <span className="shrink-0 tabular-nums opacity-80">
@@ -270,13 +274,14 @@ export function ToolTimeline({
             </span>
           )}
           <DiffCounts added={headerAdded} removed={headerRemoved} />
+          {open ? (
+            <ChevronDownIcon
+              aria-hidden
+              strokeWidth={2.25}
+              className="size-4 shrink-0 opacity-55 fade-in zoom-in-75 animate-in duration-150 motion-reduce:animate-none"
+            />
+          ) : null}
         </span>
-        <ChevronDownIcon
-          className={cn(
-            "size-3.5 shrink-0 opacity-50 transition-transform duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
-            "group-data-open/trigger:rotate-180 group-data-panel-open/trigger:rotate-180",
-          )}
-        />
       </CollapsibleTrigger>
       <CollapsibleContent className={cn(collapsePanel, "outline-none")}>
         <div className="flex flex-col gap-1 pt-1.5">

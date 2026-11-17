@@ -1923,6 +1923,9 @@ const AssistantMessage: FC = () => {
     <MessagePrimitive.Root className="aui-assistant-message-root">
       <View className="aui-assistant-message-content gap-2">
         <TurnElapsedProvider>
+          {/* Todos sit above interleaved content so the checklist stays
+              visible while the agent works (parity with web placement). */}
+          <SessionTodoList />
           {blocks.map((block, blockIndex) => {
             if (block.kind === "timeline") {
               return (
@@ -1954,7 +1957,6 @@ const AssistantMessage: FC = () => {
               </View>
             );
           })}
-          <SessionTodoList />
           <AssistantThinking />
         </TurnElapsedProvider>
         <MessageSources />

@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import { ArrowUpRightIcon, FileTextIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { mono, paper, ShimmerLabel } from "@/lib/surfaces";
+import { stepEnter } from "@/components/assistant-ui/elements/surfaces";
 
 export function ArtifactCard({
   title,
@@ -25,6 +26,7 @@ export function ArtifactCard({
     <div
       data-slot="artifact-card"
       className={cn(
+        stepEnter,
         paper,
         "group flex w-full max-w-xs cursor-pointer items-center gap-3 rounded-[20px] p-3.5 transition-transform duration-150 hover:-translate-y-px active:scale-[0.98]",
         className,

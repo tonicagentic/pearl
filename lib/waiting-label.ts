@@ -1,9 +1,12 @@
 /**
  * Ephemeral pre-content waiting label for the current send.
  * Set at send time from the local heuristic; cleared when the turn settles.
+ * Default matches Cursor's opaque agent wait status.
  */
 
-let label = "Thinking";
+import { PLANNING_NEXT_MOVES_LABEL } from "./stream-thinking-state.ts";
+
+let label = PLANNING_NEXT_MOVES_LABEL;
 const listeners = new Set<() => void>();
 
 export function getWaitingLabel(): string {
@@ -17,8 +20,8 @@ export function setWaitingLabel(next: string): void {
 }
 
 export function resetWaitingLabel(): void {
-  if (label === "Thinking") return;
-  label = "Thinking";
+  if (label === PLANNING_NEXT_MOVES_LABEL) return;
+  label = PLANNING_NEXT_MOVES_LABEL;
   for (const listener of listeners) listener();
 }
 

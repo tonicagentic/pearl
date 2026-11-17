@@ -65,7 +65,17 @@ describe("extractPartialArgString / chipForTool streaming", () => {
 });
 
 describe("deriveLiveThinkingState", () => {
-  it("shows waiting label before content", () => {
+  it("shows Planning next moves before content by default", () => {
+    const state = deriveLiveThinkingState({
+      statusType: "running",
+      events: [{ type: "turn.started" }, { type: "model.started" }],
+      parts: [],
+    });
+    assert.equal(state.phase, "pre-content");
+    assert.equal(state.label, "Planning next moves");
+  });
+
+  it("honors a custom waiting label before content", () => {
     const state = deriveLiveThinkingState({
       statusType: "running",
       waitingLabel: "Planning next steps",
@@ -79,10 +89,46 @@ describe("deriveLiveThinkingState", () => {
   it("surfaces reasoning headings", () => {
     const state = deriveLiveThinkingState({
       statusType: "running",
-      parts: [{ type: "reasoning", text: "**Check inbox**\nLooking…" }],
+      parts: [
+        {
+          type: "reasoning",
+          text: "**Check inbox**\nLooking…",
+          status: { type: "running" },
+        },
+      ],
     });
     assert.equal(state.phase, "reasoning");
     assert.equal(state.label, "Check inbox");
+  });
+
+  it("shows Planning next moves between settled tools", () => {
+    const state = deriveLiveThinkingState({
+      statusType: "running",
+      parts: [
+        {
+          type: "tool-call",
+          toolName: "web_search",
+          args: { query: "done" },
+          status: { type: "complete" },
+        },
+      ],
+    });
+    assert.equal(state.phase, "pre-content");
+    assert.equal(state.label, "Planning next moves");
+  });
+
+  it("does not keep Thinking after reasoning settles", () => {
+    const state = deriveLiveThinkingState({
+      statusType: "running",
+      parts: [
+        {
+          type: "reasoning",
+          text: "**Done thinking**\n…",
+          status: { type: "complete" },
+        },
+      ],
+    });
+    assert.equal(state.label, "Planning next moves");
   });
 
   it("surfaces streaming tool chips from argsText", () => {

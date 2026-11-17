@@ -554,29 +554,20 @@ export function ThinkingStatesLabel({
   const currentRef = useRef(label);
   const widthTargetRef = useRef(0);
 
-  const opacity0 = useSharedValue(1);
-  const y0 = useSharedValue(0);
+  // First paint starts planted below (same as a swap enter) so the initial
+  // Planning next moves / Thinking status rises in instead of popping.
+  const opacity0 = useSharedValue(motion ? 0 : 1);
+  const y0 = useSharedValue(motion ? THINK_SWAP_Y : 0);
   const opacity1 = useSharedValue(0);
   const y1 = useSharedValue(THINK_SWAP_Y);
   const widthSv = useSharedValue(0);
 
-  const runSwap = useCallback(
-    (from: 0 | 1, to: 0 | 1) => {
-      const outOpacity = from === 0 ? opacity0 : opacity1;
-      const outY = from === 0 ? y0 : y1;
-      const inOpacity = to === 0 ? opacity0 : opacity1;
-      const inY = to === 0 ? y0 : y1;
-
-      cancelAnimation(outOpacity);
-      cancelAnimation(outY);
+  const runEnter = useCallback(
+    (slot: 0 | 1) => {
+      const inOpacity = slot === 0 ? opacity0 : opacity1;
+      const inY = slot === 0 ? y0 : y1;
       cancelAnimation(inOpacity);
       cancelAnimation(inY);
-
-      // Exit outgoing immediately (up + fade).
-      outOpacity.value = withTiming(0, thinkSwapTiming);
-      outY.value = withTiming(-THINK_SWAP_Y, thinkSwapTiming);
-
-      // Plant incoming below with no transition, then release after gap.
       inOpacity.value = 0;
       inY.value = THINK_SWAP_Y;
       inOpacity.value = withDelay(THINK_GAP_MS, withTiming(1, thinkSwapTiming));
@@ -585,8 +576,38 @@ export function ThinkingStatesLabel({
     [opacity0, opacity1, y0, y1],
   );
 
+  const runSwap = useCallback(
+    (from: 0 | 1, to: 0 | 1) => {
+      const outOpacity = from === 0 ? opacity0 : opacity1;
+      const outY = from === 0 ? y0 : y1;
+
+      cancelAnimation(outOpacity);
+      cancelAnimation(outY);
+
+      // Exit outgoing immediately (up + fade).
+      outOpacity.value = withTiming(0, thinkSwapTiming);
+      outY.value = withTiming(-THINK_SWAP_Y, thinkSwapTiming);
+
+      // Incoming half matches first-paint enter.
+      runEnter(to);
+    },
+    [opacity0, opacity1, runEnter, y0, y1],
+  );
+
+  useEffect(() => {
+    if (!motion) {
+      opacity0.value = 1;
+      y0.value = 0;
+      return;
+    }
+    // Only animate first paint while still planted; later swaps own motion.
+    if (opacity0.value !== 0 || y0.value !== THINK_SWAP_Y) return;
+    runEnter(0);
+  }, [motion, opacity0, runEnter, y0]);
+
   useEffect(() => {
     if (label === currentRef.current) return;
+    const previous = currentRef.current;
     currentRef.current = label;
 
     if (!motion) {
@@ -597,6 +618,19 @@ export function ThinkingStatesLabel({
       y0.value = 0;
       opacity1.value = 0;
       y1.value = THINK_SWAP_Y;
+      return;
+    }
+
+    // Streaming tool chips grow in place — don't swap on every glyph.
+    const streamingRefine =
+      label.startsWith(previous) || previous.startsWith(label);
+    if (streamingRefine) {
+      const slot = activeRef.current;
+      setSlots((prev) => {
+        const copy: [string, string] = [prev[0], prev[1]];
+        copy[slot] = label;
+        return copy;
+      });
       return;
     }
 
@@ -619,7 +653,9 @@ export function ThinkingStatesLabel({
     (event: LayoutChangeEvent) => {
       const nextWidth = Math.ceil(event.nativeEvent.layout.width);
       if (nextWidth <= 0 || nextWidth === widthTargetRef.current) return;
-      const animate = widthTargetRef.current > 0 && motion;
+      const prevWidth = widthTargetRef.current;
+      // Snap wider so streaming tool chips never clip mid-word; ease shrinks.
+      const animate = prevWidth > 0 && motion && nextWidth < prevWidth;
       widthTargetRef.current = nextWidth;
       cancelAnimation(widthSv);
       if (!animate) {
@@ -665,15 +701,15 @@ export function ThinkingStatesLabel({
   };
 
   return (
-    <Reanimated.View
-      className={cn("relative min-w-0 flex-shrink overflow-hidden", className)}
-      style={boxStyle}
-    >
+    <View className={cn("relative min-w-0 flex-shrink", className)}>
+      {/* Intrinsic sizer lives OUTSIDE the clipped width box — measuring
+          inside overflow+fixed width locked streaming chips at the first
+          short width ("Searching p"). */}
       <View
         pointerEvents="none"
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        style={{ opacity: 0 }}
+        style={{ position: "absolute", opacity: 0, left: 0, top: 0 }}
         onLayout={onMeasure}
       >
         <ShimmerLabel
@@ -682,43 +718,56 @@ export function ThinkingStatesLabel({
           numberOfLines={1}
           className={textClassName}
         >
-          {slots[active]}
+          {label}
         </ShimmerLabel>
       </View>
-      <Reanimated.View
-        pointerEvents={active === 0 ? "auto" : "none"}
-        style={[layer0Style, layerPos]}
-        accessibilityElementsHidden={active !== 0}
-        importantForAccessibility={
-          active === 0 ? "yes" : "no-hide-descendants"
-        }
-      >
-        <ShimmerLabel
-          active={shimmer && active === 0}
-          variant="label"
-          numberOfLines={1}
-          className={textClassName}
+      <Reanimated.View className="overflow-hidden" style={boxStyle}>
+        {/* In-flow height spacer (opacity 0); width comes from boxStyle. */}
+        <View style={{ opacity: 0 }} pointerEvents="none">
+          <ShimmerLabel
+            active={false}
+            variant="label"
+            numberOfLines={1}
+            className={textClassName}
+          >
+            {slots[active]}
+          </ShimmerLabel>
+        </View>
+        <Reanimated.View
+          pointerEvents={active === 0 ? "auto" : "none"}
+          style={[layer0Style, layerPos]}
+          accessibilityElementsHidden={active !== 0}
+          importantForAccessibility={
+            active === 0 ? "yes" : "no-hide-descendants"
+          }
         >
-          {slots[0]}
-        </ShimmerLabel>
-      </Reanimated.View>
-      <Reanimated.View
-        pointerEvents={active === 1 ? "auto" : "none"}
-        style={[layer1Style, layerPos]}
-        accessibilityElementsHidden={active !== 1}
-        importantForAccessibility={
-          active === 1 ? "yes" : "no-hide-descendants"
-        }
-      >
-        <ShimmerLabel
-          active={shimmer && active === 1}
-          variant="label"
-          numberOfLines={1}
-          className={textClassName}
+          <ShimmerLabel
+            active={shimmer && active === 0}
+            variant="label"
+            numberOfLines={1}
+            className={textClassName}
+          >
+            {slots[0]}
+          </ShimmerLabel>
+        </Reanimated.View>
+        <Reanimated.View
+          pointerEvents={active === 1 ? "auto" : "none"}
+          style={[layer1Style, layerPos]}
+          accessibilityElementsHidden={active !== 1}
+          importantForAccessibility={
+            active === 1 ? "yes" : "no-hide-descendants"
+          }
         >
-          {slots[1]}
-        </ShimmerLabel>
+          <ShimmerLabel
+            active={shimmer && active === 1}
+            variant="label"
+            numberOfLines={1}
+            className={textClassName}
+          >
+            {slots[1]}
+          </ShimmerLabel>
+        </Reanimated.View>
       </Reanimated.View>
-    </Reanimated.View>
+    </View>
   );
 }

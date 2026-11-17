@@ -81,3 +81,24 @@ test("todoProgress ignores cancelled items", () => {
     { completed: 1, tracked: 2 },
   );
 });
+
+test("parseAgentTodos recovers complete items from truncated argsText", () => {
+  const partial =
+    '{"todos":[{"content":"Check Tokyo","status":"completed","priority":"high"},{"content":"Check Paris","status":"in_progress","prio';
+  assert.deepEqual(parseAgentTodos(partial), [tokyo]);
+});
+
+test("latestTodoSnapshot prefers streaming argsText before settle", () => {
+  assert.deepEqual(
+    latestTodoSnapshot([
+      {
+        type: "tool-call",
+        toolName: "todo",
+        argsText:
+          '{"todos":[{"content":"Check Paris","status":"in_progress","priority":"medium"}]}',
+        status: { type: "running" },
+      },
+    ]),
+    { items: [paris], updating: true },
+  );
+});

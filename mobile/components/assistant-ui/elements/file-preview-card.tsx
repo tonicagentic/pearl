@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Platform,
   Pressable,
   Text,
   View,
 } from "react-native";
+import Animated from "react-native-reanimated";
 import {
   BracesIcon,
   FileIcon,
@@ -23,6 +25,10 @@ import {
 } from "../../../../lib/design/file-preview";
 import { fetchChatFileContent } from "@/src/chat-files";
 import { useWorkspaceOptional } from "@/src/workspace-context";
+import {
+  stepEnter,
+  useMotion,
+} from "@/components/assistant-ui/elements/surfaces";
 
 function KindIcon({ path }: { readonly path: string }) {
   const kind = previewKindForPath(path);
@@ -117,45 +123,50 @@ export function FilePreviewCard({
     }
   };
 
+  const motion = useMotion();
+  const nativeMotion = motion && Platform.OS !== "web";
+
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${name}`}
-      accessibilityState={{ disabled: opening }}
-      disabled={opening}
-      className="border-border/50 bg-card w-full overflow-hidden rounded-2xl border"
-      onPress={() => void handlePress()}
-    >
-      {imageSrc ? (
-        <Image
-          source={{ uri: imageSrc }}
-          accessibilityIgnoresInvertColors
-          className="bg-muted h-36 w-full"
-          resizeMode="cover"
-        />
-      ) : null}
-      <View className="flex-row items-start gap-3 px-3.5 py-3">
-        <View className="bg-foreground/5 size-9 items-center justify-center rounded-xl">
-          <KindIcon path={path} />
-        </View>
-        <View className="min-w-0 flex-1">
-          <Text numberOfLines={1} className="text-foreground text-sm font-medium">
-            {name}
-          </Text>
-          <Text className="text-muted-foreground mt-0.5 text-xs">
-            {loading ? "Loading…" : label}
-          </Text>
-          {snippet ? (
-            <Text
-              numberOfLines={3}
-              className="text-muted-foreground mt-2 text-xs leading-5"
-            >
-              {snippet}
+    <Animated.View entering={nativeMotion ? stepEnter : undefined}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${name}`}
+        accessibilityState={{ disabled: opening }}
+        disabled={opening}
+        className="border-border/50 bg-card w-full overflow-hidden rounded-2xl border"
+        onPress={() => void handlePress()}
+      >
+        {imageSrc ? (
+          <Image
+            source={{ uri: imageSrc }}
+            accessibilityIgnoresInvertColors
+            className="bg-muted h-36 w-full"
+            resizeMode="cover"
+          />
+        ) : null}
+        <View className="flex-row items-start gap-3 px-3.5 py-3">
+          <View className="bg-foreground/5 size-9 items-center justify-center rounded-xl">
+            <KindIcon path={path} />
+          </View>
+          <View className="min-w-0 flex-1">
+            <Text numberOfLines={1} className="text-foreground text-sm font-medium">
+              {name}
             </Text>
-          ) : null}
+            <Text className="text-muted-foreground mt-0.5 text-xs">
+              {loading ? "Loading…" : label}
+            </Text>
+            {snippet ? (
+              <Text
+                numberOfLines={3}
+                className="text-muted-foreground mt-2 text-xs leading-5"
+              >
+                {snippet}
+              </Text>
+            ) : null}
+          </View>
+          {opening ? <ActivityIndicator size="small" /> : null}
         </View>
-        {opening ? <ActivityIndicator size="small" /> : null}
-      </View>
-    </Pressable>
+      </Pressable>
+    </Animated.View>
   );
 }

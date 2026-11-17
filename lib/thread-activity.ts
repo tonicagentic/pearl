@@ -3,7 +3,7 @@
  *
  * A step that is still running uses the present participle. A finished step
  * uses the simple past. The same stem is used in both tenses. `Thought` and
- * `Thinking…` name a reasoning block; they never name a turn that also used
+ * `Thinking` name a reasoning block; they never name a turn that also used
  * tools.
  *
  * Collapsed header:
@@ -347,7 +347,7 @@ export function toActivityStep(
 ): ActivityStep {
   if (part.type === "reasoning") {
     return {
-      verb: options.live ? "Thinking…" : "Thought",
+      verb: options.live ? "Thinking" : "Thought",
       chip: "",
       detail: part.text,
     };
@@ -569,7 +569,7 @@ export function composeActivityHeader(
 ): ActivityHeader {
   const live = options.live === true;
   if (parts.length === 0) {
-    return { bits: [{ verb: live ? "Thinking…" : "Thought", detail: "" }], text: live ? "Thinking…" : "Thought" };
+    return { bits: [{ verb: live ? "Thinking" : "Thought", detail: "" }], text: live ? "Thinking" : "Thought" };
   }
 
   const tools = parts.filter(
@@ -580,7 +580,7 @@ export function composeActivityHeader(
 
   if (onlyReasoning) {
     const bits: ActivityBit[] = [
-      { verb: live ? "Thinking…" : "Thought", detail: "" },
+      { verb: live ? "Thinking" : "Thought", detail: "" },
     ];
     return { bits, text: bitsToText(bits).trim(), ...diff };
   }

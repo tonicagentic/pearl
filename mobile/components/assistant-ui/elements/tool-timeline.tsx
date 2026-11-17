@@ -1,23 +1,25 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { ChevronDownIcon } from "lucide-react-native";
+import { SymbolView } from "expo-symbols";
 import { Platform, Pressable, View } from "react-native";
 import Animated, {
+  Easing,
   FadeIn,
   FadeOut,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { useCSSVariable } from "uniwind";
 
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import {
-  COLLAPSE_MS,
   CollapsePanel,
   ShimmerLabel,
   ThinkingStatesLabel,
-  collapseEase,
   layoutTransition,
   stepEnter,
   thinkSwapEnter,
@@ -27,6 +29,8 @@ import {
   threadMetaDetail,
   useMotion,
 } from "./surfaces";
+
+const CHEVRON_SIZE = 16;
 
 // RN port of the web tool-timeline: quiet meta rows, activity header,
 // and inline edit diffs on the edit row — no Editing footer.
@@ -95,31 +99,71 @@ export function ActivityPhrase({
   );
 }
 
-/** ChevronDown points right when collapsed, down when open. */
+/** Native disclosure chevron — points right when collapsed, down when open. */
 function MetaChevron({ open }: { readonly open: boolean }) {
   const motion = useMotion();
   const rotation = useSharedValue(open ? 0 : -90);
+  const scale = useSharedValue(1);
+  const tint =
+    (useCSSVariable("--color-muted-foreground") as string | undefined) ??
+    "#8a8a8a";
 
   useEffect(() => {
     if (!motion) {
       rotation.value = open ? 0 : -90;
+      scale.value = 1;
       return;
     }
-    rotation.value = withTiming(open ? 0 : -90, {
-      duration: COLLAPSE_MS,
-      easing: collapseEase,
+    rotation.value = withSpring(open ? 0 : -90, {
+      damping: 18,
+      stiffness: 220,
+      mass: 0.6,
     });
-  }, [open, motion, rotation]);
+    scale.value = withTiming(
+      0.86,
+      {
+        duration: 90,
+        easing: Easing.out(Easing.quad),
+      },
+      (finished) => {
+        if (finished) {
+          scale.value = withSpring(1, { damping: 14, stiffness: 280 });
+        }
+      },
+    );
+  }, [open, motion, rotation, scale]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
+    transform: [
+      { rotate: `${rotation.value}deg` },
+      { scale: scale.value },
+    ],
   }));
 
+  const nativeMotion = motion && Platform.OS !== "web";
+
   return (
-    <Animated.View className="size-3.5 items-center justify-center" style={style}>
-      <Icon
-        as={ChevronDownIcon}
-        className="size-3.5 text-muted-foreground/55"
+    <Animated.View
+      entering={nativeMotion ? FadeIn.duration(160) : undefined}
+      className="items-center justify-center"
+      style={[{ width: CHEVRON_SIZE, height: CHEVRON_SIZE }, style]}
+    >
+      <SymbolView
+        name={{
+          ios: "chevron.down",
+          android: "expand_more",
+          web: "expand_more",
+        }}
+        size={CHEVRON_SIZE}
+        weight="medium"
+        tintColor={tint}
+        fallback={
+          <Icon
+            as={ChevronDownIcon}
+            size={CHEVRON_SIZE}
+            className="text-muted-foreground/55"
+          />
+        }
       />
     </Animated.View>
   );
@@ -153,7 +197,7 @@ function DiffCounts({
 }
 
 function isReasoningVerb(verb: string): boolean {
-  return verb === "Thought" || verb === "Thinking…";
+  return verb === "Thought" || verb === "Thinking…" || verb === "Thinking";
 }
 
 function StepRow({
@@ -173,9 +217,9 @@ function StepRow({
   const motion = useMotion();
   const nativeMotion = motion && Platform.OS !== "web";
   const expandable = typeof step.detail === "string" && step.detail.length > 0;
-  // Live reasoning reads "Thinking…" like Cursor; settled stays "Thought".
+  // Live reasoning reads "Thinking"; settled stays "Thought".
   const verb =
-    active && step.verb === "Thought" ? "Thinking…" : step.verb;
+    active && step.verb === "Thought" ? "Thinking" : step.verb;
   const showChip = step.chip.length > 0;
 
   return (
@@ -185,7 +229,7 @@ function StepRow({
     >
       <Pressable
         className={cn(
-          "min-h-7 flex-row items-baseline gap-1.5 py-1.5",
+          "min-h-7 flex-row items-center gap-1.5 py-1.5",
           expandable && "active:opacity-70",
         )}
         disabled={!expandable}
@@ -244,7 +288,7 @@ function StepRow({
           )
         ) : null}
         <DiffCounts added={step.added} removed={step.removed} />
-        {expandable ? <MetaChevron open={expanded} /> : null}
+        {expandable && expanded ? <MetaChevron open /> : null}
       </Pressable>
       {expandable && expanded ? (
         <Animated.View
@@ -325,11 +369,11 @@ export function ToolTimeline({
       className="w-full"
     >
       <Pressable
-        className="min-h-7 flex-row items-baseline gap-1.5 py-1.5"
+        className="min-h-7 flex-row items-center gap-1.5 py-1.5"
         accessibilityState={{ expanded: open }}
         onPress={() => onOpenChange(!open)}
       >
-        <View className="min-w-0 flex-1 flex-row flex-nowrap items-baseline gap-x-1.5">
+        <View className="min-w-0 flex-row flex-nowrap items-center gap-x-1.5">
           {streaming ? (
             // While expanded, the last StepRow owns the live label — keep the
             // header on the activity summary so the same "Searching…" line
@@ -372,8 +416,8 @@ export function ToolTimeline({
             </Text>
           ) : null}
           <DiffCounts added={headerAdded} removed={headerRemoved} />
+          {open ? <MetaChevron open /> : null}
         </View>
-        <MetaChevron open={open} />
       </Pressable>
       <CollapsePanel open={open}>
         <Animated.View

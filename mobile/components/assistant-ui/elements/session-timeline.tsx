@@ -6,6 +6,8 @@ import {
   useState,
   type FC,
 } from "react";
+import { Platform } from "react-native";
+import Animated from "react-native-reanimated";
 import { useAuiState } from "@assistant-ui/react-native";
 
 import {
@@ -31,6 +33,7 @@ import {
   ToolTimeline,
   type TimelineStep,
 } from "./tool-timeline";
+import { stepEnter, useMotion } from "./surfaces";
 export {
   TimelineDurationEventsContext,
   TimelineDurationEventsProvider,
@@ -217,6 +220,9 @@ export const SessionTimelineSegment: FC<{
     return () => clearInterval(timer);
   }, [derivedLiveHeader, header.text, showLive]);
 
+  const motion = useMotion();
+  const nativeMotion = motion && Platform.OS !== "web";
+
   if (steps.length === 0) return null;
 
   // Settled duration only — no live Ns ticks while streaming.
@@ -224,22 +230,24 @@ export const SessionTimelineSegment: FC<{
     isLast && !showLive ? settledDuration : undefined;
 
   return (
-    <ToolTimeline
-      steps={steps}
-      visibleSteps={steps.length}
-      streaming={showLive}
-      open={userOpen ?? false}
-      onOpenChange={setUserOpen}
-      restingLabel={
-        <ActivityPhrase
-          bits={[...(showLive ? openHeader.bits : header.bits)]}
-        />
-      }
-      activeLabel={activeLabel}
-      headerAdded={header.added}
-      headerRemoved={header.removed}
-      elapsed={duration}
-    />
+    <Animated.View entering={nativeMotion ? stepEnter : undefined}>
+      <ToolTimeline
+        steps={steps}
+        visibleSteps={steps.length}
+        streaming={showLive}
+        open={userOpen ?? false}
+        onOpenChange={setUserOpen}
+        restingLabel={
+          <ActivityPhrase
+            bits={[...(showLive ? openHeader.bits : header.bits)]}
+          />
+        }
+        activeLabel={activeLabel}
+        headerAdded={header.added}
+        headerRemoved={header.removed}
+        elapsed={duration}
+      />
+    </Animated.View>
   );
 };
 

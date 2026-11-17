@@ -13,7 +13,8 @@ import {
 export type StreamPlayScenarioId =
   | "reasoning-tools"
   | "compaction-retry-subagent"
-  | "rapid-burst";
+  | "rapid-burst"
+  | "todos";
 
 export type TimedStreamEvent = {
   readonly atMs: number;
@@ -443,6 +444,196 @@ function rapidBurstScript(): TimedStreamEvent[] {
   return stamp(events);
 }
 
+function todosScript(): TimedStreamEvent[] {
+  const initial = [
+    {
+      content: "Add stepEnter mounts",
+      status: "in_progress",
+      priority: "high",
+    },
+    {
+      content: "Wire Planning next moves",
+      status: "pending",
+      priority: "high",
+    },
+    {
+      content: "Add todo replay fixtures",
+      status: "pending",
+      priority: "medium",
+    },
+  ] as const;
+  const mid = [
+    { ...initial[0], status: "completed" },
+    { ...initial[1], status: "in_progress" },
+    initial[2],
+  ] as const;
+  const done = [
+    { ...initial[0], status: "completed" },
+    { ...initial[1], status: "completed" },
+    { ...initial[2], status: "completed" },
+  ] as const;
+
+  return stamp([
+    ...turnPrelude(),
+    {
+      atMs: 400,
+      raw: {
+        type: "call.input",
+        scope: runScope,
+        data: {
+          callId: "c_todo_1",
+          kind: "tool",
+          name: "todo",
+          delta: `{"todos":${JSON.stringify(initial).slice(0, -1)}`,
+        },
+      },
+    },
+    {
+      atMs: 700,
+      raw: {
+        type: "call.input",
+        scope: runScope,
+        data: { callId: "c_todo_1", delta: "]}" },
+      },
+    },
+    {
+      atMs: 850,
+      raw: {
+        type: "call.requested",
+        scope: runScope,
+        data: {
+          callId: "c_todo_1",
+          capability: { kind: "tool", name: "todo" },
+          owner: { runId: RUN },
+          input: { todos: initial },
+        },
+      },
+    },
+    {
+      atMs: 950,
+      raw: {
+        type: "call.started",
+        scope: runScope,
+        data: { callId: "c_todo_1" },
+      },
+    },
+    {
+      atMs: 1200,
+      raw: {
+        type: "call.settled",
+        scope: runScope,
+        data: {
+          callId: "c_todo_1",
+          outcome: "completed",
+          output: { todos: initial },
+        },
+      },
+    },
+    {
+      atMs: 2200,
+      raw: {
+        type: "call.requested",
+        scope: runScope,
+        data: {
+          callId: "c_todo_2",
+          capability: { kind: "tool", name: "todo" },
+          owner: { runId: RUN },
+          input: { todos: mid },
+        },
+      },
+    },
+    {
+      atMs: 2300,
+      raw: {
+        type: "call.started",
+        scope: runScope,
+        data: { callId: "c_todo_2" },
+      },
+    },
+    {
+      atMs: 2600,
+      raw: {
+        type: "call.settled",
+        scope: runScope,
+        data: {
+          callId: "c_todo_2",
+          outcome: "completed",
+          output: { todos: mid },
+        },
+      },
+    },
+    {
+      atMs: 3600,
+      raw: {
+        type: "call.requested",
+        scope: runScope,
+        data: {
+          callId: "c_todo_3",
+          capability: { kind: "tool", name: "todo" },
+          owner: { runId: RUN },
+          input: { todos: done },
+        },
+      },
+    },
+    {
+      atMs: 3700,
+      raw: {
+        type: "call.started",
+        scope: runScope,
+        data: { callId: "c_todo_3" },
+      },
+    },
+    {
+      atMs: 4000,
+      raw: {
+        type: "call.settled",
+        scope: runScope,
+        data: {
+          callId: "c_todo_3",
+          outcome: "completed",
+          output: { todos: done },
+        },
+      },
+    },
+    {
+      atMs: 4500,
+      raw: {
+        type: "content.delta",
+        scope: runScope,
+        data: {
+          partId: "t1",
+          kind: "text",
+          delta:
+            "Checklist is live — mounts enter with motion and rows check off as work settles.",
+        },
+      },
+    },
+    {
+      atMs: 4900,
+      raw: {
+        type: "content.completed",
+        scope: runScope,
+        data: {
+          partId: "t1",
+          kind: "text",
+          phase: "reply",
+          runId: RUN,
+          value:
+            "Checklist is live — mounts enter with motion and rows check off as work settles.",
+        },
+      },
+    },
+    {
+      atMs: 5100,
+      raw: {
+        type: "turn.settled",
+        scope: turnScope,
+        data: { turnId: TURN, outcome: "completed" },
+      },
+    },
+  ]);
+}
+
 export const STREAM_PLAY_SCENARIOS: readonly StreamPlayScenario[] = [
   {
     id: "reasoning-tools",
@@ -463,6 +654,13 @@ export const STREAM_PLAY_SCENARIOS: readonly StreamPlayScenario[] = [
     description:
       "Fast heading/tool transitions to stress 2000ms dwell coalescing.",
     events: rapidBurstScript(),
+  },
+  {
+    id: "todos",
+    title: "Todos",
+    description:
+      "Streaming todo list mounts early, then rows check off with progress.",
+    events: todosScript(),
   },
 ];
 

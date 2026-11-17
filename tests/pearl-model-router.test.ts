@@ -100,7 +100,7 @@ describe("waitingLabelForText", () => {
   });
 
   it("falls back to Thinking for chat", () => {
-    assert.equal(waitingLabelForText("hi"), "Thinking");
+    assert.equal(waitingLabelForText("hi"), "Planning next moves");
   });
 });
 

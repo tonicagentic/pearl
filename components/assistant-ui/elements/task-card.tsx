@@ -9,7 +9,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { mono, paper } from "./surfaces";
+import { mono, paper, stepEnter } from "./surfaces";
 
 export type TaskCardState =
   | "working"
@@ -115,6 +115,7 @@ export function TaskCard({
       data-slot="task-card"
       data-state={state}
       className={cn(
+        stepEnter,
         paper,
         "flex w-full max-w-sm flex-col overflow-hidden rounded-2xl",
         state === "working" &&

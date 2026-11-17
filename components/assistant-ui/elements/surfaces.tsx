@@ -195,19 +195,56 @@ export function ThinkingStatesLabel({
 }) {
   const slotA = useRef<HTMLSpanElement>(null);
   const slotB = useRef<HTMLSpanElement>(null);
+  const sizerRef = useRef<HTMLSpanElement>(null);
   const [active, setActive] = useState<0 | 1>(0);
   const activeRef = useRef<0 | 1>(0);
   const [slots, setSlots] = useState<[string, string]>([label, label]);
+  // First paint uses the same enter path as a mid-turn swap (plant below,
+  // then rise after --think-gap) so model.requested → Planning next moves
+  // doesn't pop in cold.
   const [phases, setPhases] = useState<[ThinkSlotPhase, ThinkSlotPhase]>([
-    "in",
+    "enter-start",
     "exit",
   ]);
   const currentRef = useRef(label);
   const [width, setWidth] = useState<number | null>(null);
+  // Grow snaps so streaming chips ("Searching pearl…") never clip mid-glyph
+  // behind the width ease; shrink still transitions.
+  const [widthTransit, setWidthTransit] = useState(false);
+  const widthRef = useRef<number | null>(null);
   const gapTimer = useRef<number | null>(null);
 
   useLayoutEffect(() => {
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (reduced) {
+      setPhases(["in", "exit"]);
+      return;
+    }
+
+    // Release the planted first label after --think-gap. A label change that
+    // lands first clears this timer and owns the swap instead.
+    gapTimer.current = window.setTimeout(() => {
+      setPhases((prev) => {
+        if (prev[0] !== "enter-start") return prev;
+        return ["in", "exit"];
+      });
+      gapTimer.current = null;
+    }, THINK_GAP_MS);
+
+    return () => {
+      if (gapTimer.current !== null) {
+        window.clearTimeout(gapTimer.current);
+        gapTimer.current = null;
+      }
+    };
+  }, []);
+
+  useLayoutEffect(() => {
     if (label === currentRef.current) return;
+    const previous = currentRef.current;
     currentRef.current = label;
 
     const reduced =
@@ -224,6 +261,20 @@ export function ThinkingStatesLabel({
       setPhases(["in", "exit"]);
       activeRef.current = 0;
       setActive(0);
+      return;
+    }
+
+    // Streaming tool chips grow in place ("Searching p" → "Searching pearl");
+    // swapping every glyph clipped the line behind the width ease.
+    const streamingRefine =
+      label.startsWith(previous) || previous.startsWith(label);
+    if (streamingRefine) {
+      const slot = activeRef.current;
+      setSlots((prev) => {
+        const copy: [string, string] = [prev[0], prev[1]];
+        copy[slot] = label;
+        return copy;
+      });
       return;
     }
 
@@ -262,41 +313,59 @@ export function ThinkingStatesLabel({
   }, [label]);
 
   useLayoutEffect(() => {
-    const target = (active === 0 ? slotA : slotB).current;
-    if (!target) return undefined;
-    const measure = () =>
-      setWidth(Math.ceil(target.getBoundingClientRect().width));
+    const sizer = sizerRef.current;
+    if (!sizer) return undefined;
+    const measure = () => {
+      // Size from an unconstrained sizer holding the live label — measuring
+      // clipped swap layers locked streaming chips at the first short width.
+      const next = Math.ceil(sizer.getBoundingClientRect().width);
+      if (next <= 0) return;
+      const prev = widthRef.current;
+      widthRef.current = next;
+      // Only ease when the line gets shorter (swap to a briefer status).
+      setWidthTransit(prev !== null && next < prev);
+      setWidth(next);
+    };
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(target);
+    observer.observe(sizer);
     return () => observer.disconnect();
-  }, [active, slots, phases]);
+  }, [label]);
 
   return (
-    <span
-      style={width === null ? undefined : { width }}
-      className={cn(
-        "grid overflow-x-clip transition-[width] duration-150 ease-in-out motion-reduce:transition-none",
-        className,
-      )}
-    >
+    <span className={cn("relative inline-block", className)}>
       <span
-        ref={slotA}
-        aria-hidden={active !== 0}
-        className={cn(labelSwap, thinkSlotClass(phases[0]))}
+        ref={sizerRef}
+        aria-hidden
+        className="invisible pointer-events-none absolute top-0 left-0 whitespace-nowrap"
       >
-        <ShimmerLabel active={shimmer && phases[0] !== "enter-start"}>
-          {slots[0]}
-        </ShimmerLabel>
+        {label}
       </span>
       <span
-        ref={slotB}
-        aria-hidden={active !== 1}
-        className={cn(labelSwap, thinkSlotClass(phases[1]))}
+        style={width === null ? undefined : { width }}
+        className={cn(
+          "grid overflow-x-clip motion-reduce:transition-none",
+          widthTransit && "transition-[width] duration-150 ease-in-out",
+        )}
       >
-        <ShimmerLabel active={shimmer && phases[1] !== "enter-start"}>
-          {slots[1]}
-        </ShimmerLabel>
+        <span
+          ref={slotA}
+          aria-hidden={active !== 0}
+          className={cn(labelSwap, thinkSlotClass(phases[0]))}
+        >
+          <ShimmerLabel active={shimmer && phases[0] !== "enter-start"}>
+            {slots[0]}
+          </ShimmerLabel>
+        </span>
+        <span
+          ref={slotB}
+          aria-hidden={active !== 1}
+          className={cn(labelSwap, thinkSlotClass(phases[1]))}
+        >
+          <ShimmerLabel active={shimmer && phases[1] !== "enter-start"}>
+            {slots[1]}
+          </ShimmerLabel>
+        </span>
       </span>
     </span>
   );

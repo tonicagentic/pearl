@@ -8,7 +8,7 @@
 export type PearlLane = "voice" | "tools" | "analysis" | "think";
 
 export const PEARL_LANE_LABELS: Record<PearlLane, string> = {
-  voice: "Thinking",
+  voice: "Planning next moves",
   tools: "Checking your tools",
   analysis: "Reading the notes",
   think: "Thinking this through",

@@ -8,7 +8,8 @@ import {
 export type WebReplayScenarioId =
   | "reasoning-tools"
   | "rapid-burst"
-  | "approval-park";
+  | "approval-park"
+  | "todos";
 
 export type TimedWebStreamEvent = {
   readonly atMs: number;
@@ -345,6 +346,280 @@ export const WEB_REPLAY_SCENARIOS: readonly WebReplayScenario[] = [
             turnId: TURN,
             awaiting: [{ interactionId: "int_mail" }],
           },
+        },
+      },
+    ]),
+  },
+  {
+    id: "todos",
+    title: "Todos",
+    description:
+      "Streaming todo list mounts early, then rows check off with progress.",
+    events: stamp([
+      ...prelude("Ship the thread enter motion and live agent todos."),
+      {
+        atMs: 400,
+        raw: {
+          type: "call.input",
+          scope: runScope,
+          data: {
+            callId: "c_todo_1",
+            kind: "tool",
+            name: "todo",
+            delta:
+              '{"todos":[{"content":"Add stepEnter mounts","status":"in_progress","priority":"high"},{"content":"Wire Planning next moves","status":"pending","priority":"high"},{"content":"Add todo replay fixtures","status":"pending","priority":"medium"}',
+          },
+        },
+      },
+      {
+        atMs: 700,
+        raw: {
+          type: "call.input",
+          scope: runScope,
+          data: { callId: "c_todo_1", delta: "]}" },
+        },
+      },
+      {
+        atMs: 850,
+        raw: {
+          type: "call.requested",
+          scope: runScope,
+          data: {
+            callId: "c_todo_1",
+            capability: { kind: "tool", name: "todo" },
+            owner: { runId: RUN },
+            input: {
+              todos: [
+                {
+                  content: "Add stepEnter mounts",
+                  status: "in_progress",
+                  priority: "high",
+                },
+                {
+                  content: "Wire Planning next moves",
+                  status: "pending",
+                  priority: "high",
+                },
+                {
+                  content: "Add todo replay fixtures",
+                  status: "pending",
+                  priority: "medium",
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        atMs: 950,
+        raw: {
+          type: "call.started",
+          scope: runScope,
+          data: { callId: "c_todo_1" },
+        },
+      },
+      {
+        atMs: 1200,
+        raw: {
+          type: "call.settled",
+          scope: runScope,
+          data: {
+            callId: "c_todo_1",
+            outcome: "completed",
+            output: {
+              todos: [
+                {
+                  content: "Add stepEnter mounts",
+                  status: "in_progress",
+                  priority: "high",
+                },
+                {
+                  content: "Wire Planning next moves",
+                  status: "pending",
+                  priority: "high",
+                },
+                {
+                  content: "Add todo replay fixtures",
+                  status: "pending",
+                  priority: "medium",
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        atMs: 2200,
+        raw: {
+          type: "call.requested",
+          scope: runScope,
+          data: {
+            callId: "c_todo_2",
+            capability: { kind: "tool", name: "todo" },
+            owner: { runId: RUN },
+            input: {
+              todos: [
+                {
+                  content: "Add stepEnter mounts",
+                  status: "completed",
+                  priority: "high",
+                },
+                {
+                  content: "Wire Planning next moves",
+                  status: "in_progress",
+                  priority: "high",
+                },
+                {
+                  content: "Add todo replay fixtures",
+                  status: "pending",
+                  priority: "medium",
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        atMs: 2300,
+        raw: {
+          type: "call.started",
+          scope: runScope,
+          data: { callId: "c_todo_2" },
+        },
+      },
+      {
+        atMs: 2600,
+        raw: {
+          type: "call.settled",
+          scope: runScope,
+          data: {
+            callId: "c_todo_2",
+            outcome: "completed",
+            output: {
+              todos: [
+                {
+                  content: "Add stepEnter mounts",
+                  status: "completed",
+                  priority: "high",
+                },
+                {
+                  content: "Wire Planning next moves",
+                  status: "in_progress",
+                  priority: "high",
+                },
+                {
+                  content: "Add todo replay fixtures",
+                  status: "pending",
+                  priority: "medium",
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        atMs: 3600,
+        raw: {
+          type: "call.requested",
+          scope: runScope,
+          data: {
+            callId: "c_todo_3",
+            capability: { kind: "tool", name: "todo" },
+            owner: { runId: RUN },
+            input: {
+              todos: [
+                {
+                  content: "Add stepEnter mounts",
+                  status: "completed",
+                  priority: "high",
+                },
+                {
+                  content: "Wire Planning next moves",
+                  status: "completed",
+                  priority: "high",
+                },
+                {
+                  content: "Add todo replay fixtures",
+                  status: "completed",
+                  priority: "medium",
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        atMs: 3700,
+        raw: {
+          type: "call.started",
+          scope: runScope,
+          data: { callId: "c_todo_3" },
+        },
+      },
+      {
+        atMs: 4000,
+        raw: {
+          type: "call.settled",
+          scope: runScope,
+          data: {
+            callId: "c_todo_3",
+            outcome: "completed",
+            output: {
+              todos: [
+                {
+                  content: "Add stepEnter mounts",
+                  status: "completed",
+                  priority: "high",
+                },
+                {
+                  content: "Wire Planning next moves",
+                  status: "completed",
+                  priority: "high",
+                },
+                {
+                  content: "Add todo replay fixtures",
+                  status: "completed",
+                  priority: "medium",
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        atMs: 4500,
+        raw: {
+          type: "content.delta",
+          scope: runScope,
+          data: {
+            partId: "t1",
+            kind: "text",
+            delta:
+              "Checklist is live — mounts enter with motion and rows check off as work settles.",
+          },
+        },
+      },
+      {
+        atMs: 4900,
+        raw: {
+          type: "content.completed",
+          scope: runScope,
+          data: {
+            partId: "t1",
+            kind: "text",
+            phase: "reply",
+            runId: RUN,
+            value:
+              "Checklist is live — mounts enter with motion and rows check off as work settles.",
+          },
+        },
+      },
+      {
+        atMs: 5100,
+        raw: {
+          type: "turn.settled",
+          scope: turnScope,
+          data: { turnId: TURN, outcome: "completed" },
         },
       },
     ]),

@@ -16,7 +16,13 @@ export { extractPartialArgString };
 
 /** Minimum visible hold before the next swap — matches `--think-hold`. */
 export const THINKING_STATE_DWELL_MS = 2000;
+/** Live reasoning status (no ellipsis). */
 export const DEFAULT_THINKING_LABEL = "Thinking";
+/**
+ * Opaque wait while the turn is running but nothing concrete is streaming —
+ * Cursor's "Planning next moves" (pre-content and inter-tool gaps).
+ */
+export const PLANNING_NEXT_MOVES_LABEL = "Planning next moves";
 
 export type ThinkingStatusType =
   | "running"
@@ -254,10 +260,21 @@ function streamingReasoningLabel(
   for (let i = parts.length - 1; i >= 0; i -= 1) {
     const part = parts[i];
     if (part?.type !== "reasoning") continue;
+    // Only in-flight reasoning owns the status line; settled Thought lives
+    // in the timeline. Missing status is treated as live while the turn runs.
+    if (part.status?.type && part.status.type !== "running") continue;
     const heading = extractReasoningHeading(part.text);
     return heading ?? DEFAULT_THINKING_LABEL;
   }
   return undefined;
+}
+
+/** True when some concrete live activity should own the status line. */
+function hasActiveLiveWork(parts: readonly ThinkingMessagePart[]): boolean {
+  return (
+    streamingReasoningLabel(parts) !== undefined ||
+    runningToolLabel(parts) !== undefined
+  );
 }
 
 function hasVisibleWork(parts: readonly ThinkingMessagePart[]): boolean {
@@ -331,7 +348,7 @@ export function deriveLiveThinkingState(
     parts = [],
     agents,
     statusType,
-    waitingLabel = DEFAULT_THINKING_LABEL,
+    waitingLabel = PLANNING_NEXT_MOVES_LABEL,
     personWaitLabel,
     answerPhase = false,
   } = input;
@@ -393,11 +410,15 @@ export function deriveLiveThinkingState(
     return { phase: "reasoning", label: reasoning };
   }
 
-  if (!hasVisibleWork(parts)) {
-    return {
-      phase: "pre-content",
-      label: waitingLabel.trim() || DEFAULT_THINKING_LABEL,
-    };
+  // Opaque Cursor-style wait: before any parts, or in the gap after settled
+  // tools/reasoning while the model decides the next move.
+  if (!hasVisibleWork(parts) || !hasActiveLiveWork(parts)) {
+    const trimmed = waitingLabel.trim();
+    const label =
+      trimmed && trimmed !== DEFAULT_THINKING_LABEL
+        ? trimmed
+        : PLANNING_NEXT_MOVES_LABEL;
+    return { phase: "pre-content", label };
   }
 
   return { phase: "idle", label: undefined };

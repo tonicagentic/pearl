@@ -14,18 +14,14 @@ export function ThinkingIndicator({
   elapsed?: string;
   className?: string;
 }) {
-  // Cursor uses an ellipsis on the live status ("Thinking…").
-  const display =
-    label === "Thinking" || label === "Working" ? "Thinking…" : label;
-
   return (
     <View
       accessibilityRole="text"
-      accessibilityLabel={elapsed ? `${display}, ${elapsed}` : display}
+      accessibilityLabel={elapsed ? `${label}, ${elapsed}` : label}
       className={cn("flex-row items-baseline gap-1.5 py-1.5", className)}
     >
       <View className="min-h-[15px] min-w-0 flex-shrink justify-center overflow-visible">
-        <ThinkingStatesLabel label={display} textClassName={threadMeta} />
+        <ThinkingStatesLabel label={label} textClassName={threadMeta} />
       </View>
       {elapsed !== undefined ? (
         <Text variant="label" className={cn(threadMeta, "tabular-nums")}>

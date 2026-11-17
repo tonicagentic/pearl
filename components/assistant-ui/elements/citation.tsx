@@ -13,7 +13,7 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
-import { threadMeta, threadText } from "./surfaces";
+import { stepEnter, threadMeta, threadText } from "./surfaces";
 
 export type CitationRef = {
   readonly index: string;
@@ -142,7 +142,7 @@ export function MessageSources({ className }: ComponentProps<"div">) {
   return (
     <div
       data-slot="message-sources"
-      className={cn("flex flex-col gap-1.5 pt-1", className)}
+      className={cn(stepEnter, "flex flex-col gap-1.5 pt-1", className)}
     >
       <p className={cn(threadMeta, "font-medium")}>Sources</p>
       <ol className="flex flex-col gap-1">
