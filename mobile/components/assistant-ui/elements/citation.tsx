@@ -115,7 +115,7 @@ export function MessageSources({ className }: ComponentProps<typeof View>) {
       data-slot="message-sources"
       className={cn("flex-col gap-1.5 pt-1", className)}
     >
-      <Text variant="label" weight="medium" className={threadMeta}>
+      <Text variant="body" weight="medium" className={threadMeta}>
         Sources
       </Text>
       <View className="flex-col gap-1">
@@ -136,9 +136,9 @@ export function MessageSources({ className }: ComponentProps<typeof View>) {
               onPress={() => openWebUrl(ref.url)}
               className="min-w-0 flex-1 active:opacity-70"
             >
-              <Text variant="label" className={threadMeta} numberOfLines={1}>
+              <Text variant="body" className={threadMeta} numberOfLines={1}>
                 {ref.title?.trim() || hostnameOf(ref.url)}
-                <Text variant="label" tone="muted" className="opacity-70">
+                <Text variant="body" tone="muted" className="opacity-70">
                   {" "}
                   · {hostnameOf(ref.url)}
                 </Text>

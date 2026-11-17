@@ -50,7 +50,8 @@ export const mono = "tracking-tight";
 
 /**
  * Thinking / tool chrome — Cursor-like muted status (softer than answer copy).
- * Pair with `Text variant="label"` so meta matches message size; mute via tone.
+ * Pair with `Text variant="body"` (15px) so meta sits slightly under message
+ * `label` (17px); mute via tone / these color classes.
  */
 export const threadMeta = "text-muted-foreground/75";
 
@@ -695,7 +696,7 @@ export function ThinkingStatesLabel({
       <View className={cn("min-w-0 flex-shrink", className)}>
         <ShimmerLabel
           active={false}
-          variant="label"
+          variant="body"
           numberOfLines={1}
           className={textClassName}
         >
@@ -725,7 +726,7 @@ export function ThinkingStatesLabel({
       >
         <ShimmerLabel
           active={false}
-          variant="label"
+          variant="body"
           numberOfLines={1}
           className={textClassName}
         >
@@ -737,7 +738,7 @@ export function ThinkingStatesLabel({
         <View style={{ opacity: 0 }} pointerEvents="none">
           <ShimmerLabel
             active={false}
-            variant="label"
+            variant="body"
             numberOfLines={1}
             className={textClassName}
           >
@@ -754,7 +755,7 @@ export function ThinkingStatesLabel({
         >
           <ShimmerLabel
             active={shimmer && active === 0}
-            variant="label"
+            variant="body"
             numberOfLines={1}
             className={textClassName}
           >
@@ -771,7 +772,7 @@ export function ThinkingStatesLabel({
         >
           <ShimmerLabel
             active={shimmer && active === 1}
-            variant="label"
+            variant="body"
             numberOfLines={1}
             className={textClassName}
           >

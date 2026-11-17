@@ -617,7 +617,8 @@ export const Thread: FC<ThreadProps> = ({
             } : {})}
             className="aui-message-group flex-1"
             contentContainerClassName={cn(
-              "gap-4 px-4",
+              // 12px between turns; assistant internals use gap-2 (8px).
+              "gap-3 px-4",
               !floatsComposer && "pt-4 pb-6",
               Rail && "pl-10",
             )}
@@ -1921,7 +1922,8 @@ const AssistantMessage: FC = () => {
   }, [blocks, ToolFallbackComponent, TaskGroupComponent]);
 
   return (
-    <MessagePrimitive.Root className="aui-assistant-message-root">
+    <MessagePrimitive.Root className="aui-assistant-message-root gap-2">
+      {/* 8px stack: timeline meta → answer → sources → actions. */}
       <View className="aui-assistant-message-content gap-2">
         <TurnElapsedProvider>
           {/* Todos sit above interleaved content so the checklist stays
@@ -1962,11 +1964,23 @@ const AssistantMessage: FC = () => {
         </TurnElapsedProvider>
         <MessageSources />
       </View>
-      <View className="aui-assistant-message-footer min-h-7 flex-row items-center pt-1">
-        <BranchPicker />
-        <AssistantActionBar />
-      </View>
+      <AssistantMessageFooter />
     </MessagePrimitive.Root>
+  );
+};
+
+const AssistantMessageFooter: FC = () => {
+  const branchCount = useAuiState((s) => s.message.branchCount);
+  const settled = useAuiState(
+    (s) =>
+      !(s.message.role === "assistant" && s.message.status?.type === "running"),
+  );
+  if (branchCount <= 1 && !settled) return null;
+  return (
+    <View className="aui-assistant-message-footer flex-row items-center">
+      <BranchPicker />
+      <AssistantActionBar />
+    </View>
   );
 };
 
@@ -2031,6 +2045,7 @@ const AssistantActionBar: FC = () => {
 
 const UserMessage: FC = () => {
   const motion = useMotion();
+  const branchCount = useAuiState((s) => s.message.branchCount);
   const internalMessage = useAuiState((s) =>
     s.message.role === "user" && s.message.parts.some((part) =>
       part.type === "text" && isTaskNotification(part.text ?? ""),
@@ -2041,14 +2056,21 @@ const UserMessage: FC = () => {
     <Animated.View
       entering={motion && Platform.OS !== "web" ? messageEnter : undefined}
     >
-      <MessagePrimitive.Root className="aui-user-message-root items-end gap-y-1.5">
+      <MessagePrimitive.Root
+        className={cn(
+          "aui-user-message-root items-end",
+          branchCount > 1 && "gap-y-1.5",
+        )}
+      >
         <UserMessageAttachments />
         <View className="aui-user-message-content bg-card max-w-[85%] rounded-2xl px-4 py-2.5">
           <MessagePrimitive.Parts components={{ Text: UserText, Image, File }} />
         </View>
-        <View className="aui-user-message-footer flex-row items-center justify-end gap-2">
-          <BranchPicker />
-        </View>
+        {branchCount > 1 ? (
+          <View className="aui-user-message-footer flex-row items-center justify-end gap-2">
+            <BranchPicker />
+          </View>
+        ) : null}
       </MessagePrimitive.Root>
     </Animated.View>
   );

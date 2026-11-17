@@ -84,14 +84,22 @@ export function ActivityPhrase({
 }) {
   if (bits.length === 0 && prefix == null) return null;
   return (
-    <Text variant="label" numberOfLines={numberOfLines}>
+    <Text variant="body" numberOfLines={numberOfLines}>
       {prefix}
       {bits.map((bit, index) => (
         <Fragment key={`${bit.verb}-${index}`}>
-          {index > 0 ? <Text className={threadMetaDetail}>, </Text> : null}
-          <Text className={threadMetaCall}>{bit.verb}</Text>
+          {index > 0 ? (
+            <Text variant="body" className={threadMetaDetail}>
+              {", "}
+            </Text>
+          ) : null}
+          <Text variant="body" className={threadMetaCall}>
+            {bit.verb}
+          </Text>
           {bit.detail ? (
-            <Text className={threadMetaDetail}>{` ${bit.detail}`}</Text>
+            <Text variant="body" className={threadMetaDetail}>
+              {` ${bit.detail}`}
+            </Text>
           ) : null}
         </Fragment>
       ))}
@@ -180,13 +188,13 @@ function DiffCounts({
   return (
     <View className="flex-row items-baseline gap-1.5">
       {added && added > 0 ? (
-        <Text variant="label" className={cn(threadDiffAdd, "tabular-nums")}>
+        <Text variant="body" className={cn(threadDiffAdd, "tabular-nums")}>
           +{added}
         </Text>
       ) : null}
       {removed && removed > 0 ? (
         <Text
-          variant="label"
+          variant="body"
           className={cn(threadDiffRemove, "tabular-nums")}
         >
           −{removed}
@@ -229,14 +237,14 @@ function StepRow({
     >
       <Pressable
         className={cn(
-          "min-h-7 flex-row items-center gap-1.5 py-1.5",
+          "min-h-6 flex-row items-center gap-1.5 py-0.5",
           expandable && "active:opacity-70",
         )}
         disabled={!expandable}
         onPress={onToggle}
         accessibilityState={{ expanded }}
         hitSlop={
-          expandable ? { top: 6, bottom: 6, left: 4, right: 4 } : undefined
+          expandable ? { top: 8, bottom: 8, left: 4, right: 4 } : undefined
         }
       >
         {active ? (
@@ -247,7 +255,7 @@ function StepRow({
         ) : (
           <ShimmerLabel
             active={false}
-            variant="label"
+            variant="body"
             className={cn(threadMetaCall, "shrink-0")}
           >
             {verb}
@@ -255,7 +263,7 @@ function StepRow({
         )}
         {elapsed !== undefined ? (
           <Text
-            variant="label"
+            variant="body"
             className={cn(threadMetaDetail, "tabular-nums")}
           >
             {elapsed}
@@ -280,7 +288,7 @@ function StepRow({
           ) : (
             <Text
               numberOfLines={1}
-              variant="label"
+              variant="body"
               className={cn(threadMetaDetail, "min-w-0 flex-shrink")}
             >
               {step.chip}
@@ -296,7 +304,7 @@ function StepRow({
           exiting={motion ? FadeOut.duration(DETAIL_MS) : undefined}
           className="ms-0.5 mb-1 mt-0.5"
         >
-          <Text selectable variant="body" className="opacity-90">
+          <Text selectable variant="label" className="opacity-90">
             {step.detail}
           </Text>
         </Animated.View>
@@ -369,9 +377,10 @@ export function ToolTimeline({
       className="w-full"
     >
       <Pressable
-        className="min-h-7 flex-row items-center gap-1.5 py-1.5"
+        className="min-h-6 flex-row items-center gap-1.5 py-0.5"
         accessibilityState={{ expanded: open }}
         onPress={() => onOpenChange(!open)}
+        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
       >
         <View className="min-w-0 flex-row flex-nowrap items-center gap-x-1.5">
           {streaming ? (
@@ -382,7 +391,7 @@ export function ToolTimeline({
               typeof restingLabel === "string" ? (
                 <ShimmerLabel
                   active
-                  variant="label"
+                  variant="body"
                   className={threadMetaCall}
                   numberOfLines={1}
                 >
@@ -409,7 +418,7 @@ export function ToolTimeline({
           )}
           {elapsed ? (
             <Text
-              variant="label"
+              variant="body"
               className={cn(threadMetaDetail, "shrink-0 tabular-nums")}
             >
               {`· ${elapsed}`}
@@ -421,7 +430,7 @@ export function ToolTimeline({
       </Pressable>
       <CollapsePanel open={open}>
         <Animated.View
-          className="flex-col gap-0.5 pb-1 pt-1"
+          className="flex-col gap-0.5 pb-1 ps-3 pt-1"
           layout={
             motion && Platform.OS !== "web" ? layoutTransition : undefined
           }

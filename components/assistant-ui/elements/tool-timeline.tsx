@@ -284,7 +284,7 @@ export function ToolTimeline({
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent className={cn(collapsePanel, "outline-none")}>
-        <div className="flex flex-col gap-1 pt-1.5">
+        <div className="flex flex-col gap-1 ps-3 pt-1.5">
           {steps
             .slice(0, Math.max(0, Math.min(visibleSteps, steps.length)))
             .map((step, index, shown) => (
