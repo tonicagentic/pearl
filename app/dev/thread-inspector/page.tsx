@@ -74,8 +74,13 @@ function ThreadInspectorWorkbench() {
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<Speed>(1);
-  const [replayEpochMs, setReplayEpochMs] = useState<number>(() => Date.now());
+  // 0 until mount — Date.now() in useState blocks Cache Components prerender.
+  const [replayEpochMs, setReplayEpochMs] = useState(0);
   const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setReplayEpochMs(Date.now());
+  }, []);
 
   useEffect(() => {
     setDark(document.documentElement.classList.contains("dark"));

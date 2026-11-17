@@ -1,4 +1,7 @@
-import { useHydrated } from "@/components/assistant-ui/elements/surfaces";
+import {
+  useHydrated,
+  useMotion,
+} from "@/components/assistant-ui/elements/surfaces";
 import {
   isCitationLabel,
   linkChildrenToText,
@@ -6,6 +9,7 @@ import {
 import { FilePreviewCard } from "@/components/assistant-ui/elements/file-preview-card";
 import { openWebUrl } from "@/src/open-web-url";
 import { traceStream } from "@/src/stream-trace";
+import { useStreamingReveal } from "../../../../lib/streaming-text-reveal";
 import type { TextMessagePartProps } from "@assistant-ui/react-native";
 import {
   type FC,
@@ -26,6 +30,14 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
+import Animated, {
+  Easing,
+  FadeIn,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 import {
   type MarkedStyles,
   MarkedTokenizer,
@@ -492,44 +504,98 @@ function useMarkdownTypeStyle(variant: MarkdownTextVariant | undefined) {
   return { fallbackClass, typeStyle } as const;
 }
 
+/** Dot cursor — mirrors StreamingText's st-pulse. */
+function StreamingDotCursor() {
+  const motion = useMotion();
+  const tint =
+    (useCSSVariable("--color-foreground") as string | undefined) ?? "#0d0d0d";
+  const pulse = useSharedValue(0.45);
+  useEffect(() => {
+    if (!motion) {
+      pulse.value = 1;
+      return;
+    }
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+  }, [motion, pulse]);
+  const style = useAnimatedStyle(() => ({
+    opacity: pulse.value,
+    transform: [{ scale: 0.7 + pulse.value * 0.3 }],
+  }));
+  return (
+    <Animated.View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[
+        {
+          width: 8,
+          height: 8,
+          marginLeft: 6,
+          borderRadius: 9999,
+          backgroundColor: tint,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
 /**
- * Streaming answers paint as plain Text — Marked over the growing buffer on
- * every line boundary freezes the JS thread. Settled messages use the full
- * markdown path. Do not use useDeferredValue here (it blanked the body).
+ * Streaming answers use the StreamingText smoother (20 wps, fade words, dot
+ * cursor) on plain text — Marked over the growing buffer freezes the JS
+ * thread. Settled messages use the full markdown path.
  */
 const StreamingMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
   useEffect(() => {
     traceStream("paint", text.length);
   }, [text.length]);
-  const { fallbackClass, typeStyle } = useMarkdownTypeStyle(variant);
+  const { typeStyle } = useMarkdownTypeStyle(variant);
+  const motion = useMotion();
+  const { tokens, revealed, clip, writing, fadeFrom } = useStreamingReveal(
+    text,
+    true,
+  );
 
-  if (!text) {
+  if (!text && !writing) {
     return <View className="aui-md-root" />;
   }
 
+  const wordStyle = {
+    fontSize: typeStyle.fontSize,
+    lineHeight: typeStyle.lineHeight,
+    color: typeStyle.color,
+  } as TextStyle;
+  const visible = tokens.filter((t) => t.end <= revealed);
+
   return (
-    <View className="aui-md-root">
-      {Platform.OS === "ios" ? (
-        <TextInput
-          multiline
-          editable={false}
-          readOnly
-          scrollEnabled={false}
-          selectionColor={SELECTION_COLOR}
-          style={typeStyle}
-          className={fallbackClass}
-          value={text}
-        />
-      ) : (
-        <Text
-          selectable
-          selectionColor={SELECTION_COLOR}
-          variant={variant === "muted" ? "body" : "label"}
-          tone={variant === "muted" ? "muted" : "default"}
-        >
-          {text}
-        </Text>
-      )}
+    <View
+      className="aui-md-root flex-row flex-wrap items-baseline"
+      accessibilityState={{ busy: writing }}
+    >
+      {visible.map((t) => {
+        const word = text.slice(t.start, Math.min(t.end, clip));
+        const shouldFade = motion && t.start >= fadeFrom;
+        if (!shouldFade) {
+          return (
+            <RNText key={t.start} style={wordStyle}>
+              {word}
+            </RNText>
+          );
+        }
+        return (
+          <Animated.Text
+            key={t.start}
+            entering={FadeIn.duration(400).easing(Easing.out(Easing.ease))}
+            style={wordStyle}
+          >
+            {word}
+          </Animated.Text>
+        );
+      })}
+      {writing ? <StreamingDotCursor /> : null}
     </View>
   );
 };

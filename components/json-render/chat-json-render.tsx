@@ -9,8 +9,10 @@ import {
 } from "@json-render/react";
 import type { Spec } from "@json-render/core";
 import { useAui, useAuiState } from "@assistant-ui/react";
-import { MarkdownContent } from "@/components/assistant-ui/elements/markdown-content";
-import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
+import {
+  StreamingMarkdownBody,
+  StreamingMarkdownText,
+} from "@/components/assistant-ui/elements/streaming-markdown-text";
 import { parseInlineSpec } from "@/lib/json-render/inline-spec";
 import { chatRegistry } from "@/components/json-render/registry";
 
@@ -50,13 +52,18 @@ const SpecBlock: FC<{
 
 /**
  * Assistant text part that may embed an inline json-render spec.
- * Falls back to the normal MarkdownText path when there is no UI.
+ * Falls back to paced StreamingMarkdown when there is no UI.
  */
 export const AssistantInlineText: FC = memo(function AssistantInlineText() {
   const aui = useAui();
   const text = useAuiState((s) => {
     const part = s.part;
     return part.type === "text" ? (part.text ?? "") : "";
+  });
+  const partStreaming = useAuiState((s) => {
+    const part = s.part;
+    if (part.type !== "text") return false;
+    return (part.status?.type ?? "complete") === "running";
   });
   const running = useAuiState(
     (s) =>
@@ -69,7 +76,7 @@ export const AssistantInlineText: FC = memo(function AssistantInlineText() {
   );
 
   if (!parsed.hasSpec || !parsed.spec) {
-    return <MarkdownText />;
+    return <StreamingMarkdownText />;
   }
 
   return (
@@ -78,7 +85,11 @@ export const AssistantInlineText: FC = memo(function AssistantInlineText() {
         if (segment.type === "text") {
           if (!segment.text.trim()) return null;
           return (
-            <MarkdownContent key={`text-${index}`} text={segment.text} />
+            <StreamingMarkdownBody
+              key={`text-${index}`}
+              text={segment.text}
+              streaming={partStreaming}
+            />
           );
         }
         return (
