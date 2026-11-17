@@ -27,6 +27,7 @@ import {
   listStyle,
   opacity,
   padding,
+  scrollContentBackground,
   scrollEdgeEffectStyle,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -61,10 +62,13 @@ export function HistoryListIOS({
   onOpenChat,
   actions,
   bottomInset = 0,
+  onCreateProject,
 }: {
   readonly onOpenChat: () => void;
   readonly actions: HistoryChatActionHandlers;
   readonly bottomInset?: number;
+  /** Opens the shared new-project composer from the empty Projects row. */
+  readonly onCreateProject?: () => void;
 }) {
   const { signedIn } = useAuth();
   const {
@@ -176,9 +180,9 @@ export function HistoryListIOS({
     <View
       style={{
         flex: 1,
-        // Transparent — opaque fills here blocked scroll fade under the
-        // header and left a solid pad above the floating composer.
-        backgroundColor: "transparent",
+        // Pearl background shows through the inset-grouped cards; hiding the
+        // system list chrome avoids iOS's default grouped gray.
+        backgroundColor,
         // Keep SwiftUI List drawing inside this flex slot — viewport
         // measurement made the Host paint over the header above.
         overflow: "hidden",
@@ -195,10 +199,11 @@ export function HistoryListIOS({
           <EmptyChatsCard />
         </View>
       ) : null}
-      <Host style={{ flex: 1, backgroundColor: "transparent" }}>
+      <Host style={{ flex: 1, backgroundColor }}>
         <List
           modifiers={[
             listStyle("insetGrouped"),
+            scrollContentBackground("hidden"),
             scrollEdgeEffectStyle("soft"),
           ]}
         >
@@ -272,20 +277,58 @@ export function HistoryListIOS({
           </Section>
           )}
           {showProjects ? (
-            <Section title="Projects">
+            <Section
+              header={
+                <HStack alignment="center">
+                  <SwiftText
+                    modifiers={[
+                      font({ size: 13 }),
+                      foregroundStyle({
+                        type: "hierarchical",
+                        style: "secondary",
+                      }),
+                    ]}
+                  >
+                    Projects
+                  </SwiftText>
+                  <Spacer />
+                  {onCreateProject ? (
+                    <Button
+                      onPress={onCreateProject}
+                      modifiers={[buttonStyle("plain")]}
+                    >
+                      <Image
+                        systemName="plus"
+                        size={14}
+                        modifiers={[tint(mutedColor)]}
+                      />
+                    </Button>
+                  ) : null}
+                </HStack>
+              }
+            >
               {orderedProjects.length === 0 ? (
-                <SwiftText
-                  modifiers={[
-                    foregroundStyle({
-                      type: "hierarchical",
-                      style: "secondary",
-                    }),
-                    font({ size: 15 }),
-                    ...rowChrome,
-                  ]}
-                >
-                  No projects yet
-                </SwiftText>
+                onCreateProject ? (
+                  <Button
+                    label="New Project"
+                    systemImage="folder.badge.plus"
+                    onPress={onCreateProject}
+                    modifiers={[buttonStyle("plain"), ...rowChrome]}
+                  />
+                ) : (
+                  <SwiftText
+                    modifiers={[
+                      foregroundStyle({
+                        type: "hierarchical",
+                        style: "secondary",
+                      }),
+                      font({ size: 15 }),
+                      ...rowChrome,
+                    ]}
+                  >
+                    No projects yet
+                  </SwiftText>
+                )
               ) : (
                 <List.ForEach
                   data={orderedProjects}

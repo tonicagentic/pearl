@@ -46,6 +46,7 @@ export function HistoryScreen({
   visible = true,
   chatActions,
   bottomInset = 0,
+  onCreateProject,
 }: {
   /** Called after selecting an existing chat (caller should push `/chat`). */
   onOpenChat?: () => void;
@@ -53,6 +54,8 @@ export function HistoryScreen({
   /** iOS swipe / context-menu handlers (required on iOS for row actions). */
   chatActions?: HistoryChatActionHandlers;
   readonly bottomInset?: number;
+  /** Opens the new-project composer (empty Projects row + home New menu). */
+  readonly onCreateProject?: () => void;
 }) {
   const openChatRoute = () => {
     if (onOpenChat) onOpenChat();
@@ -73,6 +76,7 @@ export function HistoryScreen({
           onOpenChat={openChatRoute}
           actions={actions}
           bottomInset={bottomInset}
+          onCreateProject={onCreateProject}
         />
       </View>
     );

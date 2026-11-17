@@ -4,7 +4,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ComponentRef,
 } from "react";
 import { Alert, AppState, Platform, Pressable, View } from "react-native";
 import { Stack, router, useFocusEffect } from "expo-router";
@@ -15,9 +14,10 @@ import {
   HistoryScreen,
   type HistoryChatActionHandlers,
 } from "@/components/home/app-drawer";
+import { CreateProjectModal } from "@/components/home/create-project-modal";
 import {
-  HOME_COMPOSER_CLEARANCE,
-  HomeComposerDock,
+  HOME_COMPOSE_FAB_CLEARANCE,
+  HomeComposeFab,
 } from "@/components/home/home-composer-dock";
 import {
   SIGN_IN_CARD_CLEARANCE,
@@ -26,7 +26,6 @@ import {
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
-import { WalkthroughOverlay } from "@/components/home/walkthrough-overlay";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { useAuth } from "@/src/auth";
@@ -34,12 +33,13 @@ import { useChats } from "@/src/chat-context";
 import { chatListPresence } from "@/src/chat-presence";
 import type { ChatListItem } from "@/src/chats-client";
 import { initials as viewerInitials } from "@/src/initials";
+import type { ProjectDto } from "@/src/projects-client";
 
 const IS_IOS = Platform.OS === "ios";
 
 /**
- * Mail-style home: Profile, recent chats with projects underneath, and a
- * full-width Ask Pearl control that opens a new chat.
+ * Mail-style home: Profile, bottom-right compose, recent chats with projects
+ * underneath.
  */
 export function MailHomeScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
@@ -70,8 +70,8 @@ export function MailHomeScreen() {
   const [costOpen, setCostOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectTargetId, setProjectTargetId] = useState<string | null>(null);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const homeFocusedRef = useRef(false);
-  const composerRef = useRef<ComponentRef<typeof View>>(null);
   // Cold-start once: open new chat by default, or home when something is unread.
   const didLaunchRef = useRef(false);
   const [holdingLaunchHome, setHoldingLaunchHome] = useState(true);
@@ -103,7 +103,7 @@ export function MailHomeScreen() {
   const guestHasThread = isAnonymous && chats.length > 0;
   const listBottomInset = guestHasThread
     ? SIGN_IN_CARD_CLEARANCE
-    : HOME_COMPOSER_CLEARANCE;
+    : HOME_COMPOSE_FAB_CLEARANCE;
 
   const openNewChat = useCallback(() => {
     if (!billingReady) return;
@@ -118,6 +118,16 @@ export function MailHomeScreen() {
     newChat();
     router.push("/chat");
   }, [billingReady, chats, isAnonymous, newChat, selectChat]);
+
+  const openCreateProject = useCallback(() => {
+    if (!billingReady || isAnonymous) return;
+    setCreateProjectOpen(true);
+  }, [billingReady, isAnonymous]);
+
+  const onProjectCreated = useCallback((project: ProjectDto) => {
+    setCreateProjectOpen(false);
+    router.push(`/projects/${encodeURIComponent(project.id)}`);
+  }, []);
 
   useEffect(() => {
     if (!billingReady || !chatsReady || didLaunchRef.current) return;
@@ -357,23 +367,25 @@ export function MailHomeScreen() {
             onOpenChat={openChat}
             chatActions={chatActions}
             bottomInset={listBottomInset}
+            onCreateProject={isAnonymous ? undefined : openCreateProject}
           />
         )}
       </View>
 
-      {billingReady && !holdingLaunchHome ? (
-        guestHasThread ? (
-          <SignInForNewChatCard />
-        ) : (
-          <HomeComposerDock onPress={openNewChat} dockRef={composerRef} />
-        )
+      {billingReady && !holdingLaunchHome && guestHasThread ? (
+        <SignInForNewChatCard />
       ) : null}
 
-      {holdingLaunchHome || guestHasThread ? null : (
-        <WalkthroughOverlay composerRef={composerRef} />
-      )}
+      {billingReady && !holdingLaunchHome && !guestHasThread ? (
+        <HomeComposeFab onPress={openNewChat} />
+      ) : null}
 
       <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
+      <CreateProjectModal
+        open={createProjectOpen}
+        onClose={() => setCreateProjectOpen(false)}
+        onCreated={onProjectCreated}
+      />
       <ProjectPickerModal
         open={projectPickerOpen}
         onClose={() => {

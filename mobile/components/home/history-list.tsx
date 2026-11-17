@@ -13,6 +13,7 @@ export function HistoryListIOS(_props: {
   readonly onOpenChat: () => void;
   readonly actions: HistoryChatActionHandlers;
   readonly bottomInset?: number;
+  readonly onCreateProject?: () => void;
 }) {
   return null;
 }

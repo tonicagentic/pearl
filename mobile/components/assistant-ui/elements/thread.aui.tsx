@@ -2066,7 +2066,7 @@ const UserMessage: FC = () => {
         )}
       >
         <UserMessageAttachments />
-        <View className="aui-user-message-content bg-card max-w-[85%] rounded-2xl px-4 py-2.5">
+        <View className="aui-user-message-content bg-muted max-w-[85%] rounded-2xl px-4 py-2.5">
           <MessagePrimitive.Parts components={{ Text: UserText, Image, File }} />
         </View>
         {branchCount > 1 ? (
