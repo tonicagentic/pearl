@@ -57,13 +57,20 @@ function StatusMark({
 function TodoRow({
   item,
   justCompleted,
+  index,
 }: {
   readonly item: AgentTodo;
   readonly justCompleted: boolean;
+  readonly index: number;
 }) {
   const done = item.status === "completed" || item.status === "cancelled";
   return (
-    <li className="flex items-start gap-2">
+    <li
+      className={cn(stepEnter, "flex items-start gap-2")}
+      style={{
+        animationDelay: `${Math.min(index, 6) * 40}ms`,
+      }}
+    >
       <StatusMark status={item.status} justCompleted={justCompleted} />
       <span
         className={cn(
@@ -76,7 +83,13 @@ function TodoRow({
         {item.content}
       </span>
       {item.priority === "high" && !done ? (
-        <span className="text-foreground/45 pt-0.5 text-[11px] tracking-wide uppercase">
+        <span
+          className={cn(
+            stepEnter,
+            "text-foreground/45 pt-0.5 text-[11px] tracking-wide uppercase",
+          )}
+          style={{ animationDelay: `${Math.min(index, 6) * 40 + 60}ms` }}
+        >
           High
         </span>
       ) : null}
@@ -160,14 +173,28 @@ export function TodoListCard({
       ) : null}
       {items.length > 0 ? (
         <ul className="mt-2 flex flex-col gap-1.5">
-          {items.map((item) => (
+          {items.map((item, index) => (
             <TodoRow
               item={item}
+              index={index}
               key={item.content}
               justCompleted={justCompleted.has(item.content)}
             />
           ))}
         </ul>
+      ) : updating ? (
+        <div className="mt-2 flex flex-col gap-1.5" aria-hidden>
+          {[0, 1, 2].map((slot) => (
+            <div
+              key={`todo-skel-${slot}`}
+              className="bg-foreground/8 h-3.5 max-w-full animate-pulse rounded-full motion-reduce:animate-none"
+              style={{
+                width: `${72 - slot * 14}%`,
+                opacity: 0.7 - slot * 0.15,
+              }}
+            />
+          ))}
+        </div>
       ) : null}
     </section>
   );

@@ -100,7 +100,10 @@ function TodoListCard({
   readonly updating: boolean;
 }) {
   const motion = useMotion();
+  // Reanimated entering on Expo web drops the node out of flow and the reply
+  // paints over the card — keep layout enter native-only; web uses CSS.
   const nativeMotion = motion && Platform.OS !== "web";
+  const webMotion = motion && Platform.OS === "web";
   const { completed, tracked } = todoProgress(items);
   const fraction = tracked === 0 ? 1 : completed / tracked;
   const width = useSharedValue(Math.round(fraction * 100));
@@ -147,7 +150,10 @@ function TodoListCard({
     <Animated.View
       entering={nativeMotion ? stepEnter : undefined}
       accessibilityLabel={`To-dos, ${updating && items.length === 0 ? "Updating" : countLabel}`}
-      className="w-full rounded-xl border border-border/60 bg-foreground/[0.02] px-3 py-2.5"
+      className={cn(
+        "w-full rounded-xl border border-border/60 bg-foreground/[0.02] px-3 py-2.5",
+        webMotion && "step-enter",
+      )}
     >
       <View className="flex-row items-center justify-between gap-3">
         {updating ? (
@@ -177,11 +183,35 @@ function TodoListCard({
       ) : null}
       {items.length > 0 ? (
         <View className="mt-2 gap-1.5">
-          {items.map((item) => (
-            <TodoRow
-              item={item}
+          {items.map((item, index) => (
+            <Animated.View
               key={item.content}
-              justCompleted={justCompleted.has(item.content)}
+              entering={
+                nativeMotion
+                  ? stepEnter.delay(Math.min(index, 6) * 40)
+                  : undefined
+              }
+              className={webMotion ? "step-enter" : undefined}
+              style={
+                webMotion
+                  ? { animationDelay: `${Math.min(index, 6) * 40}ms` }
+                  : undefined
+              }
+            >
+              <TodoRow
+                item={item}
+                justCompleted={justCompleted.has(item.content)}
+              />
+            </Animated.View>
+          ))}
+        </View>
+      ) : updating ? (
+        <View className="mt-2 gap-1.5">
+          {[0, 1, 2].map((slot) => (
+            <View
+              key={`todo-skel-${slot}`}
+              className="h-3.5 max-w-full rounded-full bg-foreground/8"
+              style={{ width: `${72 - slot * 14}%`, opacity: 0.7 - slot * 0.15 }}
             />
           ))}
         </View>

@@ -118,3 +118,25 @@
     animation: none !important;
   }
 }
+
+/* Reanimated entering on Expo web takes nodes out of flow — use CSS instead. */
+@keyframes step-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.step-enter {
+  animation: step-enter 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-enter {
+    animation: none !important;
+  }
+}

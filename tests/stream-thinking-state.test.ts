@@ -148,6 +148,23 @@ describe("deriveLiveThinkingState", () => {
     assert.match(state.label ?? "", /pearl agent/);
   });
 
+  it("clears Planning next moves while a live todo card owns chrome", () => {
+    const state = deriveLiveThinkingState({
+      statusType: "running",
+      parts: [
+        {
+          type: "tool-call",
+          toolName: "todo",
+          argsText:
+            '{"todos":[{"content":"Add stepEnter mounts","status":"in_progress","priority":"high"}]}',
+          status: { type: "running" },
+        },
+      ],
+    });
+    assert.equal(state.phase, "idle");
+    assert.equal(state.label, undefined);
+  });
+
   it("prefers call.progress labels from events", () => {
     const state = deriveLiveThinkingState({
       statusType: "running",

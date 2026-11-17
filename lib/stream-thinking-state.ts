@@ -246,12 +246,29 @@ function runningToolLabel(
     const part = parts[i];
     if (part?.type !== "tool-call") continue;
     if (part.status?.type && part.status.type !== "running") continue;
-    if (part.toolName === "todo") continue;
+    // Standalone cards (todos / write preview) own their chrome — skip the
+    // generic tool status line so we do not fall through to Planning next moves.
+    if (part.toolName === "todo" || part.toolName === "write_file") continue;
     const tool = asToolPart(part);
     if (!tool) continue;
     return statusLabelForTool(tool, { live: true });
   }
   return undefined;
+}
+
+/** Live todo / write cards own the turn chrome; clear Planning next moves. */
+function hasLiveStandaloneCard(
+  parts: readonly ThinkingMessagePart[],
+): boolean {
+  for (let i = parts.length - 1; i >= 0; i -= 1) {
+    const part = parts[i];
+    if (part?.type !== "tool-call") continue;
+    if (part.status?.type && part.status.type !== "running") continue;
+    if (part.toolName === "todo" || part.toolName === "write_file") {
+      return true;
+    }
+  }
+  return false;
 }
 
 function streamingReasoningLabel(
@@ -273,7 +290,8 @@ function streamingReasoningLabel(
 function hasActiveLiveWork(parts: readonly ThinkingMessagePart[]): boolean {
   return (
     streamingReasoningLabel(parts) !== undefined ||
-    runningToolLabel(parts) !== undefined
+    runningToolLabel(parts) !== undefined ||
+    hasLiveStandaloneCard(parts)
   );
 }
 
