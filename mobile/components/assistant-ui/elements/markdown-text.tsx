@@ -3,6 +3,7 @@ import {
   useMotion,
 } from "@/components/assistant-ui/elements/surfaces";
 import {
+  CitationChip,
   isCitationLabel,
   linkChildrenToText,
 } from "@/components/assistant-ui/elements/citation";
@@ -296,17 +297,13 @@ class MarkdownRenderer extends Renderer {
   ): ReactNode {
     const label = linkChildrenToText(children);
     if (/^https?:\/\//i.test(href) && isCitationLabel(label)) {
-      const index = label.replace(/^\s*\[|\]\s*$/g, "");
       return (
-        <RNText
+        <CitationChip
           key={this.getKey()}
-          accessibilityRole="link"
-          accessibilityLabel={`Source ${index}`}
-          onPress={() => openWebUrl(href)}
-          style={[{ fontWeight: "600" }, styles]}
-        >
-          {`[${index}]`}
-        </RNText>
+          index={label}
+          href={href}
+          title={title}
+        />
       );
     }
     if (/^https?:\/\//i.test(href)) {

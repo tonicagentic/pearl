@@ -761,6 +761,8 @@ export const GALLERY_MESSAGES: readonly ThreadMessageLike[] = [
           "| `--shimmer-dur` | `2000ms` | LTR highlight sweep |",
           "",
           "> Tip: toggle dark mode or switch column width above while inspecting elements in DevTools.",
+          "",
+          "Spacing tokens follow the design system notes in [1](https://react.dev/reference/rsc \"React docs\") and the Expo layout guide [2](https://docs.expo.dev \"Expo docs\").",
         ].join("\n"),
       },
     ],

@@ -35,6 +35,7 @@ import {
   CitationChip,
   childrenToPlainText,
   isCitationLabel,
+  wrapCitationClaims,
 } from "@/components/assistant-ui/elements/citation";
 
 type MarkdownTextProps = Partial<TextMessagePartProps> & {
@@ -198,7 +199,7 @@ const defaultComponents = memoizeMarkdownComponents({
         )}
         {...props}
       >
-        {children}
+        {hasCard ? children : wrapCitationClaims(children)}
       </Comp>
     );
   },
@@ -316,8 +317,10 @@ const defaultComponents = memoizeMarkdownComponents({
       {...props}
     />
   ),
-  li: ({ className, ...props }) => (
-    <li className={cn("aui-md-li text-[15px] leading-6", className)} {...props} />
+  li: ({ className, children, ...props }) => (
+    <li className={cn("aui-md-li text-[15px] leading-6", className)} {...props}>
+      {wrapCitationClaims(children)}
+    </li>
   ),
   strong: ({ className, ...props }) => (
     <strong
