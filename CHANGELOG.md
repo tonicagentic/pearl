@@ -33,6 +33,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Builder subagent, fx agent, mini-app services, and `/apps` routes on web and
   mobile. GitHub and Vercel user-token helpers moved to `lib/connections`.
 
+## 0.1.8 - 2026-11-16
+
+### Added
+
+- Profile has a Billing screen for the plan, this period's spend, the usage
+  cap, and the payment method.
+- Home lists projects under Recents. Swipe a thread to add it to a project or
+  move it. New project opens in a sheet.
+
+### Changed
+
+- Profile is grouped into Account, Think, Make, Agent, and Usage. The account
+  row shows your name and email. Email and Calendar sit under Account. Delete
+  account is on the Account screen.
+- Files is split into Analysis (with Answers) and Storage (with Usage).
+- Home opens a new chat on launch unless another thread is unread. A new chat
+  hides compose and Computer until the thread exists. Computer opens in a
+  sheet.
+- Opening an earlier thread shows the saved reply instead of replaying it.
+
+### Removed
+
+- Profile no longer lists Computer Use, Health, Shop, Small Business, About,
+  or the stream playground.
+
 ## 0.1.0-alpha.5 - 2026-11-07
 
 ### Added
