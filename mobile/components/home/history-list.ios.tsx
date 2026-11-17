@@ -462,15 +462,25 @@ function RecentChatRow({
             {chat.title}
           </SwiftText>
           {projectName ? (
-            <SwiftText
-              modifiers={[
-                lineLimit(1),
-                font({ size: 12 }),
-                foregroundStyle({ type: "hierarchical", style: "secondary" }),
-              ]}
-            >
-              {projectName}
-            </SwiftText>
+            <HStack spacing={4} alignment="center">
+              <Image
+                systemName="folder.fill"
+                size={11}
+                modifiers={[tint(mutedColor)]}
+              />
+              <SwiftText
+                modifiers={[
+                  lineLimit(1),
+                  font({ size: 12 }),
+                  foregroundStyle({
+                    type: "hierarchical",
+                    style: "secondary",
+                  }),
+                ]}
+              >
+                {projectName}
+              </SwiftText>
+            </HStack>
           ) : null}
         </VStack>
         <Spacer />
@@ -527,6 +537,13 @@ function RecentChatRow({
           />
         </ContextMenu.Items>
       </ContextMenu>
+      <SwipeActions.Actions edge="leading">
+        <Button
+          label={projectId ? "Move" : "Project"}
+          systemImage={projectId ? "folder" : "folder.badge.plus"}
+          onPress={() => actions.onMoveToProject(chat)}
+        />
+      </SwipeActions.Actions>
       <SwipeActions.Actions edge="trailing" allowsFullSwipe>
         <Button
           label="Delete"

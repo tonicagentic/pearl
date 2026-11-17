@@ -9,10 +9,12 @@ import {
 import { router, useFocusEffect } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { FolderIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { EmptyChatsCard } from "@/components/home/empty-chats-card";
 import { ProjectMark } from "@/components/project-mark";
+import { Icon } from "@/components/ui/icon";
 import { Text as AppText } from "@/components/ui/text";
 import {
   HistoryListIOS,
@@ -423,9 +425,16 @@ function RecentChatRowAndroid({
           {chat.title}
         </Text>
         {projectName ? (
-          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
-            {projectName}
-          </Text>
+          <View className="mt-0.5 min-w-0 flex-row items-center gap-1">
+            <Icon
+              as={FolderIcon}
+              size={11}
+              className="text-muted-foreground"
+            />
+            <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+              {projectName}
+            </Text>
+          </View>
         ) : null}
       </View>
       {when ? (
