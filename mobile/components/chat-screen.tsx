@@ -520,6 +520,165 @@ export function ChatScreen({
     liveReplyVersion,
   ]);
 
+  const hitlDebugKey = useRef("");
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    const partSummary =
+      last?.role === "assistant"
+        ? last.parts.map((part) => {
+            if (part.type === "tool") {
+              const input = part.state === "streaming" ? undefined : part.input;
+              const inputOptions =
+                input &&
+                typeof input === "object" &&
+                !Array.isArray(input) &&
+                Array.isArray((input as { options?: unknown }).options)
+                  ? (input as { options: readonly unknown[] }).options.length
+                  : 0;
+              const request = part.interaction?.request;
+              return {
+                type: "tool" as const,
+                name: part.name,
+                state: part.state,
+                interactionStatus: part.interaction?.status ?? null,
+                kind: request?.kind ?? null,
+                display: request?.display ?? null,
+                optionCount: request?.options?.length ?? 0,
+                allowFreeform: request?.allowFreeform ?? null,
+                inputOptionCount: inputOptions,
+              };
+            }
+            if (part.type === "interaction") {
+              return {
+                type: "interaction" as const,
+                status: part.status,
+                kind: part.request.kind,
+                display: part.request.display ?? null,
+                optionCount: part.request.options?.length ?? 0,
+                allowFreeform: part.request.allowFreeform ?? null,
+                callName: part.call?.name ?? null,
+              };
+            }
+            return { type: part.type };
+          })
+        : [];
+    const openEvents: {
+      kind: string | null;
+      display: string | null;
+      optionCount: number;
+      allowFreeform: boolean | null;
+      hasOrigin: boolean;
+    }[] = [];
+    const openById = new Map<string, (typeof openEvents)[number]>();
+    for (const event of events) {
+      if (event.type === "interaction.opened") {
+        const request = event.data.request;
+        openById.set(event.data.interactionId, {
+          kind: request.kind ?? null,
+          display: request.display ?? null,
+          optionCount: request.options?.length ?? 0,
+          allowFreeform: request.allowFreeform ?? null,
+          hasOrigin: event.data.origin != null,
+        });
+        continue;
+      }
+      if (event.type === "interaction.settled") {
+        openById.delete(event.data.interactionId);
+        continue;
+      }
+      if (event.type === "turn.settled" || event.type === "session.ended") {
+        openById.clear();
+      }
+    }
+    openEvents.push(...openById.values());
+    const agentSummary = agents
+      ? Object.values(agents).map((agent) => ({
+          name: agent.name,
+          observation: agent.observation.status,
+        }))
+      : [];
+    const projectedLast = projectedMessages[projectedMessages.length - 1];
+    const projectedContent = Array.isArray(projectedLast?.content)
+      ? projectedLast.content
+      : [];
+    const projectedTools = projectedContent
+      .filter((part) => part.type === "tool-call")
+      .map((part) => ({
+        toolName: part.toolName,
+        approvalDisplay:
+          part.type === "tool-call" ? (part.approval?.display ?? null) : null,
+        optionCount:
+          part.type === "tool-call" ? (part.approval?.options?.length ?? 0) : 0,
+      }));
+    const snapshot = {
+      storeStatus: status,
+      isRunning,
+      isBusy,
+      waitKind,
+      composerBlocked,
+      onlyTextQuestionsPending,
+      waitingKind: waitingAction?.kind ?? null,
+      lastRole: last?.role ?? null,
+      lastMetaStatus: last?.metadata?.status ?? null,
+      projectedStatus: projectedLast?.status ?? null,
+      pending: pendingApprovals.map((item) => ({
+        kind: item.kind,
+        display: item.display,
+        optionCount: item.options.length,
+        toolName: item.toolName,
+        allowFreeform: item.allowFreeform,
+      })),
+      parts: partSummary,
+      openEvents,
+      agents: agentSummary,
+      projectedTools,
+    };
+    const interesting =
+      snapshot.pending.length > 0 ||
+      snapshot.openEvents.length > 0 ||
+      snapshot.waitKind != null ||
+      snapshot.waitingKind != null ||
+      partSummary.some(
+        (part) => part.type === "tool" || part.type === "interaction",
+      );
+    if (!interesting) return;
+    const key = JSON.stringify(snapshot);
+    if (hitlDebugKey.current === key) return;
+    hitlDebugKey.current = key;
+    // #region agent log
+    console.log("[hitl-debug]", JSON.stringify(snapshot));
+    fetch("http://127.0.0.1:7561/ingest/a354f76e-2698-4aab-9f65-8b6f93041cc1", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "daf783",
+      },
+      body: JSON.stringify({
+        sessionId: "daf783",
+        runId: "pre-fix",
+        hypothesisId: "H1-H5",
+        location: "mobile/components/chat-screen.tsx:waitingAction",
+        message: "HITL wait classification",
+        data: snapshot,
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  }, [
+    agents,
+    composerBlocked,
+    events,
+    isBusy,
+    isRunning,
+    messages,
+    onlyTextQuestionsPending,
+    pendingApprovals,
+    projectedMessages,
+    status,
+    waitKind,
+    waitingAction,
+  ]);
+
   useEffect(() => {
     if (!expectingAssistant) return;
     if (messages[messages.length - 1]?.role === "assistant") {

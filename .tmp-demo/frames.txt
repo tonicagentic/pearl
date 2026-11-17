@@ -1,0 +1,9 @@
+file '/Users/alex/GitHub/my-agent/.tmp-demo/frames/04-about.png'
+duration 5
+file '/Users/alex/GitHub/my-agent/.tmp-demo/frames/05-privacy.png'
+duration 6
+file '/Users/alex/GitHub/my-agent/.tmp-demo/frames/02-chat-search-results.png'
+duration 6
+file '/Users/alex/GitHub/my-agent/.tmp-demo/frames/01-gmail-disconnected.png'
+duration 5
+file '/Users/alex/GitHub/my-agent/.tmp-demo/frames/01-gmail-disconnected.png'

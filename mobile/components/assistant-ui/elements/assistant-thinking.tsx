@@ -92,6 +92,69 @@ export function AssistantThinking() {
 
   const dwellerRef = useRef(createThinkingStateDweller());
   const [label, setLabel] = useState<string | undefined>(derived.label);
+  const thinkingDebugKey = useRef("");
+  useEffect(() => {
+    if (derived.label !== "Needs your approval" && derived.phase !== "person-wait") {
+      return;
+    }
+    const partSummary = parts.map((part) => ({
+      type: part.type ?? null,
+      toolName: part.toolName ?? null,
+      status: part.status?.type ?? null,
+      approvalDisplay: part.approval?.display ?? null,
+      optionCount: part.approval?.options?.length ?? 0,
+      approved:
+        part.approval && "approved" in part.approval
+          ? part.approval.approved ?? null
+          : null,
+    }));
+    const key = JSON.stringify({
+      statusType,
+      askingQuestions,
+      personWaitLabel,
+      phase: derived.phase,
+      label: derived.label,
+      partSummary,
+    });
+    if (thinkingDebugKey.current === key) return;
+    thinkingDebugKey.current = key;
+    // #region agent log
+    console.log(
+      "[hitl-debug-thinking]",
+      JSON.stringify({
+        statusType: statusType ?? null,
+        askingQuestions,
+        personWaitLabel,
+        phase: derived.phase,
+        label: derived.label ?? null,
+        parts: partSummary,
+      }),
+    );
+    fetch("http://127.0.0.1:7561/ingest/a354f76e-2698-4aab-9f65-8b6f93041cc1", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "daf783",
+      },
+      body: JSON.stringify({
+        sessionId: "daf783",
+        runId: "pre-fix",
+        hypothesisId: "H1",
+        location: "mobile/components/assistant-ui/elements/assistant-thinking.tsx",
+        message: "Thinking label while parked",
+        data: {
+          statusType: statusType ?? null,
+          askingQuestions,
+          personWaitLabel,
+          phase: derived.phase,
+          label: derived.label ?? null,
+          parts: partSummary,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  }, [askingQuestions, derived.label, derived.phase, parts, personWaitLabel, statusType]);
 
   useEffect(() => {
     setLabel(dwellerRef.current.next(derived.label));
