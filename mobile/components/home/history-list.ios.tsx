@@ -24,11 +24,9 @@ import {
   lineLimit,
   listRowBackground,
   listRowInsets,
-  listRowSpacing,
   listStyle,
   opacity,
   padding,
-  scrollContentBackground,
   scrollEdgeEffectStyle,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -52,8 +50,12 @@ const PRESENCE_SLOT = 14;
 
 export type { HistoryChatActionHandlers } from "@/components/home/history-list";
 
+/** Keep Recents short so the Projects group stays on the first screen. */
+const RECENT_PREVIEW_COUNT = 6;
+
 /**
- * iOS home: plain List with swipe delete + context menu actions.
+ * iOS home: inset-grouped List — Recents, then Projects — with swipe delete
+ * and context menu actions.
  */
 export function HistoryListIOS({
   onOpenChat,
@@ -80,20 +82,19 @@ export function HistoryListIOS({
     | string
     | undefined;
   const backgroundColor = pageBackground ?? "#FFFFFF";
-  // Transparent list chrome so rows can fade under the nav + composer; keep
-  // opaque row fills for swipe/context targets.
-  const rowBackground = backgroundColor;
+  // Spacer rows stay clear so the composer clearance does not paint a card.
   const clearRow = "#00000000";
   const mutedForeground = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
   const mutedColor = mutedForeground ?? "#8E8E93";
+  // Let insetGrouped own row fills; only pin insets for status/empty rows.
   const rowChrome = [
-    listRowBackground(rowBackground),
     listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
   ];
 
   const [projects, setProjects] = useState<readonly ProjectDto[] | null>(null);
+  const [recentsExpanded, setRecentsExpanded] = useState(false);
   const orderedProjects = useMemo(
     () =>
       [...(projects ?? [])].sort((a, b) =>
@@ -105,6 +106,12 @@ export function HistoryListIOS({
     () => new Map(orderedProjects.map((project) => [project.id, project.name])),
     [orderedProjects],
   );
+  const visibleChats = useMemo(() => {
+    if (recentsExpanded || chats.length <= RECENT_PREVIEW_COUNT) return chats;
+    return chats.slice(0, RECENT_PREVIEW_COUNT);
+  }, [chats, recentsExpanded]);
+  const canExpandRecents =
+    !recentsExpanded && chats.length > RECENT_PREVIEW_COUNT;
 
   useFocusEffect(
     useCallback(() => {
@@ -145,7 +152,9 @@ export function HistoryListIOS({
         ? "Couldn’t load history"
         : "Sign in to see chats";
 
-  const showProjects = orderedProjects.length > 0;
+  // Show the Projects group once the fetch settles — empty state included —
+  // so it is not mistaken for a missing section.
+  const showProjects = projects !== null;
 
   if (showEmptyCard && !showProjects) {
     return (
@@ -189,14 +198,12 @@ export function HistoryListIOS({
       <Host style={{ flex: 1, backgroundColor: "transparent" }}>
         <List
           modifiers={[
-            listStyle("plain"),
-            scrollContentBackground("hidden"),
+            listStyle("insetGrouped"),
             scrollEdgeEffectStyle("soft"),
-            listRowSpacing(0),
           ]}
         >
           {showEmptyCard ? null : (
-          <Section>
+          <Section title="Recents">
             {selectionError ? (
               <SwiftText
                 modifiers={[
@@ -228,15 +235,15 @@ export function HistoryListIOS({
               </SwiftText>
             ) : (
               <List.ForEach
-                data={chats}
+                data={visibleChats}
                 keyExtractor={(chat) => chat.id}
                 estimatedItemSize={64}
+                recycling={false}
               >
                 {({ item: chat }) => (
                   <RecentChatRow
                     chat={chat}
                     mutedColor={mutedColor}
-                    rowBackground={rowBackground}
                     projectName={
                       chat.projectId
                         ? (projectNames.get(chat.projectId) ?? "Project")
@@ -249,7 +256,13 @@ export function HistoryListIOS({
               </List.ForEach>
             )}
 
-            {hasMoreChats ? (
+            {canExpandRecents ? (
+              <Button
+                label="Show more"
+                onPress={() => setRecentsExpanded(true)}
+                modifiers={[buttonStyle("plain"), ...rowChrome]}
+              />
+            ) : hasMoreChats ? (
               <Button
                 label={chatsLoading ? "Loading…" : "Load more"}
                 onPress={() => void loadMoreChats()}
@@ -260,19 +273,31 @@ export function HistoryListIOS({
           )}
           {showProjects ? (
             <Section title="Projects">
-              <List.ForEach
-                data={orderedProjects}
-                keyExtractor={(project) => project.id}
-                estimatedItemSize={52}
-              >
-                {({ item: project }) => (
-                  <ProjectRow
-                    project={project}
-                    mutedColor={mutedColor}
-                    rowBackground={rowBackground}
-                  />
-                )}
-              </List.ForEach>
+              {orderedProjects.length === 0 ? (
+                <SwiftText
+                  modifiers={[
+                    foregroundStyle({
+                      type: "hierarchical",
+                      style: "secondary",
+                    }),
+                    font({ size: 15 }),
+                    ...rowChrome,
+                  ]}
+                >
+                  No projects yet
+                </SwiftText>
+              ) : (
+                <List.ForEach
+                  data={orderedProjects}
+                  keyExtractor={(project) => project.id}
+                  estimatedItemSize={52}
+                  recycling={false}
+                >
+                  {({ item: project }) => (
+                    <ProjectRow project={project} mutedColor={mutedColor} />
+                  )}
+                </List.ForEach>
+              )}
             </Section>
           ) : null}
           {bottomInset > 0 ? (
@@ -300,11 +325,9 @@ export function HistoryListIOS({
 function ProjectRow({
   project,
   mutedColor,
-  rowBackground,
 }: {
   readonly project: ProjectDto;
   readonly mutedColor: string;
-  readonly rowBackground: string;
 }) {
   return (
     <Button
@@ -313,7 +336,6 @@ function ProjectRow({
       }
       modifiers={[
         buttonStyle("plain"),
-        listRowBackground(rowBackground),
         listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
       ]}
     >
@@ -342,14 +364,12 @@ function ProjectRow({
 function RecentChatRow({
   chat,
   mutedColor,
-  rowBackground,
   projectName,
   onOpen,
   actions,
 }: {
   readonly chat: ChatListItem;
   readonly mutedColor: string;
-  readonly rowBackground: string;
   readonly projectName: string | null;
   readonly onOpen: () => void;
   readonly actions: HistoryChatActionHandlers;
@@ -428,7 +448,6 @@ function RecentChatRow({
   return (
     <SwipeActions
       modifiers={[
-        listRowBackground(rowBackground),
         listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
       ]}
     >
