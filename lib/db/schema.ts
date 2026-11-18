@@ -331,12 +331,28 @@ export const issue = pgTable(
     // return to attention (the system's contract to resurface it).
     dueDate: date("due_date"),
     reviewDate: date("review_date"),
+    // Provenance when spawned from a reusable task list. Deleting the list
+    // or item clears these (set null) so the issue itself remains.
+    listId: text("list_id").references((): AnyPgColumn => taskList.id, {
+      onDelete: "set null",
+    }),
+    listItemId: text("list_item_id").references(
+      (): AnyPgColumn => taskListItem.id,
+      { onDelete: "set null" },
+    ),
+    listOccurrence: date("list_occurrence"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at"),
   },
   (table) => [
     index("idx_issue_user_status").on(table.userId, table.status),
     index("idx_issue_user_project").on(table.userId, table.projectId),
+    index("idx_issue_list_item_open").on(table.listItemId, table.status),
+    uniqueIndex("idx_issue_list_item_occurrence")
+      .on(table.listItemId, table.listOccurrence)
+      .where(
+        sql`${table.listItemId} is not null and ${table.listOccurrence} is not null`,
+      ),
   ],
 );
 
@@ -478,6 +494,63 @@ export const project = pgTable(
 );
 
 export type Project = typeof project.$inferSelect;
+
+export type TaskListCadence = "daily" | "weekly" | "monthly";
+
+// Reusable checklists (packing, apartment maintenance). Checking an item
+// only marks the list copy; a schedule (or manual spawn) materializes each
+// item as a normal issue in the inbox.
+export const taskList = pgTable(
+  "task_list",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // Where spawned tasks file. Null = Inbox (no project).
+    projectId: text("project_id").references(() => project.id, {
+      onDelete: "set null",
+    }),
+    // Null cadence = manual only (no cron spawn).
+    cadence: text("cadence", { enum: ["daily", "weekly", "monthly"] }),
+    // 0 = Sunday … 6 = Saturday; used when cadence is weekly.
+    weekday: integer("weekday"),
+    // 1–28; used when cadence is monthly (capped so short months stay even).
+    monthDay: integer("month_day"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_task_list_user").on(table.userId),
+    index("idx_task_list_scheduled").on(table.userId, table.cadence),
+  ],
+);
+
+export type TaskList = typeof taskList.$inferSelect;
+
+export const taskListItem = pgTable(
+  "task_list_item",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    listId: text("list_id")
+      .notNull()
+      .references(() => taskList.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    notes: text("notes"),
+    sortIndex: integer("sort_index").notNull().default(0),
+    // Null when unchecked; set when the user ticks the checklist copy.
+    checkedAt: timestamp("checked_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("idx_task_list_item_list").on(table.listId, table.sortIndex)],
+);
+
+export type TaskListItem = typeof taskListItem.$inferSelect;
 
 // Markdown plan documents that live inside a project. Plan mode writes
 // these; Agent mode reads them before carrying the work out.

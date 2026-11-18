@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { issue, area, user } from "@/lib/db/schema";
+import { issue, area, taskList, user } from "@/lib/db/schema";
 import type { Area } from "@/lib/db/schema";
 
 export type AreaNode = Area & {
@@ -421,6 +421,10 @@ export type IssueWithArea = {
   readonly areaId: string;
   readonly areaName: string;
   readonly projectId: string | null;
+  readonly listId: string | null;
+  readonly listItemId: string | null;
+  readonly listOccurrence: string | null;
+  readonly listName: string | null;
 };
 
 const issueSelection = {
@@ -435,15 +439,24 @@ const issueSelection = {
   areaId: issue.areaId,
   areaName: area.name,
   projectId: issue.projectId,
+  listId: issue.listId,
+  listItemId: issue.listItemId,
+  listOccurrence: issue.listOccurrence,
+  listName: taskList.name,
 };
 
-export async function listOpenIssues(
-  userId: string,
-): Promise<IssueWithArea[]> {
+function issuesWithAreaQuery() {
   return db
     .select(issueSelection)
     .from(issue)
     .innerJoin(area, eq(issue.areaId, area.id))
+    .leftJoin(taskList, eq(issue.listId, taskList.id));
+}
+
+export async function listOpenIssues(
+  userId: string,
+): Promise<IssueWithArea[]> {
+  return issuesWithAreaQuery()
     .where(and(eq(issue.userId, userId), eq(issue.status, "open")))
     .orderBy(
       asc(sql`coalesce(${issue.reviewDate}, ${issue.dueDate})`),
@@ -456,10 +469,7 @@ export async function listRecentlyResolvedIssues(
   userId: string,
   sinceIso: string,
 ): Promise<IssueWithArea[]> {
-  return db
-    .select(issueSelection)
-    .from(issue)
-    .innerJoin(area, eq(issue.areaId, area.id))
+  return issuesWithAreaQuery()
     .where(
       and(
         eq(issue.userId, userId),
@@ -475,10 +485,7 @@ export async function getIssue(
   userId: string,
   id: string,
 ): Promise<IssueWithArea | null> {
-  const [row] = await db
-    .select(issueSelection)
-    .from(issue)
-    .innerJoin(area, eq(issue.areaId, area.id))
+  const [row] = await issuesWithAreaQuery()
     .where(and(eq(issue.userId, userId), eq(issue.id, id)))
     .limit(1);
 
@@ -492,6 +499,9 @@ export type CreateIssueInput = {
   readonly projectId?: string | null;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;
+  readonly listId?: string | null;
+  readonly listItemId?: string | null;
+  readonly listOccurrence?: string | null;
 };
 
 export async function createIssue(
@@ -508,6 +518,9 @@ export async function createIssue(
       projectId: input.projectId ?? null,
       dueDate: input.dueDate ?? null,
       reviewDate: input.reviewDate ?? null,
+      listId: input.listId ?? null,
+      listItemId: input.listItemId ?? null,
+      listOccurrence: input.listOccurrence ?? null,
     })
     .returning({ id: issue.id });
 
