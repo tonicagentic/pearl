@@ -3,8 +3,11 @@ import { drizzle as drizzleNeonHttp, type NeonHttpDatabase } from "drizzle-orm/n
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema.ts";
+import * as bodySchema from "./body-schema.ts";
 
-let database: NeonHttpDatabase<typeof schema> | null = null;
+const fullSchema = { ...schema, ...bodySchema };
+
+let database: NeonHttpDatabase<typeof fullSchema> | null = null;
 
 export function isDatabaseConfigured() {
   return Boolean(process.env.DATABASE_URL?.trim());
@@ -31,15 +34,15 @@ export function getDb() {
 
     database = (
       isLocalDatabaseUrl(url)
-        ? drizzleNodePostgres({ client: new Pool({ connectionString: url }), schema })
-        : drizzleNeonHttp({ client: neon(url), schema })
-    ) as NeonHttpDatabase<typeof schema>;
+        ? drizzleNodePostgres({ client: new Pool({ connectionString: url }), schema: fullSchema })
+        : drizzleNeonHttp({ client: neon(url), schema: fullSchema })
+    ) as NeonHttpDatabase<typeof fullSchema>;
   }
 
   return database;
 }
 
-export const db = new Proxy({} as NeonHttpDatabase<typeof schema>, {
+export const db = new Proxy({} as NeonHttpDatabase<typeof fullSchema>, {
   get(_, prop) {
     return (getDb() as unknown as Record<string | symbol, unknown>)[prop];
   },
