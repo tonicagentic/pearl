@@ -58,6 +58,8 @@ const productionTrustedOrigins = [
   "pearlmoney://*",
   "pearltasks://",
   "pearltasks://*",
+  "pearlbody://",
+  "pearlbody://*",
 ].filter((origin, index, list): origin is string => {
   if (!origin) return false;
   // Custom schemes are not valid URL origins; keep them as-is.
@@ -106,6 +108,8 @@ const trustedOrigins =
         "pearlmoney://*",
         "pearltasks://",
         "pearltasks://*",
+        "pearlbody://",
+        "pearlbody://*",
         "exp://",
         "exp://**",
       ];
