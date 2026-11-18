@@ -28,6 +28,7 @@ import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { SignupSheet } from "@/components/signup-sheet";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { ComputerPanel } from "@/components/computer-panel";
+import { FileCanvas } from "@/components/file-canvas";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { Icon } from "@/components/ui/icon";
 import { StackScreen } from "@/components/ui/stack-screen";
@@ -41,6 +42,7 @@ import {
   subscribeLiveReplyText,
 } from "@/src/live-reply-text";
 import { buildTurnClientContext } from "@/src/turn-client-context";
+import { isEditableCanvasPath } from "../../lib/design/file-preview";
 import { useWorkspace } from "@/src/workspace-context";
 import {
   appendSpokenTurnMessages,
@@ -114,7 +116,8 @@ export function ChatScreen({
     recoverDeadSession,
     spokenTurns,
   } = useChats();
-  const { setChatId, tabs, preferDetail } = useWorkspace();
+  const { setChatId, tabs, preferDetail, canvasOpen, openFile } =
+    useWorkspace();
   const [computerOpen, setComputerOpen] = useState(false);
   const computerSheetRef = useRef<BottomSheetModalRef>(null);
   const [signupOpen, setSignupOpen] = useState(false);
@@ -123,6 +126,12 @@ export function ChatScreen({
   // Defer new-chat autofocus until the stack push finishes so keyboard +
   // composer morph do not fight the transition.
   const [navSettled, setNavSettled] = useState(false);
+  /** Queued while the Computer sheet closes — RN Modal can't beat the sheet. */
+  const pendingCanvasRef = useRef<{
+    readonly id?: string;
+    readonly path: string;
+    readonly content: string;
+  } | null>(null);
 
   const presentComputer = useCallback(() => {
     dismissKeyboard();
@@ -134,6 +143,34 @@ export function ChatScreen({
     computerSheetRef.current?.dismiss();
     setComputerOpen(false);
   }, []);
+
+  const flushPendingCanvas = useCallback(() => {
+    const pending = pendingCanvasRef.current;
+    if (!pending) return;
+    pendingCanvasRef.current = null;
+    openFile({
+      id: pending.id,
+      path: pending.path,
+      content: pending.content,
+      openCanvas: true,
+    });
+  }, [openFile]);
+
+  const openEditableFromComputer = useCallback(
+    (file: {
+      readonly id?: string;
+      readonly path: string;
+      readonly content: string;
+    }) => {
+      pendingCanvasRef.current = file;
+      dismissComputer();
+      // Fallback if the sheet never reports close (already dismissed, etc.).
+      setTimeout(() => {
+        flushPendingCanvas();
+      }, 450);
+    },
+    [dismissComputer, flushPendingCanvas],
+  );
 
   useEffect(() => {
     setChatId(activeChatId);
@@ -170,19 +207,37 @@ export function ChatScreen({
     };
   }, [navigation, activeChatId, chromeRevealed, newChatEntry]);
 
-  // Auto-present Computer when the agent opens the first tab; dismiss when empty.
+  // Auto-present Computer for browser/non-text tabs. Text write_file claims
+  // stay as an inline Writing card until the user opens the canvas.
   useEffect(() => {
     const prev = tabCountRef.current;
     tabCountRef.current = tabs.length;
-    if (prev === 0 && tabs.length > 0) presentComputer();
-    else if (tabs.length === 0 && prev > 0) dismissComputer();
-  }, [dismissComputer, presentComputer, tabs.length]);
+    if (prev === 0 && tabs.length > 0) {
+      if (canvasOpen) {
+        dismissComputer();
+        return;
+      }
+      const onlyEditableFiles = tabs.every(
+        (tab) => tab.kind === "file" && isEditableCanvasPath(tab.path),
+      );
+      if (onlyEditableFiles) return;
+      presentComputer();
+    } else if (tabs.length === 0 && prev > 0) {
+      dismissComputer();
+    }
+  }, [canvasOpen, dismissComputer, presentComputer, tabs]);
 
-  // Chat-launched file opens should surface the Computer sheet.
+  // Chat-launched non-editable opens surface the Computer sheet.
   useEffect(() => {
     if (!preferDetail) return;
     presentComputer();
   }, [preferDetail, presentComputer]);
+
+  // Editable canvas owns the screen — tuck Computer away.
+  useEffect(() => {
+    if (!canvasOpen) return;
+    dismissComputer();
+  }, [canvasOpen, dismissComputer]);
 
   const projectPickWaiter = useRef<{
     resolve: (projectId: string) => void;
@@ -1095,8 +1150,6 @@ export function ChatScreen({
     dismissComputer();
     newChat();
   }, [dismissComputer, newChat]);
-  const computerBadge = tabs.length > 0 && !computerOpen;
-
   return (
     <StackScreen>
       <Stack.Screen
@@ -1133,28 +1186,19 @@ export function ChatScreen({
                         <View className="w-2" />
                         <Pressable
                           accessibilityRole="button"
-                          accessibilityLabel={
-                            computerBadge
-                              ? "Computer, open activity available"
-                              : "Computer"
-                          }
+                          accessibilityLabel="Computer"
                           accessibilityState={{ selected: computerOpen }}
                           className="h-10 w-10 items-center justify-center"
                           onPress={toggleComputer}
                         >
-                          <View>
-                            <Icon
-                              as={MonitorIcon}
-                              className={
-                                computerOpen
-                                  ? "size-5 text-foreground"
-                                  : "size-5 text-muted-foreground"
-                              }
-                            />
-                            {computerBadge ? (
-                              <View className="bg-primary absolute -right-0.5 -top-0.5 size-1.5 rounded-full" />
-                            ) : null}
-                          </View>
+                          <Icon
+                            as={MonitorIcon}
+                            className={
+                              computerOpen
+                                ? "size-5 text-foreground"
+                                : "size-5 text-muted-foreground"
+                            }
+                          />
                         </Pressable>
                       </>
                     ) : null}
@@ -1189,18 +1233,12 @@ export function ChatScreen({
           <Stack.Toolbar.Spacer width={8} hidden={!activeChatId} />
           <Stack.Toolbar.Button
             icon="desktopcomputer"
-            accessibilityLabel={
-              computerBadge
-                ? "Computer, open activity available"
-                : "Computer"
-            }
+            accessibilityLabel="Computer"
             selected={computerOpen}
             onPress={toggleComputer}
             tintColor={foregroundColor}
             hidden={!activeChatId}
-          >
-            {computerBadge ? <Stack.Toolbar.Badge /> : null}
-          </Stack.Toolbar.Button>
+          />
           <Stack.Toolbar.Menu
             icon="ellipsis"
             accessibilityLabel="Thread actions"
@@ -1268,14 +1306,23 @@ export function ChatScreen({
                       snapPoints={[...COMPUTER_SHEET_SNAP_POINTS]}
                       enablePanDownToClose
                       onChange={(index) => {
-                        setComputerOpen(index >= 0);
+                        const open = index >= 0;
+                        setComputerOpen(open);
+                        if (!open) flushPendingCanvas();
                       }}
-                      onClose={() => setComputerOpen(false)}
+                      onClose={() => {
+                        setComputerOpen(false);
+                        flushPendingCanvas();
+                      }}
                     >
                       <BottomSheetView style={{ flex: 1 }}>
-                        <ComputerPanel visible={computerOpen} />
+                        <ComputerPanel
+                          visible={computerOpen}
+                          onOpenEditableFile={openEditableFromComputer}
+                        />
                       </BottomSheetView>
                     </BottomSheetModal>
+                    <FileCanvas />
                   </AssistantRuntimeProvider>
                   <SubagentInspectHost onAnswer={answerInteraction} />
                   <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />

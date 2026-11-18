@@ -84,3 +84,26 @@ export function invalidateChatFileCaches(chatId?: string): void {
     if (key.startsWith(`${chatId}:`)) contentCache.delete(key);
   }
 }
+
+/** Persist user canvas edits to the chat's agent_file mirror. */
+export async function saveChatFile(
+  chatId: string,
+  path: string,
+  content: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/files`,
+      {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify({ path, content }),
+      },
+    );
+    if (!res.ok) return false;
+    invalidateChatFileCaches(chatId);
+    return true;
+  } catch {
+    return false;
+  }
+}

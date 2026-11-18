@@ -16,6 +16,7 @@ import {
   type AssistantMessagePart,
 } from "@/src/assistant-blocks";
 import { useEveEvents } from "@/src/chat-context";
+import { useWorkspaceOptional } from "@/src/workspace-context";
 import { formatDurationMs, turnEventSpan } from "@/src/turn-duration";
 import {
   composeActivityHeader,
@@ -224,6 +225,7 @@ export const SessionTimelineSegment: FC<{
 
   const motion = useMotion();
   const nativeMotion = motion && Platform.OS !== "web";
+  const workspace = useWorkspaceOptional();
 
   if (steps.length === 0) return null;
 
@@ -249,6 +251,13 @@ export const SessionTimelineSegment: FC<{
         headerAdded={header.added}
         headerRemoved={header.removed}
         elapsed={duration}
+        onOpenFile={
+          workspace
+            ? (path) => {
+                void workspace.openPath(path);
+              }
+            : undefined
+        }
       />
     </Animated.View>
   );

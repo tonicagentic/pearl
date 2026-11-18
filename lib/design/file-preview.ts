@@ -77,6 +77,15 @@ export function prefersInAppPreview(path: string): boolean {
   );
 }
 
+/**
+ * Text/markdown (and mermaid source) open in the mobile ChatGPT-style
+ * editable canvas. HTML/SVG/images stay on the read-only preview path.
+ */
+export function isEditableCanvasPath(path: string): boolean {
+  const kind = previewKindForPath(path);
+  return kind === "markdown" || kind === "text" || kind === "mermaid";
+}
+
 const SNIPPET_CHARS = 280;
 
 /** Clamped text snippet for card previews. */

@@ -13,6 +13,8 @@ export type ThreadSampleId =
   | "gallery"
   | "one-read"
   | "mixed"
+  | "imagine"
+  | "file-canvas"
   | "prod-twitch"
   | "prod-mail"
   | "prod-pearl"
@@ -584,6 +586,122 @@ const mixed: ThreadSample = {
   ],
 };
 
+const IMAGINE_TURN_ID = "sample-imagine";
+const IMAGINE_PROMPT =
+  "Quiet coastal road at dusk, soft amber light, long shadows, photographic, 16:9";
+const IMAGINE_IMAGE_URL =
+  "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1024&h=576&fit=crop";
+
+/** Settled generate_image card — pair with Stream Replay → Imagine for live process. */
+const imagine: ThreadSample = {
+  id: "imagine",
+  label: "Imagine",
+  durationEvents: durationEvents(IMAGINE_TURN_ID, "2026-01-01T00:00:12.000Z"),
+  messages: [
+    {
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: "Make a photo of a quiet coastal road at dusk, 16:9.",
+        },
+      ],
+    },
+    {
+      role: "assistant",
+      status: { type: "complete", reason: "stop" },
+      content: [
+        {
+          type: "text",
+          text: "Generating that now — coastal road at dusk, wide frame.",
+        },
+        toolCall(
+          "generate_image",
+          {
+            prompt: IMAGINE_PROMPT,
+            aspectRatio: "16:9",
+          },
+          {
+            toolCallId: "sample-generate-image-1",
+            result: {
+              success: true,
+              url: IMAGINE_IMAGE_URL,
+              downloadUrl: IMAGINE_IMAGE_URL,
+              pathname: "design/generated/coastal-road.png",
+              contentType: "image/jpeg",
+              model: "spacexai/grok-imagine-image-2.0",
+              prompt: IMAGINE_PROMPT,
+            },
+          },
+        ),
+        {
+          type: "text",
+          text: "Here's the dusk coastal road — 16:9, soft amber light.",
+        },
+      ],
+      metadata: { custom: { turnId: IMAGINE_TURN_ID } },
+    },
+  ],
+};
+
+const FILE_CANVAS_TURN_ID = "sample-file-canvas";
+const FILE_CANVAS_MD = `# Mobile canvas
+
+Full-screen editable text while Pearl writes.
+
+- Auto-opens on \`write_file\`
+- Floating Ask Pearl composer
+- Undo, redo, and copy
+`;
+
+/** Settled write_file card for the editable mobile canvas. */
+const fileCanvas: ThreadSample = {
+  id: "file-canvas",
+  label: "File canvas",
+  durationEvents: durationEvents(FILE_CANVAS_TURN_ID, "2026-01-01T00:00:14.000Z"),
+  messages: [
+    {
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: "Write a short README for the mobile canvas.",
+        },
+      ],
+    },
+    {
+      role: "assistant",
+      status: { type: "complete", reason: "stop" },
+      content: [
+        {
+          type: "text",
+          text: "I'll draft `docs/mobile-canvas.md` now.",
+        },
+        toolCall(
+          "write_file",
+          {
+            filePath: "docs/mobile-canvas.md",
+            content: FILE_CANVAS_MD,
+          },
+          {
+            toolCallId: "sample-write-file-canvas",
+            result: {
+              path: "docs/mobile-canvas.md",
+              existed: false,
+              persisted: true,
+            },
+          },
+        ),
+        {
+          type: "text",
+          text: "Saved the README — open it in the canvas to edit.",
+        },
+      ],
+      metadata: { custom: { turnId: FILE_CANVAS_TURN_ID } },
+    },
+  ],
+};
+
 export const THREAD_SAMPLES: readonly ThreadSample[] = [
   approve,
   choose,
@@ -593,6 +711,8 @@ export const THREAD_SAMPLES: readonly ThreadSample[] = [
   gallery,
   oneRead,
   mixed,
+  imagine,
+  fileCanvas,
   ...IMPORTED_THREAD_SAMPLES,
 ];
 

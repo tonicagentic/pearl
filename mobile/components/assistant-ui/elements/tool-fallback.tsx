@@ -10,24 +10,21 @@ import {
 } from "@assistant-ui/react-native";
 import { CheckIcon, XIcon } from "lucide-react-native";
 import { type FC, useEffect, useState } from "react";
-import { Modal, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
-import Animated from "react-native-reanimated";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Pressable, TextInput, View } from "react-native";
 import { Text, textVariants } from "@/components/ui/text";
 import {
   field,
   inkButton,
   mono,
   monoStyle,
-  stepEnter,
   textButtonHitSlop,
   useAnnounce,
   useHydrated,
-  useMotion,
   webLiveRegion,
 } from "./surfaces";
 import { getToolPresentation } from "./tool-presentation";
 import { GenerateImageToolCard } from "./generate-image-tool";
+import { WritingFileCard } from "./writing-file-card";
 import { formatUnknownValue } from "../utils/task";
 import { useWorkspaceOptional } from "@/src/workspace-context";
 import { useComposerOwnsHitl } from "@/components/assistant-ui/elements/composer-owns-hitl";
@@ -449,56 +446,6 @@ export const ToolFallbackApproval: FC<
   );
 };
 
-// Only previews content that is already present in the tool call; it never
-// fetches a persisted artifact or presents the draft as a saved download.
-function FilePreview({ path, content }: { path: string; content: string }) {
-  const workspace = useWorkspaceOptional();
-  const [open, setOpen] = useState(false);
-  const motion = useMotion();
-  const nativeMotion = motion && Platform.OS !== "web";
-
-  const openPreview = () => {
-    if (workspace) {
-      workspace.openFile({ path, content });
-      return;
-    }
-    setOpen(true);
-  };
-
-  return <>
-    <Animated.View entering={nativeMotion ? stepEnter : undefined}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Open ${path}`} className="min-h-11 justify-center ps-6" onPress={openPreview}>
-        <Text variant="secondary" tone="primary" numberOfLines={1}>
-          Open {path}
-        </Text>
-      </Pressable>
-    </Animated.View>
-    <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
-      <SafeAreaView className="bg-background flex-1 p-4">
-        <Pressable accessibilityRole="button" className="min-h-11 justify-center" onPress={() => setOpen(false)}>
-          <Text variant="body" tone="primary">
-            Close
-          </Text>
-        </Pressable>
-        <Text variant="body" weight="semibold" className="mb-3" numberOfLines={2}>
-          {path}
-        </Text>
-        <ScrollView className="flex-1">
-          <Text
-            selectable
-            variant="secondary"
-            tone="default"
-            className={mono}
-            style={monoStyle}
-          >
-            {content.slice(0, 5_000)}{content.length > 5_000 ? "\n… Preview limited to 5,000 characters" : ""}
-          </Text>
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
-  </>;
-}
-
 export const ToolFallback: ToolCallMessagePartComponent = ({
   toolName,
   args,
@@ -563,9 +510,6 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
     status.type === "incomplete" && status.error != null
       ? formatUnknownValue(status.error)
       : "";
-  const preview = toolName === "write_file" && typeof args?.content === "string"
-    ? { path: typeof args.filePath === "string" ? args.filePath : "Draft file", content: args.content }
-    : null;
   const generatedSvgPath =
     toolName === "generate_svg" &&
     result &&
@@ -615,6 +559,21 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
         }
         result={result}
         status={status}
+      />
+    );
+  }
+
+  if (toolName === "write_file") {
+    return (
+      <WritingFileCard
+        args={
+          args && typeof args === "object" && !Array.isArray(args)
+            ? (args as Record<string, unknown>)
+            : undefined
+        }
+        argsText={argsText}
+        status={status}
+        result={result}
       />
     );
   }
@@ -684,7 +643,6 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
           </Text>
         </View>
       )}
-      {preview && <FilePreview path={preview.path} content={preview.content} />}
       {generatedSvgPath && workspace ? (
         <Pressable
           accessibilityRole="button"

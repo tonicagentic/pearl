@@ -99,10 +99,65 @@ export function isContentBlockPart(
   return false;
 }
 
+function isWriteFilePart(
+  part: AssistantMessagePart | null | undefined,
+): boolean {
+  return part?.type === "tool-call" && part.toolName === "write_file";
+}
+
+/**
+ * Keep Writing cards below the Worked-for timeline (ChatGPT order): hold
+ * write_file-only content until a timeline has been emitted, then place the
+ * card after that timeline instead of above it.
+ */
+function placeWriteFileAfterTimeline(
+  blocks: readonly AssistantBlock[],
+  parts: readonly AssistantMessagePart[],
+): readonly AssistantBlock[] {
+  const out: AssistantBlock[] = [];
+  const pendingWrites: AssistantContentBlock[] = [];
+  let sawTimeline = false;
+
+  const flushWrites = () => {
+    if (pendingWrites.length === 0) return;
+    out.push(...pendingWrites);
+    pendingWrites.length = 0;
+  };
+
+  for (const block of blocks) {
+    if (block.kind === "timeline") {
+      out.push(block);
+      sawTimeline = true;
+      flushWrites();
+      continue;
+    }
+
+    const writeIndices: number[] = [];
+    const otherIndices: number[] = [];
+    for (const index of block.indices) {
+      if (isWriteFilePart(parts[index])) writeIndices.push(index);
+      else otherIndices.push(index);
+    }
+
+    if (writeIndices.length > 0) {
+      pendingWrites.push({ kind: "content", indices: writeIndices });
+    }
+    // After Worked-for, Writing lands next, then any trailing prose.
+    if (sawTimeline) flushWrites();
+    if (otherIndices.length > 0) {
+      out.push({ kind: "content", indices: otherIndices });
+    }
+  }
+
+  flushWrites();
+  return out;
+}
+
 /**
  * Split assistant parts into interleaved timeline / content blocks.
  * Contiguous reasoning + timeline tools stay together until a visible
  * content part arrives; then a new timeline can start below that content.
+ * write_file cards are ordered after the Worked-for timeline when both appear.
  */
 export function splitAssistantBlocks(
   parts: readonly AssistantMessagePart[],
@@ -138,7 +193,7 @@ export function splitAssistantBlocks(
 
   flushTimeline();
   flushContent();
-  return blocks;
+  return placeWriteFileAfterTimeline(blocks, parts);
 }
 
 /** Index of the last timeline block, or -1 when none. */

@@ -56,7 +56,10 @@ export function FilePreviewCard({
   readonly path: string;
   /** When already known (Computer list), skip the network fetch. */
   readonly content?: string | null;
-  readonly onOpen?: (path: string, content: string | null) => void;
+  readonly onOpen?: (
+    path: string,
+    content: string | null,
+  ) => void | Promise<void>;
 }) {
   const workspace = useWorkspaceOptional();
   const chatId = workspace?.chatId ?? null;
@@ -114,7 +117,7 @@ export function FilePreviewCard({
     setOpening(true);
     try {
       if (onOpen) {
-        onOpen(path, content);
+        await onOpen(path, content);
         return;
       }
       await workspace?.openPath(path, content ?? undefined);

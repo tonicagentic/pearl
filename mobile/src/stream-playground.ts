@@ -18,6 +18,8 @@ export type StreamPlayScenarioId =
   | "compaction-retry-subagent"
   | "rapid-burst"
   | "todos"
+  | "imagine"
+  | "file-canvas"
   | ThreadSampleId;
 
 export type TimedStreamEvent = {
@@ -638,6 +640,443 @@ function todosScript(): TimedStreamEvent[] {
   ]);
 }
 
+const IMAGINE_PROMPT =
+  "Quiet coastal road at dusk, soft amber light, long shadows, photographic, 16:9";
+const IMAGINE_IMAGE_URL =
+  "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1024&h=576&fit=crop";
+
+function imagineScript(): TimedStreamEvent[] {
+  return stamp([
+    { atMs: 0, raw: { type: "session.started", data: {} } },
+    {
+      atMs: 20,
+      raw: { type: "delivery.admitted", data: { deliveryId: "d_imagine" } },
+    },
+    {
+      atMs: 40,
+      raw: {
+        type: "delivery.consumed",
+        scope: turnScope,
+        data: {
+          deliveryId: "d_imagine",
+          turnId: TURN,
+          parts: [
+            {
+              kind: "text",
+              text: "Make a photo of a quiet coastal road at dusk, 16:9.",
+            },
+          ],
+        },
+      },
+    },
+    {
+      atMs: 60,
+      raw: {
+        type: "turn.started",
+        scope: turnScope,
+        data: {
+          turnId: TURN,
+          cause: { deliveryId: "d_imagine" },
+          follows: null,
+        },
+      },
+    },
+    {
+      atMs: 80,
+      raw: {
+        type: "model.requested",
+        scope: turnScope,
+        data: { runId: RUN, owner: { turnId: TURN } },
+      },
+    },
+    {
+      atMs: 100,
+      raw: {
+        type: "model.started",
+        scope: runScope,
+        data: { runId: RUN, modelId: "test-model", attempt: 0 },
+      },
+    },
+    {
+      atMs: 350,
+      raw: {
+        type: "content.delta",
+        scope: runScope,
+        data: {
+          partId: "t_imagine_lead",
+          kind: "text",
+          delta: "Generating that now — ",
+        },
+      },
+    },
+    {
+      atMs: 550,
+      raw: {
+        type: "content.delta",
+        scope: runScope,
+        data: {
+          partId: "t_imagine_lead",
+          delta: "coastal road at dusk, wide frame.",
+        },
+      },
+    },
+    {
+      atMs: 700,
+      raw: {
+        type: "content.completed",
+        scope: runScope,
+        data: {
+          partId: "t_imagine_lead",
+          kind: "text",
+          phase: "reply",
+          runId: RUN,
+          value: "Generating that now — coastal road at dusk, wide frame.",
+        },
+      },
+    },
+    {
+      atMs: 900,
+      raw: {
+        type: "call.input",
+        scope: runScope,
+        data: {
+          callId: "c_imagine",
+          kind: "tool",
+          name: "generate_image",
+          delta: '{"prompt":"Quiet coastal road at dusk, soft amber',
+        },
+      },
+    },
+    {
+      atMs: 1100,
+      raw: {
+        type: "call.input",
+        scope: runScope,
+        data: {
+          callId: "c_imagine",
+          delta:
+            ' light, long shadows, photographic","aspectRatio":"16:9"}',
+        },
+      },
+    },
+    {
+      atMs: 1250,
+      raw: {
+        type: "call.requested",
+        scope: runScope,
+        data: {
+          callId: "c_imagine",
+          capability: {
+            kind: "tool",
+            name: "generate_image",
+            label: `Generating image · ${IMAGINE_PROMPT.slice(0, 39)}…`,
+          },
+          owner: { runId: RUN },
+          input: {
+            prompt: IMAGINE_PROMPT,
+            aspectRatio: "16:9",
+          },
+        },
+      },
+    },
+    {
+      atMs: 1350,
+      raw: {
+        type: "call.started",
+        scope: runScope,
+        data: { callId: "c_imagine" },
+      },
+    },
+    {
+      atMs: 1600,
+      raw: {
+        type: "call.progress",
+        scope: runScope,
+        data: {
+          callId: "c_imagine",
+          label: "Generating image…",
+          output: { status: "running" },
+        },
+      },
+    },
+    // Deliberate dwell so the aspect-ratio placeholder is inspectable in replay.
+    {
+      atMs: 4800,
+      raw: {
+        type: "call.settled",
+        scope: runScope,
+        data: {
+          callId: "c_imagine",
+          outcome: "completed",
+          label: "Generated image",
+          output: {
+            success: true,
+            url: IMAGINE_IMAGE_URL,
+            downloadUrl: IMAGINE_IMAGE_URL,
+            pathname: "design/generated/coastal-road.png",
+            contentType: "image/jpeg",
+            model: "spacexai/grok-imagine-image-2.0",
+            prompt: IMAGINE_PROMPT,
+          },
+        },
+      },
+    },
+    {
+      atMs: 5200,
+      raw: {
+        type: "content.delta",
+        scope: runScope,
+        data: {
+          partId: "t_imagine_done",
+          kind: "text",
+          delta: "Here's the dusk coastal road — ",
+        },
+      },
+    },
+    {
+      atMs: 5450,
+      raw: {
+        type: "content.delta",
+        scope: runScope,
+        data: {
+          partId: "t_imagine_done",
+          delta: "16:9, soft amber light.",
+        },
+      },
+    },
+    {
+      atMs: 5600,
+      raw: {
+        type: "content.completed",
+        scope: runScope,
+        data: {
+          partId: "t_imagine_done",
+          kind: "text",
+          phase: "reply",
+          runId: RUN,
+          value: "Here's the dusk coastal road — 16:9, soft amber light.",
+        },
+      },
+    },
+    {
+      atMs: 5800,
+      raw: {
+        type: "turn.settled",
+        scope: turnScope,
+        data: { turnId: TURN, outcome: "completed" },
+      },
+    },
+  ]);
+}
+
+const FILE_CANVAS_MD = [
+  "# Mobile canvas\n\n",
+  "Full-screen editable text while Pearl writes.\n\n",
+  "- Auto-opens on `write_file`\n",
+  "- Floating Ask Pearl composer\n",
+  "- Undo, redo, and copy\n",
+].join("");
+
+function fileCanvasScript(): TimedStreamEvent[] {
+  const argsStart = '{"filePath":"docs/mobile-canvas.md","content":"';
+  const chunkA = "# Mobile canvas\\n\\nFull-screen editable text while Pearl writes.\\n\\n";
+  const chunkB =
+    "- Auto-opens on `write_file`\\n- Floating Ask Pearl composer\\n- Undo, redo, and copy\\n";
+  const argsEnd = '"}';
+  return stamp([
+    { atMs: 0, raw: { type: "session.started", data: {} } },
+    {
+      atMs: 20,
+      raw: { type: "delivery.admitted", data: { deliveryId: "d_file" } },
+    },
+    {
+      atMs: 40,
+      raw: {
+        type: "delivery.consumed",
+        scope: turnScope,
+        data: {
+          deliveryId: "d_file",
+          turnId: TURN,
+          parts: [
+            {
+              kind: "text",
+              text: "Write a short README for the mobile canvas.",
+            },
+          ],
+        },
+      },
+    },
+    {
+      atMs: 60,
+      raw: {
+        type: "turn.started",
+        scope: turnScope,
+        data: {
+          turnId: TURN,
+          cause: { deliveryId: "d_file" },
+          follows: null,
+        },
+      },
+    },
+    {
+      atMs: 80,
+      raw: {
+        type: "model.requested",
+        scope: turnScope,
+        data: { runId: RUN, owner: { turnId: TURN } },
+      },
+    },
+    {
+      atMs: 100,
+      raw: {
+        type: "model.started",
+        scope: runScope,
+        data: { runId: RUN, modelId: "test-model", attempt: 0 },
+      },
+    },
+    {
+      atMs: 300,
+      raw: {
+        type: "content.delta",
+        scope: runScope,
+        data: {
+          partId: "t_file_lead",
+          kind: "text",
+          delta: "I'll draft `docs/mobile-canvas.md` now.",
+        },
+      },
+    },
+    {
+      atMs: 500,
+      raw: {
+        type: "content.completed",
+        scope: runScope,
+        data: {
+          partId: "t_file_lead",
+          kind: "text",
+          phase: "reply",
+          runId: RUN,
+          value: "I'll draft `docs/mobile-canvas.md` now.",
+        },
+      },
+    },
+    {
+      atMs: 700,
+      raw: {
+        type: "call.input",
+        scope: runScope,
+        data: {
+          callId: "c_write",
+          kind: "tool",
+          name: "write_file",
+          delta: argsStart + chunkA,
+        },
+      },
+    },
+    {
+      atMs: 1600,
+      raw: {
+        type: "call.input",
+        scope: runScope,
+        data: {
+          callId: "c_write",
+          delta: chunkB,
+        },
+      },
+    },
+    {
+      atMs: 2200,
+      raw: {
+        type: "call.input",
+        scope: runScope,
+        data: {
+          callId: "c_write",
+          delta: argsEnd,
+        },
+      },
+    },
+    {
+      atMs: 2400,
+      raw: {
+        type: "call.requested",
+        scope: runScope,
+        data: {
+          callId: "c_write",
+          capability: {
+            kind: "tool",
+            name: "write_file",
+            label: "Writing docs/mobile-canvas.md",
+          },
+          owner: { runId: RUN },
+          input: {
+            filePath: "docs/mobile-canvas.md",
+            content: FILE_CANVAS_MD,
+          },
+        },
+      },
+    },
+    {
+      atMs: 2500,
+      raw: {
+        type: "call.started",
+        scope: runScope,
+        data: { callId: "c_write" },
+      },
+    },
+    {
+      atMs: 5200,
+      raw: {
+        type: "call.settled",
+        scope: runScope,
+        data: {
+          callId: "c_write",
+          outcome: "completed",
+          label: "Wrote docs/mobile-canvas.md",
+          output: {
+            path: "docs/mobile-canvas.md",
+            existed: false,
+            persisted: true,
+          },
+        },
+      },
+    },
+    {
+      atMs: 5600,
+      raw: {
+        type: "content.delta",
+        scope: runScope,
+        data: {
+          partId: "t_file_done",
+          kind: "text",
+          delta: "Saved the README — open it in the canvas to edit.",
+        },
+      },
+    },
+    {
+      atMs: 5800,
+      raw: {
+        type: "content.completed",
+        scope: runScope,
+        data: {
+          partId: "t_file_done",
+          kind: "text",
+          phase: "reply",
+          runId: RUN,
+          value: "Saved the README — open it in the canvas to edit.",
+        },
+      },
+    },
+    {
+      atMs: 6000,
+      raw: {
+        type: "turn.settled",
+        scope: turnScope,
+        data: { turnId: TURN, outcome: "completed" },
+      },
+    },
+  ]);
+}
+
 const CORE_STREAM_PLAY_SCENARIOS: readonly StreamPlayScenario[] = [
   {
     id: "reasoning-tools",
@@ -666,16 +1105,36 @@ const CORE_STREAM_PLAY_SCENARIOS: readonly StreamPlayScenario[] = [
       "Streaming todo list mounts early, then rows check off with progress.",
     events: todosScript(),
   },
+  {
+    id: "imagine",
+    title: "Imagine",
+    description:
+      "generate_image args stream, running placeholder, then settled preview.",
+    events: imagineScript(),
+  },
+  {
+    id: "file-canvas",
+    title: "File canvas",
+    description:
+      "write_file args stream into the editable mobile canvas, then settle.",
+    events: fileCanvasScript(),
+  },
 ];
+
+const CORE_STREAM_IDS = new Set(
+  CORE_STREAM_PLAY_SCENARIOS.map((scenario) => scenario.id),
+);
 
 /** Every static thread sample, synthesized into a paced stream script. */
 const SAMPLE_STREAM_PLAY_SCENARIOS: readonly StreamPlayScenario[] =
-  THREAD_SAMPLES.map((sample) => ({
-    id: sample.id,
-    title: sample.label,
-    description: `Stream replay synthesized from the “${sample.label}” sample.`,
-    events: eventsFromThreadSample(sample),
-  }));
+  THREAD_SAMPLES.filter((sample) => !CORE_STREAM_IDS.has(sample.id)).map(
+    (sample) => ({
+      id: sample.id,
+      title: sample.label,
+      description: `Stream replay synthesized from the “${sample.label}” sample.`,
+      events: eventsFromThreadSample(sample),
+    }),
+  );
 
 export const STREAM_PLAY_SCENARIOS: readonly StreamPlayScenario[] = [
   ...CORE_STREAM_PLAY_SCENARIOS,

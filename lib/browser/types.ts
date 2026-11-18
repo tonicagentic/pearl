@@ -59,6 +59,8 @@ export type WorkspaceFileTab = {
   readonly running: boolean;
   readonly note: string | null;
   readonly version: number;
+  /** True when the user has typed into the buffer since the last agent write or save. */
+  readonly dirty?: boolean;
 };
 
 export type WorkspacePageTab = {

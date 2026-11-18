@@ -353,6 +353,9 @@ export function eventsFromReplaySample(
         },
         70,
       );
+      // Image generation is slow in product; keep the placeholder visible in
+      // synthesized sample replay instead of snapping straight to the result.
+      const settleDelay = tool.toolName === "generate_image" ? 2800 : 220;
       push(
         {
           type: "call.settled",
@@ -360,10 +363,13 @@ export function eventsFromReplaySample(
           data: {
             callId,
             outcome: "completed",
+            ...(tool.toolName === "generate_image"
+              ? { label: "Generated image" }
+              : {}),
             output: tool.result ?? { ok: true },
           },
         },
-        220,
+        settleDelay,
       );
     });
 

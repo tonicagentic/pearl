@@ -43,6 +43,7 @@ import {
   useMotion,
   webLiveRegion,
 } from "@/components/assistant-ui/elements/surfaces";
+import { MessageFileToolClaims } from "@/components/assistant-ui/elements/file-tool-claim";
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback";
 import { TypingIndicator } from "@/components/assistant-ui/elements/typing-indicator";
 import { ThreadEdgeFades } from "@/components/assistant-ui/elements/thread-edge-fades";
@@ -1915,6 +1916,7 @@ const AssistantMessage: FC = () => {
 
   return (
     <MessagePrimitive.Root className="aui-assistant-message-root gap-2">
+      <MessageFileToolClaims />
       {/* 8px stack: timeline meta → answer; sources join the footer with actions. */}
       <View className="aui-assistant-message-content gap-2">
         <TurnElapsedProvider>

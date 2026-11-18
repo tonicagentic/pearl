@@ -71,6 +71,8 @@ export interface ToolTimelineProps {
   readonly headerRemoved?: number;
   /** Elapsed badge: live while streaming, the settled duration after. */
   readonly elapsed?: string;
+  /** Open a file path from a timeline chip (mobile file canvas / Computer). */
+  readonly onOpenFile?: (path: string) => void;
 }
 
 /** Verb in secondary muted; counts/paths in a lighter muted. */
@@ -219,6 +221,7 @@ function StepRow({
   expanded,
   onToggle,
   elapsed,
+  onOpenFile,
 }: {
   readonly step: TimelineStep;
   readonly active: boolean;
@@ -226,6 +229,7 @@ function StepRow({
   readonly onToggle: () => void;
   /** Shown beside Thought/Thinking on single-step turns. */
   readonly elapsed?: string;
+  readonly onOpenFile?: (path: string) => void;
 }) {
   const motion = useMotion();
   const nativeMotion = motion && Platform.OS !== "web";
@@ -234,6 +238,7 @@ function StepRow({
   const verb =
     active && step.verb === "Thought" ? "Thinking" : step.verb;
   const showChip = step.chip.length > 0;
+  const fileOpenable = Boolean(step.filePath && onOpenFile);
 
   return (
     <Animated.View
@@ -296,6 +301,25 @@ function StepRow({
                 {step.chip}
               </Text>
             </View>
+          ) : fileOpenable ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${step.filePath}`}
+              hitSlop={6}
+              onPress={(event) => {
+                event.stopPropagation?.();
+                onOpenFile?.(step.filePath!);
+              }}
+            >
+              <Text
+                numberOfLines={1}
+                variant="body"
+                tone="primary"
+                className="min-w-0 flex-shrink"
+              >
+                {step.chip}
+              </Text>
+            </Pressable>
           ) : (
             <Text
               numberOfLines={1}
@@ -335,6 +359,7 @@ export function ToolTimeline({
   headerAdded,
   headerRemoved,
   elapsed,
+  onOpenFile,
 }: ToolTimelineProps) {
   const motion = useMotion();
   const [expandedSteps, setExpandedSteps] = useState<ReadonlySet<number>>(
@@ -376,6 +401,7 @@ export function ToolTimeline({
           expanded={expandedSteps.has(0)}
           onToggle={() => toggleStep(0)}
           elapsed={isReasoningVerb(step.verb) ? elapsed : undefined}
+          onOpenFile={onOpenFile}
         />
       </Animated.View>
     );
@@ -453,6 +479,7 @@ export function ToolTimeline({
               active={streaming && index === shown.length - 1}
               expanded={expandedSteps.has(index)}
               onToggle={() => toggleStep(index)}
+              onOpenFile={onOpenFile}
             />
           ))}
         </Animated.View>
