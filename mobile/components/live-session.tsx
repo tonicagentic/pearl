@@ -42,7 +42,7 @@ import {
   liveSocketProtocols,
   liveVoiceStatusLabel,
   pcm16PeakLevel,
-  shouldUploadWhileSpeaking,
+  shouldUploadIosMicFrame,
   wavFromPcm16,
   type LiveTurn,
   type LiveVoiceMode,
@@ -139,12 +139,13 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
   const finishRef = useRef<() => void>(() => {});
   const suppressMicRef = useRef(false);
   const awaitPlaybackDrainRef = useRef(false);
-  /** iOS: Pearl is audible on the speaker; residual mic frames are gated. */
+  /** iOS: Pearl is audible on the speaker. Mic stays open; echo cancellation removes her. */
   const assistantAudibleRef = useRef(false);
   const modelAudioDoneRef = useRef(false);
   /** True after an audio-delta until native playbackDrained. */
   const playbackScheduledRef = useRef(false);
-  const clearedInputForTurnRef = useRef(false);
+  /** iOS: mute uplink only for the short flush after playback drains. */
+  const inPlaybackTailRef = useRef(false);
   const drainTailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const levelTickRef = useRef(0);
   const voiceRef = useRef<LiveVoice | null>(null);
@@ -161,6 +162,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       clearTimeout(drainTailTimerRef.current);
       drainTailTimerRef.current = null;
     }
+    inPlaybackTailRef.current = false;
   }, []);
 
   const releaseAssistantAudible = useCallback(() => {
@@ -168,7 +170,6 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     assistantAudibleRef.current = false;
     modelAudioDoneRef.current = false;
     playbackScheduledRef.current = false;
-    clearedInputForTurnRef.current = false;
     setMicLevel(0);
     if (!closedRef.current && !mutedRef.current) setVoiceMode("idle");
   }, [clearDrainTail]);
@@ -177,25 +178,22 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     if (closedRef.current) return;
     if (!assistantAudibleRef.current || !modelAudioDoneRef.current) return;
     if (playbackScheduledRef.current) return;
-    clearDrainTail();
+    if (drainTailTimerRef.current) return;
+    // Speaker flush after drain — mute uplink briefly, then reopen.
+    inPlaybackTailRef.current = true;
     drainTailTimerRef.current = setTimeout(() => {
       drainTailTimerRef.current = null;
       releaseAssistantAudible();
     }, LIVE_PLAYBACK_TAIL_MS);
-  }, [clearDrainTail, releaseAssistantAudible]);
+  }, [releaseAssistantAudible]);
 
   const markAssistantAudible = useCallback(() => {
     clearDrainTail();
-    const first = !assistantAudibleRef.current;
     assistantAudibleRef.current = true;
     modelAudioDoneRef.current = false;
     playbackScheduledRef.current = true;
-    if (first && !clearedInputForTurnRef.current) {
-      clearedInputForTurnRef.current = true;
-      sendEvent({ type: "input-audio-clear" });
-    }
     setVoiceMode((current) => (current === "muted" || current === "speaking" ? current : "speaking"));
-  }, [clearDrainTail, sendEvent]);
+  }, [clearDrainTail]);
 
   const noteModelAudioDone = useCallback(() => {
     if (!assistantAudibleRef.current) return;
@@ -372,8 +370,8 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
         suppressMicRef.current = false;
         setVoiceMode("listening");
       }
-      // iOS: while Pearl is audible, drop residual echo; upload only barge-in.
-      if (iosDuplex && assistantAudibleRef.current && !shouldUploadWhileSpeaking(level)) {
+      // iOS: mic stays open while Pearl talks; mute only the post-drain flush.
+      if (iosDuplex && !shouldUploadIosMicFrame({ inPlaybackTail: inPlaybackTailRef.current })) {
         return;
       }
       const audio = captureToPcm16Base64({
@@ -479,7 +477,6 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
               assistantAudibleRef.current = false;
               modelAudioDoneRef.current = false;
               playbackScheduledRef.current = false;
-              clearedInputForTurnRef.current = false;
               voiceRef.current?.stopPlayback();
               stopPlayback();
               suppressMicRef.current = false;

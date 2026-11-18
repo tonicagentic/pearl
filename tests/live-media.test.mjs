@@ -16,6 +16,7 @@ import {
   LIVE_CAPTURE_SAMPLE_RATE,
   LIVE_FRAME_MAX_BYTES,
   LIVE_PLAYBACK_CHUNK_BYTES,
+  LIVE_PLAYBACK_TAIL_MS,
   LIVE_SAMPLE_RATE,
   LIVE_SESSION_CONFIG,
   PcmPlaybackBuffer,
@@ -31,6 +32,7 @@ import {
   liveVoiceStatusLabel,
   pcm16PeakLevel,
   resampleLinear,
+  shouldUploadIosMicFrame,
   shouldUploadWhileSpeaking,
   wavFromPcm16,
 } from "../mobile/src/live-media.ts";
@@ -53,11 +55,20 @@ test("pcm peak level and voice labels support the speaking orb", () => {
   new DataView(loud.buffer).setInt16(0, 20000, true);
   new DataView(loud.buffer).setInt16(2, -20000, true);
   assert.ok(pcm16PeakLevel(loud) > LIVE_BARGE_IN_LEVEL);
+  // Android half-duplex still uses a peak barge-in while Pearl is playing.
   assert.equal(shouldUploadWhileSpeaking(0), false);
   assert.equal(shouldUploadWhileSpeaking(LIVE_BARGE_IN_LEVEL - 0.01), false);
   assert.equal(shouldUploadWhileSpeaking(LIVE_BARGE_IN_LEVEL), true);
   assert.equal(liveVoiceStatusLabel("speaking"), "Pearl is talking");
   assert.equal(liveVoiceStatusLabel("listening"), "You're talking");
+});
+
+test("iOS keeps the mic open while Pearl talks and mutes only the post-drain tail", () => {
+  assert.equal(LIVE_PLAYBACK_TAIL_MS, 400);
+  // Echo cancellation removes her voice; frames still upload during her turn.
+  assert.equal(shouldUploadIosMicFrame({ inPlaybackTail: false }), true);
+  // After playback drains, the speaker flush is dropped for LIVE_PLAYBACK_TAIL_MS.
+  assert.equal(shouldUploadIosMicFrame({ inPlaybackTail: true }), false);
 });
 
 test("live turns map to eve history without a Pearl reply turn", () => {

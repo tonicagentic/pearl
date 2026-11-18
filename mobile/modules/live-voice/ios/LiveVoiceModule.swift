@@ -55,38 +55,26 @@ final class LiveVoice: SharedObject {
     let player = AVAudioPlayerNode()
     let input = engine.inputNode
 
-    // Voice processing must be enabled while the engine is stopped, before
-    // connecting nodes, so both I/O nodes share the echo-cancellation path.
-    do {
-      try input.setVoiceProcessingEnabled(true)
-    } catch {
-      throw LiveVoiceException("The microphone did not start.")
-    }
-    input.isVoiceProcessingBypassed = false
-    if #available(iOS 17.0, *) {
-      input.voiceProcessingOtherAudioDuckingConfiguration =
-        AVAudioVoiceProcessingOtherAudioDuckingConfiguration(
-          enableAdvancedDucking: false,
-          duckingLevel: .min
-        )
-    }
-
+    // Attach playback first so Voice Processing I/O has an output bus to use
+    // as its echo reference. Enabling voice processing before the player is
+    // connected leaves the canceller with nothing to subtract.
     engine.prepare()
-    var format = input.outputFormat(forBus: 0)
-    if format.sampleRate == 0 || format.channelCount == 0 {
+    var hardwareRate = input.outputFormat(forBus: 0).sampleRate
+    if hardwareRate == 0 {
       try session.setActive(true)
       engine.prepare()
-      format = input.outputFormat(forBus: 0)
+      hardwareRate = input.outputFormat(forBus: 0).sampleRate
     }
-    guard format.sampleRate > 0, format.channelCount > 0 else {
-      throw LiveVoiceException("The microphone did not start.")
+    if hardwareRate == 0 {
+      hardwareRate = session.sampleRate
+    }
+    if hardwareRate == 0 {
+      hardwareRate = 48_000
     }
 
-    // Play and record in the voice-processing hardware format so the
-    // canceller compares the same signal the speaker is rendering.
     guard let monoHardware = AVAudioFormat(
       commonFormat: .pcmFormatFloat32,
-      sampleRate: format.sampleRate,
+      sampleRate: hardwareRate,
       channels: 1,
       interleaved: false
     ) else {
@@ -104,6 +92,34 @@ final class LiveVoice: SharedObject {
     engine.attach(player)
     engine.connect(player, to: engine.mainMixerNode, format: monoHardware)
     engine.connect(engine.mainMixerNode, to: engine.outputNode, format: monoHardware)
+
+    do {
+      try input.setVoiceProcessingEnabled(true)
+    } catch {
+      engine.detach(player)
+      throw LiveVoiceException("The microphone did not start.")
+    }
+    input.isVoiceProcessingBypassed = false
+    if #available(iOS 17.0, *) {
+      input.voiceProcessingOtherAudioDuckingConfiguration =
+        AVAudioVoiceProcessingOtherAudioDuckingConfiguration(
+          enableAdvancedDucking: false,
+          duckingLevel: .min
+        )
+    }
+
+    // Read the tap format after voice processing is on — it can change the
+    // input node's client format.
+    var format = input.outputFormat(forBus: 0)
+    if format.sampleRate == 0 || format.channelCount == 0 {
+      try session.setActive(true)
+      format = input.outputFormat(forBus: 0)
+    }
+    guard format.sampleRate > 0, format.channelCount > 0 else {
+      try? input.setVoiceProcessingEnabled(false)
+      engine.detach(player)
+      throw LiveVoiceException("The microphone did not start.")
+    }
 
     let bufferSize = AVAudioFrameCount(max(256.0, format.sampleRate * 0.02))
     input.installTap(onBus: 0, bufferSize: bufferSize, format: format) { [weak self] buffer, _ in
@@ -139,6 +155,8 @@ final class LiveVoice: SharedObject {
     } catch {
       input.removeTap(onBus: 0)
       tapInstalled = false
+      try? input.setVoiceProcessingEnabled(false)
+      engine.detach(player)
       throw LiveVoiceException("The microphone did not start.")
     }
     player.play()
@@ -147,6 +165,7 @@ final class LiveVoice: SharedObject {
       input.removeTap(onBus: 0)
       tapInstalled = false
       player.stop()
+      try? input.setVoiceProcessingEnabled(false)
       engine.stop()
       throw LiveVoiceException("The microphone did not start.")
     }
@@ -173,6 +192,11 @@ final class LiveVoice: SharedObject {
       tapInstalled = false
     }
     player?.stop()
+    // Disable voice processing before stopping the engine — reverse order
+    // can crash AURemoteIO teardown on iOS 18+.
+    if let engine {
+      try? engine.inputNode.setVoiceProcessingEnabled(false)
+    }
     engine?.stop()
     engine = nil
     player = nil
@@ -327,6 +351,9 @@ final class LiveVoice: SharedObject {
       engine?.inputNode.removeTap(onBus: 0)
     }
     player?.stop()
+    if let engine {
+      try? engine.inputNode.setVoiceProcessingEnabled(false)
+    }
     engine?.stop()
   }
 }

@@ -38,16 +38,30 @@ export const LIVE_SESSION_CONFIG = {
 } as const;
 
 /**
- * Keep the uplink gate closed after the model finishes while the speaker
- * drains the last buffers (~200 ms at the hardware rate).
+ * After playback drains, keep the uplink closed briefly so the speaker flush
+ * is not transcribed as the user. Talking over Pearl during her turn is not
+ * gated — Apple's voice processing cancels her voice while the mic stays open.
  */
-export const LIVE_PLAYBACK_TAIL_MS = 200;
+export const LIVE_PLAYBACK_TAIL_MS = 400;
 
 /**
- * Whether a mic frame should be uploaded while the assistant is audible.
- * Silent residual echo is dropped; energy at or above the barge-in level is
- * a real interrupt and goes to the server.
+ * Local barge-in threshold. Android uses it to stop expo-audio playback while
+ * Pearl is speaking (half-duplex; no shared echo canceller).
  */
+export const LIVE_BARGE_IN_LEVEL = 0.14;
+
+/**
+ * Whether an iOS mic frame should be uploaded.
+ * While Pearl is audible the mic stays open (echo cancellation removes her).
+ * During the short post-playback tail the uplink stays closed.
+ */
+export function shouldUploadIosMicFrame(input: {
+  readonly inPlaybackTail: boolean;
+}): boolean {
+  return !input.inPlaybackTail;
+}
+
+/** Android: whether a loud mic frame should interrupt local playback. */
 export function shouldUploadWhileSpeaking(level: number): boolean {
   return level >= LIVE_BARGE_IN_LEVEL;
 }
@@ -64,13 +78,6 @@ export function pcm16PeakLevel(pcm: Uint8Array): number {
   }
   return Math.min(1, peak);
 }
-
-/**
- * Local barge-in threshold. Android uses it to stop expo-audio playback.
- * iOS uses it to decide whether a mic frame is residual echo (drop) or a
- * real interrupt (upload; server speech-started stops the player).
- */
-export const LIVE_BARGE_IN_LEVEL = 0.14;
 
 export type LiveVoiceMode =
   | "connecting"
