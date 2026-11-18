@@ -1,11 +1,11 @@
 import { getEffectiveAppUrl } from "@/lib/auth-url";
 
 /**
- * Native clients (iOS URLSession via expo/fetch) cannot set Origin; the
- * platform sends the literal string "null" or omits the header. better-auth's
- * CSRF check rejects that with MISSING_OR_NULL_ORIGIN whenever cookies are
- * present — and URLSession routinely attaches the cookie jar on repeat
- * sign-ins.
+ * Native clients (iOS URLSession via expo/fetch) cannot set a browser Origin;
+ * the platform sends the literal string "null", omits the header, or — in
+ * Expo Go — sends a custom-scheme origin like `exp://192.168.x.x:8081`.
+ * better-auth's CSRF check rejects those with MISSING_OR_NULL_ORIGIN /
+ * INVALID_ORIGIN whenever cookies are present.
  *
  * Stamp the canonical app origin when Origin/Referer are opaque and there are
  * no Fetch Metadata headers (browsers always send Sec-Fetch-* on credentialed
@@ -23,12 +23,17 @@ export function withTrustedNativeOrigin(request: Request): Request {
   }
 
   const originHeader = request.headers.get("origin");
-  if (originHeader && originHeader !== "null") {
+  if (originHeader && !isOpaqueNativeOrigin(originHeader)) {
     return request;
   }
 
   const referer = request.headers.get("referer");
-  if (referer && referer.trim() && referer !== "null") {
+  if (
+    referer &&
+    referer.trim() &&
+    referer !== "null" &&
+    !isOpaqueNativeOrigin(referer)
+  ) {
     return request;
   }
 
@@ -45,6 +50,15 @@ export function withTrustedNativeOrigin(request: Request): Request {
     redirect: request.redirect,
     signal: request.signal,
   } as RequestInit);
+}
+
+/** True for missing/"null"/custom-scheme origins (Expo Go, companion apps). */
+export function isOpaqueNativeOrigin(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "null") return true;
+  // exp://, exp+slug://, pearlbody://, pearlmoney://, …
+  if (!/^https?:\/\//i.test(trimmed)) return true;
+  return false;
 }
 
 /** True when the client looks like a browser (Fetch Metadata present). */

@@ -97,6 +97,37 @@ describe("withTrustedNativeOrigin", () => {
     assert.equal(next.headers.get("origin"), "https://pearl.tonicagentic.com");
   });
 
+  it("stamps Expo Go exp:// origins to the canonical app origin", () => {
+    process.env.BETTER_AUTH_URL = "https://pearl.tonicagentic.com";
+    const request = new Request(AUTH_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "exp://10.0.0.78:8083",
+      },
+      body: "{}",
+    });
+
+    const next = withTrustedNativeOrigin(request);
+    assert.notEqual(next, request);
+    assert.equal(next.headers.get("origin"), "https://pearl.tonicagentic.com");
+  });
+
+  it("stamps companion-app custom-scheme origins", () => {
+    process.env.BETTER_AUTH_URL = "https://pearl.tonicagentic.com";
+    const request = new Request(AUTH_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "pearlbody://",
+      },
+      body: "{}",
+    });
+
+    const next = withTrustedNativeOrigin(request);
+    assert.equal(next.headers.get("origin"), "https://pearl.tonicagentic.com");
+  });
+
   it("skips GET requests", () => {
     process.env.BETTER_AUTH_URL = "https://pearl.tonicagentic.com";
     const request = new Request("https://example.test/api/auth/get-session", {
