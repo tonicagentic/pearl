@@ -4,6 +4,13 @@ import { defineRegistry } from "@json-render/react";
 import { chatCatalog } from "@/lib/json-render/catalog";
 import { comparisonBarShares } from "@/lib/json-render/comparison-bar";
 import {
+  CHORD_LIBRARY,
+  findChordByName,
+  initialLibraryIndex,
+  mergeVoicings,
+  type ChordVoicing,
+} from "@/lib/json-render/chord-library";
+import {
   clampPin,
   circleOfFifthsPositions,
   guitarChordDots,
@@ -14,7 +21,15 @@ import {
 import { playSpeakable } from "@/lib/json-render/speak";
 import { cn } from "@/lib/utils";
 import { Button as UiButton } from "@/components/ui/button";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+
+/** Light fretboard panel so dots stay readable in dark mode. */
+const CHORD_BOARD = {
+  fill: "#E8E4DC",
+  line: "#3A3A3A",
+  dot: "#1A1A1A",
+  label: "#1A1A1A",
+} as const;
 
 const gapClass = {
   sm: "gap-2",
@@ -39,17 +54,17 @@ function httpsSrc(src: string | null | undefined): string | null {
   }
 }
 
-function GuitarChordSvg({
+function GuitarChordDiagram({
   name,
   frets,
   baseFret,
 }: {
   name: string;
-  frets: number[];
+  frets: readonly number[];
   baseFret: number | null;
 }) {
   const { dots, baseFret: windowBase } = guitarChordDots(frets, baseFret);
-  const width = 140;
+  const width = 148;
   const height = 168;
   const left = 28;
   const top = 36;
@@ -57,88 +72,205 @@ function GuitarChordSvg({
   const boardH = 100;
   const stringGap = boardW / (GUITAR_STRING_COUNT - 1);
   const fretGap = boardH / GUITAR_FRET_COUNT;
+  const pad = 8;
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="text-foreground text-[15px] font-medium">{name}</div>
-      <svg
-        width={width}
-        height={height}
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label={`${name} guitar chord`}
-        className="text-foreground"
-      >
-        {windowBase > 1 ? (
-          <text x={10} y={top + fretGap * 0.7} fill="currentColor" fontSize="11" fontWeight="600">
-            {windowBase}
-          </text>
-        ) : null}
-        {Array.from({ length: GUITAR_FRET_COUNT + 1 }, (_, fret) => (
-          <line
-            key={`fret-${fret}`}
-            x1={left}
-            y1={top + fret * fretGap}
-            x2={left + boardW}
-            y2={top + fret * fretGap}
-            stroke="currentColor"
-            strokeWidth={fret === 0 && windowBase === 1 ? 3 : 1.25}
-            opacity={0.85}
-          />
-        ))}
-        {Array.from({ length: GUITAR_STRING_COUNT }, (_, stringIndex) => (
-          <line
-            key={`string-${stringIndex}`}
-            x1={left + stringIndex * stringGap}
-            y1={top}
-            x2={left + stringIndex * stringGap}
-            y2={top + boardH}
-            stroke="currentColor"
-            strokeWidth={1}
-            opacity={0.7}
-          />
-        ))}
-        {dots.map((dot) => {
-          const x = left + dot.stringIndex * stringGap;
-          if (dot.muted) {
-            return (
-              <text
-                key={`m-${dot.stringIndex}`}
-                x={x}
-                y={top - 12}
-                fill="currentColor"
-                fontSize="12"
-                textAnchor="middle"
-              >
-                ×
-              </text>
-            );
-          }
-          if (dot.open) {
-            return (
-              <circle
-                key={`o-${dot.stringIndex}`}
-                cx={x}
-                cy={top - 14}
-                r={5}
-                stroke="currentColor"
-                strokeWidth={1.5}
-                fill="none"
-              />
-            );
-          }
-          if (dot.fret < 1 || dot.fret > GUITAR_FRET_COUNT) return null;
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label={`${name} guitar chord`}
+    >
+      <rect
+        x={left - pad}
+        y={top - pad}
+        width={boardW + pad * 2}
+        height={boardH + pad * 2}
+        rx={8}
+        fill={CHORD_BOARD.fill}
+      />
+      {windowBase > 1 ? (
+        <text
+          x={12}
+          y={top + fretGap * 0.7}
+          fill={CHORD_BOARD.label}
+          fontSize="11"
+          fontWeight="700"
+        >
+          {windowBase}
+        </text>
+      ) : null}
+      {Array.from({ length: GUITAR_FRET_COUNT + 1 }, (_, fret) => (
+        <line
+          key={`fret-${fret}`}
+          x1={left}
+          y1={top + fret * fretGap}
+          x2={left + boardW}
+          y2={top + fret * fretGap}
+          stroke={CHORD_BOARD.line}
+          strokeWidth={fret === 0 && windowBase === 1 ? 3.5 : 1.4}
+        />
+      ))}
+      {Array.from({ length: GUITAR_STRING_COUNT }, (_, stringIndex) => (
+        <line
+          key={`string-${stringIndex}`}
+          x1={left + stringIndex * stringGap}
+          y1={top}
+          x2={left + stringIndex * stringGap}
+          y2={top + boardH}
+          stroke={CHORD_BOARD.line}
+          strokeWidth={1.1}
+        />
+      ))}
+      {dots.map((dot) => {
+        const x = left + dot.stringIndex * stringGap;
+        if (dot.muted) {
+          return (
+            <text
+              key={`m-${dot.stringIndex}`}
+              x={x}
+              y={top - 12}
+              fill={CHORD_BOARD.label}
+              fontSize="13"
+              fontWeight="700"
+              textAnchor="middle"
+            >
+              ×
+            </text>
+          );
+        }
+        if (dot.open) {
           return (
             <circle
-              key={`d-${dot.stringIndex}`}
+              key={`o-${dot.stringIndex}`}
               cx={x}
-              cy={top + (dot.fret - 0.5) * fretGap}
-              r={7}
-              fill="currentColor"
+              cy={top - 14}
+              r={5}
+              stroke={CHORD_BOARD.line}
+              strokeWidth={1.75}
+              fill="none"
             />
           );
+        }
+        if (dot.fret < 1 || dot.fret > GUITAR_FRET_COUNT) return null;
+        return (
+          <circle
+            key={`d-${dot.stringIndex}`}
+            cx={x}
+            cy={top + (dot.fret - 0.5) * fretGap}
+            r={7}
+            fill={CHORD_BOARD.dot}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+function GuitarChordBrowser({
+  name,
+  frets,
+  baseFret,
+  agentVoicings,
+}: {
+  name: string;
+  frets: number[];
+  baseFret: number | null;
+  agentVoicings: ChordVoicing[] | null;
+}) {
+  const [chordIndex, setChordIndex] = useState(() =>
+    initialLibraryIndex(name),
+  );
+  const [voicingIndex, setVoicingIndex] = useState(0);
+
+  const selected = CHORD_LIBRARY[chordIndex] ?? CHORD_LIBRARY[0]!;
+  const matchedLibrary = findChordByName(name);
+  const usingAgentSeed =
+    matchedLibrary != null && selected.id === matchedLibrary.id;
+
+  const voicings = useMemo(() => {
+    if (usingAgentSeed) {
+      return mergeVoicings(matchedLibrary, {
+        name,
+        frets,
+        baseFret,
+        voicings: agentVoicings,
+      });
+    }
+    return selected.voicings;
+  }, [
+    agentVoicings,
+    baseFret,
+    frets,
+    matchedLibrary,
+    name,
+    selected.voicings,
+    usingAgentSeed,
+  ]);
+
+  const activeVoicing =
+    voicings[Math.min(voicingIndex, voicings.length - 1)] ?? voicings[0]!;
+
+  const selectChord = (index: number) => {
+    setChordIndex(index);
+    setVoicingIndex(0);
+  };
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="text-foreground text-[15px] font-medium">
+        {selected.name}
+      </div>
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+        {CHORD_LIBRARY.map((chord, index) => {
+          const active = index === chordIndex;
+          return (
+            <button
+              key={chord.id}
+              type="button"
+              aria-pressed={active}
+              onClick={() => selectChord(index)}
+              className={cn(
+                "shrink-0 rounded-full border px-2.5 py-1 text-[12px] font-medium",
+                active
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border/70 bg-muted/40 text-muted-foreground",
+              )}
+            >
+              {chord.name.replace(" major", "").replace(" minor", "m")}
+            </button>
+          );
         })}
-      </svg>
+      </div>
+      {voicings.length > 1 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {voicings.map((voicing, index) => {
+            const active = index === voicingIndex;
+            return (
+              <button
+                key={`${voicing.label}-${index}`}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setVoicingIndex(index)}
+                className={cn(
+                  "rounded-lg border px-2.5 py-1 text-[12px] font-medium",
+                  active
+                    ? "border-foreground/40 bg-muted text-foreground"
+                    : "border-border/50 text-muted-foreground",
+                )}
+              >
+                {voicing.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      <GuitarChordDiagram
+        name={selected.name}
+        frets={activeVoicing.frets}
+        baseFret={activeVoicing.baseFret}
+      />
     </div>
   );
 }
@@ -626,10 +758,11 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
       );
     },
     GuitarChord: ({ props }) => (
-      <GuitarChordSvg
+      <GuitarChordBrowser
         name={props.name}
         frets={props.frets}
         baseFret={props.baseFret}
+        agentVoicings={props.voicings}
       />
     ),
     TheoryBoard: ({ props }) => (

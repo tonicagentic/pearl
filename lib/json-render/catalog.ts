@@ -205,12 +205,22 @@ export const chatCatalog = defineCatalog(schema, {
     GuitarChord: {
       props: z.object({
         name: z.string(),
-        /** Six strings high-E → low-E, or low-E → high-E — always length 6. -1 muted, 0 open, 1+ fret. */
+        /** Six strings low-E → high-e. -1 muted, 0 open, 1+ fret. Starting/default voicing. */
         frets: z.array(z.number()).length(6),
         baseFret: z.number().nullable(),
+        /** Optional extra fingerings; the UI also browses a built-in chord library. */
+        voicings: z
+          .array(
+            z.object({
+              label: z.string(),
+              frets: z.array(z.number()).length(6),
+              baseFret: z.number().nullable(),
+            }),
+          )
+          .nullable(),
       }),
       description:
-        "Guitar chord diagram. frets is six numbers (low E to high e): -1 muted, 0 open, positive fret number.",
+        "Interactive guitar chord diagram. frets is six numbers (low E to high e): -1 muted, 0 open, positive fret. Emit the best default fingering; UI can browse voicings and a shared library.",
     },
     TheoryBoard: {
       props: z.object({

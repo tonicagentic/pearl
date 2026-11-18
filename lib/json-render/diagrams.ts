@@ -25,12 +25,19 @@ export function guitarChordDots(
   while (values.length < GUITAR_STRING_COUNT) values.push(-1);
 
   const positive = values.filter((f) => f > 0);
+  const hasOpen = values.some((f) => f === 0);
+  const maxPositive = positive.length > 0 ? Math.max(...positive) : 0;
+  const minPositive = positive.length > 0 ? Math.min(...positive) : 1;
+  // Open-position shapes that fit frets 1–4 keep the nut (base 1).
+  const openFitsWindow = hasOpen && maxPositive <= GUITAR_FRET_COUNT;
   const inferredBase =
     baseFret != null && Number.isFinite(baseFret) && baseFret >= 1
       ? Math.floor(baseFret)
-      : positive.length > 0
-        ? Math.max(1, Math.min(...positive))
-        : 1;
+      : openFitsWindow
+        ? 1
+        : positive.length > 0
+          ? Math.max(1, minPositive)
+          : 1;
 
   const dots: ChordDot[] = values.map((fret, stringIndex) => {
     if (fret < 0) {

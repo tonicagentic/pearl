@@ -1,6 +1,13 @@
 import type { ComponentRegistry } from "@json-render/react-native";
 import { comparisonBarShares } from "../../../lib/json-render/comparison-bar";
 import {
+  CHORD_LIBRARY,
+  findChordByName,
+  initialLibraryIndex,
+  mergeVoicings,
+  type ChordVoicing,
+} from "../../../lib/json-render/chord-library";
+import {
   clampPin,
   circleOfFifthsPositions,
   guitarChordDots,
@@ -20,8 +27,21 @@ import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
 import { createAudioPlayer, useAudioPlayer } from "expo-audio";
 import { Volume2Icon } from "lucide-react-native";
 import { Pressable, View, Image as RNImage, ScrollView } from "react-native";
-import Svg, { Circle, Line, Text as SvgText } from "react-native-svg";
-import { useState, type ReactNode } from "react";
+import Svg, {
+  Circle,
+  Line,
+  Rect,
+  Text as SvgText,
+} from "react-native-svg";
+import { useMemo, useState, type ReactNode } from "react";
+
+/** Light fretboard panel so dots stay readable in dark mode. */
+const CHORD_BOARD = {
+  fill: "#E8E4DC",
+  line: "#3A3A3A",
+  dot: "#1A1A1A",
+  label: "#1A1A1A",
+} as const;
 
 function asNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -81,17 +101,17 @@ function asObjectArray(value: unknown): Record<string, unknown>[] {
   );
 }
 
-function GuitarChordSvg({
+function GuitarChordDiagram({
   name,
   frets,
   baseFret,
 }: {
   name: string;
-  frets: number[];
+  frets: readonly number[];
   baseFret: number | null;
 }) {
   const { dots, baseFret: windowBase } = guitarChordDots(frets, baseFret);
-  const width = 140;
+  const width = 148;
   const height = 168;
   const left = 28;
   const top = 36;
@@ -99,94 +119,217 @@ function GuitarChordSvg({
   const boardH = 100;
   const stringGap = boardW / (GUITAR_STRING_COUNT - 1);
   const fretGap = boardH / GUITAR_FRET_COUNT;
+  const pad = 8;
 
   return (
-    <View className="self-start flex-col gap-1">
-      <Text variant="body" weight="medium">
-        {name}
-      </Text>
-      <Svg
-        width={width}
-        height={height}
-        viewBox={`0 0 ${width} ${height}`}
-        accessibilityLabel={`${name} guitar chord`}
-      >
-        {windowBase > 1 ? (
-          <SvgText
-            x={10}
-            y={top + fretGap * 0.7}
-            fill="currentColor"
-            fontSize="11"
-            fontWeight="600"
-          >
-            {windowBase}
-          </SvgText>
-        ) : null}
-        {Array.from({ length: GUITAR_FRET_COUNT + 1 }, (_, fret) => (
-          <Line
-            key={`fret-${fret}`}
-            x1={left}
-            y1={top + fret * fretGap}
-            x2={left + boardW}
-            y2={top + fret * fretGap}
-            stroke="currentColor"
-            strokeWidth={fret === 0 && windowBase === 1 ? 3 : 1.25}
-            opacity={0.85}
-          />
-        ))}
-        {Array.from({ length: GUITAR_STRING_COUNT }, (_, stringIndex) => (
-          <Line
-            key={`string-${stringIndex}`}
-            x1={left + stringIndex * stringGap}
-            y1={top}
-            x2={left + stringIndex * stringGap}
-            y2={top + boardH}
-            stroke="currentColor"
-            strokeWidth={1}
-            opacity={0.7}
-          />
-        ))}
-        {dots.map((dot) => {
-          const x = left + dot.stringIndex * stringGap;
-          if (dot.muted) {
-            return (
-              <SvgText
-                key={`m-${dot.stringIndex}`}
-                x={x}
-                y={top - 12}
-                fill="currentColor"
-                fontSize="12"
-                textAnchor="middle"
-              >
-                ×
-              </SvgText>
-            );
-          }
-          if (dot.open) {
-            return (
-              <Circle
-                key={`o-${dot.stringIndex}`}
-                cx={x}
-                cy={top - 14}
-                r={5}
-                stroke="currentColor"
-                strokeWidth={1.5}
-                fill="none"
-              />
-            );
-          }
-          if (dot.fret < 1 || dot.fret > GUITAR_FRET_COUNT) return null;
+    <Svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      accessibilityLabel={`${name} guitar chord`}
+    >
+      <Rect
+        x={left - pad}
+        y={top - pad}
+        width={boardW + pad * 2}
+        height={boardH + pad * 2}
+        rx={8}
+        fill={CHORD_BOARD.fill}
+      />
+      {windowBase > 1 ? (
+        <SvgText
+          x={12}
+          y={top + fretGap * 0.7}
+          fill={CHORD_BOARD.label}
+          fontSize="11"
+          fontWeight="700"
+        >
+          {windowBase}
+        </SvgText>
+      ) : null}
+      {Array.from({ length: GUITAR_FRET_COUNT + 1 }, (_, fret) => (
+        <Line
+          key={`fret-${fret}`}
+          x1={left}
+          y1={top + fret * fretGap}
+          x2={left + boardW}
+          y2={top + fret * fretGap}
+          stroke={CHORD_BOARD.line}
+          strokeWidth={fret === 0 && windowBase === 1 ? 3.5 : 1.4}
+        />
+      ))}
+      {Array.from({ length: GUITAR_STRING_COUNT }, (_, stringIndex) => (
+        <Line
+          key={`string-${stringIndex}`}
+          x1={left + stringIndex * stringGap}
+          y1={top}
+          x2={left + stringIndex * stringGap}
+          y2={top + boardH}
+          stroke={CHORD_BOARD.line}
+          strokeWidth={1.1}
+        />
+      ))}
+      {dots.map((dot) => {
+        const x = left + dot.stringIndex * stringGap;
+        if (dot.muted) {
+          return (
+            <SvgText
+              key={`m-${dot.stringIndex}`}
+              x={x}
+              y={top - 12}
+              fill={CHORD_BOARD.label}
+              fontSize="13"
+              fontWeight="700"
+              textAnchor="middle"
+            >
+              ×
+            </SvgText>
+          );
+        }
+        if (dot.open) {
           return (
             <Circle
-              key={`d-${dot.stringIndex}`}
+              key={`o-${dot.stringIndex}`}
               cx={x}
-              cy={top + (dot.fret - 0.5) * fretGap}
-              r={7}
-              fill="currentColor"
+              cy={top - 14}
+              r={5}
+              stroke={CHORD_BOARD.line}
+              strokeWidth={1.75}
+              fill="none"
             />
           );
+        }
+        if (dot.fret < 1 || dot.fret > GUITAR_FRET_COUNT) return null;
+        return (
+          <Circle
+            key={`d-${dot.stringIndex}`}
+            cx={x}
+            cy={top + (dot.fret - 0.5) * fretGap}
+            r={7}
+            fill={CHORD_BOARD.dot}
+          />
+        );
+      })}
+    </Svg>
+  );
+}
+
+function GuitarChordBrowser({
+  name,
+  frets,
+  baseFret,
+  agentVoicings,
+}: {
+  name: string;
+  frets: number[];
+  baseFret: number | null;
+  agentVoicings: ChordVoicing[] | null;
+}) {
+  const [chordIndex, setChordIndex] = useState(() =>
+    initialLibraryIndex(name),
+  );
+  const [voicingIndex, setVoicingIndex] = useState(0);
+
+  const selected = CHORD_LIBRARY[chordIndex] ?? CHORD_LIBRARY[0]!;
+  const matchedLibrary = findChordByName(name);
+  const usingAgentSeed =
+    matchedLibrary != null && selected.id === matchedLibrary.id;
+
+  const voicings = useMemo(() => {
+    if (usingAgentSeed) {
+      return mergeVoicings(matchedLibrary, {
+        name,
+        frets,
+        baseFret,
+        voicings: agentVoicings,
+      });
+    }
+    return selected.voicings;
+  }, [
+    agentVoicings,
+    baseFret,
+    frets,
+    matchedLibrary,
+    name,
+    selected.voicings,
+    usingAgentSeed,
+  ]);
+
+  const activeVoicing =
+    voicings[Math.min(voicingIndex, voicings.length - 1)] ?? voicings[0]!;
+
+  const selectChord = (index: number) => {
+    setChordIndex(index);
+    setVoicingIndex(0);
+  };
+
+  return (
+    <View className="flex-col gap-2.5">
+      <Text variant="body" weight="medium">
+        {selected.name}
+      </Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerClassName="gap-1.5"
+      >
+        {CHORD_LIBRARY.map((chord, index) => {
+          const active = index === chordIndex;
+          return (
+            <Pressable
+              key={chord.id}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              onPress={() => selectChord(index)}
+              className={cn(
+                "rounded-full border px-2.5 py-1",
+                active
+                  ? "border-foreground bg-foreground"
+                  : "border-border/70 bg-muted/40",
+              )}
+            >
+              <Text
+                variant="caption"
+                weight="medium"
+                className={active ? "text-background" : undefined}
+                tone={active ? "default" : "muted"}
+              >
+                {chord.name.replace(" major", "").replace(" minor", "m")}
+              </Text>
+            </Pressable>
+          );
         })}
-      </Svg>
+      </ScrollView>
+      {voicings.length > 1 ? (
+        <View className="flex-row flex-wrap gap-1.5">
+          {voicings.map((voicing, index) => {
+            const active = index === voicingIndex;
+            return (
+              <Pressable
+                key={`${voicing.label}-${index}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                onPress={() => setVoicingIndex(index)}
+                className={cn(
+                  "rounded-lg border px-2.5 py-1",
+                  active
+                    ? "border-foreground/40 bg-muted"
+                    : "border-border/50 bg-transparent",
+                )}
+              >
+                <Text variant="caption" weight="medium">
+                  {voicing.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+      <GuitarChordDiagram
+        name={selected.name}
+        frets={[...activeVoicing.frets]}
+        baseFret={activeVoicing.baseFret}
+      />
     </View>
   );
 }
@@ -812,11 +955,27 @@ export const chatRegistry: ComponentRegistry = {
       element.props.baseFret == null
         ? null
         : asNumber(element.props.baseFret);
+    const agentVoicings = Array.isArray(element.props.voicings)
+      ? (element.props.voicings as unknown[])
+          .filter(
+            (item): item is Record<string, unknown> =>
+              item != null && typeof item === "object",
+          )
+          .map((item) => ({
+            label: asString(item.label) || "Voicing",
+            frets: (Array.isArray(item.frets)
+              ? item.frets.map(asNumber)
+              : frets) as ChordVoicing["frets"],
+            baseFret:
+              item.baseFret == null ? null : asNumber(item.baseFret),
+          }))
+      : null;
     return (
-      <GuitarChordSvg
+      <GuitarChordBrowser
         name={asString(element.props.name)}
         frets={frets}
         baseFret={baseFret != null && baseFret > 0 ? baseFret : null}
+        agentVoicings={agentVoicings}
       />
     );
   },

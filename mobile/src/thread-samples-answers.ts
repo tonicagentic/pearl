@@ -401,7 +401,14 @@ export const ANSWER_THREAD_SAMPLES: readonly AnswerThreadSample[] = [
         props: {
           name: "G major",
           frets: [3, 2, 0, 0, 0, 3],
-          baseFret: null,
+          baseFret: 1,
+          voicings: [
+            {
+              label: "Open alt",
+              frets: [3, 2, 0, 0, 3, 3],
+              baseFret: 1,
+            },
+          ],
         },
       },
     },
