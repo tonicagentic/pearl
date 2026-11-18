@@ -2,9 +2,11 @@ import type { WaitingAction } from "@/components/assistant-ui/elements/waiting-a
 import type { ThreadMessageLike } from "@assistant-ui/react-native";
 import type { ReadonlyJSONObject } from "assistant-stream/utils";
 
+import { ANSWER_THREAD_SAMPLES } from "./thread-samples-answers";
 import { IMPORTED_THREAD_SAMPLES } from "./thread-samples-imported";
 
 export type ThreadSampleId =
+  | "empty"
   | "approve"
   | "choose"
   | "ask"
@@ -21,7 +23,23 @@ export type ThreadSampleId =
   | "prod-cacio"
   | "prod-coder"
   | "prod-logo"
-  | "prod-kaiser";
+  | "prod-kaiser"
+  | "answer-web"
+  | "answer-location"
+  | "answer-places"
+  | "answer-products"
+  | "answer-brief"
+  | "answer-entry"
+  | "answer-pronounce"
+  | "answer-phrase"
+  | "answer-chord"
+  | "answer-theory"
+  | "answer-votes"
+  | "answer-table"
+  | "answer-explain"
+  | "answer-recipe";
+
+export type ThreadSampleGroup = "default" | "answer";
 
 type SampleWaitingAction = Exclude<
   WaitingAction,
@@ -36,6 +54,8 @@ type SampleWaitingAction = Exclude<
 export type ThreadSample = {
   readonly id: ThreadSampleId;
   readonly label: string;
+  /** Inspector pill row; answer samples sit on a second scroller. */
+  readonly group?: ThreadSampleGroup;
   readonly messages: readonly ThreadMessageLike[];
   /** Fixture events for Worked-for duration; never written to the chat store. */
   readonly durationEvents: readonly unknown[];
@@ -702,7 +722,16 @@ const fileCanvas: ThreadSample = {
   ],
 };
 
+/** Blank thread for new-chat composer / keyboard seed checks. */
+const empty: ThreadSample = {
+  id: "empty",
+  label: "Empty",
+  durationEvents: [],
+  messages: [],
+};
+
 export const THREAD_SAMPLES: readonly ThreadSample[] = [
+  empty,
   approve,
   choose,
   ask,
@@ -714,7 +743,14 @@ export const THREAD_SAMPLES: readonly ThreadSample[] = [
   imagine,
   fileCanvas,
   ...IMPORTED_THREAD_SAMPLES,
+  ...(ANSWER_THREAD_SAMPLES as readonly ThreadSample[]),
 ];
+
+export function threadSamplesForGroup(
+  group: ThreadSampleGroup = "default",
+): readonly ThreadSample[] {
+  return THREAD_SAMPLES.filter((sample) => (sample.group ?? "default") === group);
+}
 
 export function threadSample(id: ThreadSampleId): ThreadSample {
   return THREAD_SAMPLES.find((sample) => sample.id === id) ?? approve;

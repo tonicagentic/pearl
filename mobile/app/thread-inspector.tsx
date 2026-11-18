@@ -3,22 +3,25 @@ import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, router } from "expo-router";
 import {
   AssistantRuntimeProvider,
+  useAui,
   useExternalStoreRuntime,
+  type AppendMessage,
+  type ThreadMessageLike,
   type ToolCallMessagePartProps,
 } from "@assistant-ui/react-native";
 import { ChevronLeftIcon } from "lucide-react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback";
 import { TimelineDurationEventsProvider } from "@/components/assistant-ui/elements/session-timeline";
 import { ConversationProvider } from "@/src/conversation-context";
+import { focusComposerInput } from "@/src/composer-input-focus";
 import { toThreadMessages } from "@/src/eve-transport";
 import { Icon } from "@/components/ui/icon";
 import {
-  THREAD_SAMPLES,
   threadSample,
+  threadSamplesForGroup,
   type ThreadSampleId,
 } from "@/src/thread-samples";
 import {
@@ -33,6 +36,14 @@ import {
 type Mode = "samples" | "replay";
 type WidthMode = "phone" | "full";
 type Speed = 0.5 | 1 | 2;
+
+const MULTILINE_DRAFT = [
+  "Line one — collapsed pill should grow.",
+  "Line two with a bit more text for the field.",
+  "Line three keeps the same TextInput mounted.",
+  "",
+  "Final paragraph to push toward the expanded max height while typing stays smooth.",
+].join("\n");
 
 function leaveInspector() {
   if (router.canGoBack()) router.back();
@@ -78,10 +89,38 @@ function Pill({
   );
 }
 
+/** Seeds the live composer after mount (Multiline pill). */
+function ComposerDraftSeeder({
+  draft,
+  seedKey,
+}: {
+  readonly draft: string | null;
+  readonly seedKey: number;
+}) {
+  const aui = useAui();
+  useEffect(() => {
+    if (draft == null || seedKey === 0) return;
+    aui.composer.setText(draft);
+    if (Platform.OS !== "ios") return;
+    // Focus so the keyboard morph runs and content-size can measure full width.
+    const timer = setTimeout(() => focusComposerInput(), 60);
+    return () => clearTimeout(timer);
+  }, [aui, draft, seedKey]);
+  return null;
+}
+
+function appendMessageToLike(message: AppendMessage): ThreadMessageLike {
+  return {
+    role: "user",
+    content: message.content,
+  };
+}
+
 /**
  * Dev-only React Native Thread Inspector (runs on both Expo Web for DOM/CSS
  * DevTools inspection and iOS/Android simulators). Combines static component
  * samples (bubbles, timeline, markdown, HITL) and live v27 stream replay.
+ * The composer is interactive in Samples mode for iOS keyboard/layout work.
  */
 export default function ThreadInspectorScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
@@ -95,8 +134,15 @@ export default function ThreadInspectorScreen() {
   const [widthMode, setWidthMode] = useState<WidthMode>(
     Platform.OS === "web" ? "phone" : "full",
   );
-  const [sampleId, setSampleId] = useState<ThreadSampleId>("gallery");
+  const [sampleId, setSampleId] = useState<ThreadSampleId>("empty");
   const sample = threadSample(sampleId);
+
+  const [localMessages, setLocalMessages] = useState<ThreadMessageLike[]>(() => [
+    ...sample.messages,
+  ]);
+  const [forceRunning, setForceRunning] = useState(false);
+  const [draftSeed, setDraftSeed] = useState<string | null>(null);
+  const [draftSeedKey, setDraftSeedKey] = useState(0);
 
   const [scenarioId, setScenarioId] =
     useState<StreamPlayScenarioId>("reasoning-tools");
@@ -106,6 +152,15 @@ export default function ThreadInspectorScreen() {
   const [speed, setSpeed] = useState<Speed>(1);
   const [replayEpochMs, setReplayEpochMs] = useState<number>(() => Date.now());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const selectSample = useCallback((id: ThreadSampleId) => {
+    const next = threadSample(id);
+    setSampleId(id);
+    setLocalMessages([...next.messages]);
+    setForceRunning(false);
+    setDraftSeed(null);
+    setDraftSeedKey(0);
+  }, []);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current != null) {
@@ -153,25 +208,35 @@ export default function ThreadInspectorScreen() {
     [index, replayEpochMs, scenario.events],
   );
 
+  const hitlBlocksSend = sample.waitingAction != null;
+
   const sampleAdapter = useMemo(
     () => ({
-      messages: [...sample.messages],
-      convertMessage: (message: (typeof sample.messages)[number]) => message,
-      isRunning: false,
-      isDisabled: true,
-      isSendDisabled: true,
-      onNew: async () => {},
+      messages: localMessages,
+      convertMessage: (message: ThreadMessageLike) => message,
+      isRunning: forceRunning,
+      isDisabled: false,
+      isSendDisabled: hitlBlocksSend,
+      onNew: async (message: AppendMessage) => {
+        setLocalMessages((prev) => [...prev, appendMessageToLike(message)]);
+        setForceRunning(true);
+      },
+      onCancel: async () => {
+        setForceRunning(false);
+      },
     }),
-    [sample],
+    [forceRunning, hitlBlocksSend, localMessages],
   );
   const replayAdapter = useMemo(
     () => ({
       messages: [...replayMessages],
       convertMessage: (message: (typeof replayMessages)[number]) => message,
       isRunning: replayRunning,
-      isDisabled: true,
+      isDisabled: false,
+      // Keep the composer mounted for keyboard checks; do not rewrite steps.
       isSendDisabled: true,
       onNew: async () => {},
+      onCancel: async () => {},
     }),
     [replayMessages, replayRunning],
   );
@@ -201,8 +266,19 @@ export default function ThreadInspectorScreen() {
         ? "settled"
         : eventTypeAt(scenario.events, index - 1);
 
+  // Empty sample mirrors a new chat (null id → keyboard seed at zero).
+  const conversationId =
+    mode === "samples"
+      ? sample.id === "empty" && localMessages.length === 0
+        ? null
+        : `sample:${sample.id}`
+      : `replay:${scenario.id}`;
+
+  const runtimeKey =
+    mode === "samples" ? `samples:${sample.id}` : `replay:${scenario.id}`;
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor }} edges={["bottom"]}>
+    <View style={{ flex: 1, backgroundColor }}>
       <Stack.Screen
         options={{
           title: "RN Thread Inspector",
@@ -266,27 +342,61 @@ export default function ThreadInspectorScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerClassName="gap-1.5"
             >
-              {THREAD_SAMPLES.map((entry) => (
+              {threadSamplesForGroup("default").map((entry) => (
                 <Pill
                   key={entry.id}
                   label={entry.label}
                   active={entry.id === sampleId}
-                  onPress={() => setSampleId(entry.id)}
+                  onPress={() => selectSample(entry.id)}
                 />
               ))}
             </ScrollView>
-            <Pill
-              label="Replay this sample"
-              onPress={() => {
-                clearTimer();
-                setPlaying(false);
-                setIndex(0);
-                setReplayEpochMs(Date.now());
-                setScenarioId(sampleId);
-                setMode("replay");
-                setPlaying(true);
-              }}
-            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerClassName="gap-1.5"
+            >
+              {threadSamplesForGroup("answer").map((entry) => (
+                <Pill
+                  key={entry.id}
+                  label={entry.label}
+                  active={entry.id === sampleId}
+                  onPress={() => selectSample(entry.id)}
+                />
+              ))}
+            </ScrollView>
+            <View className="flex-row flex-wrap items-center gap-1.5">
+              <Pill
+                label="Running"
+                active={forceRunning}
+                onPress={() => setForceRunning((prev) => !prev)}
+              />
+              <Pill
+                label="Multiline"
+                onPress={() => {
+                  setDraftSeed(MULTILINE_DRAFT);
+                  setDraftSeedKey((key) => key + 1);
+                }}
+              />
+              <Pill
+                label="Reset"
+                onPress={() => selectSample(sampleId)}
+              />
+              {sample.id !== "empty" ? (
+                <Pill
+                  label="Replay this sample"
+                  onPress={() => {
+                    clearTimer();
+                    setPlaying(false);
+                    setIndex(0);
+                    setReplayEpochMs(Date.now());
+                    setScenarioId(sampleId);
+                    setMode("replay");
+                    setPlaying(true);
+                  }}
+                />
+              ) : null}
+            </View>
           </View>
         ) : (
           <View className="gap-1.5">
@@ -380,16 +490,18 @@ export default function ThreadInspectorScreen() {
             <TimelineDurationEventsProvider
               events={mode === "replay" ? playedEvents : sample.durationEvents}
             >
-              <AssistantRuntimeProvider key={mode} runtime={runtime}>
+              <AssistantRuntimeProvider key={runtimeKey} runtime={runtime}>
+                {mode === "samples" ? (
+                  <ComposerDraftSeeder
+                    draft={draftSeed}
+                    seedKey={draftSeedKey}
+                  />
+                ) : null}
                 <Thread
                   autoFocus={false}
                   chromeRevealed
                   contentPaddingTop={16}
-                  conversationId={
-                    mode === "samples"
-                      ? `sample:${sample.id}`
-                      : `replay:${scenario.id}`
-                  }
+                  conversationId={conversationId}
                   components={{ ToolFallback: SampleToolFallback }}
                   waitingAction={waitingAction}
                 />
@@ -398,6 +510,6 @@ export default function ThreadInspectorScreen() {
           </ConversationProvider>
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }

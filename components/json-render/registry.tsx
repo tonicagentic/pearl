@@ -3,6 +3,14 @@
 import { defineRegistry } from "@json-render/react";
 import { chatCatalog } from "@/lib/json-render/catalog";
 import { comparisonBarShares } from "@/lib/json-render/comparison-bar";
+import {
+  clampPin,
+  circleOfFifthsPositions,
+  guitarChordDots,
+  GUITAR_FRET_COUNT,
+  GUITAR_STRING_COUNT,
+  regionBarWidths,
+} from "@/lib/json-render/diagrams";
 import { cn } from "@/lib/utils";
 import { Button as UiButton } from "@/components/ui/button";
 
@@ -27,6 +35,156 @@ function httpsSrc(src: string | null | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+function GuitarChordSvg({
+  name,
+  frets,
+  baseFret,
+}: {
+  name: string;
+  frets: number[];
+  baseFret: number | null;
+}) {
+  const { dots, baseFret: windowBase } = guitarChordDots(frets, baseFret);
+  const width = 140;
+  const height = 168;
+  const left = 28;
+  const top = 36;
+  const boardW = 84;
+  const boardH = 100;
+  const stringGap = boardW / (GUITAR_STRING_COUNT - 1);
+  const fretGap = boardH / GUITAR_FRET_COUNT;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="text-foreground text-[15px] font-medium">{name}</div>
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={`${name} guitar chord`}
+        className="text-foreground"
+      >
+        {windowBase > 1 ? (
+          <text x={10} y={top + fretGap * 0.7} fill="currentColor" fontSize="11" fontWeight="600">
+            {windowBase}
+          </text>
+        ) : null}
+        {Array.from({ length: GUITAR_FRET_COUNT + 1 }, (_, fret) => (
+          <line
+            key={`fret-${fret}`}
+            x1={left}
+            y1={top + fret * fretGap}
+            x2={left + boardW}
+            y2={top + fret * fretGap}
+            stroke="currentColor"
+            strokeWidth={fret === 0 && windowBase === 1 ? 3 : 1.25}
+            opacity={0.85}
+          />
+        ))}
+        {Array.from({ length: GUITAR_STRING_COUNT }, (_, stringIndex) => (
+          <line
+            key={`string-${stringIndex}`}
+            x1={left + stringIndex * stringGap}
+            y1={top}
+            x2={left + stringIndex * stringGap}
+            y2={top + boardH}
+            stroke="currentColor"
+            strokeWidth={1}
+            opacity={0.7}
+          />
+        ))}
+        {dots.map((dot) => {
+          const x = left + dot.stringIndex * stringGap;
+          if (dot.muted) {
+            return (
+              <text
+                key={`m-${dot.stringIndex}`}
+                x={x}
+                y={top - 12}
+                fill="currentColor"
+                fontSize="12"
+                textAnchor="middle"
+              >
+                ×
+              </text>
+            );
+          }
+          if (dot.open) {
+            return (
+              <circle
+                key={`o-${dot.stringIndex}`}
+                cx={x}
+                cy={top - 14}
+                r={5}
+                stroke="currentColor"
+                strokeWidth={1.5}
+                fill="none"
+              />
+            );
+          }
+          if (dot.fret < 1 || dot.fret > GUITAR_FRET_COUNT) return null;
+          return (
+            <circle
+              key={`d-${dot.stringIndex}`}
+              cx={x}
+              cy={top + (dot.fret - 0.5) * fretGap}
+              r={7}
+              fill="currentColor"
+            />
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function CircleOfFifthsSvg({ highlightKey }: { highlightKey: string | null }) {
+  const size = 160;
+  const positions = circleOfFifthsPositions(highlightKey, 80, 80, 58);
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      role="img"
+      aria-label={
+        highlightKey
+          ? `Circle of fifths highlighting ${highlightKey}`
+          : "Circle of fifths"
+      }
+      className="text-foreground"
+    >
+      <circle
+        cx={80}
+        cy={80}
+        r={58}
+        stroke="currentColor"
+        strokeWidth={1.25}
+        fill="none"
+        opacity={0.35}
+      />
+      {positions.map((pos) => (
+        <text
+          key={pos.key}
+          x={pos.x}
+          y={pos.y + 4}
+          fill="currentColor"
+          fontSize={pos.highlighted ? 13 : 11}
+          fontWeight={pos.highlighted ? 700 : 500}
+          textAnchor="middle"
+          opacity={pos.highlighted ? 1 : 0.7}
+        >
+          {pos.key}
+        </text>
+      ))}
+      {highlightKey ? (
+        <circle cx={80} cy={80} r={18} fill="currentColor" opacity={0.08} />
+      ) : null}
+    </svg>
+  );
 }
 
 export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
@@ -187,6 +345,269 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
       >
         {props.label}
       </UiButton>
+    ),
+    SearchResults: ({ props }) => (
+      <div className="flex flex-col gap-2.5">
+        {props.items.map((item, index) => (
+          <div key={index} className="flex flex-col gap-0.5">
+            <div className="text-foreground text-[15px] font-medium leading-snug">
+              {item.title}
+            </div>
+            {item.detail ? (
+              <div className="text-muted-foreground text-[13.5px] leading-relaxed">
+                {item.detail}
+              </div>
+            ) : null}
+            {item.meta ? (
+              <div className="text-muted-foreground text-[12px]">{item.meta}</div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    ),
+    PlaceMap: ({ props }) => (
+      <div className="flex flex-col gap-2">
+        {props.title ? (
+          <div className="text-foreground text-[15px] font-medium">{props.title}</div>
+        ) : null}
+        {props.address ? (
+          <div className="text-muted-foreground text-[13.5px]">{props.address}</div>
+        ) : null}
+        <div className="border-border/60 bg-muted/30 relative h-40 w-full overflow-hidden rounded-lg border">
+          <div className="bg-border/40 absolute top-1/3 right-0 left-0 h-px" />
+          <div className="bg-border/40 absolute top-0 bottom-0 left-1/2 w-px" />
+          {props.pins.map((pin, index) => {
+            const x = clampPin(pin.x);
+            const y = clampPin(pin.y);
+            return (
+              <div
+                key={index}
+                className="absolute flex -translate-x-1/2 -translate-y-full flex-col items-center"
+                style={{ left: `${x}%`, top: `${y}%` }}
+              >
+                <span className="bg-foreground border-background h-3.5 w-3.5 rounded-full border-2" />
+                <span className="bg-background/90 text-foreground mt-0.5 max-w-[5.5rem] truncate rounded px-1 text-[11px] font-medium">
+                  {pin.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        {props.pins.some((pin) => pin.detail) ? (
+          <div className="flex flex-col gap-1">
+            {props.pins.map((pin, index) =>
+              pin.detail ? (
+                <div key={index} className="text-muted-foreground text-[12px]">
+                  {pin.label} — {pin.detail}
+                </div>
+              ) : null,
+            )}
+          </div>
+        ) : null}
+      </div>
+    ),
+    NewsBrief: ({ props }) => (
+      <div className="flex flex-col gap-2">
+        {props.kicker ? (
+          <div className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+            {props.kicker}
+          </div>
+        ) : null}
+        <div className="text-foreground text-base font-medium leading-snug">
+          {props.headline}
+        </div>
+        {props.dek ? (
+          <div className="text-muted-foreground text-[13.5px] leading-relaxed">
+            {props.dek}
+          </div>
+        ) : null}
+        {props.bullets && props.bullets.length > 0 ? (
+          <ul className="text-muted-foreground flex list-disc flex-col gap-1 pl-4 text-[13.5px]">
+            {props.bullets.map((bullet) => (
+              <li key={bullet}>{bullet}</li>
+            ))}
+          </ul>
+        ) : null}
+        {props.sources && props.sources.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {props.sources.map((source) => (
+              <span
+                key={source}
+                className="bg-muted text-muted-foreground inline-flex rounded-full px-2 py-0.5 text-[12px] font-medium"
+              >
+                {source}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    ),
+    Encyclopedia: ({ props }) => (
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <div className="text-foreground text-base font-medium">{props.title}</div>
+          <div className="text-muted-foreground text-[13.5px] leading-relaxed">
+            {props.lead}
+          </div>
+        </div>
+        {props.infobox && props.infobox.length > 0 ? (
+          <div className="border-border/60 bg-muted/30 flex flex-col gap-1.5 rounded-lg border px-2.5 py-2">
+            {props.infobox.map((pair) => (
+              <div key={pair.label} className="flex justify-between gap-3 text-[12.5px]">
+                <span className="text-muted-foreground font-medium">{pair.label}</span>
+                <span className="text-foreground text-right">{pair.value}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {props.sections?.map((section) => (
+          <div key={section.heading} className="flex flex-col gap-0.5">
+            <div className="text-foreground text-[15px] font-medium">
+              {section.heading}
+            </div>
+            <div className="text-muted-foreground text-[13.5px] leading-relaxed">
+              {section.body}
+            </div>
+          </div>
+        ))}
+      </div>
+    ),
+    Pronounce: ({ props }) => (
+      <div className="flex flex-col gap-1">
+        <div className="text-foreground text-base font-medium">{props.word}</div>
+        {props.ipa ? (
+          <div className="text-foreground text-[15px] tracking-wide">
+            /{props.ipa}/
+          </div>
+        ) : null}
+        {props.syllables ? (
+          <div className="text-muted-foreground text-[13.5px] font-medium">
+            {props.syllables}
+          </div>
+        ) : null}
+        {props.note ? (
+          <div className="text-muted-foreground text-[12px]">{props.note}</div>
+        ) : null}
+      </div>
+    ),
+    Phrase: ({ props }) => (
+      <div className="flex flex-col gap-1.5">
+        <div className="text-muted-foreground text-[12px] font-medium">
+          {props.sourceLanguage} → {props.targetLanguage}
+        </div>
+        <div className="text-foreground text-base font-medium">{props.phrase}</div>
+        <div className="text-foreground text-[15px]">{props.translation}</div>
+        {props.literal ? (
+          <div className="text-muted-foreground text-[12px]">
+            Literal: {props.literal}
+          </div>
+        ) : null}
+      </div>
+    ),
+    GuitarChord: ({ props }) => (
+      <GuitarChordSvg
+        name={props.name}
+        frets={props.frets}
+        baseFret={props.baseFret}
+      />
+    ),
+    TheoryBoard: ({ props }) => (
+      <div className="flex flex-col gap-3">
+        {props.title ? (
+          <div className="text-foreground text-[15px] font-medium">{props.title}</div>
+        ) : null}
+        {props.progression && props.progression.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {props.progression.map((roman, index) => (
+              <span
+                key={`${roman}-${index}`}
+                className="bg-muted text-foreground rounded-lg px-2.5 py-1 text-[15px] font-medium"
+              >
+                {roman}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {props.showCircle !== false ? (
+          <CircleOfFifthsSvg highlightKey={props.highlightKey} />
+        ) : null}
+      </div>
+    ),
+    RegionChart: ({ props }) => {
+      const widths = regionBarWidths(props.regions.map((r) => r.value));
+      const unit = props.unit ?? "%";
+      return (
+        <div className="flex flex-col gap-2">
+          {props.title ? (
+            <div className="text-foreground text-[15px] font-medium">{props.title}</div>
+          ) : null}
+          {props.regions.map((region, index) => (
+            <div key={region.label} className="flex flex-col gap-1">
+              <div className="flex items-baseline justify-between gap-2 text-[13px]">
+                <span className="text-foreground font-medium">{region.label}</span>
+                <span className="text-muted-foreground tabular-nums">
+                  {region.value}
+                  {unit}
+                  {region.hint ? ` · ${region.hint}` : ""}
+                </span>
+              </div>
+              <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
+                <div
+                  className="bg-foreground/70 h-full rounded-full"
+                  style={{ width: `${widths[index] ?? 0}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    },
+    Explainer: ({ props }) => (
+      <div className="flex flex-col gap-2.5">
+        <div className="text-foreground text-[15px] font-medium">{props.title}</div>
+        {props.steps.map((step, index) => (
+          <div key={step.heading} className="flex gap-2.5">
+            <div className="bg-muted text-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-medium">
+              {index + 1}
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <div className="text-foreground text-[13.5px] font-medium">
+                {step.heading}
+              </div>
+              <div className="text-muted-foreground text-[13.5px] leading-relaxed">
+                {step.body}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    ),
+    Recipe: ({ props }) => (
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-0.5">
+          <div className="text-foreground text-[15px] font-medium">{props.title}</div>
+          <div className="text-muted-foreground flex flex-wrap gap-2 text-[12px]">
+            {props.time ? <span>{props.time}</span> : null}
+            {props.yield ? <span>{props.yield}</span> : null}
+          </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-foreground text-[13.5px] font-medium">Ingredients</div>
+          <ul className="text-muted-foreground list-disc space-y-0.5 pl-4 text-[13.5px]">
+            {props.ingredients.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <div className="text-foreground text-[13.5px] font-medium">Method</div>
+          <ol className="text-muted-foreground list-decimal space-y-1 pl-4 text-[13.5px] leading-relaxed">
+            {props.method.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </div>
+      </div>
     ),
   },
   actions: {
