@@ -44,6 +44,7 @@ import { cn } from "@/lib/utils";
 import { Button as UiButton } from "@/components/ui/button";
 import { creativeWebCards } from "@/components/json-render/creative-cards";
 import { devopsWebCards } from "@/components/json-render/devops-cards";
+import { structuredWebCards } from "@/components/json-render/structured-cards";
 import { useMemo, useState } from "react";
 
 /** Light fretboard panel so dots stay readable in dark mode. */
@@ -1692,6 +1693,7 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
     },
     ...devopsWebCards,
     ...creativeWebCards,
+    ...structuredWebCards,
   },
   actions: {
     // Bound at render time via ActionProvider handlers in ChatJsonRender.

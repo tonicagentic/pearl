@@ -3,6 +3,7 @@ import { useActions } from "@json-render/react-native";
 import { VideoPlayer } from "@/components/assistant-ui/elements/media-player";
 import { creativeMobileCards } from "@/components/json-render/creative-cards";
 import { devopsMobileCards } from "@/components/json-render/devops-cards";
+import { structuredMobileCards } from "@/components/json-render/structured-cards";
 import {
   chartDeltaTone,
   chartSeriesLayout,
@@ -2064,4 +2065,5 @@ export const chatRegistry: ComponentRegistry = {
   },
   ...devopsMobileCards,
   ...creativeMobileCards,
+  ...structuredMobileCards,
 };

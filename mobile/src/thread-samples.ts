@@ -78,7 +78,13 @@ export type ThreadSampleId =
   | "answer-pdf"
   | "answer-chess"
   | "answer-terminal"
-  | "answer-audio";
+  | "answer-audio"
+  | "answer-model3d"
+  | "answer-web-preview"
+  | "answer-timeline"
+  | "answer-comparison"
+  | "answer-math"
+  | "answer-score";
 
 export type ThreadSampleGroup = "default" | "answer";
 

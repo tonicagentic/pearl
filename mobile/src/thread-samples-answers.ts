@@ -61,7 +61,13 @@ export type AnswerThreadSample = {
     | "answer-pdf"
     | "answer-chess"
     | "answer-terminal"
-    | "answer-audio";
+    | "answer-audio"
+    | "answer-model3d"
+    | "answer-web-preview"
+    | "answer-timeline"
+    | "answer-comparison"
+    | "answer-math"
+    | "answer-score";
   readonly label: string;
   readonly group: "answer";
   readonly messages: readonly AnswerMessage[];
@@ -1962,6 +1968,227 @@ export const ANSWER_THREAD_SAMPLES: readonly AnswerThreadSample[] = [
           artist: "SoundHelix",
           duration: "6:12",
           poster: null,
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-model3d",
+    "3D",
+    "Show the Damaged Helmet sample.",
+    "Khronos DamagedHelmet:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["model"],
+      },
+      model: {
+        type: "Model3D",
+        props: {
+          title: "Damaged Helmet",
+          src: "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb",
+          caption: "Drag to orbit · auto-rotate on",
+          poster:
+            "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/DamagedHelmet/screenshot/screenshot.jpg",
+          autoRotate: true,
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-web-preview",
+    "Preview",
+    "Preview example.com in a sandbox.",
+    "Live preview:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["preview"],
+      },
+      preview: {
+        type: "WebPreview",
+        props: {
+          title: "example.com",
+          url: "https://example.com",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-timeline",
+    "Timeline",
+    "Walk me through the launch day plan.",
+    "Launch day:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["timeline"],
+      },
+      timeline: {
+        type: "Timeline",
+        props: {
+          visibleCount: null,
+          events: [
+            {
+              id: "freeze",
+              when: "past",
+              time: "09:00",
+              title: "Code freeze",
+              detail: "Main locked; hotfix branch only.",
+            },
+            {
+              id: "promote",
+              when: "now",
+              time: "11:30",
+              title: "Promote canary",
+              detail: "10% traffic on the new build.",
+            },
+            {
+              id: "announce",
+              when: "future",
+              time: "14:00",
+              title: "Customer announce",
+              detail: "Blog + changelog go live.",
+            },
+            {
+              id: "retro",
+              when: "future",
+              time: "16:30",
+              title: "Retro notes",
+              detail: null,
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-comparison",
+    "Compare",
+    "Should we use Neon or PlanetScale for this app?",
+    "Trade-offs:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["compare"],
+      },
+      compare: {
+        type: "ComparisonCard",
+        props: {
+          traitLabels: ["Branching", "Serverless driver", "Region pick"],
+          options: [
+            {
+              id: "neon",
+              name: "Neon",
+              headline: "Postgres branches + scale-to-zero",
+              traits: ["Instant DB branches", "HTTP + WS drivers", "Pick region"],
+            },
+            {
+              id: "pscale",
+              name: "PlanetScale",
+              headline: "Vitess MySQL with deploy requests",
+              traits: [false, "Serverless driver", "Multi-region"],
+            },
+          ],
+          recommendedId: "neon",
+          reason:
+            "Pick Neon if you want Postgres + branch workflows that match this stack.",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-math",
+    "Math",
+    "Derive the quadratic formula briefly.",
+    "Completing the square:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["math"],
+      },
+      math: {
+        type: "MathBlock",
+        props: {
+          label: "ax² + bx + c = 0",
+          visibleSteps: null,
+          steps: [
+            {
+              expression: "ax² + bx = −c",
+              note: "Move the constant.",
+            },
+            {
+              expression: "x² + (b/a)x = −c/a",
+              note: "Divide by a.",
+            },
+            {
+              expression: "x² + (b/a)x + (b/2a)² = −c/a + (b/2a)²",
+              note: "Complete the square.",
+            },
+            {
+              expression: "x = (−b ± √(b² − 4ac)) / (2a)",
+              note: "Solve for x.",
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-score",
+    "Score",
+    "How did this design review score?",
+    "Rubric:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["score"],
+      },
+      score: {
+        type: "ScoreBreakdown",
+        props: {
+          verdict: "ship",
+          total: 8.4,
+          outOf: 10,
+          visibleCount: null,
+          criteria: [
+            {
+              label: "Clarity",
+              score: 9,
+              weight: 0.3,
+              note: "Hierarchy reads in one pass.",
+            },
+            {
+              label: "Motion",
+              score: 8,
+              weight: 0.2,
+              note: "Two intentional fades; no noise.",
+            },
+            {
+              label: "Accessibility",
+              score: 7.5,
+              weight: 0.25,
+              note: "Contrast OK; focus rings still thin.",
+            },
+            {
+              label: "Brand fit",
+              score: 9,
+              weight: 0.25,
+              note: null,
+            },
+          ],
         },
       },
     },

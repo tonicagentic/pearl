@@ -60,6 +60,12 @@ const EXPECTED_ROOT_CHILD: Record<string, string> = {
   "answer-chess": "ChessBoard",
   "answer-terminal": "TerminalBlock",
   "answer-audio": "AudioPlayback",
+  "answer-model3d": "Model3D",
+  "answer-web-preview": "WebPreview",
+  "answer-timeline": "Timeline",
+  "answer-comparison": "ComparisonCard",
+  "answer-math": "MathBlock",
+  "answer-score": "ScoreBreakdown",
 };
 
 function assistantText(sample: (typeof ANSWER_THREAD_SAMPLES)[number]): string {
@@ -84,8 +90,8 @@ function assistantText(sample: (typeof ANSWER_THREAD_SAMPLES)[number]): string {
 }
 
 describe("answer thread samples", () => {
-  it("includes fifty-five answer fixtures", () => {
-    assert.equal(ANSWER_THREAD_SAMPLES.length, 55);
+  it("includes sixty-one answer fixtures", () => {
+    assert.equal(ANSWER_THREAD_SAMPLES.length, 61);
   });
 
   for (const sample of ANSWER_THREAD_SAMPLES) {

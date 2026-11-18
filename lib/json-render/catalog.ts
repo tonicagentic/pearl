@@ -236,6 +236,33 @@ const slideItem = z.object({
   notes: z.string().nullable(),
 });
 
+const timelineEvent = z.object({
+  id: z.string(),
+  when: z.enum(["past", "now", "future"]),
+  time: z.string(),
+  title: z.string(),
+  detail: z.string().nullable(),
+});
+
+const comparisonOption = z.object({
+  id: z.string(),
+  name: z.string(),
+  headline: z.string(),
+  traits: z.array(z.union([z.string(), z.literal(false)])),
+});
+
+const mathStep = z.object({
+  expression: z.string(),
+  note: z.string().nullable(),
+});
+
+const scoreCriterion = z.object({
+  label: z.string(),
+  score: z.number(),
+  weight: z.number(),
+  note: z.string().nullable(),
+});
+
 /**
  * Shared generative-UI vocabulary for Pearl chat.
  *
@@ -883,6 +910,63 @@ export const chatCatalog = defineCatalog(schema, {
       description:
         "Inline audio clip from an https URL with optional title, artist, duration, and poster",
     },
+    Model3D: {
+      props: z.object({
+        src: z.string(),
+        title: z.string().nullable(),
+        caption: z.string().nullable(),
+        poster: z.string().nullable(),
+        autoRotate: z.boolean().nullable(),
+      }),
+      description:
+        "Interactive 3D model from an https .glb/.gltf URL with optional poster and auto-rotate",
+    },
+    WebPreview: {
+      props: z.object({
+        url: z.string(),
+        title: z.string().nullable(),
+      }),
+      description:
+        "Sandboxed live web preview chrome (reload, origin bar, open) around an https URL",
+    },
+    Timeline: {
+      props: z.object({
+        events: z.array(timelineEvent).min(2).max(12),
+        visibleCount: z.number().nullable(),
+      }),
+      description:
+        "Event timeline on a vertical axis with past/now/future dots (not session tool chrome)",
+    },
+    ComparisonCard: {
+      props: z.object({
+        traitLabels: z.array(z.string()).min(1).max(8),
+        options: z.array(comparisonOption).min(2).max(3),
+        recommendedId: z.string(),
+        reason: z.string(),
+      }),
+      description:
+        "Side-by-side option comparison with trait checklist, named pick, and reason (not ComparisonBar %)",
+    },
+    MathBlock: {
+      props: z.object({
+        label: z.string().nullable(),
+        steps: z.array(mathStep).min(1).max(12),
+        visibleSteps: z.number().nullable(),
+      }),
+      description:
+        "Worked math derivation: plain-text expression steps with optional notes",
+    },
+    ScoreBreakdown: {
+      props: z.object({
+        verdict: z.string(),
+        total: z.number(),
+        outOf: z.number(),
+        criteria: z.array(scoreCriterion).min(1).max(12),
+        visibleCount: z.number().nullable(),
+      }),
+      description:
+        "Score verdict with total/outOf pill and weighted criteria bars",
+    },
   },
   actions: {
     reply: {
@@ -898,13 +982,13 @@ export const chatCatalog = defineCatalog(schema, {
 export type ChatCatalog = typeof chatCatalog;
 
 export const JSON_RENDER_CUSTOM_RULES = [
-  "Emit a UI spec for structured answers of these kinds: web/product search, location or place maps, news briefs, daily multi-story briefs, encyclopedia entries, pronunciation, foreign-language phrases, guitar chords, music theory, vote or regional charts, sparkline charts, spec sheets, Mermaid diagrams, tables, explainers, recipes, flight tracking, calendar events, table bookings, email drafts/batches, surf/snow reports and picks, video, Vercel/GitHub/Neon status (projects, deploys, PRs, issues, Neon projects/branches, schema, ship status, env names, domains, slow queries, and picks), photo edit settings, music production settings, video storyboards, OWID/census indicators, slide decks, PDF artifacts, chess positions, terminal command output, and audio clips. Ordinary replies and exploratory thinking-together turns stay prose with no spec.",
-  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, DailyBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Chart, SpecSheet, MermaidDiagram, Table, Explainer, Recipe, ComparisonBar, FlightTracker, CalendarEvent, CreateEvent, Booking, EmailDraft, EmailBatch, SurfReport, SurfSpotPick, SnowReport, MountainPick, Video, VercelProject, DeploymentStatus, DeploymentList, PullRequest, PullRequestList, Issue, IssueList, NeonProject, NeonBranch, SchemaOverview, ShipStatus, EnvVarList, DomainList, SlowQueryList, RepoPick, ProjectPick, NeonBranchPick, PhotoEditSettings, MusicProdSettings, VideoStoryboard, IndicatorCard, Slides, PdfArtifact, ChessBoard, TerminalBlock, AudioPlayback) inside it.",
-  "For two-way % races prefer ComparisonBar; for multi-region shares use RegionChart; for a single metric series use Chart; for OWID/census answers with source + series and/or regional breakdown use IndicatorCard. Use SurfSpotPick / MountainPick / RepoPick / ProjectPick / NeonBranchPick when choosing among options; use SurfReport/SnowReport or single status cards for one place. Use DailyBrief for a morning/top-stories roundup; NewsBrief for one story. Use PhotoEditSettings / MusicProdSettings for presentational settings sheets (not live editors). Use VideoStoryboard for frame sequences; Slides for in-thread decks; PdfArtifact for PDF receipts (https src embeds when possible). Use ChessBoard for FEN positions (optional lastMove UCI + moves list). Use TerminalBlock for command stdout/stderr with exit code. Use AudioPlayback for https audio clips (not Pronounce TTS). Keep 1–2 sentences of prose outside the fence.",
+  "Emit a UI spec for structured answers of these kinds: web/product search, location or place maps, news briefs, daily multi-story briefs, encyclopedia entries, pronunciation, foreign-language phrases, guitar chords, music theory, vote or regional charts, sparkline charts, spec sheets, Mermaid diagrams, tables, explainers, recipes, flight tracking, calendar events, table bookings, email drafts/batches, surf/snow reports and picks, video, Vercel/GitHub/Neon status, photo/music settings, storyboards, OWID/census indicators, slides, PDF artifacts, chess, terminal output, audio clips, 3D models, sandboxed web previews, event timelines, option comparisons, math derivations, and score breakdowns. Ordinary replies and exploratory thinking-together turns stay prose with no spec.",
+  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, DailyBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Chart, SpecSheet, MermaidDiagram, Table, Explainer, Recipe, ComparisonBar, FlightTracker, CalendarEvent, CreateEvent, Booking, EmailDraft, EmailBatch, SurfReport, SurfSpotPick, SnowReport, MountainPick, Video, VercelProject, DeploymentStatus, DeploymentList, PullRequest, PullRequestList, Issue, IssueList, NeonProject, NeonBranch, SchemaOverview, ShipStatus, EnvVarList, DomainList, SlowQueryList, RepoPick, ProjectPick, NeonBranchPick, PhotoEditSettings, MusicProdSettings, VideoStoryboard, IndicatorCard, Slides, PdfArtifact, ChessBoard, TerminalBlock, AudioPlayback, Model3D, WebPreview, Timeline, ComparisonCard, MathBlock, ScoreBreakdown) inside it.",
+  "For two-way % races prefer ComparisonBar; for multi-region shares use RegionChart; for a single metric series use Chart; for OWID/census use IndicatorCard. Use ComparisonCard for two options with traits and a named pick (not %). Use Timeline for past/now/future event axes (not session tool chrome). Use MathBlock for worked expression steps; ScoreBreakdown for rubric verdicts. Use Model3D for https GLB/glTF; WebPreview for sandboxed https live previews. Use ChessBoard for FEN; TerminalBlock for command output; AudioPlayback for https audio. Keep 1–2 sentences of prose outside the fence.",
   "EmailDraft, EmailBatch, CreateEvent, and Booking include built-in confirm buttons that reply with tool-ready messages. When the user sends those confirmations, call create_gmail_draft / send_gmail_message / apply_mail_batch or the calendar create path immediately with the stated params (approvals still apply).",
   "EnvVarList must list variable NAMES only — never values, secrets, or connection strings. NeonBranch.endpointHost is a hostname only.",
   "Buttons that continue the conversation must bind press to the reply action with a concrete message string. Do not invent component names outside this catalog.",
-  "Image, Video, PdfArtifact, and AudioPlayback src must be https URLs. Prefer the dedicated answer components over assembling the same layout from Stack/Text alone.",
+  "Image, Video, PdfArtifact, AudioPlayback, Model3D, and WebPreview URLs must be https. Prefer the dedicated answer components over assembling the same layout from Stack/Text alone.",
 ] as const;
 
 /** System prompt fragment for the eve chat channel (inline generative UI). */
