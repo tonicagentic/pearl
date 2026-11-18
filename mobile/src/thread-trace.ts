@@ -6,6 +6,8 @@ export {
   type ThreadTrace,
   type ThreadTraceCall,
   type ThreadTraceEvent,
+  type ThreadTraceToolCharge,
+  type ThreadTraceToolSourceRow,
   type ThreadTraceTurn,
 } from "../../lib/usage/thread-trace";
 

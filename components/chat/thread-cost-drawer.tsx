@@ -31,7 +31,8 @@ export function ThreadCostDrawer({
   readonly events: readonly ThreadTraceEvent[];
 }) {
   const trace = useMemo(() => threadTraceFromEvents(events), [events]);
-  const empty = trace.totals.modelCalls === 0;
+  const empty =
+    trace.totals.modelCalls === 0 && trace.tools.count === 0;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -42,7 +43,7 @@ export function ThreadCostDrawer({
         <SheetHeader className="border-b px-4 py-3 text-left">
           <SheetTitle>Thread cost</SheetTitle>
           <SheetDescription>
-            Model-call cost for this thread, from the live event trace.
+            Models and tools for this thread, from the live event trace.
           </SheetDescription>
         </SheetHeader>
 
@@ -52,11 +53,15 @@ export function ThreadCostDrawer({
               <StatTile
                 icon={<CoinsIcon className="size-3.5" />}
                 label="Cost"
-                value={formatUsd(trace.totals.costUsd)}
+                value={formatUsd(trace.grandCostUsd)}
                 hint={
-                  trace.totals.costUsd === null && !empty
-                    ? "no cost reported"
-                    : undefined
+                  empty
+                    ? undefined
+                    : trace.tools.count > 0
+                      ? `models ${formatUsd(trace.totals.costUsd)} · tools ${formatUsd(trace.tools.costUsd)}`
+                      : trace.grandCostUsd === null
+                        ? "no cost reported"
+                        : undefined
                 }
               />
               <StatTile
@@ -78,43 +83,108 @@ export function ThreadCostDrawer({
                 icon={<GaugeIcon className="size-3.5" />}
                 label="Turns"
                 value={String(trace.turns)}
-                hint={`${String(trace.totals.modelCalls)} model calls`}
+                hint={`${String(trace.totals.modelCalls)} model · ${String(trace.tools.count)} tool`}
               />
             </div>
 
             {empty ? (
               <p className="rounded-lg border bg-card px-3 py-4 text-sm text-muted-foreground">
-                No model calls in this thread yet.
+                No billed usage in this thread yet.
               </p>
             ) : (
               <>
-                <section>
-                  <h2 className="mb-2 text-sm font-medium">By model</h2>
-                  <div className="overflow-hidden rounded-lg border">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                          <th className="px-3 py-2 font-medium">Model</th>
-                          <th className="px-3 py-2 text-right font-medium">Calls</th>
-                          <th className="px-3 py-2 text-right font-medium">In</th>
-                          <th className="px-3 py-2 text-right font-medium">Out</th>
-                          <th className="px-3 py-2 text-right font-medium">Cost</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {trace.byModel.map((row) => (
-                          <tr key={row.label} className="border-b last:border-b-0">
-                            <td className="max-w-48 truncate px-3 py-2">{row.label}</td>
-                            <NumCell value={row.modelCalls} />
-                            <NumCell value={formatTokens(row.inputTokens)} />
-                            <NumCell value={formatTokens(row.outputTokens)} />
-                            <NumCell value={formatUsd(row.costUsd)} />
+                {trace.tools.bySource.length > 0 ? (
+                  <section>
+                    <h2 className="mb-2 text-sm font-medium">By source</h2>
+                    <div className="overflow-hidden rounded-lg border">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+                            <th className="px-3 py-2 font-medium">Source</th>
+                            <th className="px-3 py-2 text-right font-medium">
+                              Calls
+                            </th>
+                            <th className="px-3 py-2 text-right font-medium">
+                              Cost
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
+                        </thead>
+                        <tbody>
+                          {trace.tools.bySource.map((row) => (
+                            <tr
+                              key={row.source}
+                              className="border-b last:border-b-0"
+                            >
+                              <td className="max-w-48 truncate px-3 py-2">
+                                {row.label}
+                              </td>
+                              <NumCell value={row.count} />
+                              <NumCell value={formatUsd(row.costUsd)} />
+                            </tr>
+                          ))}
+                          {trace.totals.modelCalls > 0 ? (
+                            <tr className="border-b last:border-b-0">
+                              <td className="max-w-48 truncate px-3 py-2">
+                                Models
+                              </td>
+                              <NumCell value={trace.totals.modelCalls} />
+                              <NumCell
+                                value={formatUsd(trace.totals.costUsd)}
+                              />
+                            </tr>
+                          ) : null}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                ) : null}
+
+                {trace.byModel.length > 0 ? (
+                  <section>
+                    <h2 className="mb-2 text-sm font-medium">By model</h2>
+                    <div className="overflow-hidden rounded-lg border">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+                            <th className="px-3 py-2 font-medium">Model</th>
+                            <th className="px-3 py-2 text-right font-medium">
+                              Calls
+                            </th>
+                            <th className="px-3 py-2 text-right font-medium">
+                              In
+                            </th>
+                            <th className="px-3 py-2 text-right font-medium">
+                              Out
+                            </th>
+                            <th className="px-3 py-2 text-right font-medium">
+                              Cost
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {trace.byModel.map((row) => (
+                            <tr
+                              key={row.label}
+                              className="border-b last:border-b-0"
+                            >
+                              <td className="max-w-48 truncate px-3 py-2">
+                                {row.label}
+                              </td>
+                              <NumCell value={row.modelCalls} />
+                              <NumCell
+                                value={formatTokens(row.inputTokens)}
+                              />
+                              <NumCell
+                                value={formatTokens(row.outputTokens)}
+                              />
+                              <NumCell value={formatUsd(row.costUsd)} />
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                ) : null}
 
                 <section>
                   <h2 className="mb-2 text-sm font-medium">Trace</h2>
@@ -130,7 +200,7 @@ export function ThreadCostDrawer({
                         <ul className="divide-y">
                           {turn.calls.map((call, index) => (
                             <li
-                              key={`${turn.turnId ?? "turn"}-${call.stepIndex ?? index}`}
+                              key={`${turn.turnId ?? "turn"}-model-${call.stepIndex ?? index}`}
                               className="flex items-start justify-between gap-3 px-3 py-2 text-sm"
                             >
                               <div className="min-w-0">
@@ -147,6 +217,26 @@ export function ThreadCostDrawer({
                               </div>
                               <div className="shrink-0 tabular-nums text-muted-foreground">
                                 {formatUsd(call.costUsd)}
+                              </div>
+                            </li>
+                          ))}
+                          {turn.tools.map((tool, index) => (
+                            <li
+                              key={`${turn.turnId ?? "turn"}-tool-${tool.callId ?? index}`}
+                              className="flex items-start justify-between gap-3 px-3 py-2 text-sm"
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate font-medium">
+                                  {tool.label}
+                                </div>
+                                {tool.detail ? (
+                                  <div className="truncate text-xs text-muted-foreground">
+                                    {tool.detail}
+                                  </div>
+                                ) : null}
+                              </div>
+                              <div className="shrink-0 tabular-nums text-muted-foreground">
+                                {formatUsd(tool.costUsd)}
                               </div>
                             </li>
                           ))}

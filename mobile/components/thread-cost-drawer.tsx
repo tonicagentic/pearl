@@ -36,7 +36,8 @@ export function ThreadCostDrawer({
   const liveEvents = useEveEvents() as readonly ThreadTraceEvent[];
   const events = eventsProp ?? liveEvents;
   const trace = useMemo(() => threadTraceFromEvents(events), [events]);
-  const empty = trace.totals.modelCalls === 0;
+  const empty =
+    trace.totals.modelCalls === 0 && trace.tools.count === 0;
 
   return (
     <Modal
@@ -73,7 +74,7 @@ export function ThreadCostDrawer({
             Cost
           </Text>
           <Text variant="secondary" className="mt-1">
-            Model usage for this thread
+            Models and tools for this thread
           </Text>
         </View>
 
@@ -85,17 +86,19 @@ export function ThreadCostDrawer({
           <View className="flex-row gap-3">
             <HeroStat
               label="Total"
-              value={formatUsd(trace.totals.costUsd)}
+              value={formatUsd(trace.grandCostUsd)}
               hint={
-                trace.totals.costUsd === null && !empty
-                  ? "No cost reported"
-                  : undefined
+                trace.tools.count > 0
+                  ? `models ${formatUsd(trace.totals.costUsd)} · tools ${formatUsd(trace.tools.costUsd)}`
+                  : trace.grandCostUsd === null && !empty
+                    ? "No cost reported"
+                    : undefined
               }
             />
             <HeroStat
               label="Turns"
               value={String(trace.turns)}
-              hint={`${String(trace.totals.modelCalls)} calls`}
+              hint={`${String(trace.totals.modelCalls)} model · ${String(trace.tools.count)} tool`}
             />
           </View>
 
@@ -117,34 +120,82 @@ export function ThreadCostDrawer({
 
           {empty ? (
             <Text variant="body" tone="muted" className="px-1">
-              No model calls in this thread yet.
+              No billed usage in this thread yet.
             </Text>
           ) : (
             <>
-              <Section title="By model">
-                {trace.byModel.map((row, index) => (
-                  <View
-                    key={row.label}
-                    className={`flex-row items-start justify-between gap-3 py-3 ${index === 0 ? "" : "border-t border-border/50"}`}
-                  >
-                    <View className="min-w-0 flex-1">
-                      <Text variant="body" weight="medium" numberOfLines={1}>
-                        {row.label}
-                      </Text>
-                      <Text
-                        variant="caption"
-                        className="mt-0.5 tabular-nums"
-                      >
-                        {row.modelCalls} calls · {formatTokens(row.inputTokens)}{" "}
-                        in · {formatTokens(row.outputTokens)} out
+              {trace.tools.bySource.length > 0 ? (
+                <Section title="By source">
+                  {trace.tools.bySource.map((row, index) => (
+                    <View
+                      key={row.source}
+                      className={`flex-row items-start justify-between gap-3 py-3 ${index === 0 ? "" : "border-t border-border/50"}`}
+                    >
+                      <View className="min-w-0 flex-1">
+                        <Text variant="body" weight="medium" numberOfLines={1}>
+                          {row.label}
+                        </Text>
+                        <Text
+                          variant="caption"
+                          className="mt-0.5 tabular-nums"
+                        >
+                          {row.count} {row.count === 1 ? "call" : "calls"}
+                        </Text>
+                      </View>
+                      <Text variant="body" className="tabular-nums">
+                        {formatUsd(row.costUsd)}
                       </Text>
                     </View>
-                    <Text variant="body" className="tabular-nums">
-                      {formatUsd(row.costUsd)}
-                    </Text>
-                  </View>
-                ))}
-              </Section>
+                  ))}
+                  {trace.totals.modelCalls > 0 ? (
+                    <View className="flex-row items-start justify-between gap-3 border-t border-border/50 py-3">
+                      <View className="min-w-0 flex-1">
+                        <Text variant="body" weight="medium">
+                          Models
+                        </Text>
+                        <Text
+                          variant="caption"
+                          className="mt-0.5 tabular-nums"
+                        >
+                          {trace.totals.modelCalls}{" "}
+                          {trace.totals.modelCalls === 1 ? "call" : "calls"}
+                        </Text>
+                      </View>
+                      <Text variant="body" className="tabular-nums">
+                        {formatUsd(trace.totals.costUsd)}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Section>
+              ) : null}
+
+              {trace.byModel.length > 0 ? (
+                <Section title="By model">
+                  {trace.byModel.map((row, index) => (
+                    <View
+                      key={row.label}
+                      className={`flex-row items-start justify-between gap-3 py-3 ${index === 0 ? "" : "border-t border-border/50"}`}
+                    >
+                      <View className="min-w-0 flex-1">
+                        <Text variant="body" weight="medium" numberOfLines={1}>
+                          {row.label}
+                        </Text>
+                        <Text
+                          variant="caption"
+                          className="mt-0.5 tabular-nums"
+                        >
+                          {row.modelCalls} calls ·{" "}
+                          {formatTokens(row.inputTokens)} in ·{" "}
+                          {formatTokens(row.outputTokens)} out
+                        </Text>
+                      </View>
+                      <Text variant="body" className="tabular-nums">
+                        {formatUsd(row.costUsd)}
+                      </Text>
+                    </View>
+                  ))}
+                </Section>
+              ) : null}
 
               <Section title="Trace">
                 {trace.callTurns.map((turn) => (
@@ -159,7 +210,7 @@ export function ThreadCostDrawer({
                     </Text>
                     {turn.calls.map((call, index) => (
                       <View
-                        key={`${turn.turnId ?? "turn"}-${call.stepIndex ?? index}`}
+                        key={`${turn.turnId ?? "turn"}-model-${call.stepIndex ?? index}`}
                         className={`flex-row items-start justify-between gap-3 py-2.5 ${index === 0 ? "" : "border-t border-border/40"}`}
                       >
                         <View className="min-w-0 flex-1">
@@ -177,11 +228,32 @@ export function ThreadCostDrawer({
                               : ""}
                           </Text>
                         </View>
-                        <Text
-                          variant="secondary"
-                          className="tabular-nums"
-                        >
+                        <Text variant="secondary" className="tabular-nums">
                           {formatUsd(call.costUsd)}
+                        </Text>
+                      </View>
+                    ))}
+                    {turn.tools.map((tool, index) => (
+                      <View
+                        key={`${turn.turnId ?? "turn"}-tool-${tool.callId ?? index}`}
+                        className={`flex-row items-start justify-between gap-3 py-2.5 ${turn.calls.length > 0 || index > 0 ? "border-t border-border/40" : ""}`}
+                      >
+                        <View className="min-w-0 flex-1">
+                          <Text variant="body" numberOfLines={1}>
+                            {tool.label}
+                          </Text>
+                          {tool.detail ? (
+                            <Text
+                              variant="caption"
+                              className="mt-0.5"
+                              numberOfLines={1}
+                            >
+                              {tool.detail}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Text variant="secondary" className="tabular-nums">
+                          {formatUsd(tool.costUsd)}
                         </Text>
                       </View>
                     ))}

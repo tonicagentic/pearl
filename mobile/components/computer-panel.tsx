@@ -651,9 +651,10 @@ export function ComputerPanel({
           <View className="min-w-0 flex-1">
             <Text className="text-foreground text-sm font-medium">Cost</Text>
             <Text className="text-muted-foreground mt-0.5 text-xs">
-              {costTrace.totals.modelCalls === 0
-                ? "No model usage yet"
-                : `${formatUsd(costTrace.totals.costUsd)} · ${costTrace.turns} turn${costTrace.turns === 1 ? "" : "s"}`}
+              {costTrace.totals.modelCalls === 0 &&
+              costTrace.tools.count === 0
+                ? "No billed usage yet"
+                : `${formatUsd(costTrace.grandCostUsd)} · ${costTrace.turns} turn${costTrace.turns === 1 ? "" : "s"}`}
             </Text>
           </View>
           <Icon

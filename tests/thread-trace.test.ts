@@ -25,6 +25,8 @@ test("threadTraceFromEvents returns empty totals with no model calls", () => {
 
   assert.equal(trace.totals.modelCalls, 0);
   assert.equal(trace.totals.costUsd, null);
+  assert.equal(trace.tools.count, 0);
+  assert.equal(trace.grandCostUsd, null);
   assert.deepEqual(trace.callTurns, []);
   assert.equal(trace.turns, 0);
 });
@@ -235,4 +237,182 @@ test("threadTraceFromEvents skips delegated-late usage rollups", () => {
     },
   ]);
   assert.equal(trace.totals.modelCalls, 0);
+});
+
+test("threadTraceFromEvents prices web_search / generate_image / exa_agent_run", () => {
+  const trace = threadTraceFromEvents([
+    event("message.received", { turnId: "t1", message: "research then draw" }),
+    event("step.started", {
+      turnId: "t1",
+      stepIndex: 0,
+      modelId: "zai/glm-5.3-flash",
+    }),
+    event("step.completed", {
+      turnId: "t1",
+      stepIndex: 0,
+      usage: { costUsd: 0.01, inputTokens: 100, outputTokens: 20 },
+    }),
+    event(
+      "call.requested",
+      {
+        turnId: "t1",
+        callId: "c-search",
+        capability: { name: "web_search" },
+        input: { type: "auto" },
+        owner: { turnId: "t1" },
+      },
+      "2026-09-17T12:00:01.000Z",
+    ),
+    event(
+      "call.settled",
+      {
+        turnId: "t1",
+        callId: "c-search",
+        outcome: "completed",
+        output: { type: "auto", results: [{ url: "https://example.com" }] },
+      },
+      "2026-09-17T12:00:02.000Z",
+    ),
+    event(
+      "call.requested",
+      {
+        turnId: "t1",
+        callId: "c-image",
+        capability: { name: "generate_image" },
+        owner: { turnId: "t1" },
+      },
+      "2026-09-17T12:00:03.000Z",
+    ),
+    event(
+      "call.settled",
+      {
+        turnId: "t1",
+        callId: "c-image",
+        outcome: "completed",
+        output: {
+          success: true,
+          model: "spacexai/grok-imagine-image-2.0",
+        },
+      },
+      "2026-09-17T12:00:04.000Z",
+    ),
+    event(
+      "call.requested",
+      {
+        turnId: "t1",
+        callId: "c-exa",
+        capability: { name: "exa_agent_run" },
+        input: { effort: "low" },
+        owner: { turnId: "t1" },
+      },
+      "2026-09-17T12:00:05.000Z",
+    ),
+    event(
+      "call.settled",
+      {
+        turnId: "t1",
+        callId: "c-exa",
+        outcome: "completed",
+        output: {
+          status: "completed",
+          effort: "low",
+          costDollars: { total: 0.042 },
+        },
+      },
+      "2026-09-17T12:00:06.000Z",
+    ),
+  ]);
+
+  assert.equal(trace.totals.modelCalls, 1);
+  assert.ok(Math.abs((trace.totals.costUsd ?? 0) - 0.01) < 1e-9);
+  assert.equal(trace.tools.count, 3);
+  assert.ok(Math.abs(trace.tools.costUsd - (0.007 + 0.06 + 0.042)) < 1e-9);
+  assert.ok(
+    Math.abs((trace.grandCostUsd ?? 0) - (0.01 + 0.007 + 0.06 + 0.042)) < 1e-9,
+  );
+
+  assert.deepEqual(
+    trace.tools.bySource.map((row) => row.source),
+    ["image", "exa_agent", "web_search"],
+  );
+  assert.equal(trace.callTurns.length, 1);
+  assert.equal(trace.callTurns[0]?.calls.length, 1);
+  assert.equal(trace.callTurns[0]?.tools.length, 3);
+  assert.equal(trace.callTurns[0]?.tools[0]?.source, "web_search");
+  assert.equal(trace.callTurns[0]?.tools[0]?.detail, "Exa auto");
+  assert.equal(trace.callTurns[0]?.tools[1]?.source, "image");
+  assert.equal(trace.callTurns[0]?.tools[2]?.source, "exa_agent");
+  assert.equal(trace.callTurns[0]?.tools[2]?.detail, "Exa Agent · low");
+});
+
+test("threadTraceFromEvents skips failed tool calls and ignores unknown tools", () => {
+  const trace = threadTraceFromEvents([
+    event("call.requested", {
+      turnId: "t1",
+      callId: "c-fail",
+      capability: { name: "generate_image" },
+      owner: { turnId: "t1" },
+    }),
+    event("call.settled", {
+      turnId: "t1",
+      callId: "c-fail",
+      outcome: "completed",
+      output: { success: false },
+    }),
+    event("call.requested", {
+      turnId: "t1",
+      callId: "c-other",
+      capability: { name: "read_file" },
+      owner: { turnId: "t1" },
+    }),
+    event("call.settled", {
+      turnId: "t1",
+      callId: "c-other",
+      outcome: "completed",
+      output: { ok: true },
+    }),
+    event("call.requested", {
+      turnId: "t1",
+      callId: "c-error",
+      capability: { name: "web_search" },
+      owner: { turnId: "t1" },
+    }),
+    event("call.settled", {
+      turnId: "t1",
+      callId: "c-error",
+      outcome: "failed",
+      output: { type: "auto" },
+    }),
+  ]);
+
+  assert.equal(trace.tools.count, 0);
+  assert.equal(trace.grandCostUsd, null);
+});
+
+test("threadTraceFromEvents attaches tool-only turns without model calls", () => {
+  const trace = threadTraceFromEvents([
+    event("message.received", { turnId: "t1", message: "search only" }),
+    event("call.requested", {
+      turnId: "t1",
+      callId: "c1",
+      capability: { name: "web_search" },
+      input: { type: "instant" },
+      owner: { turnId: "t1" },
+    }),
+    event("call.settled", {
+      turnId: "t1",
+      callId: "c1",
+      outcome: "completed",
+      output: { type: "instant", numResults: 5 },
+    }),
+  ]);
+
+  assert.equal(trace.totals.modelCalls, 0);
+  assert.equal(trace.tools.count, 1);
+  assert.ok(Math.abs(trace.tools.costUsd - 0.004) < 1e-9);
+  assert.equal(trace.grandCostUsd, 0.004);
+  assert.equal(trace.turns, 1);
+  assert.equal(trace.callTurns[0]?.label, "search only");
+  assert.equal(trace.callTurns[0]?.calls.length, 0);
+  assert.equal(trace.callTurns[0]?.tools[0]?.detail, "Exa instant");
 });
