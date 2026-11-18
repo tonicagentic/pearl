@@ -57,7 +57,7 @@ test("live session config stays voice-first without gateway providerOptions", ()
   assert.equal(GATEWAY_PROVIDER_OPTIONS.disallowPromptTraining, true);
   assert.equal("providerOptions" in LIVE_SESSION_CONFIG, false);
   assert.equal(LIVE_MODEL_ID, "spacexai/grok-voice-3.0");
-  assert.equal(LIVE_SESSION_CONFIG.voice, "eve");
+  assert.equal(LIVE_SESSION_CONFIG.voice, "ara");
   assert.equal(LIVE_SESSION_CONFIG.turnDetection.type, "server-vad");
   assert.equal(LIVE_SESSION_CONFIG.turnDetection.threshold, 0.6);
   assert.equal(liveGreetingResponseEvent().type, "response-create");
@@ -274,5 +274,6 @@ test("transcripts and socket protocols stay on the gateway live session", () => 
   ]);
   assert.equal(isVideoFrameRejection("unknown event type"), true);
   assert.equal(isFatalLiveError("no_providers_available"), true);
+  assert.equal(isFatalLiveError("eve is not a valid voice"), true);
   assert.equal(isFatalLiveError("unknown event type"), false);
 });

@@ -251,6 +251,11 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     const busy = toolUplinkHeld();
     suppressMicRef.current = busy;
     if (busy) {
+      // Post-tool reply audio: keep uplink held but show speaking, not "working".
+      if (awaitAudioAfterToolRef.current && assistantAudibleRef.current) {
+        setVoiceMode((current) => (current === "muted" ? current : "speaking"));
+        return;
+      }
       setVoiceMode((current) => (current === "muted" ? current : "working"));
       return;
     }
@@ -828,9 +833,18 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
             if (!item || typeof item !== "object") continue;
             const message = item as ServerEvent;
             if (message.type === "audio-delta" && typeof message.delta === "string") {
-              clearPostToolAudioWait();
+              // Keep uplink muted through the whole post-tool reply — clearing on
+              // the first delta let her own speech trip VAD as the user.
+              if (
+                awaitAudioAfterToolRef.current &&
+                workTaskRef.current?.phase === "answering"
+              ) {
+                workTaskRef.current = { ...workTaskRef.current, phase: "done" };
+                refreshWorkCards();
+              }
               if (iosDuplex) {
                 markAssistantAudible();
+                if (awaitAudioAfterToolRef.current) syncToolVoiceMode();
                 voiceRef.current?.enqueuePcm16Base64(message.delta);
               } else {
                 for (const chunk of playbackRef.current.pushBase64(message.delta)) enqueueWav(chunk);
@@ -846,8 +860,8 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
                 settleAfterPlayback();
               }
             } else if (message.type === "speech-started") {
-              // During the greeting hold or tool wait, treat speech-started as
-              // noise — clear the buffer and keep going.
+              // During the greeting hold, tool wait, or post-tool reply, treat
+              // speech-started as echo — clear the buffer and keep going.
               if (iosDuplex && (holdUplinkRef.current || toolUplinkHeld())) {
                 sendEvent({ type: "input-audio-clear" });
                 continue;
@@ -948,9 +962,11 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     markAssistantAudible,
     noteModelAudioDone,
     notePlaybackDrained,
+    refreshWorkCards,
     sendEvent,
     settleAfterPlayback,
     stopPlayback,
+    syncToolVoiceMode,
     toolUplinkHeld,
   ]);
 
