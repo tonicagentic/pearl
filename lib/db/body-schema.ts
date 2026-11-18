@@ -9,6 +9,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { user } from "./schema.ts";
 
@@ -71,6 +72,8 @@ export const bodyFoods = body.table(
     servingLabel: text("serving_label").notNull().default("1 serving"),
     /** breakfast | lunch | dinner | snack — null until set */
     slot: text("slot"),
+    /** UPC/EAN barcode when known */
+    barcode: text("barcode"),
     calories: macros.calories(),
     proteinG: macros.proteinG(),
     carbsG: macros.carbsG(),
@@ -78,7 +81,12 @@ export const bodyFoods = body.table(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("foods_user_id_idx").on(t.userId)],
+  (t) => [
+    index("foods_user_id_idx").on(t.userId),
+    uniqueIndex("foods_user_barcode_unique")
+      .on(t.userId, t.barcode)
+      .where(sql`${t.barcode} is not null`),
+  ],
 );
 
 export const bodyMealLogs = body.table(

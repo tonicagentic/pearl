@@ -21,10 +21,17 @@ export async function POST(request: Request) {
                 throw new Error(`Invalid meal slot: ${String(body.slot)}`);
               })()
           : undefined;
+    const barcode =
+      body.barcode === null || body.barcode === ""
+        ? null
+        : body.barcode != null
+          ? str(body.barcode)
+          : undefined;
     return createFood({
       name,
       servingLabel: str(body.servingLabel) || undefined,
       slot,
+      barcode,
       calories: num(body.calories),
       proteinG: num(body.proteinG),
       carbsG: num(body.carbsG),

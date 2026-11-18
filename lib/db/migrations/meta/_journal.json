@@ -267,6 +267,13 @@
       "when": 1795100000000,
       "tag": "0040_body_rotation_meals",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1795200000000,
+      "tag": "0041_body_food_barcode",
+      "breakpoints": true
     }
   ]
 }

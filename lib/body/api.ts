@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   bodyExercises,
@@ -26,6 +26,7 @@ import {
   sumMacros,
   type MacroTotals,
 } from "./macros";
+import { lookupOpenFoodFacts } from "./barcode-lookup";
 import {
   suggestMealDay,
   type CategorizedFood,
@@ -76,8 +77,13 @@ function mapFood(row: typeof bodyFoods.$inferSelect) {
     name: row.name,
     servingLabel: row.servingLabel,
     slot: isMealSlot(row.slot) ? row.slot : null,
+    barcode: row.barcode ?? null,
     ...macrosFromNumeric(row),
   };
+}
+
+function cleanBarcode(raw: string): string {
+  return raw.replace(/\D/g, "");
 }
 
 function optionalSlot(value: unknown): MealSlot | null | undefined {
@@ -164,6 +170,7 @@ export async function createFood(input: {
   name: string;
   servingLabel?: string;
   slot?: MealSlot | null;
+  barcode?: string | null;
   calories: number;
   proteinG: number;
   carbsG: number;
@@ -173,6 +180,13 @@ export async function createFood(input: {
     input.slot === undefined || input.slot === null
       ? null
       : assertMealSlot(input.slot);
+  const barcode =
+    input.barcode === undefined || input.barcode === null || input.barcode === ""
+      ? null
+      : cleanBarcode(input.barcode);
+  if (barcode && (barcode.length < 8 || barcode.length > 14)) {
+    throw new Error("Invalid barcode");
+  }
   const [row] = await tx()
     .insert(bodyFoods)
     .values({
@@ -180,6 +194,7 @@ export async function createFood(input: {
       name: input.name.trim(),
       servingLabel: input.servingLabel?.trim() || "1 serving",
       slot,
+      barcode,
       ...macroStrings(input),
     })
     .returning();
@@ -192,6 +207,7 @@ export async function updateFood(
     name: string;
     servingLabel: string;
     slot: MealSlot | null;
+    barcode: string | null;
     calories: number;
     proteinG: number;
     carbsG: number;
@@ -205,6 +221,17 @@ export async function updateFood(
     patch.slot =
       input.slot === null ? null : assertMealSlot(input.slot);
   }
+  if (input.barcode !== undefined) {
+    if (input.barcode === null || input.barcode === "") {
+      patch.barcode = null;
+    } else {
+      const barcode = cleanBarcode(input.barcode);
+      if (barcode.length < 8 || barcode.length > 14) {
+        throw new Error("Invalid barcode");
+      }
+      patch.barcode = barcode;
+    }
+  }
   if (input.calories != null) patch.calories = String(input.calories);
   if (input.proteinG != null) patch.proteinG = String(input.proteinG);
   if (input.carbsG != null) patch.carbsG = String(input.carbsG);
@@ -217,6 +244,77 @@ export async function updateFood(
     .returning();
   if (!row) throw new Error("Not found");
   return { food: mapFood(row) };
+}
+
+export async function getFoodByBarcode(code: string) {
+  const barcode = cleanBarcode(code);
+  if (!barcode) throw new Error("barcode is required");
+  const rows = await tx()
+    .select()
+    .from(bodyFoods)
+    .where(and(eq(bodyFoods.userId, uid()), eq(bodyFoods.barcode, barcode)))
+    .limit(1);
+  return { food: rows[0] ? mapFood(rows[0]) : null };
+}
+
+export async function lookupBarcodeFood(code: string) {
+  const existing = await getFoodByBarcode(code);
+  if (existing.food) {
+    return {
+      food: existing.food,
+      lookup: null as null,
+      existing: true,
+    };
+  }
+  const lookup = await lookupOpenFoodFacts(code);
+  return { food: null, lookup, existing: false };
+}
+
+export async function listRecentFoods(limit = 12) {
+  const capped = Math.min(Math.max(1, Math.floor(limit) || 12), 40);
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - 14);
+  const sinceIso = since.toISOString().slice(0, 10);
+
+  const rows = await tx()
+    .select({
+      foodId: bodyMealLogItems.foodId,
+      loggedAt: bodyMealLogItems.createdAt,
+    })
+    .from(bodyMealLogItems)
+    .innerJoin(bodyMealLogs, eq(bodyMealLogItems.mealLogId, bodyMealLogs.id))
+    .where(
+      and(eq(bodyMealLogItems.userId, uid()), gte(bodyMealLogs.date, sinceIso)),
+    )
+    .orderBy(desc(bodyMealLogItems.createdAt))
+    .limit(200);
+
+  const orderedIds: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (!row.foodId || seen.has(row.foodId)) continue;
+    seen.add(row.foodId);
+    orderedIds.push(row.foodId);
+    if (orderedIds.length >= capped) break;
+  }
+
+  if (orderedIds.length === 0) {
+    return { foods: [] as ReturnType<typeof mapFood>[] };
+  }
+
+  const foods = await tx()
+    .select()
+    .from(bodyFoods)
+    .where(and(eq(bodyFoods.userId, uid()), inArray(bodyFoods.id, orderedIds)));
+
+  // Preserve recency order from orderedIds
+  const byId = new Map(foods.map((f) => [f.id, f]));
+  return {
+    foods: orderedIds
+      .map((id) => byId.get(id))
+      .filter((f): f is NonNullable<typeof f> => Boolean(f))
+      .map(mapFood),
+  };
 }
 
 export async function estimateFoodNutrition(input: {

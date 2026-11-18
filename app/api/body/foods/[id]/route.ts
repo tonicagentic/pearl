@@ -17,11 +17,18 @@ export async function PATCH(request: Request, ctx: Ctx) {
       }
       slot = body.slot;
     }
+    const barcode =
+      body.barcode === null || body.barcode === ""
+        ? null
+        : body.barcode != null
+          ? str(body.barcode)
+          : undefined;
     return updateFood(id, {
       name: body.name != null ? str(body.name) : undefined,
       servingLabel:
         body.servingLabel != null ? str(body.servingLabel) : undefined,
       slot,
+      barcode,
       calories: body.calories != null ? num(body.calories) : undefined,
       proteinG: body.proteinG != null ? num(body.proteinG) : undefined,
       carbsG: body.carbsG != null ? num(body.carbsG) : undefined,
