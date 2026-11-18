@@ -19,6 +19,19 @@ const EXPECTED_ROOT_CHILD: Record<string, string> = {
   "answer-table": "Table",
   "answer-explain": "Explainer",
   "answer-recipe": "Recipe",
+  "answer-chart": "Chart",
+  "answer-spec": "SpecSheet",
+  "answer-mermaid": "MermaidDiagram",
+  "answer-flight": "FlightTracker",
+  "answer-event": "CalendarEvent",
+  "answer-create-event": "CreateEvent",
+  "answer-booking": "Booking",
+  "answer-email-draft": "EmailDraft",
+  "answer-email-batch": "EmailBatch",
+  "answer-surf": "SurfReport",
+  "answer-snow": "SnowReport",
+  "answer-daily": "DailyBrief",
+  "answer-video": "Video",
 };
 
 function assistantText(sample: (typeof ANSWER_THREAD_SAMPLES)[number]): string {
@@ -43,8 +56,8 @@ function assistantText(sample: (typeof ANSWER_THREAD_SAMPLES)[number]): string {
 }
 
 describe("answer thread samples", () => {
-  it("includes fourteen answer fixtures", () => {
-    assert.equal(ANSWER_THREAD_SAMPLES.length, 14);
+  it("includes twenty-seven answer fixtures", () => {
+    assert.equal(ANSWER_THREAD_SAMPLES.length, 27);
   });
 
   for (const sample of ANSWER_THREAD_SAMPLES) {

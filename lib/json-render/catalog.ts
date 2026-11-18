@@ -40,6 +40,47 @@ const regionBar = z.object({
   hint: z.string().nullable(),
 });
 
+const specRow = z.object({
+  label: z.string(),
+  value: z.string(),
+  emphasis: z.boolean().nullable(),
+});
+
+const mailBatchItem = z.object({
+  accountId: z.string(),
+  threadId: z.string(),
+  action: z.enum(["archive", "mark_read"]),
+  subject: z.string().nullable(),
+  from: z.string().nullable(),
+});
+
+const dayEvent = z.object({
+  title: z.string(),
+  time: z.string(),
+  tag: z.string().nullable(),
+});
+
+const surfPeriod = z.object({
+  label: z.string(),
+  wave: z.string(),
+  wind: z.string(),
+});
+
+const dailyStory = z.object({
+  headline: z.string(),
+  dek: z.string().nullable(),
+  source: z.string().nullable(),
+  url: z.string().nullable(),
+  image: z.string().nullable(),
+});
+
+const snowTrailLevel = z.object({
+  /** Difficulty: beginner (green), intermediate (blue), advanced (black), expert (double-black). */
+  level: z.enum(["beginner", "intermediate", "advanced", "expert"]),
+  open: z.number(),
+  total: z.number().nullable(),
+});
+
 /**
  * Shared generative-UI vocabulary for Pearl chat.
  *
@@ -258,6 +299,160 @@ export const chatCatalog = defineCatalog(schema, {
       }),
       description: "Recipe card with time, yield, ingredients, and numbered method",
     },
+    Chart: {
+      props: z.object({
+        label: z.string(),
+        value: z.string(),
+        delta: z.string().nullable(),
+        trend: z.enum(["up", "down", "flat"]).nullable(),
+        upIsGood: z.boolean().nullable(),
+        points: z.array(z.number()).min(1),
+        visibleCount: z.number().nullable(),
+        variant: z.enum(["area", "line", "bars"]).nullable(),
+      }),
+      description:
+        "Sparkline metric chart: label, headline value, optional delta, and a numeric series (area, line, or bars)",
+    },
+    SpecSheet: {
+      props: z.object({
+        title: z.string(),
+        subtitle: z.string().nullable(),
+        rows: z.array(specRow).min(1),
+        visibleCount: z.number().nullable(),
+      }),
+      description:
+        "Labeled object sheet: title, optional subtitle, and label/value rows (emphasis marks the deciding row)",
+    },
+    MermaidDiagram: {
+      props: z.object({
+        code: z.string(),
+        title: z.string().nullable(),
+        streaming: z.boolean().nullable(),
+      }),
+      description:
+        "Mermaid diagram from source code (flowchart, sequence, class, state, ER, XY). Prefer this card for diagram answers inside Card.",
+    },
+    FlightTracker: {
+      props: z.object({
+        airline: z.string(),
+        flightNumber: z.string(),
+        status: z.string(),
+        origin: z.string(),
+        destination: z.string(),
+        progress: z.number(),
+        elapsed: z.string().nullable(),
+        remaining: z.string().nullable(),
+      }),
+      description:
+        "In-flight or scheduled flight card with origin/destination codes and a 0–100 route progress bar",
+    },
+    CalendarEvent: {
+      props: z.object({
+        date: z.string(),
+        title: z.string(),
+        time: z.string(),
+        location: z.string().nullable(),
+      }),
+      description: "Compact single calendar event summary",
+    },
+    CreateEvent: {
+      props: z.object({
+        day: z.string(),
+        month: z.string(),
+        weekday: z.string(),
+        events: z.array(dayEvent).nullable(),
+        title: z.string(),
+        start: z.string(),
+        end: z.string().nullable(),
+        location: z.string().nullable(),
+        calendarId: z.string().nullable(),
+      }),
+      description:
+        "Propose adding an event: day header, optional same-day events, and Add to calendar / Discard actions that reply into chat",
+    },
+    Booking: {
+      props: z.object({
+        restaurant: z.string().nullable(),
+        name: z.string().nullable(),
+        partySize: z.number(),
+        date: z.string(),
+        seating: z.enum(["indoor", "patio"]).nullable(),
+        reminder: z.boolean().nullable(),
+      }),
+      description:
+        "Table reservation card with party size, date, seating; Confirm/Cancel reply into chat",
+    },
+    EmailDraft: {
+      props: z.object({
+        to: z.string(),
+        cc: z.string().nullable(),
+        bcc: z.string().nullable(),
+        subject: z.string(),
+        body: z.string(),
+        accountId: z.string().nullable(),
+        threadId: z.string().nullable(),
+      }),
+      description:
+        "Email draft preview with Save draft / Send buttons that reply so Pearl can call create_gmail_draft or send_gmail_message",
+    },
+    EmailBatch: {
+      props: z.object({
+        items: z.array(mailBatchItem).min(1).max(20),
+      }),
+      description:
+        "Proposed Gmail archive/mark-read batch; Confirm batch replies so Pearl can call apply_mail_batch",
+    },
+    SurfReport: {
+      props: z.object({
+        spot: z.string(),
+        region: z.string().nullable(),
+        updated: z.string().nullable(),
+        rating: z.string().nullable(),
+        summary: z.string().nullable(),
+        wave: z.string().nullable(),
+        wind: z.string().nullable(),
+        tide: z.string().nullable(),
+        periods: z.array(surfPeriod).nullable(),
+      }),
+      description: "Surf conditions for a spot: wave, wind, tide, rating, optional periods",
+    },
+    SnowReport: {
+      props: z.object({
+        resort: z.string(),
+        region: z.string().nullable(),
+        updated: z.string().nullable(),
+        baseDepth: z.string().nullable(),
+        newSnow: z.string().nullable(),
+        conditions: z.string().nullable(),
+        liftsOpen: z.string().nullable(),
+        trailsOpen: z.string().nullable(),
+        /** Trails open by difficulty (green / blue / black / double-black). */
+        trailLevels: z.array(snowTrailLevel).nullable(),
+        summary: z.string().nullable(),
+        image: z.string().nullable(),
+      }),
+      description:
+        "Ski resort snow report with depth, new snow, lifts/trails, optional trailLevels breakdown and image",
+    },
+    DailyBrief: {
+      props: z.object({
+        date: z.string().nullable(),
+        title: z.string().nullable(),
+        stories: z.array(dailyStory).min(3).max(8),
+      }),
+      description:
+        "Multi-story daily brief (top headlines). Use NewsBrief for a single story deep-dive.",
+    },
+    Video: {
+      props: z.object({
+        title: z.string().nullable(),
+        src: z.string(),
+        provider: z.enum(["file", "youtube", "vimeo"]).nullable(),
+        poster: z.string().nullable(),
+      }),
+      description:
+        "Inline video from an https file URL or YouTube/Vimeo watch/embed URL (provider inferred when omitted)",
+    },
   },
   actions: {
     reply: {
@@ -273,11 +468,12 @@ export const chatCatalog = defineCatalog(schema, {
 export type ChatCatalog = typeof chatCatalog;
 
 export const JSON_RENDER_CUSTOM_RULES = [
-  "Emit a UI spec for structured answers of these kinds: web/product search, location or place maps, news briefs, encyclopedia entries, pronunciation, foreign-language phrases, guitar chords, music theory (progressions / circle of fifths), vote or regional charts, tables, explainers, and recipes. Ordinary replies and exploratory thinking-together turns stay prose with no spec.",
-  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Table, Explainer, Recipe, ComparisonBar) inside it.",
-  "For two-way % races prefer ComparisonBar; for multi-region shares use RegionChart. Keep 1–2 sentences of prose outside the fence.",
+  "Emit a UI spec for structured answers of these kinds: web/product search, location or place maps, news briefs, daily multi-story briefs, encyclopedia entries, pronunciation, foreign-language phrases, guitar chords, music theory, vote or regional charts, sparkline charts, spec sheets, Mermaid diagrams, tables, explainers, recipes, flight tracking, calendar events, table bookings, email drafts/batches, surf/snow reports, and video. Ordinary replies and exploratory thinking-together turns stay prose with no spec.",
+  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, DailyBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Chart, SpecSheet, MermaidDiagram, Table, Explainer, Recipe, ComparisonBar, FlightTracker, CalendarEvent, CreateEvent, Booking, EmailDraft, EmailBatch, SurfReport, SnowReport, Video) inside it.",
+  "For two-way % races prefer ComparisonBar; for multi-region shares use RegionChart; for a single metric series use Chart. Use DailyBrief for a morning/top-stories roundup; NewsBrief for one story. Keep 1–2 sentences of prose outside the fence.",
+  "EmailDraft, EmailBatch, CreateEvent, and Booking include built-in confirm buttons that reply with tool-ready messages. When the user sends those confirmations, call create_gmail_draft / send_gmail_message / apply_mail_batch or the calendar create path immediately with the stated params (approvals still apply).",
   "Buttons that continue the conversation must bind press to the reply action with a concrete message string. Do not invent component names outside this catalog.",
-  "Image src must be an https URL. Prefer the dedicated answer components over assembling the same layout from Stack/Text alone.",
+  "Image and Video src must be https URLs. Prefer the dedicated answer components over assembling the same layout from Stack/Text alone.",
 ] as const;
 
 /** System prompt fragment for the eve chat channel (inline generative UI). */

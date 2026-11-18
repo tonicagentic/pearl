@@ -1,4 +1,12 @@
 import type { ComponentRegistry } from "@json-render/react-native";
+import { useActions } from "@json-render/react-native";
+import { VideoPlayer } from "@/components/assistant-ui/elements/media-player";
+import {
+  chartDeltaTone,
+  chartSeriesLayout,
+  clampVisibleCount,
+  inferChartTrend,
+} from "../../../lib/json-render/chart";
 import { comparisonBarShares } from "../../../lib/json-render/comparison-bar";
 import {
   CHORD_LIBRARY,
@@ -16,10 +24,24 @@ import {
   regionBarWidths,
 } from "../../../lib/json-render/diagrams";
 import {
+  bookingCancelMessage,
+  bookingConfirmMessage,
+  createEventConfirmMessage,
+  createEventDiscardMessage,
+  emailBatchConfirmMessage,
+  emailDraftSaveMessage,
+  emailDraftSendMessage,
+} from "../../../lib/json-render/reply-messages";
+import {
   fetchAiSpeechUrl,
   playAudioUrl,
   speakText,
 } from "../../../lib/json-render/speak";
+import {
+  formatSnowLevelCount,
+  snowTrailLevelMeta,
+} from "../../../lib/json-render/snow";
+import { resolveVideoEmbed } from "../../../lib/json-render/video-embed";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
@@ -30,10 +52,114 @@ import { Pressable, View, Image as RNImage, ScrollView } from "react-native";
 import Svg, {
   Circle,
   Line,
+  Path,
   Rect,
   Text as SvgText,
 } from "react-native-svg";
-import { useMemo, useState, type ReactNode } from "react";
+import {
+  useMemo,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
+
+type WebViewComponent = ComponentType<{
+  source: { html?: string; uri?: string };
+  style?: object;
+  originWhitelist?: string[];
+  scrollEnabled?: boolean;
+}>;
+
+function loadWebView(): WebViewComponent | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("react-native-webview").WebView as WebViewComponent;
+  } catch {
+    return null;
+  }
+}
+
+function MermaidWebView({ code }: { readonly code: string }) {
+  const WebView = useMemo(() => loadWebView(), []);
+  if (!WebView) {
+    return (
+      <Text variant="caption" className="opacity-70">
+        {code}
+      </Text>
+    );
+  }
+  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"/><script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:false,securityLevel:"strict",theme:"neutral"});try{const {svg}=await mermaid.render("m1",${JSON.stringify(code)});document.body.innerHTML=svg;}catch(e){document.body.textContent=${JSON.stringify(code)};}</script></head><body style="margin:0;padding:8px;background:transparent;color:#111"></body></html>`;
+  return (
+    <WebView
+      originWhitelist={["*"]}
+      source={{ html }}
+      style={{ width: "100%", height: 220, backgroundColor: "transparent" }}
+      scrollEnabled={false}
+    />
+  );
+}
+
+function EmbedWebView({ uri }: { readonly uri: string }) {
+  const WebView = useMemo(() => loadWebView(), []);
+  if (!WebView) {
+    return (
+      <Text variant="caption" className="opacity-70">
+        Open {uri}
+      </Text>
+    );
+  }
+  return (
+    <WebView
+      originWhitelist={["https://*"]}
+      source={{ uri }}
+      style={{ width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000" }}
+    />
+  );
+}
+
+function ReplyButtons({
+  primary,
+  secondary,
+}: {
+  readonly primary: { readonly label: string; readonly message: string };
+  readonly secondary?: { readonly label: string; readonly message: string };
+}) {
+  const actions = useActions();
+  return (
+    <View className="flex-row flex-wrap gap-2">
+      <Pressable
+        accessibilityRole="button"
+        onPress={() =>
+          void actions.execute({
+            action: "reply",
+            params: { message: primary.message },
+          })
+        }
+        className="bg-primary self-start rounded-full px-3.5 py-2 active:opacity-80"
+      >
+        <Text variant="secondary" weight="medium" className="text-primary-foreground">
+          {primary.label}
+        </Text>
+      </Pressable>
+      {secondary ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() =>
+            void actions.execute({
+              action: "reply",
+              params: { message: secondary.message },
+            })
+          }
+          className="border-border self-start rounded-full border bg-transparent px-3.5 py-2 active:opacity-80"
+        >
+          <Text variant="secondary" weight="medium">
+            {secondary.label}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
 
 /** Light fretboard panel so dots stay readable in dark mode. */
 const CHORD_BOARD = {
@@ -1110,6 +1236,713 @@ export const chatRegistry: ComponentRegistry = {
             </Text>
           ))}
         </View>
+      </View>
+    );
+  },
+  Chart: ({ element }) => {
+    const points = Array.isArray(element.props.points)
+      ? element.props.points.map((value: unknown) => asNumber(value))
+      : [];
+    const visibleCount = clampVisibleCount(
+      points.length,
+      element.props.visibleCount == null
+        ? null
+        : asNumber(element.props.visibleCount),
+    );
+    const layout = chartSeriesLayout(points, visibleCount);
+    const delta =
+      element.props.delta == null ? null : asString(element.props.delta);
+    const trend = inferChartTrend(
+      delta,
+      element.props.trend === "up" ||
+        element.props.trend === "down" ||
+        element.props.trend === "flat"
+        ? element.props.trend
+        : null,
+    );
+    const tone = chartDeltaTone(
+      trend,
+      element.props.upIsGood == null ? null : Boolean(element.props.upIsGood),
+    );
+    const variant =
+      element.props.variant === "line" || element.props.variant === "bars"
+        ? element.props.variant
+        : "area";
+    return (
+      <View className="flex-col gap-2">
+        <View className="flex-row items-baseline justify-between gap-2">
+          <Text variant="caption" className="uppercase tracking-wide">
+            {asString(element.props.label)}
+          </Text>
+          {delta ? (
+            <Text
+              variant="caption"
+              className={cn(
+                tone === "positive" && "text-emerald-600",
+                tone === "negative" && "text-red-600",
+              )}
+            >
+              {delta}
+            </Text>
+          ) : null}
+        </View>
+        <Text variant="body" weight="semibold" className="text-2xl">
+          {asString(element.props.value)}
+        </Text>
+        <Svg width="100%" height={72} viewBox="0 0 240 72">
+          {variant === "bars"
+            ? layout.bars.map((bar, index) => (
+                <Rect
+                  key={index}
+                  x={bar.x}
+                  y={bar.y}
+                  width={bar.w}
+                  height={bar.h}
+                  rx={1}
+                  fill={bar.last ? "#3B82F6" : "rgba(26,26,26,0.25)"}
+                />
+              ))
+            : null}
+          {variant === "area" && layout.areaPath ? (
+            <Path d={layout.areaPath} fill="rgba(59,130,246,0.2)" />
+          ) : null}
+          {(variant === "area" || variant === "line") && layout.linePath ? (
+            <Path
+              d={layout.linePath}
+              fill="none"
+              stroke="#3B82F6"
+              strokeWidth={2}
+            />
+          ) : null}
+          {(variant === "area" || variant === "line") &&
+          layout.visible.length > 0 ? (
+            <Circle
+              cx={layout.visible[layout.visible.length - 1]!.x}
+              cy={layout.visible[layout.visible.length - 1]!.y}
+              r={3}
+              fill="#3B82F6"
+            />
+          ) : null}
+        </Svg>
+      </View>
+    );
+  },
+  SpecSheet: ({ element }) => {
+    const rows = asObjectArray(element.props.rows);
+    const visibleCount =
+      element.props.visibleCount == null
+        ? rows.length
+        : Math.max(
+            0,
+            Math.min(rows.length, Math.floor(asNumber(element.props.visibleCount))),
+          );
+    const visible = rows.slice(0, visibleCount);
+    return (
+      <View className="flex-col gap-3">
+        <View className="flex-col gap-0.5">
+          <Text variant="body" weight="medium">
+            {asString(element.props.title)}
+          </Text>
+          {element.props.subtitle ? (
+            <Text variant="caption">{asString(element.props.subtitle)}</Text>
+          ) : null}
+        </View>
+        <View className="flex-col">
+          {visible.map((row, index) => (
+            <View
+              key={asString(row.label)}
+              className={cn(
+                "flex-row items-baseline justify-between gap-3 py-1.5",
+                index > 0 && "border-border/60 border-t",
+              )}
+            >
+              <Text variant="caption" className="font-mono">
+                {asString(row.label)}
+              </Text>
+              <Text
+                variant="secondary"
+                weight={row.emphasis ? "semibold" : "regular"}
+                className="text-right"
+              >
+                {asString(row.value)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  },
+  MermaidDiagram: ({ element }) => (
+    <View className="flex-col gap-2">
+      {element.props.title ? (
+        <Text variant="body" weight="medium">
+          {asString(element.props.title)}
+        </Text>
+      ) : null}
+      {element.props.streaming ? (
+        <Text variant="caption">Rendering diagram…</Text>
+      ) : (
+        <MermaidWebView code={asString(element.props.code)} />
+      )}
+    </View>
+  ),
+  FlightTracker: ({ element }) => {
+    const progress = Math.max(0, Math.min(100, asNumber(element.props.progress)));
+    return (
+      <View className="flex-col gap-3">
+        <View className="flex-row justify-between">
+          <Text variant="caption">
+            {asString(element.props.airline)} ·{" "}
+            {asString(element.props.flightNumber)}
+          </Text>
+          <Text variant="caption">{asString(element.props.status)}</Text>
+        </View>
+        <View className="flex-row items-center justify-between gap-3">
+          <Text variant="body" weight="semibold" className="text-3xl">
+            {asString(element.props.origin)}
+          </Text>
+          <Text variant="caption">✈</Text>
+          <Text variant="body" weight="semibold" className="text-3xl">
+            {asString(element.props.destination)}
+          </Text>
+        </View>
+        <View className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+          <View
+            className="h-full rounded-full bg-blue-500"
+            style={{ width: `${progress}%` }}
+          />
+        </View>
+        <View className="flex-row justify-between">
+          <Text variant="caption">{asString(element.props.elapsed)}</Text>
+          <Text variant="caption">{asString(element.props.remaining)}</Text>
+        </View>
+      </View>
+    );
+  },
+  CalendarEvent: ({ element }) => (
+    <View className="flex-col gap-1.5">
+      <Text variant="caption">{asString(element.props.date)}</Text>
+      <Text variant="body" weight="medium" className="text-[17px]">
+        {asString(element.props.title)}
+      </Text>
+      <Text variant="secondary">
+        {asString(element.props.time)}
+        {element.props.location
+          ? ` · ${asString(element.props.location)}`
+          : ""}
+      </Text>
+    </View>
+  ),
+  CreateEvent: ({ element }) => {
+    const events = asObjectArray(element.props.events);
+    const title = asString(element.props.title);
+    return (
+      <View className="flex-col gap-3">
+        <View className="flex-row items-center gap-3">
+          <Text variant="body" weight="semibold" className="text-3xl">
+            {asString(element.props.day)}
+          </Text>
+          <View className="flex-col">
+            <Text variant="secondary" weight="semibold">
+              {asString(element.props.month)}
+            </Text>
+            <Text variant="caption">{asString(element.props.weekday)}</Text>
+          </View>
+        </View>
+        <View className="border-border/60 border-t" />
+        {events.length > 0 ? (
+          <View className="flex-col gap-2.5">
+            {events.map((event, index) => (
+              <View
+                key={`${asString(event.title)}-${index}`}
+                className="flex-row items-center gap-3"
+              >
+                <View className="bg-foreground/50 h-8 w-0.5 rounded-full" />
+                <View className="min-w-0 flex-1 flex-col">
+                  <Text variant="secondary" weight="medium">
+                    {asString(event.title)}
+                  </Text>
+                  <Text variant="caption">{asString(event.time)}</Text>
+                </View>
+                {event.tag ? (
+                  <Text
+                    variant="caption"
+                    className="bg-muted rounded-full px-2 py-0.5"
+                  >
+                    {asString(event.tag)}
+                  </Text>
+                ) : null}
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View className="flex-col gap-0.5">
+            <Text variant="secondary" weight="medium">
+              {title}
+            </Text>
+            <Text variant="caption">
+              {asString(element.props.start)}
+              {element.props.end ? ` – ${asString(element.props.end)}` : ""}
+              {element.props.location
+                ? ` · ${asString(element.props.location)}`
+                : ""}
+            </Text>
+          </View>
+        )}
+        <ReplyButtons
+          primary={{
+            label: "Add to calendar",
+            message: createEventConfirmMessage({
+              title,
+              start: asString(element.props.start),
+              end:
+                element.props.end == null
+                  ? null
+                  : asString(element.props.end),
+              location:
+                element.props.location == null
+                  ? null
+                  : asString(element.props.location),
+              calendarId:
+                element.props.calendarId == null
+                  ? null
+                  : asString(element.props.calendarId),
+            }),
+          }}
+          secondary={{
+            label: "Discard",
+            message: createEventDiscardMessage(title),
+          }}
+        />
+      </View>
+    );
+  },
+  Booking: ({ element }) => {
+    const restaurant =
+      element.props.restaurant == null
+        ? null
+        : asString(element.props.restaurant);
+    const seating =
+      element.props.seating === "indoor" || element.props.seating === "patio"
+        ? element.props.seating
+        : null;
+    return (
+      <View className="flex-col gap-3">
+        <Text variant="body" weight="medium">
+          {restaurant ? `Reserve · ${restaurant}` : "Reserve a table"}
+        </Text>
+        <View className="flex-col gap-1">
+          {element.props.name ? (
+            <Text variant="secondary">
+              Name · {asString(element.props.name)}
+            </Text>
+          ) : null}
+          <Text variant="secondary">
+            Party · {asNumber(element.props.partySize)}
+          </Text>
+          <Text variant="secondary">Date · {asString(element.props.date)}</Text>
+          {seating ? (
+            <Text variant="secondary">Seating · {seating}</Text>
+          ) : null}
+          {element.props.reminder != null ? (
+            <Text variant="secondary">
+              Reminder · {element.props.reminder ? "Yes" : "No"}
+            </Text>
+          ) : null}
+        </View>
+        <ReplyButtons
+          primary={{
+            label: "Confirm reservation",
+            message: bookingConfirmMessage({
+              restaurant,
+              name:
+                element.props.name == null
+                  ? null
+                  : asString(element.props.name),
+              partySize: asNumber(element.props.partySize),
+              date: asString(element.props.date),
+              seating,
+              reminder:
+                element.props.reminder == null
+                  ? null
+                  : Boolean(element.props.reminder),
+            }),
+          }}
+          secondary={{
+            label: "Cancel",
+            message: bookingCancelMessage(restaurant),
+          }}
+        />
+      </View>
+    );
+  },
+  EmailDraft: ({ element }) => {
+    const draft = {
+      to: asString(element.props.to),
+      cc: element.props.cc == null ? null : asString(element.props.cc),
+      bcc: element.props.bcc == null ? null : asString(element.props.bcc),
+      subject: asString(element.props.subject),
+      body: asString(element.props.body),
+      accountId:
+        element.props.accountId == null
+          ? null
+          : asString(element.props.accountId),
+      threadId:
+        element.props.threadId == null
+          ? null
+          : asString(element.props.threadId),
+    };
+    return (
+      <View className="flex-col gap-3">
+        <View className="flex-col gap-1">
+          <Text variant="caption">To {draft.to}</Text>
+          {draft.cc ? <Text variant="caption">Cc {draft.cc}</Text> : null}
+          {draft.bcc ? <Text variant="caption">Bcc {draft.bcc}</Text> : null}
+          <Text variant="body" weight="medium">
+            {draft.subject}
+          </Text>
+        </View>
+        <Text variant="secondary" className="leading-relaxed">
+          {draft.body}
+        </Text>
+        <ReplyButtons
+          primary={{
+            label: "Send",
+            message: emailDraftSendMessage(draft),
+          }}
+          secondary={{
+            label: "Save draft",
+            message: emailDraftSaveMessage(draft),
+          }}
+        />
+      </View>
+    );
+  },
+  EmailBatch: ({ element }) => {
+    const items = asObjectArray(element.props.items).map((item) => ({
+      accountId: asString(item.accountId),
+      threadId: asString(item.threadId),
+      action:
+        item.action === "mark_read"
+          ? ("mark_read" as const)
+          : ("archive" as const),
+      subject: item.subject == null ? null : asString(item.subject),
+      from: item.from == null ? null : asString(item.from),
+    }));
+    return (
+      <View className="flex-col gap-3">
+        <Text variant="body" weight="medium">
+          {items.length} thread{items.length === 1 ? "" : "s"}
+        </Text>
+        <View className="flex-col gap-2">
+          {items.map((item) => (
+            <View
+              key={`${item.accountId}:${item.threadId}`}
+              className="border-border/50 flex-col gap-0.5 rounded-lg border px-2.5 py-2"
+            >
+              <Text variant="secondary" weight="medium">
+                {item.subject ?? item.threadId}
+              </Text>
+              <Text variant="caption">
+                {item.from ? `${item.from} · ` : ""}
+                {item.action === "archive" ? "Archive" : "Mark read"}
+              </Text>
+            </View>
+          ))}
+        </View>
+        <ReplyButtons
+          primary={{
+            label: "Confirm batch",
+            message: emailBatchConfirmMessage(items),
+          }}
+        />
+      </View>
+    );
+  },
+  SurfReport: ({ element }) => {
+    const periods = asObjectArray(element.props.periods);
+    return (
+      <View className="flex-col gap-3">
+        <View className="flex-col gap-0.5">
+          <Text variant="body" weight="medium">
+            {asString(element.props.spot)}
+          </Text>
+          <Text variant="caption">
+            {[element.props.region, element.props.updated, element.props.rating]
+              .filter((value) => value != null && asString(value))
+              .map(asString)
+              .join(" · ")}
+          </Text>
+        </View>
+        {element.props.summary ? (
+          <Text variant="secondary" className="leading-relaxed">
+            {asString(element.props.summary)}
+          </Text>
+        ) : null}
+        <View className="flex-row flex-wrap gap-2">
+          {element.props.wave ? (
+            <View className="bg-muted/40 min-w-[30%] flex-1 rounded-lg p-2">
+              <Text variant="caption">Wave</Text>
+              <Text variant="secondary" weight="medium">
+                {asString(element.props.wave)}
+              </Text>
+            </View>
+          ) : null}
+          {element.props.wind ? (
+            <View className="bg-muted/40 min-w-[30%] flex-1 rounded-lg p-2">
+              <Text variant="caption">Wind</Text>
+              <Text variant="secondary" weight="medium">
+                {asString(element.props.wind)}
+              </Text>
+            </View>
+          ) : null}
+          {element.props.tide ? (
+            <View className="bg-muted/40 min-w-[30%] flex-1 rounded-lg p-2">
+              <Text variant="caption">Tide</Text>
+              <Text variant="secondary" weight="medium">
+                {asString(element.props.tide)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        {periods.length > 0 ? (
+          <View className="flex-col gap-1.5">
+            {periods.map((period) => (
+              <View
+                key={asString(period.label)}
+                className="flex-row justify-between gap-2"
+              >
+                <Text variant="secondary" weight="medium">
+                  {asString(period.label)}
+                </Text>
+                <Text variant="caption">
+                  {asString(period.wave)} · {asString(period.wind)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+    );
+  },
+  SnowReport: ({ element }) => {
+    const image = httpsSrc(element.props.image);
+    const trailLevels = asObjectArray(element.props.trailLevels);
+    return (
+      <View className="flex-col gap-3">
+        <View className="flex-col gap-0.5">
+          <Text variant="body" weight="medium">
+            {asString(element.props.resort)}
+          </Text>
+          <Text variant="caption">
+            {[element.props.region, element.props.updated]
+              .filter((value) => value != null && asString(value))
+              .map(asString)
+              .join(" · ")}
+          </Text>
+        </View>
+        {image ? (
+          <RNImage
+            source={{ uri: image }}
+            accessibilityLabel={asString(element.props.resort)}
+            className="border-border/50 h-40 w-full rounded-lg border"
+            resizeMode="cover"
+          />
+        ) : null}
+        {element.props.summary ? (
+          <Text variant="secondary" className="leading-relaxed">
+            {asString(element.props.summary)}
+          </Text>
+        ) : null}
+        <View className="flex-row flex-wrap gap-x-4 gap-y-2">
+          {element.props.baseDepth ? (
+            <View>
+              <Text variant="caption">Base</Text>
+              <Text variant="secondary" weight="medium">
+                {asString(element.props.baseDepth)}
+              </Text>
+            </View>
+          ) : null}
+          {element.props.newSnow ? (
+            <View>
+              <Text variant="caption">New snow</Text>
+              <Text variant="secondary" weight="medium">
+                {asString(element.props.newSnow)}
+              </Text>
+            </View>
+          ) : null}
+          {element.props.conditions ? (
+            <View>
+              <Text variant="caption">Conditions</Text>
+              <Text variant="secondary" weight="medium">
+                {asString(element.props.conditions)}
+              </Text>
+            </View>
+          ) : null}
+          {element.props.liftsOpen ? (
+            <View>
+              <Text variant="caption">Lifts</Text>
+              <Text variant="secondary" weight="medium">
+                {asString(element.props.liftsOpen)}
+              </Text>
+            </View>
+          ) : null}
+          {element.props.trailsOpen ? (
+            <View>
+              <Text variant="caption">Trails</Text>
+              <Text variant="secondary" weight="medium">
+                {asString(element.props.trailsOpen)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        {trailLevels.length > 0 ? (
+          <View className="flex-col gap-1.5">
+            <Text variant="caption">Open by level</Text>
+            {trailLevels.map((entry) => {
+              const level = asString(entry.level);
+              const meta = snowTrailLevelMeta(level);
+              return (
+                <View
+                  key={level}
+                  className="flex-row items-center justify-between gap-3"
+                >
+                  <View className="flex-row items-center gap-2">
+                    <View className="w-5 flex-row items-center gap-0.5">
+                      <View
+                        style={{
+                          width: 10,
+                          height: 10,
+                          backgroundColor: meta.color,
+                          borderRadius:
+                            meta.symbol === "circle"
+                              ? 999
+                              : meta.symbol === "square"
+                                ? 2
+                                : 1,
+                          transform:
+                            meta.symbol === "diamond" ||
+                            meta.symbol === "double-diamond"
+                              ? [{ rotate: "45deg" }]
+                              : undefined,
+                        }}
+                      />
+                      {meta.symbol === "double-diamond" ? (
+                        <View
+                          style={{
+                            width: 10,
+                            height: 10,
+                            backgroundColor: meta.color,
+                            borderRadius: 1,
+                            transform: [{ rotate: "45deg" }],
+                          }}
+                        />
+                      ) : null}
+                    </View>
+                    <Text variant="secondary">{meta.label}</Text>
+                  </View>
+                  <Text variant="secondary" weight="medium">
+                    {formatSnowLevelCount(
+                      asNumber(entry.open),
+                      entry.total == null ? null : asNumber(entry.total),
+                    )}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+      </View>
+    );
+  },
+  DailyBrief: ({ element }) => {
+    const stories = asObjectArray(element.props.stories);
+    return (
+      <View className="flex-col gap-3">
+        <View className="flex-col gap-0.5">
+          <Text variant="body" weight="medium">
+            {element.props.title
+              ? asString(element.props.title)
+              : "Daily brief"}
+          </Text>
+          {element.props.date ? (
+            <Text variant="caption">{asString(element.props.date)}</Text>
+          ) : null}
+        </View>
+        <View className="flex-col gap-3">
+          {stories.map((story, index) => {
+            const image = httpsSrc(story.image);
+            return (
+              <View
+                key={`${asString(story.headline)}-${index}`}
+                className={cn(
+                  "gap-2.5",
+                  image ? "flex-row items-start" : "flex-col",
+                )}
+              >
+                {image ? (
+                  <RNImage
+                    source={{ uri: image }}
+                    accessibilityLabel=""
+                    className="border-border/50 h-14 w-14 shrink-0 rounded-lg border"
+                    resizeMode="cover"
+                  />
+                ) : null}
+                <View className="min-w-0 flex-1 flex-col gap-0.5">
+                  <Text variant="secondary" weight="medium">
+                    {asString(story.headline)}
+                  </Text>
+                  {story.dek ? (
+                    <Text variant="caption" className="leading-relaxed">
+                      {asString(story.dek)}
+                    </Text>
+                  ) : null}
+                  {story.source ? (
+                    <Text variant="caption">{asString(story.source)}</Text>
+                  ) : null}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    );
+  },
+  Video: ({ element }) => {
+    const resolved = resolveVideoEmbed({
+      src: asString(element.props.src),
+      provider:
+        element.props.provider === "file" ||
+        element.props.provider === "youtube" ||
+        element.props.provider === "vimeo"
+          ? element.props.provider
+          : null,
+      poster:
+        element.props.poster == null ? null : asString(element.props.poster),
+    });
+    if (!resolved) {
+      return <Text variant="caption">Video needs an https URL.</Text>;
+    }
+    return (
+      <View className="flex-col gap-2">
+        {element.props.title ? (
+          <Text variant="body" weight="medium">
+            {asString(element.props.title)}
+          </Text>
+        ) : null}
+        {resolved.provider === "file" ? (
+          <VideoPlayer
+            src={resolved.src}
+            poster={resolved.poster ?? undefined}
+            title={
+              element.props.title
+                ? asString(element.props.title)
+                : undefined
+            }
+          />
+        ) : (
+          <EmbedWebView uri={resolved.embedUrl} />
+        )}
       </View>
     );
   },

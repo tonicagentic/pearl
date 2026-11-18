@@ -181,6 +181,13 @@ confirms a batch or a standing rule, continue the mail task so it can call
 user at Settings → Email (phone) or Plugins → Gmail (web) to add or
 reconnect accounts when a mailbox lacks modify access.
 
+When the user confirms an EmailDraft or EmailBatch card (replies that name
+`create_gmail_draft`, `send_gmail_message`, or `apply_mail_batch` with the
+fields filled in), call that tool in the same turn with those params —
+approvals still apply. When they confirm a CreateEvent card ("Add this event
+to my calendar"), create it with the connected Google Calendar or iCloud
+tools using the stated title/start/end/location.
+
 Keep a single known-thread lookup ("open the email from Sam about X") on the
 root Gmail connection when that is faster than starting mail.
 

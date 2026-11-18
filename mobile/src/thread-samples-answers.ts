@@ -20,7 +20,20 @@ export type AnswerThreadSample = {
     | "answer-votes"
     | "answer-table"
     | "answer-explain"
-    | "answer-recipe";
+    | "answer-recipe"
+    | "answer-chart"
+    | "answer-spec"
+    | "answer-mermaid"
+    | "answer-flight"
+    | "answer-event"
+    | "answer-create-event"
+    | "answer-booking"
+    | "answer-email-draft"
+    | "answer-email-batch"
+    | "answer-surf"
+    | "answer-snow"
+    | "answer-daily"
+    | "answer-video";
   readonly label: string;
   readonly group: "answer";
   readonly messages: readonly AnswerMessage[];
@@ -564,6 +577,388 @@ export const ANSWER_THREAD_SAMPLES: readonly AnswerThreadSample[] = [
             "Toast pepper in a wide pan, then add a splash of pasta water.",
             "Add pasta and pecorino off heat, tossing and adding water until glossy.",
           ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-chart",
+    "Chart",
+    "How are runs looking this week?",
+    "Week-to-date:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["chart"],
+      },
+      chart: {
+        type: "Chart",
+        props: {
+          label: "Runs this week",
+          value: "92",
+          delta: "+34%",
+          trend: "up",
+          upIsGood: true,
+          points: [18, 22, 19, 31, 28, 42, 38, 51, 47, 63, 58, 71, 69, 84, 92],
+          visibleCount: 15,
+          variant: "area",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-spec",
+    "Spec",
+    "What’s the Opus 5.5 model card?",
+    "Quick sheet:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["spec"],
+      },
+      spec: {
+        type: "SpecSheet",
+        props: {
+          title: "Opus 5.5",
+          subtitle: "claude-opus-5-5",
+          visibleCount: 3,
+          rows: [
+            { label: "context", value: "1,000,000 tokens", emphasis: null },
+            { label: "input", value: "$4.00 / M", emphasis: null },
+            {
+              label: "best for",
+              value: "Long agentic runs",
+              emphasis: true,
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-mermaid",
+    "Mermaid",
+    "Diagram the checkout flow.",
+    "Simple path:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["diagram"],
+      },
+      diagram: {
+        type: "MermaidDiagram",
+        props: {
+          title: "Checkout",
+          streaming: false,
+          code: "flowchart LR\n  Cart --> Pay --> Ship",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-flight",
+    "Flight",
+    "Where is UA 872?",
+    "In the air:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["flight"],
+      },
+      flight: {
+        type: "FlightTracker",
+        props: {
+          airline: "United",
+          flightNumber: "UA 872",
+          status: "On time",
+          origin: "SFO",
+          destination: "NRT",
+          progress: 62,
+          elapsed: "6h 40m elapsed",
+          remaining: "4h 10m remaining",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-event",
+    "Event",
+    "What’s on my calendar Friday morning?",
+    "Next up:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["event"],
+      },
+      event: {
+        type: "CalendarEvent",
+        props: {
+          date: "Friday, July 24",
+          title: "Design review",
+          time: "9:00 to 9:30 AM",
+          location: "Conference Room B",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-create-event",
+    "Create event",
+    "Block Friday for the design review.",
+    "Here’s the day with the new event ready to add:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["create"],
+      },
+      create: {
+        type: "CreateEvent",
+        props: {
+          day: "24",
+          month: "July",
+          weekday: "Friday",
+          events: [
+            { title: "Design review", time: "9:00 to 9:30 AM", tag: "Work" },
+            { title: "Lunch with Sam", time: "12:30 to 1:30 PM", tag: "Personal" },
+            { title: "Flight to Tokyo", time: "6:45 PM", tag: "Travel" },
+          ],
+          title: "Design review",
+          start: "2026-07-24T09:00:00-07:00",
+          end: "2026-07-24T09:30:00-07:00",
+          location: "Conference Room B",
+          calendarId: null,
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-booking",
+    "Booking",
+    "Book a table for two Friday at 7.",
+    "Reservation draft:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["booking"],
+      },
+      booking: {
+        type: "Booking",
+        props: {
+          restaurant: "State Bird Provisions",
+          name: "Alex",
+          partySize: 2,
+          date: "Friday, July 24 · 7:00 PM",
+          seating: "indoor",
+          reminder: true,
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-email-draft",
+    "Email draft",
+    "Draft a thank-you to Sam.",
+    "Ready to send:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["draft"],
+      },
+      draft: {
+        type: "EmailDraft",
+        props: {
+          to: "sam@example.com",
+          cc: null,
+          bcc: null,
+          subject: "Thanks for today",
+          body: "Sam —\n\nAppreciate you walking through the design review. I’ll send notes tomorrow.\n\n— Alex",
+          accountId: null,
+          threadId: null,
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-email-batch",
+    "Email batch",
+    "Clean up the newsletters.",
+    "Proposed archive batch:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["batch"],
+      },
+      batch: {
+        type: "EmailBatch",
+        props: {
+          items: [
+            {
+              accountId: "acct_1",
+              threadId: "thread_a",
+              action: "archive",
+              subject: "Weekly digest",
+              from: "news@example.com",
+            },
+            {
+              accountId: "acct_1",
+              threadId: "thread_b",
+              action: "mark_read",
+              subject: "Product updates",
+              from: "hello@example.com",
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-surf",
+    "Surf",
+    "Surf report for Ocean Beach?",
+    "This morning:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["surf"],
+      },
+      surf: {
+        type: "SurfReport",
+        props: {
+          spot: "Ocean Beach",
+          region: "San Francisco",
+          updated: "6:12 AM",
+          rating: "Fair",
+          summary: "Chest-high west swell with light NW wind; better on the south end.",
+          wave: "3–4 ft",
+          wind: "NW 8 mph",
+          tide: "Rising · mid",
+          periods: [
+            { label: "Morning", wave: "3–4 ft", wind: "NW 8" },
+            { label: "Afternoon", wave: "2–3 ft", wind: "NW 12" },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-snow",
+    "Snow",
+    "Snow report for Eldora?",
+    "Mountain conditions:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["snow"],
+      },
+      snow: {
+        type: "SnowReport",
+        props: {
+          resort: "Eldora",
+          region: "Nederland, CO",
+          updated: "5:40 AM",
+          baseDepth: "48\"",
+          newSnow: "3\" overnight",
+          conditions: "Packed powder",
+          liftsOpen: "10 / 12",
+          trailsOpen: "61 / 88",
+          trailLevels: [
+            { level: "beginner", open: 18, total: 22 },
+            { level: "intermediate", open: 28, total: 34 },
+            { level: "advanced", open: 12, total: 24 },
+            { level: "expert", open: 3, total: 8 },
+          ],
+          summary: "Fresh overnight on Corona; wind holds Challenge.",
+          image:
+            "https://images.unsplash.com/photo-1551524559-8af4e6624178?w=800&q=80",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-daily",
+    "Daily",
+    "What’s in today’s brief?",
+    "Top stories:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["daily"],
+      },
+      daily: {
+        type: "DailyBrief",
+        props: {
+          date: "Tuesday, March 3",
+          title: "Morning brief",
+          stories: [
+            {
+              headline: "Markets open mixed after jobs data",
+              dek: "Futures chop as traders digest payrolls.",
+              source: "Reuters",
+              url: "https://example.com/markets",
+              image: null,
+            },
+            {
+              headline: "City council advances housing package",
+              dek: "Vote expected next week on zoning changes.",
+              source: "Local desk",
+              url: null,
+              image: null,
+            },
+            {
+              headline: "Storm system heads for the Sierra",
+              dek: "Heavy snow likely Thursday into Friday.",
+              source: "NWS",
+              url: null,
+              image: null,
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-video",
+    "Video",
+    "Show me that Big Buck Bunny clip.",
+    "Here you go:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["video"],
+      },
+      video: {
+        type: "Video",
+        props: {
+          title: "Big Buck Bunny",
+          src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+          provider: "file",
+          poster: null,
         },
       },
     },

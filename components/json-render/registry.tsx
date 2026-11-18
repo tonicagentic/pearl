@@ -1,7 +1,14 @@
 "use client";
 
-import { defineRegistry } from "@json-render/react";
+import { defineRegistry, useActions } from "@json-render/react";
+import { MermaidBlock } from "@/components/assistant-ui/elements/mermaid-block";
 import { chatCatalog } from "@/lib/json-render/catalog";
+import {
+  chartDeltaTone,
+  chartSeriesLayout,
+  clampVisibleCount,
+  inferChartTrend,
+} from "@/lib/json-render/chart";
 import { comparisonBarShares } from "@/lib/json-render/comparison-bar";
 import {
   CHORD_LIBRARY,
@@ -18,7 +25,21 @@ import {
   GUITAR_STRING_COUNT,
   regionBarWidths,
 } from "@/lib/json-render/diagrams";
+import {
+  bookingCancelMessage,
+  bookingConfirmMessage,
+  createEventConfirmMessage,
+  createEventDiscardMessage,
+  emailBatchConfirmMessage,
+  emailDraftSaveMessage,
+  emailDraftSendMessage,
+} from "@/lib/json-render/reply-messages";
 import { playSpeakable } from "@/lib/json-render/speak";
+import {
+  formatSnowLevelCount,
+  snowTrailLevelMeta,
+} from "@/lib/json-render/snow";
+import { resolveVideoEmbed } from "@/lib/json-render/video-embed";
 import { cn } from "@/lib/utils";
 import { Button as UiButton } from "@/components/ui/button";
 import { useMemo, useState } from "react";
@@ -863,6 +884,688 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
         </div>
       </div>
     ),
+    Chart: ({ props }) => {
+      const points = props.points ?? [];
+      const visibleCount = clampVisibleCount(points.length, props.visibleCount);
+      const layout = chartSeriesLayout(points, visibleCount);
+      const trend = inferChartTrend(props.delta, props.trend);
+      const tone = chartDeltaTone(trend, props.upIsGood);
+      const variant = props.variant ?? "area";
+      return (
+        <div className="flex flex-col gap-2" data-slot="chart">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-muted-foreground font-mono text-[11px] uppercase tracking-wide">
+              {props.label}
+            </span>
+            {props.delta ? (
+              <span
+                className={cn(
+                  "font-mono text-[11px]",
+                  tone === "positive" && "text-emerald-600 dark:text-emerald-400",
+                  tone === "negative" && "text-red-600 dark:text-red-400",
+                  tone === "neutral" && "text-muted-foreground",
+                )}
+              >
+                {props.delta}
+              </span>
+            ) : null}
+          </div>
+          <div className="text-foreground text-2xl font-semibold tracking-tight tabular-nums">
+            {props.value}
+          </div>
+          <svg viewBox="0 0 240 72" className="text-foreground h-16 w-full" aria-hidden>
+            {variant === "bars"
+              ? layout.bars.map((bar, index) => (
+                  <rect
+                    key={index}
+                    x={bar.x}
+                    y={bar.y}
+                    width={bar.w}
+                    height={bar.h}
+                    rx={1}
+                    className={bar.last ? "fill-blue-500" : "fill-foreground/25"}
+                  />
+                ))
+              : null}
+            {variant === "area" && layout.areaPath ? (
+              <path d={layout.areaPath} className="fill-blue-500/20" />
+            ) : null}
+            {(variant === "area" || variant === "line") && layout.linePath ? (
+              <path
+                d={layout.linePath}
+                fill="none"
+                strokeWidth={2}
+                className="stroke-blue-500"
+              />
+            ) : null}
+            {(variant === "area" || variant === "line") && layout.visible.length > 0 ? (
+              <circle
+                cx={layout.visible[layout.visible.length - 1]!.x}
+                cy={layout.visible[layout.visible.length - 1]!.y}
+                r={3}
+                className="fill-blue-500"
+              />
+            ) : null}
+          </svg>
+        </div>
+      );
+    },
+    SpecSheet: ({ props }) => {
+      const count =
+        props.visibleCount == null || !Number.isFinite(props.visibleCount)
+          ? props.rows.length
+          : Math.max(0, Math.min(props.rows.length, Math.floor(props.visibleCount)));
+      const rows = props.rows.slice(0, count);
+      return (
+        <div className="flex flex-col gap-3" data-slot="spec-sheet">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-foreground text-[15px] font-medium">{props.title}</span>
+            {props.subtitle ? (
+              <span className="text-muted-foreground text-[12px]">{props.subtitle}</span>
+            ) : null}
+          </div>
+          <div className="flex flex-col">
+            {rows.map((row, index) => (
+              <div
+                key={row.label}
+                className={cn(
+                  "flex items-baseline justify-between gap-3 py-1.5 text-[13px]",
+                  index > 0 && "border-border/60 border-t",
+                )}
+              >
+                <span className="text-muted-foreground font-mono text-[11px]">
+                  {row.label}
+                </span>
+                <span
+                  className={cn(
+                    "text-right",
+                    row.emphasis
+                      ? "text-foreground font-semibold"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {row.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    },
+    MermaidDiagram: ({ props }) => (
+      <div className="flex flex-col gap-2">
+        {props.title ? (
+          <div className="text-foreground text-[15px] font-medium">{props.title}</div>
+        ) : null}
+        {props.streaming ? (
+          <div
+            data-slot="mermaid-skeleton"
+            className="bg-muted/40 text-muted-foreground rounded-xl border border-dashed p-4 text-[13px]"
+            aria-label="Rendering diagram"
+          >
+            Rendering diagram…
+          </div>
+        ) : (
+          <MermaidBlock code={props.code} />
+        )}
+      </div>
+    ),
+    FlightTracker: ({ props }) => {
+      const progress = Math.max(0, Math.min(100, props.progress));
+      return (
+        <div className="flex flex-col gap-3">
+          <div className="text-muted-foreground flex justify-between text-[12px]">
+            <span>
+              {props.airline} · {props.flightNumber}
+            </span>
+            <span>{props.status}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-foreground text-3xl font-bold tracking-tight">
+              {props.origin}
+            </span>
+            <span className="text-muted-foreground text-lg" aria-hidden>
+              ✈
+            </span>
+            <span className="text-foreground text-3xl font-bold tracking-tight">
+              {props.destination}
+            </span>
+          </div>
+          <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+            <div
+              className="h-full rounded-full bg-blue-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="text-muted-foreground flex justify-between text-[12px]">
+            <span>{props.elapsed ?? ""}</span>
+            <span>{props.remaining ?? ""}</span>
+          </div>
+        </div>
+      );
+    },
+    CalendarEvent: ({ props }) => (
+      <div className="flex flex-col gap-1.5">
+        <div className="text-muted-foreground text-[12px]">{props.date}</div>
+        <div className="text-foreground text-[17px] font-medium">{props.title}</div>
+        <div className="text-muted-foreground text-[13px]">
+          {props.time}
+          {props.location ? ` · ${props.location}` : ""}
+        </div>
+      </div>
+    ),
+    CreateEvent: ({ props }) => {
+      const actions = useActions();
+      const events = props.events ?? [];
+      return (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-foreground text-3xl font-bold tabular-nums">
+              {props.day}
+            </span>
+            <div className="flex flex-col">
+              <span className="text-foreground text-[14px] font-semibold">
+                {props.month}
+              </span>
+              <span className="text-muted-foreground text-[12px]">{props.weekday}</span>
+            </div>
+          </div>
+          <div className="border-border/60 border-t" />
+          {events.length > 0 ? (
+            <div className="flex flex-col gap-2.5">
+              {events.map((event) => (
+                <div key={`${event.title}-${event.time}`} className="flex items-center gap-3">
+                  <div className="bg-foreground/50 h-8 w-0.5 rounded-full" />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-foreground text-[13.5px] font-medium">
+                      {event.title}
+                    </span>
+                    <span className="text-muted-foreground text-[12px]">{event.time}</span>
+                  </div>
+                  {event.tag ? (
+                    <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px]">
+                      {event.tag}
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-foreground text-[13.5px] font-medium">{props.title}</span>
+              <span className="text-muted-foreground text-[12px]">
+                {props.start}
+                {props.end ? ` – ${props.end}` : ""}
+                {props.location ? ` · ${props.location}` : ""}
+              </span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <UiButton
+              type="button"
+              size="sm"
+              onClick={() =>
+                void actions.execute({
+                  action: "reply",
+                  params: {
+                    message: createEventConfirmMessage({
+                      title: props.title,
+                      start: props.start,
+                      end: props.end,
+                      location: props.location,
+                      calendarId: props.calendarId,
+                    }),
+                  },
+                })
+              }
+            >
+              Add to calendar
+            </UiButton>
+            <UiButton
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void actions.execute({
+                  action: "reply",
+                  params: { message: createEventDiscardMessage(props.title) },
+                })
+              }
+            >
+              Discard
+            </UiButton>
+          </div>
+        </div>
+      );
+    },
+    Booking: ({ props }) => {
+      const actions = useActions();
+      return (
+        <div className="flex flex-col gap-3">
+          <div className="text-foreground text-[15px] font-medium">
+            {props.restaurant ? `Reserve · ${props.restaurant}` : "Reserve a table"}
+          </div>
+          <div className="text-muted-foreground grid grid-cols-2 gap-2 text-[13px]">
+            {props.name ? (
+              <>
+                <span>Name</span>
+                <span className="text-foreground text-right">{props.name}</span>
+              </>
+            ) : null}
+            <span>Party</span>
+            <span className="text-foreground text-right">{props.partySize}</span>
+            <span>Date</span>
+            <span className="text-foreground text-right">{props.date}</span>
+            {props.seating ? (
+              <>
+                <span>Seating</span>
+                <span className="text-foreground text-right capitalize">
+                  {props.seating}
+                </span>
+              </>
+            ) : null}
+            {props.reminder != null ? (
+              <>
+                <span>Reminder</span>
+                <span className="text-foreground text-right">
+                  {props.reminder ? "Yes" : "No"}
+                </span>
+              </>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <UiButton
+              type="button"
+              size="sm"
+              onClick={() =>
+                void actions.execute({
+                  action: "reply",
+                  params: {
+                    message: bookingConfirmMessage({
+                      restaurant: props.restaurant,
+                      name: props.name,
+                      partySize: props.partySize,
+                      date: props.date,
+                      seating: props.seating,
+                      reminder: props.reminder,
+                    }),
+                  },
+                })
+              }
+            >
+              Confirm reservation
+            </UiButton>
+            <UiButton
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void actions.execute({
+                  action: "reply",
+                  params: { message: bookingCancelMessage(props.restaurant) },
+                })
+              }
+            >
+              Cancel
+            </UiButton>
+          </div>
+        </div>
+      );
+    },
+    EmailDraft: ({ props }) => {
+      const actions = useActions();
+      return (
+        <div className="flex flex-col gap-3">
+          <div className="text-muted-foreground flex flex-col gap-1 text-[12px]">
+            <div>
+              <span className="font-medium">To</span> {props.to}
+            </div>
+            {props.cc ? (
+              <div>
+                <span className="font-medium">Cc</span> {props.cc}
+              </div>
+            ) : null}
+            {props.bcc ? (
+              <div>
+                <span className="font-medium">Bcc</span> {props.bcc}
+              </div>
+            ) : null}
+            <div className="text-foreground text-[14px] font-medium">{props.subject}</div>
+          </div>
+          <pre className="text-muted-foreground whitespace-pre-wrap font-sans text-[13.5px] leading-relaxed">
+            {props.body}
+          </pre>
+          <div className="flex flex-wrap gap-2">
+            <UiButton
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                void actions.execute({
+                  action: "reply",
+                  params: {
+                    message: emailDraftSaveMessage({
+                      to: props.to,
+                      cc: props.cc,
+                      bcc: props.bcc,
+                      subject: props.subject,
+                      body: props.body,
+                      accountId: props.accountId,
+                      threadId: props.threadId,
+                    }),
+                  },
+                })
+              }
+            >
+              Save draft
+            </UiButton>
+            <UiButton
+              type="button"
+              size="sm"
+              onClick={() =>
+                void actions.execute({
+                  action: "reply",
+                  params: {
+                    message: emailDraftSendMessage({
+                      to: props.to,
+                      cc: props.cc,
+                      bcc: props.bcc,
+                      subject: props.subject,
+                      body: props.body,
+                      accountId: props.accountId,
+                      threadId: props.threadId,
+                    }),
+                  },
+                })
+              }
+            >
+              Send
+            </UiButton>
+          </div>
+        </div>
+      );
+    },
+    EmailBatch: ({ props }) => {
+      const actions = useActions();
+      return (
+        <div className="flex flex-col gap-3">
+          <div className="text-foreground text-[14px] font-medium">
+            {props.items.length} thread{props.items.length === 1 ? "" : "s"}
+          </div>
+          <div className="flex flex-col gap-2">
+            {props.items.map((item) => (
+              <div
+                key={`${item.accountId}:${item.threadId}`}
+                className="border-border/50 flex flex-col gap-0.5 rounded-lg border px-2.5 py-2"
+              >
+                <div className="text-foreground text-[13px] font-medium">
+                  {item.subject ?? item.threadId}
+                </div>
+                <div className="text-muted-foreground text-[12px]">
+                  {item.from ? `${item.from} · ` : ""}
+                  {item.action === "archive" ? "Archive" : "Mark read"}
+                </div>
+              </div>
+            ))}
+          </div>
+          <UiButton
+            type="button"
+            size="sm"
+            onClick={() =>
+              void actions.execute({
+                action: "reply",
+                params: { message: emailBatchConfirmMessage(props.items) },
+              })
+            }
+          >
+            Confirm batch
+          </UiButton>
+        </div>
+      );
+    },
+    SurfReport: ({ props }) => (
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-0.5">
+          <div className="text-foreground text-[15px] font-medium">{props.spot}</div>
+          <div className="text-muted-foreground text-[12px]">
+            {[props.region, props.updated, props.rating].filter(Boolean).join(" · ")}
+          </div>
+        </div>
+        {props.summary ? (
+          <div className="text-muted-foreground text-[13.5px] leading-relaxed">
+            {props.summary}
+          </div>
+        ) : null}
+        <div className="grid grid-cols-3 gap-2 text-[12px]">
+          {props.wave ? (
+            <div className="bg-muted/40 rounded-lg p-2">
+              <div className="text-muted-foreground">Wave</div>
+              <div className="text-foreground font-medium">{props.wave}</div>
+            </div>
+          ) : null}
+          {props.wind ? (
+            <div className="bg-muted/40 rounded-lg p-2">
+              <div className="text-muted-foreground">Wind</div>
+              <div className="text-foreground font-medium">{props.wind}</div>
+            </div>
+          ) : null}
+          {props.tide ? (
+            <div className="bg-muted/40 rounded-lg p-2">
+              <div className="text-muted-foreground">Tide</div>
+              <div className="text-foreground font-medium">{props.tide}</div>
+            </div>
+          ) : null}
+        </div>
+        {props.periods && props.periods.length > 0 ? (
+          <div className="flex flex-col gap-1.5">
+            {props.periods.map((period) => (
+              <div
+                key={period.label}
+                className="text-muted-foreground flex justify-between gap-2 text-[12px]"
+              >
+                <span className="text-foreground font-medium">{period.label}</span>
+                <span>
+                  {period.wave} · {period.wind}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    ),
+    SnowReport: ({ props }) => {
+      const image = httpsSrc(props.image);
+      const trailLevels = props.trailLevels ?? [];
+      return (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-0.5">
+            <div className="text-foreground text-[15px] font-medium">{props.resort}</div>
+            <div className="text-muted-foreground text-[12px]">
+              {[props.region, props.updated].filter(Boolean).join(" · ")}
+            </div>
+          </div>
+          {image ? (
+            // eslint-disable-next-line @next/next/no-img-element -- generative UI URLs are dynamic https sources
+            <img
+              src={image}
+              alt={props.resort}
+              className="border-border/50 max-h-40 w-full rounded-lg border object-cover"
+            />
+          ) : null}
+          {props.summary ? (
+            <div className="text-muted-foreground text-[13.5px] leading-relaxed">
+              {props.summary}
+            </div>
+          ) : null}
+          <div className="grid grid-cols-2 gap-2 text-[12px]">
+            {props.baseDepth ? (
+              <div>
+                <div className="text-muted-foreground">Base</div>
+                <div className="text-foreground font-medium">{props.baseDepth}</div>
+              </div>
+            ) : null}
+            {props.newSnow ? (
+              <div>
+                <div className="text-muted-foreground">New snow</div>
+                <div className="text-foreground font-medium">{props.newSnow}</div>
+              </div>
+            ) : null}
+            {props.conditions ? (
+              <div>
+                <div className="text-muted-foreground">Conditions</div>
+                <div className="text-foreground font-medium">{props.conditions}</div>
+              </div>
+            ) : null}
+            {props.liftsOpen ? (
+              <div>
+                <div className="text-muted-foreground">Lifts</div>
+                <div className="text-foreground font-medium">{props.liftsOpen}</div>
+              </div>
+            ) : null}
+            {props.trailsOpen ? (
+              <div>
+                <div className="text-muted-foreground">Trails</div>
+                <div className="text-foreground font-medium">{props.trailsOpen}</div>
+              </div>
+            ) : null}
+          </div>
+          {trailLevels.length > 0 ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="text-muted-foreground text-[12px]">Open by level</div>
+              <div className="flex flex-col gap-1.5">
+                {trailLevels.map((entry) => {
+                  const meta = snowTrailLevelMeta(entry.level);
+                  return (
+                    <div
+                      key={entry.level}
+                      className="flex items-center justify-between gap-3 text-[13px]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          aria-hidden
+                          className="inline-flex w-5 items-center justify-start gap-0.5"
+                        >
+                          <span
+                            className={cn(
+                              "inline-block shrink-0",
+                              meta.symbol === "circle" &&
+                                "h-2.5 w-2.5 rounded-full",
+                              meta.symbol === "square" &&
+                                "h-2.5 w-2.5 rounded-[2px]",
+                              (meta.symbol === "diamond" ||
+                                meta.symbol === "double-diamond") &&
+                                "h-2.5 w-2.5 rotate-45 rounded-[1px]",
+                            )}
+                            style={{ backgroundColor: meta.color }}
+                          />
+                          {meta.symbol === "double-diamond" ? (
+                            <span
+                              className="inline-block h-2.5 w-2.5 shrink-0 rotate-45 rounded-[1px]"
+                              style={{ backgroundColor: meta.color }}
+                            />
+                          ) : null}
+                        </span>
+                        <span className="text-foreground">{meta.label}</span>
+                      </div>
+                      <span className="text-foreground font-medium tabular-nums">
+                        {formatSnowLevelCount(entry.open, entry.total)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      );
+    },
+    DailyBrief: ({ props }) => (
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-0.5">
+          <div className="text-foreground text-[15px] font-medium">
+            {props.title ?? "Daily brief"}
+          </div>
+          {props.date ? (
+            <div className="text-muted-foreground text-[12px]">{props.date}</div>
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-3">
+          {props.stories.map((story, index) => {
+            const image = httpsSrc(story.image);
+            return (
+              <div
+                key={`${story.headline}-${index}`}
+                className={cn(
+                  "gap-2.5",
+                  image ? "flex flex-row items-start" : "flex flex-col",
+                )}
+              >
+                {image ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- generative UI URLs are dynamic https sources
+                  <img
+                    src={image}
+                    alt=""
+                    className="border-border/50 h-14 w-14 shrink-0 rounded-lg border object-cover"
+                  />
+                ) : null}
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <div className="text-foreground text-[13.5px] font-medium leading-snug">
+                    {story.headline}
+                  </div>
+                  {story.dek ? (
+                    <div className="text-muted-foreground text-[12.5px] leading-relaxed">
+                      {story.dek}
+                    </div>
+                  ) : null}
+                  {story.source ? (
+                    <div className="text-muted-foreground text-[11px]">{story.source}</div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ),
+    Video: ({ props }) => {
+      const resolved = resolveVideoEmbed({
+        src: props.src,
+        provider: props.provider,
+        poster: props.poster,
+      });
+      if (!resolved) {
+        return (
+          <div className="text-muted-foreground text-[13px]">
+            Video needs an https URL.
+          </div>
+        );
+      }
+      return (
+        <div className="flex flex-col gap-2">
+          {props.title ? (
+            <div className="text-foreground text-[15px] font-medium">{props.title}</div>
+          ) : null}
+          {resolved.provider === "file" ? (
+            // eslint-disable-next-line jsx-a11y/media-has-caption -- generative clips rarely ship captions
+            <video
+              className="border-border/50 aspect-video w-full rounded-lg border bg-black"
+              src={resolved.src}
+              poster={resolved.poster ?? undefined}
+              controls
+              playsInline
+            />
+          ) : (
+            <iframe
+              title={props.title ?? "Video"}
+              src={resolved.embedUrl}
+              className="border-border/50 aspect-video w-full rounded-lg border"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          )}
+        </div>
+      );
+    },
   },
   actions: {
     // Bound at render time via ActionProvider handlers in ChatJsonRender.

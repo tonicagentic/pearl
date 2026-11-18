@@ -37,7 +37,20 @@ export type ThreadSampleId =
   | "answer-votes"
   | "answer-table"
   | "answer-explain"
-  | "answer-recipe";
+  | "answer-recipe"
+  | "answer-chart"
+  | "answer-spec"
+  | "answer-mermaid"
+  | "answer-flight"
+  | "answer-event"
+  | "answer-create-event"
+  | "answer-booking"
+  | "answer-email-draft"
+  | "answer-email-batch"
+  | "answer-surf"
+  | "answer-snow"
+  | "answer-daily"
+  | "answer-video";
 
 export type ThreadSampleGroup = "default" | "answer";
 
