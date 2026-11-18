@@ -23,7 +23,7 @@ for (const envFile of [".env.development.local", ".env.local"]) {
 }
 
 export default defineConfig({
-  schema: "./lib/db/schema.ts",
+  schema: ["./lib/db/schema.ts", "./lib/db/body-schema.ts"],
   out: "./lib/db/migrations",
   dialect: "postgresql",
   dbCredentials: {
