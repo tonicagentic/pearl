@@ -10,7 +10,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tonicagentic.pearl",
-      "associatedDomains": ["webcredentials:pearl.tonicagentic.com"],
+      "associatedDomains": [
+        "webcredentials:pearl.tonicagentic.com"
+      ],
       "entitlements": {
         "com.apple.developer.associated-domains": [
           "webcredentials:pearl.tonicagentic.com"
@@ -104,7 +106,7 @@
     },
     "extra": {
       "router": {},
-      "pearlOta": "27",
+      "pearlOta": "28",
       "eas": {
         "projectId": "43ee6005-c5ac-4b8f-b463-5d910681956d"
       }

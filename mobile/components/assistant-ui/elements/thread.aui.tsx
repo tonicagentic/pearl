@@ -1197,6 +1197,25 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
     awaitingEchoRef.current = false;
     setValue(storeText);
   }, [storeText]);
+  // Draft seeds / paste can land while the collapsed field is still narrow, so
+  // onContentSizeChange ignores them. Approximate height until a full-width
+  // measure runs (keyboard morph or a later edit).
+  useEffect(() => {
+    if (!expandedHeight) return;
+    if (value.length === 0) {
+      if (expandedHeight.value !== COMPOSER_EXPANDED_INPUT_MIN) {
+        expandedHeight.value = COMPOSER_EXPANDED_INPUT_MIN;
+      }
+      setInputScrolls((current) => (current ? false : current));
+      return;
+    }
+    const lines = Math.max(1, value.split("\n").length);
+    const estimated = Math.min(
+      COMPOSER_EXPANDED_INPUT_MAX,
+      Math.max(COMPOSER_EXPANDED_INPUT_MIN, lines * 22 + 12),
+    );
+    if (estimated > expandedHeight.value) expandedHeight.value = estimated;
+  }, [expandedHeight, value]);
   const placeholderColor = Platform.OS === "ios"
     ? "accent-muted-foreground/85"
     : "accent-muted-foreground/60";
@@ -1559,40 +1578,33 @@ const Composer: FC<{
     />
   );
 
-  // Live call replaces the text composer inside the same glass shell. Skip the
-  // keyboard morph so the call bar keeps a stable height with no keyboard up.
-  if (liveOpen) {
-    return (
-      <ComposerPrimitive.Root className="aui-composer-root w-full">
-        <View
-          className="aui-composer-shell relative p-2"
-          style={COMPOSER_SHELL_STYLE}
-        >
-          {shellSurface}
-          <LiveSession onClose={closeLive} />
-        </View>
-      </ComposerPrimitive.Root>
-    );
-  }
+  // Live voice is a full-screen takeover (ChatGPT-style). Keep the composer
+  // tree mounted underneath so closing voice can refocus Ask Pearl.
+  const liveOverlay = liveOpen ? <LiveSession onClose={closeLive} /> : null;
 
   // HITL morphs the same glass shell into the response surface (options / text).
   // Attach, Ask anything, and voice stay hidden until the pause resolves.
   if (waitingAction) {
     return (
-      <ComposerPrimitive.Root className="aui-composer-root w-full">
-        <View
-          className="aui-composer-shell relative p-3"
-          style={COMPOSER_SHELL_STYLE}
-        >
-          {shellSurface}
-          <WaitingActionCard action={waitingAction} variant="composer" />
-        </View>
-      </ComposerPrimitive.Root>
+      <>
+        {liveOverlay}
+        <ComposerPrimitive.Root className="aui-composer-root w-full">
+          <View
+            className="aui-composer-shell relative p-3"
+            style={COMPOSER_SHELL_STYLE}
+          >
+            {shellSurface}
+            <WaitingActionCard action={waitingAction} variant="composer" />
+          </View>
+        </ComposerPrimitive.Root>
+      </>
     );
   }
 
   if (Platform.OS !== "ios") {
     return (
+      <>
+      {liveOverlay}
       <ComposerPrimitive.Root className="aui-composer-root w-full">
         <Animated.View
           className="aui-composer-shell relative gap-2 p-2"
@@ -1617,12 +1629,15 @@ const Composer: FC<{
           </View>
         </Animated.View>
       </ComposerPrimitive.Root>
+      </>
     );
   }
 
   // iOS morph: collapsed mini-player row ↔ full composer (input above, actions below).
   // One TextInput is absolutely positioned so keyboard drag never remounts it.
   return (
+    <>
+    {liveOverlay}
     <ComposerInputHeightContext.Provider value={expandedHeight}>
       <Animated.ScrollView
         keyboardDismissMode="interactive"
@@ -1681,6 +1696,7 @@ const Composer: FC<{
       </Animated.View>
       </Animated.ScrollView>
     </ComposerInputHeightContext.Provider>
+    </>
   );
 };
 

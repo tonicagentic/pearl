@@ -9,14 +9,23 @@ import {
 } from "expo-audio";
 import { File, Paths } from "expo-file-system";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import {
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  useColorScheme,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   MicIcon,
   MicOffIcon,
-  PhoneOffIcon,
+  PlusIcon,
   SwitchCameraIcon,
   VideoIcon,
   VideoOffIcon,
+  XIcon,
 } from "lucide-react-native";
 
 import { LiveVoiceOrb } from "@/components/live-voice-orb";
@@ -24,6 +33,7 @@ import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { createLiveVoice, type LiveVoice } from "@/modules/live-voice";
 import { useChats } from "@/src/chat-context";
+import { focusComposerInput } from "@/src/composer-input-focus";
 import { resizeLiveJpeg } from "@/src/live-camera";
 import {
   LIVE_BARGE_IN_LEVEL,
@@ -630,6 +640,8 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     }
   };
 
+  const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme();
   const cameraGranted = cameraPermission?.granted === true;
   const orbMode = phase === "connecting" ? "connecting" : phase === "error" ? "ended" : voiceMode;
   const endLabel = phase === "live" || phase === "connecting"
@@ -637,6 +649,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     : turns.length > 0 || handoffError
       ? "Save to chat"
       : "Close";
+  const stageBg = colorScheme === "dark" ? "#0B0D12" : "#FFFFFF";
 
   const toggleCamera = () => {
     setCameraReady(false);
@@ -654,74 +667,105 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     });
   };
 
+  const askPearl = () => {
+    finish();
+    // After the call closes, put focus back in the text composer.
+    requestAnimationFrame(() => focusComposerInput());
+  };
+
   return (
-    <View accessibilityLiveRegion="polite" className="w-full gap-3 px-1 py-1">
-      <View className="flex-row items-center gap-3">
-        <LiveVoiceOrb
-          mode={orbMode}
-          level={voiceMode === "speaking" ? Math.max(micLevel, 0.35) : micLevel}
-          size="compact"
-          showLabel={false}
-        />
-        <View className="min-w-0 flex-1 gap-0.5">
-          <Text variant="body" weight="semibold" numberOfLines={1}>
-            {liveVoiceStatusLabel(orbMode)}
-          </Text>
-          <Text variant="secondary" numberOfLines={1}>
-            {phase === "connecting" ? "Starting the call…" : "Say something"}
-          </Text>
-        </View>
-      </View>
-
-      {cameraOn && cameraGranted ? (
-        <View className="overflow-hidden rounded-2xl" style={styles.preview}>
-          <CameraView
-            ref={cameraRef}
-            style={StyleSheet.absoluteFill}
-            facing={facing}
-            mode="picture"
-            mute
-            animateShutter={false}
-            onCameraReady={() => setCameraReady(true)}
-            onMountError={() => {
-              setCameraReady(false);
-              setCameraOn(false);
-              setNotice("Camera unavailable. Voice stays on.");
-            }}
+    <Modal
+      visible
+      animationType="fade"
+      presentationStyle="fullScreen"
+      onRequestClose={finish}
+      statusBarTranslucent
+    >
+      <View
+        accessibilityLiveRegion="polite"
+        style={[styles.stage, { backgroundColor: stageBg, paddingTop: insets.top }]}
+      >
+        <View style={styles.orbArea}>
+          <LiveVoiceOrb
+            mode={orbMode}
+            level={voiceMode === "speaking" ? Math.max(micLevel, 0.35) : micLevel}
+            size="stage"
+            showLabel={false}
           />
+          {(error || notice || videoRejected || handoffError) ? (
+            <View style={styles.notices}>
+              {error ? (
+                <Text variant="secondary" tone="destructive" className="text-center">
+                  {error}
+                </Text>
+              ) : null}
+              {notice ? (
+                <Text variant="secondary" className="text-center">
+                  {notice}
+                </Text>
+              ) : null}
+              {videoRejected ? (
+                <Text variant="secondary" className="text-center">
+                  The model is not receiving video. Voice stays on.
+                </Text>
+              ) : null}
+              {handoffError ? (
+                <Text variant="secondary" tone="destructive" className="text-center">
+                  {handoffError}
+                </Text>
+              ) : null}
+            </View>
+          ) : (
+            <Text variant="secondary" className="text-center opacity-60">
+              {phase === "connecting" ? "Starting…" : liveVoiceStatusLabel(orbMode)}
+            </Text>
+          )}
         </View>
-      ) : null}
 
-      {error ? (
-        <Text variant="secondary" tone="destructive">
-          {error}
-        </Text>
-      ) : null}
-      {notice ? <Text variant="secondary">{notice}</Text> : null}
-      {videoRejected ? (
-        <Text variant="secondary">
-          The model is not receiving video. Voice stays on.
-        </Text>
-      ) : null}
-      {cameraOn && !cameraGranted ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Allow camera"
-          onPress={() => void requestCameraPermission()}
-        >
-          <Text variant="secondary" tone="primary" weight="medium">
-            Allow camera
-          </Text>
-        </Pressable>
-      ) : null}
-      {handoffError ? (
-        <Text variant="secondary" tone="destructive">
-          {handoffError}
-        </Text>
-      ) : null}
+        {cameraOn && cameraGranted ? (
+          <View style={styles.previewWrap}>
+            <View style={styles.preview}>
+              <CameraView
+                ref={cameraRef}
+                style={StyleSheet.absoluteFill}
+                facing={facing}
+                mode="picture"
+                mute
+                animateShutter={false}
+                onCameraReady={() => setCameraReady(true)}
+                onMountError={() => {
+                  setCameraReady(false);
+                  setCameraOn(false);
+                  setNotice("Camera unavailable. Voice stays on.");
+                }}
+              />
+            </View>
+            <CallControl
+              label="Flip camera"
+              onPress={() => {
+                setCameraReady(false);
+                setFacing((current) => (current === "back" ? "front" : "back"));
+              }}
+            >
+              <Icon as={SwitchCameraIcon} className="text-foreground size-5" />
+            </CallControl>
+          </View>
+        ) : null}
 
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center gap-2">
+        <View style={[styles.bottomChrome, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Ask Pearl"
+            onPress={askPearl}
+            style={styles.askPill}
+            className="bg-card border-border/50 active:bg-accent/40"
+          >
+            <Icon as={PlusIcon} className="text-foreground size-5" />
+            <Text variant="secondary" className="flex-1" numberOfLines={1}>
+              Ask Pearl
+            </Text>
+          </Pressable>
+
           <CallControl
             label={muted ? "Unmute" : "Mute"}
             onPress={toggleMute}
@@ -729,6 +773,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
           >
             <Icon as={muted ? MicOffIcon : MicIcon} className="text-foreground size-5" />
           </CallControl>
+
           <CallControl
             label={cameraOn ? "Turn camera off" : "Turn camera on"}
             onPress={toggleCamera}
@@ -736,27 +781,23 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
           >
             <Icon as={cameraOn ? VideoIcon : VideoOffIcon} className="text-foreground size-5" />
           </CallControl>
-          {cameraOn && cameraGranted ? (
+
+          {cameraOn && !cameraGranted ? (
             <CallControl
-              label="Flip camera"
-              onPress={() => {
-                setCameraReady(false);
-                setFacing((current) => current === "back" ? "front" : "back");
-              }}
+              label="Allow camera"
+              onPress={() => void requestCameraPermission()}
+              active
             >
-              <Icon as={SwitchCameraIcon} className="text-foreground size-5" />
+              <Icon as={VideoOffIcon} className="text-foreground size-5" />
             </CallControl>
           ) : null}
+
+          <CallControl label={endLabel} onPress={finish} solid>
+            <Icon as={XIcon} className="size-5 text-white" />
+          </CallControl>
         </View>
-        <CallControl
-          label={endLabel}
-          onPress={finish}
-          danger
-        >
-          <Icon as={PhoneOffIcon} className="size-5 text-white" />
-        </CallControl>
       </View>
-    </View>
+    </Modal>
   );
 }
 
@@ -764,13 +805,13 @@ function CallControl({
   label,
   onPress,
   active = false,
-  danger = false,
+  solid = false,
   children,
 }: {
   readonly label: string;
   readonly onPress: () => void;
   readonly active?: boolean;
-  readonly danger?: boolean;
+  readonly solid?: boolean;
   readonly children: ReactNode;
 }) {
   return (
@@ -780,13 +821,14 @@ function CallControl({
       onPress={onPress}
       hitSlop={6}
       className={cn(
-        "size-10 items-center justify-center rounded-full",
-        danger
-          ? "bg-destructive active:bg-destructive/90"
+        "size-12 items-center justify-center rounded-full",
+        solid
+          ? "bg-foreground active:bg-foreground/90"
           : active
-            ? "bg-foreground/15 active:bg-foreground/20"
-            : "bg-foreground/8 active:bg-foreground/12",
+            ? "bg-foreground/12 active:bg-foreground/18"
+            : "bg-card border-border/40 border active:bg-foreground/8",
       )}
+      style={solid ? undefined : styles.softShadow}
     >
       {children}
     </Pressable>
@@ -794,9 +836,56 @@ function CallControl({
 }
 
 const styles = StyleSheet.create({
+  stage: {
+    flex: 1,
+  },
+  orbArea: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 20,
+    paddingHorizontal: 24,
+  },
+  notices: {
+    gap: 6,
+    maxWidth: 320,
+  },
+  previewWrap: {
+    position: "absolute",
+    right: 20,
+    bottom: 118,
+    alignItems: "flex-end",
+    gap: 8,
+  },
   preview: {
-    height: 120,
-    width: "100%",
+    width: 96,
+    height: 128,
+    borderRadius: 18,
+    overflow: "hidden",
     backgroundColor: "#0B0D12",
+  },
+  bottomChrome: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  askPill: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  softShadow: {
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
 });

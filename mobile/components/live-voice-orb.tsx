@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { BlurView } from "expo-blur";
 import Animated, {
   Easing,
   interpolate,
@@ -16,23 +17,25 @@ import {
 
 export type LiveVoiceOrbSize = "stage" | "compact";
 
+const SIZE = {
+  stage: { core: 248, minHeight: 280, labelTop: 28, labelSize: 16 },
+  compact: { core: 40, minHeight: 40, labelTop: 0, labelSize: 13 },
+} as const;
+
 function modeAccent(mode: LiveVoiceMode): string {
   switch (mode) {
     case "speaking":
-      return "#7EC8FF";
+      return "#5B8CFF";
     case "listening":
-      return "#9BE7C4";
+      return "#7EB6FF";
     case "muted":
-      return "#8A8A8A";
+      return "#9AA3B2";
+    case "connecting":
+      return "#B7C7E8";
     default:
-      return "#D7DEE8";
+      return "#8EB6FF";
   }
 }
-
-const SIZE = {
-  stage: { core: 92, minHeight: 220, labelTop: 28, labelSize: 16 },
-  compact: { core: 40, minHeight: 40, labelTop: 0, labelSize: 13 },
-} as const;
 
 export function LiveVoiceOrb({
   mode,
@@ -46,19 +49,29 @@ export function LiveVoiceOrb({
   readonly showLabel?: boolean;
 }) {
   const breath = useSharedValue(0);
+  const drift = useSharedValue(0);
   const energy = useSharedValue(0);
   const boost = useSharedValue(0.04);
-  const baseOpacity = useSharedValue(0.92);
+  const baseOpacity = useSharedValue(0.96);
   const active = mode === "listening" || mode === "speaking";
   const dim = SIZE[size];
+  const stage = size === "stage";
 
   useEffect(() => {
     breath.value = withRepeat(
-      withTiming(1, { duration: active ? 900 : 2400, easing: Easing.inOut(Easing.sin) }),
+      withTiming(1, { duration: active ? 1400 : 2800, easing: Easing.inOut(Easing.sin) }),
       -1,
       true,
     );
   }, [active, breath]);
+
+  useEffect(() => {
+    drift.value = withRepeat(
+      withTiming(1, { duration: 5200, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+  }, [drift]);
 
   useEffect(() => {
     energy.value = withTiming(Math.min(1, Math.max(0, level)), {
@@ -69,38 +82,76 @@ export function LiveVoiceOrb({
 
   useEffect(() => {
     boost.value = withTiming(
-      mode === "speaking" ? 0.18 : mode === "listening" ? 0.12 : 0.04,
-      { duration: 180 },
+      mode === "speaking" ? 0.14 : mode === "listening" ? 0.09 : 0.03,
+      { duration: 220 },
     );
     baseOpacity.value = withTiming(
-      mode === "ended" ? 0.35 : mode === "connecting" ? 0.6 : 0.92,
-      { duration: 180 },
+      mode === "ended" ? 0.4 : mode === "connecting" ? 0.72 : mode === "muted" ? 0.55 : 0.98,
+      { duration: 220 },
     );
   }, [baseOpacity, boost, mode]);
 
   const coreStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + boost.value + energy.value * 0.28 + breath.value * (boost.value > 0.05 ? 0.08 : 0.03) }],
+    transform: [
+      {
+        scale:
+          1 +
+          boost.value +
+          energy.value * (stage ? 0.12 : 0.28) +
+          breath.value * (boost.value > 0.05 ? 0.05 : 0.02),
+      },
+    ],
     opacity: baseOpacity.value,
   }));
 
-  const ringStyle = useAnimatedStyle(() => {
-    const lively = boost.value > 0.05;
-    return {
-      transform: [{ scale: 1.15 + breath.value * 0.22 + energy.value * 0.35 }],
-      opacity: interpolate(breath.value, [0, 1], lively ? [0.35, 0.12] : [0.16, 0.06]),
-    };
-  });
+  const blobA = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: interpolate(drift.value, [0, 1], [-18, 22]) },
+      { translateY: interpolate(breath.value, [0, 1], [-14, 16]) },
+      { scale: 1.05 + energy.value * 0.18 + breath.value * 0.08 },
+    ],
+    opacity: interpolate(breath.value, [0, 1], [0.85, 0.55]),
+  }));
 
-  const outerStyle = useAnimatedStyle(() => {
-    const lively = boost.value > 0.05;
-    return {
-      transform: [{ scale: 1.35 + breath.value * 0.3 + energy.value * 0.45 }],
-      opacity: interpolate(breath.value, [0, 1], lively ? [0.22, 0.05] : [0.1, 0.03]),
-    };
-  });
+  const blobB = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: interpolate(drift.value, [0, 1], [20, -16]) },
+      { translateY: interpolate(breath.value, [0, 1], [18, -12]) },
+      { scale: 1.1 + energy.value * 0.22 + breath.value * 0.1 },
+    ],
+    opacity: interpolate(breath.value, [0, 1], [0.7, 0.95]),
+  }));
+
+  const blobC = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: interpolate(drift.value, [0, 1], [-8, 12]) },
+      { translateY: interpolate(breath.value, [0, 1], [10, -18]) },
+      { scale: 0.95 + energy.value * 0.15 },
+    ],
+    opacity: interpolate(breath.value, [0, 1], [0.45, 0.75]),
+  }));
+
+  const glowStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1.08 + breath.value * 0.06 + energy.value * 0.1 }],
+    opacity: interpolate(breath.value, [0, 1], stage ? [0.35, 0.18] : [0.2, 0.08]),
+  }));
 
   const tint = modeAccent(mode);
   const coreBox = { width: dim.core, height: dim.core, borderRadius: 999 };
+
+  if (!stage) {
+    return (
+      <View
+        accessibilityRole="image"
+        accessibilityLabel={liveVoiceStatusLabel(mode)}
+        style={[styles.wrap, { minHeight: dim.minHeight }]}
+        pointerEvents="none"
+      >
+        <Animated.View style={[styles.compactRing, coreBox, { borderColor: tint }, glowStyle]} />
+        <Animated.View style={[styles.compactCore, coreBox, { backgroundColor: tint }, coreStyle]} />
+      </View>
+    );
+  }
 
   return (
     <View
@@ -109,10 +160,69 @@ export function LiveVoiceOrb({
       style={[styles.wrap, { minHeight: dim.minHeight }]}
       pointerEvents="none"
     >
-      <Animated.View style={[styles.ring, coreBox, { borderColor: tint }, outerStyle]} />
-      <Animated.View style={[styles.ring, coreBox, { borderColor: tint }, ringStyle]} />
-      <Animated.View style={[styles.core, coreBox, { backgroundColor: tint }, coreStyle]} />
-      {showLabel && size === "stage" ? (
+      <Animated.View style={[styles.glow, coreBox, { backgroundColor: tint }, glowStyle]} />
+      <Animated.View style={[styles.stageClip, coreBox, coreStyle]}>
+        <View style={[StyleSheet.absoluteFill, styles.stageBase]} />
+        <Animated.View
+          style={[
+            styles.blob,
+            {
+              width: dim.core * 0.78,
+              height: dim.core * 0.78,
+              borderRadius: dim.core,
+              backgroundColor: "#2F6BFF",
+              top: dim.core * 0.02,
+              left: dim.core * 0.08,
+            },
+            blobA,
+          ]}
+        />
+        <Animated.View
+          style={[
+            styles.blob,
+            {
+              width: dim.core * 0.7,
+              height: dim.core * 0.7,
+              borderRadius: dim.core,
+              backgroundColor: "#A9C8FF",
+              bottom: dim.core * 0.02,
+              right: dim.core * 0.04,
+            },
+            blobB,
+          ]}
+        />
+        <Animated.View
+          style={[
+            styles.blob,
+            {
+              width: dim.core * 0.55,
+              height: dim.core * 0.55,
+              borderRadius: dim.core,
+              backgroundColor: "#F4F8FF",
+              top: dim.core * 0.32,
+              left: dim.core * 0.28,
+            },
+            blobC,
+          ]}
+        />
+        <Animated.View
+          style={[
+            styles.blob,
+            {
+              width: dim.core * 0.42,
+              height: dim.core * 0.42,
+              borderRadius: dim.core,
+              backgroundColor: "#6B9BFF",
+              top: dim.core * 0.1,
+              right: dim.core * 0.12,
+            },
+            blobA,
+          ]}
+        />
+        <BlurView intensity={42} tint="light" style={StyleSheet.absoluteFill} />
+        <View style={[StyleSheet.absoluteFill, styles.stageSheen]} />
+      </Animated.View>
+      {showLabel ? (
         <Text style={[styles.label, { marginTop: dim.labelTop, fontSize: dim.labelSize }]}>
           {liveVoiceStatusLabel(mode)}
         </Text>
@@ -126,18 +236,38 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  core: {
+  glow: {
+    position: "absolute",
+    opacity: 0.25,
+  },
+  stageClip: {
+    overflow: "hidden",
+    shadowColor: "#6B9BFF",
+    shadowOpacity: 0.35,
+    shadowRadius: 36,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  stageBase: {
+    backgroundColor: "#DCE8FF",
+  },
+  stageSheen: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  blob: {
+    position: "absolute",
+  },
+  compactCore: {
     shadowColor: "#9EC7FF",
     shadowOpacity: 0.45,
     shadowRadius: 28,
     shadowOffset: { width: 0, height: 0 },
   },
-  ring: {
+  compactRing: {
     position: "absolute",
     borderWidth: 2,
   },
   label: {
-    color: "rgba(255,255,255,0.82)",
+    color: "rgba(0,0,0,0.45)",
     fontWeight: "500",
     letterSpacing: 0.2,
   },
