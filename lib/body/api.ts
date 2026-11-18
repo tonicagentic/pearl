@@ -11,6 +11,8 @@ import {
   bodyProgramDays,
   bodyProgramExercises,
   bodyPrograms,
+  bodyRotationState,
+  bodyRotationSteps,
   bodySessionSets,
   bodySessions,
   bodyTargets,
@@ -24,7 +26,25 @@ import {
   sumMacros,
   type MacroTotals,
 } from "./macros";
-import { assertMealSlot, type MealSlot } from "./slots";
+import {
+  suggestMealDay,
+  type CategorizedFood,
+  type MealDaySuggestion,
+} from "./meal-day";
+import { estimateNutrition } from "./nutrition-estimate";
+import {
+  advanceRotation,
+  DEFAULT_ROTATION_STEPS,
+  isMuscle,
+  missingMusclesFromSteps,
+  parseMuscles,
+  resolveRotationAssignment,
+  serializeMuscles,
+  undoRotationCompletion,
+  type Muscle,
+  type RotationAssignment,
+} from "./rotation";
+import { assertMealSlot, isMealSlot, type MealSlot } from "./slots";
 import { snapshotFromFood, snapshotsFromPlannedItems } from "./snapshots";
 import {
   isTrainingDay,
@@ -55,8 +75,15 @@ function mapFood(row: typeof bodyFoods.$inferSelect) {
     id: row.id,
     name: row.name,
     servingLabel: row.servingLabel,
+    slot: isMealSlot(row.slot) ? row.slot : null,
     ...macrosFromNumeric(row),
   };
+}
+
+function optionalSlot(value: unknown): MealSlot | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  return assertMealSlot(value);
 }
 
 function mapExercise(row: typeof bodyExercises.$inferSelect) {
@@ -136,17 +163,23 @@ export async function listFoods() {
 export async function createFood(input: {
   name: string;
   servingLabel?: string;
+  slot?: MealSlot | null;
   calories: number;
   proteinG: number;
   carbsG: number;
   fatG: number;
 }) {
+  const slot =
+    input.slot === undefined || input.slot === null
+      ? null
+      : assertMealSlot(input.slot);
   const [row] = await tx()
     .insert(bodyFoods)
     .values({
       userId: uid(),
       name: input.name.trim(),
       servingLabel: input.servingLabel?.trim() || "1 serving",
+      slot,
       ...macroStrings(input),
     })
     .returning();
@@ -158,6 +191,7 @@ export async function updateFood(
   input: Partial<{
     name: string;
     servingLabel: string;
+    slot: MealSlot | null;
     calories: number;
     proteinG: number;
     carbsG: number;
@@ -167,6 +201,10 @@ export async function updateFood(
   const patch: Record<string, unknown> = { updatedAt: new Date() };
   if (input.name != null) patch.name = input.name.trim();
   if (input.servingLabel != null) patch.servingLabel = input.servingLabel.trim();
+  if (input.slot !== undefined) {
+    patch.slot =
+      input.slot === null ? null : assertMealSlot(input.slot);
+  }
   if (input.calories != null) patch.calories = String(input.calories);
   if (input.proteinG != null) patch.proteinG = String(input.proteinG);
   if (input.carbsG != null) patch.carbsG = String(input.carbsG);
@@ -179,6 +217,18 @@ export async function updateFood(
     .returning();
   if (!row) throw new Error("Not found");
   return { food: mapFood(row) };
+}
+
+export async function estimateFoodNutrition(input: {
+  name: string;
+  slot?: MealSlot | null;
+}) {
+  const slot = optionalSlot(input.slot);
+  const estimate = await estimateNutrition({
+    name: input.name,
+    slot: slot === undefined ? null : slot,
+  });
+  return { estimate };
 }
 
 export async function deleteFood(id: string) {
@@ -346,6 +396,7 @@ export async function getDay(date: string) {
   const programDay = training ? await programDayForWeekday(weekday) : null;
   const session = await sessionForDate(date);
   const weighIn = await latestWeighIn();
+  const rotation = await getRotationAssignment(date, training);
 
   return {
     date,
@@ -358,7 +409,41 @@ export async function getDay(date: string) {
     programDay,
     session,
     latestWeighIn: weighIn,
+    rotation,
   };
+}
+
+export async function suggestMealsForDate(
+  date: string,
+): Promise<{ suggestion: MealDaySuggestion }> {
+  const day = await getDay(date);
+  const { foods } = await listFoods();
+  const categorized: CategorizedFood[] = foods
+    .filter((f): f is typeof f & { slot: MealSlot } => f.slot != null)
+    .map((f) => ({
+      id: f.id,
+      name: f.name,
+      servingLabel: f.servingLabel,
+      slot: f.slot,
+      calories: f.calories,
+      proteinG: f.proteinG,
+      carbsG: f.carbsG,
+      fatG: f.fatG,
+    }));
+  const loggedSlots = [
+    ...new Set(day.meals.map((m) => m.slot as MealSlot)),
+  ];
+  const suggestion = suggestMealDay({
+    foods: categorized,
+    remaining: {
+      calories: Math.max(0, day.remaining.calories),
+      proteinG: Math.max(0, day.remaining.proteinG),
+      carbsG: Math.max(0, day.remaining.carbsG),
+      fatG: Math.max(0, day.remaining.fatG),
+    },
+    loggedSlots,
+  });
+  return { suggestion };
 }
 
 // --- Meal logs ---
@@ -1022,6 +1107,187 @@ export async function createWeighIn(input: {
       notes: row.notes,
     },
   };
+}
+
+// --- Muscle rotation queue ---
+
+async function ensureRotationSeeded() {
+  const existing = await tx()
+    .select()
+    .from(bodyRotationSteps)
+    .where(eq(bodyRotationSteps.userId, uid()))
+    .limit(1);
+
+  if (!existing[0]) {
+    for (let i = 0; i < DEFAULT_ROTATION_STEPS.length; i++) {
+      await tx().insert(bodyRotationSteps).values({
+        userId: uid(),
+        sortOrder: i,
+        muscles: serializeMuscles(DEFAULT_ROTATION_STEPS[i]),
+      });
+    }
+  }
+
+  const stateRows = await tx()
+    .select()
+    .from(bodyRotationState)
+    .where(eq(bodyRotationState.userId, uid()))
+    .limit(1);
+  if (!stateRows[0]) {
+    await tx().insert(bodyRotationState).values({
+      userId: uid(),
+      nextIndex: 0,
+      completedOn: null,
+    });
+  }
+}
+
+async function loadRotationSteps(): Promise<Muscle[][]> {
+  await ensureRotationSeeded();
+  const rows = await tx()
+    .select()
+    .from(bodyRotationSteps)
+    .where(eq(bodyRotationSteps.userId, uid()))
+    .orderBy(asc(bodyRotationSteps.sortOrder));
+  return rows.map((r) => parseMuscles(r.muscles));
+}
+
+async function loadRotationState() {
+  await ensureRotationSeeded();
+  const rows = await tx()
+    .select()
+    .from(bodyRotationState)
+    .where(eq(bodyRotationState.userId, uid()))
+    .limit(1);
+  const row = rows[0];
+  return {
+    nextIndex: row?.nextIndex ?? 0,
+    completedOn: row?.completedOn ?? null,
+  };
+}
+
+export async function getRotation() {
+  const steps = await loadRotationSteps();
+  const state = await loadRotationState();
+  const rows = await tx()
+    .select()
+    .from(bodyRotationSteps)
+    .where(eq(bodyRotationSteps.userId, uid()))
+    .orderBy(asc(bodyRotationSteps.sortOrder));
+
+  return {
+    steps: rows.map((r, i) => ({
+      id: r.id,
+      sortOrder: r.sortOrder,
+      muscles: steps[i] ?? parseMuscles(r.muscles),
+    })),
+    nextIndex: state.nextIndex,
+    completedOn: state.completedOn,
+    missingMuscles: missingMusclesFromSteps(steps),
+  };
+}
+
+export async function putRotation(input: {
+  steps: Array<{ muscles: string[] }>;
+}) {
+  if (!Array.isArray(input.steps) || input.steps.length === 0) {
+    throw new Error("steps is required");
+  }
+
+  const cleaned = input.steps.map((step) => {
+    const muscles = [...new Set(step.muscles.filter(isMuscle))];
+    if (muscles.length === 0) {
+      throw new Error("Each step needs at least one muscle");
+    }
+    return muscles;
+  });
+
+  await tx()
+    .delete(bodyRotationSteps)
+    .where(eq(bodyRotationSteps.userId, uid()));
+
+  for (let i = 0; i < cleaned.length; i++) {
+    await tx().insert(bodyRotationSteps).values({
+      userId: uid(),
+      sortOrder: i,
+      muscles: serializeMuscles(cleaned[i]),
+    });
+  }
+
+  const state = await loadRotationState();
+  const nextIndex = state.nextIndex % cleaned.length;
+  await tx()
+    .update(bodyRotationState)
+    .set({ nextIndex, updatedAt: new Date() })
+    .where(eq(bodyRotationState.userId, uid()));
+
+  return getRotation();
+}
+
+export async function getRotationAssignment(
+  date: string,
+  isTrainingDayFlag?: boolean,
+): Promise<RotationAssignment> {
+  const targets =
+    isTrainingDayFlag === undefined ? await getTargets() : null;
+  const training =
+    isTrainingDayFlag ??
+    isTrainingDay(targets!.trainingDays, weekdayFromDate(date));
+  const steps = await loadRotationSteps();
+  const state = await loadRotationState();
+  return resolveRotationAssignment({
+    isTrainingDay: training,
+    steps,
+    nextIndex: state.nextIndex,
+    completedOn: state.completedOn,
+    date,
+  });
+}
+
+export async function completeRotation(date: string) {
+  const steps = await loadRotationSteps();
+  const state = await loadRotationState();
+  const result = advanceRotation({
+    nextIndex: state.nextIndex,
+    completedOn: state.completedOn,
+    date,
+    stepCount: steps.length,
+  });
+
+  await tx()
+    .update(bodyRotationState)
+    .set({
+      nextIndex: result.nextIndex,
+      completedOn: result.completedOn,
+      updatedAt: new Date(),
+    })
+    .where(eq(bodyRotationState.userId, uid()));
+
+  const assignment = await getRotationAssignment(date);
+  return { advanced: result.advanced, assignment, rotation: await getRotation() };
+}
+
+export async function undoRotation(date: string) {
+  const steps = await loadRotationSteps();
+  const state = await loadRotationState();
+  const result = undoRotationCompletion({
+    nextIndex: state.nextIndex,
+    completedOn: state.completedOn,
+    date,
+    stepCount: steps.length,
+  });
+
+  await tx()
+    .update(bodyRotationState)
+    .set({
+      nextIndex: result.nextIndex,
+      completedOn: result.completedOn,
+      updatedAt: new Date(),
+    })
+    .where(eq(bodyRotationState.userId, uid()));
+
+  const assignment = await getRotationAssignment(date);
+  return { undone: result.undone, assignment, rotation: await getRotation() };
 }
 
 export { EMPTY_MACROS };

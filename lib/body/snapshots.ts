@@ -1,4 +1,4 @@
-import { scaleMacros, type MacroTotals } from "./macros";
+import { scaleMacros, type MacroTotals } from "@/lib/body/macros";
 
 export type FoodSnapshotSource = {
   id: string;

@@ -69,6 +69,8 @@ export const bodyFoods = body.table(
     userId: userId(),
     name: text("name").notNull(),
     servingLabel: text("serving_label").notNull().default("1 serving"),
+    /** breakfast | lunch | dinner | snack — null until set */
+    slot: text("slot"),
     calories: macros.calories(),
     proteinG: macros.proteinG(),
     carbsG: macros.carbsG(),
@@ -315,6 +317,38 @@ export const bodyWeighIns = body.table(
   ],
 );
 
+/** Ordered muscle-group steps for the training queue. */
+export const bodyRotationSteps = body.table(
+  "rotation_steps",
+  {
+    id: id(),
+    userId: userId(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** JSON array of muscle ids, e.g. '["chest","shoulders","triceps"]' */
+    muscles: text("muscles").notNull().default("[]"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("rotation_steps_user_id_idx").on(t.userId),
+    index("rotation_steps_user_sort_idx").on(t.userId, t.sortOrder),
+  ],
+);
+
+/** One row per user: next queue index and last completion date. */
+export const bodyRotationState = body.table(
+  "rotation_state",
+  {
+    id: id(),
+    userId: userId(),
+    nextIndex: integer("next_index").notNull().default(0),
+    completedOn: date("completed_on"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [unique("rotation_state_user_id_unique").on(t.userId)],
+);
+
 export type BodyTargets = typeof bodyTargets.$inferSelect;
 export type BodyFood = typeof bodyFoods.$inferSelect;
 export type BodyMealLog = typeof bodyMealLogs.$inferSelect;
@@ -324,3 +358,5 @@ export type BodyExercise = typeof bodyExercises.$inferSelect;
 export type BodyProgram = typeof bodyPrograms.$inferSelect;
 export type BodySession = typeof bodySessions.$inferSelect;
 export type BodyWeighIn = typeof bodyWeighIns.$inferSelect;
+export type BodyRotationStep = typeof bodyRotationSteps.$inferSelect;
+export type BodyRotationState = typeof bodyRotationState.$inferSelect;

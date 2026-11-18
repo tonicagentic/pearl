@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 import { snapshotFromFood, snapshotsFromPlannedItems } from "@/lib/body/snapshots";
 
 const chicken = {
@@ -13,21 +14,21 @@ const chicken = {
 describe("snapshotFromFood", () => {
   it("freezes name and scaled macros", () => {
     const snap = snapshotFromFood(chicken, 2);
-    expect(snap.foodId).toBe("food-1");
-    expect(snap.name).toBe("Chicken breast");
-    expect(snap.servings).toBe(2);
-    expect(snap.calories).toBe(330);
-    expect(snap.proteinG).toBe(62);
-    expect(snap.carbsG).toBe(0);
-    expect(snap.fatG).toBe(7.2);
+    assert.equal(snap.foodId, "food-1");
+    assert.equal(snap.name, "Chicken breast");
+    assert.equal(snap.servings, 2);
+    assert.equal(snap.calories, 330);
+    assert.equal(snap.proteinG, 62);
+    assert.equal(snap.carbsG, 0);
+    assert.equal(snap.fatG, 7.2);
   });
 
   it("does not mutate the source food when servings change later", () => {
     const snap = snapshotFromFood(chicken, 1);
     const foodLater = { ...chicken, calories: 999, name: "Changed" };
-    expect(snap.calories).toBe(165);
-    expect(snap.name).toBe("Chicken breast");
-    expect(foodLater.calories).toBe(999);
+    assert.equal(snap.calories, 165);
+    assert.equal(snap.name, "Chicken breast");
+    assert.equal(foodLater.calories, 999);
   });
 });
 
@@ -48,11 +49,11 @@ describe("snapshotsFromPlannedItems", () => {
         },
       },
     ]);
-    expect(snaps).toHaveLength(2);
-    expect(snaps[0].calories).toBe(247.5);
-    expect(snaps[0].proteinG).toBe(46.5);
-    expect(snaps[1].name).toBe("Rice");
-    expect(snaps[1].calories).toBe(200);
-    expect(snaps[1].carbsG).toBe(44);
+    assert.equal(snaps.length, 2);
+    assert.equal(snaps[0].calories, 247.5);
+    assert.equal(snaps[0].proteinG, 46.5);
+    assert.equal(snaps[1].name, "Rice");
+    assert.equal(snaps[1].calories, 200);
+    assert.equal(snaps[1].carbsG, 44);
   });
 });
