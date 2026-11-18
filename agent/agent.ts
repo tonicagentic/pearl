@@ -4,7 +4,10 @@ import { defineDynamic } from "eve/models";
 import { resolvePearlModel } from "./model-router.ts";
 
 export { DEFAULT_MODEL } from "./model-selection.ts";
-export { GATEWAY_PROVIDER_OPTIONS } from "./gateway-policy.ts";
+export {
+  GATEWAY_PROVIDER_OPTIONS,
+  GATEWAY_ZDR_PROVIDER_OPTIONS,
+} from "./gateway-policy.ts";
 
 // AGENT_MODEL_OVERRIDE lets experiments (evals, model comparisons) swap the
 // model without editing the agent; production stays on Auto routing. It wins

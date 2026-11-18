@@ -1,6 +1,7 @@
 import { list } from "@vercel/blob";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
+import { readPrivateBlobText } from "@/lib/blob/private";
 import { writerPreferencesKey } from "#lib/writer-preferences.js";
 
 /**
@@ -38,15 +39,15 @@ export default defineTool({
       if (!blob) {
         return { found: false, preferences: "" };
       }
-      const response = await fetch(blob.url);
-      if (!response.ok) {
+      const preferences = await readPrivateBlobText(blob.pathname);
+      if (preferences === null) {
         return {
-          error: `Failed to read preferences: ${response.status} ${response.statusText}`,
+          error: "Failed to read preferences from private storage.",
           found: false,
           preferences: "",
         };
       }
-      return { found: true, preferences: await response.text() };
+      return { found: true, preferences };
     } catch (error) {
       return {
         error:

@@ -17,6 +17,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ComponentProps,
   type FC,
 } from "react";
 import {
@@ -34,6 +35,7 @@ import { useCSSVariable } from "uniwind";
 import { Text } from "@/components/ui/text";
 
 import { uploadImageAttachment } from "@/src/image-attachment";
+import { useDisplayMediaUri } from "@/src/media-disk-cache";
 import { uploadPdfAttachment } from "@/src/pdf-attachment";
 import {
   isSupportedAttachment,
@@ -113,6 +115,31 @@ const useAttachmentMeta = () => {
   return { name, contentType, type };
 };
 
+function CachedRemoteImage({
+  uri,
+  className,
+  style,
+  resizeMode,
+  accessibilityLabel,
+}: {
+  readonly uri: string;
+  readonly className?: string;
+  readonly style?: ComponentProps<typeof Image>["style"];
+  readonly resizeMode?: ComponentProps<typeof Image>["resizeMode"];
+  readonly accessibilityLabel?: string;
+}) {
+  const displayUri = useDisplayMediaUri(uri);
+  return (
+    <Image
+      source={{ uri: displayUri }}
+      className={className}
+      style={style}
+      resizeMode={resizeMode}
+      accessibilityLabel={accessibilityLabel}
+    />
+  );
+}
+
 function AttachmentPreviewSheet({
   open,
   onClose,
@@ -183,8 +210,8 @@ function AttachmentPreviewSheet({
             bounces={false}
           >
             {imageUri ? (
-              <Image
-                source={{ uri: imageUri }}
+              <CachedRemoteImage
+                uri={imageUri}
                 className="w-full rounded-2xl bg-muted"
                 style={{ aspectRatio: 1, maxHeight: 420 }}
                 resizeMode="contain"
@@ -264,8 +291,8 @@ const ComposerAttachment: FC<{
         onPress={openPreview}
       >
         {uri ? (
-          <Image
-            source={{ uri }}
+          <CachedRemoteImage
+            uri={uri}
             className="aui-composer-attachment-image bg-muted size-14 rounded-xl"
             resizeMode="cover"
           />
@@ -575,8 +602,8 @@ const UserMessageAttachment: FC = () => {
         onPress={() => setPreviewOpen(true)}
       >
         {uri ? (
-          <Image
-            source={{ uri }}
+          <CachedRemoteImage
+            uri={uri}
             className="aui-user-message-attachment-image bg-muted size-[200px] rounded-2xl"
             resizeMode="cover"
           />

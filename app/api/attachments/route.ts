@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { issueSignedToken, presignUrl, put } from "@vercel/blob";
+import { putPrivateBlob } from "@/lib/blob/private";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -35,22 +35,6 @@ function mediaTypeAllowed(mediaType: string) {
 
     return lower === allowed;
   });
-}
-
-async function signedImageGetUrl(pathname: string): Promise<string> {
-  const validUntil = Date.now() + IMAGE_SIGNED_URL_TTL_MS;
-  const token = await issueSignedToken({
-    pathname,
-    operations: ["get"],
-    validUntil,
-  });
-  const { presignedUrl } = await presignUrl(token, {
-    operation: "get",
-    pathname,
-    access: "private",
-    validUntil,
-  });
-  return presignedUrl;
 }
 
 export async function POST(request: Request) {
@@ -115,19 +99,18 @@ export async function POST(request: Request) {
       // Images: mint a signed GET URL so the model/gateway can fetch them
       // (mobile sends that URL instead of a multi-MB data URL).
       // PDFs/text: agent uses extracted text / read_attachment.
-      const blob = await put(
+      const blob = await putPrivateBlob(
         `attachments/${viewer.id}/${Date.now()}-${file.name}`,
         bytes,
         {
-          access: "private",
           contentType: mediaType,
           addRandomSuffix: false,
+          signGet: isImage,
+          signedGetTtlMs: IMAGE_SIGNED_URL_TTL_MS,
         },
       );
-      blobUrl = blob.url;
-      clientBlobUrl = isImage
-        ? await signedImageGetUrl(blob.pathname)
-        : blob.url;
+      blobUrl = blob.canonicalUrl;
+      clientBlobUrl = isImage ? blob.url : blob.canonicalUrl;
     } catch (error) {
       blobError =
         error instanceof Error ? error.message : "Blob upload failed.";

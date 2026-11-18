@@ -27,6 +27,7 @@ type GenerateImageResult = {
   readonly url?: string;
   readonly downloadUrl?: string;
   readonly pathname?: string;
+  readonly filePath?: string;
   readonly contentType?: string;
   readonly model?: string;
   readonly prompt?: string;
@@ -141,21 +142,14 @@ function GenerateImageRender({
       ? parsed.error.trim()
       : undefined;
   const filename =
+    parsed?.filePath?.split("/").pop() ||
     parsed?.pathname?.split("/").pop() ||
     args?.pathname?.split("/").pop() ||
     "generated-image.png";
   const prompt = parsed?.prompt || args?.prompt;
 
-  if (running) {
-    return (
-      <GenerateImagePlaceholder
-        args={args}
-        label="Generating image…"
-        detail={truncatePrompt(prompt)}
-      />
-    );
-  }
-
+  // Prefer a settled URL over turn-level "running" — otherwise the preview
+  // flashes away while assistant text streams (tool part stays preliminary).
   if (success) {
     const part = { type: "image" as const, image: url, filename };
     return (
@@ -175,6 +169,16 @@ function GenerateImageRender({
           </div>
         </ImageRoot>
       </div>
+    );
+  }
+
+  if (running) {
+    return (
+      <GenerateImagePlaceholder
+        args={args}
+        label="Generating image…"
+        detail={truncatePrompt(prompt)}
+      />
     );
   }
 

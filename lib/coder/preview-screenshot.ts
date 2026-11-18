@@ -1,4 +1,4 @@
-import { put } from "@vercel/blob";
+import { putPrivateBlob } from "@/lib/blob/private";
 import { Sandbox } from "@vercel/sandbox";
 
 export type CaptureResult =
@@ -96,10 +96,11 @@ const { chromium } = require("playwright-core");
       }
       const b64 = (await read.stdout()).trim();
       const bytes = Buffer.from(b64, "base64");
-      const blob = await put(`pearl-coder/previews/${Date.now()}.png`, bytes, {
-        access: "public",
-        contentType: "image/png",
-      });
+      const blob = await putPrivateBlob(
+        `pearl-coder/previews/${Date.now()}.png`,
+        bytes,
+        { contentType: "image/png" },
+      );
       return { status: "ok" as const, url: blob.url };
     });
   } catch (cause) {
@@ -182,10 +183,10 @@ const fs = require("fs");
       }
       const videoBytes = Buffer.from((await readVideo.stdout()).trim(), "base64");
       const stamp = Date.now();
-      const videoBlob = await put(
+      const videoBlob = await putPrivateBlob(
         `pearl-coder/previews/${stamp}.webm`,
         videoBytes,
-        { access: "public", contentType: "video/webm" },
+        { contentType: "video/webm" },
       );
 
       let posterUrl: string | undefined;
@@ -198,10 +199,10 @@ const fs = require("fs");
           (await readPoster.stdout()).trim(),
           "base64",
         );
-        const posterBlob = await put(
+        const posterBlob = await putPrivateBlob(
           `pearl-coder/previews/${stamp}-poster.png`,
           posterBytes,
-          { access: "public", contentType: "image/png" },
+          { contentType: "image/png" },
         );
         posterUrl = posterBlob.url;
       }

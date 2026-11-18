@@ -1,4 +1,4 @@
-import { put } from "@vercel/blob";
+import { putPrivateBlob } from "@/lib/blob/private";
 import { NextResponse } from "next/server";
 
 import {
@@ -129,13 +129,13 @@ export async function PUT(
     if (prefix) {
       const slug = normalizeArtifactSlug(path);
       if (slug) {
-        const blob = await put(`${prefix}${slug}`, content, {
-          access: "public",
+        const blob = await putPrivateBlob(`${prefix}${slug}`, content, {
           addRandomSuffix: false,
           allowOverwrite: true,
           contentType: contentTypeForWorkspacePath(path),
+          signGet: false,
         });
-        blobPathname = blob.pathname ?? `${prefix}${slug}`;
+        blobPathname = blob.pathname || `${prefix}${slug}`;
       }
     }
   } catch {

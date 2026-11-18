@@ -31,9 +31,9 @@ export const MODEL_SELECTION_MARKER = "eveModelSelection";
 
 // Image generation models for generate_image. Separate allowlist from chat
 // models so a client cannot select an image id as the reply model (or the
-// reverse). Only models expected to honor the US / ZDR / no-training gateway
-// policy belong here; generate_image fails closed when no compliant provider
-// is available for the chosen id.
+// reverse). Only models expected to honor the ZDR / no-training gateway
+// policy belong here (US region is not required for images); generate_image
+// fails closed when no compliant provider is available for the chosen id.
 export const DEFAULT_IMAGE_MODEL = "spacexai/grok-imagine-image-2.0";
 
 export const CLIENT_IMAGE_MODEL_KEYS = {

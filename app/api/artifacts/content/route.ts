@@ -5,7 +5,7 @@ import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
 // Artifact content: served server-side so the browser never talks to Blob
-// directly (also keeps the door open for private-access stores later).
+// directly. The project store is private — read via authenticated get().
 // `?download=1` adds a Content-Disposition attachment header.
 
 export async function GET(request: Request) {
@@ -40,26 +40,17 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await get(pathname, { access: "public" });
+    const result = await get(pathname, { access: "private" });
 
-    if (!result || result.statusCode !== 200) {
+    if (!result || result.statusCode !== 200 || !result.stream) {
       return NextResponse.json(
         { error: "Artifact not readable from storage." },
         { status: 404 },
       );
     }
 
-    const response = await fetch(result.blob.url);
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: `Failed to read: ${response.status} ${response.statusText}` },
-        { status: 502 },
-      );
-    }
-
     const contentType =
-      response.headers.get("content-type") ?? "application/octet-stream";
+      result.blob.contentType ?? "application/octet-stream";
     const basename = pathname.slice(prefix.length);
     const headers = new Headers({
       "content-type": contentType,
@@ -72,7 +63,7 @@ export async function GET(request: Request) {
       );
     }
 
-    return new Response(response.body, { headers });
+    return new Response(result.stream, { headers });
   } catch (error) {
     return NextResponse.json(
       {

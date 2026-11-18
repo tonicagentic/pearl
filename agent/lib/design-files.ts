@@ -48,3 +48,8 @@ export function contentTypeForWorkspacePath(path: string): string {
   if (/\.webp$/i.test(path)) return "image/webp";
   return "text/markdown";
 }
+
+/** True when sandbox restore must use binary read/write (not UTF-8 text). */
+export function isBinaryWorkspacePath(path: string): boolean {
+  return /\.(png|jpe?g|webp|gif|pdf)$/i.test(path);
+}

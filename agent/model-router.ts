@@ -6,7 +6,10 @@ import {
   type PearlLane,
 } from "@/lib/pearl-lane";
 
-import { GATEWAY_PROVIDER_OPTIONS } from "./gateway-policy.ts";
+import {
+  GATEWAY_PROVIDER_OPTIONS,
+  GATEWAY_ZDR_PROVIDER_OPTIONS,
+} from "./gateway-policy.ts";
 import { setPearlLane } from "./lib/lane-state.ts";
 import {
   DEFAULT_MODEL,
@@ -249,15 +252,16 @@ export async function resolvePearlLane(
 }
 
 function gatewayOptionsForLane(lane: PearlLane) {
-  const base = {
-    ...GATEWAY_PROVIDER_OPTIONS,
+  // Analysis (Ultramarine) often lacks a catalog US zone pin; keep ZDR only.
+  const policy =
+    lane === "analysis"
+      ? GATEWAY_ZDR_PROVIDER_OPTIONS
+      : GATEWAY_PROVIDER_OPTIONS;
+  return {
+    ...policy,
     models: [PEARL_LANES[lane].fallback],
     tags: [`lane:${lane}`, "agent:pearl"],
   };
-  if (lane !== "analysis") return base;
-  // Ultramarine's catalog endpoint may lack a US zone pin; keep ZDR + no-training.
-  const { inferenceRegion: _region, ...withoutRegion } = base;
-  return withoutRegion;
 }
 
 export function modelForLane(lane: PearlLane) {

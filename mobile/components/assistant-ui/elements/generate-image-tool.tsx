@@ -5,6 +5,7 @@ import { ImageIcon, ImageOffIcon } from "lucide-react-native";
 import { View } from "react-native";
 
 import {
+  ImageActions,
   ImageContentFilterError,
   ImageFilename,
   ImagePreview,
@@ -23,6 +24,7 @@ type GenerateImageResult = {
   readonly error?: string;
   readonly url?: string;
   readonly pathname?: string;
+  readonly filePath?: string;
   readonly prompt?: string;
 };
 
@@ -137,8 +139,39 @@ export function GenerateImageToolCard({
       ? parsed.error.trim()
       : undefined;
   const filename =
-    parsed?.pathname?.split("/").pop() || "generated-image.png";
+    parsed?.filePath?.split("/").pop() ||
+    parsed?.pathname?.split("/").pop() ||
+    "generated-image.png";
   const prompt = parsed?.prompt || args?.prompt;
+
+  // Prefer a settled URL over turn-level "running" — otherwise the preview
+  // flashes away while assistant text streams (tool part stays preliminary).
+  if (success) {
+    return (
+      <ImageRoot className="w-full max-w-[512px]">
+        <ImageZoom
+          src={url}
+          alt={prompt || filename}
+          cacheKey={parsed?.pathname}
+          filename={filename}
+        >
+          <ImagePreview
+            src={url}
+            alt={prompt || filename}
+            cacheKey={parsed?.pathname}
+          />
+        </ImageZoom>
+        <View className="flex-row items-center justify-between gap-1">
+          <ImageFilename className="min-w-0 flex-1">{filename}</ImageFilename>
+          <ImageActions
+            src={url}
+            filename={filename}
+            cacheKey={parsed?.pathname}
+          />
+        </View>
+      </ImageRoot>
+    );
+  }
 
   if (running) {
     return (
@@ -147,17 +180,6 @@ export function GenerateImageToolCard({
         label="Generating image…"
         detail={truncatePrompt(prompt)}
       />
-    );
-  }
-
-  if (success) {
-    return (
-      <ImageRoot className="w-full max-w-[512px]">
-        <ImageZoom src={url} alt={prompt || filename}>
-          <ImagePreview src={url} alt={prompt || filename} />
-        </ImageZoom>
-        <ImageFilename>{filename}</ImageFilename>
-      </ImageRoot>
     );
   }
 

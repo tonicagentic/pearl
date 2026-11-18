@@ -1,4 +1,3 @@
-import { put } from "@vercel/blob";
 import { generateImage } from "ai";
 import { defineDynamic, defineTool } from "eve/tools";
 import {
@@ -7,35 +6,49 @@ import {
 } from "#lib/lane-state.js";
 import { z } from "zod";
 
+import { contentTypeForWorkspacePath } from "@/agent/lib/design-files";
+import { persistAgentFileBinary } from "@/lib/agent/persist-agent-file";
+import { putPrivateBlob } from "@/lib/blob/private";
 import {
   blockMessage,
   IMAGE_FALLBACK_CENTS,
 } from "@/lib/billing/config";
 import { assertCanSpend, recordUsage, usdToCents } from "@/lib/billing/ledger";
 import { principalIdFromAuth } from "@/lib/billing/principal";
-import { GATEWAY_PROVIDER_OPTIONS } from "../agent.ts";
+import { GATEWAY_ZDR_PROVIDER_OPTIONS } from "../agent.ts";
 import {
   currentImageModelId,
   isPlanMode,
   planModeBlocked,
 } from "#lib/turn-context.js";
 
+type SandboxBinaryWriter = {
+  writeBinaryFile: (options: {
+    path: string;
+    content: Uint8Array;
+  }) => PromiseLike<void>;
+};
+
 /**
- * Generate a pictorial image via the AI Gateway and upload the PNG to Blob.
+ * Generate a pictorial image via the AI Gateway, write it into the session
+ * sandbox under `/workspace/design/generated/…`, and mirror it to private
+ * Blob + agent_file so Computer → Workspace files can list it.
  *
  * The model id comes from clientContext.eveImageModelSelection (allowlisted),
  * synced into turn intent on step.started — never from the tool arguments.
- * Gateway data policy matches chat: US zone, zero data retention, no prompt
- * training. Fail closed when no compliant provider is available — do not
- * switch models silently.
+ * Gateway data policy requires ZDR + no prompt training, but not a US zone
+ * pin — image catalog endpoints often lack one even when ZDR-cleared. Fail
+ * closed when no compliant provider is available — do not switch models
+ * silently.
  */
 const tool = defineTool({
   description:
-    "Generate a pictorial image for a design deliverable and return a public " +
-    "Blob URL. Use for illustration, texture, or photographic work after " +
-    "loading graphic-design (or another design skill). Geometric marks and " +
-    "type-led posters should be SVG via write_file instead. The image model " +
-    "comes from Models settings, not from this tool's arguments.",
+    "Generate a pictorial image for a design deliverable, save it into the " +
+    "session workspace filesystem, and return a signed Blob URL for chat. " +
+    "Use for illustration, texture, or photographic work after loading " +
+    "graphic-design (or another design skill). Geometric marks and type-led " +
+    "posters should be SVG via write_file instead. The image model comes " +
+    "from Models settings, not from this tool's arguments.",
   label: {
     start(input) {
       const prompt = typeof input.prompt === "string" ? input.prompt.trim() : "";
@@ -97,21 +110,54 @@ const tool = defineTool({
     const model = currentImageModelId();
 
     try {
-      const result = await generateImage({
+      // Many image endpoints (incl. Grok Imagine) reject size / aspectRatio /
+      // seed with HTTP 422. Prefer aspect over size when both are set; on
+      // Unprocessable Entity retry once with prompt-only so the first visible
+      // tool call succeeds instead of failing then re-invoking.
+      const sizedCall = {
         model,
         prompt: input.prompt,
-        n: 1,
-        ...(input.size
-          ? { size: input.size as `${number}x${number}` }
-          : {}),
+        n: 1 as const,
+        providerOptions: {
+          gateway: GATEWAY_ZDR_PROVIDER_OPTIONS,
+        },
         ...(input.aspectRatio
           ? { aspectRatio: input.aspectRatio as `${number}:${number}` }
-          : {}),
-        seed: input.seed,
+          : input.size
+            ? { size: input.size as `${number}x${number}` }
+            : {}),
+        ...(typeof input.seed === "number" ? { seed: input.seed } : {}),
+      };
+      const bareCall = {
+        model,
+        prompt: input.prompt,
+        n: 1 as const,
         providerOptions: {
-          gateway: GATEWAY_PROVIDER_OPTIONS,
+          gateway: GATEWAY_ZDR_PROVIDER_OPTIONS,
         },
-      });
+      };
+
+      let result: Awaited<ReturnType<typeof generateImage>>;
+      try {
+        result = await generateImage(sizedCall);
+      } catch (firstError) {
+        const firstMessage =
+          firstError instanceof Error ? firstError.message : String(firstError);
+        // 422 is usually unsupported size/aspect/seed (or a transient gateway
+        // reject). One in-tool retry avoids a failed card + a second billed
+        // tool call from the model — generation only runs again if the first
+        // attempt never produced an image.
+        if (!/unprocessable|422|invalid.*(size|aspect|seed|parameter)/i.test(
+          firstMessage,
+        )) {
+          throw firstError;
+        }
+        const hadGeometry =
+          Boolean(input.size) ||
+          Boolean(input.aspectRatio) ||
+          typeof input.seed === "number";
+        result = await generateImage(hadGeometry ? bareCall : sizedCall);
+      }
 
       const file = result.image;
       const bytes = file.uint8Array;
@@ -121,15 +167,50 @@ const tool = defineTool({
         : contentType.includes("webp")
           ? "webp"
           : "png";
-      const slug =
-        input.pathname?.replace(/^\/+/, "") ||
-        `design/generated/${Date.now()}.${ext}`;
+      const random = Math.random().toString(36).slice(2, 10);
+      const requested = input.pathname?.replace(/^\/+/, "").trim();
+      const relative = requested
+        ? requested.replace(/\.[^.]+$/, "") + `-${random}.${ext}`
+        : `design/generated/${Date.now()}-${random}.${ext}`;
+      const filePath = relative.startsWith("workspace/")
+        ? `/${relative}`
+        : `/workspace/${relative.replace(/^workspace\//, "")}`;
+      const mime = contentTypeForWorkspacePath(filePath) || contentType;
 
-      const blob = await put(slug, Buffer.from(bytes), {
-        access: "public",
-        addRandomSuffix: true,
-        contentType,
-      });
+      // Session filesystem first — Computer tree + agent reads need a real path.
+      try {
+        const sandbox = (await (
+          ctx as { getSandbox: () => PromiseLike<unknown> }
+        ).getSandbox()) as SandboxBinaryWriter;
+        await sandbox.writeBinaryFile({ path: filePath, content: bytes });
+      } catch (error) {
+        console.error("[generate_image] sandbox write", error);
+      }
+
+      // Durable mirror under artifacts/ + agent_file (signed GET for chat UI).
+      const persistence = await persistAgentFileBinary(
+        ctx as { session: { id: string } },
+        filePath,
+        bytes,
+        mime,
+      );
+
+      let url = persistence.url ?? "";
+      let downloadUrl = persistence.downloadUrl ?? "";
+      let pathname = persistence.blobPathname;
+
+      // Fallback when chat link / artifacts put is not ready yet: still give
+      // the UI a signed URL from a private put outside the artifacts prefix.
+      if (!url) {
+        const blob = await putPrivateBlob(relative, Buffer.from(bytes), {
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          contentType: mime,
+        });
+        url = blob.url;
+        downloadUrl = blob.downloadUrl;
+        pathname = blob.pathname;
+      }
 
       if (userId) {
         const usage = (result as unknown as { usage?: { costUsd?: number } })
@@ -140,12 +221,12 @@ const tool = defineTool({
           usdToCents(providerCost) || IMAGE_FALLBACK_CENTS;
         try {
           await recordUsage({
-            idempotencyKey: `image:${blob.pathname}`,
+            idempotencyKey: `image:${pathname ?? filePath}`,
             userId,
             source: "image",
             costCents,
             reservationId,
-            metadata: { model, pathname: blob.pathname },
+            metadata: { model, pathname, filePath },
           });
         } catch (error) {
           console.error("[generate_image] billing", error);
@@ -154,24 +235,32 @@ const tool = defineTool({
 
       return {
         success: true,
-        url: blob.url,
-        downloadUrl: blob.downloadUrl,
-        pathname: blob.pathname,
-        contentType,
+        url,
+        downloadUrl,
+        pathname,
+        filePath,
+        contentType: mime,
         model,
         prompt: input.prompt,
         width: undefined as number | undefined,
         height: undefined as number | undefined,
+        ...(persistence.persisted
+          ? {}
+          : persistence.note
+            ? { note: persistence.note }
+            : {}),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const noProvider =
         /no_providers_available|No.*provider/i.test(message) ||
-        /zero.?data.?retention|inferenceRegion/i.test(message);
+        /zero.?data.?retention|inferenceRegion|disallowPromptTraining/i.test(
+          message,
+        );
       return {
         success: false,
         error: noProvider
-          ? `Image model "${model}" has no provider that meets the US / zero-data-retention policy. Choose another image model in Models settings, or retry later. (${message})`
+          ? `Image model "${model}" has no provider that meets the zero-data-retention / no-training policy. Choose another image model in Models settings, or retry later. (${message})`
           : message,
         url: "",
         downloadUrl: "",
@@ -189,26 +278,38 @@ const tool = defineTool({
       .string()
       .regex(/^\d+x\d+$/)
       .optional()
-      .describe('Pixel size as WIDTHxHEIGHT, e.g. "1024x1024".'),
+      .describe(
+        'Pixel size as WIDTHxHEIGHT, e.g. "1024x1024". Many image models ignore or reject this — omit unless the user asks for a specific size.',
+      ),
     aspectRatio: z
       .string()
       .regex(/^\d+:\d+$/)
       .optional()
-      .describe('Aspect ratio as W:H, e.g. "16:9". Prefer size or aspectRatio, not both.'),
-    seed: z.number().int().optional().describe("Optional seed for reproducibility."),
+      .describe(
+        'Aspect ratio as W:H, e.g. "16:9". Prefer this over size; omit when unsure — unsupported values return 422.',
+      ),
+    seed: z
+      .number()
+      .int()
+      .optional()
+      .describe(
+        "Optional seed for reproducibility. Omit unless the user asks — many models reject seed.",
+      ),
     pathname: z
       .string()
       .optional()
       .describe(
-        'Optional Blob pathname prefix, e.g. "design/poster.png". A random suffix is always added.',
+        'Optional workspace-relative path, e.g. "design/poster.png". A random suffix is always added.',
       ),
   }),
   outputSchema: z.object({
     success: z.boolean(),
     error: z.string().optional(),
+    note: z.string().optional(),
     url: z.string(),
     downloadUrl: z.string(),
     pathname: z.string().optional(),
+    filePath: z.string().optional(),
     contentType: z.string().optional(),
     model: z.string(),
     prompt: z.string(),
@@ -220,4 +321,3 @@ const tool = defineTool({
 export default defineDynamic(async (ctx) =>
   imageSurfaceEnabled(latestUserHint(await ctx.messages())) ? tool : null,
 );
-

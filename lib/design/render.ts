@@ -1,4 +1,4 @@
-import { put } from "@vercel/blob";
+import { putPrivateBlob } from "@/lib/blob/private";
 import { Sandbox } from "@vercel/sandbox";
 
 /** Minimal sandbox surface used by design rendering (mockable in tests). */
@@ -77,8 +77,7 @@ async function uploadBinary(args: {
   readonly pathname: string;
   readonly contentType: string;
 }> {
-  const blob = await put(args.pathname, args.body, {
-    access: "public",
+  const blob = await putPrivateBlob(args.pathname, args.body, {
     addRandomSuffix: true,
     contentType: args.contentType,
   });
@@ -86,7 +85,7 @@ async function uploadBinary(args: {
     url: blob.url,
     downloadUrl: blob.downloadUrl,
     pathname: blob.pathname,
-    contentType: blob.contentType ?? args.contentType,
+    contentType: blob.contentType || args.contentType,
   };
 }
 

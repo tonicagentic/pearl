@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { get } from "@vercel/blob";
+import { isBinaryWorkspacePath } from "@/agent/lib/design-files";
+import {
+  readPrivateBlobText,
+  signedPrivateBlobGetUrl,
+} from "@/lib/blob/private";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import type { ClientSessionState, SessionStreamEvent } from "eve/client";
 import {
@@ -1067,6 +1071,11 @@ export type UpsertAgentFileInput = {
   readonly content: string;
   /** Set when the current content lives in Blob; then `content` is history-only. */
   readonly blobPathname?: string;
+  /**
+   * Override stored size when `content` is not the real body (blob-primary
+   * binaries use an empty history marker).
+   */
+  readonly byteLength?: number;
 };
 
 /**
@@ -1078,8 +1087,12 @@ export async function upsertAgentFile({
   path,
   content,
   blobPathname,
+  byteLength: byteLengthOverride,
 }: UpsertAgentFileInput): Promise<void> {
-  const byteLength = Buffer.byteLength(content, "utf8");
+  const byteLength =
+    typeof byteLengthOverride === "number" && byteLengthOverride >= 0
+      ? byteLengthOverride
+      : Buffer.byteLength(content, "utf8");
 
   // No transaction here: the neon-http driver (production) does not support
   // them ("No transactions support in neon-http driver"), so these run as
@@ -1209,23 +1222,29 @@ export async function getAgentFile(
     return null;
   }
 
-  // Blob-primary: resolve the reference server-side. If the Blob read fails,
-  // fall back to any stored legacy content rather than failing the download.
+  // Blob-primary: resolve the reference server-side. Binary paths return a
+  // signed GET URL (clients download bytes); text paths return the body.
+  // If the Blob read fails, fall back to any stored legacy content.
   if (row.blobPathname) {
     try {
-      const result = await get(row.blobPathname, { access: "public" });
+      if (isBinaryWorkspacePath(row.path)) {
+        const url = await signedPrivateBlobGetUrl(row.blobPathname);
+        return {
+          path: row.path,
+          content: url,
+          byteLength: row.byteLength,
+          updatedAt: row.updatedAt.toISOString(),
+        };
+      }
 
-      if (result && result.statusCode === 200) {
-        const response = await fetch(result.blob.url);
-
-        if (response.ok) {
-          return {
-            path: row.path,
-            content: await response.text(),
-            byteLength: row.byteLength,
-            updatedAt: row.updatedAt.toISOString(),
-          };
-        }
+      const content = await readPrivateBlobText(row.blobPathname);
+      if (content !== null) {
+        return {
+          path: row.path,
+          content,
+          byteLength: row.byteLength,
+          updatedAt: row.updatedAt.toISOString(),
+        };
       }
     } catch {
       // Fall through to stored content below.

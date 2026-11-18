@@ -1,4 +1,4 @@
-import { get } from "@vercel/blob";
+import { readPrivateBlobText } from "@/lib/blob/private";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { artifactKey, artifactSandboxPath } from "#lib/artifacts.js";
@@ -47,25 +47,14 @@ export default defineTool({
 
     let content: string;
     try {
-      // Public-access blob: fetch the URL for the content, mirroring
-      // download_asset (get() returns a raw stream, not buffered text).
-      const result = await get(key, { access: "public" });
-      if (!result || result.statusCode !== 200) {
+      const text = await readPrivateBlobText(key);
+      if (text === null) {
         return {
           error: `Artifact ${key} is not readable from storage.`,
           success: false,
         };
       }
-
-      const response = await fetch(result.blob.url);
-      if (!response.ok) {
-        return {
-          error: `Failed to download: ${response.status} ${response.statusText}`,
-          success: false,
-        };
-      }
-
-      content = await response.text();
+      content = text;
     } catch (error) {
       return {
         error: `Could not read ${key} from storage: ${

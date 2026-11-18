@@ -85,6 +85,15 @@ function toolApprovalFromInteraction(
   };
 }
 
+function settledGenerateImageResult(output: unknown): boolean {
+  if (!output || typeof output !== "object" || Array.isArray(output)) {
+    return false;
+  }
+  const record = output as Record<string, unknown>;
+  const url = typeof record.url === "string" ? record.url.trim() : "";
+  return record.success === true && url.length > 0;
+}
+
 function convertToolPart(part: EveToolPart): Part {
   const toolCall = {
     type: "tool-call" as const,
@@ -119,11 +128,19 @@ function convertToolPart(part: EveToolPart): Part {
         isError: true,
       } as Part;
     default:
-      return (
-        part.output === undefined
-          ? toolCall
-          : { ...toolCall, result: part.output, isPreliminary: true }
-      ) as Part;
+      if (part.output === undefined) {
+        return toolCall as Part;
+      }
+      // generate_image often lands a final URL before the turn marks the
+      // tool completed; keep that preview settled so it does not flash away
+      // while assistant text streams under isPreliminary/running.
+      if (
+        part.name === "generate_image" &&
+        settledGenerateImageResult(part.output)
+      ) {
+        return { ...toolCall, result: part.output } as Part;
+      }
+      return { ...toolCall, result: part.output, isPreliminary: true } as Part;
   }
 }
 

@@ -863,7 +863,7 @@ export const GALLERY_MESSAGES: readonly ThreadMessageLike[] = [
         result: {
           success: false,
           error:
-            'Image model "spacexai/grok-imagine-image-2.0" has no provider that meets the US / zero-data-retention policy.',
+            'Image model "spacexai/grok-imagine-image-2.0" has no provider that meets the zero-data-retention / no-training policy.',
           url: "",
           downloadUrl: "",
           model: "spacexai/grok-imagine-image-2.0",

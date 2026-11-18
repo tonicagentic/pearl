@@ -1,4 +1,4 @@
-import { put } from "@vercel/blob";
+import { putPrivateBlob } from "@/lib/blob/private";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { writerPreferencesKey } from "#lib/writer-preferences.js";
@@ -43,11 +43,11 @@ export default defineTool({
       };
     }
     try {
-      const blob = await put(key, preferences, {
-        access: "public",
+      const blob = await putPrivateBlob(key, preferences, {
         addRandomSuffix: false,
         allowOverwrite: true,
         contentType: "text/markdown",
+        signGet: false,
       });
       return { pathname: blob.pathname, success: true };
     } catch (error) {

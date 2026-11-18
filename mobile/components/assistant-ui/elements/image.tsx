@@ -1,9 +1,17 @@
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
+import {
+  downloadRemoteMedia,
+  previewRemoteMedia,
+  shareRemoteMedia,
+} from "@/src/media-actions";
+import { useDisplayMediaUri } from "@/src/media-disk-cache";
 import type { ImageMessagePartComponent } from "@assistant-ui/react-native";
 import {
+  DownloadIcon,
   ImageIcon,
   ImageOffIcon,
+  ShareIcon,
   ShieldAlertIcon,
   XIcon,
 } from "lucide-react-native";
@@ -46,10 +54,13 @@ type ImagePreviewProps = Omit<ImageProps, "source" | "style"> & {
   src: string;
   alt?: string;
   containerClassName?: string;
+  /** Stable disk-cache key (prefer Blob pathname over signed URL). */
+  cacheKey?: string;
 };
 
 function ImagePreview({
   alt = "Image content",
+  cacheKey,
   className,
   containerClassName,
   onError,
@@ -57,24 +68,25 @@ function ImagePreview({
   src,
   ...props
 }: ImagePreviewProps) {
+  const displaySrc = useDisplayMediaUri(src, cacheKey);
   const [aspectRatio, setAspectRatio] = useState<
     { src: string; value: number } | undefined
   >(undefined);
   const [loadedSrc, setLoadedSrc] = useState<string | undefined>(undefined);
   const [errorSrc, setErrorSrc] = useState<string | undefined>(undefined);
-  const loaded = loadedSrc === src;
-  const error = errorSrc === src;
+  const loaded = loadedSrc === displaySrc;
+  const error = errorSrc === displaySrc;
   const currentAspectRatio =
-    aspectRatio?.src === src ? aspectRatio.value : undefined;
+    aspectRatio?.src === displaySrc ? aspectRatio.value : undefined;
   const opacity = usePulse(!loaded && !error);
 
   const applyNaturalSize = (width: number, height: number) => {
     if (!(width > 0 && height > 0)) return;
     const value = width / height;
     setAspectRatio((current) =>
-      current?.src === src && current.value === value
+      current?.src === displaySrc && current.value === value
         ? current
-        : { src, value },
+        : { src: displaySrc, value },
     );
   };
 
@@ -106,7 +118,7 @@ function ImagePreview({
         </View>
       )}
       <NativeImage
-        source={{ uri: src }}
+        source={{ uri: displaySrc }}
         accessibilityLabel={alt}
         resizeMode="contain"
         className={cn("w-full", !loaded && "opacity-0", className)}
@@ -123,13 +135,13 @@ function ImagePreview({
           if (source) {
             applyNaturalSize(source.width, source.height);
           } else {
-            NativeImage.getSize(src, applyNaturalSize);
+            NativeImage.getSize(displaySrc, applyNaturalSize);
           }
-          setLoadedSrc(src);
+          setLoadedSrc(displaySrc);
           onLoad?.(event);
         }}
         onError={(event) => {
-          setErrorSrc(src);
+          setErrorSrc(displaySrc);
           onError?.(event);
         }}
         {...props}
@@ -162,19 +174,47 @@ function ImageFilename({
 type ImageZoomProps = PropsWithChildren<{
   src: string;
   alt?: string;
+  cacheKey?: string;
+  filename?: string;
 }>;
 
-function ImageZoom({ src, alt = "Image preview", children }: ImageZoomProps) {
+function ImageZoom({
+  src,
+  alt = "Image preview",
+  cacheKey,
+  filename,
+  children,
+}: ImageZoomProps) {
+  const displaySrc = useDisplayMediaUri(src, cacheKey);
   const [isOpen, setIsOpen] = useState(false);
+  const [opening, setOpening] = useState(false);
   const close = () => setIsOpen(false);
+
+  const openPreview = async () => {
+    if (opening) return;
+    setOpening(true);
+    try {
+      const opened = await previewRemoteMedia({
+        url: src,
+        cacheKey,
+        filename: filename || alt || "image.jpg",
+      });
+      if (!opened) setIsOpen(true);
+    } finally {
+      setOpening(false);
+    }
+  };
 
   return (
     <>
       <Pressable
         className="aui-image-zoom-trigger"
         accessibilityRole="imagebutton"
-        accessibilityLabel="Zoom image"
-        onPress={() => setIsOpen(true)}
+        accessibilityLabel="Preview image"
+        disabled={opening}
+        onPress={() => {
+          void openPreview();
+        }}
       >
         {children}
       </Pressable>
@@ -190,7 +230,7 @@ function ImageZoom({ src, alt = "Image preview", children }: ImageZoomProps) {
           onPress={close}
         >
           <NativeImage
-            source={{ uri: src }}
+            source={{ uri: displaySrc }}
             accessibilityLabel={alt}
             resizeMode="contain"
             className="aui-image-zoom-content h-full w-full"
@@ -203,6 +243,80 @@ function ImageZoom({ src, alt = "Image preview", children }: ImageZoomProps) {
         </Pressable>
       </Modal>
     </>
+  );
+}
+
+type ImageActionsProps = {
+  readonly src: string;
+  readonly filename?: string;
+  readonly cacheKey?: string;
+  readonly className?: string;
+};
+
+function ImageActions({
+  src,
+  filename = "image.jpg",
+  cacheKey,
+  className,
+}: ImageActionsProps) {
+  const [busy, setBusy] = useState<"share" | "download" | null>(null);
+
+  const run = async (kind: "share" | "download") => {
+    if (busy) return;
+    setBusy(kind);
+    try {
+      if (kind === "share") {
+        await shareRemoteMedia({ url: src, cacheKey, filename });
+      } else {
+        await downloadRemoteMedia({ url: src, cacheKey, filename });
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <View
+      className={cn(
+        "aui-image-actions flex-row items-center gap-1 px-1 pb-1",
+        className,
+      )}
+    >
+      <IconButton
+        label="Download image"
+        disabled={busy !== null}
+        className="size-9"
+        style={{ opacity: busy !== null ? 0.4 : 1 }}
+        onPress={() => {
+          void run("download");
+        }}
+      >
+        <Icon
+          as={DownloadIcon}
+          className={cn(
+            "text-muted-foreground size-4",
+            busy === "download" && "opacity-50",
+          )}
+        />
+      </IconButton>
+      <IconButton
+        label="Share image"
+        disabled={busy !== null}
+        className="size-9"
+        style={{ opacity: busy !== null ? 0.4 : 1 }}
+        onPress={() => {
+          void run("share");
+        }}
+      >
+        <Icon
+          as={ShareIcon}
+          className={cn(
+            "text-muted-foreground size-4",
+            busy === "share" && "opacity-50",
+          )}
+        />
+      </IconButton>
+    </View>
   );
 }
 
@@ -268,10 +382,17 @@ const ImageImpl: ImageMessagePartComponent = ({ image, filename, status }) => {
 
   return (
     <ImageRoot>
-      <ImageZoom src={image} alt={filename || "Image content"}>
+      <ImageZoom
+        src={image}
+        alt={filename || "Image content"}
+        filename={filename || "image.jpg"}
+      >
         <ImagePreview src={image} alt={filename || "Image content"} />
       </ImageZoom>
-      <ImageFilename>{filename}</ImageFilename>
+      <View className="flex-row items-center justify-between gap-1">
+        <ImageFilename className="min-w-0 flex-1">{filename}</ImageFilename>
+        <ImageActions src={image} filename={filename || "image.jpg"} />
+      </View>
     </ImageRoot>
   );
 };
@@ -281,6 +402,7 @@ const Image = memo(ImageImpl) as unknown as ImageMessagePartComponent & {
   Preview: typeof ImagePreview;
   Filename: typeof ImageFilename;
   Zoom: typeof ImageZoom;
+  Actions: typeof ImageActions;
   Generating: typeof ImageGenerating;
   ContentFilterError: typeof ImageContentFilterError;
 };
@@ -290,6 +412,7 @@ Image.Root = ImageRoot;
 Image.Preview = ImagePreview;
 Image.Filename = ImageFilename;
 Image.Zoom = ImageZoom;
+Image.Actions = ImageActions;
 Image.Generating = ImageGenerating;
 Image.ContentFilterError = ImageContentFilterError;
 
@@ -299,6 +422,7 @@ export {
   ImagePreview,
   ImageFilename,
   ImageZoom,
+  ImageActions,
   ImageGenerating,
   ImageContentFilterError,
 };

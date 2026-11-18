@@ -1,4 +1,4 @@
-import { put } from "@vercel/blob";
+import { putPrivateBlob } from "@/lib/blob/private";
 
 import { contentTypeForWorkspacePath } from "@/agent/lib/design-files";
 import {
@@ -104,11 +104,11 @@ export async function mirrorPlanMarkdown(input: {
   }
 
   try {
-    await put(`${prefix}${slug}`, content, {
-      access: "public",
+    await putPrivateBlob(`${prefix}${slug}`, content, {
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: contentTypeForWorkspacePath(path),
+      signGet: false,
     });
     return { path, mirrored: true };
   } catch (error) {

@@ -272,18 +272,23 @@ export function ComputerPanel({
     });
   }, []);
 
-  const refreshRemote = useCallback(async (id: string) => {
-    setLoading(true);
-    setError(null);
+  const refreshRemote = useCallback(async (id: string, quiet = false) => {
+    if (!quiet) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const next = await fetchComputerState(id);
       setRemote(next);
+      if (quiet) setError(null);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not load computer state.",
-      );
+      if (!quiet) {
+        setError(
+          err instanceof Error ? err.message : "Could not load computer state.",
+        );
+      }
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, []);
 
@@ -294,6 +299,12 @@ export function ComputerPanel({
       return;
     }
     void refreshRemote(activeChatId);
+    // Keep Workspace files current while Computer is open (generated images
+    // and write_file settles land in agent_file after the first paint).
+    const timer = setInterval(() => {
+      void refreshRemote(activeChatId, true);
+    }, 4_000);
+    return () => clearInterval(timer);
   }, [activeChatId, refreshRemote, visible]);
 
   // Chat-launched opens request the workspace reader.

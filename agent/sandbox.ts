@@ -1,5 +1,10 @@
 import { list } from "@vercel/blob";
 import { DefaultSandbox, defineSandbox } from "eve/sandbox";
+import { isBinaryWorkspacePath } from "@/agent/lib/design-files";
+import {
+  readPrivateBlobBytes,
+  readPrivateBlobText,
+} from "@/lib/blob/private";
 import {
   getChatIdByEveSessionId,
   listAgentFileSeeds,
@@ -49,19 +54,41 @@ export default defineSandbox(async ({ session }) => {
           continue;
         }
 
-        // Bounded fetch: a hung storage read must not stall the first turn
-        // of a fresh session. On any failure, stop restoring — the agent can
-        // still use restore_artifact.
-        const response = await fetch(blob.url, {
-          signal: AbortSignal.timeout(10_000),
-        });
+        // Bounded private read: a hung storage read must not stall the first
+        // turn of a fresh session. On any failure, stop restoring — the agent
+        // can still use restore_artifact.
+        if (isBinaryWorkspacePath(path)) {
+          const bytes = await Promise.race([
+            readPrivateBlobBytes(blob.pathname),
+            new Promise<null>((resolve) => {
+              setTimeout(() => resolve(null), 10_000);
+            }),
+          ]);
 
-        if (!response.ok) {
+          if (bytes === null) {
+            break;
+          }
+
+          await sandbox.writeBinaryFile({
+            content: bytes,
+            path,
+          });
+          continue;
+        }
+
+        const content = await Promise.race([
+          readPrivateBlobText(blob.pathname),
+          new Promise<null>((resolve) => {
+            setTimeout(() => resolve(null), 10_000);
+          }),
+        ]);
+
+        if (content === null) {
           break;
         }
 
         await sandbox.writeTextFile({
-          content: await response.text(),
+          content,
           path,
         });
       }
