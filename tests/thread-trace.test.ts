@@ -193,7 +193,7 @@ test("threadTraceFromEvents reads usage.recorded + model.started (current eve)",
     {
       type: "model.started",
       scope: { turnId: "t1", runId: "r1" },
-      data: { runId: "r1", modelId: "spacexai/grok-imagine-image-2.0", attempt: 0 },
+      data: { runId: "r1", modelId: "spacexai/grok-imagine-image-2.0" },
       meta: { at: "2026-11-17T12:00:02.000Z" },
     },
     {

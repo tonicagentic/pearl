@@ -830,7 +830,6 @@ export const GALLERY_MESSAGES: readonly ThreadMessageLike[] = [
             "Quiet coastal road at dusk, soft amber light, long shadows, photographic",
           aspectRatio: "16:9",
         },
-        status: { type: "running" },
       },
       {
         type: "tool-call",
@@ -850,7 +849,6 @@ export const GALLERY_MESSAGES: readonly ThreadMessageLike[] = [
           model: "spacexai/grok-imagine-image-2.0",
           prompt: "Quiet coastal road at dusk",
         },
-        status: { type: "complete" },
       },
       {
         type: "tool-call",
@@ -869,7 +867,6 @@ export const GALLERY_MESSAGES: readonly ThreadMessageLike[] = [
           model: "spacexai/grok-imagine-image-2.0",
           prompt: "A photo that the provider cannot fulfill",
         },
-        status: { type: "complete" },
       },
     ],
   },
