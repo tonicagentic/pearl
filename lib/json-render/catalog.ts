@@ -81,6 +81,23 @@ const snowTrailLevel = z.object({
   total: z.number().nullable(),
 });
 
+const surfSpotOption = z.object({
+  name: z.string(),
+  rating: z.string().nullable(),
+  wave: z.string().nullable(),
+  wind: z.string().nullable(),
+  note: z.string().nullable(),
+});
+
+const mountainOption = z.object({
+  name: z.string(),
+  newSnow: z.string().nullable(),
+  baseDepth: z.string().nullable(),
+  conditions: z.string().nullable(),
+  liftsOpen: z.string().nullable(),
+  note: z.string().nullable(),
+});
+
 /**
  * Shared generative-UI vocabulary for Pearl chat.
  *
@@ -416,6 +433,17 @@ export const chatCatalog = defineCatalog(schema, {
       }),
       description: "Surf conditions for a spot: wave, wind, tide, rating, optional periods",
     },
+    SurfSpotPick: {
+      props: z.object({
+        /** Recommended spot name; should match one options[].name. */
+        pick: z.string(),
+        reason: z.string().nullable(),
+        timeframe: z.string().nullable(),
+        options: z.array(surfSpotOption).min(2).max(6),
+      }),
+      description:
+        "Which surf spot to go to (e.g. best this morning): named pick, reason, and 2–6 compared spots",
+    },
     SnowReport: {
       props: z.object({
         resort: z.string(),
@@ -433,6 +461,17 @@ export const chatCatalog = defineCatalog(schema, {
       }),
       description:
         "Ski resort snow report with depth, new snow, lifts/trails, optional trailLevels breakdown and image",
+    },
+    MountainPick: {
+      props: z.object({
+        /** Recommended mountain name; should match one options[].name. */
+        pick: z.string(),
+        reason: z.string().nullable(),
+        timeframe: z.string().nullable(),
+        options: z.array(mountainOption).min(2).max(6),
+      }),
+      description:
+        "Which ski mountain to go to: named pick, reason, and 2–6 compared resorts",
     },
     DailyBrief: {
       props: z.object({
@@ -468,9 +507,9 @@ export const chatCatalog = defineCatalog(schema, {
 export type ChatCatalog = typeof chatCatalog;
 
 export const JSON_RENDER_CUSTOM_RULES = [
-  "Emit a UI spec for structured answers of these kinds: web/product search, location or place maps, news briefs, daily multi-story briefs, encyclopedia entries, pronunciation, foreign-language phrases, guitar chords, music theory, vote or regional charts, sparkline charts, spec sheets, Mermaid diagrams, tables, explainers, recipes, flight tracking, calendar events, table bookings, email drafts/batches, surf/snow reports, and video. Ordinary replies and exploratory thinking-together turns stay prose with no spec.",
-  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, DailyBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Chart, SpecSheet, MermaidDiagram, Table, Explainer, Recipe, ComparisonBar, FlightTracker, CalendarEvent, CreateEvent, Booking, EmailDraft, EmailBatch, SurfReport, SnowReport, Video) inside it.",
-  "For two-way % races prefer ComparisonBar; for multi-region shares use RegionChart; for a single metric series use Chart. Use DailyBrief for a morning/top-stories roundup; NewsBrief for one story. Keep 1–2 sentences of prose outside the fence.",
+  "Emit a UI spec for structured answers of these kinds: web/product search, location or place maps, news briefs, daily multi-story briefs, encyclopedia entries, pronunciation, foreign-language phrases, guitar chords, music theory, vote or regional charts, sparkline charts, spec sheets, Mermaid diagrams, tables, explainers, recipes, flight tracking, calendar events, table bookings, email drafts/batches, surf/snow reports, surf-spot and ski-mountain picks, and video. Ordinary replies and exploratory thinking-together turns stay prose with no spec.",
+  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, DailyBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Chart, SpecSheet, MermaidDiagram, Table, Explainer, Recipe, ComparisonBar, FlightTracker, CalendarEvent, CreateEvent, Booking, EmailDraft, EmailBatch, SurfReport, SurfSpotPick, SnowReport, MountainPick, Video) inside it.",
+  "For two-way % races prefer ComparisonBar; for multi-region shares use RegionChart; for a single metric series use Chart. Use SurfSpotPick when choosing among surf spots and MountainPick when choosing among ski mountains; use SurfReport/SnowReport for a single place. Use DailyBrief for a morning/top-stories roundup; NewsBrief for one story. Keep 1–2 sentences of prose outside the fence.",
   "EmailDraft, EmailBatch, CreateEvent, and Booking include built-in confirm buttons that reply with tool-ready messages. When the user sends those confirmations, call create_gmail_draft / send_gmail_message / apply_mail_batch or the calendar create path immediately with the stated params (approvals still apply).",
   "Buttons that continue the conversation must bind press to the reply action with a concrete message string. Do not invent component names outside this catalog.",
   "Image and Video src must be https URLs. Prefer the dedicated answer components over assembling the same layout from Stack/Text alone.",

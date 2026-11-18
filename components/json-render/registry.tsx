@@ -1373,6 +1373,66 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
         ) : null}
       </div>
     ),
+    SurfSpotPick: ({ props }) => (
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-0.5">
+          {props.timeframe ? (
+            <div className="text-muted-foreground text-[12px]">{props.timeframe}</div>
+          ) : null}
+          <div className="text-foreground text-[15px] font-medium">
+            Go to {props.pick}
+          </div>
+          {props.reason ? (
+            <div className="text-muted-foreground text-[13.5px] leading-relaxed">
+              {props.reason}
+            </div>
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-2">
+          {props.options.map((option) => {
+            const isPick = option.name === props.pick;
+            return (
+              <div
+                key={option.name}
+                className={cn(
+                  "flex flex-col gap-0.5 rounded-lg border px-2.5 py-2",
+                  isPick
+                    ? "border-foreground/30 bg-muted/50"
+                    : "border-border/50",
+                )}
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span
+                    className={cn(
+                      "text-[13.5px]",
+                      isPick
+                        ? "text-foreground font-semibold"
+                        : "text-foreground font-medium",
+                    )}
+                  >
+                    {option.name}
+                    {isPick ? " · pick" : ""}
+                  </span>
+                  {option.rating ? (
+                    <span className="text-muted-foreground text-[12px]">
+                      {option.rating}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="text-muted-foreground text-[12px]">
+                  {[option.wave, option.wind].filter(Boolean).join(" · ")}
+                </div>
+                {option.note ? (
+                  <div className="text-muted-foreground text-[12px] leading-relaxed">
+                    {option.note}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ),
     SnowReport: ({ props }) => {
       const image = httpsSrc(props.image);
       const trailLevels = props.trailLevels ?? [];
@@ -1479,6 +1539,68 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
         </div>
       );
     },
+    MountainPick: ({ props }) => (
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-0.5">
+          {props.timeframe ? (
+            <div className="text-muted-foreground text-[12px]">{props.timeframe}</div>
+          ) : null}
+          <div className="text-foreground text-[15px] font-medium">
+            Go to {props.pick}
+          </div>
+          {props.reason ? (
+            <div className="text-muted-foreground text-[13.5px] leading-relaxed">
+              {props.reason}
+            </div>
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-2">
+          {props.options.map((option) => {
+            const isPick = option.name === props.pick;
+            return (
+              <div
+                key={option.name}
+                className={cn(
+                  "flex flex-col gap-0.5 rounded-lg border px-2.5 py-2",
+                  isPick
+                    ? "border-foreground/30 bg-muted/50"
+                    : "border-border/50",
+                )}
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span
+                    className={cn(
+                      "text-[13.5px]",
+                      isPick
+                        ? "text-foreground font-semibold"
+                        : "text-foreground font-medium",
+                    )}
+                  >
+                    {option.name}
+                    {isPick ? " · pick" : ""}
+                  </span>
+                  {option.newSnow ? (
+                    <span className="text-muted-foreground text-[12px]">
+                      {option.newSnow}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="text-muted-foreground text-[12px]">
+                  {[option.baseDepth, option.conditions, option.liftsOpen]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
+                {option.note ? (
+                  <div className="text-muted-foreground text-[12px] leading-relaxed">
+                    {option.note}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ),
     DailyBrief: ({ props }) => (
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-0.5">

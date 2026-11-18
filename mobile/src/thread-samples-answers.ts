@@ -31,7 +31,9 @@ export type AnswerThreadSample = {
     | "answer-email-draft"
     | "answer-email-batch"
     | "answer-surf"
+    | "answer-surf-pick"
     | "answer-snow"
+    | "answer-mountain-pick"
     | "answer-daily"
     | "answer-video";
   readonly label: string;
@@ -892,6 +894,101 @@ export const ANSWER_THREAD_SAMPLES: readonly AnswerThreadSample[] = [
           summary: "Fresh overnight on Corona; wind holds Challenge.",
           image:
             "https://images.unsplash.com/photo-1551524559-8af4e6624178?w=800&q=80",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-surf-pick",
+    "Surf pick",
+    "Which surf spot is best this morning?",
+    "Best call:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["pick"],
+      },
+      pick: {
+        type: "SurfSpotPick",
+        props: {
+          pick: "Ocean Beach",
+          timeframe: "This morning",
+          reason:
+            "Cleanest face and lightest wind before the NW breeze fills in.",
+          options: [
+            {
+              name: "Ocean Beach",
+              rating: "Good",
+              wave: "3–4 ft",
+              wind: "NW 6 mph",
+              note: "South end cleaner; mid-tide.",
+            },
+            {
+              name: "Pacifica",
+              rating: "Fair",
+              wave: "2–3 ft",
+              wind: "NW 10 mph",
+              note: "A bit mushy; wind earlier.",
+            },
+            {
+              name: "Bolinas",
+              rating: "Poor–Fair",
+              wave: "1–2 ft",
+              wind: "Variable",
+              note: "Small and inconsistent.",
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-mountain-pick",
+    "Mountain pick",
+    "Which ski mountain should I go to today?",
+    "Best call:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["pick"],
+      },
+      pick: {
+        type: "MountainPick",
+        props: {
+          pick: "Eldora",
+          timeframe: "Today",
+          reason:
+            "Closest fresh snow with most lifts spinning; less drive than Summit.",
+          options: [
+            {
+              name: "Eldora",
+              newSnow: "3\" overnight",
+              baseDepth: "48\"",
+              conditions: "Packed powder",
+              liftsOpen: "10 / 12",
+              note: "Corona skiing well; Challenge windy.",
+            },
+            {
+              name: "Winter Park",
+              newSnow: "2\" overnight",
+              baseDepth: "52\"",
+              conditions: "Packed powder",
+              liftsOpen: "18 / 25",
+              note: "More terrain, longer drive and wind on ridge.",
+            },
+            {
+              name: "Loveland",
+              newSnow: "1\" overnight",
+              baseDepth: "44\"",
+              conditions: "Hard pack",
+              liftsOpen: "8 / 10",
+              note: "Fast access but thinner coverage on steeps.",
+            },
+          ],
         },
       },
     },

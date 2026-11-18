@@ -1725,6 +1725,63 @@ export const chatRegistry: ComponentRegistry = {
       </View>
     );
   },
+  SurfSpotPick: ({ element }) => {
+    const pick = asString(element.props.pick);
+    const options = asObjectArray(element.props.options);
+    return (
+      <View className="flex-col gap-3">
+        <View className="flex-col gap-0.5">
+          {element.props.timeframe ? (
+            <Text variant="caption">{asString(element.props.timeframe)}</Text>
+          ) : null}
+          <Text variant="body" weight="medium">
+            Go to {pick}
+          </Text>
+          {element.props.reason ? (
+            <Text variant="secondary" className="leading-relaxed">
+              {asString(element.props.reason)}
+            </Text>
+          ) : null}
+        </View>
+        <View className="flex-col gap-2">
+          {options.map((option) => {
+            const name = asString(option.name);
+            const isPick = name === pick;
+            return (
+              <View
+                key={name}
+                className={cn(
+                  "flex-col gap-0.5 rounded-lg border px-2.5 py-2",
+                  isPick ? "border-foreground/30 bg-muted/50" : "border-border/50",
+                )}
+              >
+                <View className="flex-row items-baseline justify-between gap-2">
+                  <Text variant="secondary" weight={isPick ? "semibold" : "medium"}>
+                    {name}
+                    {isPick ? " · pick" : ""}
+                  </Text>
+                  {option.rating ? (
+                    <Text variant="caption">{asString(option.rating)}</Text>
+                  ) : null}
+                </View>
+                <Text variant="caption">
+                  {[option.wave, option.wind]
+                    .filter((value) => value != null && asString(value))
+                    .map(asString)
+                    .join(" · ")}
+                </Text>
+                {option.note ? (
+                  <Text variant="caption" className="leading-relaxed">
+                    {asString(option.note)}
+                  </Text>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    );
+  },
   SnowReport: ({ element }) => {
     const image = httpsSrc(element.props.image);
     const trailLevels = asObjectArray(element.props.trailLevels);
@@ -1852,6 +1909,63 @@ export const chatRegistry: ComponentRegistry = {
             })}
           </View>
         ) : null}
+      </View>
+    );
+  },
+  MountainPick: ({ element }) => {
+    const pick = asString(element.props.pick);
+    const options = asObjectArray(element.props.options);
+    return (
+      <View className="flex-col gap-3">
+        <View className="flex-col gap-0.5">
+          {element.props.timeframe ? (
+            <Text variant="caption">{asString(element.props.timeframe)}</Text>
+          ) : null}
+          <Text variant="body" weight="medium">
+            Go to {pick}
+          </Text>
+          {element.props.reason ? (
+            <Text variant="secondary" className="leading-relaxed">
+              {asString(element.props.reason)}
+            </Text>
+          ) : null}
+        </View>
+        <View className="flex-col gap-2">
+          {options.map((option) => {
+            const name = asString(option.name);
+            const isPick = name === pick;
+            return (
+              <View
+                key={name}
+                className={cn(
+                  "flex-col gap-0.5 rounded-lg border px-2.5 py-2",
+                  isPick ? "border-foreground/30 bg-muted/50" : "border-border/50",
+                )}
+              >
+                <View className="flex-row items-baseline justify-between gap-2">
+                  <Text variant="secondary" weight={isPick ? "semibold" : "medium"}>
+                    {name}
+                    {isPick ? " · pick" : ""}
+                  </Text>
+                  {option.newSnow ? (
+                    <Text variant="caption">{asString(option.newSnow)}</Text>
+                  ) : null}
+                </View>
+                <Text variant="caption">
+                  {[option.baseDepth, option.conditions, option.liftsOpen]
+                    .filter((value) => value != null && asString(value))
+                    .map(asString)
+                    .join(" · ")}
+                </Text>
+                {option.note ? (
+                  <Text variant="caption" className="leading-relaxed">
+                    {asString(option.note)}
+                  </Text>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
       </View>
     );
   },

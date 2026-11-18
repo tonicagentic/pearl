@@ -48,7 +48,9 @@ export type ThreadSampleId =
   | "answer-email-draft"
   | "answer-email-batch"
   | "answer-surf"
+  | "answer-surf-pick"
   | "answer-snow"
+  | "answer-mountain-pick"
   | "answer-daily"
   | "answer-video";
 
