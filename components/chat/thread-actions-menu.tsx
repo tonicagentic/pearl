@@ -33,6 +33,9 @@ export function ThreadActionsMenu({
   const hasMessages = events.some(
     (event) =>
       event.type === "message.received" ||
+      event.type === "delivery.consumed" ||
+      event.type === "model.started" ||
+      event.type === "usage.recorded" ||
       event.type === "step.started" ||
       event.type === "step.completed",
   );

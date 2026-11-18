@@ -2,8 +2,12 @@ import { defineHook } from "eve/hooks";
 import { call } from "eve/events";
 
 import { isBillingActive } from "@/lib/billing/accounts";
-import { WEB_SEARCH_FALLBACK_CENTS } from "@/lib/billing/config";
-import { recordUsage, usdToCents } from "@/lib/billing/ledger";
+import { recordUsage } from "@/lib/billing/ledger";
+import {
+  exaSearchMicros,
+  microsToUsd,
+  usdToMicros,
+} from "@/lib/billing/provider-pricing";
 
 /**
  * Server-side usage ledger from eve's usage.recorded events. Covers every
@@ -31,12 +35,59 @@ export default defineHook({
           return;
         }
 
+        // Default eve / Pearl web_search is Exa via AI Gateway. Prefer a
+        // reported dollar cost on the tool result when present; otherwise use
+        // Exa's published auto/instant rates.
+        const output = settled?.output as
+          | {
+              readonly costDollars?: unknown;
+              readonly costUsd?: unknown;
+              readonly type?: unknown;
+              readonly numResults?: unknown;
+              readonly results?: unknown;
+            }
+          | undefined;
+        const reported =
+          typeof output?.costUsd === "number"
+            ? output.costUsd
+            : typeof output?.costDollars === "number"
+              ? output.costDollars
+              : output?.costDollars &&
+                  typeof output.costDollars === "object" &&
+                  typeof (output.costDollars as { total?: unknown }).total ===
+                    "number"
+                ? (output.costDollars as { total: number }).total
+                : null;
+        const searchType =
+          typeof output?.type === "string" ? output.type : "auto";
+        const numResults =
+          typeof output?.numResults === "number"
+            ? output.numResults
+            : Array.isArray(output?.results)
+              ? output.results.length
+              : null;
+        const micros =
+          typeof reported === "number" && reported > 0
+            ? usdToMicros(reported)
+            : exaSearchMicros({ type: searchType, numResults });
+
         await recordUsage({
           idempotencyKey: `web_search:${event.data.callId}`,
           userId: principalId,
           source: "web_search",
-          costCents: WEB_SEARCH_FALLBACK_CENTS,
-          metadata: { callId: event.data.callId },
+          costMicros: micros,
+          metadata: {
+            callId: event.data.callId,
+            provider: "exa",
+            searchType,
+            numResults,
+            pricing:
+              typeof reported === "number" && reported > 0
+                ? "provider"
+                : "exa_list",
+            costUsd: microsToUsd(micros),
+            costMicros: micros,
+          },
         });
       } catch (error) {
         console.error("[billing-usage] call.settled", error);
@@ -66,6 +117,13 @@ export default defineHook({
           readonly cacheWriteTokens?: number;
           readonly modelId?: string;
           readonly owner?: { readonly runId?: string; readonly callId?: string };
+          readonly usage?: {
+            readonly costUsd?: number;
+            readonly inputTokens?: number;
+            readonly outputTokens?: number;
+            readonly cacheReadTokens?: number;
+            readonly cacheWriteTokens?: number;
+          };
         };
 
         // Parent rollups of delegated spend: kind "delegated-late" or an
@@ -78,8 +136,14 @@ export default defineHook({
           return;
         }
 
-        const costCents = usdToCents(data.costUsd);
-        if (costCents <= 0 && !data.inputTokens && !data.outputTokens) {
+        // Current eve nests tokens under `data.usage`; accept a flat payload
+        // too in case an older/compat emitter still inlines the fields.
+        const usage = data.usage ?? data;
+        const costUsd =
+          typeof usage.costUsd === "number" && Number.isFinite(usage.costUsd)
+            ? usage.costUsd
+            : 0;
+        if (costUsd <= 0 && !usage.inputTokens && !usage.outputTokens) {
           return;
         }
 
@@ -91,15 +155,16 @@ export default defineHook({
           idempotencyKey: `model:${runKey}`,
           userId: principalId,
           source: "model",
-          costCents,
+          costUsd,
           metadata: {
             modelId: data.modelId ?? null,
-            inputTokens: data.inputTokens ?? null,
-            outputTokens: data.outputTokens ?? null,
-            cacheReadTokens: data.cacheReadTokens ?? null,
-            cacheWriteTokens: data.cacheWriteTokens ?? null,
+            inputTokens: usage.inputTokens ?? null,
+            outputTokens: usage.outputTokens ?? null,
+            cacheReadTokens: usage.cacheReadTokens ?? null,
+            cacheWriteTokens: usage.cacheWriteTokens ?? null,
             sessionId: ctx.session.id,
             kind: data.kind ?? null,
+            costUsd,
           },
         });
       } catch (error) {

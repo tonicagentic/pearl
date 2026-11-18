@@ -22,15 +22,19 @@ import {
 export function ThreadCostDrawer({
   open,
   onClose,
+  events: eventsProp,
 }: {
   readonly open: boolean;
   readonly onClose: () => void;
+  /** When set, use these events instead of the active chat store (home list). */
+  readonly events?: readonly ThreadTraceEvent[];
 }) {
   const insets = useSafeAreaInsets();
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
-  const events = useEveEvents() as readonly ThreadTraceEvent[];
+  const liveEvents = useEveEvents() as readonly ThreadTraceEvent[];
+  const events = eventsProp ?? liveEvents;
   const trace = useMemo(() => threadTraceFromEvents(events), [events]);
   const empty = trace.totals.modelCalls === 0;
 

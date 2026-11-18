@@ -178,9 +178,16 @@ export async function sumSpentCents(
   userId: string,
   periodStart: Date,
 ): Promise<number> {
+  // Cap checks compare against whole cents. Sum exact micros first, then
+  // ceil so sub-cent spend still counts toward the cap.
   const [row] = await db
     .select({
-      total: sql<number>`coalesce(sum(${usageEvent.costCents}), 0)`,
+      totalMicros: sql<number>`coalesce(sum(
+        case
+          when ${usageEvent.costMicros} > 0 then ${usageEvent.costMicros}
+          else ${usageEvent.costCents} * 10000
+        end
+      ), 0)`,
     })
     .from(usageEvent)
     .where(
@@ -190,7 +197,9 @@ export async function sumSpentCents(
       ),
     );
 
-  return Number(row?.total ?? 0);
+  const micros = Number(row?.totalMicros ?? 0);
+  if (!Number.isFinite(micros) || micros <= 0) return 0;
+  return Math.ceil(micros / 10_000);
 }
 
 export async function sumReservedCents(

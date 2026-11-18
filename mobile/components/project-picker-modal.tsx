@@ -16,11 +16,12 @@ import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 
-/** Sheet to pick or create a project before Plan-mode sends. */
+/** Sheet to pick or create a project (Plan mode, Computer, chat actions). */
 export function ProjectPickerModal({
   open,
   onClose,
   onSelect,
+  description = "Plan mode writes into a project. Pick an existing one or create a new project for this chat.",
 }: {
   readonly open: boolean;
   readonly onClose: () => void;
@@ -28,6 +29,7 @@ export function ProjectPickerModal({
     readonly id: string;
     readonly name: string;
   }) => void;
+  readonly description?: string;
 }) {
   const [projects, setProjects] = useState<readonly ProjectDto[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -80,10 +82,7 @@ export function ProjectPickerModal({
             <Text variant="title" className="tracking-tight">
               Choose a project
             </Text>
-            <Text variant="secondary">
-              Plan mode writes into a project. Pick an existing one or create a
-              new project for this chat.
-            </Text>
+            <Text variant="secondary">{description}</Text>
           </View>
 
           {error ? (

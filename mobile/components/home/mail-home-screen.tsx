@@ -31,9 +31,10 @@ import { Text } from "@/components/ui/text";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import { chatListPresence } from "@/src/chat-presence";
-import type { ChatListItem } from "@/src/chats-client";
+import { getChat, type ChatListItem } from "@/src/chats-client";
 import { initials as viewerInitials } from "@/src/initials";
 import type { ProjectDto } from "@/src/projects-client";
+import type { ThreadTraceEvent } from "@/src/thread-trace";
 
 const IS_IOS = Platform.OS === "ios";
 
@@ -222,21 +223,23 @@ export function MailHomeScreen() {
     [deleteChat],
   );
 
-  const openCost = useCallback(
-    (chat: ChatListItem) => {
-      void selectChat(chat.id).then((ok) => {
-        if (!ok) {
-          Alert.alert(
-            "Could not open cost",
-            "Check your connection and try again.",
-          );
-          return;
-        }
-        setCostOpen(true);
-      });
-    },
-    [selectChat],
+  const [costEvents, setCostEvents] = useState<readonly ThreadTraceEvent[]>(
+    [],
   );
+
+  const openCost = useCallback((chat: ChatListItem) => {
+    void getChat(chat.id)
+      .then((full) => {
+        setCostEvents((full?.events ?? []) as readonly ThreadTraceEvent[]);
+        setCostOpen(true);
+      })
+      .catch(() => {
+        Alert.alert(
+          "Could not open cost",
+          "Check your connection and try again.",
+        );
+      });
+  }, []);
 
   const openProjectPicker = useCallback((chat: ChatListItem) => {
     setProjectTargetId(chat.id);
@@ -380,7 +383,14 @@ export function MailHomeScreen() {
         <HomeComposeFab onPress={openNewChat} />
       ) : null}
 
-      <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
+      <ThreadCostDrawer
+        open={costOpen}
+        events={costEvents}
+        onClose={() => {
+          setCostOpen(false);
+          setCostEvents([]);
+        }}
+      />
       <CreateProjectModal
         open={createProjectOpen}
         onClose={() => setCreateProjectOpen(false)}

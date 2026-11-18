@@ -13,8 +13,12 @@ import {
   blockMessage,
   IMAGE_FALLBACK_CENTS,
 } from "@/lib/billing/config";
-import { assertCanSpend, recordUsage, usdToCents } from "@/lib/billing/ledger";
+import { assertCanSpend, recordUsage } from "@/lib/billing/ledger";
 import { principalIdFromAuth } from "@/lib/billing/principal";
+import {
+  imageMicros,
+  microsToUsd,
+} from "@/lib/billing/provider-pricing";
 import { GATEWAY_ZDR_PROVIDER_OPTIONS } from "../agent.ts";
 import {
   currentImageModelId,
@@ -213,20 +217,46 @@ const tool = defineTool({
       }
 
       if (userId) {
-        const usage = (result as unknown as { usage?: { costUsd?: number } })
-          .usage;
-        const providerCost =
-          typeof usage?.costUsd === "number" ? usage.costUsd : null;
-        const costCents =
-          usdToCents(providerCost) || IMAGE_FALLBACK_CENTS;
+        // AI SDK image usage is tokens-only; Gateway list price is the source
+        // of truth unless a provider somehow reports a dollar cost.
+        const usage = (
+          result as unknown as {
+            usage?: { costUsd?: number };
+            providerMetadata?: Record<string, { costUsd?: number }>;
+          }
+        ).usage;
+        const metaCost = Object.values(result.providerMetadata ?? {}).find(
+          (entry) =>
+            entry &&
+            typeof entry === "object" &&
+            typeof (entry as { costUsd?: unknown }).costUsd === "number",
+        ) as { costUsd?: number } | undefined;
+        const reportedUsd =
+          typeof usage?.costUsd === "number"
+            ? usage.costUsd
+            : typeof metaCost?.costUsd === "number"
+              ? metaCost.costUsd
+              : null;
+        const priced = imageMicros({
+          modelId: model,
+          reportedUsd,
+          imageCount: 1,
+        });
         try {
           await recordUsage({
             idempotencyKey: `image:${pathname ?? filePath}`,
             userId,
             source: "image",
-            costCents,
+            costMicros: priced.micros,
             reservationId,
-            metadata: { model, pathname, filePath },
+            metadata: {
+              model,
+              pathname,
+              filePath,
+              pricing: priced.pricing,
+              costUsd: microsToUsd(priced.micros),
+              costMicros: priced.micros,
+            },
           });
         } catch (error) {
           console.error("[generate_image] billing", error);

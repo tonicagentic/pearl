@@ -21,11 +21,17 @@ export const DEFAULT_TURN_RESERVATION_CENTS = 50;
 /** Rough reservation for an Exa agent run. */
 export const DEFAULT_EXA_RESERVATION_CENTS = 100;
 
-/** Fallback cents per web_search call when Gateway reports no dollar cost. */
+/**
+ * Fallback whole-cent mirror for web_search reservations / legacy UI.
+ * Exact ledger writes use `exaSearchMicros` ($0.007 Exa auto).
+ */
 export const WEB_SEARCH_FALLBACK_CENTS = 1;
 
-/** Fallback cents per generated image when the provider reports no cost. */
-export const IMAGE_FALLBACK_CENTS = 4;
+/**
+ * Fallback cents per generated image when the model is unknown and Gateway
+ * reports no cost. Matches default `spacexai/grok-imagine-image-2.0` ($0.06).
+ */
+export const IMAGE_FALLBACK_CENTS = 6;
 
 /**
  * Vercel Sandbox pricing: active CPU time. Defaults match published rates

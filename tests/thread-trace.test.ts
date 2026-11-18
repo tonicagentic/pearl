@@ -171,3 +171,68 @@ test("threadTraceFromEvents attributes each step to its started model", () => {
     ["model-b", "model-a"],
   );
 });
+
+test("threadTraceFromEvents reads usage.recorded + model.started (current eve)", () => {
+  const trace = threadTraceFromEvents([
+    {
+      type: "delivery.consumed",
+      data: {
+        turnId: "t1",
+        parts: [{ kind: "text", text: "draw a house" }],
+      },
+      meta: { at: "2026-11-17T12:00:00.000Z" },
+    },
+    {
+      type: "model.requested",
+      scope: { turnId: "t1", runId: "r1" },
+      data: { runId: "r1", owner: { turnId: "t1" } },
+      meta: { at: "2026-11-17T12:00:01.000Z" },
+    },
+    {
+      type: "model.started",
+      scope: { turnId: "t1", runId: "r1" },
+      data: { runId: "r1", modelId: "spacexai/grok-imagine-image-2.0", attempt: 0 },
+      meta: { at: "2026-11-17T12:00:02.000Z" },
+    },
+    {
+      type: "usage.recorded",
+      scope: { turnId: "t1", runId: "r1" },
+      data: {
+        kind: "model",
+        owner: { runId: "r1" },
+        usage: {
+          costUsd: 0.04,
+          inputTokens: 80,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        },
+      },
+      meta: { at: "2026-11-17T12:00:03.000Z" },
+    },
+  ]);
+
+  assert.equal(trace.totals.modelCalls, 1);
+  assert.ok(Math.abs((trace.totals.costUsd ?? 0) - 0.04) < 1e-9);
+  assert.equal(trace.totals.inputTokens, 80);
+  assert.equal(trace.callTurns[0]?.label, "draw a house");
+  assert.equal(
+    trace.callTurns[0]?.calls[0]?.modelId,
+    "spacexai/grok-imagine-image-2.0",
+  );
+  assert.equal(trace.byModel[0]?.label, "spacexai/grok-imagine-image-2.0");
+});
+
+test("threadTraceFromEvents skips delegated-late usage rollups", () => {
+  const trace = threadTraceFromEvents([
+    {
+      type: "usage.recorded",
+      data: {
+        kind: "delegated-late",
+        usage: { costUsd: 1, inputTokens: 10, outputTokens: 1 },
+      },
+      meta: { at: "2026-11-17T12:00:00.000Z" },
+    },
+  ]);
+  assert.equal(trace.totals.modelCalls, 0);
+});

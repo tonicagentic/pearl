@@ -605,6 +605,11 @@ export const usageEvent = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     periodStart: timestamp("period_start").notNull(),
     source: text("source").notNull(),
+    /**
+     * Exact spend in microdollars (1 USD = 1_000_000). Source of truth for
+     * totals; `costCents` is a rounded mirror for Metronome / legacy caps.
+     */
+    costMicros: integer("cost_micros").notNull().default(0),
     costCents: integer("cost_cents").notNull(),
     billable: boolean("billable").notNull().default(true),
     ingestedAt: timestamp("ingested_at"),

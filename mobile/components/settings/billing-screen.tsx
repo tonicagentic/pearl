@@ -22,8 +22,8 @@ import { formatSpendCents } from "@/src/usage-client";
 
 const SOURCE_LABELS: Record<string, string> = {
   model: "Models",
-  web_search: "Web search",
-  exa_agent: "Research",
+  web_search: "Exa Search",
+  exa_agent: "Exa research",
   sandbox: "Sandboxes",
   image: "Images",
 };

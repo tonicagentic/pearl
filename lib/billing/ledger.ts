@@ -1,4 +1,4 @@
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import {
@@ -15,6 +15,12 @@ import {
   type BillingBlockReason,
 } from "@/lib/billing/config";
 import { ingestUsageEvents } from "@/lib/billing/metronome";
+import {
+  MICROS_PER_CENT,
+  microsToRoundedCents,
+  microsToUsd,
+  usdToMicros,
+} from "@/lib/billing/provider-pricing";
 import { db } from "@/lib/db/client";
 import {
   usageEvent,
@@ -28,22 +34,57 @@ export type RecordUsageInput = {
   readonly idempotencyKey: string;
   readonly userId: string;
   readonly source: UsageEventSource;
-  readonly costCents: number;
+  /**
+   * Exact spend. Prefer `costUsd` / `costMicros`. `costCents` remains for
+   * legacy callers and is converted to micros (×10_000).
+   */
+  readonly costUsd?: number;
+  readonly costMicros?: number;
+  readonly costCents?: number;
   readonly metadata?: Record<string, unknown>;
   /** Optional reservation to release after recording. */
   readonly reservationId?: string | null;
 };
 
+function resolveCostMicros(input: RecordUsageInput): number {
+  if (
+    typeof input.costMicros === "number" &&
+    Number.isFinite(input.costMicros) &&
+    input.costMicros >= 0
+  ) {
+    return Math.round(input.costMicros);
+  }
+  if (
+    typeof input.costUsd === "number" &&
+    Number.isFinite(input.costUsd) &&
+    input.costUsd >= 0
+  ) {
+    return usdToMicros(input.costUsd);
+  }
+  if (
+    typeof input.costCents === "number" &&
+    Number.isFinite(input.costCents) &&
+    input.costCents >= 0
+  ) {
+    return Math.round(input.costCents * MICROS_PER_CENT);
+  }
+  return 0;
+}
+
 /**
  * Append one usage row. Idempotent on idempotencyKey. Free-pass and
  * friend-beta trial users get billable=false so Metronome never sees them.
  * Best-effort ingest for billable (subscribed) rows.
+ *
+ * Exact spend is stored in `costMicros`; `costCents` is a rounded mirror for
+ * Metronome / legacy caps.
  */
 export async function recordUsage(
   input: RecordUsageInput,
 ): Promise<{ readonly inserted: boolean; readonly id: string | null }> {
-  const cents = Math.max(0, Math.round(input.costCents));
-  if (cents === 0 && input.source !== "model") {
+  const micros = Math.max(0, resolveCostMicros(input));
+  const cents = microsToRoundedCents(micros);
+  if (micros === 0 && input.source !== "model") {
     // Still release any reservation.
     if (input.reservationId) {
       await releaseReservation(input.reservationId);
@@ -76,6 +117,7 @@ export async function recordUsage(
       userId: input.userId,
       periodStart: period.start,
       source: input.source,
+      costMicros: micros,
       costCents: cents,
       billable,
       metadata: input.metadata ?? {},
@@ -101,6 +143,8 @@ export async function recordUsage(
         properties: {
           source: input.source,
           cost_cents: cents,
+          cost_micros: micros,
+          cost_usd: microsToUsd(micros),
           ...(input.metadata ?? {}),
         },
       },
@@ -312,6 +356,177 @@ export async function usageByPeriod(
   return {
     totalCents: periods.reduce((sum, period) => sum + period.totalCents, 0),
     periods,
+  };
+}
+
+export type UsageSourceSubgroup = {
+  readonly label: string;
+  readonly eventCount: number;
+  readonly costMicros: number;
+  readonly costUsd: number;
+  /** Rounded mirror for older clients. */
+  readonly costCents: number;
+  /** Present when every event in the subgroup shares one rate (micros). */
+  readonly unitMicros: number | null;
+  readonly unitUsd: number | null;
+};
+
+export type UsageSourceDetail = {
+  readonly source: string;
+  readonly costMicros: number;
+  readonly costUsd: number;
+  readonly costCents: number;
+  readonly eventCount: number;
+  readonly unitMicros: number | null;
+  readonly unitUsd: number | null;
+  /** Image generations grouped by model id, when available. */
+  readonly subgroups: readonly UsageSourceSubgroup[];
+};
+
+/**
+ * Ledger spend in a created_at window (inclusive from, exclusive to),
+ * rolled up by source. Used when the Usage screen filters by date range.
+ */
+export async function usageBySourceInRange(
+  userId: string,
+  range?: { readonly from?: Date | null; readonly to?: Date | null },
+): Promise<{
+  readonly totalCents: number;
+  readonly totalUsd: number;
+  readonly bySource: readonly {
+    readonly source: string;
+    readonly costCents: number;
+    readonly costUsd: number;
+  }[];
+}> {
+  const detail = await usageSourceDetailsInRange(userId, range);
+  return {
+    totalCents: detail.totalCents,
+    totalUsd: detail.totalUsd,
+    bySource: detail.bySource.map((row) => ({
+      source: row.source,
+      costCents: row.costCents,
+      costUsd: row.costUsd,
+    })),
+  };
+}
+
+/**
+ * Ledger spend with per-source event counts and image-model subgroups so the
+ * Usage UI can show "$0.007 each" / "3 × grok-imagine" style clarity.
+ * Totals sum exact microdollars; cents are derived only for display mirrors.
+ */
+export async function usageSourceDetailsInRange(
+  userId: string,
+  range?: { readonly from?: Date | null; readonly to?: Date | null },
+): Promise<{
+  readonly totalMicros: number;
+  readonly totalUsd: number;
+  readonly totalCents: number;
+  readonly bySource: readonly UsageSourceDetail[];
+}> {
+  const window = [
+    range?.from ? gte(usageEvent.createdAt, range.from) : undefined,
+    range?.to ? lt(usageEvent.createdAt, range.to) : undefined,
+  ].filter((clause): clause is NonNullable<typeof clause> => clause != null);
+
+  // Prefer cost_micros; fall back to cost_cents×10k for rows written before
+  // the micros column existed / was backfilled.
+  const rowMicros = sql`case
+    when ${usageEvent.costMicros} > 0 then ${usageEvent.costMicros}
+    else ${usageEvent.costCents} * ${MICROS_PER_CENT}
+  end`;
+  const costMicrosExpr = sql<number>`coalesce(sum(${rowMicros}), 0)`;
+  const distinctMicrosExpr = sql<number>`count(distinct ${rowMicros})::int`;
+  const minMicrosExpr = sql<number>`min(${rowMicros})`;
+
+  const [sourceRows, imageRows] = await Promise.all([
+    db
+      .select({
+        source: usageEvent.source,
+        costMicros: costMicrosExpr,
+        eventCount: sql<number>`count(*)::int`,
+        distinctCosts: distinctMicrosExpr,
+        minCost: minMicrosExpr,
+      })
+      .from(usageEvent)
+      .where(and(eq(usageEvent.userId, userId), ...window))
+      .groupBy(usageEvent.source),
+    db
+      .select({
+        model: sql<string | null>`${usageEvent.metadata} ->> 'model'`,
+        costMicros: costMicrosExpr,
+        eventCount: sql<number>`count(*)::int`,
+        distinctCosts: distinctMicrosExpr,
+        minCost: minMicrosExpr,
+      })
+      .from(usageEvent)
+      .where(
+        and(
+          eq(usageEvent.userId, userId),
+          eq(usageEvent.source, "image"),
+          ...window,
+        ),
+      )
+      .groupBy(sql`${usageEvent.metadata} ->> 'model'`),
+  ]);
+
+  const imageSubgroups: UsageSourceSubgroup[] = imageRows
+    .map((row) => {
+      const eventCount = Number(row.eventCount);
+      const costMicros = Number(row.costMicros);
+      const distinctCosts = Number(row.distinctCosts);
+      const minCost = Number(row.minCost);
+      const unitMicros =
+        eventCount > 0 && distinctCosts === 1 && Number.isFinite(minCost)
+          ? minCost
+          : null;
+      return {
+        label: row.model?.trim() || "Unknown model",
+        eventCount,
+        costMicros,
+        costUsd: microsToUsd(costMicros),
+        costCents: microsToRoundedCents(costMicros),
+        unitMicros,
+        unitUsd: unitMicros == null ? null : microsToUsd(unitMicros),
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.costMicros - a.costMicros || a.label.localeCompare(b.label),
+    );
+
+  const bySource: UsageSourceDetail[] = sourceRows
+    .map((row) => {
+      const eventCount = Number(row.eventCount);
+      const costMicros = Number(row.costMicros);
+      const distinctCosts = Number(row.distinctCosts);
+      const minCost = Number(row.minCost);
+      const unitMicros =
+        eventCount > 0 && distinctCosts === 1 && Number.isFinite(minCost)
+          ? minCost
+          : null;
+      return {
+        source: row.source,
+        costMicros,
+        costUsd: microsToUsd(costMicros),
+        costCents: microsToRoundedCents(costMicros),
+        eventCount,
+        unitMicros,
+        unitUsd: unitMicros == null ? null : microsToUsd(unitMicros),
+        subgroups: row.source === "image" ? imageSubgroups : [],
+      };
+    })
+    .sort(
+      (a, b) => b.costMicros - a.costMicros || a.source.localeCompare(b.source),
+    );
+
+  const totalMicros = bySource.reduce((sum, row) => sum + row.costMicros, 0);
+  return {
+    totalMicros,
+    totalUsd: microsToUsd(totalMicros),
+    totalCents: microsToRoundedCents(totalMicros),
+    bySource,
   };
 }
 

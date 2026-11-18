@@ -1385,11 +1385,10 @@ export async function getAgentAttachmentPage(
   return { name: row.name, pageCount: row.pageCount ?? 0, markdown: "" };
 }
 
-// Per-user usage rows for the settings page: one entry per completed model
-// call (eve `step.completed` stream event), with the model id joined from the
-// turn's `step.started` event (eve reports the concrete model there). Events
-// persist while the client streams the turn, so this reflects what the chat
-// event log captured for chats owned by the user.
+// Per-user usage rows for the settings page. Prefer current eve facts
+// (`usage.recorded` + `model.started`); also read legacy `step.completed` /
+// `step.started` so older chats still contribute. Events persist while the
+// client streams the turn, so this reflects what the chat event log captured.
 export type UserUsageRow = {
   readonly chatId: string;
   readonly turnId: string | null;
@@ -1402,8 +1401,76 @@ export type UserUsageRow = {
   readonly cacheWriteTokens: number | null;
 };
 
-export async function getUserUsageRows(userId: string): Promise<UserUsageRow[]> {
-  const [steps, models] = await Promise.all([
+/** Inclusive start / exclusive end window over `chat_event.created_at`. */
+export type UserUsageRowRange = {
+  readonly from?: Date | null;
+  readonly to?: Date | null;
+};
+
+export async function getUserUsageRows(
+  userId: string,
+  range?: UserUsageRowRange,
+): Promise<UserUsageRow[]> {
+  const nullableNumber = (value: unknown): number | null => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    const parsed = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const createdAtWindow = [
+    range?.from ? gte(chatEvent.createdAt, range.from) : undefined,
+    range?.to ? lt(chatEvent.createdAt, range.to) : undefined,
+  ].filter((clause): clause is NonNullable<typeof clause> => clause != null);
+
+  const [usageRows, legacySteps, models, legacyModels] = await Promise.all([
+    db
+      .select({
+        chatId: chatEvent.chatId,
+        turnId: sql<string | null>`coalesce(
+          ${chatEvent.event} -> 'scope' ->> 'turnId',
+          ${chatEvent.event} -> 'data' ->> 'turnId'
+        )`,
+        runId: sql<string | null>`coalesce(
+          ${chatEvent.event} -> 'data' -> 'owner' ->> 'runId',
+          ${chatEvent.event} -> 'data' ->> 'runId',
+          ${chatEvent.event} -> 'scope' ->> 'runId'
+        )`,
+        kind: sql<string | null>`${chatEvent.event} -> 'data' ->> 'kind'`,
+        ownerCallId: sql<string | null>`${chatEvent.event} -> 'data' -> 'owner' ->> 'callId'`,
+        createdAt: chatEvent.createdAt,
+        costUsd: sql<unknown>`coalesce(
+          ${chatEvent.event} -> 'data' -> 'usage' ->> 'costUsd',
+          ${chatEvent.event} -> 'data' ->> 'costUsd'
+        )`,
+        inputTokens: sql<unknown>`coalesce(
+          ${chatEvent.event} -> 'data' -> 'usage' ->> 'inputTokens',
+          ${chatEvent.event} -> 'data' ->> 'inputTokens'
+        )`,
+        outputTokens: sql<unknown>`coalesce(
+          ${chatEvent.event} -> 'data' -> 'usage' ->> 'outputTokens',
+          ${chatEvent.event} -> 'data' ->> 'outputTokens'
+        )`,
+        cacheReadTokens: sql<unknown>`coalesce(
+          ${chatEvent.event} -> 'data' -> 'usage' ->> 'cacheReadTokens',
+          ${chatEvent.event} -> 'data' ->> 'cacheReadTokens'
+        )`,
+        cacheWriteTokens: sql<unknown>`coalesce(
+          ${chatEvent.event} -> 'data' -> 'usage' ->> 'cacheWriteTokens',
+          ${chatEvent.event} -> 'data' ->> 'cacheWriteTokens'
+        )`,
+      })
+      .from(chatEvent)
+      .innerJoin(chat, eq(chatEvent.chatId, chat.id))
+      .where(
+        and(
+          eq(chat.userId, userId),
+          sql`${chatEvent.event} ->> 'type' = 'usage.recorded'`,
+          ...createdAtWindow,
+        ),
+      ),
     db
       .select({
         chatId: chatEvent.chatId,
@@ -1417,7 +1484,31 @@ export async function getUserUsageRows(userId: string): Promise<UserUsageRow[]> 
       })
       .from(chatEvent)
       .innerJoin(chat, eq(chatEvent.chatId, chat.id))
-      .where(and(eq(chat.userId, userId), sql`${chatEvent.event} ->> 'type' = 'step.completed'`)),
+      .where(
+        and(
+          eq(chat.userId, userId),
+          sql`${chatEvent.event} ->> 'type' = 'step.completed'`,
+          ...createdAtWindow,
+        ),
+      ),
+    db
+      .select({
+        chatId: chatEvent.chatId,
+        runId: sql<string | null>`${chatEvent.event} -> 'data' ->> 'runId'`,
+        turnId: sql<string | null>`coalesce(
+          ${chatEvent.event} -> 'scope' ->> 'turnId',
+          ${chatEvent.event} -> 'data' ->> 'turnId'
+        )`,
+        modelId: sql<string | null>`${chatEvent.event} -> 'data' ->> 'modelId'`,
+      })
+      .from(chatEvent)
+      .innerJoin(chat, eq(chatEvent.chatId, chat.id))
+      .where(
+        and(
+          eq(chat.userId, userId),
+          sql`${chatEvent.event} ->> 'type' = 'model.started'`,
+        ),
+      ),
     db
       .select({
         chatId: chatEvent.chatId,
@@ -1426,38 +1517,72 @@ export async function getUserUsageRows(userId: string): Promise<UserUsageRow[]> 
       })
       .from(chatEvent)
       .innerJoin(chat, eq(chatEvent.chatId, chat.id))
-      .where(and(eq(chat.userId, userId), sql`${chatEvent.event} ->> 'type' = 'step.started'`)),
+      .where(
+        and(
+          eq(chat.userId, userId),
+          sql`${chatEvent.event} ->> 'type' = 'step.started'`,
+        ),
+      ),
   ]);
 
-  // Newest step.started per (chat, turn) wins: the model can change mid-turn
-  // (dynamic resolution), so the last one before completion is the closest
-  // attribution available in the event log.
+  const modelByRun = new Map<string, string | null>();
   const modelByTurn = new Map<string, string | null>();
   for (const row of models) {
-    if (!row.turnId) {
-      continue;
+    if (row.runId) {
+      modelByRun.set(`${row.chatId}::${row.runId}`, row.modelId);
     }
+    if (row.turnId) {
+      modelByTurn.set(`${row.chatId}::${row.turnId}`, row.modelId);
+    }
+  }
+  for (const row of legacyModels) {
+    if (!row.turnId) continue;
     modelByTurn.set(`${row.chatId}::${row.turnId}`, row.modelId);
   }
 
-  const nullableNumber = (value: unknown): number | null => {
-    if (value === null || value === undefined) {
-      return null;
-    }
+  const fromUsage = usageRows
+    .filter((row) => {
+      if (row.kind === "delegated-late") return false;
+      if (row.ownerCallId && !row.runId) return false;
+      return true;
+    })
+    .map((row) => ({
+      cacheReadTokens: nullableNumber(row.cacheReadTokens),
+      cacheWriteTokens: nullableNumber(row.cacheWriteTokens),
+      chatId: row.chatId,
+      costUsd: nullableNumber(row.costUsd),
+      createdAt: row.createdAt,
+      inputTokens: nullableNumber(row.inputTokens),
+      modelId: row.runId
+        ? (modelByRun.get(`${row.chatId}::${row.runId}`) ??
+          (row.turnId
+            ? (modelByTurn.get(`${row.chatId}::${row.turnId}`) ?? null)
+            : null))
+        : row.turnId
+          ? (modelByTurn.get(`${row.chatId}::${row.turnId}`) ?? null)
+          : null,
+      outputTokens: nullableNumber(row.outputTokens),
+      turnId: row.turnId,
+    }));
 
-    const parsed = typeof value === "number" ? value : Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
+  // Prefer usage.recorded when present; only fall back to legacy steps when a
+  // chat has no modern usage facts (avoid double-counting converted history).
+  const chatsWithUsage = new Set(fromUsage.map((row) => row.chatId));
+  const fromLegacy = legacySteps
+    .filter((row) => !chatsWithUsage.has(row.chatId))
+    .map((row) => ({
+      cacheReadTokens: nullableNumber(row.cacheReadTokens),
+      cacheWriteTokens: nullableNumber(row.cacheWriteTokens),
+      chatId: row.chatId,
+      costUsd: nullableNumber(row.costUsd),
+      createdAt: row.createdAt,
+      inputTokens: nullableNumber(row.inputTokens),
+      modelId: row.turnId
+        ? (modelByTurn.get(`${row.chatId}::${row.turnId}`) ?? null)
+        : null,
+      outputTokens: nullableNumber(row.outputTokens),
+      turnId: row.turnId,
+    }));
 
-  return steps.map((row) => ({
-    cacheReadTokens: nullableNumber(row.cacheReadTokens),
-    cacheWriteTokens: nullableNumber(row.cacheWriteTokens),
-    chatId: row.chatId,
-    costUsd: nullableNumber(row.costUsd),
-    createdAt: row.createdAt,
-    inputTokens: nullableNumber(row.inputTokens),
-    modelId: row.turnId ? (modelByTurn.get(`${row.chatId}::${row.turnId}`) ?? null) : null,
-    outputTokens: nullableNumber(row.outputTokens),
-    turnId: row.turnId,
-  }));
+  return [...fromUsage, ...fromLegacy];
 }

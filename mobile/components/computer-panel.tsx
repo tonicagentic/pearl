@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   Text,
@@ -17,13 +18,18 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  CoinsIcon,
   FileIcon,
   FolderIcon,
   FolderOpenIcon,
   FolderTreeIcon,
   GlobeIcon,
+  XIcon,
 } from "lucide-react-native";
 
+import { ProjectPickerModal } from "@/components/project-picker-modal";
+import { ProjectMark } from "@/components/project-mark";
+import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { Icon } from "@/components/ui/icon";
 import { WorkspacePanel } from "@/components/workspace-screen";
 
@@ -32,9 +38,14 @@ import {
   type AgentFileMeta,
   type ComputerState,
 } from "@/src/chats-client";
-import { useChats } from "@/src/chat-context";
+import { useChats, useEveEvents } from "@/src/chat-context";
 import { fetchChatFileContent } from "@/src/chat-files";
 import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
+import {
+  formatUsd,
+  threadTraceFromEvents,
+  type ThreadTraceEvent,
+} from "@/src/thread-trace";
 import { useWorkspace } from "@/src/workspace-context";
 import { isEditableCanvasPath } from "../../lib/design/file-preview";
 
@@ -166,7 +177,12 @@ export function ComputerPanel({
    */
   readonly onOpenEditableFile?: (file: ComputerEditableOpen) => void;
 }) {
-  const { activeChatId } = useChats();
+  const {
+    activeChatId,
+    activeProjectId,
+    setActiveProjectId,
+    setChatProject,
+  } = useChats();
   const {
     tabs,
     chatId,
@@ -190,7 +206,15 @@ export function ComputerPanel({
   const [expandedFolders, setExpandedFolders] = useState<ReadonlySet<string>>(
     () => new Set(readLocation(activeChatId).expandedFolders),
   );
+  const [projectLabel, setProjectLabel] = useState<string | null>(null);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [costOpen, setCostOpen] = useState(false);
   const locationChatRef = useRef(activeChatId);
+  const eveEvents = useEveEvents() as readonly ThreadTraceEvent[];
+  const costTrace = useMemo(
+    () => threadTraceFromEvents(eveEvents),
+    [eveEvents],
+  );
 
   // Restore this thread's Computer section when the active chat changes
   // (ChatScreen stays mounted across thread switches).
@@ -201,6 +225,55 @@ export function ComputerPanel({
     setMode(location.mode);
     setExpandedFolders(new Set(location.expandedFolders));
   }, [activeChatId]);
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setProjectLabel(null);
+      return;
+    }
+    let cancelled = false;
+    void import("@/src/projects-client")
+      .then(({ fetchProjects }) => fetchProjects())
+      .then((projects) => {
+        if (cancelled) return;
+        setProjectLabel(
+          projects.find((project) => project.id === activeProjectId)?.name ??
+            "Project",
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setProjectLabel("Project");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectId]);
+
+  const clearProject = useCallback(() => {
+    setActiveProjectId(null);
+    if (!activeChatId) return;
+    void setChatProject(activeChatId, null).catch(() => {
+      Alert.alert(
+        "Could not update project",
+        "Check your connection and try again.",
+      );
+    });
+  }, [activeChatId, setActiveProjectId, setChatProject]);
+
+  const assignProject = useCallback(
+    (project: { readonly id: string; readonly name: string }) => {
+      setActiveProjectId(project.id);
+      setProjectLabel(project.name);
+      if (!activeChatId) return;
+      void setChatProject(activeChatId, project.id).catch(() => {
+        Alert.alert(
+          "Could not update project",
+          "Check your connection and try again.",
+        );
+      });
+    },
+    [activeChatId, setActiveProjectId, setChatProject],
+  );
 
   // Remember overview / files-tree / workspace (+ folder expand) per thread.
   useEffect(() => {
@@ -517,6 +590,78 @@ export function ComputerPanel({
           </Text>
         ) : null}
 
+        <View className="border-border/50 bg-card mb-5 overflow-hidden rounded-2xl border">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              projectLabel
+                ? `Change project, currently ${projectLabel}`
+                : "Add this chat to a project"
+            }
+            className="flex-row items-center gap-3 px-3.5 py-3 active:opacity-80"
+            onPress={() => setProjectPickerOpen(true)}
+          >
+            {projectLabel ? (
+              <ProjectMark name={projectLabel} size="sm" />
+            ) : (
+              <View className="bg-foreground/5 size-9 items-center justify-center rounded-xl">
+                <Icon as={FolderIcon} className="text-foreground size-4" />
+              </View>
+            )}
+            <View className="min-w-0 flex-1">
+              <Text className="text-foreground text-sm font-medium">
+                Project
+              </Text>
+              <Text
+                numberOfLines={1}
+                className="text-muted-foreground mt-0.5 text-xs"
+              >
+                {projectLabel ?? "Not in a project"}
+              </Text>
+            </View>
+            <Icon
+              as={ChevronRightIcon}
+              className="text-muted-foreground size-4"
+            />
+          </Pressable>
+          {activeProjectId ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Remove chat from project"
+              className="border-border/50 flex-row items-center gap-2 border-t px-3.5 py-2.5 active:opacity-80"
+              onPress={clearProject}
+            >
+              <Icon as={XIcon} className="text-muted-foreground size-3.5" />
+              <Text className="text-muted-foreground text-xs font-medium">
+                Remove from project
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="View cost breakdown for this thread"
+          className="border-border/50 bg-card mb-5 flex-row items-center gap-3 rounded-2xl border px-3.5 py-3 active:opacity-80"
+          onPress={() => setCostOpen(true)}
+        >
+          <View className="bg-foreground/5 size-9 items-center justify-center rounded-xl">
+            <Icon as={CoinsIcon} className="text-foreground size-4" />
+          </View>
+          <View className="min-w-0 flex-1">
+            <Text className="text-foreground text-sm font-medium">Cost</Text>
+            <Text className="text-muted-foreground mt-0.5 text-xs">
+              {costTrace.totals.modelCalls === 0
+                ? "No model usage yet"
+                : `${formatUsd(costTrace.totals.costUsd)} · ${costTrace.turns} turn${costTrace.turns === 1 ? "" : "s"}`}
+            </Text>
+          </View>
+          <Icon
+            as={ChevronRightIcon}
+            className="text-muted-foreground size-4"
+          />
+        </Pressable>
+
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Browse workspace files"
@@ -575,6 +720,18 @@ export function ComputerPanel({
           )}
         </Section>
       </ScrollView>
+
+      <ProjectPickerModal
+        open={projectPickerOpen}
+        onClose={() => setProjectPickerOpen(false)}
+        onSelect={assignProject}
+        description="Keep this chat with related plans and threads. Pick a project or create a new one."
+      />
+      <ThreadCostDrawer
+        open={costOpen}
+        events={eveEvents}
+        onClose={() => setCostOpen(false)}
+      />
     </View>
   );
 }

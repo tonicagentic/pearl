@@ -1,18 +1,19 @@
 // Per-user usage aggregation over the persisted chat event log.
 //
-// Source of truth: eve emits a `step.completed` stream event for every model
-// call with `data.usage` ({ costUsd?, inputTokens?, outputTokens?,
-// cacheReadTokens?, cacheWriteTokens? }). The web app persists every stream
-// event into `chat_event` (see onEvent → appendClientChatEvent), and each row
-// is attributed to a user through `chat.user_id`. This module turns those
-// rows into the settings page's usage summary.
+// Source of truth: eve records model spend as `usage.recorded` (nested
+// `data.usage`: costUsd?, inputTokens, outputTokens, cacheReadTokens,
+// cacheWriteTokens) with model id from the matching `model.started`. Older
+// chats may still carry legacy `step.completed` / `step.started` pairs. The
+// web app persists every stream event into `chat_event` (see onEvent →
+// appendClientChatEvent), and each row is attributed to a user through
+// `chat.user_id`. This module turns those rows into the settings page's
+// usage summary.
 //
 // Known gaps (documented in the UI):
 // - Events persist while the browser tab streams the turn; a closed tab can
 //   lose the tail of a turn.
 // - Browser-storage chats (storageMode "browser") never reach the database.
-// - Compaction model calls inside eve's session harness are not surfaced as
-//   `step.completed` stream events, so their tokens are not counted.
+// - Compaction model calls may not always surface a `usage.recorded` fact.
 
 export type UsageRow = {
   readonly chatId: string;

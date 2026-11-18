@@ -232,6 +232,13 @@
       "when": 1794850116129,
       "tag": "0035_even_hellfire_club",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794971155898,
+      "tag": "0036_vengeful_cerebro",
+      "breakpoints": true
     }
   ]
 }

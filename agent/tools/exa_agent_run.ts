@@ -6,8 +6,14 @@ import {
   blockMessage,
   DEFAULT_EXA_RESERVATION_CENTS,
 } from "@/lib/billing/config";
-import { assertCanSpend, recordUsage, usdToCents } from "@/lib/billing/ledger";
+import { assertCanSpend, recordUsage } from "@/lib/billing/ledger";
 import { principalIdFromAuth } from "@/lib/billing/principal";
+import {
+  exaAgentEffortMicros,
+  exaAgentEffortUsd,
+  parseExaCostDollars,
+  usdToMicros,
+} from "@/lib/billing/provider-pricing";
 
 // Deep research and lead-list generation via the Exa Agent API
 // (https://api.exa.ai/agent/runs). Exa runs the multi-step search,
@@ -158,7 +164,16 @@ type AgentRunResult = {
     structured?: unknown;
     grounding?: unknown;
   };
+  /** Parsed Exa `costDollars.total` (object on the wire). */
   costDollars?: number;
+  costBreakdown?: {
+    readonly agentCompute?: number;
+    readonly search?: number;
+    readonly emails?: number;
+    readonly phoneNumbers?: number;
+    readonly dataSources?: Record<string, number>;
+  };
+  effort?: string;
   note?: string;
   error?: string;
 };
@@ -208,10 +223,20 @@ async function getAgentRun(
   return (await response.json()) as Record<string, unknown>;
 }
 
-function toAgentRunResult(result: Record<string, unknown>): AgentRunResult {
+function toAgentRunResult(
+  result: Record<string, unknown>,
+  effortHint?: string | null,
+): AgentRunResult {
   const output = result.output as
     | { text?: string; structured?: unknown; grounding?: unknown }
     | undefined;
+  const parsedCost = parseExaCostDollars(result.costDollars);
+  const request = result.request as { effort?: unknown } | undefined;
+  const effort =
+    (typeof effortHint === "string" && effortHint) ||
+    (typeof result.effort === "string" ? result.effort : undefined) ||
+    (typeof request?.effort === "string" ? request.effort : undefined) ||
+    undefined;
 
   return {
     status: typeof result.status === "string" ? result.status : "unknown",
@@ -223,8 +248,17 @@ function toAgentRunResult(result: Record<string, unknown>): AgentRunResult {
           grounding: output.grounding,
         }
       : undefined,
-    costDollars:
-      typeof result.costDollars === "number" ? result.costDollars : undefined,
+    costDollars: parsedCost?.total,
+    costBreakdown: parsedCost
+      ? {
+          agentCompute: parsedCost.agentCompute,
+          search: parsedCost.search,
+          emails: parsedCost.emails,
+          phoneNumbers: parsedCost.phoneNumbers,
+          dataSources: parsedCost.dataSources,
+        }
+      : undefined,
+    effort,
     error:
       result.error !== undefined && typeof result.error !== "object"
         ? String(result.error)
@@ -240,18 +274,38 @@ async function recordExaCost(
   if (!userId || !summary.runId) {
     return;
   }
-  const costCents = usdToCents(summary.costDollars);
-  if (costCents <= 0) {
+  // Prefer Exa's reported total; fall back to fixed-effort list price when
+  // the run omits costDollars (e.g. some cancelled/error paths).
+  const reportedUsd = summary.costDollars;
+  const reported =
+    typeof reportedUsd === "number" && reportedUsd > 0
+      ? { micros: usdToMicros(reportedUsd), usd: reportedUsd, pricing: "exa_reported" as const }
+      : null;
+  const fallbackMicros = exaAgentEffortMicros(summary.effort);
+  const micros =
+    reported?.micros ??
+    (fallbackMicros != null && fallbackMicros > 0 ? fallbackMicros : 0);
+  if (micros <= 0) {
     return;
   }
+  const usd = reported?.usd ?? exaAgentEffortUsd(summary.effort) ?? 0;
   try {
     await recordUsage({
       idempotencyKey: `exa_agent:${summary.runId}`,
       userId,
       source: "exa_agent",
-      costCents,
+      costMicros: micros,
       reservationId,
-      metadata: { runId: summary.runId, status: summary.status },
+      metadata: {
+        runId: summary.runId,
+        status: summary.status,
+        provider: "exa_agent",
+        effort: summary.effort ?? null,
+        pricing: reported?.pricing ?? "effort_list",
+        costUsd: usd,
+        costMicros: micros,
+        breakdown: summary.costBreakdown ?? null,
+      },
     });
   } catch (error) {
     console.error("[exa_agent_run] billing", error);
@@ -336,12 +390,13 @@ const tool = defineTool({
     }
 
     const startedAt = Date.now();
+    const effort = input.effort ?? undefined;
 
     // Polling an in-progress run when a runId is present; otherwise start.
     if (runId) {
       for (;;) {
         const result = await getAgentRun(runId, apiKey);
-        const summary = toAgentRunResult(result);
+        const summary = toAgentRunResult(result, effort);
         const status = summary.status;
 
         if (
@@ -409,7 +464,7 @@ const tool = defineTool({
     const created = await startAgentRun(
       {
         query,
-        ...(input.effort ? { effort: input.effort } : {}),
+        ...(effort ? { effort } : {}),
         ...(outputSchema ? { outputSchema } : {}),
         ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
         ...(input.exclusions?.length
@@ -437,14 +492,14 @@ const tool = defineTool({
       createdStatus === "failed" ||
       createdStatus === "cancelled"
     ) {
-      const summary = toAgentRunResult(created);
+      const summary = toAgentRunResult(created, effort);
       await recordExaCost(summary, userId, reservationId);
       return summary;
     }
 
     for (;;) {
       const result = await getAgentRun(createdRunId, apiKey);
-      const summary = toAgentRunResult(result);
+      const summary = toAgentRunResult(result, effort);
       const status = summary.status;
 
       if (
