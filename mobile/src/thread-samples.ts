@@ -75,7 +75,10 @@ export type ThreadSampleId =
   | "answer-storyboard"
   | "answer-indicator"
   | "answer-slides"
-  | "answer-pdf";
+  | "answer-pdf"
+  | "answer-chess"
+  | "answer-terminal"
+  | "answer-audio";
 
 export type ThreadSampleGroup = "default" | "answer";
 

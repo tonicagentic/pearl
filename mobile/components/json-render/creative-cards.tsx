@@ -2,11 +2,22 @@ import {
   chartSeriesLayout,
   clampVisibleCount,
 } from "../../../lib/json-render/chart";
+import {
+  boardCells,
+  fileLabel,
+  formatDurationMs,
+  pieceGlyph,
+  rankLabel,
+  stripAnsi,
+} from "../../../lib/json-render/chess";
 import { regionBarWidths } from "../../../lib/json-render/diagrams";
 import { httpsImageSrc, isHttpsPdfUrl } from "../../../lib/json-render/pdf-url";
+import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
-import { useMemo, type ComponentType } from "react";
+import { useAudioPlayer } from "expo-audio";
+import { PauseIcon, PlayIcon } from "lucide-react-native";
+import { useMemo, useState, type ComponentType } from "react";
 import {
   Image as RNImage,
   Linking,
@@ -565,4 +576,281 @@ export const creativeMobileCards = {
       </View>
     );
   },
+
+  ChessBoard: ({
+    element,
+  }: {
+    element: { props: Record<string, unknown> };
+  }) => {
+    const fen = asString(element.props.fen);
+    const title =
+      element.props.title == null ? null : asString(element.props.title);
+    const orientation =
+      element.props.orientation === "black" ? "black" : "white";
+    const lastMove =
+      element.props.lastMove == null
+        ? null
+        : asString(element.props.lastMove);
+    const moves = asStringArray(element.props.moves).slice(0, 20);
+    const cells = boardCells({ fen, orientation, lastMove });
+    return (
+      <View className="flex-col gap-3">
+        {title ? (
+          <Text variant="body" weight="medium">
+            {title}
+          </Text>
+        ) : null}
+        <View className="border-border/50 aspect-square w-full max-w-[280px] overflow-hidden rounded-lg border">
+          {Array.from({ length: 8 }, (_, row) => (
+            <View key={row} className="flex-1 flex-row">
+              {cells.slice(row * 8, row * 8 + 8).map((cell) => (
+                <View
+                  key={`${cell.square.file}-${cell.square.rank}`}
+                  className={cn(
+                    "relative flex-1 items-center justify-center",
+                    cell.light ? "bg-[#f0d9b5]" : "bg-[#b58863]",
+                    cell.highlighted && "border-2 border-amber-400",
+                  )}
+                >
+                  <Text className="text-[18px] leading-none text-neutral-950">
+                    {pieceGlyph(cell.piece)}
+                  </Text>
+                  {cell.square.file === 0 ? (
+                    <Text className="absolute top-0.5 left-0.5 text-[8px] text-black/45">
+                      {rankLabel(cell.square.rank)}
+                    </Text>
+                  ) : null}
+                  {cell.square.rank === 0 ? (
+                    <Text className="absolute right-0.5 bottom-0.5 text-[8px] text-black/45">
+                      {fileLabel(cell.square.file)}
+                    </Text>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+        {lastMove ? <Text variant="caption">Last: {lastMove}</Text> : null}
+        {moves.length > 0 ? (
+          <Text variant="caption" className="leading-relaxed">
+            {moves
+              .map((move, index) =>
+                index % 2 === 0
+                  ? `${Math.floor(index / 2) + 1}. ${move}`
+                  : move,
+              )
+              .join(" ")}
+          </Text>
+        ) : null}
+      </View>
+    );
+  },
+
+  TerminalBlock: ({
+    element,
+  }: {
+    element: { props: Record<string, unknown> };
+  }) => {
+    const command = asString(element.props.command);
+    const cwd =
+      element.props.cwd == null ? null : asString(element.props.cwd);
+    const done = element.props.done !== false;
+    const exitCode =
+      element.props.exitCode == null ? 0 : asNumber(element.props.exitCode);
+    const failed = done && exitCode !== 0;
+    const duration = formatDurationMs(
+      element.props.durationMs == null
+        ? null
+        : asNumber(element.props.durationMs),
+    );
+    const stdout = asStringArray(element.props.lines).map(stripAnsi);
+    const stderr = asStringArray(element.props.stderr).map(stripAnsi);
+    const all = [
+      ...stdout.map((text) => ({ kind: "out" as const, text })),
+      ...stderr.map((text) => ({ kind: "err" as const, text })),
+    ];
+    const visibleCap =
+      element.props.visibleCount == null
+        ? all.length
+        : Math.max(
+            0,
+            Math.min(all.length, Math.floor(asNumber(element.props.visibleCount))),
+          );
+    const revealed = all.slice(0, visibleCap);
+    const collapseAt =
+      done && element.props.maxCollapsedLines != null
+        ? Math.max(0, Math.floor(asNumber(element.props.maxCollapsedLines)))
+        : null;
+    const [expanded, setExpanded] = useState(false);
+    const shown =
+      collapseAt != null && !expanded
+        ? revealed.slice(0, collapseAt)
+        : revealed;
+    const ink = element.props.variant !== "paper";
+    return (
+      <View
+        className={cn(
+          "flex-col overflow-hidden rounded-lg border",
+          ink
+            ? "border-neutral-800 bg-neutral-950"
+            : "border-border/60 bg-card",
+        )}
+      >
+        <View
+          className={cn(
+            "flex-row flex-wrap items-center gap-x-2 gap-y-1 border-b px-2.5 py-1.5",
+            ink ? "border-neutral-800" : "border-border/60",
+          )}
+        >
+          <Text
+            variant="caption"
+            className={cn("min-w-0 flex-1", ink && "text-neutral-200")}
+            numberOfLines={2}
+          >
+            {cwd ? `${cwd} ` : ""}$ {command}
+          </Text>
+          {done ? (
+            <Text
+              variant="caption"
+              className={failed ? "text-red-400" : "text-emerald-400"}
+            >
+              exit {exitCode}
+            </Text>
+          ) : (
+            <Text variant="caption">running…</Text>
+          )}
+          {duration ? <Text variant="caption">{duration}</Text> : null}
+        </View>
+        <View className="min-h-[4.5rem] px-2.5 py-2">
+          {shown.map((line, index) => (
+            <Text
+              key={index}
+              variant="caption"
+              className={cn(
+                "leading-relaxed",
+                line.kind === "err"
+                  ? "text-red-400"
+                  : ink
+                    ? "text-neutral-300"
+                    : undefined,
+              )}
+            >
+              {line.text || " "}
+              {!done && index === shown.length - 1 ? " ▍" : ""}
+            </Text>
+          ))}
+          {element.props.truncated ? (
+            <Text variant="caption" className="mt-1 opacity-50">
+              output truncated
+            </Text>
+          ) : null}
+          {collapseAt != null && revealed.length > collapseAt ? (
+            <Pressable onPress={() => setExpanded((value) => !value)}>
+              <Text variant="caption" className="mt-2 underline">
+                {expanded
+                  ? "Show less"
+                  : `Show all ${revealed.length} lines`}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    );
+  },
+
+  AudioPlayback: ({
+    element,
+  }: {
+    element: { props: Record<string, unknown> };
+  }) => {
+    const title =
+      element.props.title == null ? null : asString(element.props.title);
+    const artist =
+      element.props.artist == null ? null : asString(element.props.artist);
+    const duration =
+      element.props.duration == null
+        ? null
+        : asString(element.props.duration);
+    const src = httpsImageSrc(asString(element.props.src));
+    const poster = httpsImageSrc(
+      element.props.poster == null ? null : asString(element.props.poster),
+    );
+    const meta = [artist, duration].filter(Boolean).join(" · ");
+    if (!src) {
+      return (
+        <Text variant="caption">Audio needs an https URL.</Text>
+      );
+    }
+    return (
+      <AudioClipPlayer
+        src={src}
+        title={title}
+        meta={meta || null}
+        poster={poster}
+      />
+    );
+  },
 };
+
+function AudioClipPlayer({
+  src,
+  title,
+  meta,
+  poster,
+}: {
+  readonly src: string;
+  readonly title: string | null;
+  readonly meta: string | null;
+  readonly poster: string | null;
+}) {
+  const player = useAudioPlayer(src);
+  const [playing, setPlaying] = useState(false);
+  return (
+    <View className="flex-col gap-2">
+      <View className="flex-row items-center gap-3">
+        {poster ? (
+          <RNImage
+            source={{ uri: poster }}
+            accessibilityLabel={title ?? "Audio"}
+            className="border-border/50 h-14 w-14 shrink-0 rounded-md border"
+            resizeMode="cover"
+          />
+        ) : null}
+        <View className="min-w-0 flex-1 flex-col gap-0.5">
+          {title ? (
+            <Text variant="body" weight="medium">
+              {title}
+            </Text>
+          ) : null}
+          {meta ? <Text variant="caption">{meta}</Text> : null}
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={playing ? "Pause" : "Play"}
+          onPress={() => {
+            if (playing) {
+              player.pause();
+              setPlaying(false);
+              return;
+            }
+            void (async () => {
+              try {
+                await player.seekTo(0);
+              } catch {
+                /* ok */
+              }
+              player.play();
+              setPlaying(true);
+            })();
+          }}
+          className="border-border/60 bg-muted/40 rounded-full border p-2.5 active:opacity-80"
+        >
+          <Icon
+            as={playing ? PauseIcon : PlayIcon}
+            className="size-4 text-foreground"
+          />
+        </Pressable>
+      </View>
+    </View>
+  );
+}

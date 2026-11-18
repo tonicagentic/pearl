@@ -844,6 +844,45 @@ export const chatCatalog = defineCatalog(schema, {
       description:
         "PDF artifact receipt with meta; embed or open when src is an https PDF URL",
     },
+    ChessBoard: {
+      props: z.object({
+        fen: z.string(),
+        title: z.string().nullable(),
+        orientation: z.enum(["white", "black"]).nullable(),
+        lastMove: z.string().nullable(),
+        moves: z.array(z.string()).nullable(),
+      }),
+      description:
+        "Chess position from FEN with optional last-move highlight (UCI) and move list",
+    },
+    TerminalBlock: {
+      props: z.object({
+        command: z.string(),
+        lines: z.array(z.string()),
+        stderr: z.array(z.string()).nullable(),
+        cwd: z.string().nullable(),
+        exitCode: z.number().nullable(),
+        durationMs: z.number().nullable(),
+        truncated: z.boolean().nullable(),
+        visibleCount: z.number().nullable(),
+        done: z.boolean().nullable(),
+        maxCollapsedLines: z.number().nullable(),
+        variant: z.enum(["paper", "ink"]).nullable(),
+      }),
+      description:
+        "Command terminal block: header with cwd/command/exit/duration and stdout/stderr lines (assistant-ui TerminalBlock-shaped)",
+    },
+    AudioPlayback: {
+      props: z.object({
+        title: z.string().nullable(),
+        src: z.string(),
+        artist: z.string().nullable(),
+        duration: z.string().nullable(),
+        poster: z.string().nullable(),
+      }),
+      description:
+        "Inline audio clip from an https URL with optional title, artist, duration, and poster",
+    },
   },
   actions: {
     reply: {
@@ -859,13 +898,13 @@ export const chatCatalog = defineCatalog(schema, {
 export type ChatCatalog = typeof chatCatalog;
 
 export const JSON_RENDER_CUSTOM_RULES = [
-  "Emit a UI spec for structured answers of these kinds: web/product search, location or place maps, news briefs, daily multi-story briefs, encyclopedia entries, pronunciation, foreign-language phrases, guitar chords, music theory, vote or regional charts, sparkline charts, spec sheets, Mermaid diagrams, tables, explainers, recipes, flight tracking, calendar events, table bookings, email drafts/batches, surf/snow reports and picks, video, Vercel/GitHub/Neon status (projects, deploys, PRs, issues, Neon projects/branches, schema, ship status, env names, domains, slow queries, and picks), photo edit settings, music production settings, video storyboards, OWID/census indicators, slide decks, and PDF artifacts. Ordinary replies and exploratory thinking-together turns stay prose with no spec.",
-  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, DailyBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Chart, SpecSheet, MermaidDiagram, Table, Explainer, Recipe, ComparisonBar, FlightTracker, CalendarEvent, CreateEvent, Booking, EmailDraft, EmailBatch, SurfReport, SurfSpotPick, SnowReport, MountainPick, Video, VercelProject, DeploymentStatus, DeploymentList, PullRequest, PullRequestList, Issue, IssueList, NeonProject, NeonBranch, SchemaOverview, ShipStatus, EnvVarList, DomainList, SlowQueryList, RepoPick, ProjectPick, NeonBranchPick, PhotoEditSettings, MusicProdSettings, VideoStoryboard, IndicatorCard, Slides, PdfArtifact) inside it.",
-  "For two-way % races prefer ComparisonBar; for multi-region shares use RegionChart; for a single metric series use Chart; for OWID/census answers with source + series and/or regional breakdown use IndicatorCard. Use SurfSpotPick / MountainPick / RepoPick / ProjectPick / NeonBranchPick when choosing among options; use SurfReport/SnowReport or single status cards for one place. Use DailyBrief for a morning/top-stories roundup; NewsBrief for one story. Use PhotoEditSettings / MusicProdSettings for presentational settings sheets (not live editors). Use VideoStoryboard for frame sequences; Slides for in-thread decks; PdfArtifact for PDF receipts (https src embeds when possible). Keep 1–2 sentences of prose outside the fence.",
+  "Emit a UI spec for structured answers of these kinds: web/product search, location or place maps, news briefs, daily multi-story briefs, encyclopedia entries, pronunciation, foreign-language phrases, guitar chords, music theory, vote or regional charts, sparkline charts, spec sheets, Mermaid diagrams, tables, explainers, recipes, flight tracking, calendar events, table bookings, email drafts/batches, surf/snow reports and picks, video, Vercel/GitHub/Neon status (projects, deploys, PRs, issues, Neon projects/branches, schema, ship status, env names, domains, slow queries, and picks), photo edit settings, music production settings, video storyboards, OWID/census indicators, slide decks, PDF artifacts, chess positions, terminal command output, and audio clips. Ordinary replies and exploratory thinking-together turns stay prose with no spec.",
+  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, DailyBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Chart, SpecSheet, MermaidDiagram, Table, Explainer, Recipe, ComparisonBar, FlightTracker, CalendarEvent, CreateEvent, Booking, EmailDraft, EmailBatch, SurfReport, SurfSpotPick, SnowReport, MountainPick, Video, VercelProject, DeploymentStatus, DeploymentList, PullRequest, PullRequestList, Issue, IssueList, NeonProject, NeonBranch, SchemaOverview, ShipStatus, EnvVarList, DomainList, SlowQueryList, RepoPick, ProjectPick, NeonBranchPick, PhotoEditSettings, MusicProdSettings, VideoStoryboard, IndicatorCard, Slides, PdfArtifact, ChessBoard, TerminalBlock, AudioPlayback) inside it.",
+  "For two-way % races prefer ComparisonBar; for multi-region shares use RegionChart; for a single metric series use Chart; for OWID/census answers with source + series and/or regional breakdown use IndicatorCard. Use SurfSpotPick / MountainPick / RepoPick / ProjectPick / NeonBranchPick when choosing among options; use SurfReport/SnowReport or single status cards for one place. Use DailyBrief for a morning/top-stories roundup; NewsBrief for one story. Use PhotoEditSettings / MusicProdSettings for presentational settings sheets (not live editors). Use VideoStoryboard for frame sequences; Slides for in-thread decks; PdfArtifact for PDF receipts (https src embeds when possible). Use ChessBoard for FEN positions (optional lastMove UCI + moves list). Use TerminalBlock for command stdout/stderr with exit code. Use AudioPlayback for https audio clips (not Pronounce TTS). Keep 1–2 sentences of prose outside the fence.",
   "EmailDraft, EmailBatch, CreateEvent, and Booking include built-in confirm buttons that reply with tool-ready messages. When the user sends those confirmations, call create_gmail_draft / send_gmail_message / apply_mail_batch or the calendar create path immediately with the stated params (approvals still apply).",
   "EnvVarList must list variable NAMES only — never values, secrets, or connection strings. NeonBranch.endpointHost is a hostname only.",
   "Buttons that continue the conversation must bind press to the reply action with a concrete message string. Do not invent component names outside this catalog.",
-  "Image, Video, and PdfArtifact src must be https URLs. Prefer the dedicated answer components over assembling the same layout from Stack/Text alone.",
+  "Image, Video, PdfArtifact, and AudioPlayback src must be https URLs. Prefer the dedicated answer components over assembling the same layout from Stack/Text alone.",
 ] as const;
 
 /** System prompt fragment for the eve chat channel (inline generative UI). */

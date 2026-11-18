@@ -58,7 +58,10 @@ export type AnswerThreadSample = {
     | "answer-storyboard"
     | "answer-indicator"
     | "answer-slides"
-    | "answer-pdf";
+    | "answer-pdf"
+    | "answer-chess"
+    | "answer-terminal"
+    | "answer-audio";
   readonly label: string;
   readonly group: "answer";
   readonly messages: readonly AnswerMessage[];
@@ -1874,6 +1877,91 @@ export const ANSWER_THREAD_SAMPLES: readonly AnswerThreadSample[] = [
           pages: "1 page",
           size: "13 KB",
           updated: "sample",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-chess",
+    "Chess",
+    "Show the position after 1.e4 c5 2.Nf3.",
+    "Sicilian after Nf3:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["chess"],
+      },
+      chess: {
+        type: "ChessBoard",
+        props: {
+          title: "Open Sicilian",
+          fen: "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+          orientation: "white",
+          lastMove: "g1f3",
+          moves: ["e4", "c5", "Nf3"],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-terminal",
+    "Terminal",
+    "What did the test run print?",
+    "Command output:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["term"],
+      },
+      term: {
+        type: "TerminalBlock",
+        props: {
+          cwd: "~/my-agent",
+          command: "pnpm vitest run composer",
+          lines: [
+            "RUN v4.0.5 /Users/alex/GitHub/my-agent",
+            "",
+            " ✓ tests/composer.test.ts (3)",
+            "   ✓ mounts thread",
+            "   ✓ streams reply",
+            "   ✓ settles markdown",
+          ],
+          stderr: ["Error: snapshot mismatch in footer"],
+          exitCode: 1,
+          durationMs: 1840,
+          truncated: false,
+          visibleCount: 8,
+          done: true,
+          maxCollapsedLines: 4,
+          variant: "ink",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-audio",
+    "Audio",
+    "Play the theme sting.",
+    "Clip:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["audio"],
+      },
+      audio: {
+        type: "AudioPlayback",
+        props: {
+          title: "Pearl sting",
+          src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+          artist: "SoundHelix",
+          duration: "6:12",
+          poster: null,
         },
       },
     },

@@ -4,10 +4,18 @@ import {
   chartSeriesLayout,
   clampVisibleCount,
 } from "@/lib/json-render/chart";
+import {
+  boardCells,
+  fileLabel,
+  formatDurationMs,
+  pieceGlyph,
+  rankLabel,
+  stripAnsi,
+} from "@/lib/json-render/chess";
 import { regionBarWidths } from "@/lib/json-render/diagrams";
 import { httpsImageSrc, isHttpsPdfUrl } from "@/lib/json-render/pdf-url";
 import { cn } from "@/lib/utils";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 type SettingsRow = { readonly label: string; readonly value: string };
 type SettingsGroup = {
@@ -460,6 +468,246 @@ export const creativeWebCards = {
             </MetaLine>
           </div>
         )}
+      </div>
+    );
+  },
+
+  ChessBoard: ({
+    props,
+  }: {
+    props: {
+      fen: string;
+      title: string | null;
+      orientation: "white" | "black" | null;
+      lastMove: string | null;
+      moves: string[] | null;
+    };
+  }) => {
+    const cells = boardCells({
+      fen: props.fen,
+      orientation: props.orientation,
+      lastMove: props.lastMove,
+    });
+    const moves = (props.moves ?? []).slice(0, 20);
+    return (
+      <div className="flex flex-col gap-3" data-slot="chess-board">
+        {props.title ? (
+          <div className="text-foreground text-[15px] font-medium">{props.title}</div>
+        ) : null}
+        <div className="border-border/50 grid aspect-square w-full max-w-[280px] grid-cols-8 overflow-hidden rounded-lg border">
+          {cells.map((cell) => (
+            <div
+              key={`${cell.square.file}-${cell.square.rank}`}
+              className={cn(
+                "relative flex items-center justify-center text-[clamp(14px,4.5vw,22px)] leading-none",
+                cell.light ? "bg-[#f0d9b5]" : "bg-[#b58863]",
+                cell.highlighted && "ring-2 ring-inset ring-amber-400/90",
+              )}
+            >
+              <span
+                className={
+                  cell.piece && cell.piece === cell.piece.toUpperCase()
+                    ? "text-neutral-900 drop-shadow-sm"
+                    : "text-neutral-950"
+                }
+              >
+                {pieceGlyph(cell.piece)}
+              </span>
+              {cell.square.file === 0 ? (
+                <span className="absolute top-0.5 left-0.5 text-[9px] font-medium text-black/45">
+                  {rankLabel(cell.square.rank)}
+                </span>
+              ) : null}
+              {cell.square.rank === 0 ? (
+                <span className="absolute right-0.5 bottom-0.5 text-[9px] font-medium text-black/45">
+                  {fileLabel(cell.square.file)}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+        {props.lastMove ? <MetaLine>Last: {props.lastMove}</MetaLine> : null}
+        {moves.length > 0 ? (
+          <div className="text-muted-foreground font-mono text-[12px] leading-relaxed">
+            {moves.map((move, index) => (
+              <span key={`${move}-${index}`}>
+                {index % 2 === 0 ? (
+                  <span className="text-muted-foreground/70">
+                    {Math.floor(index / 2) + 1}.{" "}
+                  </span>
+                ) : null}
+                {move}{" "}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  },
+
+  TerminalBlock: ({
+    props,
+  }: {
+    props: {
+      command: string;
+      lines: string[];
+      stderr: string[] | null;
+      cwd: string | null;
+      exitCode: number | null;
+      durationMs: number | null;
+      truncated: boolean | null;
+      visibleCount: number | null;
+      done: boolean | null;
+      maxCollapsedLines: number | null;
+      variant: "paper" | "ink" | null;
+    };
+  }) => {
+    const done = props.done !== false;
+    const exitCode = props.exitCode ?? 0;
+    const failed = done && exitCode !== 0;
+    const stdout = props.lines ?? [];
+    const stderr = props.stderr ?? [];
+    const all = [
+      ...stdout.map((text) => ({ kind: "out" as const, text: stripAnsi(text) })),
+      ...stderr.map((text) => ({ kind: "err" as const, text: stripAnsi(text) })),
+    ];
+    const visibleCap =
+      props.visibleCount == null || !Number.isFinite(props.visibleCount)
+        ? all.length
+        : Math.max(0, Math.min(all.length, Math.floor(props.visibleCount)));
+    const revealed = all.slice(0, visibleCap);
+    const collapseAt =
+      done &&
+      props.maxCollapsedLines != null &&
+      Number.isFinite(props.maxCollapsedLines)
+        ? Math.max(0, Math.floor(props.maxCollapsedLines))
+        : null;
+    const [expanded, setExpanded] = useState(false);
+    const shown =
+      collapseAt != null && !expanded
+        ? revealed.slice(0, collapseAt)
+        : revealed;
+    const duration = formatDurationMs(props.durationMs);
+    const ink = props.variant !== "paper";
+    return (
+      <div
+        data-slot="terminal-block"
+        data-state={!done ? "running" : failed ? "failed" : "done"}
+        className={cn(
+          "flex flex-col overflow-hidden rounded-lg border font-mono text-[12px]",
+          ink
+            ? "border-neutral-800 bg-neutral-950 text-neutral-100"
+            : "border-border/60 bg-card text-foreground",
+        )}
+      >
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-2.5 py-1.5",
+            ink ? "border-neutral-800 text-neutral-400" : "border-border/60 text-muted-foreground",
+          )}
+        >
+          <span className="min-w-0 flex-1 truncate">
+            {props.cwd ? (
+              <span className="opacity-60">{props.cwd} </span>
+            ) : null}
+            <span className={ink ? "text-neutral-200" : "text-foreground"}>
+              $ {props.command}
+            </span>
+          </span>
+          {done ? (
+            <span className={failed ? "text-red-400" : "text-emerald-400"}>
+              exit {exitCode}
+            </span>
+          ) : (
+            <span className="opacity-70">running…</span>
+          )}
+          {duration ? <span className="opacity-60">{duration}</span> : null}
+        </div>
+        <div className="min-h-[4.5rem] px-2.5 py-2 leading-relaxed">
+          {shown.map((line, index) => (
+            <div
+              key={index}
+              className={cn(
+                "whitespace-pre-wrap break-all",
+                line.kind === "err"
+                  ? "text-red-400"
+                  : index === shown.length - 1 && !done
+                    ? ink
+                      ? "text-neutral-50"
+                      : "text-foreground"
+                    : ink
+                      ? "text-neutral-300"
+                      : "text-muted-foreground",
+              )}
+            >
+              {line.text || " "}
+            </div>
+          ))}
+          {!done ? (
+            <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-current align-middle opacity-80" />
+          ) : null}
+          {props.truncated ? (
+            <div className="mt-1 opacity-50">output truncated</div>
+          ) : null}
+          {collapseAt != null && revealed.length > collapseAt ? (
+            <button
+              type="button"
+              className="mt-2 opacity-70 underline-offset-2 hover:underline"
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {expanded
+                ? "Show less"
+                : `Show all ${revealed.length} lines`}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  },
+
+  AudioPlayback: ({
+    props,
+  }: {
+    props: {
+      title: string | null;
+      src: string;
+      artist: string | null;
+      duration: string | null;
+      poster: string | null;
+    };
+  }) => {
+    const src = httpsImageSrc(props.src);
+    const poster = httpsImageSrc(props.poster);
+    const meta = [props.artist, props.duration].filter(Boolean).join(" · ");
+    if (!src) {
+      return (
+        <div className="text-muted-foreground text-[13px]">
+          Audio needs an https URL.
+        </div>
+      );
+    }
+    return (
+      <div className="flex flex-col gap-2" data-slot="audio-playback">
+        <div className="flex items-start gap-3">
+          {poster ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={poster}
+              alt={props.title ?? "Audio"}
+              className="border-border/50 h-14 w-14 shrink-0 rounded-md border object-cover"
+            />
+          ) : null}
+          <div className="min-w-0 flex-1 flex-col gap-0.5">
+            {props.title ? (
+              <div className="text-foreground text-[15px] font-medium">
+                {props.title}
+              </div>
+            ) : null}
+            {meta ? <MetaLine>{meta}</MetaLine> : null}
+          </div>
+        </div>
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <audio className="w-full" src={src} controls preload="metadata" />
       </div>
     );
   },
