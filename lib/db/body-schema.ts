@@ -10,7 +10,7 @@ import {
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
-import { user } from "./schema";
+import { user } from "./schema.ts";
 
 /**
  * Pearl Body nutrition + training ledger.
