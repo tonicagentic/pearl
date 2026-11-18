@@ -2,7 +2,7 @@ import {
   DEFAULT_IMAGE_USD,
   EXA_SEARCH_AUTO_USD,
   formatSpendUsd,
-} from "@/lib/billing/provider-pricing";
+} from "../billing/provider-pricing.ts";
 
 export type UsageSourceId =
   | "model"
