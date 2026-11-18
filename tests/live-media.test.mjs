@@ -57,7 +57,7 @@ test("live session config stays voice-first without gateway providerOptions", ()
   assert.equal(GATEWAY_PROVIDER_OPTIONS.disallowPromptTraining, true);
   assert.equal("providerOptions" in LIVE_SESSION_CONFIG, false);
   assert.equal(LIVE_MODEL_ID, "spacexai/grok-voice-3.0");
-  assert.equal(LIVE_SESSION_CONFIG.voice, "ara");
+  assert.equal(LIVE_SESSION_CONFIG.voice, "coral");
   assert.equal(LIVE_SESSION_CONFIG.turnDetection.type, "server-vad");
   assert.equal(LIVE_SESSION_CONFIG.turnDetection.threshold, 0.6);
   assert.equal(liveGreetingResponseEvent().type, "response-create");
