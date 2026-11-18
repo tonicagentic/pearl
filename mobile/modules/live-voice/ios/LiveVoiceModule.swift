@@ -55,49 +55,15 @@ final class LiveVoice: SharedObject {
     let player = AVAudioPlayerNode()
     let input = engine.inputNode
 
-    // Attach playback first so Voice Processing I/O has an output bus to use
-    // as its echo reference. Enabling voice processing before the player is
-    // connected leaves the canceller with nothing to subtract.
-    engine.prepare()
-    var hardwareRate = input.outputFormat(forBus: 0).sampleRate
-    if hardwareRate == 0 {
-      try session.setActive(true)
-      engine.prepare()
-      hardwareRate = input.outputFormat(forBus: 0).sampleRate
-    }
-    if hardwareRate == 0 {
-      hardwareRate = session.sampleRate
-    }
-    if hardwareRate == 0 {
-      hardwareRate = 48_000
-    }
-
-    guard let monoHardware = AVAudioFormat(
-      commonFormat: .pcmFormatFloat32,
-      sampleRate: hardwareRate,
-      channels: 1,
-      interleaved: false
-    ) else {
-      throw LiveVoiceException("The microphone did not start.")
-    }
-    guard let wire = AVAudioFormat(
-      commonFormat: .pcmFormatFloat32,
-      sampleRate: wireRate,
-      channels: 1,
-      interleaved: false
-    ) else {
-      throw LiveVoiceException("The microphone did not start.")
-    }
-
-    engine.attach(player)
-    engine.connect(player, to: engine.mainMixerNode, format: monoHardware)
-    engine.connect(engine.mainMixerNode, to: engine.outputNode, format: monoHardware)
-
+    // Voice processing must be enabled while the engine is stopped. Enabling
+    // it first remaps both I/O nodes onto VoiceProcessingIO; connecting the
+    // player afterward puts playback on that same duplex unit so its output
+    // is the echo reference. Connecting first with a pre-VP format, then
+    // enabling VP, leaves a broken graph (engine.start fails on device).
     do {
       try input.setVoiceProcessingEnabled(true)
     } catch {
-      engine.detach(player)
-      throw LiveVoiceException("The microphone did not start.")
+      throw LiveVoiceException("Voice processing failed: \(error.localizedDescription)")
     }
     input.isVoiceProcessingBypassed = false
     if #available(iOS 17.0, *) {
@@ -108,8 +74,7 @@ final class LiveVoice: SharedObject {
         )
     }
 
-    // Read the tap format after voice processing is on — it can change the
-    // input node's client format.
+    // Format after VP is on — tap and playback must share this Voice I/O rate.
     var format = input.outputFormat(forBus: 0)
     if format.sampleRate == 0 || format.channelCount == 0 {
       try session.setActive(true)
@@ -117,9 +82,33 @@ final class LiveVoice: SharedObject {
     }
     guard format.sampleRate > 0, format.channelCount > 0 else {
       try? input.setVoiceProcessingEnabled(false)
-      engine.detach(player)
-      throw LiveVoiceException("The microphone did not start.")
+      throw LiveVoiceException("The microphone format is unavailable.")
     }
+
+    guard let monoHardware = AVAudioFormat(
+      commonFormat: .pcmFormatFloat32,
+      sampleRate: format.sampleRate,
+      channels: 1,
+      interleaved: false
+    ) else {
+      try? input.setVoiceProcessingEnabled(false)
+      throw LiveVoiceException("The microphone format is unavailable.")
+    }
+    guard let wire = AVAudioFormat(
+      commonFormat: .pcmFormatFloat32,
+      sampleRate: wireRate,
+      channels: 1,
+      interleaved: false
+    ) else {
+      try? input.setVoiceProcessingEnabled(false)
+      throw LiveVoiceException("The microphone format is unavailable.")
+    }
+
+    engine.attach(player)
+    engine.connect(player, to: engine.mainMixerNode, format: monoHardware)
+    // Complete the duplex path: VP needs a formatted output bus or the input
+    // side stays silent / fails to start.
+    engine.connect(engine.mainMixerNode, to: engine.outputNode, format: monoHardware)
 
     let bufferSize = AVAudioFrameCount(max(256.0, format.sampleRate * 0.02))
     input.installTap(onBus: 0, bufferSize: bufferSize, format: format) { [weak self] buffer, _ in
@@ -150,6 +139,7 @@ final class LiveVoice: SharedObject {
     }
     tapInstalled = true
 
+    engine.prepare()
     do {
       try engine.start()
     } catch {
@@ -157,7 +147,7 @@ final class LiveVoice: SharedObject {
       tapInstalled = false
       try? input.setVoiceProcessingEnabled(false)
       engine.detach(player)
-      throw LiveVoiceException("The microphone did not start.")
+      throw LiveVoiceException("Audio engine failed: \(error.localizedDescription)")
     }
     player.play()
 
@@ -167,7 +157,7 @@ final class LiveVoice: SharedObject {
       player.stop()
       try? input.setVoiceProcessingEnabled(false)
       engine.stop()
-      throw LiveVoiceException("The microphone did not start.")
+      throw LiveVoiceException("Voice processing did not stay enabled.")
     }
 
     self.engine = engine
