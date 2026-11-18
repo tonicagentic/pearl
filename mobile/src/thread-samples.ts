@@ -69,7 +69,13 @@ export type ThreadSampleId =
   | "answer-slow-queries"
   | "answer-repo-pick"
   | "answer-project-pick"
-  | "answer-neon-branch-pick";
+  | "answer-neon-branch-pick"
+  | "answer-photo-edit"
+  | "answer-music-prod"
+  | "answer-storyboard"
+  | "answer-indicator"
+  | "answer-slides"
+  | "answer-pdf";
 
 export type ThreadSampleGroup = "default" | "answer";
 

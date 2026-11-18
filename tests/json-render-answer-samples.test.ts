@@ -51,6 +51,12 @@ const EXPECTED_ROOT_CHILD: Record<string, string> = {
   "answer-repo-pick": "RepoPick",
   "answer-project-pick": "ProjectPick",
   "answer-neon-branch-pick": "NeonBranchPick",
+  "answer-photo-edit": "PhotoEditSettings",
+  "answer-music-prod": "MusicProdSettings",
+  "answer-storyboard": "VideoStoryboard",
+  "answer-indicator": "IndicatorCard",
+  "answer-slides": "Slides",
+  "answer-pdf": "PdfArtifact",
 };
 
 function assistantText(sample: (typeof ANSWER_THREAD_SAMPLES)[number]): string {
@@ -75,8 +81,8 @@ function assistantText(sample: (typeof ANSWER_THREAD_SAMPLES)[number]): string {
 }
 
 describe("answer thread samples", () => {
-  it("includes forty-six answer fixtures", () => {
-    assert.equal(ANSWER_THREAD_SAMPLES.length, 46);
+  it("includes fifty-two answer fixtures", () => {
+    assert.equal(ANSWER_THREAD_SAMPLES.length, 52);
   });
 
   for (const sample of ANSWER_THREAD_SAMPLES) {

@@ -42,6 +42,7 @@ import {
 import { resolveVideoEmbed } from "@/lib/json-render/video-embed";
 import { cn } from "@/lib/utils";
 import { Button as UiButton } from "@/components/ui/button";
+import { creativeWebCards } from "@/components/json-render/creative-cards";
 import { devopsWebCards } from "@/components/json-render/devops-cards";
 import { useMemo, useState } from "react";
 
@@ -1690,6 +1691,7 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
       );
     },
     ...devopsWebCards,
+    ...creativeWebCards,
   },
   actions: {
     // Bound at render time via ActionProvider handlers in ChatJsonRender.

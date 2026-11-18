@@ -194,6 +194,48 @@ const slowQueryItem = z.object({
   note: z.string().nullable(),
 });
 
+const settingsRow = z.object({
+  label: z.string(),
+  value: z.string(),
+});
+
+const settingsGroup = z.object({
+  name: z.string(),
+  rows: z.array(settingsRow).min(1).max(8),
+});
+
+const musicTrack = z.object({
+  name: z.string(),
+  role: z.string().nullable(),
+  level: z.string().nullable(),
+  muted: z.boolean().nullable(),
+});
+
+const storyboardFrame = z.object({
+  label: z.string().nullable(),
+  image: z.string().nullable(),
+  beat: z.string().nullable(),
+  duration: z.string().nullable(),
+});
+
+const indicatorRegion = z.object({
+  label: z.string(),
+  value: z.number(),
+  hint: z.string().nullable(),
+});
+
+const indicatorRow = z.object({
+  label: z.string(),
+  value: z.string(),
+});
+
+const slideItem = z.object({
+  title: z.string(),
+  bullets: z.array(z.string()).nullable(),
+  image: z.string().nullable(),
+  notes: z.string().nullable(),
+});
+
 /**
  * Shared generative-UI vocabulary for Pearl chat.
  *
@@ -736,6 +778,72 @@ export const chatCatalog = defineCatalog(schema, {
       description:
         "Which Neon branch/database to use: named pick, reason, and 2–6 options",
     },
+    PhotoEditSettings: {
+      props: z.object({
+        title: z.string().nullable(),
+        image: z.string().nullable(),
+        groups: z.array(settingsGroup).min(1).max(4),
+      }),
+      description:
+        "Presentational photo grade/settings sheet (not an editor): optional preview image and labeled groups",
+    },
+    MusicProdSettings: {
+      props: z.object({
+        title: z.string().nullable(),
+        project: z.string().nullable(),
+        bpm: z.string().nullable(),
+        key: z.string().nullable(),
+        tracks: z.array(musicTrack).nullable(),
+        groups: z.array(settingsGroup).nullable(),
+      }),
+      description:
+        "Presentational music production / mix settings: project meta, tracks, optional bus/FX groups",
+    },
+    VideoStoryboard: {
+      props: z.object({
+        title: z.string().nullable(),
+        aspect: z.enum(["16:9", "9:16", "1:1"]).nullable(),
+        frames: z.array(storyboardFrame).min(2).max(12),
+      }),
+      description:
+        "Video storyboard: horizontal sequence of frames with optional image, beat, and duration",
+    },
+    IndicatorCard: {
+      props: z.object({
+        title: z.string(),
+        source: z.string().nullable(),
+        unit: z.string().nullable(),
+        value: z.string().nullable(),
+        delta: z.string().nullable(),
+        asOf: z.string().nullable(),
+        points: z.array(z.number()).nullable(),
+        regions: z.array(indicatorRegion).nullable(),
+        rows: z.array(indicatorRow).nullable(),
+      }),
+      description:
+        "OWID / census-style indicator: headline value with optional sparkline, region bars, and/or rows (include at least one of points, regions, rows)",
+    },
+    Slides: {
+      props: z.object({
+        title: z.string().nullable(),
+        theme: z.string().nullable(),
+        slides: z.array(slideItem).min(2).max(12),
+        index: z.number().nullable(),
+      }),
+      description:
+        "In-thread slide deck: current slide by index plus strip of others (title, bullets, optional image)",
+    },
+    PdfArtifact: {
+      props: z.object({
+        title: z.string(),
+        src: z.string().nullable(),
+        pages: z.string().nullable(),
+        size: z.string().nullable(),
+        updated: z.string().nullable(),
+      }),
+      description:
+        "PDF artifact receipt with meta; embed or open when src is an https PDF URL",
+    },
   },
   actions: {
     reply: {
@@ -751,13 +859,13 @@ export const chatCatalog = defineCatalog(schema, {
 export type ChatCatalog = typeof chatCatalog;
 
 export const JSON_RENDER_CUSTOM_RULES = [
-  "Emit a UI spec for structured answers of these kinds: web/product search, location or place maps, news briefs, daily multi-story briefs, encyclopedia entries, pronunciation, foreign-language phrases, guitar chords, music theory, vote or regional charts, sparkline charts, spec sheets, Mermaid diagrams, tables, explainers, recipes, flight tracking, calendar events, table bookings, email drafts/batches, surf/snow reports and picks, video, and Vercel/GitHub/Neon status (projects, deploys, PRs, issues, Neon projects/branches, schema, ship status, env names, domains, slow queries, and picks). Ordinary replies and exploratory thinking-together turns stay prose with no spec.",
-  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, DailyBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Chart, SpecSheet, MermaidDiagram, Table, Explainer, Recipe, ComparisonBar, FlightTracker, CalendarEvent, CreateEvent, Booking, EmailDraft, EmailBatch, SurfReport, SurfSpotPick, SnowReport, MountainPick, Video, VercelProject, DeploymentStatus, DeploymentList, PullRequest, PullRequestList, Issue, IssueList, NeonProject, NeonBranch, SchemaOverview, ShipStatus, EnvVarList, DomainList, SlowQueryList, RepoPick, ProjectPick, NeonBranchPick) inside it.",
-  "For two-way % races prefer ComparisonBar; for multi-region shares use RegionChart; for a single metric series use Chart. Use SurfSpotPick / MountainPick / RepoPick / ProjectPick / NeonBranchPick when choosing among options; use SurfReport/SnowReport or single status cards for one place. Use DailyBrief for a morning/top-stories roundup; NewsBrief for one story. Keep 1–2 sentences of prose outside the fence.",
+  "Emit a UI spec for structured answers of these kinds: web/product search, location or place maps, news briefs, daily multi-story briefs, encyclopedia entries, pronunciation, foreign-language phrases, guitar chords, music theory, vote or regional charts, sparkline charts, spec sheets, Mermaid diagrams, tables, explainers, recipes, flight tracking, calendar events, table bookings, email drafts/batches, surf/snow reports and picks, video, Vercel/GitHub/Neon status (projects, deploys, PRs, issues, Neon projects/branches, schema, ship status, env names, domains, slow queries, and picks), photo edit settings, music production settings, video storyboards, OWID/census indicators, slide decks, and PDF artifacts. Ordinary replies and exploratory thinking-together turns stay prose with no spec.",
+  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, DailyBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Chart, SpecSheet, MermaidDiagram, Table, Explainer, Recipe, ComparisonBar, FlightTracker, CalendarEvent, CreateEvent, Booking, EmailDraft, EmailBatch, SurfReport, SurfSpotPick, SnowReport, MountainPick, Video, VercelProject, DeploymentStatus, DeploymentList, PullRequest, PullRequestList, Issue, IssueList, NeonProject, NeonBranch, SchemaOverview, ShipStatus, EnvVarList, DomainList, SlowQueryList, RepoPick, ProjectPick, NeonBranchPick, PhotoEditSettings, MusicProdSettings, VideoStoryboard, IndicatorCard, Slides, PdfArtifact) inside it.",
+  "For two-way % races prefer ComparisonBar; for multi-region shares use RegionChart; for a single metric series use Chart; for OWID/census answers with source + series and/or regional breakdown use IndicatorCard. Use SurfSpotPick / MountainPick / RepoPick / ProjectPick / NeonBranchPick when choosing among options; use SurfReport/SnowReport or single status cards for one place. Use DailyBrief for a morning/top-stories roundup; NewsBrief for one story. Use PhotoEditSettings / MusicProdSettings for presentational settings sheets (not live editors). Use VideoStoryboard for frame sequences; Slides for in-thread decks; PdfArtifact for PDF receipts (https src embeds when possible). Keep 1–2 sentences of prose outside the fence.",
   "EmailDraft, EmailBatch, CreateEvent, and Booking include built-in confirm buttons that reply with tool-ready messages. When the user sends those confirmations, call create_gmail_draft / send_gmail_message / apply_mail_batch or the calendar create path immediately with the stated params (approvals still apply).",
   "EnvVarList must list variable NAMES only — never values, secrets, or connection strings. NeonBranch.endpointHost is a hostname only.",
   "Buttons that continue the conversation must bind press to the reply action with a concrete message string. Do not invent component names outside this catalog.",
-  "Image and Video src must be https URLs. Prefer the dedicated answer components over assembling the same layout from Stack/Text alone.",
+  "Image, Video, and PdfArtifact src must be https URLs. Prefer the dedicated answer components over assembling the same layout from Stack/Text alone.",
 ] as const;
 
 /** System prompt fragment for the eve chat channel (inline generative UI). */

@@ -52,7 +52,13 @@ export type AnswerThreadSample = {
     | "answer-slow-queries"
     | "answer-repo-pick"
     | "answer-project-pick"
-    | "answer-neon-branch-pick";
+    | "answer-neon-branch-pick"
+    | "answer-photo-edit"
+    | "answer-music-prod"
+    | "answer-storyboard"
+    | "answer-indicator"
+    | "answer-slides"
+    | "answer-pdf";
   readonly label: string;
   readonly group: "answer";
   readonly messages: readonly AnswerMessage[];
@@ -1616,6 +1622,258 @@ export const ANSWER_THREAD_SAMPLES: readonly AnswerThreadSample[] = [
               meta: "idle",
             },
           ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-photo-edit",
+    "Photo edit",
+    "What grade settings for this portrait?",
+    "Suggested grade:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["photo"],
+      },
+      photo: {
+        type: "PhotoEditSettings",
+        props: {
+          title: "Portrait grade",
+          image:
+            "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=640&q=80",
+          groups: [
+            {
+              name: "Exposure",
+              rows: [
+                { label: "Exposure", value: "+0.35" },
+                { label: "Highlights", value: "-20" },
+                { label: "Shadows", value: "+15" },
+              ],
+            },
+            {
+              name: "Color",
+              rows: [
+                { label: "Temp", value: "5200K" },
+                { label: "Tint", value: "+4" },
+                { label: "Vibrance", value: "+12" },
+              ],
+            },
+            {
+              name: "Detail",
+              rows: [
+                { label: "Clarity", value: "+8" },
+                { label: "Sharpen", value: "35" },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-music-prod",
+    "Music prod",
+    "Show the mix settings for the chorus.",
+    "Session:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["music"],
+      },
+      music: {
+        type: "MusicProdSettings",
+        props: {
+          title: "Chorus mix",
+          project: "Pearl Theme",
+          bpm: "118",
+          key: "Am",
+          tracks: [
+            {
+              name: "Kick",
+              role: "Drums",
+              level: "-6.0 dB",
+              muted: false,
+            },
+            {
+              name: "Bass",
+              role: "Low end",
+              level: "-8.5 dB",
+              muted: false,
+            },
+            {
+              name: "Pad",
+              role: "Atmosphere",
+              level: "-14.0 dB",
+              muted: true,
+            },
+          ],
+          groups: [
+            {
+              name: "Bus",
+              rows: [
+                { label: "Drum bus", value: "Glue +2" },
+                { label: "Master", value: "-1.0 dBTP" },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-storyboard",
+    "Storyboard",
+    "Storyboard the 15s product open.",
+    "Frames:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["board"],
+      },
+      board: {
+        type: "VideoStoryboard",
+        props: {
+          title: "Product open · 15s",
+          aspect: "16:9",
+          frames: [
+            {
+              label: "Logo hold",
+              image: null,
+              beat: "0:00",
+              duration: "2s",
+            },
+            {
+              label: "Product hero",
+              image:
+                "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=640&q=80",
+              beat: "0:02",
+              duration: "4s",
+            },
+            {
+              label: "UI montage",
+              image: null,
+              beat: "0:06",
+              duration: "5s",
+            },
+            {
+              label: "CTA",
+              image: null,
+              beat: "0:11",
+              duration: "4s",
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-indicator",
+    "Indicator",
+    "CO₂ emissions per capita for the US over time?",
+    "From Our World in Data:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["indicator"],
+      },
+      indicator: {
+        type: "IndicatorCard",
+        props: {
+          title: "CO₂ emissions per capita",
+          source: "Our World in Data",
+          unit: "t",
+          value: "14.9",
+          delta: "−3% vs 2019",
+          asOf: "2022",
+          points: [16.2, 15.8, 15.1, 14.4, 13.9, 14.2, 14.9],
+          regions: [
+            { label: "United States", value: 14.9, hint: "2022" },
+            { label: "EU-27", value: 6.8, hint: null },
+            { label: "World", value: 4.7, hint: null },
+          ],
+          rows: [
+            { label: "Peak year", value: "2000 · 20.2 t" },
+            { label: "Change since peak", value: "−26%" },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-slides",
+    "Slides",
+    "Draft slides for the Pearl launch update.",
+    "Deck:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["slides"],
+      },
+      slides: {
+        type: "Slides",
+        props: {
+          title: "Pearl launch",
+          theme: "Dark product",
+          index: 1,
+          slides: [
+            {
+              title: "Agenda",
+              bullets: ["Why now", "What’s shipping", "Ask"],
+              image: null,
+              notes: null,
+            },
+            {
+              title: "What’s shipping",
+              bullets: [
+                "Answer cards across chat",
+                "Mobile inspector samples",
+                "Devops + creative surfaces",
+              ],
+              image: null,
+              notes: "Keep to 60 seconds",
+            },
+            {
+              title: "Ask",
+              bullets: ["Ship this week", "Gather feedback"],
+              image: null,
+              notes: null,
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-pdf",
+    "PDF",
+    "Show the brief PDF.",
+    "Artifact:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["pdf"],
+      },
+      pdf: {
+        type: "PdfArtifact",
+        props: {
+          title: "W3C dummy PDF",
+          src: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+          pages: "1 page",
+          size: "13 KB",
+          updated: "sample",
         },
       },
     },

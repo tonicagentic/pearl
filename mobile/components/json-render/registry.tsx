@@ -1,6 +1,7 @@
 import type { ComponentRegistry } from "@json-render/react-native";
 import { useActions } from "@json-render/react-native";
 import { VideoPlayer } from "@/components/assistant-ui/elements/media-player";
+import { creativeMobileCards } from "@/components/json-render/creative-cards";
 import { devopsMobileCards } from "@/components/json-render/devops-cards";
 import {
   chartDeltaTone,
@@ -2062,4 +2063,5 @@ export const chatRegistry: ComponentRegistry = {
     );
   },
   ...devopsMobileCards,
+  ...creativeMobileCards,
 };
