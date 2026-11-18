@@ -52,7 +52,24 @@ export type ThreadSampleId =
   | "answer-snow"
   | "answer-mountain-pick"
   | "answer-daily"
-  | "answer-video";
+  | "answer-video"
+  | "answer-vercel-project"
+  | "answer-deploy"
+  | "answer-deploy-list"
+  | "answer-pr"
+  | "answer-pr-list"
+  | "answer-issue"
+  | "answer-issue-list"
+  | "answer-neon-project"
+  | "answer-neon-branch"
+  | "answer-schema"
+  | "answer-ship"
+  | "answer-env-names"
+  | "answer-domains"
+  | "answer-slow-queries"
+  | "answer-repo-pick"
+  | "answer-project-pick"
+  | "answer-neon-branch-pick";
 
 export type ThreadSampleGroup = "default" | "answer";
 

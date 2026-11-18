@@ -42,6 +42,7 @@ import {
 import { resolveVideoEmbed } from "@/lib/json-render/video-embed";
 import { cn } from "@/lib/utils";
 import { Button as UiButton } from "@/components/ui/button";
+import { devopsWebCards } from "@/components/json-render/devops-cards";
 import { useMemo, useState } from "react";
 
 /** Light fretboard panel so dots stay readable in dark mode. */
@@ -1688,6 +1689,7 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
         </div>
       );
     },
+    ...devopsWebCards,
   },
   actions: {
     // Bound at render time via ActionProvider handlers in ChatJsonRender.

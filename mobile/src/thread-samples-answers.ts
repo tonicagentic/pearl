@@ -35,7 +35,24 @@ export type AnswerThreadSample = {
     | "answer-snow"
     | "answer-mountain-pick"
     | "answer-daily"
-    | "answer-video";
+    | "answer-video"
+    | "answer-vercel-project"
+    | "answer-deploy"
+    | "answer-deploy-list"
+    | "answer-pr"
+    | "answer-pr-list"
+    | "answer-issue"
+    | "answer-issue-list"
+    | "answer-neon-project"
+    | "answer-neon-branch"
+    | "answer-schema"
+    | "answer-ship"
+    | "answer-env-names"
+    | "answer-domains"
+    | "answer-slow-queries"
+    | "answer-repo-pick"
+    | "answer-project-pick"
+    | "answer-neon-branch-pick";
   readonly label: string;
   readonly group: "answer";
   readonly messages: readonly AnswerMessage[];
@@ -1056,6 +1073,549 @@ export const ANSWER_THREAD_SAMPLES: readonly AnswerThreadSample[] = [
           src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           provider: "file",
           poster: null,
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-vercel-project",
+    "Vercel project",
+    "Show my Pearl Vercel project.",
+    "Project:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["project"],
+      },
+      project: {
+        type: "VercelProject",
+        props: {
+          name: "pearl",
+          team: "tonicagentic",
+          framework: "nextjs",
+          productionUrl: "https://pearl.tonicagentic.com",
+          latestDeploy: {
+            state: "ready",
+            env: "production",
+            url: "https://pearl.tonicagentic.com",
+            createdAt: "12m ago",
+          },
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-deploy",
+    "Deploy",
+    "Status of the latest preview deploy?",
+    "Latest preview:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["deploy"],
+      },
+      deploy: {
+        type: "DeploymentStatus",
+        props: {
+          project: "pearl",
+          state: "ready",
+          environment: "preview",
+          url: "https://pearl-git-feat-xyz.vercel.app",
+          commit: "a1b2c3d",
+          branch: "feat/answer-cards",
+          duration: "48s",
+          createdAt: "3m ago",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-deploy-list",
+    "Deploys",
+    "Recent deploys for pearl?",
+    "Last few:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["list"],
+      },
+      list: {
+        type: "DeploymentList",
+        props: {
+          project: "pearl",
+          items: [
+            {
+              state: "ready",
+              environment: "production",
+              url: "https://pearl.tonicagentic.com",
+              commit: "a1b2c3d",
+              branch: "main",
+              createdAt: "12m ago",
+            },
+            {
+              state: "ready",
+              environment: "preview",
+              url: "https://pearl-git-feat.vercel.app",
+              commit: "d4e5f6a",
+              branch: "feat/answer-cards",
+              createdAt: "1h ago",
+            },
+            {
+              state: "error",
+              environment: "preview",
+              url: null,
+              commit: "99aabb",
+              branch: "feat/broken",
+              createdAt: "yesterday",
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-pr",
+    "PR",
+    "What’s the status of PR 42?",
+    "Pull request:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["pr"],
+      },
+      pr: {
+        type: "PullRequest",
+        props: {
+          title: "Add devops answer cards",
+          number: 42,
+          repo: "tonicagentic/my-agent",
+          state: "open",
+          checks: "pass",
+          url: "https://github.com/tonicagentic/my-agent/pull/42",
+          author: "alex",
+          branch: "feat/devops-cards",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-pr-list",
+    "PRs",
+    "Open PRs on my-agent?",
+    "Open pull requests:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["list"],
+      },
+      list: {
+        type: "PullRequestList",
+        props: {
+          repo: "tonicagentic/my-agent",
+          items: [
+            {
+              title: "Add devops answer cards",
+              number: 42,
+              state: "open",
+              checks: "pass",
+              author: "alex",
+              branch: "feat/devops-cards",
+              url: null,
+            },
+            {
+              title: "Fix mobile composer height",
+              number: 41,
+              state: "open",
+              checks: "pending",
+              author: "alex",
+              branch: "fix/composer",
+              url: null,
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-issue",
+    "Issue",
+    "Open issue 18?",
+    "Issue:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["issue"],
+      },
+      issue: {
+        type: "Issue",
+        props: {
+          title: "Neon branch pick card",
+          number: 18,
+          repo: "tonicagentic/my-agent",
+          state: "open",
+          url: null,
+          author: "alex",
+          labels: ["enhancement", "ui"],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-issue-list",
+    "Issues",
+    "Open issues?",
+    "Issues:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["list"],
+      },
+      list: {
+        type: "IssueList",
+        props: {
+          repo: "tonicagentic/my-agent",
+          items: [
+            {
+              title: "Neon branch pick card",
+              number: 18,
+              state: "open",
+              author: "alex",
+              labels: ["enhancement"],
+              url: null,
+            },
+            {
+              title: "Document EnvVarList names-only rule",
+              number: 17,
+              state: "open",
+              author: "alex",
+              labels: ["docs"],
+              url: null,
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-neon-project",
+    "Neon project",
+    "Show the Pearl Neon project.",
+    "Database project:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["neon"],
+      },
+      neon: {
+        type: "NeonProject",
+        props: {
+          name: "pearl",
+          region: "aws-us-west-2",
+          branchesOpen: "3 branches",
+          defaultBranch: "main",
+          compute: "idle",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-neon-branch",
+    "Neon branch",
+    "What’s on the preview branch?",
+    "Branch:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["branch"],
+      },
+      branch: {
+        type: "NeonBranch",
+        props: {
+          name: "preview/feat-cards",
+          project: "pearl",
+          parent: "main",
+          primary: false,
+          compute: "active",
+          endpointHost: "ep-cool-name.us-west-2.aws.neon.tech",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-schema",
+    "Schema",
+    "What’s in the pearl database?",
+    "Tables:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["schema"],
+      },
+      schema: {
+        type: "SchemaOverview",
+        props: {
+          database: "pearl",
+          tableCount: 12,
+          tables: [
+            { name: "user", rows: "~2.4k", detail: null },
+            { name: "session", rows: "~8k", detail: null },
+            { name: "chat", rows: "~1.1k", detail: "indexed on userId" },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-ship",
+    "Ship",
+    "Where are we on shipping the cards PR?",
+    "Ship status:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["ship"],
+      },
+      ship: {
+        type: "ShipStatus",
+        props: {
+          repo: "tonicagentic/my-agent",
+          branch: "feat/devops-cards",
+          pr: {
+            number: 42,
+            title: "Add devops answer cards",
+            url: null,
+            checks: "pass",
+          },
+          previewUrl: "https://pearl-git-feat.vercel.app",
+          deployState: "ready",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-env-names",
+    "Env names",
+    "Which env vars are set on production?",
+    "Names only:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["env"],
+      },
+      env: {
+        type: "EnvVarList",
+        props: {
+          project: "pearl",
+          environment: "production",
+          names: [
+            "DATABASE_URL",
+            "BETTER_AUTH_SECRET",
+            "VERCEL_OIDC_TOKEN",
+            "AI_GATEWAY_API_KEY",
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-domains",
+    "Domains",
+    "Domains on pearl?",
+    "Domains:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["domains"],
+      },
+      domains: {
+        type: "DomainList",
+        props: {
+          project: "pearl",
+          domains: [
+            {
+              name: "pearl.tonicagentic.com",
+              verified: true,
+              environment: "production",
+            },
+            {
+              name: "pearl-staging.tonicagentic.com",
+              verified: true,
+              environment: "preview",
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-slow-queries",
+    "Slow queries",
+    "Any slow queries on pearl?",
+    "Slowest recently:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["slow"],
+      },
+      slow: {
+        type: "SlowQueryList",
+        props: {
+          project: "pearl",
+          items: [
+            {
+              query:
+                "SELECT * FROM session WHERE user_id = $1 ORDER BY expires_at DESC",
+              duration: "420ms",
+              calls: "128",
+              note: "missing index on expires_at",
+            },
+            {
+              query: "SELECT count(*) FROM chat_message WHERE chat_id = $1",
+              duration: "180ms",
+              calls: "54",
+              note: null,
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-repo-pick",
+    "Repo pick",
+    "Which repo should I work in for the chat UI?",
+    "Best repo:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["pick"],
+      },
+      pick: {
+        type: "RepoPick",
+        props: {
+          pick: "tonicagentic/my-agent",
+          timeframe: "This task",
+          reason: "Owns Pearl chat UI, json-render catalog, and mobile inspector.",
+          options: [
+            {
+              name: "tonicagentic/my-agent",
+              detail: "Pearl agent + Expo app",
+              meta: "active",
+            },
+            {
+              name: "tonicagentic/eve",
+              detail: "Framework internals only",
+              meta: "upstream",
+            },
+            {
+              name: "tonicagentic/pearl-tasks",
+              detail: "Task docs, not app code",
+              meta: null,
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-project-pick",
+    "Project pick",
+    "Which Vercel project for the preview?",
+    "Use:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["pick"],
+      },
+      pick: {
+        type: "ProjectPick",
+        props: {
+          pick: "pearl",
+          timeframe: null,
+          reason: "Production Pearl deployment lives here.",
+          options: [
+            {
+              name: "pearl",
+              detail: "Next.js agent app",
+              meta: "tonicagentic",
+            },
+            {
+              name: "pearl-docs",
+              detail: "Docs site only",
+              meta: "tonicagentic",
+            },
+          ],
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-neon-branch-pick",
+    "Neon pick",
+    "Which Neon branch should the preview use?",
+    "Branch pick:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["pick"],
+      },
+      pick: {
+        type: "NeonBranchPick",
+        props: {
+          pick: "preview/feat-cards",
+          timeframe: "This PR",
+          reason: "Isolated schema changes without touching main.",
+          options: [
+            {
+              name: "preview/feat-cards",
+              detail: "Branched from main for this PR",
+              meta: "active",
+            },
+            {
+              name: "main",
+              detail: "Production data — avoid writes",
+              meta: "primary",
+            },
+            {
+              name: "dev",
+              detail: "Shared scratch branch",
+              meta: "idle",
+            },
+          ],
         },
       },
     },

@@ -2,6 +2,23 @@ import { defineCatalog } from "@json-render/core";
 import { schema } from "@json-render/react/schema";
 import { z } from "zod";
 
+/** Shared by SurfSpotPick / MountainPick / RepoPick / ProjectPick / NeonBranchPick. */
+const pickCardProps = z.object({
+  pick: z.string(),
+  reason: z.string().nullable(),
+  timeframe: z.string().nullable(),
+  options: z
+    .array(
+      z.object({
+        name: z.string(),
+        detail: z.string().nullable(),
+        meta: z.string().nullable(),
+      }),
+    )
+    .min(2)
+    .max(6),
+});
+
 const searchResultItem = z.object({
   title: z.string(),
   detail: z.string().nullable(),
@@ -95,6 +112,85 @@ const mountainOption = z.object({
   baseDepth: z.string().nullable(),
   conditions: z.string().nullable(),
   liftsOpen: z.string().nullable(),
+  note: z.string().nullable(),
+});
+
+const deployState = z.enum([
+  "ready",
+  "building",
+  "error",
+  "canceled",
+  "queued",
+]);
+
+const deployEnvironment = z.enum(["production", "preview", "development"]);
+
+const latestDeploy = z.object({
+  state: deployState,
+  env: deployEnvironment,
+  url: z.string().nullable(),
+  createdAt: z.string().nullable(),
+});
+
+const deploymentItem = z.object({
+  state: deployState,
+  environment: deployEnvironment,
+  url: z.string().nullable(),
+  commit: z.string().nullable(),
+  branch: z.string().nullable(),
+  createdAt: z.string().nullable(),
+});
+
+const checkState = z.enum(["pending", "pass", "fail", "neutral"]);
+
+const prState = z.enum(["open", "merged", "closed"]);
+
+const pullRequestItem = z.object({
+  title: z.string(),
+  number: z.number(),
+  state: prState,
+  checks: checkState.nullable(),
+  author: z.string().nullable(),
+  branch: z.string().nullable(),
+  url: z.string().nullable(),
+});
+
+const issueState = z.enum(["open", "closed"]);
+
+const issueItem = z.object({
+  title: z.string(),
+  number: z.number(),
+  state: issueState,
+  author: z.string().nullable(),
+  labels: z.array(z.string()).nullable(),
+  url: z.string().nullable(),
+});
+
+const computeState = z.enum(["idle", "active"]);
+
+const schemaTable = z.object({
+  name: z.string(),
+  rows: z.string().nullable(),
+  detail: z.string().nullable(),
+});
+
+const shipPr = z.object({
+  number: z.number(),
+  title: z.string().nullable(),
+  url: z.string().nullable(),
+  checks: checkState.nullable(),
+});
+
+const domainItem = z.object({
+  name: z.string(),
+  verified: z.boolean().nullable(),
+  environment: deployEnvironment.nullable(),
+});
+
+const slowQueryItem = z.object({
+  query: z.string(),
+  duration: z.string().nullable(),
+  calls: z.string().nullable(),
   note: z.string().nullable(),
 });
 
@@ -492,6 +588,154 @@ export const chatCatalog = defineCatalog(schema, {
       description:
         "Inline video from an https file URL or YouTube/Vimeo watch/embed URL (provider inferred when omitted)",
     },
+    VercelProject: {
+      props: z.object({
+        name: z.string(),
+        team: z.string().nullable(),
+        framework: z.string().nullable(),
+        productionUrl: z.string().nullable(),
+        latestDeploy: latestDeploy.nullable(),
+      }),
+      description: "One Vercel project at a glance with optional latest deploy",
+    },
+    DeploymentStatus: {
+      props: z.object({
+        project: z.string(),
+        state: deployState,
+        environment: deployEnvironment,
+        url: z.string().nullable(),
+        commit: z.string().nullable(),
+        branch: z.string().nullable(),
+        duration: z.string().nullable(),
+        createdAt: z.string().nullable(),
+      }),
+      description: "Single Vercel deployment status (preview or production)",
+    },
+    DeploymentList: {
+      props: z.object({
+        project: z.string().nullable(),
+        items: z.array(deploymentItem).min(1).max(8),
+      }),
+      description: "Recent Vercel deployments with state badges",
+    },
+    PullRequest: {
+      props: z.object({
+        title: z.string(),
+        number: z.number(),
+        repo: z.string(),
+        state: prState,
+        checks: checkState.nullable(),
+        url: z.string().nullable(),
+        author: z.string().nullable(),
+        branch: z.string().nullable(),
+      }),
+      description: "One GitHub pull request with checks summary",
+    },
+    PullRequestList: {
+      props: z.object({
+        repo: z.string().nullable(),
+        items: z.array(pullRequestItem).min(1).max(8),
+      }),
+      description: "Open or recent pull requests for a repo",
+    },
+    Issue: {
+      props: z.object({
+        title: z.string(),
+        number: z.number(),
+        repo: z.string(),
+        state: issueState,
+        url: z.string().nullable(),
+        author: z.string().nullable(),
+        labels: z.array(z.string()).nullable(),
+      }),
+      description: "One GitHub issue",
+    },
+    IssueList: {
+      props: z.object({
+        repo: z.string().nullable(),
+        items: z.array(issueItem).min(1).max(8),
+      }),
+      description: "List of GitHub issues",
+    },
+    NeonProject: {
+      props: z.object({
+        name: z.string(),
+        region: z.string().nullable(),
+        branchesOpen: z.string().nullable(),
+        defaultBranch: z.string().nullable(),
+        compute: computeState.nullable(),
+      }),
+      description: "One Neon project summary (no connection strings)",
+    },
+    NeonBranch: {
+      props: z.object({
+        name: z.string(),
+        project: z.string().nullable(),
+        parent: z.string().nullable(),
+        primary: z.boolean().nullable(),
+        compute: computeState.nullable(),
+        /** Hostname only — never a full connection string. */
+        endpointHost: z.string().nullable(),
+      }),
+      description: "One Neon branch with compute and endpoint host (no secrets)",
+    },
+    SchemaOverview: {
+      props: z.object({
+        database: z.string().nullable(),
+        tableCount: z.number().nullable(),
+        tables: z.array(schemaTable).min(1).max(20),
+      }),
+      description: "Database schema overview: table count and named tables",
+    },
+    ShipStatus: {
+      props: z.object({
+        repo: z.string(),
+        pr: shipPr.nullable(),
+        previewUrl: z.string().nullable(),
+        deployState: deployState.nullable(),
+        branch: z.string().nullable(),
+      }),
+      description:
+        "Thin ship handoff: repo, optional PR, preview URL, and deploy state",
+    },
+    EnvVarList: {
+      props: z.object({
+        project: z.string().nullable(),
+        environment: deployEnvironment.nullable(),
+        names: z.array(z.string()).min(1).max(40),
+      }),
+      description:
+        "Environment variable NAMES only for a Vercel project — never values or secrets",
+    },
+    DomainList: {
+      props: z.object({
+        project: z.string().nullable(),
+        domains: z.array(domainItem).min(1).max(20),
+      }),
+      description: "Custom domains for a Vercel project",
+    },
+    SlowQueryList: {
+      props: z.object({
+        project: z.string().nullable(),
+        items: z.array(slowQueryItem).min(1).max(10),
+      }),
+      description: "Slow Neon/Postgres queries (SQL truncated in UI)",
+    },
+    RepoPick: {
+      props: pickCardProps,
+      description:
+        "Which GitHub repo to work in: named pick, reason, and 2–6 options",
+    },
+    ProjectPick: {
+      props: pickCardProps,
+      description:
+        "Which Vercel project to use: named pick, reason, and 2–6 options",
+    },
+    NeonBranchPick: {
+      props: pickCardProps,
+      description:
+        "Which Neon branch/database to use: named pick, reason, and 2–6 options",
+    },
   },
   actions: {
     reply: {
@@ -507,10 +751,11 @@ export const chatCatalog = defineCatalog(schema, {
 export type ChatCatalog = typeof chatCatalog;
 
 export const JSON_RENDER_CUSTOM_RULES = [
-  "Emit a UI spec for structured answers of these kinds: web/product search, location or place maps, news briefs, daily multi-story briefs, encyclopedia entries, pronunciation, foreign-language phrases, guitar chords, music theory, vote or regional charts, sparkline charts, spec sheets, Mermaid diagrams, tables, explainers, recipes, flight tracking, calendar events, table bookings, email drafts/batches, surf/snow reports, surf-spot and ski-mountain picks, and video. Ordinary replies and exploratory thinking-together turns stay prose with no spec.",
-  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, DailyBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Chart, SpecSheet, MermaidDiagram, Table, Explainer, Recipe, ComparisonBar, FlightTracker, CalendarEvent, CreateEvent, Booking, EmailDraft, EmailBatch, SurfReport, SurfSpotPick, SnowReport, MountainPick, Video) inside it.",
-  "For two-way % races prefer ComparisonBar; for multi-region shares use RegionChart; for a single metric series use Chart. Use SurfSpotPick when choosing among surf spots and MountainPick when choosing among ski mountains; use SurfReport/SnowReport for a single place. Use DailyBrief for a morning/top-stories roundup; NewsBrief for one story. Keep 1–2 sentences of prose outside the fence.",
+  "Emit a UI spec for structured answers of these kinds: web/product search, location or place maps, news briefs, daily multi-story briefs, encyclopedia entries, pronunciation, foreign-language phrases, guitar chords, music theory, vote or regional charts, sparkline charts, spec sheets, Mermaid diagrams, tables, explainers, recipes, flight tracking, calendar events, table bookings, email drafts/batches, surf/snow reports and picks, video, and Vercel/GitHub/Neon status (projects, deploys, PRs, issues, Neon projects/branches, schema, ship status, env names, domains, slow queries, and picks). Ordinary replies and exploratory thinking-together turns stay prose with no spec.",
+  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, DailyBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Chart, SpecSheet, MermaidDiagram, Table, Explainer, Recipe, ComparisonBar, FlightTracker, CalendarEvent, CreateEvent, Booking, EmailDraft, EmailBatch, SurfReport, SurfSpotPick, SnowReport, MountainPick, Video, VercelProject, DeploymentStatus, DeploymentList, PullRequest, PullRequestList, Issue, IssueList, NeonProject, NeonBranch, SchemaOverview, ShipStatus, EnvVarList, DomainList, SlowQueryList, RepoPick, ProjectPick, NeonBranchPick) inside it.",
+  "For two-way % races prefer ComparisonBar; for multi-region shares use RegionChart; for a single metric series use Chart. Use SurfSpotPick / MountainPick / RepoPick / ProjectPick / NeonBranchPick when choosing among options; use SurfReport/SnowReport or single status cards for one place. Use DailyBrief for a morning/top-stories roundup; NewsBrief for one story. Keep 1–2 sentences of prose outside the fence.",
   "EmailDraft, EmailBatch, CreateEvent, and Booking include built-in confirm buttons that reply with tool-ready messages. When the user sends those confirmations, call create_gmail_draft / send_gmail_message / apply_mail_batch or the calendar create path immediately with the stated params (approvals still apply).",
+  "EnvVarList must list variable NAMES only — never values, secrets, or connection strings. NeonBranch.endpointHost is a hostname only.",
   "Buttons that continue the conversation must bind press to the reply action with a concrete message string. Do not invent component names outside this catalog.",
   "Image and Video src must be https URLs. Prefer the dedicated answer components over assembling the same layout from Stack/Text alone.",
 ] as const;

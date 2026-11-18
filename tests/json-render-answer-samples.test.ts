@@ -34,6 +34,23 @@ const EXPECTED_ROOT_CHILD: Record<string, string> = {
   "answer-mountain-pick": "MountainPick",
   "answer-daily": "DailyBrief",
   "answer-video": "Video",
+  "answer-vercel-project": "VercelProject",
+  "answer-deploy": "DeploymentStatus",
+  "answer-deploy-list": "DeploymentList",
+  "answer-pr": "PullRequest",
+  "answer-pr-list": "PullRequestList",
+  "answer-issue": "Issue",
+  "answer-issue-list": "IssueList",
+  "answer-neon-project": "NeonProject",
+  "answer-neon-branch": "NeonBranch",
+  "answer-schema": "SchemaOverview",
+  "answer-ship": "ShipStatus",
+  "answer-env-names": "EnvVarList",
+  "answer-domains": "DomainList",
+  "answer-slow-queries": "SlowQueryList",
+  "answer-repo-pick": "RepoPick",
+  "answer-project-pick": "ProjectPick",
+  "answer-neon-branch-pick": "NeonBranchPick",
 };
 
 function assistantText(sample: (typeof ANSWER_THREAD_SAMPLES)[number]): string {
@@ -58,8 +75,8 @@ function assistantText(sample: (typeof ANSWER_THREAD_SAMPLES)[number]): string {
 }
 
 describe("answer thread samples", () => {
-  it("includes twenty-nine answer fixtures", () => {
-    assert.equal(ANSWER_THREAD_SAMPLES.length, 29);
+  it("includes forty-six answer fixtures", () => {
+    assert.equal(ANSWER_THREAD_SAMPLES.length, 46);
   });
 
   for (const sample of ANSWER_THREAD_SAMPLES) {
