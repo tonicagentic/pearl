@@ -30,9 +30,9 @@ export const LIVE_AUTH_PROTOCOL_PREFIX = "ai-gateway-auth.";
 export const LIVE_SESSION_CONFIG = {
   instructions:
     "You are Pearl, a personal agent in a live voice conversation. On the first response, greet the user in one short spoken sentence and invite them to talk. After that, answer out loud and briefly.",
-  // Normalized AI Gateway realtime voice ids (OpenAI roster). xAI names like
-  // ara/eve are rejected by the gateway session-update validator.
-  voice: "coral",
+  // Do not set `voice` here. Model is spacexai/grok-voice-3.0; xAI defaults to
+  // eve. Gateway session-update still validates the OpenAI voice roster and
+  // rejects ara/eve, so omitting voice is the way to stay on Grok's default.
   outputModalities: ["audio"] as Array<"text" | "audio">,
   inputAudioTranscription: {},
   outputAudioTranscription: {},
