@@ -14,6 +14,7 @@ import {
   ImageIcon,
   IdCardIcon,
   LayoutTemplateIcon,
+  ListTodoIcon,
   LogOutIcon,
   MailIcon,
   MessageCircleQuestionIcon,
@@ -212,6 +213,13 @@ export function SettingsScreen() {
           label="Money"
           detail="Pearl Money"
           onPress={() => router.push("/money")}
+          showSeparator
+        />
+        <SettingsRow
+          icon={<Icon as={ListTodoIcon} className="size-5 text-teal-500" />}
+          label="Tasks"
+          detail="Pearl Tasks"
+          onPress={() => router.push("/tasks")}
         />
       </SettingsCard>
 

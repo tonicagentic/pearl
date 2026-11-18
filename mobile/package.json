@@ -94,6 +94,9 @@
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/$1"
     },
+    "modulePaths": [
+      "<rootDir>/node_modules"
+    ],
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.ts"
     ]

@@ -1,7 +1,8 @@
-// Shared Keychain item used by Pearl and Pearl Money so both apps can reuse
-// the same better-auth bearer on one device (iOS Keychain access group).
-// Requires a development / EAS build with keychain-access-groups entitlement
-// and EXPO_PUBLIC_APPLE_TEAM_ID. No-ops in Expo Go (native module absent).
+// Shared Keychain item used by Pearl, Pearl Money, and Pearl Tasks so companion
+// apps can reuse the same better-auth bearer on this device (iOS Keychain
+// access group). Requires a development / EAS build with
+// keychain-access-groups entitlement and EXPO_PUBLIC_APPLE_TEAM_ID.
+// No-ops in Expo Go (native module absent).
 
 import { NativeModules, Platform } from "react-native";
 

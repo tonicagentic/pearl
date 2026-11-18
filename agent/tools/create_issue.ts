@@ -9,6 +9,7 @@ import {
   findAreaByName,
   getArea,
 } from "@/lib/db/issues";
+import { getProject, getProjectByName } from "@/lib/db/projects";
 import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
 /**
@@ -27,9 +28,10 @@ const tool = defineTool({
   approval: once(),
   description:
     "Record something unresolved the user is holding in their head: an issue attached to an " +
-    "area of their life that will need attention before it is settled. Not for tasks, " +
-    "bookkeeping, or general notes. Offer a review date — when this should come back to the " +
-    "user's attention — because resurfacing at the right time is the point.",
+    "area of their life that will need attention before it is settled. Not for bookkeeping or " +
+    "general notes. Optionally file it under an existing project (projectName or projectId). " +
+    "Offer a review date — when this should come back to the user's attention — because " +
+    "resurfacing at the right time is the point.",
   /**
    * Create an issue for the current principal.
    *
@@ -81,10 +83,30 @@ const tool = defineTool({
       };
     }
 
+    let projectId: string | null = null;
+
+    if (input.projectId) {
+      const known = await getProject(userId, input.projectId);
+      if (!known) {
+        return { error: "Unknown project id." };
+      }
+      projectId = known.id;
+    } else if (input.projectName) {
+      const known = await getProjectByName(userId, input.projectName);
+      if (!known) {
+        return {
+          error:
+            "Unknown project name. Use an existing project, or omit it to leave the issue in the inbox.",
+        };
+      }
+      projectId = known.id;
+    }
+
     const issue = await createIssue(userId, {
       title,
       description: input.description?.trim() || null,
       areaId,
+      projectId,
       dueDate: input.dueDate ?? null,
       reviewDate: input.reviewDate ?? null,
     });
@@ -93,6 +115,7 @@ const tool = defineTool({
       id: issue.id,
       title: issue.title,
       area: issue.areaName,
+      projectId: issue.projectId,
       dueDate: issue.dueDate,
       reviewDate: issue.reviewDate,
     };
@@ -101,6 +124,10 @@ const tool = defineTool({
     title: z.string().max(200),
     areaName: z.string().max(80).optional(),
     areaId: z.string().optional(),
+    // Optional project workspace. Unknown names fail closed (unlike areas)
+    // so chat does not invent empty projects.
+    projectName: z.string().max(120).optional(),
+    projectId: z.string().optional(),
     description: z.string().max(4000).optional(),
     // Calendar dates (YYYY-MM-DD): dueDate is when it must be resolved;
     // reviewDate is when it should return to the user's attention.
@@ -118,6 +145,7 @@ const tool = defineTool({
     id: z.string().optional(),
     title: z.string().optional(),
     area: z.string().optional(),
+    projectId: z.string().nullable().optional(),
     dueDate: z.string().nullable().optional(),
     reviewDate: z.string().nullable().optional(),
   }),

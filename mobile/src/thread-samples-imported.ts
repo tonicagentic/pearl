@@ -109,7 +109,7 @@ export const prodTwitch: ThreadSample = {
   ],
 };
 
-/** Mail tool + mid-turn prose + long summary — production inbox ask. */
+/** Mail tool + mid-turn prose + long summary — production inbox ask (PII scrubbed). */
 export const prodMail: ThreadSample = {
   id: "prod-mail",
   label: "Prod · Mail",
@@ -133,7 +133,7 @@ export const prodMail: ThreadSample = {
         },
         toolCall("mail", {
           message:
-            "Alex asks: what emails have I gotten today? Summarize today's received mail across all connected accounts, grouped usefully with senders, subjects, concise significance, needs reply vs FYI/noise. Read-only; no changes.",
+            "Summarize today's received mail across all connected accounts, grouped usefully with senders, subjects, concise significance, needs reply vs FYI/noise. Read-only; no changes.",
         }),
         {
           type: "text",
@@ -141,11 +141,11 @@ export const prodMail: ThreadSample = {
         },
         {
           type: "reasoning",
-          text: "We should summarize for Alex what emails gotten today. Need to highlight important items: security alerts, Capital One link, Vercel failure.",
+          text: "Summarize today's mail. Highlight security alerts, bank link, Vercel failure.",
         },
         {
           type: "text",
-          text: "You got **45 emails today** (Nov 14 UTC) — 43 unread. Most is promos, a few worth checking:\n\n**Needs a look:**\n* **Google — Security alert (5x around 17:24 UTC):** authenticator app, passkey, phone number, and 2-step verification changes on alex@tonicagentic.com — if that wasn't you, check it now.\n* **Capital One — Pearl by Tonic Agentic linked** (18:50 UTC) — new data-sharing connection confirmed.\n* **Vercel — Production deployment failed for `my-agent`** (00:55 UTC, commit ea25663) — worth checking logs.\n* **Kaiser Permanente — premium bill available** (2x, already read)\n\n**FYI (8):** Progressive auto policy renewed/rate down, $12 Chestnut Street Coffee receipt, Apple/Tinder receipt, Neon usage recap, Capital One 15% travel reward (through Dec 14), Economist briefing, CU Buffs win 42-32 over Houston, Bandcamp recs.\n\n**Rest (28) is noise/promos:** Parachute, Wayfair, CB2, Crate & Barrel, ski passes (Epic says prices increase tomorrow / Breck in 2 days — time-sensitive if you're buying), plus clothing/music spam.\n\nAnd **1 suspicious** email posing as SendGrid from `noreply@qa.ucdsb.on.ca` — don't click, check SendGrid directly.\n\nNo personal threads needing a reply today. Want me to open any of those in full?",
+          text: "You got **45 emails today** (Nov 14 UTC) — 43 unread. Most is promos, a few worth checking:\n\n**Needs a look:**\n* **Google — Security alert (5x around 17:24 UTC):** authenticator app, passkey, phone number, and 2-step verification changes on a connected account — if that wasn't you, check it now.\n* **Bank — Pearl linked** (18:50 UTC) — new data-sharing connection confirmed.\n* **Vercel — Production deployment failed for `my-agent`** (00:55 UTC) — worth checking logs.\n* **Kaiser Permanente — premium bill available** (2x, already read)\n\n**FYI (8):** Auto policy renewal, coffee receipt, app store receipt, Neon usage recap, travel reward promo, news briefing, sports score, music recs.\n\n**Rest (28) is noise/promos:** home goods, ski passes (prices increase soon — time-sensitive if you're buying), plus clothing/music spam.\n\nAnd **1 suspicious** email posing as SendGrid from an unfamiliar school domain — don't click, check SendGrid directly.\n\nNo personal threads needing a reply today. Want me to open any of those in full?",
         },
       ],
       metadata: { custom: { turnId: MAIL_TURN } },

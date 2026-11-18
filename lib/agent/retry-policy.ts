@@ -412,8 +412,8 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
   ),
   report_handoff: policy(
     true,
-    [],
-    1,
+    ["network", "timeout"],
+    2,
     "Pure receipt publish for the parent task card; no side effect.",
   ),
   deployment_logs: policy(

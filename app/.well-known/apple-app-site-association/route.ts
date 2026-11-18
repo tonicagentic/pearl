@@ -13,6 +13,7 @@ export function GET() {
     ? [
         `${teamId}.com.tonicagentic.pearl`,
         `${teamId}.com.tonicagentic.pearlmoney`,
+        `${teamId}.com.tonicagentic.pearltasks`,
       ]
     : [];
 

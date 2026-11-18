@@ -420,6 +420,7 @@ export type IssueWithArea = {
   readonly resolvedAt: Date | null;
   readonly areaId: string;
   readonly areaName: string;
+  readonly projectId: string | null;
 };
 
 const issueSelection = {
@@ -433,6 +434,7 @@ const issueSelection = {
   resolvedAt: issue.resolvedAt,
   areaId: issue.areaId,
   areaName: area.name,
+  projectId: issue.projectId,
 };
 
 export async function listOpenIssues(
@@ -487,6 +489,7 @@ export type CreateIssueInput = {
   readonly title: string;
   readonly description?: string | null;
   readonly areaId: string;
+  readonly projectId?: string | null;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;
 };
@@ -502,6 +505,7 @@ export async function createIssue(
       title: input.title,
       description: input.description ?? null,
       areaId: input.areaId,
+      projectId: input.projectId ?? null,
       dueDate: input.dueDate ?? null,
       reviewDate: input.reviewDate ?? null,
     })
@@ -524,6 +528,7 @@ export type UpdateIssueInput = {
   readonly title?: string;
   readonly description?: string | null;
   readonly areaId?: string;
+  readonly projectId?: string | null;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;
 };
@@ -542,6 +547,9 @@ export async function updateIssue(
         : {}),
       ...(input.areaId !== undefined
         ? { areaId: input.areaId }
+        : {}),
+      ...(input.projectId !== undefined
+        ? { projectId: input.projectId }
         : {}),
       ...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
       ...(input.reviewDate !== undefined
