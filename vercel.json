@@ -1,4 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm db:migrate && pnpm build"
+  "buildCommand": "pnpm db:migrate && pnpm build",
+  "crons": [
+    {
+      "path": "/api/cron/finance-daily",
+      "schedule": "0 14 * * *"
+    }
+  ]
 }
