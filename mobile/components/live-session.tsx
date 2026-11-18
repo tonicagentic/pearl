@@ -146,6 +146,11 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
   const playbackScheduledRef = useRef(false);
   /** iOS: mute uplink only for the short flush after playback drains. */
   const inPlaybackTailRef = useRef(false);
+  /**
+   * iOS: hold the uplink through the opening greeting until AEC has heard
+   * one full playout. Cleared after the first drain+tail.
+   */
+  const holdUplinkRef = useRef(Platform.OS === "ios");
   const drainTailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const levelTickRef = useRef(0);
   const voiceRef = useRef<LiveVoice | null>(null);
@@ -170,6 +175,8 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     assistantAudibleRef.current = false;
     modelAudioDoneRef.current = false;
     playbackScheduledRef.current = false;
+    // First completed reply primes the canceller — open the mic after that.
+    holdUplinkRef.current = false;
     setMicLevel(0);
     if (!closedRef.current && !mutedRef.current) setVoiceMode("idle");
   }, [clearDrainTail]);
@@ -192,8 +199,12 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     assistantAudibleRef.current = true;
     modelAudioDoneRef.current = false;
     playbackScheduledRef.current = true;
+    // Drop anything buffered before the greeting while the uplink was held.
+    if (holdUplinkRef.current) {
+      sendEvent({ type: "input-audio-clear" });
+    }
     setVoiceMode((current) => (current === "muted" || current === "speaking" ? current : "speaking"));
-  }, [clearDrainTail]);
+  }, [clearDrainTail, sendEvent]);
 
   const noteModelAudioDone = useCallback(() => {
     if (!assistantAudibleRef.current) return;
@@ -370,8 +381,14 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
         suppressMicRef.current = false;
         setVoiceMode("listening");
       }
-      // iOS: mic stays open while Pearl talks; mute only the post-drain flush.
-      if (iosDuplex && !shouldUploadIosMicFrame({ inPlaybackTail: inPlaybackTailRef.current })) {
+      // iOS: hold through the greeting; then open mic, mute only the post-drain flush.
+      if (
+        iosDuplex &&
+        !shouldUploadIosMicFrame({
+          holdUplink: holdUplinkRef.current,
+          inPlaybackTail: inPlaybackTailRef.current,
+        })
+      ) {
         return;
       }
       const audio = captureToPcm16Base64({
@@ -473,6 +490,12 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
                 settleAfterPlayback();
               }
             } else if (message.type === "speech-started") {
+              // During the greeting hold, treat speech-started as echo — clear
+              // the buffer and keep playing. After AEC is primed, barge-in stops her.
+              if (iosDuplex && holdUplinkRef.current) {
+                sendEvent({ type: "input-audio-clear" });
+                continue;
+              }
               clearDrainTail();
               assistantAudibleRef.current = false;
               modelAudioDoneRef.current = false;
@@ -491,6 +514,8 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
                 setTurns(turnsRef.current);
               }
             } else if (message.type === "input-transcription-completed" && typeof message.transcript === "string") {
+              // Greeting-hold echo must not become a saved user turn.
+              if (iosDuplex && holdUplinkRef.current) continue;
               const text = message.transcript.trim();
               if (text) {
                 turnsRef.current = [...turnsRef.current, { role: "user", text }];

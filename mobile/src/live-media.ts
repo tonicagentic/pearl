@@ -52,13 +52,18 @@ export const LIVE_BARGE_IN_LEVEL = 0.14;
 
 /**
  * Whether an iOS mic frame should be uploaded.
- * While Pearl is audible the mic stays open (echo cancellation removes her).
- * During the short post-playback tail the uplink stays closed.
+ *
+ * - `holdUplink`: true through the opening greeting. Voice processing has not
+ *   converged yet, so her first words would otherwise be heard as the user
+ *   ("sure, take your time"). After that first drain+tail, the hold lifts and
+ *   the mic stays open for the rest of the call.
+ * - `inPlaybackTail`: short mute after any reply drains (speaker flush).
  */
 export function shouldUploadIosMicFrame(input: {
+  readonly holdUplink: boolean;
   readonly inPlaybackTail: boolean;
 }): boolean {
-  return !input.inPlaybackTail;
+  return !input.holdUplink && !input.inPlaybackTail;
 }
 
 /** Android: whether a loud mic frame should interrupt local playback. */

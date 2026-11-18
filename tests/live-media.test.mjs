@@ -63,12 +63,23 @@ test("pcm peak level and voice labels support the speaking orb", () => {
   assert.equal(liveVoiceStatusLabel("listening"), "You're talking");
 });
 
-test("iOS keeps the mic open while Pearl talks and mutes only the post-drain tail", () => {
+test("iOS holds the uplink through the greeting, then opens with a short drain tail", () => {
   assert.equal(LIVE_PLAYBACK_TAIL_MS, 400);
-  // Echo cancellation removes her voice; frames still upload during her turn.
-  assert.equal(shouldUploadIosMicFrame({ inPlaybackTail: false }), true);
+  // Opening greeting: AEC has not converged — drop every frame.
+  assert.equal(
+    shouldUploadIosMicFrame({ holdUplink: true, inPlaybackTail: false }),
+    false,
+  );
+  // After the first reply, mic stays open while she talks.
+  assert.equal(
+    shouldUploadIosMicFrame({ holdUplink: false, inPlaybackTail: false }),
+    true,
+  );
   // After playback drains, the speaker flush is dropped for LIVE_PLAYBACK_TAIL_MS.
-  assert.equal(shouldUploadIosMicFrame({ inPlaybackTail: true }), false);
+  assert.equal(
+    shouldUploadIosMicFrame({ holdUplink: false, inPlaybackTail: true }),
+    false,
+  );
 });
 
 test("live turns map to eve history without a Pearl reply turn", () => {
