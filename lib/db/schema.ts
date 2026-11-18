@@ -13,6 +13,12 @@ import {
 } from "drizzle-orm/pg-core";
 import { randomUUID } from "node:crypto";
 import type { ClientSessionState, SessionStreamEvent } from "eve/client";
+import type {
+  BodyExercise,
+  BodyGroceryItem,
+  BodyMealDay,
+  BodyMuscleGroup,
+} from "@/lib/body/validate";
 import type { SpokenTurn } from "@/lib/chat/spoken-turns";
 
 export const user = pgTable("user", {
@@ -956,3 +962,70 @@ export const icloudCalendarAccount = pgTable(
 
 export type IcloudCalendarAccountRow =
   typeof icloudCalendarAccount.$inferSelect;
+
+// Pearl Body account data for the phone companion: training settings, logged
+// sessions, the current meal plan, and the grocery list. Rows cascade with
+// the user. /api/body is the only writer; lib/body/validate.ts checks values
+// before they land here.
+
+export const bodySettings = pgTable("body_settings", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  goal: text("goal").notNull(),
+  dietStyle: text("diet_style").notNull(),
+  trainingDays: jsonb("training_days").$type<number[]>().notNull(),
+  split: text("split").notNull(),
+  calorieTarget: integer("calorie_target").notNull(),
+  proteinTarget: integer("protein_target").notNull(),
+  targetWeight: text("target_weight"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type BodySettingsRow = typeof bodySettings.$inferSelect;
+
+export const bodySession = pgTable(
+  "body_session",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    splitDayId: text("split_day_id").notNull(),
+    splitDayLabel: text("split_day_label").notNull(),
+    muscleGroups: jsonb("muscle_groups").$type<BodyMuscleGroup[]>().notNull(),
+    exercises: jsonb("exercises").$type<BodyExercise[]>().notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_body_session_user_date").on(table.userId, table.date),
+  ],
+);
+
+export type BodySessionRow = typeof bodySession.$inferSelect;
+
+export const bodyMealPlan = pgTable("body_meal_plan", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  weekStart: date("week_start").notNull(),
+  days: jsonb("days").$type<BodyMealDay[]>().notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type BodyMealPlanRow = typeof bodyMealPlan.$inferSelect;
+
+export const bodyGrocery = pgTable("body_grocery", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  weekStart: date("week_start").notNull(),
+  items: jsonb("items").$type<BodyGroceryItem[]>().notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type BodyGroceryRow = typeof bodyGrocery.$inferSelect;
