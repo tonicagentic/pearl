@@ -13,10 +13,15 @@ import {
 } from "../lib/chat/spoken-turns.ts";
 import {
   LIVE_CHAT_TOOLS,
+  LIVE_POST_TOOL_AUDIO_TIMEOUT_MS,
   buildLiveInstructions,
+  formatLiveElapsed,
   formatTranscriptLines,
   liveFunctionCallOutputEvent,
+  liveToolActivityLabel,
   linesFromChatEvents,
+  primaryAskPearlCard,
+  raceWithTimeout,
   truncateForVoice,
 } from "../mobile/src/live-chat-tools.ts";
 import {
@@ -52,7 +57,7 @@ test("live session config stays voice-first without gateway providerOptions", ()
   assert.equal(GATEWAY_PROVIDER_OPTIONS.disallowPromptTraining, true);
   assert.equal("providerOptions" in LIVE_SESSION_CONFIG, false);
   assert.equal(LIVE_MODEL_ID, "spacexai/grok-voice-3.0");
-  assert.equal(LIVE_SESSION_CONFIG.voice, "ara");
+  assert.equal(LIVE_SESSION_CONFIG.voice, "eve");
   assert.equal(LIVE_SESSION_CONFIG.turnDetection.type, "server-vad");
   assert.equal(LIVE_SESSION_CONFIG.turnDetection.threshold, 0.6);
   assert.equal(liveGreetingResponseEvent().type, "response-create");
@@ -149,6 +154,28 @@ test("live chat tools format transcripts and function-call outputs", () => {
       },
     },
   );
+  assert.equal(liveToolActivityLabel("ask_pearl"), "Asking Pearl…");
+  assert.equal(liveToolActivityLabel("list_chats"), "Checking your chats…");
+  assert.equal(formatLiveElapsed(65_000), "1:05");
+  assert.equal(LIVE_POST_TOOL_AUDIO_TIMEOUT_MS, 8_000);
+  const card = primaryAskPearlCard({
+    toolName: "ask_pearl",
+    taskMessage: "Summarize my inbox",
+    phase: "answering",
+    messages: [],
+    storeWaiting: false,
+    summaryText: "Three unread.",
+  });
+  assert.equal(card.state, "done");
+  assert.equal(card.activity, "Got it — answering…");
+});
+
+test("raceWithTimeout rejects when the promise never settles", async () => {
+  await assert.rejects(
+    () => raceWithTimeout(new Promise(() => {}), 20, "probe"),
+    /probe timed out/,
+  );
+  assert.equal(await raceWithTimeout(Promise.resolve(7), 100, "probe"), 7);
 });
 
 test("live turns map to eve history without a Pearl reply turn", () => {

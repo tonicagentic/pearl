@@ -30,7 +30,8 @@ export const LIVE_AUTH_PROTOCOL_PREFIX = "ai-gateway-auth.";
 export const LIVE_SESSION_CONFIG = {
   instructions:
     "You are Pearl, a personal agent in a live voice conversation. On the first response, greet the user in one short spoken sentence and invite them to talk. After that, answer out loud and briefly.",
-  voice: "ara",
+  // Grok realtime voice id (not the eve framework).
+  voice: "eve",
   outputModalities: ["audio"] as Array<"text" | "audio">,
   inputAudioTranscription: {},
   outputAudioTranscription: {},

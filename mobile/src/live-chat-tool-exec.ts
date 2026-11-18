@@ -13,6 +13,7 @@ import {
 } from "./chats-client";
 import {
   LIVE_ASK_PEARL_DEFAULT_TIMEOUT_MS,
+  LIVE_ASK_PEARL_SEND_TIMEOUT_MS,
   LIVE_CHAT_TRANSCRIPT_MAX_CHARS,
   LIVE_VOICE_REPLY_MAX_CHARS,
   clampAskTimeout,
@@ -20,6 +21,7 @@ import {
   formatTranscriptLines,
   lastAssistantPlainText,
   linesFromEveMessages,
+  raceWithTimeout,
   truncateForVoice,
 } from "./live-chat-tools";
 import { hasPendingAction } from "./message-projection";
@@ -34,8 +36,11 @@ export type AskPearlContext = {
   readonly wasSendPrepared: (source: SessionStore) => boolean;
   readonly clearPendingMessage: (source: SessionStore) => void;
   readonly recoverDeadSession: (source: SessionStore) => boolean;
-  /** Called when the active chat id changes (create / select). */
-  readonly onChatTarget?: (chatId: string) => void;
+  /**
+   * Fired when prepareSend first materializes a chat id on the voice anchor
+   * (null → id). Does not retarget spoken save away from the anchor.
+   */
+  readonly onAnchorEnsured?: (chatId: string) => void;
 };
 
 export type AskPearlResult =
@@ -57,6 +62,7 @@ export type AskPearlResult =
     };
 
 export type LiveToolExecContext = AskPearlContext & {
+  /** Voice-anchor chat id; ask_pearl defaults here (no new Recents rows). */
   readonly defaultChatId: string | null;
 };
 
@@ -94,29 +100,23 @@ export async function runAskPearl(
     return { status: "error", error: "ask_pearl requires a non-empty message." };
   }
 
-  let store = ctx.getStore();
-  let chatId = args.chatId?.trim() || ctx.getActiveChatId();
+  const timeoutMs = clampAskTimeout(
+    args.timeoutMs ?? LIVE_ASK_PEARL_DEFAULT_TIMEOUT_MS,
+  );
+  const sendTimeoutMs = Math.min(timeoutMs, LIVE_ASK_PEARL_SEND_TIMEOUT_MS);
 
-  if (chatId && chatId !== ctx.getActiveChatId()) {
+  let store = ctx.getStore();
+  const priorChatId = ctx.getActiveChatId();
+  // Prefer explicit past-thread id, else voice anchor / active chat.
+  // Do not createChat here — prepareSend on the anchor store creates if needed.
+  let chatId = args.chatId?.trim() || priorChatId;
+
+  if (chatId && chatId !== priorChatId) {
     const ok = await ctx.selectChat(chatId);
     if (!ok) {
       return { status: "error", error: `Could not open chat ${chatId}.`, chatId };
     }
     store = ctx.getStore();
-    ctx.onChatTarget?.(chatId);
-  } else if (!chatId) {
-    const created = await createChat(message.slice(0, 200), ctx.activeProjectId);
-    chatId = created.id;
-    const ok = await ctx.selectChat(created.id);
-    if (!ok) {
-      return {
-        status: "error",
-        error: "Created a chat but could not open it.",
-        chatId,
-      };
-    }
-    store = ctx.getStore();
-    ctx.onChatTarget?.(chatId);
   }
 
   const sendPayload = {
@@ -125,27 +125,40 @@ export async function runAskPearl(
   };
 
   try {
-    let delivery = await store.send(sendPayload);
+    let delivery = await raceWithTimeout(
+      store.send(sendPayload),
+      sendTimeoutMs,
+      "ask_pearl send",
+    );
     if (
       isEveSessionInactive(store.snapshot.error) &&
       ctx.recoverDeadSession(store)
     ) {
-      delivery = await store.send(sendPayload);
+      delivery = await raceWithTimeout(
+        store.send(sendPayload),
+        sendTimeoutMs,
+        "ask_pearl send retry",
+      );
     }
     if (shouldRestoreUnsentDraft(store.snapshot.error, ctx.wasSendPrepared(store))) {
       return {
         status: "error",
         error: "Could not start the eve turn.",
-        chatId,
+        chatId: ctx.getActiveChatId() ?? chatId ?? undefined,
       };
     }
     if (delivery?.deliveryId) {
       ctx.clearPendingMessage(store);
     }
 
-    const timeoutMs = clampAskTimeout(
-      args.timeoutMs ?? LIVE_ASK_PEARL_DEFAULT_TIMEOUT_MS,
-    );
+    chatId = ctx.getActiveChatId() ?? chatId;
+    if (chatId && !priorChatId) {
+      ctx.onAnchorEnsured?.(chatId);
+    }
+    if (!chatId) {
+      return { status: "error", error: "Could not resolve the voice chat id." };
+    }
+
     const result = await delivery.result({
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -191,7 +204,11 @@ export async function runAskPearl(
   } catch (cause) {
     const error =
       cause instanceof Error ? cause.message : "Could not complete ask_pearl.";
-    return { status: "error", error, chatId };
+    return {
+      status: "error",
+      error,
+      chatId: ctx.getActiveChatId() ?? chatId ?? undefined,
+    };
   }
 }
 
@@ -253,6 +270,8 @@ export async function executeLiveChatTool(
         };
       }
       case "create_chat": {
+        // Rare during live; still creates a Recents row but does not move the
+        // voice-anchor spoken-save target.
         const titleHint =
           typeof args.titleHint === "string" ? args.titleHint.trim() : "";
         const created = await createChat(
@@ -260,7 +279,6 @@ export async function executeLiveChatTool(
           ctx.activeProjectId,
         );
         const ok = await ctx.selectChat(created.id);
-        if (ok) ctx.onChatTarget?.(created.id);
         return {
           id: created.id,
           title: created.title,

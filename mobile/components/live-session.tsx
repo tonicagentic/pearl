@@ -29,6 +29,7 @@ import {
 } from "lucide-react-native";
 
 import { LiveVoiceOrb } from "@/components/live-voice-orb";
+import { LiveWorkCards } from "@/components/live-work-cards";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { createLiveVoice, type LiveVoice } from "@/modules/live-voice";
@@ -41,10 +42,13 @@ import {
 } from "@/src/live-chat-tool-exec";
 import {
   LIVE_CHAT_TOOLS,
+  LIVE_POST_TOOL_AUDIO_TIMEOUT_MS,
   buildLiveInstructions,
   formatTranscriptLines,
   linesFromEveMessages,
   liveFunctionCallOutputEvent,
+  liveToolActivityLabel,
+  primaryAskPearlCard,
 } from "@/src/live-chat-tools";
 import {
   LIVE_BARGE_IN_LEVEL,
@@ -69,6 +73,11 @@ import {
   type LiveVoiceMode,
 } from "@/src/live-media";
 import { fetchLiveToken } from "@/src/live-token-client";
+import {
+  nestedSubagentCards,
+  type LiveWorkCardModel,
+} from "@/src/live-work-progress";
+import { hasPendingAction } from "@/src/message-projection";
 import { cn } from "@/lib/utils";
 
 type Phase = "connecting" | "live" | "closed" | "error";
@@ -186,13 +195,31 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
    * one full playout. Cleared after the first drain+tail.
    */
   const holdUplinkRef = useRef(Platform.OS === "ios");
-  /** Mute uplink while an eve tool (ask_pearl, etc.) is running. */
-  const toolBusyRef = useRef(false);
-  const spokenChatIdRef = useRef<string | null>(activeChatId);
+  /**
+   * Mute uplink while tools run and until Grok starts speaking the result.
+   * Ref-count so parallel/queued tools cannot clear busy early.
+   */
+  const toolBusyCountRef = useRef(0);
+  const awaitAudioAfterToolRef = useRef(false);
+  const postToolAudioTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toolQueueRef = useRef<Promise<void>>(Promise.resolve());
+  /** Spoken turns + ask_pearl default; never retargeted by create_chat. */
+  const voiceAnchorChatIdRef = useRef<string | null>(activeChatId);
   const drainTailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const levelTickRef = useRef(0);
   const voiceRef = useRef<LiveVoice | null>(null);
   const iosDuplex = Platform.OS === "ios";
+
+  const [workCards, setWorkCards] = useState<readonly LiveWorkCardModel[]>([]);
+  const [workStartedAt, setWorkStartedAt] = useState<number | null>(null);
+  const [workNow, setWorkNow] = useState(() => Date.now());
+  const workTaskRef = useRef<{
+    toolName: string;
+    taskMessage: string;
+    phase: "running" | "answering" | "needs_input" | "error" | "done";
+    errorText?: string;
+    summaryText?: string;
+  } | null>(null);
 
   const toolCtxRef = useRef<LiveToolExecContext | null>(null);
   toolCtxRef.current = {
@@ -203,9 +230,9 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     wasSendPrepared,
     clearPendingMessage,
     recoverDeadSession,
-    defaultChatId: spokenChatIdRef.current,
-    onChatTarget: (chatId) => {
-      spokenChatIdRef.current = chatId;
+    defaultChatId: voiceAnchorChatIdRef.current,
+    onAnchorEnsured: (chatId) => {
+      if (!voiceAnchorChatIdRef.current) voiceAnchorChatIdRef.current = chatId;
     },
   };
 
@@ -215,68 +242,229 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     socket.send(JSON.stringify(event));
   }, []);
 
-  const setToolBusy = useCallback((busy: boolean) => {
-    toolBusyRef.current = busy;
+  const toolUplinkHeld = useCallback(
+    () => toolBusyCountRef.current > 0 || awaitAudioAfterToolRef.current,
+    [],
+  );
+
+  const syncToolVoiceMode = useCallback(() => {
+    const busy = toolUplinkHeld();
+    suppressMicRef.current = busy;
     if (busy) {
-      suppressMicRef.current = true;
       setVoiceMode((current) => (current === "muted" ? current : "working"));
       return;
     }
-    suppressMicRef.current = false;
     if (!closedRef.current && !mutedRef.current) {
       setVoiceMode((current) =>
         current === "speaking" || current === "listening" ? current : "idle",
       );
     }
-  }, []);
+  }, [toolUplinkHeld]);
+
+  const beginToolBusy = useCallback(() => {
+    toolBusyCountRef.current += 1;
+    syncToolVoiceMode();
+  }, [syncToolVoiceMode]);
+
+  const endToolBusy = useCallback(() => {
+    toolBusyCountRef.current = Math.max(0, toolBusyCountRef.current - 1);
+    syncToolVoiceMode();
+  }, [syncToolVoiceMode]);
+
+  const clearPostToolAudioWait = useCallback(() => {
+    if (postToolAudioTimerRef.current) {
+      clearTimeout(postToolAudioTimerRef.current);
+      postToolAudioTimerRef.current = null;
+    }
+    if (!awaitAudioAfterToolRef.current) return;
+    awaitAudioAfterToolRef.current = false;
+    syncToolVoiceMode();
+    if (workTaskRef.current?.phase === "answering") {
+      workTaskRef.current = { ...workTaskRef.current, phase: "done" };
+    }
+  }, [syncToolVoiceMode]);
+
+  const armPostToolAudioWait = useCallback(() => {
+    awaitAudioAfterToolRef.current = true;
+    syncToolVoiceMode();
+    if (postToolAudioTimerRef.current) clearTimeout(postToolAudioTimerRef.current);
+    postToolAudioTimerRef.current = setTimeout(() => {
+      postToolAudioTimerRef.current = null;
+      clearPostToolAudioWait();
+    }, LIVE_POST_TOOL_AUDIO_TIMEOUT_MS);
+  }, [clearPostToolAudioWait, syncToolVoiceMode]);
+
+  const refreshWorkCards = useCallback(() => {
+    const task = workTaskRef.current;
+    if (!task) {
+      setWorkCards([]);
+      return;
+    }
+    try {
+      const snapshot = getActiveStore().snapshot;
+      const primary = primaryAskPearlCard({
+        toolName: task.toolName,
+        taskMessage: task.taskMessage,
+        phase: task.phase,
+        messages: snapshot.messages,
+        storeWaiting: hasPendingAction(snapshot),
+        errorText: task.errorText,
+        summaryText: task.summaryText,
+      });
+      const nested =
+        task.toolName === "ask_pearl"
+          ? nestedSubagentCards({
+              events: snapshot.events,
+              agents: snapshot.agents,
+            })
+          : [];
+      setWorkCards([primary, ...nested]);
+    } catch {
+      setWorkCards([
+        {
+          key: "ask",
+          label: liveToolActivityLabel(task.toolName),
+          state: task.phase === "error" ? "failed" : "working",
+          activity: liveToolActivityLabel(task.toolName),
+        },
+      ]);
+    }
+  }, [getActiveStore]);
 
   const handleFunctionCall = useCallback(
-    async (input: {
+    (input: {
       readonly callId: string;
       readonly name: string;
       readonly arguments: string;
     }) => {
-      const ctx = toolCtxRef.current;
-      if (!ctx || closedRef.current) return;
-      setToolBusy(true);
-      try {
-        const result = await executeLiveChatTool(
-          input.name,
-          input.arguments,
-          {
+      toolQueueRef.current = toolQueueRef.current.then(async () => {
+        const ctx = toolCtxRef.current;
+        if (!ctx) return;
+
+        let taskMessage = "";
+        try {
+          const parsed = JSON.parse(input.arguments || "{}") as {
+            message?: unknown;
+          };
+          if (typeof parsed.message === "string") taskMessage = parsed.message;
+        } catch {
+          taskMessage = "";
+        }
+
+        beginToolBusy();
+        workTaskRef.current = {
+          toolName: input.name,
+          taskMessage,
+          phase: "running",
+        };
+        setWorkStartedAt(Date.now());
+        refreshWorkCards();
+
+        let outputPayload: unknown = { error: "Tool cancelled." };
+        try {
+          const result = await executeLiveChatTool(input.name, input.arguments, {
             ...ctx,
-            defaultChatId: spokenChatIdRef.current,
-          },
-        );
-        if (closedRef.current) return;
-        sendEvent(
-          liveFunctionCallOutputEvent({
-            callId: input.callId,
-            name: input.name,
-            output: JSON.stringify(result),
-          }),
-        );
-        sendEvent(liveGreetingResponseEvent());
-      } catch (cause) {
-        if (closedRef.current) return;
-        sendEvent(
-          liveFunctionCallOutputEvent({
-            callId: input.callId,
-            name: input.name,
-            output: JSON.stringify({
-              error:
-                cause instanceof Error
-                  ? cause.message
-                  : "Tool execution failed.",
+            defaultChatId: voiceAnchorChatIdRef.current,
+          });
+          outputPayload = result;
+
+          if (
+            result &&
+            typeof result === "object" &&
+            "status" in result &&
+            (result as { status?: string }).status === "needs_input"
+          ) {
+            workTaskRef.current = {
+              toolName: input.name,
+              taskMessage,
+              phase: "needs_input",
+              summaryText: (result as { summary?: string }).summary,
+            };
+          } else if (
+            result &&
+            typeof result === "object" &&
+            "status" in result &&
+            (result as { status?: string }).status === "error"
+          ) {
+            workTaskRef.current = {
+              toolName: input.name,
+              taskMessage,
+              phase: "error",
+              errorText: (result as { error?: string }).error,
+            };
+          } else if (
+            result &&
+            typeof result === "object" &&
+            "status" in result &&
+            (result as { status?: string }).status === "ok"
+          ) {
+            workTaskRef.current = {
+              toolName: input.name,
+              taskMessage,
+              phase: "answering",
+              summaryText: (result as { reply?: string }).reply,
+            };
+          } else {
+            workTaskRef.current = {
+              toolName: input.name,
+              taskMessage,
+              phase: "answering",
+              summaryText:
+                typeof result === "object" ? JSON.stringify(result).slice(0, 400) : String(result),
+            };
+          }
+          refreshWorkCards();
+        } catch (cause) {
+          outputPayload = {
+            error:
+              cause instanceof Error ? cause.message : "Tool execution failed.",
+          };
+          workTaskRef.current = {
+            toolName: input.name,
+            taskMessage,
+            phase: "error",
+            errorText:
+              cause instanceof Error ? cause.message : "Tool execution failed.",
+          };
+          refreshWorkCards();
+        }
+
+        const socket = socketRef.current;
+        const canSend =
+          socket != null &&
+          socket.readyState === WebSocket.OPEN;
+        if (canSend) {
+          sendEvent(
+            liveFunctionCallOutputEvent({
+              callId: input.callId,
+              name: input.name,
+              output: JSON.stringify(outputPayload),
             }),
-          }),
-        );
-        sendEvent(liveGreetingResponseEvent());
-      } finally {
-        setToolBusy(false);
-      }
+          );
+          if (!closedRef.current) {
+            sendEvent(liveGreetingResponseEvent());
+            armPostToolAudioWait();
+          }
+        }
+
+        endToolBusy();
+        if (closedRef.current || workTaskRef.current?.phase === "error") {
+          // Leave error/needs_input cards visible briefly; clear busy wait.
+          if (workTaskRef.current?.phase === "error") {
+            awaitAudioAfterToolRef.current = false;
+            syncToolVoiceMode();
+          }
+        }
+      });
     },
-    [sendEvent, setToolBusy],
+    [
+      armPostToolAudioWait,
+      beginToolBusy,
+      endToolBusy,
+      refreshWorkCards,
+      sendEvent,
+      syncToolVoiceMode,
+    ],
   );
 
   const clearDrainTail = useCallback(() => {
@@ -396,7 +584,13 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     closedRef.current = true;
     clearDrainTail();
     assistantAudibleRef.current = false;
-    toolBusyRef.current = false;
+    toolBusyCountRef.current = 0;
+    awaitAudioAfterToolRef.current = false;
+    if (postToolAudioTimerRef.current) {
+      clearTimeout(postToolAudioTimerRef.current);
+      postToolAudioTimerRef.current = null;
+    }
+    workTaskRef.current = null;
     const socket = socketRef.current;
     socketRef.current = null;
     socket?.close();
@@ -419,7 +613,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       onClose();
       return;
     }
-    const targetId = spokenChatIdRef.current;
+    const targetId = voiceAnchorChatIdRef.current;
     void (async () => {
       if (targetId && targetId !== getActiveChatId()) {
         await selectChat(targetId);
@@ -505,13 +699,13 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       }
       if (!iosDuplex && suppressMicRef.current) {
         // Tool waits must not be cleared by barge-in noise.
-        if (toolBusyRef.current) return;
+        if (toolUplinkHeld()) return;
         if (level < LIVE_BARGE_IN_LEVEL) return;
         stopPlayback();
         suppressMicRef.current = false;
         setVoiceMode("listening");
       }
-      if (toolBusyRef.current) return;
+      if (toolUplinkHeld()) return;
       // iOS: hold through the greeting; then open mic, mute only the post-drain flush
       // (and while an eve tool is running).
       if (
@@ -519,7 +713,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
         !shouldUploadIosMicFrame({
           holdUplink: holdUplinkRef.current,
           inPlaybackTail: inPlaybackTailRef.current,
-          toolBusy: toolBusyRef.current,
+          toolBusy: toolUplinkHeld(),
         })
       ) {
         return;
@@ -532,7 +726,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       });
       if (audio) sendEvent({ type: "input-audio-append", audio });
     };
-  }, [iosDuplex, sendEvent, stopPlayback]);
+  }, [iosDuplex, sendEvent, stopPlayback, toolUplinkHeld]);
 
   useEffect(() => {
     let cancelled = false;
@@ -580,8 +774,9 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
         socketRef.current = socket;
         socket.onopen = () => {
           if (cancelled || closedRef.current) return;
-          spokenChatIdRef.current = getActiveChatId() ?? spokenChatIdRef.current;
-          const chatId = spokenChatIdRef.current;
+          voiceAnchorChatIdRef.current =
+            getActiveChatId() ?? voiceAnchorChatIdRef.current;
+          const chatId = voiceAnchorChatIdRef.current;
           let transcript: string | null = null;
           if (chatId) {
             try {
@@ -633,6 +828,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
             if (!item || typeof item !== "object") continue;
             const message = item as ServerEvent;
             if (message.type === "audio-delta" && typeof message.delta === "string") {
+              clearPostToolAudioWait();
               if (iosDuplex) {
                 markAssistantAudible();
                 voiceRef.current?.enqueuePcm16Base64(message.delta);
@@ -640,6 +836,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
                 for (const chunk of playbackRef.current.pushBase64(message.delta)) enqueueWav(chunk);
               }
             } else if (message.type === "audio-done" || message.type === "response-done") {
+              if (awaitAudioAfterToolRef.current) clearPostToolAudioWait();
               if (iosDuplex) {
                 noteModelAudioDone();
               } else {
@@ -651,7 +848,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
             } else if (message.type === "speech-started") {
               // During the greeting hold or tool wait, treat speech-started as
               // noise — clear the buffer and keep going.
-              if (iosDuplex && (holdUplinkRef.current || toolBusyRef.current)) {
+              if (iosDuplex && (holdUplinkRef.current || toolUplinkHeld())) {
                 sendEvent({ type: "input-audio-clear" });
                 continue;
               }
@@ -674,7 +871,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
               }
             } else if (message.type === "input-transcription-completed" && typeof message.transcript === "string") {
               // Greeting-hold / tool-busy echo must not become a saved user turn.
-              if (iosDuplex && (holdUplinkRef.current || toolBusyRef.current)) continue;
+              if (iosDuplex && (holdUplinkRef.current || toolUplinkHeld())) continue;
               const text = message.transcript.trim();
               if (text) {
                 turnsRef.current = [...turnsRef.current, { role: "user", text }];
@@ -742,6 +939,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
   }, [
     activeTitle,
     clearDrainTail,
+    clearPostToolAudioWait,
     enqueueWav,
     getActiveChatId,
     getActiveStore,
@@ -753,7 +951,44 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     sendEvent,
     settleAfterPlayback,
     stopPlayback,
+    toolUplinkHeld,
   ]);
+
+  // 1 Hz clock + store subscription while a live work card is active.
+  useEffect(() => {
+    if (workStartedAt == null) return;
+    const tick = () => {
+      setWorkNow(Date.now());
+      refreshWorkCards();
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    let unsub: (() => void) | undefined;
+    try {
+      unsub = getActiveStore().subscribe(() => refreshWorkCards());
+    } catch {
+      unsub = undefined;
+    }
+    return () => {
+      clearInterval(timer);
+      unsub?.();
+    };
+  }, [getActiveStore, refreshWorkCards, workStartedAt]);
+
+  useEffect(() => {
+    if (workCards.length === 0) return;
+    const allSettled = workCards.every(
+      (card) => card.state === "done" || card.state === "failed" || card.state === "cancelled",
+    );
+    if (!allSettled || toolUplinkHeld()) return;
+    const clearTimer = setTimeout(() => {
+      if (toolUplinkHeld()) return;
+      workTaskRef.current = null;
+      setWorkCards([]);
+      setWorkStartedAt(null);
+    }, 2500);
+    return () => clearTimeout(clearTimer);
+  }, [toolUplinkHeld, workCards]);
 
   useEffect(() => {
     if (!cameraOn || !cameraReady || videoRejected || phase !== "live") return;
@@ -880,11 +1115,16 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
                 </Text>
               ) : null}
             </View>
-          ) : (
+          ) : workCards.length === 0 ? (
             <Text variant="secondary" className="text-center opacity-60">
               {phase === "connecting" ? "Starting…" : liveVoiceStatusLabel(orbMode)}
             </Text>
-          )}
+          ) : null}
+          <LiveWorkCards
+            cards={workCards}
+            startedAt={workStartedAt}
+            now={workNow}
+          />
         </View>
 
         {cameraOn && cameraGranted ? (
