@@ -8,11 +8,20 @@ import {
   GUITAR_STRING_COUNT,
   regionBarWidths,
 } from "../../../lib/json-render/diagrams";
+import {
+  fetchAiSpeechUrl,
+  playAudioUrl,
+  speakText,
+} from "../../../lib/json-render/speak";
+import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
+import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
+import { createAudioPlayer, useAudioPlayer } from "expo-audio";
+import { Volume2Icon } from "lucide-react-native";
 import { Pressable, View, Image as RNImage, ScrollView } from "react-native";
 import Svg, { Circle, Line, Text as SvgText } from "react-native-svg";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 function asNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -179,6 +188,81 @@ function GuitarChordSvg({
         })}
       </Svg>
     </View>
+  );
+}
+
+function SpeakButton({
+  text,
+  lang,
+  audioUrl,
+  label,
+}: {
+  text: string;
+  lang?: string | null;
+  audioUrl?: string | null;
+  label: string;
+}) {
+  const url = httpsSrc(audioUrl);
+  const player = useAudioPlayer(url);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Play pronunciation of ${label}`}
+      disabled={busy || !text.trim()}
+      onPress={() => {
+        void (async () => {
+          setBusy(true);
+          try {
+            if (url) {
+              try {
+                await player.seekTo(0);
+              } catch {
+                /* fresh players may not need seek */
+              }
+              player.play();
+              return;
+            }
+
+            const cookie = getAuthCookie();
+            const speechUrl = await fetchAiSpeechUrl({
+              text,
+              lang,
+              endpoint: `${AGENT_URL}/api/speech`,
+              headers: cookie
+                ? { Authorization: `Bearer ${cookie}` }
+                : undefined,
+            }).catch(() => null);
+
+            if (speechUrl) {
+              try {
+                if (await playAudioUrl(speechUrl)) return;
+              } catch {
+                /* try expo-audio below */
+              }
+              try {
+                const clip = createAudioPlayer(speechUrl);
+                clip.play();
+                return;
+              } catch {
+                /* fall through to browser TTS */
+              }
+            }
+
+            speakText(text, lang);
+          } finally {
+            setBusy(false);
+          }
+        })();
+      }}
+      className="border-border/60 bg-muted/40 self-start flex-row items-center gap-1.5 rounded-full border px-2.5 py-1 active:opacity-80"
+    >
+      <Icon as={Volume2Icon} className="size-3.5 text-foreground" />
+      <Text variant="caption" weight="medium">
+        {busy ? "Playing…" : "Play"}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -646,43 +730,80 @@ export const chatRegistry: ComponentRegistry = {
       </View>
     );
   },
-  Pronounce: ({ element }) => (
-    <View className="flex-col gap-1">
-      <Text variant="label" weight="medium">
-        {asString(element.props.word)}
-      </Text>
-      {element.props.ipa ? (
-        <Text variant="body" className="tracking-wide">
-          /{asString(element.props.ipa)}/
+  Pronounce: ({ element }) => {
+    const word = asString(element.props.word);
+    const spoken =
+      typeof element.props.spoken === "string" && element.props.spoken.trim()
+        ? asString(element.props.spoken)
+        : word;
+    const lang =
+      typeof element.props.lang === "string" ? element.props.lang : null;
+    const audio =
+      typeof element.props.audio === "string" ? element.props.audio : null;
+    return (
+      <View className="flex-col gap-2">
+        <View className="flex-row items-start justify-between gap-3">
+          <View className="min-w-0 flex-1 flex-col gap-1">
+            <Text variant="label" weight="medium">
+              {word}
+            </Text>
+            {element.props.ipa ? (
+              <Text variant="body" className="tracking-wide">
+                /{asString(element.props.ipa)}/
+              </Text>
+            ) : null}
+            {element.props.syllables ? (
+              <Text variant="secondary" weight="medium">
+                {asString(element.props.syllables)}
+              </Text>
+            ) : null}
+            {element.props.note ? (
+              <Text variant="caption">{asString(element.props.note)}</Text>
+            ) : null}
+          </View>
+          <SpeakButton text={spoken} lang={lang} audioUrl={audio} label={word} />
+        </View>
+      </View>
+    );
+  },
+  Phrase: ({ element }) => {
+    const translation = asString(element.props.translation);
+    const spoken =
+      typeof element.props.spoken === "string" && element.props.spoken.trim()
+        ? asString(element.props.spoken)
+        : translation;
+    const lang =
+      typeof element.props.lang === "string" ? element.props.lang : null;
+    const audio =
+      typeof element.props.audio === "string" ? element.props.audio : null;
+    return (
+      <View className="flex-col gap-2">
+        <Text variant="caption" weight="medium" tone="muted">
+          {asString(element.props.sourceLanguage)} →{" "}
+          {asString(element.props.targetLanguage)}
         </Text>
-      ) : null}
-      {element.props.syllables ? (
-        <Text variant="secondary" weight="medium">
-          {asString(element.props.syllables)}
-        </Text>
-      ) : null}
-      {element.props.note ? (
-        <Text variant="caption">{asString(element.props.note)}</Text>
-      ) : null}
-    </View>
-  ),
-  Phrase: ({ element }) => (
-    <View className="flex-col gap-1.5">
-      <Text variant="caption" weight="medium" tone="muted">
-        {asString(element.props.sourceLanguage)} →{" "}
-        {asString(element.props.targetLanguage)}
-      </Text>
-      <Text variant="label" weight="medium">
-        {asString(element.props.phrase)}
-      </Text>
-      <Text variant="body">{asString(element.props.translation)}</Text>
-      {element.props.literal ? (
-        <Text variant="caption">
-          Literal: {asString(element.props.literal)}
-        </Text>
-      ) : null}
-    </View>
-  ),
+        <View className="flex-row items-start justify-between gap-3">
+          <View className="min-w-0 flex-1 flex-col gap-1.5">
+            <Text variant="label" weight="medium">
+              {asString(element.props.phrase)}
+            </Text>
+            <Text variant="body">{translation}</Text>
+            {element.props.literal ? (
+              <Text variant="caption">
+                Literal: {asString(element.props.literal)}
+              </Text>
+            ) : null}
+          </View>
+          <SpeakButton
+            text={spoken}
+            lang={lang}
+            audioUrl={audio}
+            label={translation}
+          />
+        </View>
+      </View>
+    );
+  },
   GuitarChord: ({ element }) => {
     const frets = Array.isArray(element.props.frets)
       ? (element.props.frets as unknown[]).map(asNumber)

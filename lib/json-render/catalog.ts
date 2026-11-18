@@ -175,8 +175,15 @@ export const chatCatalog = defineCatalog(schema, {
         ipa: z.string().nullable(),
         syllables: z.string().nullable(),
         note: z.string().nullable(),
+        /** Optional https audio clip; otherwise the UI may TTS `spoken` or `word`. */
+        audio: z.string().nullable(),
+        /** BCP-47 language tag for TTS (e.g. it-IT). */
+        lang: z.string().nullable(),
+        /** Exact text to speak; defaults to word. */
+        spoken: z.string().nullable(),
       }),
-      description: "How to pronounce a word: surface form, IPA, stressed syllables",
+      description:
+        "How to pronounce a word: surface form, IPA, stressed syllables; set lang for AI speech playback",
     },
     Phrase: {
       props: z.object({
@@ -185,8 +192,15 @@ export const chatCatalog = defineCatalog(schema, {
         phrase: z.string(),
         translation: z.string(),
         literal: z.string().nullable(),
+        /** Optional https audio clip of the translation. */
+        audio: z.string().nullable(),
+        /** BCP-47 language tag for AI speech of the translation (e.g. ja-JP). */
+        lang: z.string().nullable(),
+        /** Exact text to speak; defaults to translation. */
+        spoken: z.string().nullable(),
       }),
-      description: "How to say a phrase in another language, with optional literal gloss",
+      description:
+        "How to say a phrase in another language, with optional literal gloss; set lang for AI speech playback",
     },
     GuitarChord: {
       props: z.object({

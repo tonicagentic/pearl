@@ -11,8 +11,10 @@ import {
   GUITAR_STRING_COUNT,
   regionBarWidths,
 } from "@/lib/json-render/diagrams";
+import { playSpeakable } from "@/lib/json-render/speak";
 import { cn } from "@/lib/utils";
 import { Button as UiButton } from "@/components/ui/button";
+import { useState } from "react";
 
 const gapClass = {
   sm: "gap-2",
@@ -138,6 +140,61 @@ function GuitarChordSvg({
         })}
       </svg>
     </div>
+  );
+}
+
+function SpeakButton({
+  text,
+  lang,
+  audioUrl,
+  label,
+}: {
+  text: string;
+  lang?: string | null;
+  audioUrl?: string | null;
+  label: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      aria-label={`Play pronunciation of ${label}`}
+      disabled={busy || !text.trim()}
+      onClick={() => {
+        void (async () => {
+          setBusy(true);
+          try {
+            await playSpeakable({
+              text,
+              lang,
+              audioUrl,
+              aiSpeech: {
+                text,
+                lang,
+                endpoint: "/api/speech",
+              },
+            });
+          } finally {
+            setBusy(false);
+          }
+        })();
+      }}
+      className="border-border/60 bg-muted/40 text-foreground hover:bg-muted inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium disabled:opacity-50"
+    >
+      <svg
+        aria-hidden
+        viewBox="0 0 24 24"
+        className="size-3.5 fill-none stroke-current"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+      </svg>
+      {busy ? "Playing…" : "Play"}
+    </button>
   );
 }
 
@@ -504,38 +561,70 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
       </div>
       );
     },
-    Pronounce: ({ props }) => (
-      <div className="flex flex-col gap-1">
-        <div className="text-foreground text-base font-medium">{props.word}</div>
-        {props.ipa ? (
-          <div className="text-foreground text-[15px] tracking-wide">
-            /{props.ipa}/
+    Pronounce: ({ props }) => {
+      const spoken = props.spoken?.trim() || props.word;
+      return (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="text-foreground text-base font-medium">
+                {props.word}
+              </div>
+              {props.ipa ? (
+                <div className="text-foreground text-[15px] tracking-wide">
+                  /{props.ipa}/
+                </div>
+              ) : null}
+              {props.syllables ? (
+                <div className="text-muted-foreground text-[13.5px] font-medium">
+                  {props.syllables}
+                </div>
+              ) : null}
+              {props.note ? (
+                <div className="text-muted-foreground text-[12px]">
+                  {props.note}
+                </div>
+              ) : null}
+            </div>
+            <SpeakButton
+              text={spoken}
+              lang={props.lang}
+              audioUrl={props.audio}
+              label={props.word}
+            />
           </div>
-        ) : null}
-        {props.syllables ? (
-          <div className="text-muted-foreground text-[13.5px] font-medium">
-            {props.syllables}
-          </div>
-        ) : null}
-        {props.note ? (
-          <div className="text-muted-foreground text-[12px]">{props.note}</div>
-        ) : null}
-      </div>
-    ),
-    Phrase: ({ props }) => (
-      <div className="flex flex-col gap-1.5">
-        <div className="text-muted-foreground text-[12px] font-medium">
-          {props.sourceLanguage} → {props.targetLanguage}
         </div>
-        <div className="text-foreground text-base font-medium">{props.phrase}</div>
-        <div className="text-foreground text-[15px]">{props.translation}</div>
-        {props.literal ? (
-          <div className="text-muted-foreground text-[12px]">
-            Literal: {props.literal}
+      );
+    },
+    Phrase: ({ props }) => {
+      const spoken = props.spoken?.trim() || props.translation;
+      return (
+        <div className="flex flex-col gap-2">
+          <div className="text-muted-foreground text-[12px] font-medium">
+            {props.sourceLanguage} → {props.targetLanguage}
           </div>
-        ) : null}
-      </div>
-    ),
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <div className="text-foreground text-base font-medium">
+                {props.phrase}
+              </div>
+              <div className="text-foreground text-[15px]">{props.translation}</div>
+              {props.literal ? (
+                <div className="text-muted-foreground text-[12px]">
+                  Literal: {props.literal}
+                </div>
+              ) : null}
+            </div>
+            <SpeakButton
+              text={spoken}
+              lang={props.lang}
+              audioUrl={props.audio}
+              label={props.translation}
+            />
+          </div>
+        </div>
+      );
+    },
     GuitarChord: ({ props }) => (
       <GuitarChordSvg
         name={props.name}
