@@ -12,6 +12,14 @@ import {
   toSpokenTurns,
 } from "../lib/chat/spoken-turns.ts";
 import {
+  LIVE_CHAT_TOOLS,
+  buildLiveInstructions,
+  formatTranscriptLines,
+  liveFunctionCallOutputEvent,
+  linesFromChatEvents,
+  truncateForVoice,
+} from "../mobile/src/live-chat-tools.ts";
+import {
   LIVE_BARGE_IN_LEVEL,
   LIVE_CAPTURE_SAMPLE_RATE,
   LIVE_FRAME_MAX_BYTES,
@@ -28,6 +36,7 @@ import {
   isVideoFrameRejection,
   liveFrameEvent,
   liveGreetingResponseEvent,
+  liveSessionUpdateEvent,
   liveSocketProtocols,
   liveVoiceStatusLabel,
   pcm16PeakLevel,
@@ -42,10 +51,20 @@ test("live session config stays voice-first without gateway providerOptions", ()
   assert.equal(GATEWAY_PROVIDER_OPTIONS.zeroDataRetention, true);
   assert.equal(GATEWAY_PROVIDER_OPTIONS.disallowPromptTraining, true);
   assert.equal("providerOptions" in LIVE_SESSION_CONFIG, false);
-  assert.equal(LIVE_MODEL_ID, "openai/gpt-realtime-mini");
+  assert.equal(LIVE_MODEL_ID, "spacexai/grok-voice-3.0");
+  assert.equal(LIVE_SESSION_CONFIG.voice, "ara");
   assert.equal(LIVE_SESSION_CONFIG.turnDetection.type, "server-vad");
   assert.equal(LIVE_SESSION_CONFIG.turnDetection.threshold, 0.6);
   assert.equal(liveGreetingResponseEvent().type, "response-create");
+  assert.ok(LIVE_CHAT_TOOLS.some((tool) => tool.name === "ask_pearl"));
+  assert.ok(LIVE_CHAT_TOOLS.some((tool) => tool.name === "list_chats"));
+  const update = liveSessionUpdateEvent({
+    instructions: buildLiveInstructions({ chatId: "c1", title: "Hello" }),
+    tools: LIVE_CHAT_TOOLS,
+  });
+  assert.equal(update.type, "session-update");
+  assert.match(update.config.instructions, /Current chat id: c1/);
+  assert.ok(update.config.tools.some((tool) => tool.name === "ask_pearl"));
 });
 
 test("pcm peak level and voice labels support the speaking orb", () => {
@@ -79,6 +98,56 @@ test("iOS holds the uplink through the greeting, then opens with a short drain t
   assert.equal(
     shouldUploadIosMicFrame({ holdUplink: false, inPlaybackTail: true }),
     false,
+  );
+  // Eve tool waits must not upload ambient noise as the user.
+  assert.equal(
+    shouldUploadIosMicFrame({
+      holdUplink: false,
+      inPlaybackTail: false,
+      toolBusy: true,
+    }),
+    false,
+  );
+  assert.equal(liveVoiceStatusLabel("working"), "Looking that up…");
+});
+
+test("live chat tools format transcripts and function-call outputs", () => {
+  const lines = linesFromChatEvents([
+    {
+      type: "delivery.consumed",
+      data: { parts: [{ kind: "text", text: " What did we decide? " }] },
+    },
+    {
+      type: "content.completed",
+      data: { kind: "text", phase: "reply", value: "Ship the timeline." },
+    },
+  ]);
+  assert.deepEqual(lines, [
+    { role: "user", text: "What did we decide?" },
+    { role: "assistant", text: "Ship the timeline." },
+  ]);
+  const transcript = formatTranscriptLines("Timeline", lines, 40);
+  assert.match(transcript, /Chat: Timeline/);
+  assert.match(transcript, /truncated/i);
+  assert.deepEqual(truncateForVoice("abcdef", 4), {
+    text: "abc…",
+    truncated: true,
+  });
+  assert.deepEqual(
+    liveFunctionCallOutputEvent({
+      callId: "call_1",
+      name: "ask_pearl",
+      output: "{\"status\":\"ok\"}",
+    }),
+    {
+      type: "conversation-item-create",
+      item: {
+        type: "function-call-output",
+        callId: "call_1",
+        name: "ask_pearl",
+        output: "{\"status\":\"ok\"}",
+      },
+    },
   );
 });
 

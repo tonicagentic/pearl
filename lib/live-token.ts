@@ -3,7 +3,7 @@
  * optional. Gemini live was tried earlier but pairing it with Gateway ZDR mint
  * options produced WebSocket auth failures.
  */
-export const LIVE_MODEL_ID = "openai/gpt-realtime-mini";
+export const LIVE_MODEL_ID = "spacexai/grok-voice-3.0";
 
 /** Gateway client-secret lifetime (seconds). Default is 60; max is 300. */
 export const LIVE_TOKEN_TTL_SECONDS = 300;

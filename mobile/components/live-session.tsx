@@ -36,6 +36,17 @@ import { useChats } from "@/src/chat-context";
 import { focusComposerInput } from "@/src/composer-input-focus";
 import { resizeLiveJpeg } from "@/src/live-camera";
 import {
+  executeLiveChatTool,
+  type LiveToolExecContext,
+} from "@/src/live-chat-tool-exec";
+import {
+  LIVE_CHAT_TOOLS,
+  buildLiveInstructions,
+  formatTranscriptLines,
+  linesFromEveMessages,
+  liveFunctionCallOutputEvent,
+} from "@/src/live-chat-tools";
+import {
   LIVE_BARGE_IN_LEVEL,
   LIVE_CAPTURE_SAMPLE_RATE,
   LIVE_MAX_SESSION_MS,
@@ -67,6 +78,9 @@ type ServerEvent = {
   delta?: unknown;
   message?: unknown;
   transcript?: unknown;
+  callId?: unknown;
+  name?: unknown;
+  arguments?: unknown;
 };
 
 function writeWav(pcm: Uint8Array): string {
@@ -104,7 +118,18 @@ async function startMicStream(stream: { start: () => Promise<unknown> }) {
 }
 
 export function LiveSession({ onClose }: { readonly onClose: () => void }) {
-  const { saveSpokenTurns } = useChats();
+  const {
+    saveSpokenTurns,
+    activeChatId,
+    activeTitle,
+    activeProjectId,
+    getActiveStore,
+    getActiveChatId,
+    selectChat,
+    wasSendPrepared,
+    clearPendingMessage,
+    recoverDeadSession,
+  } = useChats();
   const cameraRef = useRef<CameraView>(null);
   const onCapture = useRef<(buffer: AudioStreamBuffer) => void>(() => {});
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -161,16 +186,98 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
    * one full playout. Cleared after the first drain+tail.
    */
   const holdUplinkRef = useRef(Platform.OS === "ios");
+  /** Mute uplink while an eve tool (ask_pearl, etc.) is running. */
+  const toolBusyRef = useRef(false);
+  const spokenChatIdRef = useRef<string | null>(activeChatId);
   const drainTailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const levelTickRef = useRef(0);
   const voiceRef = useRef<LiveVoice | null>(null);
   const iosDuplex = Platform.OS === "ios";
+
+  const toolCtxRef = useRef<LiveToolExecContext | null>(null);
+  toolCtxRef.current = {
+    getStore: getActiveStore,
+    getActiveChatId,
+    activeProjectId,
+    selectChat,
+    wasSendPrepared,
+    clearPendingMessage,
+    recoverDeadSession,
+    defaultChatId: spokenChatIdRef.current,
+    onChatTarget: (chatId) => {
+      spokenChatIdRef.current = chatId;
+    },
+  };
 
   const sendEvent = useCallback((event: object) => {
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN || closedRef.current) return;
     socket.send(JSON.stringify(event));
   }, []);
+
+  const setToolBusy = useCallback((busy: boolean) => {
+    toolBusyRef.current = busy;
+    if (busy) {
+      suppressMicRef.current = true;
+      setVoiceMode((current) => (current === "muted" ? current : "working"));
+      return;
+    }
+    suppressMicRef.current = false;
+    if (!closedRef.current && !mutedRef.current) {
+      setVoiceMode((current) =>
+        current === "speaking" || current === "listening" ? current : "idle",
+      );
+    }
+  }, []);
+
+  const handleFunctionCall = useCallback(
+    async (input: {
+      readonly callId: string;
+      readonly name: string;
+      readonly arguments: string;
+    }) => {
+      const ctx = toolCtxRef.current;
+      if (!ctx || closedRef.current) return;
+      setToolBusy(true);
+      try {
+        const result = await executeLiveChatTool(
+          input.name,
+          input.arguments,
+          {
+            ...ctx,
+            defaultChatId: spokenChatIdRef.current,
+          },
+        );
+        if (closedRef.current) return;
+        sendEvent(
+          liveFunctionCallOutputEvent({
+            callId: input.callId,
+            name: input.name,
+            output: JSON.stringify(result),
+          }),
+        );
+        sendEvent(liveGreetingResponseEvent());
+      } catch (cause) {
+        if (closedRef.current) return;
+        sendEvent(
+          liveFunctionCallOutputEvent({
+            callId: input.callId,
+            name: input.name,
+            output: JSON.stringify({
+              error:
+                cause instanceof Error
+                  ? cause.message
+                  : "Tool execution failed.",
+            }),
+          }),
+        );
+        sendEvent(liveGreetingResponseEvent());
+      } finally {
+        setToolBusy(false);
+      }
+    },
+    [sendEvent, setToolBusy],
+  );
 
   const clearDrainTail = useCallback(() => {
     if (drainTailTimerRef.current) {
@@ -289,6 +396,7 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
     closedRef.current = true;
     clearDrainTail();
     assistantAudibleRef.current = false;
+    toolBusyRef.current = false;
     const socket = socketRef.current;
     socketRef.current = null;
     socket?.close();
@@ -311,19 +419,29 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       onClose();
       return;
     }
-    void saveSpokenTurns(spokenTurns)
-      .then(() => {
-        onClose();
-      })
-      .catch((cause: unknown) => {
-        endingRef.current = false;
-        setHandoffError(
-          cause instanceof Error
-            ? cause.message
-            : "Could not save the live conversation to this chat.",
-        );
-      });
-  }, [clearDrainTail, onClose, saveSpokenTurns, stopPlayback]);
+    const targetId = spokenChatIdRef.current;
+    void (async () => {
+      if (targetId && targetId !== getActiveChatId()) {
+        await selectChat(targetId);
+      }
+      await saveSpokenTurns(spokenTurns);
+      onClose();
+    })().catch((cause: unknown) => {
+      endingRef.current = false;
+      setHandoffError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not save the live conversation to this chat.",
+      );
+    });
+  }, [
+    clearDrainTail,
+    getActiveChatId,
+    onClose,
+    saveSpokenTurns,
+    selectChat,
+    stopPlayback,
+  ]);
 
   useEffect(() => {
     finishRef.current = finish;
@@ -386,17 +504,22 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
         setMicLevel(level);
       }
       if (!iosDuplex && suppressMicRef.current) {
+        // Tool waits must not be cleared by barge-in noise.
+        if (toolBusyRef.current) return;
         if (level < LIVE_BARGE_IN_LEVEL) return;
         stopPlayback();
         suppressMicRef.current = false;
         setVoiceMode("listening");
       }
-      // iOS: hold through the greeting; then open mic, mute only the post-drain flush.
+      if (toolBusyRef.current) return;
+      // iOS: hold through the greeting; then open mic, mute only the post-drain flush
+      // (and while an eve tool is running).
       if (
         iosDuplex &&
         !shouldUploadIosMicFrame({
           holdUplink: holdUplinkRef.current,
           inPlaybackTail: inPlaybackTailRef.current,
+          toolBusy: toolBusyRef.current,
         })
       ) {
         return;
@@ -457,7 +580,33 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
         socketRef.current = socket;
         socket.onopen = () => {
           if (cancelled || closedRef.current) return;
-          sendEvent(liveSessionUpdateEvent());
+          spokenChatIdRef.current = getActiveChatId() ?? spokenChatIdRef.current;
+          const chatId = spokenChatIdRef.current;
+          let transcript: string | null = null;
+          if (chatId) {
+            try {
+              const messages = getActiveStore().snapshot.messages;
+              if (messages.length > 0) {
+                transcript = formatTranscriptLines(
+                  activeTitle || "Current chat",
+                  linesFromEveMessages(messages),
+                  2_000,
+                );
+              }
+            } catch {
+              transcript = null;
+            }
+          }
+          sendEvent(
+            liveSessionUpdateEvent({
+              instructions: buildLiveInstructions({
+                chatId,
+                title: activeTitle,
+                transcript,
+              }),
+              tools: LIVE_CHAT_TOOLS,
+            }),
+          );
           sendEvent(liveGreetingResponseEvent());
           setPhase("live");
           setVoiceMode(mutedRef.current ? "muted" : "idle");
@@ -500,9 +649,9 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
                 settleAfterPlayback();
               }
             } else if (message.type === "speech-started") {
-              // During the greeting hold, treat speech-started as echo — clear
-              // the buffer and keep playing. After AEC is primed, barge-in stops her.
-              if (iosDuplex && holdUplinkRef.current) {
+              // During the greeting hold or tool wait, treat speech-started as
+              // noise — clear the buffer and keep going.
+              if (iosDuplex && (holdUplinkRef.current || toolBusyRef.current)) {
                 sendEvent({ type: "input-audio-clear" });
                 continue;
               }
@@ -524,14 +673,26 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
                 setTurns(turnsRef.current);
               }
             } else if (message.type === "input-transcription-completed" && typeof message.transcript === "string") {
-              // Greeting-hold echo must not become a saved user turn.
-              if (iosDuplex && holdUplinkRef.current) continue;
+              // Greeting-hold / tool-busy echo must not become a saved user turn.
+              if (iosDuplex && (holdUplinkRef.current || toolBusyRef.current)) continue;
               const text = message.transcript.trim();
               if (text) {
                 turnsRef.current = [...turnsRef.current, { role: "user", text }];
                 setTurns(turnsRef.current);
               }
               if (!iosDuplex && !suppressMicRef.current && !mutedRef.current) setVoiceMode("idle");
+            } else if (
+              message.type === "function-call-arguments-done" &&
+              typeof message.callId === "string" &&
+              typeof message.name === "string"
+            ) {
+              const args =
+                typeof message.arguments === "string" ? message.arguments : "{}";
+              void handleFunctionCall({
+                callId: message.callId,
+                name: message.name,
+                arguments: args,
+              });
             } else if (message.type === "error" && typeof message.message === "string") {
               const text = message.message.slice(0, 240);
               if (isFatalLiveError(text)) {
@@ -579,8 +740,12 @@ export function LiveSession({ onClose }: { readonly onClose: () => void }) {
       stopPlayback();
     };
   }, [
+    activeTitle,
     clearDrainTail,
     enqueueWav,
+    getActiveChatId,
+    getActiveStore,
+    handleFunctionCall,
     iosDuplex,
     markAssistantAudible,
     noteModelAudioDone,

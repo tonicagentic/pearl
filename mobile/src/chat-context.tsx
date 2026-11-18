@@ -104,6 +104,13 @@ function eventsMayChangeWait(
 type ChatsContextValue = {
   /** The active eve store (one React-mounted store; others may be LRU-retained). */
   readonly store: SessionStore;
+  /**
+   * Synchronous active store (ref). Use after `selectChat` / `createChat` when
+   * React state may not have flushed yet — e.g. live voice tool handlers.
+   */
+  readonly getActiveStore: () => SessionStore;
+  /** Synchronous active chat id (ref). */
+  readonly getActiveChatId: () => string | null;
   readonly activeChatId: string | null;
   /** Project linked to the active chat (Plan mode / project chats). */
   readonly activeProjectId: string | null;
@@ -1114,9 +1121,22 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     return () => clearInterval(timer);
   }, [signedIn, reloadChats, needsFastPresencePoll]);
 
+  const getActiveStore = useCallback(() => {
+    const current = activeStoreRef.current;
+    if (!current) throw new Error("No active chat store.");
+    return current;
+  }, []);
+
+  const getActiveChatId = useCallback(
+    () => activeChatIdRef.current,
+    [],
+  );
+
   const value = useMemo(
     () => ({
       store,
+      getActiveStore,
+      getActiveChatId,
       activeChatId,
       activeProjectId,
       setActiveProjectId,
@@ -1147,6 +1167,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     }),
     [
       store,
+      getActiveStore,
+      getActiveChatId,
       activeChatId,
       activeProjectId,
       setActiveProjectId,

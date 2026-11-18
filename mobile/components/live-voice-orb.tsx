@@ -28,6 +28,8 @@ function modeAccent(mode: LiveVoiceMode): string {
       return "#5B8CFF";
     case "listening":
       return "#7EB6FF";
+    case "working":
+      return "#6A9BFF";
     case "muted":
       return "#9AA3B2";
     case "connecting":
@@ -53,7 +55,8 @@ export function LiveVoiceOrb({
   const energy = useSharedValue(0);
   const boost = useSharedValue(0.04);
   const baseOpacity = useSharedValue(0.96);
-  const active = mode === "listening" || mode === "speaking";
+  const active =
+    mode === "listening" || mode === "speaking" || mode === "working";
   const dim = SIZE[size];
   const stage = size === "stage";
 

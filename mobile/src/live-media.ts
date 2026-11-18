@@ -1,5 +1,7 @@
 // Pure helpers for the mobile live session. The Gateway socket speaks the
 // normalized AI SDK realtime events; this file does not open that socket.
+// Chat tool defs / transcript helpers live in live-chat-tools.ts (imported by
+// the session UI and unit tests — not from this file, so Node tests stay light).
 
 /** Wire rate for gateway realtime PCM (input-audio-append / playback). */
 export const LIVE_SAMPLE_RATE = 24_000;
@@ -22,20 +24,21 @@ export const LIVE_AUTH_PROTOCOL_PREFIX = "ai-gateway-auth.";
 /**
  * Client session-update payload. Gateway data-policy flags (ZDR, no-training,
  * inferenceRegion) must be pinned when minting the client secret — see
- * lib/live-token.ts — not sent here.
+ * lib/live-token.ts — not sent here. Tools + full instructions are merged in
+ * liveSessionUpdateEvent by the session UI.
  */
 export const LIVE_SESSION_CONFIG = {
   instructions:
-    "You are Pearl, a personal agent in a live voice conversation. On the first response, greet the user in one short spoken sentence and invite them to talk. After that, answer out loud and briefly. If the user shares a camera frame, say what you see; otherwise stay on the voice conversation.",
-  voice: "alloy",
-  outputModalities: ["audio"],
+    "You are Pearl, a personal agent in a live voice conversation. On the first response, greet the user in one short spoken sentence and invite them to talk. After that, answer out loud and briefly.",
+  voice: "ara",
+  outputModalities: ["audio"] as Array<"text" | "audio">,
   inputAudioTranscription: {},
   outputAudioTranscription: {},
-  inputAudioFormat: { type: "audio/pcm", rate: LIVE_SAMPLE_RATE },
-  outputAudioFormat: { type: "audio/pcm", rate: LIVE_SAMPLE_RATE },
+  inputAudioFormat: { type: "audio/pcm" as const, rate: LIVE_SAMPLE_RATE },
+  outputAudioFormat: { type: "audio/pcm" as const, rate: LIVE_SAMPLE_RATE },
   // 0.6 is speakerphone margin so residual echo is less likely to trip VAD.
-  turnDetection: { type: "server-vad", threshold: 0.6 },
-} as const;
+  turnDetection: { type: "server-vad" as const, threshold: 0.6 },
+};
 
 /**
  * After playback drains, keep the uplink closed briefly so the speaker flush
@@ -58,12 +61,14 @@ export const LIVE_BARGE_IN_LEVEL = 0.14;
  *   ("sure, take your time"). After that first drain+tail, the hold lifts and
  *   the mic stays open for the rest of the call.
  * - `inPlaybackTail`: short mute after any reply drains (speaker flush).
+ * - `toolBusy`: mute while an eve tool (e.g. ask_pearl) is running.
  */
 export function shouldUploadIosMicFrame(input: {
   readonly holdUplink: boolean;
   readonly inPlaybackTail: boolean;
+  readonly toolBusy?: boolean;
 }): boolean {
-  return !input.holdUplink && !input.inPlaybackTail;
+  return !input.holdUplink && !input.inPlaybackTail && !input.toolBusy;
 }
 
 /** Android: whether a loud mic frame should interrupt local playback. */
@@ -89,6 +94,7 @@ export type LiveVoiceMode =
   | "idle"
   | "listening"
   | "speaking"
+  | "working"
   | "muted"
   | "ended";
 
@@ -102,6 +108,8 @@ export function liveVoiceStatusLabel(mode: LiveVoiceMode): string {
       return "You're talking";
     case "speaking":
       return "Pearl is talking";
+    case "working":
+      return "Looking that up…";
     case "muted":
       return "Muted";
     case "ended":
@@ -109,8 +117,25 @@ export function liveVoiceStatusLabel(mode: LiveVoiceMode): string {
   }
 }
 
-export function liveSessionUpdateEvent() {
-  return { type: "session-update" as const, config: LIVE_SESSION_CONFIG };
+export function liveSessionUpdateEvent(overrides?: {
+  readonly instructions?: string;
+  readonly tools?: readonly {
+    readonly type: "function";
+    readonly name: string;
+    readonly description?: string;
+    readonly parameters: Record<string, unknown>;
+  }[];
+}) {
+  return {
+    type: "session-update" as const,
+    config: {
+      ...LIVE_SESSION_CONFIG,
+      ...(overrides?.instructions
+        ? { instructions: overrides.instructions }
+        : {}),
+      ...(overrides?.tools ? { tools: overrides.tools } : {}),
+    },
+  };
 }
 
 /** Kick the model so the first turn is an audible greeting. */
