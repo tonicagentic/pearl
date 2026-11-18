@@ -4,13 +4,18 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@assistant-ui/eve@0.0.25':
+    hash: 9b13e09d281a9952294d2a03f490ef81223a8b0065ec744eb1921d558fee399a
+    path: patches/@assistant-ui__eve@0.0.25.patch
+
 importers:
 
   .:
     dependencies:
       '@assistant-ui/eve':
         specifier: ^0.0.25
-        version: 0.0.25(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@opentelemetry/api@1.9.0)(@types/react@19.2.18)(ai@7.0.166(zod@4.4.3))(eve@1.0.0-rc.16)(react@19.2.8)
+        version: 0.0.25(patch_hash=9b13e09d281a9952294d2a03f490ef81223a8b0065ec744eb1921d558fee399a)(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@opentelemetry/api@1.9.0)(@types/react@19.2.18)(ai@7.0.166(zod@4.4.3))(eve@1.0.0-rc.16)(react@19.2.8)
       '@assistant-ui/next':
         specifier: ^0.0.25
         version: 0.0.25
@@ -7115,7 +7120,7 @@ snapshots:
       - ioredis
       - redis
 
-  '@assistant-ui/eve@0.0.25(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@opentelemetry/api@1.9.0)(@types/react@19.2.18)(ai@7.0.166(zod@4.4.3))(eve@1.0.0-rc.16)(react@19.2.8)':
+  '@assistant-ui/eve@0.0.25(patch_hash=9b13e09d281a9952294d2a03f490ef81223a8b0065ec744eb1921d558fee399a)(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@opentelemetry/api@1.9.0)(@types/react@19.2.18)(ai@7.0.166(zod@4.4.3))(eve@1.0.0-rc.16)(react@19.2.8)':
     dependencies:
       '@assistant-ui/core': 0.3.33(@assistant-ui/store@0.3.23(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@types/react@19.2.18)(react@19.2.8))(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@opentelemetry/api@1.9.0)(@types/react@19.2.18)(ai@7.0.166(zod@4.4.3))(react@19.2.8)
       '@assistant-ui/store': 0.3.23(@assistant-ui/tap@0.9.25(@types/react@19.2.18)(react@19.2.8))(@types/react@19.2.18)(react@19.2.8)

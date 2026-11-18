@@ -1,0 +1,102 @@
+diff --git a/dist/eveExtras.d.ts b/dist/eveExtras.d.ts
+index d2f282b0c9ff8a8e78e9a621bbc8b41c09b52aa5..29933355ce6875dc0b61f7d7fe97211442021045 100644
+--- a/dist/eveExtras.d.ts
++++ b/dist/eveExtras.d.ts
+@@ -1,5 +1,5 @@
+ import type { UseEveAgentReturn } from "eve/react";
+-export type EveRuntimeExtras = Pick<UseEveAgentReturn, "error" | "events" | "session"> & {
++export type EveRuntimeExtras = Pick<UseEveAgentReturn, "error" | "events" | "session" | "agents"> & {
+     readonly reset: UseEveAgentReturn["newSession"];
+ };
+ export declare const eveExtras: import("@assistant-ui/core/react").RuntimeExtras<EveRuntimeExtras>;
+diff --git a/dist/hooks.d.ts b/dist/hooks.d.ts
+index 77928309fbd9cb28a1fd3f2830f04dd2a563cc3d..1f4e33dfccf651dafc19ad2c19f78d146909e31e 100644
+--- a/dist/hooks.d.ts
++++ b/dist/hooks.d.ts
+@@ -14,6 +14,11 @@ export declare const useEveSession: () => EveRuntimeExtras["session"] | undefine
+  * Defaults to an empty array outside an Eve runtime.
+  */
+ export declare const useEveEvents: () => EveRuntimeExtras["events"];
++/**
++ * Read followed child agent sessions from the runtime extras (`followAgents`).
++ * Defaults to an empty object outside an Eve runtime.
++ */
++export declare const useEveAgents: () => EveRuntimeExtras["agents"];
+ /**
+  * Returns a function that starts a new Eve session: it stops reading the
+  * current session and clears its events and messages, without cancelling a
+diff --git a/dist/hooks.js b/dist/hooks.js
+index 05d4884248e12deefe015d691a49c4deb1adbe58..4b7498b7c9a3207077afb645ed095bea357d1d47 100644
+--- a/dist/hooks.js
++++ b/dist/hooks.js
+@@ -3,6 +3,7 @@ import { eveExtras } from "./eveExtras.js";
+ import { useAui } from "@assistant-ui/store";
+ // src/hooks.ts
+ const EMPTY_EVENTS = Object.freeze([]);
++const EMPTY_AGENTS = Object.freeze({});
+ /** Read the last Eve session error from the runtime extras. */
+ const useEveError = () => eveExtras.use((e) => e.error, void 0);
+ /**
+@@ -19,6 +20,11 @@ const useEveSession = () => eveExtras.use((e) => e.session, void 0);
+ */
+ const useEveEvents = () => eveExtras.use((e) => e.events, EMPTY_EVENTS);
+ /**
++* Read followed child agent sessions from the runtime extras (`followAgents`).
++* Defaults to an empty object outside an Eve runtime.
++*/
++const useEveAgents = () => eveExtras.use((e) => e.agents, EMPTY_AGENTS);
++/**
+ * Returns a function that starts a new Eve session: it stops reading the
+ * current session and clears its events and messages, without cancelling a
+ * turn still running on the server. Pending staged messages and tool execution
+@@ -31,6 +37,6 @@ const useEveReset = () => {
+ 	const aui = useAui();
+ 	return () => eveExtras.get(aui).reset();
+ };
+-export { useEveError, useEveEvents, useEveReset, useEveSession };
++export { useEveAgents, useEveError, useEveEvents, useEveReset, useEveSession };
+ 
+ //# sourceMappingURL=hooks.js.map
+\ No newline at end of file
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 9e18649aeb8020cffc14ed6009b26b0eb014db70..cd0f71138bbe8993d61d14aa8cfea4dec507c9b7 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -3,6 +3,6 @@ export { convertEveMessage, convertEveMessages, getEveMessageContent, toEveInput
+ export type { ConvertEveMessagesOptions, EveAuthorizationData, EveMessageContent, } from "./convertEveMessages.js";
+ export { useEveAgentRuntime } from "./useEveAgentRuntime.js";
+ export type { UseEveAgentRuntimeOptions } from "./useEveAgentRuntime.js";
+-export { useEveError, useEveEvents, useEveReset, useEveSession } from "./hooks.js";
++export { useEveAgents, useEveError, useEveEvents, useEveReset, useEveSession } from "./hooks.js";
+ export type { EveRuntimeExtras } from "./eveExtras.js";
+ //# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/dist/index.js b/dist/index.js
+index d23d3c89979bf619982ea055f4802ac3c942810e..9eae214180667107419459042fab952ab7b97a4c 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,4 +1,4 @@
+ import { convertEveMessage, convertEveMessages, getEveMessageContent, toEveInputResponse } from "./convertEveMessages.js";
+-import { useEveError, useEveEvents, useEveReset, useEveSession } from "./hooks.js";
++import { useEveAgents, useEveError, useEveEvents, useEveReset, useEveSession } from "./hooks.js";
+ import { useEveAgentRuntime } from "./useEveAgentRuntime.js";
+-export { convertEveMessage, convertEveMessages, getEveMessageContent, toEveInputResponse, useEveAgentRuntime, useEveError, useEveEvents, useEveReset, useEveSession };
++export { convertEveMessage, convertEveMessages, getEveMessageContent, toEveInputResponse, useEveAgentRuntime, useEveAgents, useEveError, useEveEvents, useEveReset, useEveSession };
+diff --git a/dist/useEveAgentRuntime.js b/dist/useEveAgentRuntime.js
+index 1b1271bbb55a7064029aa1ad21cb32cc442edf93..1b142a007e536009949c1727a17772ef3fb3ed43 100644
+--- a/dist/useEveAgentRuntime.js
++++ b/dist/useEveAgentRuntime.js
+@@ -226,11 +226,13 @@ const useEveThreadRuntime = (options, cloudSessions) => {
+ 		error: agent.error,
+ 		events: agent.events,
+ 		session: agent.session,
++		agents: agent.agents,
+ 		reset
+ 	}), [
+ 		agent.error,
+ 		agent.events,
+ 		agent.session,
++		agent.agents,
+ 		reset
+ 	]);
+ 	const runtime = useExternalStoreRuntime({

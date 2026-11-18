@@ -1,35 +1,42 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { useAuiState } from "@assistant-ui/react";
-import { useEveEvents } from "@assistant-ui/eve";
+import { useEveAgents, useEveEvents } from "@assistant-ui/eve";
+import type { ConversationAgentSession } from "eve/client";
 
 import {
   deriveSubagentRuns,
   type SubagentRun,
 } from "@/lib/agent/subagent-runs";
 import {
-  deriveCoderJobProgress,
-  extractCoderHandoff,
-} from "@/lib/chat/coder-receipt";
+  deriveSubagentRowContent,
+  subagentRowTitle,
+  WAITING_FOR_SUBAGENT_LABEL,
+} from "@/lib/chat/subagent-row";
+import { extractCoderHandoff } from "@/lib/chat/coder-receipt";
 import {
   TaskCard,
   type TaskCardState,
 } from "@/components/assistant-ui/elements/task-card";
-import {
-  CoderSettledReceipt,
-  CoderWorkingReceipt,
-} from "@/components/assistant-ui/elements/coder-receipt";
+import { CoderSettledReceipt } from "@/components/assistant-ui/elements/coder-receipt";
+import { threadMeta } from "@/components/assistant-ui/elements/surfaces";
 
 // Runtime binding for the task-card element (docs: elements/task-card).
 //
-// Delegated subagent work renders as task cards instead of timeline steps or
-// the background inbox. The card state cannot come from the tool-call part
-// alone: a delegation's tool call completes immediately with a "working"
-// receipt, so the part reads "done" while the subagent still runs. The real
-// lifecycle lives in the persisted subagent event stream (subagent.called /
-// subagent.completed), which the provider derives into runs — the same
-// derivation the background inbox used, keyed by the delegation's call id.
+// Delegated subagent work renders as a flat row instead of timeline steps.
+// The row state cannot come from the tool-call part alone: a delegation's
+// tool call completes immediately with a "working" receipt, so the part reads
+// "done" while the subagent still runs. The real lifecycle lives in the
+// persisted subagent event stream, keyed by the delegation's call id. Live
+// model + activity come from the followed child session (`followAgents`).
 
 type TaskRuns = readonly SubagentRun[];
 
@@ -65,14 +72,6 @@ export function SubagentRunsProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function formatElapsed(ms: number): string {
-  const seconds = Math.max(0, Math.round(ms / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.round(minutes / 60)}h`;
-}
-
 // Declared subagents under agent/subagents/* plus eve's built-in `agent`.
 export const DELEGATION_TOOLS = new Set([
   "agent",
@@ -99,16 +98,9 @@ function isDelegationPart(part: unknown): part is ToolCallPartState {
   );
 }
 
-function taskLabel(part: ToolCallPartState): string {
+function delegationMessage(part: ToolCallPartState): string | undefined {
   const args = (part.args ?? {}) as { message?: unknown };
-  const raw =
-    typeof args.message === "string" ? args.message.split("\n")[0].trim() : "";
-  if (!raw) return part.toolName;
-  return raw.length > 80 ? `${raw.slice(0, 77).trimEnd()}…` : raw;
-}
-
-function taskMeta(part: ToolCallPartState, run?: SubagentRun): string {
-  return run?.name ?? part.toolName;
+  return typeof args.message === "string" ? args.message : undefined;
 }
 
 function taskState(part: ToolCallPartState, run?: SubagentRun): TaskCardState {
@@ -123,19 +115,28 @@ function taskState(part: ToolCallPartState, run?: SubagentRun): TaskCardState {
   return "done";
 }
 
-function coderResult(input: {
-  readonly label: string;
+function agentForCall(
+  agents: Readonly<Record<string, ConversationAgentSession>> | undefined,
+  callId: string | undefined,
+): ConversationAgentSession | undefined {
+  if (!agents || !callId) return undefined;
+  return Object.values(agents).find((agent) => {
+    if (agent.callId === callId) return true;
+    return "callId" in agent.owner && agent.owner.callId === callId;
+  });
+}
+
+function settledResult(input: {
   readonly state: TaskCardState;
   readonly run?: SubagentRun;
+  readonly isCoder: boolean;
 }): ReactNode {
-  const { label, state, run } = input;
+  const { state, run, isCoder } = input;
   if (state === "failed") {
     return "no result arrived — the run was likely interrupted; ask again";
   }
-  if (state === "working" || state === "waiting") {
-    const progress = deriveCoderJobProgress([]);
-    return <CoderWorkingReceipt title={label} progress={progress} />;
-  }
+  if (state === "working" || state === "waiting") return undefined;
+  if (!isCoder) return undefined;
   const handoff = extractCoderHandoff({ runResult: run?.result });
   if (handoff) return <CoderSettledReceipt handoff={handoff} />;
   return undefined;
@@ -149,71 +150,52 @@ export function TaskGroup({
   group: { readonly indices: readonly number[] };
 }) {
   const runs = useSubagentRuns();
+  const agents = useEveAgents();
   const parts = useAuiState((s) => s.message.parts) as readonly unknown[];
-  const now = useNowWhileWorking(group, parts, runs);
 
   const delegations = group.indices
     .map((index) => parts[index])
     .filter(isDelegationPart);
   if (delegations.length === 0) return null;
 
+  const anyLive = delegations.some((part) => {
+    const run = runs.find((r) => r.callId === part.toolCallId);
+    const state = taskState(part, run);
+    return state === "working" || state === "waiting";
+  });
+
   return (
     <div data-slot="aui_task-group" className="flex flex-col gap-2 px-2">
       {delegations.map((part) => {
         const run = runs.find((r) => r.callId === part.toolCallId);
         const state = taskState(part, run);
-        const working = state === "working";
-        const elapsed =
-          run !== undefined
-            ? formatElapsed((now ?? run.at) - run.at)
-            : undefined;
-        const isCoder =
-          part.toolName === "coder" || run?.name === "coder";
-        const label = taskLabel(part);
+        const agent = agentForCall(agents, part.toolCallId);
+        const isCoder = part.toolName === "coder" || run?.name === "coder";
+        const title = subagentRowTitle(
+          delegationMessage(part),
+          run?.name ?? part.toolName,
+        );
+        const row = deriveSubagentRowContent({ title, child: agent });
+        const live = state === "working" || state === "waiting";
         return (
           <TaskCard
             key={part.toolCallId}
-            label={label}
-            meta={taskMeta(part, run)}
+            label={row.title}
+            modelLabel={row.modelLabel}
+            activity={live ? row.activity : undefined}
             state={state}
-            elapsed={elapsed}
             className={isCoder ? "max-w-xl" : undefined}
-            result={
-              isCoder
-                ? coderResult({ label, state, run })
-                : run?.state === "failed"
-                  ? "no result arrived — the run was likely interrupted; ask again"
-                  : working
-                    ? `Waiting on ${taskMeta(part, run)}…`
-                    : undefined
-            }
+            result={settledResult({ state, run, isCoder })}
           />
         );
       })}
+      {anyLive ? (
+        <div className={threadMeta} data-slot="aui_task-waiting">
+          <span className="text-foreground/35 text-[12.5px]">
+            {WAITING_FOR_SUBAGENT_LABEL}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
-}
-
-// Ticking clock for in-flight runs, shared by all cards in the lane.
-function useNowWhileWorking(
-  group: { readonly indices: readonly number[] },
-  parts: readonly unknown[],
-  runs: TaskRuns,
-): number | null {
-  const [now, setNow] = useState<number | null>(null);
-  const anyWorking = group.indices.some((index) => {
-    const part = parts[index];
-    if (!isDelegationPart(part)) return false;
-    const run = runs.find((r) => r.callId === part.toolCallId);
-    return taskState(part, run) === "working";
-  });
-
-  useEffect(() => {
-    if (!anyWorking) return;
-    setNow(Date.now());
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [anyWorking]);
-
-  return now;
 }

@@ -211,6 +211,55 @@ describe("deriveLiveThinkingState", () => {
     });
     assert.equal(state.label, undefined);
   });
+
+  it("quiets the status line while a subagent row owns the wait", () => {
+    const fromEvents = deriveLiveThinkingState({
+      statusType: "running",
+      events: [
+        { type: "task.started", data: { name: "coder", taskId: "t1" } },
+        { type: "child.opened", data: { name: "coder" } },
+      ],
+      parts: [
+        {
+          type: "tool-call",
+          toolName: "coder",
+          status: { type: "complete" },
+        },
+      ],
+    });
+    assert.equal(fromEvents.phase, "subagent");
+    assert.equal(fromEvents.label, undefined);
+
+    const fromAgents = deriveLiveThinkingState({
+      statusType: "running",
+      agents: {
+        child: {
+          name: "coder",
+          observation: {
+            status: "following",
+            conversation: {
+              messages: [
+                {
+                  role: "assistant",
+                  metadata: { status: "streaming" },
+                  parts: [
+                    {
+                      type: "tool-call",
+                      toolName: "bash",
+                      args: { command: "pnpm tsc" },
+                      status: { type: "running" },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+    assert.equal(fromAgents.phase, "subagent");
+    assert.equal(fromAgents.label, undefined);
+  });
 });
 
 describe("createThinkingStateDweller", () => {

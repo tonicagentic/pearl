@@ -19,25 +19,27 @@ import {
   useChatConversation,
 } from "@/src/conversation-context";
 import { pendingForDelegation } from "@/src/message-projection";
-import { latestSubagentPreviewLine } from "@/src/subagent-preview";
 import { useSubagentInspect } from "@/src/subagent-inspect-context";
+import { extractCoderHandoff } from "../../../../lib/chat/coder-receipt";
 import {
-  deriveCoderJobProgress,
-  extractCoderHandoff,
-} from "../../../../lib/chat/coder-receipt";
-import { CoderSettledReceipt, CoderWorkingReceipt } from "./coder-receipt";
+  deriveSubagentRowContent,
+  subagentRowTitle,
+  WAITING_FOR_SUBAGENT_LABEL,
+} from "../../../../lib/chat/subagent-row";
+import { CoderSettledReceipt } from "./coder-receipt";
+import { Text } from "@/components/ui/text";
 import { TaskCard, type TaskCardState } from "./task-card";
 
 // Runtime binding for the task-card element (docs: elements/task-card) —
 // RN port of the web's task-card.aui.
 //
-// Delegated subagent work renders as task cards instead of timeline steps.
-// The card state cannot come from the tool-call part alone: a delegation's
+// Delegated subagent work renders as a flat row instead of timeline steps.
+// The row state cannot come from the tool-call part alone: a delegation's
 // tool call completes immediately with a "working" receipt, so the part reads
 // "done" while the subagent still runs. The real lifecycle lives in the
-// persisted subagent event stream (subagent.called / subagent.completed),
-// derived into runs keyed by the delegation's call id. Open person-waits on
-// the tool part or a followed child override the card to "waiting".
+// persisted subagent event stream, keyed by the delegation's call id. Open
+// person-waits on the tool part or a followed child override the card to
+// "waiting". Live model + activity come from the followed child session.
 
 type TaskRuns = readonly SubagentRun[];
 
@@ -56,10 +58,6 @@ export function useSubagentRuns(): TaskRuns {
   return useContext(TaskRunsContext).runs;
 }
 
-function useSubagentClock(): number {
-  return useContext(TaskRunsContext).now;
-}
-
 /** Only re-derive when the event log gains/loses subagent-shaped rows. */
 function subagentEventsKey(events: readonly unknown[]): string {
   let count = 0;
@@ -72,17 +70,24 @@ function subagentEventsKey(events: readonly unknown[]): string {
     };
     if (
       event.type === "subagent.called" ||
-      event.type === "subagent.completed"
+      event.type === "subagent.completed" ||
+      event.type === "task.started" ||
+      event.type === "task.ended" ||
+      event.type === "child.opened"
     ) {
       count += 1;
-      lastType = event.type;
+      lastType = event.type ?? "";
       lastCallId = event.data?.callId ?? "";
     }
   }
   return `${count}:${lastType}:${lastCallId}`;
 }
 
-export function SubagentRunsProvider({ children }: { readonly children: ReactNode }) {
+export function SubagentRunsProvider({
+  children,
+}: {
+  readonly children: ReactNode;
+}) {
   const events = useEveEvents();
   const [now, setNow] = useState(() => Date.now());
   // Gate full-log scans: content.delta does not change this key, so `runs`
@@ -95,8 +100,7 @@ export function SubagentRunsProvider({ children }: { readonly children: ReactNod
   );
 
   // Tick while any run is undelivered (keying on the post-derivation state
-  // deadlocks — see the web element). Also covers in-flight elapsed labels so
-  // TaskGroup does not need a second interval.
+  // deadlocks — see the web element).
   const anyUndelivered = runs.some((run) => run.delivered === false);
   const anyRunning = runs.some((run) => run.state === "running");
 
@@ -111,14 +115,6 @@ export function SubagentRunsProvider({ children }: { readonly children: ReactNod
   return (
     <TaskRunsContext.Provider value={value}>{children}</TaskRunsContext.Provider>
   );
-}
-
-function formatElapsed(ms: number): string {
-  const seconds = Math.max(0, Math.round(ms / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.round(minutes / 60)}h`;
 }
 
 // Declared subagents under agent/subagents/* plus eve's built-in `agent`.
@@ -147,16 +143,9 @@ function isDelegationPart(part: unknown): part is ToolCallPartState {
   );
 }
 
-function taskLabel(part: ToolCallPartState): string {
+function delegationMessage(part: ToolCallPartState): string | undefined {
   const args = (part.args ?? {}) as { message?: unknown };
-  const raw =
-    typeof args.message === "string" ? args.message.split("\n")[0].trim() : "";
-  if (!raw) return part.toolName;
-  return raw.length > 80 ? `${raw.slice(0, 77).trimEnd()}…` : raw;
-}
-
-function taskMeta(part: ToolCallPartState, run?: SubagentRun): string {
-  return run?.name ?? part.toolName;
+  return typeof args.message === "string" ? args.message : undefined;
 }
 
 function taskState(
@@ -191,29 +180,23 @@ function childMessagesFor(
   return agent.observation.conversation.messages;
 }
 
-function coderResult(input: {
-  readonly label: string;
+function settledResult(input: {
   readonly state: TaskCardState;
   readonly run?: SubagentRun;
   readonly agent: ReturnType<typeof agentForCall>;
   readonly waitPrompt?: string;
+  readonly isCoder: boolean;
 }): ReactNode {
-  const { label, state, run, agent, waitPrompt } = input;
+  const { state, run, agent, waitPrompt, isCoder } = input;
   if (waitPrompt) return waitPrompt;
   if (state === "failed") {
     return "no result arrived — the run was likely interrupted; ask again";
   }
-
-  const messages = childMessagesFor(agent);
-  if (state === "working" || state === "waiting") {
-    const livePreview = latestSubagentPreviewLine(agent);
-    const progress = deriveCoderJobProgress(messages, livePreview);
-    return <CoderWorkingReceipt title={label} progress={progress} />;
-  }
-
+  if (state === "working" || state === "waiting") return undefined;
+  if (!isCoder) return undefined;
   const handoff = extractCoderHandoff({
     runResult: run?.result,
-    childMessages: messages,
+    childMessages: childMessagesFor(agent),
   });
   if (handoff) return <CoderSettledReceipt handoff={handoff} />;
   return undefined;
@@ -227,7 +210,6 @@ export function TaskGroup({
   readonly group: { readonly indices: readonly number[] };
 }) {
   const runs = useSubagentRuns();
-  const clock = useSubagentClock();
   const { conversation } = useChatConversation();
   const { open } = useSubagentInspect();
   const parts = useAuiState((s) => s.message.parts) as readonly unknown[];
@@ -237,58 +219,58 @@ export function TaskGroup({
     .filter(isDelegationPart);
   if (delegations.length === 0) return null;
 
+  const anyLive = delegations.some((part) => {
+    const run = runs.find((r) => r.callId === part.toolCallId);
+    const wait = pendingForDelegation(conversation, part.toolCallId);
+    const state = taskState(part, run, wait != null);
+    return state === "working" || state === "waiting";
+  });
+
   return (
     <View className="flex-col gap-2 px-2">
       {delegations.map((part) => {
         const run = runs.find((r) => r.callId === part.toolCallId);
         const wait = pendingForDelegation(conversation, part.toolCallId);
         const state = taskState(part, run, wait != null);
-        const working = state === "working";
-        const elapsed =
-          run !== undefined && (working || state === "waiting")
-            ? formatElapsed((clock || run.at) - run.at)
-            : undefined;
         const agent = agentForCall(conversation.agents, part.toolCallId);
-        const isCoder =
-          part.toolName === "coder" || run?.name === "coder";
-        const label = taskLabel(part);
-        const livePreview = working ? latestSubagentPreviewLine(agent) : null;
+        const isCoder = part.toolName === "coder" || run?.name === "coder";
+        const title = subagentRowTitle(
+          delegationMessage(part),
+          run?.name ?? part.toolName,
+        );
+        const row = deriveSubagentRowContent({ title, child: agent });
+        const live = state === "working" || state === "waiting";
         return (
           <TaskCard
             key={part.toolCallId}
-            label={label}
-            meta={taskMeta(part, run)}
+            label={row.title}
+            modelLabel={row.modelLabel}
+            activity={live ? row.activity : undefined}
             state={state}
-            elapsed={elapsed}
             className={isCoder ? "max-w-xl" : undefined}
             onPress={() => {
               open({
                 sessionId: agent?.sessionId ?? part.toolCallId ?? part.toolName,
-                name: taskMeta(part, run),
+                name: run?.name ?? part.toolName,
                 callId: part.toolCallId,
                 agent,
               });
             }}
-            result={
-              isCoder
-                ? coderResult({
-                    label,
-                    state,
-                    run,
-                    agent,
-                    waitPrompt: wait?.prompt,
-                  })
-                : wait
-                  ? wait.prompt
-                  : run?.state === "failed"
-                    ? "no result arrived — the run was likely interrupted; ask again"
-                    : working
-                      ? (livePreview ?? `Waiting on ${taskMeta(part, run)}…`)
-                      : undefined
-            }
+            result={settledResult({
+              state,
+              run,
+              agent,
+              waitPrompt: wait?.prompt,
+              isCoder,
+            })}
           />
         );
       })}
+      {anyLive ? (
+        <Text variant="caption" tone="default" className="opacity-35">
+          {WAITING_FOR_SUBAGENT_LABEL}
+        </Text>
+      ) : null}
     </View>
   );
 }

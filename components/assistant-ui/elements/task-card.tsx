@@ -1,15 +1,9 @@
 "use client";
 
-import { Children, type ComponentProps, type ReactNode, useState } from "react";
-import {
-  Ban,
-  CheckIcon,
-  ChevronRightIcon,
-  Loader2Icon,
-  XIcon,
-} from "lucide-react";
+import type { ComponentProps, ReactNode } from "react";
+import { Ban, CheckIcon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { mono, paper, stepEnter } from "./surfaces";
+import { mono, stepEnter, threadMeta } from "./surfaces";
 
 export type TaskCardState =
   | "working"
@@ -21,7 +15,7 @@ export type TaskCardState =
 const isRenderable = (node: ReactNode) =>
   node !== undefined && node !== null && node !== false && node !== true;
 
-export function TaskStateIcon({
+function TaskStateMark({
   state,
   className,
 }: {
@@ -52,145 +46,99 @@ export function TaskStateIcon({
       />
     );
   }
-  if (state === "working") {
-    return (
-      <Loader2Icon
-        aria-hidden
-        className={cn(
-          "text-foreground/35 size-3.5 shrink-0 animate-spin motion-reduce:animate-none",
-          className,
-        )}
-      />
-    );
-  }
+  // Live / waiting: double-colon mark matching the Cursor subagent row.
   return (
     <span
       aria-hidden
       className={cn(
-        "border-foreground/35 m-1 size-1.5 shrink-0 rounded-full border",
+        mono,
+        "text-foreground/35 w-3.5 shrink-0 text-center leading-none",
         className,
       )}
-    />
+    >
+      ::
+    </span>
   );
 }
 
+/**
+ * Flat in-transcript subagent row: `::` mark, truncated title, model label,
+ * optional activity line, and an optional settled result strip. Not a card.
+ */
 export function TaskCard({
   label,
-  meta,
+  modelLabel,
+  activity,
   state,
-  elapsed,
-  actions,
   result,
-  open,
-  onOpenChange,
-  children,
   className,
   ...props
 }: Omit<
   ComponentProps<"div">,
-  "children" | "label" | "state" | "result" | "open" | "onOpenChange"
+  "children" | "label" | "state" | "result"
 > & {
   label: string;
-  meta?: string | undefined;
+  modelLabel?: string | undefined;
+  activity?: string | undefined;
   state: TaskCardState;
-  elapsed?: string | undefined;
-  actions?: ReactNode | undefined;
   result?: ReactNode | undefined;
-  open?: boolean | undefined;
-  onOpenChange?: ((open: boolean) => void) | undefined;
-  children?: ReactNode | undefined;
 }) {
-  const hasTranscript = Children.toArray(children).length > 0;
-  const inert = open !== undefined && onOpenChange === undefined;
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const isOpen = open ?? uncontrolledOpen;
-  const toggle = () => {
-    const next = !isOpen;
-    if (open === undefined) setUncontrolledOpen(next);
-    onOpenChange?.(next);
-  };
-
   return (
     <div
       data-slot="task-card"
       data-state={state}
-      className={cn(
-        stepEnter,
-        paper,
-        "flex w-full max-w-sm flex-col overflow-hidden rounded-2xl",
-        state === "working" &&
-          "animate-pulse motion-reduce:animate-none [animation-duration:2.4s]",
-        className,
-      )}
+      className={cn(stepEnter, "flex w-full flex-col gap-0.5", className)}
       {...props}
     >
-      <button
-        type="button"
-        aria-expanded={hasTranscript ? isOpen : undefined}
-        disabled={!hasTranscript || inert}
-        onClick={toggle}
-        className="hover:enabled:bg-foreground/[0.03] flex items-center gap-2.5 px-3.5 py-2.5 text-start transition-colors disabled:cursor-default"
-      >
-        <TaskStateIcon state={state} />
+      <div className={cn("flex items-baseline gap-2", threadMeta)}>
+        <TaskStateMark state={state} className="translate-y-[1px]" />
         <span className="sr-only">{state}</span>
-        <span className="min-w-0 flex-1 truncate text-[13.5px]">{label}</span>
-        {meta !== undefined && (
+        <span className="min-w-0 flex-1 truncate text-[13px]">{label}</span>
+        {modelLabel !== undefined && (
           <span
             className={cn(
               mono,
-              "text-foreground/35 max-w-24 shrink-0 truncate",
+              "text-foreground/35 max-w-[40%] shrink-0 truncate",
             )}
           >
-            {meta}
+            {modelLabel}
           </span>
         )}
-        {elapsed !== undefined && (
-          <span
-            className={cn(mono, "text-foreground/30 shrink-0 tabular-nums")}
-          >
-            {elapsed}
+      </div>
+      {activity !== undefined && activity.length > 0 && (
+        <div className={cn("ps-5.5", threadMeta)}>
+          <span className="text-foreground/45 text-[12.5px] leading-snug">
+            {activity}
           </span>
-        )}
-        {hasTranscript && (
-          <ChevronRightIcon
-            aria-hidden
-            className={cn(
-              "text-foreground/25 size-3 shrink-0 transition-transform duration-200 motion-reduce:transition-none",
-              isOpen && "rotate-90",
-            )}
-          />
-        )}
-      </button>
-      {isRenderable(actions) && (
-        <div
-          data-slot="task-card-actions"
-          className="border-border/60 border-t px-3.5 py-2.5"
-        >
-          {actions}
-        </div>
-      )}
-      {hasTranscript && isOpen && (
-        <div
-          data-slot="task-card-transcript"
-          className="border-border/60 flex flex-col gap-2 border-t px-3.5 py-2.5"
-        >
-          {children}
         </div>
       )}
       {isRenderable(result) && (
         <div
           data-slot="task-card-result"
-          className="border-border/60 border-t px-3.5 py-2.5"
+          className="border-border/60 mt-1.5 max-w-xl overflow-hidden rounded-2xl border"
         >
-          {typeof result === "string" || typeof result === "number" ? (
-            <div className="text-foreground/70 text-xs leading-relaxed">
-              {result}
-            </div>
-          ) : (
-            result
-          )}
+          <div className="px-3.5 py-2.5">
+            {typeof result === "string" || typeof result === "number" ? (
+              <div className="text-foreground/70 text-xs leading-relaxed">
+                {result}
+              </div>
+            ) : (
+              result
+            )}
+          </div>
         </div>
       )}
     </div>
   );
+}
+
+/** @deprecated Prefer TaskCard; kept for any external TaskStateIcon imports. */
+export function TaskStateIcon({
+  state,
+  className,
+}: {
+  state: TaskCardState;
+  className?: string;
+}) {
+  return <TaskStateMark state={state} className={className} />;
 }

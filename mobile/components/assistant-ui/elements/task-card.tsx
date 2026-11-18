@@ -1,16 +1,16 @@
 import type { ReactNode } from "react";
-import { Ban, CheckIcon, Loader2, XIcon } from "lucide-react-native";
+import { Ban, CheckIcon, XIcon } from "lucide-react-native";
 import { Platform, Pressable, View } from "react-native";
 import Animated from "react-native-reanimated";
 
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
-import { mono, paper, stepEnter, useMotion } from "./surfaces";
+import { mono, stepEnter, useMotion } from "./surfaces";
 
-// RN port of the web task-card element (components/assistant-ui/elements/
-// task-card.tsx): a compact status row for delegated subagent work, with an
-// optional result strip. States drive the leading icon. Only the header is
-// pressable so receipt controls (links, preview, video) stay interactive.
+// RN port of the web task-card element: a flat status row for delegated
+// subagent work. States drive the leading mark. Only the header is pressable
+// so settled receipt controls stay interactive.
+
 export type TaskCardState =
   | "working"
   | "waiting"
@@ -26,7 +26,9 @@ export function TaskStateIcon({
   readonly className?: string;
 }) {
   if (state === "done") {
-    return <CheckIcon className={cn("size-3.5 shrink-0 text-emerald-500", className)} />;
+    return (
+      <CheckIcon className={cn("size-3.5 shrink-0 text-emerald-500", className)} />
+    );
   }
   if (state === "failed") {
     return <XIcon className={cn("size-3.5 shrink-0 text-destructive", className)} />;
@@ -34,11 +36,14 @@ export function TaskStateIcon({
   if (state === "cancelled") {
     return <Ban className={cn("size-3.5 shrink-0 text-foreground/35", className)} />;
   }
-  if (state === "working" || state === "waiting") {
-    return <Loader2 className={cn("size-3.5 shrink-0 animate-spin text-foreground/35", className)} />;
-  }
   return (
-    <View className={cn("m-1 size-1.5 shrink-0 rounded-full border border-foreground/35", className)} />
+    <Text
+      variant="caption"
+      tone="default"
+      className={cn(mono, "w-3.5 shrink-0 text-center opacity-35", className)}
+    >
+      ::
+    </Text>
   );
 }
 
@@ -47,71 +52,79 @@ const isRenderable = (node: ReactNode) =>
 
 function TaskHeader({
   label,
-  meta,
+  modelLabel,
+  activity,
   state,
-  elapsed,
   onPress,
 }: {
   readonly label: string;
-  readonly meta?: string | undefined;
+  readonly modelLabel?: string | undefined;
+  readonly activity?: string | undefined;
   readonly state: TaskCardState;
-  readonly elapsed?: string | undefined;
   readonly onPress?: () => void;
 }) {
-  const row = (
-    <View className="flex-row items-center gap-2.5 px-3.5 py-2.5">
-      <TaskStateIcon state={state} />
-      <Text variant="secondary" tone="default" numberOfLines={1} className="min-w-0 flex-1">
-        {label}
-      </Text>
-      {meta !== undefined && (
+  const body = (
+    <View className="flex-col gap-0.5">
+      <View className="flex-row items-baseline gap-2">
+        <TaskStateIcon state={state} />
         <Text
-          variant="caption"
+          variant="secondary"
           tone="default"
           numberOfLines={1}
-          className={cn(mono, "max-w-24 shrink-0 opacity-35")}
+          className="min-w-0 flex-1 text-[13px]"
         >
-          {meta}
+          {label}
         </Text>
-      )}
-      {elapsed !== undefined && (
+        {modelLabel !== undefined && (
+          <Text
+            variant="caption"
+            tone="default"
+            numberOfLines={1}
+            className={cn(mono, "max-w-[40%] shrink-0 opacity-35")}
+          >
+            {modelLabel}
+          </Text>
+        )}
+      </View>
+      {activity !== undefined && activity.length > 0 ? (
         <Text
           variant="caption"
           tone="default"
-          className={cn(mono, "shrink-0 opacity-30")}
+          numberOfLines={2}
+          className="ps-5.5 leading-snug opacity-45"
         >
-          {elapsed}
+          {activity}
         </Text>
-      )}
+      ) : null}
     </View>
   );
 
-  if (!onPress) return row;
+  if (!onPress) return body;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Open ${meta ?? label} transcript`}
+      accessibilityLabel={`Open ${modelLabel ?? label} transcript`}
       onPress={onPress}
     >
-      {row}
+      {body}
     </Pressable>
   );
 }
 
 export function TaskCard({
   label,
-  meta,
+  modelLabel,
+  activity,
   state,
-  elapsed,
   result,
   className,
   onPress,
 }: {
   readonly label: string;
-  readonly meta?: string | undefined;
+  readonly modelLabel?: string | undefined;
+  readonly activity?: string | undefined;
   readonly state: TaskCardState;
-  readonly elapsed?: string | undefined;
   readonly result?: ReactNode | undefined;
   readonly className?: string;
   readonly onPress?: () => void;
@@ -121,29 +134,33 @@ export function TaskCard({
   return (
     <Animated.View
       entering={nativeMotion ? stepEnter : undefined}
-      className={cn(
-        paper,
-        "w-full flex-col overflow-hidden rounded-2xl",
-        (state === "working" || state === "waiting") && "opacity-90",
-        className,
-      )}
+      className={cn("w-full flex-col gap-0.5", className)}
     >
       <TaskHeader
         label={label}
-        meta={meta}
+        modelLabel={modelLabel}
+        activity={activity}
         state={state}
-        elapsed={elapsed}
         onPress={onPress}
       />
       {isRenderable(result) && (
-        <View data-slot="task-card-result" className="border-t border-border/60 px-3.5 py-2.5">
-          {typeof result === "string" || typeof result === "number" ? (
-            <Text variant="caption" tone="default" className="leading-relaxed opacity-70">
-              {result}
-            </Text>
-          ) : (
-            result
-          )}
+        <View
+          data-slot="task-card-result"
+          className="mt-1.5 overflow-hidden rounded-2xl border border-border/60"
+        >
+          <View className="px-3.5 py-2.5">
+            {typeof result === "string" || typeof result === "number" ? (
+              <Text
+                variant="caption"
+                tone="default"
+                className="leading-relaxed opacity-70"
+              >
+                {result}
+              </Text>
+            ) : (
+              result
+            )}
+          </View>
         </View>
       )}
     </Animated.View>

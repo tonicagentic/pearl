@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuiState } from "@assistant-ui/react";
-import { useEveEvents } from "@assistant-ui/eve";
+import { useEveAgents, useEveEvents } from "@assistant-ui/eve";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
 import {
@@ -18,6 +18,8 @@ import {
 // Stays live across pre-content, reasoning, streaming tool calls, and
 // subagent phases — yielding only when reply prose is actively streaming
 // or the turn settles. Raw reasoning stays collapsed in SessionTimeline.
+// While a subagent row is live, the status line stays quiet (the row owns
+// "Waiting for subagent").
 
 function isAnswerPhase(parts: readonly ThinkingMessagePart[]): boolean {
   for (let i = parts.length - 1; i >= 0; i -= 1) {
@@ -46,6 +48,7 @@ export function AssistantThinking() {
     getWaitingLabel,
   );
   const events = useEveEvents();
+  const agents = useEveAgents();
   const statusType = useAuiState((s) => s.message.status?.type);
   const parts = useAuiState(
     (s) => s.message.parts as readonly ThinkingMessagePart[],
@@ -59,11 +62,14 @@ export function AssistantThinking() {
           typeof deriveLiveThinkingState
         >[0]["events"],
         parts,
+        agents: agents as unknown as Parameters<
+          typeof deriveLiveThinkingState
+        >[0]["agents"],
         statusType,
         waitingLabel,
         answerPhase,
       }),
-    [answerPhase, events, parts, statusType, waitingLabel],
+    [agents, answerPhase, events, parts, statusType, waitingLabel],
   );
 
   const dwellerRef = useRef(createThinkingStateDweller());

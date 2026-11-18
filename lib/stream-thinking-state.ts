@@ -408,9 +408,11 @@ export function deriveLiveThinkingState(
     return { phase: "retry", label: "Retrying model" };
   }
 
-  const child = activeChildLabel(agents) ?? latestTaskLabel(events);
-  if (child) {
-    return { phase: "subagent", label: child };
+  // Subagent chrome lives on the in-transcript task row ("Waiting for
+  // subagent" + live activity). Keep the bottom/top status line quiet so the
+  // child's tool labels are not repeated here.
+  if (activeChildLabel(agents) !== undefined || latestTaskLabel(events) !== undefined) {
+    return { phase: "subagent", label: undefined };
   }
 
   const progress = latestCallProgressLabel(events);

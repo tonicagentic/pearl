@@ -7,7 +7,10 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
-    ]
+    ],
+    "patchedDependencies": {
+      "@assistant-ui/eve@0.0.25": "patches/@assistant-ui__eve@0.0.25.patch"
+    }
   },
   "imports": {
     "#*": "./agent/*",
