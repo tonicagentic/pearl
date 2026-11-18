@@ -457,21 +457,40 @@ export const chatRegistry: ComponentRegistry = {
     const items = asObjectArray(element.props.items);
     return (
       <View className="flex-col gap-2.5">
-        {items.map((item, index) => (
-          <View key={index} className="flex-col gap-0.5">
-            <Text variant="body" weight="medium" className="leading-snug">
-              {asString(item.title)}
-            </Text>
-            {item.detail ? (
-              <Text variant="secondary" className="leading-relaxed">
-                {asString(item.detail)}
-              </Text>
-            ) : null}
-            {item.meta ? (
-              <Text variant="caption">{asString(item.meta)}</Text>
-            ) : null}
-          </View>
-        ))}
+        {items.map((item, index) => {
+          const image = httpsSrc(item.image);
+          return (
+            <View
+              key={index}
+              className={cn(
+                "gap-2.5",
+                image ? "flex-row items-start" : "flex-col",
+              )}
+            >
+              {image ? (
+                <RNImage
+                  source={{ uri: image }}
+                  accessibilityLabel={asString(item.title)}
+                  className="border-border/50 h-16 w-16 shrink-0 rounded-lg border"
+                  resizeMode="cover"
+                />
+              ) : null}
+              <View className="min-w-0 flex-1 flex-col gap-0.5">
+                <Text variant="body" weight="medium" className="leading-snug">
+                  {asString(item.title)}
+                </Text>
+                {item.detail ? (
+                  <Text variant="secondary" className="leading-relaxed">
+                    {asString(item.detail)}
+                  </Text>
+                ) : null}
+                {item.meta ? (
+                  <Text variant="caption">{asString(item.meta)}</Text>
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
       </View>
     );
   },
@@ -581,6 +600,7 @@ export const chatRegistry: ComponentRegistry = {
   Encyclopedia: ({ element }) => {
     const infobox = asObjectArray(element.props.infobox);
     const sections = asObjectArray(element.props.sections);
+    const image = httpsSrc(element.props.image);
     return (
       <View className="flex-col gap-3">
         <View className="flex-col gap-1">
@@ -591,6 +611,14 @@ export const chatRegistry: ComponentRegistry = {
             {asString(element.props.lead)}
           </Text>
         </View>
+        {image ? (
+          <RNImage
+            source={{ uri: image }}
+            accessibilityLabel={asString(element.props.title)}
+            className="border-border/50 h-40 w-full rounded-lg border"
+            resizeMode="cover"
+          />
+        ) : null}
         {infobox.length > 0 ? (
           <View className="border-border/60 bg-muted/30 flex-col gap-1.5 rounded-lg border px-2.5 py-2">
             {infobox.map((pair, index) => (

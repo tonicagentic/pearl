@@ -6,6 +6,8 @@ const searchResultItem = z.object({
   title: z.string(),
   detail: z.string().nullable(),
   meta: z.string().nullable(),
+  /** Optional https image URL (prefer for product results). */
+  image: z.string().nullable(),
 });
 
 const placePin = z.object({
@@ -135,7 +137,7 @@ export const chatCatalog = defineCatalog(schema, {
         items: z.array(searchResultItem).min(1).max(8),
       }),
       description:
-        "Web or product search hits. Each item has title, optional detail, and optional meta (domain or price).",
+        "Web or product search hits. Each item has title, optional detail, optional meta (domain or price), and optional https image (use for products).",
     },
     PlaceMap: {
       props: z.object({
@@ -160,10 +162,12 @@ export const chatCatalog = defineCatalog(schema, {
       props: z.object({
         title: z.string(),
         lead: z.string(),
+        image: z.string().nullable(),
         infobox: z.array(infoboxPair).nullable(),
         sections: z.array(encyclopediaSection).nullable(),
       }),
-      description: "Encyclopedia-style entry: title, lead, optional infobox pairs and short sections",
+      description:
+        "Encyclopedia-style entry: title, lead, optional https image, optional infobox pairs and short sections",
     },
     Pronounce: {
       props: z.object({

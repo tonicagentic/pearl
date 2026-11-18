@@ -348,21 +348,42 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
     ),
     SearchResults: ({ props }) => (
       <div className="flex flex-col gap-2.5">
-        {props.items.map((item, index) => (
-          <div key={index} className="flex flex-col gap-0.5">
-            <div className="text-foreground text-[15px] font-medium leading-snug">
-              {item.title}
-            </div>
-            {item.detail ? (
-              <div className="text-muted-foreground text-[13.5px] leading-relaxed">
-                {item.detail}
+        {props.items.map((item, index) => {
+          const image = httpsSrc(item.image);
+          return (
+            <div
+              key={index}
+              className={cn(
+                "gap-2.5",
+                image ? "flex flex-row items-start" : "flex flex-col",
+              )}
+            >
+              {image ? (
+                // eslint-disable-next-line @next/next/no-img-element -- generative UI URLs are dynamic https sources
+                <img
+                  src={image}
+                  alt={item.title}
+                  className="border-border/50 h-16 w-16 shrink-0 rounded-lg border object-cover"
+                />
+              ) : null}
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <div className="text-foreground text-[15px] font-medium leading-snug">
+                  {item.title}
+                </div>
+                {item.detail ? (
+                  <div className="text-muted-foreground text-[13.5px] leading-relaxed">
+                    {item.detail}
+                  </div>
+                ) : null}
+                {item.meta ? (
+                  <div className="text-muted-foreground text-[12px]">
+                    {item.meta}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-            {item.meta ? (
-              <div className="text-muted-foreground text-[12px]">{item.meta}</div>
-            ) : null}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
     ),
     PlaceMap: ({ props }) => (
@@ -442,7 +463,9 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
         ) : null}
       </div>
     ),
-    Encyclopedia: ({ props }) => (
+    Encyclopedia: ({ props }) => {
+      const image = httpsSrc(props.image);
+      return (
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <div className="text-foreground text-base font-medium">{props.title}</div>
@@ -450,6 +473,14 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
             {props.lead}
           </div>
         </div>
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element -- generative UI URLs are dynamic https sources
+          <img
+            src={image}
+            alt={props.title}
+            className="border-border/50 h-40 w-full rounded-lg border object-cover"
+          />
+        ) : null}
         {props.infobox && props.infobox.length > 0 ? (
           <div className="border-border/60 bg-muted/30 flex flex-col gap-1.5 rounded-lg border px-2.5 py-2">
             {props.infobox.map((pair) => (
@@ -471,7 +502,8 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
           </div>
         ))}
       </div>
-    ),
+      );
+    },
     Pronounce: ({ props }) => (
       <div className="flex flex-col gap-1">
         <div className="text-foreground text-base font-medium">{props.word}</div>

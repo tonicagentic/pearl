@@ -243,16 +243,22 @@ export const ANSWER_THREAD_SAMPLES: readonly AnswerThreadSample[] = [
               title: "Nike Pegasus 41",
               detail: "Daily trainer with ReactX foam; wide toe box option.",
               meta: "$140",
+              image:
+                "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=256&h=256&q=80",
             },
             {
               title: "Brooks Ghost 16",
               detail: "Soft cushioning for easy miles; stable ride.",
               meta: "$140",
+              image:
+                "https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?auto=format&fit=crop&w=256&h=256&q=80",
             },
             {
               title: "Saucony Ride 18",
               detail: "Light and snappy for tempo work mid-week.",
               meta: "$135",
+              image:
+                "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=256&h=256&q=80",
             },
           ],
         },
@@ -304,6 +310,8 @@ export const ANSWER_THREAD_SAMPLES: readonly AnswerThreadSample[] = [
         props: {
           title: "Cacio e pepe",
           lead: "Roman pasta finished with pecorino Romano and black pepper; the cheese and pasta water emulsify into a glossy sauce without cream.",
+          image:
+            "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?auto=format&fit=crop&w=1200&h=800&q=80",
           infobox: [
             { label: "Origin", value: "Rome, Lazio" },
             { label: "Course", value: "Primo" },
