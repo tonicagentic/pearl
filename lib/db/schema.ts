@@ -1065,6 +1065,29 @@ export const icloudCalendarAccount = pgTable(
 export type IcloudCalendarAccountRow =
   typeof icloudCalendarAccount.$inferSelect;
 
+/** Seeded catalog entry for the agent directory (not user-owned). */
+export type AgentTemplateMemorySeed = {
+  readonly text: string;
+};
+
+export type AgentTemplateSkillSeed = {
+  readonly slug: string;
+  readonly title: string;
+  readonly description: string;
+  readonly markdown: string;
+};
+
+export type AgentTemplateRoutineSeed = {
+  readonly name: string;
+  readonly cron: string;
+  readonly timezone: string;
+  readonly prompt: string;
+};
+
+export type AgentTemplateIntegrationSeed = {
+  readonly connectionId: string;
+};
+
 /**
  * User-defined Pearl personas: name + standing instructions, each with
  * exactly one durable chat (chat.customAgentId). Same Pearl eve agent,
@@ -1091,16 +1114,167 @@ export const customAgent = pgTable(
     markBrows: text("mark_brows").notNull().default("none"),
     /** Idle gaze: still | wander. */
     markGaze: text("mark_gaze").notNull().default("wander"),
+    /** Directory template this agent was added from, when applicable. */
+    templateSlug: text("template_slug"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
     index("idx_custom_agent_user").on(table.userId),
     uniqueIndex("idx_custom_agent_user_name").on(table.userId, table.name),
+    uniqueIndex("idx_custom_agent_user_template").on(
+      table.userId,
+      table.templateSlug,
+    ),
   ],
 );
 
 export type CustomAgent = typeof customAgent.$inferSelect;
+
+/**
+ * Global directory of agent templates. Seeded in migrations; the app reads
+ * these rows — there is no templates folder in the repo.
+ */
+export const agentTemplate = pgTable(
+  "agent_template",
+  {
+    slug: text("slug").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description").notNull(),
+    category: text("category").notNull(),
+    featured: boolean("featured").notNull().default(false),
+    sortOrder: integer("sort_order").notNull().default(0),
+    instructions: text("instructions").notNull().default(""),
+    accent: text("accent").notNull().default("#0A0A0A"),
+    markShape: text("mark_shape").notNull().default("oval"),
+    markTalk: text("mark_talk").notNull().default("hinge"),
+    markBrows: text("mark_brows").notNull().default("none"),
+    markGaze: text("mark_gaze").notNull().default("wander"),
+    memories: jsonb("memories")
+      .$type<AgentTemplateMemorySeed[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    skills: jsonb("skills")
+      .$type<AgentTemplateSkillSeed[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    routines: jsonb("routines")
+      .$type<AgentTemplateRoutineSeed[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    integrations: jsonb("integrations")
+      .$type<AgentTemplateIntegrationSeed[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_agent_template_category").on(table.category, table.sortOrder),
+    index("idx_agent_template_featured").on(table.featured, table.sortOrder),
+  ],
+);
+
+export type AgentTemplate = typeof agentTemplate.$inferSelect;
+
+/** Facts this custom agent already knows (separate from global eve memory). */
+export const customAgentMemory = pgTable(
+  "custom_agent_memory",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => customAgent.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [index("idx_custom_agent_memory_agent").on(table.agentId)],
+);
+
+export type CustomAgentMemory = typeof customAgentMemory.$inferSelect;
+
+/** Playbooks this custom agent can load (replaces user skills while active). */
+export const customAgentSkill = pgTable(
+  "custom_agent_skill",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => customAgent.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    markdown: text("markdown").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_custom_agent_skill_agent").on(table.agentId),
+    uniqueIndex("idx_custom_agent_skill_agent_slug").on(
+      table.agentId,
+      table.slug,
+    ),
+  ],
+);
+
+export type CustomAgentSkill = typeof customAgentSkill.$inferSelect;
+
+/** Jobs that run on a cron into this agent's durable chat. */
+export const customAgentRoutine = pgTable(
+  "custom_agent_routine",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => customAgent.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    cron: text("cron").notNull(),
+    timezone: text("timezone").notNull().default("America/Los_Angeles"),
+    prompt: text("prompt").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    lastRunAt: timestamp("last_run_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_custom_agent_routine_agent").on(table.agentId),
+    index("idx_custom_agent_routine_enabled").on(table.enabled),
+  ],
+);
+
+export type CustomAgentRoutine = typeof customAgentRoutine.$inferSelect;
+
+/** Apps this custom agent may use (allowlist of connection ids). */
+export const customAgentIntegration = pgTable(
+  "custom_agent_integration",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => customAgent.id, { onDelete: "cascade" }),
+    connectionId: text("connection_id").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_custom_agent_integration_agent").on(table.agentId),
+    uniqueIndex("idx_custom_agent_integration_agent_conn").on(
+      table.agentId,
+      table.connectionId,
+    ),
+  ],
+);
+
+export type CustomAgentIntegration = typeof customAgentIntegration.$inferSelect;
 
 /**
  * Private eve deployments the signed-in user linked from Settings.

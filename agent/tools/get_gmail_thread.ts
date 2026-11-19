@@ -2,7 +2,7 @@ import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { getGmailThread } from "@/lib/agent/gmail-api";
-import { toolSurfaceEnabled } from "#lib/lane-state.js";
+import { gatedToolExport } from "#lib/gated-tool.js";
 import { resolveGmailToken } from "../lib/gmail-tool-helpers.js";
 
 const tool = defineTool({
@@ -42,4 +42,4 @@ const tool = defineTool({
   },
 });
 
-export default defineDynamic(() => (toolSurfaceEnabled() ? tool : null));
+export default defineDynamic(gatedToolExport("gmail", tool));

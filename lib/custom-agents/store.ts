@@ -275,6 +275,7 @@ export async function createCustomAgent(
     readonly markTalk?: string;
     readonly markBrows?: string;
     readonly markGaze?: string;
+    readonly templateSlug?: string | null;
   },
 ): Promise<CustomAgentSummary> {
   const name = requireName(input.name);
@@ -284,6 +285,7 @@ export async function createCustomAgent(
   const markTalk = normalizeMarkTalk(input.markTalk);
   const markBrows = normalizeMarkBrows(input.markBrows);
   const markGaze = normalizeMarkGaze(input.markGaze);
+  const templateSlug = input.templateSlug?.trim() || null;
   const agentId = randomUUID();
   const chatId = randomUUID();
 
@@ -300,6 +302,7 @@ export async function createCustomAgent(
         markTalk,
         markBrows,
         markGaze,
+        templateSlug,
       })
       .returning();
     if (!agent) {

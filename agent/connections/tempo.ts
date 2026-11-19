@@ -6,24 +6,19 @@ import {
   TEMPO_WRITE_TOOLS,
 } from "../lib/connection-allowlists.js";
 import { writeToolApproval } from "../lib/connection-approval.js";
+import { integrationAllowed } from "../lib/gate-integration.js";
 import { toolSurfaceEnabled } from "../lib/lane-state.js";
 import { isBetterAuthUserPrincipal } from "../lib/user-connection.js";
 
-// TEMPO_CONNECTOR is the Vercel Connect UID for Tempo's MCP server (Streamable
-// HTTP, OAuth via Better Auth's mcp plugin on the CRM app). Create with:
-//   vercel connect create "$TEMPO_MCP_URL" --name tempo
-// TEMPO_MCP_URL is required (no hardcoded host) so public multi-tenant deploys
-// do not silently point at an operator CRM.
-// Reads (search, resolve, list_*, read_*_history) run freely; writes need a
-// person's approval every call and are denied in plan mode.
-export default defineDynamic((ctx) => {
+export default defineDynamic(async (ctx) => {
   const connector = process.env.TEMPO_CONNECTOR?.trim();
   const url = process.env.TEMPO_MCP_URL?.trim();
   if (
     !connector ||
     !url ||
     !toolSurfaceEnabled() ||
-    !isBetterAuthUserPrincipal(ctx.session.auth.current)
+    !isBetterAuthUserPrincipal(ctx.session.auth.current) ||
+    !(await integrationAllowed(ctx, "tempo"))
   ) {
     return null;
   }

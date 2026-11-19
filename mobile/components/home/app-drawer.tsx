@@ -185,6 +185,14 @@ function HistoryListAndroid({
           <EmptyAgentsState />
         ) : (
           <View className="mb-8">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Browse agent directory"
+              className="mb-3 self-start rounded-full border border-border bg-card px-3 py-1.5 active:opacity-80"
+              onPress={() => router.push("/agent-directory")}
+            >
+              <AppText variant="secondary">Browse directory</AppText>
+            </Pressable>
             {orderedAgents.map((agent) => {
               const subtitle = agentListSubtitle({
                 name: agent.name,

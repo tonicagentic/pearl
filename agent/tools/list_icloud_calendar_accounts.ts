@@ -2,7 +2,7 @@ import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { listIcloudCalendarAccountSummaries } from "@/lib/calendar/icloud-accounts";
-import { toolSurfaceEnabled } from "../lib/lane-state.js";
+import { gatedToolExport } from "../lib/gated-tool.js";
 import { isBetterAuthUserPrincipal } from "../lib/user-connection.js";
 
 const tool = defineTool({
@@ -37,4 +37,4 @@ const tool = defineTool({
   },
 });
 
-export default defineDynamic(() => (toolSurfaceEnabled() ? tool : null));
+export default defineDynamic(gatedToolExport("icloud", tool));

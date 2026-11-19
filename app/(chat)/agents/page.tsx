@@ -3,8 +3,10 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { AgentAccentMark } from "@/components/custom-agents/agent-identity-pill";
+import { AgentDirectory } from "@/components/custom-agents/agent-directory";
 import { ensureUserForPrincipal } from "@/lib/db/issues";
 import { listCustomAgents } from "@/lib/custom-agents/store";
+import { listAgentTemplates } from "@/lib/custom-agents/templates";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -18,7 +20,7 @@ export default function AgentsPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="h-full overflow-y-auto px-4 pt-14 pb-8">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
           <header>
             <h1 className="text-lg font-semibold">Agents</h1>
             <p className="text-sm text-muted-foreground">
@@ -56,50 +58,59 @@ async function ResolvedAgents() {
     attributes: { name: viewer.name, email: viewer.email },
   });
 
-  const agents = await listCustomAgents(viewer.id);
+  const [agents, templates] = await Promise.all([
+    listCustomAgents(viewer.id),
+    listAgentTemplates(viewer.id),
+  ]);
 
   return (
     <>
-      <CreateAgentForm />
-      {agents.length === 0 ? (
-        <p className="rounded-lg border bg-card px-3 py-4 text-sm text-muted-foreground">
-          No agents yet. Create one to keep a lasting role in one thread.
-        </p>
-      ) : (
-        <ul className="divide-y rounded-lg border bg-card">
-          {agents.map((row) => (
-            <li key={row.id}>
-              <Link
-                className="flex items-center justify-between gap-3 px-3 py-3 hover:bg-muted/40"
-                href={`/chat/${row.chatId}`}
-              >
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <AgentAccentMark
-                    accent={row.accent}
-                    markShape={row.markShape}
-                    markTalk={row.markTalk}
-                    markBrows={row.markBrows}
-                    markGaze={row.markGaze}
-                    size="md"
-                    motion="burst"
-                  />
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">
-                      {row.name}
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {row.instructions.trim()
-                        ? row.instructions.trim().slice(0, 120)
-                        : "No instructions yet"}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold">Your agents</h2>
+        <CreateAgentForm />
+        {agents.length === 0 ? (
+          <p className="rounded-lg border bg-card px-3 py-4 text-sm text-muted-foreground">
+            No agents yet. Create one below or add from the directory.
+          </p>
+        ) : (
+          <ul className="divide-y rounded-lg border bg-card">
+            {agents.map((row) => (
+              <li key={row.id}>
+                <Link
+                  className="flex items-center justify-between gap-3 px-3 py-3 hover:bg-muted/40"
+                  href={`/chat/${row.chatId}`}
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <AgentAccentMark
+                      accent={row.accent}
+                      markShape={row.markShape}
+                      markTalk={row.markTalk}
+                      markBrows={row.markBrows}
+                      markGaze={row.markGaze}
+                      size="md"
+                      motion="off"
+                      eyeMotion="off"
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">
+                        {row.name}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {row.instructions.trim()
+                          ? row.instructions.trim().slice(0, 120)
+                          : "No instructions yet"}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <span className="text-xs text-muted-foreground">Open</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+                  <span className="text-xs text-muted-foreground">Open</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <AgentDirectory templates={templates} />
     </>
   );
 }

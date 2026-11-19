@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import {
   Host,
   HStack,
@@ -181,6 +181,27 @@ export function HistoryListIOS({
             listRowSpacing(10),
           ]}
         >
+          {agents !== null && !agentsEmpty ? (
+            <Section>
+              <HStack
+                modifiers={[
+                  listRowBackground(clearRow),
+                  listRowSeparator("hidden"),
+                  onTapGesture(() => router.push("/agent-directory")),
+                  accessibilityLabel("Browse agent directory"),
+                  contentShape(shapes.rectangle()),
+                  frame({ maxWidth: 9999, alignment: "leading" as const }),
+                ]}
+              >
+                <SwiftText
+                  modifiers={[font({ size: 15 }), foregroundStyle("secondary")]}
+                >
+                  Browse directory
+                </SwiftText>
+                <Spacer />
+              </HStack>
+            </Section>
+          ) : null}
           <Section>
             {agents !== null && !agentsEmpty ? (
               <List.ForEach

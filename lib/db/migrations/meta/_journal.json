@@ -330,6 +330,13 @@
       "when": 1795708000000,
       "tag": "0049_desktop_session",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1795709000000,
+      "tag": "0050_agent_directory",
+      "breakpoints": true
     }
   ]
 }

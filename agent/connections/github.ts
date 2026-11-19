@@ -2,6 +2,7 @@ import { connect } from "@vercel/connect/eve";
 import { defineDynamic, defineMcpClientConnection } from "eve/connections";
 
 import { CONNECTION_READONLY_ALLOWLISTS } from "../lib/connection-allowlists.js";
+import { integrationAllowed } from "../lib/gate-integration.js";
 import { isBetterAuthUserPrincipal } from "../lib/user-connection.js";
 import { connectionTokenParams } from "@/lib/connections/oauth-scopes";
 
@@ -9,9 +10,13 @@ import { connectionTokenParams } from "@/lib/connections/oauth-scopes";
 // MCP OAuth connector (not the managed GitHub App). Create against the
 // readonly MCP URL with userAuthorization + GitHub OAuth discovery — a bare
 // clientId/clientSecret create does not support user grants.
-export default defineDynamic((ctx) => {
+export default defineDynamic(async (ctx) => {
   const connector = process.env.GITHUB_CONNECTOR?.trim();
-  if (!connector || !isBetterAuthUserPrincipal(ctx.session.auth.current)) {
+  if (
+    !connector ||
+    !isBetterAuthUserPrincipal(ctx.session.auth.current) ||
+    !(await integrationAllowed(ctx, "github"))
+  ) {
     return null;
   }
 

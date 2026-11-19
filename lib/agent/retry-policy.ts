@@ -298,6 +298,19 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     1,
     "Resolution is approval-gated; a retried resolve must status check that the issue is still open first — never blind-settle again.",
   ),
+  // Custom-agent local memories (per-agent facts, not global file memory).
+  add_agent_memory: policy(
+    false,
+    [],
+    1,
+    "Inserts a new agent memory row; a retry must re-list first instead of blind-inserting a duplicate.",
+  ),
+  remove_agent_memory: policy(
+    false,
+    [],
+    1,
+    "Deletes by id; a retry must status-check existence first.",
+  ),
   // User-scoped skills (settings + agent tools).
   list_skills: policy(
     true,

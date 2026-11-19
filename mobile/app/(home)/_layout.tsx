@@ -178,6 +178,10 @@ export default function HomeLayout() {
         options={{ title: "Skills", headerShown: true }}
       />
       <Stack.Screen
+        name="agent-directory"
+        options={{ title: "Directory", headerShown: true }}
+      />
+      <Stack.Screen
         name="plugins/index"
         options={{ title: "Plugins", headerShown: true }}
       />

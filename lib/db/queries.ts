@@ -9,6 +9,7 @@ import type { ClientSessionState, SessionStreamEvent } from "eve/client";
 import {
   chatPresence,
   isChatTurnSettledEvent,
+  isHydratableSessionEvent,
   type ChatPresence,
 } from "@/lib/chat/events";
 import type {
@@ -354,7 +355,10 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
     .where(eq(chatEvent.chatId, chatId))
     .orderBy(asc(chatEvent.eventIndex));
 
-  const eventValues = events.map((eventRow) => eventRow.event);
+  // Presence-only mirrors lack meta.position; eve rejects them as initialEvents.
+  const eventValues = events
+    .map((eventRow) => eventRow.event)
+    .filter(isHydratableSessionEvent);
   const pendingMessageCreatedAt = row.pendingUserMessageCreatedAt;
   const hasCurrentTurnCompleted = Boolean(
     pendingMessageCreatedAt &&

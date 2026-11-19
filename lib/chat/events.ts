@@ -13,6 +13,17 @@ export function isChatTurnSettledEvent(event: SessionStreamEvent) {
   );
 }
 
+/**
+ * eve ≥27 only hydrates saved `initialEvents` that carry a stream
+ * `meta.position`. Presence mirrors (and older rows) omit it — keep those for
+ * Recents, but never pass them into `useEveAgentRuntime`.
+ */
+export function isHydratableSessionEvent(event: SessionStreamEvent): boolean {
+  const meta = (event as { readonly meta?: { readonly position?: unknown } })
+    .meta;
+  return meta?.position !== undefined;
+}
+
 function pendingUserInputState(events: readonly SessionStreamEvent[]): {
   pendingInput: Set<string>;
   pendingAuth: Set<string>;

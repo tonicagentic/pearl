@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 
 import { updateCustomAgentAction } from "@/app/actions/custom-agents";
+import { AgentConfigPanel } from "@/components/custom-agents/agent-config-panel";
 import { AgentMarkPicker } from "@/components/custom-agents/agent-mark-picker";
 import { useActiveCustomAgent } from "@/components/custom-agents/active-custom-agent-context";
 import { Button } from "@/components/ui/button";
@@ -70,7 +71,7 @@ export function AgentSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Agent settings</DialogTitle>
         </DialogHeader>
@@ -140,6 +141,7 @@ export function AgentSettingsDialog({
           {error ? (
             <p className="text-sm text-destructive">{error}</p>
           ) : null}
+          <AgentConfigPanel agentId={agent.id} />
           <div className="flex justify-end gap-2">
             <Button
               disabled={pending}

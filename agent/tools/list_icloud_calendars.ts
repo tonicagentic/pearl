@@ -4,7 +4,7 @@ import { z } from "zod";
 import { listCalendarsForAccount } from "@/lib/calendar/icloud-accounts";
 import { IcloudCalDavError } from "@/lib/calendar/icloud-caldav";
 import { SecretCryptoError } from "@/lib/crypto/secrets";
-import { toolSurfaceEnabled } from "../lib/lane-state.js";
+import { gatedToolExport } from "../lib/gated-tool.js";
 import { isBetterAuthUserPrincipal } from "../lib/user-connection.js";
 
 const tool = defineTool({
@@ -55,4 +55,4 @@ const tool = defineTool({
   },
 });
 
-export default defineDynamic(() => (toolSurfaceEnabled() ? tool : null));
+export default defineDynamic(gatedToolExport("icloud", tool));

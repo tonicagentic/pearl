@@ -40,10 +40,10 @@ export default defineHook({
 });
 
 async function mirrorPresenceEvent(
-  event: { readonly type: string },
+  event: { readonly type: string; readonly meta?: unknown; readonly data?: unknown },
   ctx: {
     readonly session: { readonly id: string };
-    readonly position: { readonly index: number };
+    readonly position: { readonly index: number; readonly line?: number };
   },
 ): Promise<void> {
   try {
@@ -51,9 +51,28 @@ async function mirrorPresenceEvent(
       return;
     }
 
+    // Stamp stream position so UI hydrate (eve ≥27) can accept these rows when
+    // they later appear in a full client flush. Presence queries still work
+    // without it; getChat filters non-positioned events out of initialEvents.
+    const line = ctx.position.line ?? ctx.position.index;
+    const priorMeta =
+      event.meta && typeof event.meta === "object"
+        ? (event.meta as Record<string, unknown>)
+        : {};
+    const stamped = {
+      ...event,
+      meta: {
+        ...priorMeta,
+        position: {
+          index: ctx.position.index,
+          line,
+        },
+      },
+    };
+
     const mirrored = await appendChatEventForSession({
       sessionId: ctx.session.id,
-      event: event as Parameters<typeof appendChatEventForSession>[0]["event"],
+      event: stamped as Parameters<typeof appendChatEventForSession>[0]["event"],
       eventIndex: ctx.position.index,
       bumpUpdatedAt: true,
     });

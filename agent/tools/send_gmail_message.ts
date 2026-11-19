@@ -1,5 +1,5 @@
 import { defineDynamic, defineTool } from "eve/tools";
-import { toolSurfaceEnabled } from "#lib/lane-state.js";
+import { gatedToolExport } from "#lib/gated-tool.js";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 
@@ -147,6 +147,4 @@ const tool = defineTool({
   },
 });
 
-export default defineDynamic(() =>
-  toolSurfaceEnabled() ? tool : null,
-);
+export default defineDynamic(gatedToolExport("gmail", tool));

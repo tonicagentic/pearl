@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  ScrollView,
   TextInput,
   View,
 } from "react-native";
@@ -9,6 +10,7 @@ import { BottomSheet, RNHostView } from "@expo/ui";
 import { CheckIcon, XIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
+import { AgentConfigSections } from "@/components/custom-agents/agent-config-sections";
 import { AgentMarkPicker } from "@/components/custom-agents/agent-mark-picker";
 import { Icon } from "@/components/ui/icon";
 import { Text, textVariants } from "@/components/ui/text";
@@ -123,7 +125,10 @@ export function AgentSettingsModal({
       contentPadding={{ top: 4, left: 0, right: 0, bottom: 0 }}
     >
       <RNHostView matchContents>
-        <View className="px-5 pb-6 pt-1">
+        <ScrollView
+          className="px-5 pb-6 pt-1"
+          keyboardShouldPersistTaps="handled"
+        >
           <View className="mb-3 flex-row items-center justify-between">
             <Pressable
               accessibilityRole="button"
@@ -192,7 +197,8 @@ export function AgentSettingsModal({
             textAlignVertical="top"
             value={instructions}
           />
-        </View>
+          {agent ? <AgentConfigSections agentId={agent.id} /> : null}
+        </ScrollView>
       </RNHostView>
     </BottomSheet>
   );

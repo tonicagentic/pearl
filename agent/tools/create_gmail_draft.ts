@@ -3,7 +3,7 @@ import { always } from "eve/tools/approval";
 import { z } from "zod";
 
 import { createGmailDraft } from "@/lib/agent/gmail-api";
-import { toolSurfaceEnabled } from "#lib/lane-state.js";
+import { gatedToolExport } from "#lib/gated-tool.js";
 import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 import { resolveGmailToken } from "../lib/gmail-tool-helpers.js";
 
@@ -53,4 +53,4 @@ const tool = defineTool({
   },
 });
 
-export default defineDynamic(() => (toolSurfaceEnabled() ? tool : null));
+export default defineDynamic(gatedToolExport("gmail", tool));

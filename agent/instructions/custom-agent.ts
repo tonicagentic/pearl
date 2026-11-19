@@ -1,80 +1,15 @@
 import { defineDynamic, defineInstructions } from "eve/instructions";
 
-import {
-  CHAT_ID_MARKER,
-  CUSTOM_AGENT_ID_MARKER,
-} from "@/lib/agent-mode-context";
-import {
-  getCustomAgentByChatId,
-  getCustomAgentByEveSessionId,
-  getOwnedCustomAgent,
-} from "@/lib/custom-agents/store";
+import { listCustomAgentMemories } from "@/lib/custom-agents/config";
+import { resolveActiveCustomAgent } from "@/lib/custom-agents/resolve-active";
 
 import { requirePrincipalUser } from "../lib/principal.ts";
 
-interface ScannedMessage {
-  readonly role: string;
-  readonly content: unknown;
-  readonly kind?: unknown;
-}
-
-function messageText(content: unknown): string | null {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return null;
-  const parts: string[] = [];
-  for (const part of content) {
-    if (typeof part === "string") {
-      parts.push(part);
-      continue;
-    }
-    if (
-      part &&
-      typeof part === "object" &&
-      "type" in part &&
-      part.type === "text" &&
-      "text" in part &&
-      typeof part.text === "string"
-    ) {
-      parts.push(part.text);
-    }
-  }
-  return parts.length > 0 ? parts.join("") : null;
-}
-
-function isClientContextMessage(message: ScannedMessage): boolean {
-  if (message.role !== "user") return false;
-  if (message.kind === "context.instruction") return true;
-  if (message.kind !== undefined) return false;
-  const text = messageText(message.content);
-  return text?.startsWith("Client context:") === true;
-}
-
-function readMarker(
-  messages: readonly ScannedMessage[],
-  marker: string,
-): string | null {
-  const markerPattern = new RegExp(`"${marker}"\\s*:\\s*"([^"]*)"`);
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (!isClientContextMessage(message)) continue;
-    const text = messageText(message.content);
-    if (!text) continue;
-    const match = text.match(markerPattern);
-    if (!match) continue;
-    const value = match[1]?.trim() ?? "";
-    return value || null;
-  }
-  return null;
-}
-
 /**
  * When the open chat belongs to a user-defined custom agent, inject that
- * agent's name and standing instructions as an identity override. Loaded
- * from the database after verifying ownership — never from client text.
- *
- * Markers are read outside memo so a late-arriving clientContext does not
- * stick a null resolve for the whole turn. DB work is memoized by the
- * resolved ids + turn.
+ * agent's name, standing instructions, and agent-local memories as an
+ * identity override. Loaded from the database after verifying ownership —
+ * never from client text.
  */
 export default defineDynamic(async (ctx) => {
   const auth = await requirePrincipalUser(ctx.session.auth.current);
@@ -82,47 +17,28 @@ export default defineDynamic(async (ctx) => {
   const { userId } = auth;
 
   const messages = await ctx.messages();
-  const agentId = readMarker(messages, CUSTOM_AGENT_ID_MARKER);
-  const chatId = readMarker(messages, CHAT_ID_MARKER);
   const sessionId = ctx.session.id;
 
   const selection = await ctx.memo(
     [
       "custom-agent-instructions",
       ctx.turn?.id ?? null,
-      agentId,
-      chatId,
       sessionId,
+      messages.length,
     ],
     async () => {
-      if (agentId) {
-        const byId = await getOwnedCustomAgent(userId, agentId);
-        if (byId) {
-          return {
-            id: byId.id,
-            name: byId.name,
-            instructions: byId.instructions.trim(),
-          };
-        }
-      }
-
-      if (chatId) {
-        const byChat = await getCustomAgentByChatId(userId, chatId);
-        if (byChat) {
-          return {
-            id: byChat.id,
-            name: byChat.name,
-            instructions: byChat.instructions.trim(),
-          };
-        }
-      }
-
-      const bySession = await getCustomAgentByEveSessionId(userId, sessionId);
-      if (!bySession) return null;
+      const agent = await resolveActiveCustomAgent({
+        userId,
+        messages,
+        sessionId,
+      });
+      if (!agent) return null;
+      const memories = await listCustomAgentMemories(agent.id);
       return {
-        id: bySession.id,
-        name: bySession.name,
-        instructions: bySession.instructions.trim(),
+        id: agent.id,
+        name: agent.name,
+        instructions: agent.instructions.trim(),
+        memories: memories.map((row) => row.text),
       };
     },
   );
@@ -149,6 +65,19 @@ export default defineDynamic(async (ctx) => {
         "(none set yet — ask the user what this role should own, then follow it)",
       ].join("\n");
 
+  const memoryBlock =
+    selection.memories.length > 0
+      ? [
+          "## Facts this agent already knows",
+          "",
+          ...selection.memories.map((text) => `- ${text}`),
+          "",
+          "These facts are local to this agent. Prefer them for this thread.",
+          "Use add_agent_memory / remove_agent_memory to update them when the",
+          "user asks you to remember or forget something for this role.",
+        ].join("\n")
+      : null;
+
   const sections = [
     "# Active custom agent — identity override",
     "",
@@ -159,6 +88,10 @@ export default defineDynamic(async (ctx) => {
     "",
     roleBlock,
   ];
+
+  if (memoryBlock) {
+    sections.push("", memoryBlock);
+  }
 
   return defineInstructions({
     content: sections.join("\n"),
