@@ -17,6 +17,7 @@ import {
 } from "@/components/assistant-ui/elements/icon-button";
 import { File } from "@/components/assistant-ui/elements/file";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
+import { ThreadSuggestedPrompts } from "@/components/assistant-ui/elements/suggested-prompts.aui";
 import { Image } from "@/components/assistant-ui/elements/image";
 import { AssistantInlineText } from "@/components/json-render/chat-json-render";
 import { MarkdownText } from "@/components/assistant-ui/elements/markdown-text";
@@ -774,6 +775,7 @@ export const Thread: FC<ThreadProps> = ({
         }}
       >
         <ThreadFollowupSuggestions />
+        <ThreadSuggestedPrompts />
         <ComposerDock
           floats={floatsComposer}
           waitingAction={waitingAction}
