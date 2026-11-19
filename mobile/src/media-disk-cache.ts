@@ -60,6 +60,40 @@ export function peekCachedMediaUri(key: string): string | undefined {
 }
 
 /**
+ * Write bytes we already hold (upload response) into the disk cache so the
+ * first Image mount paints `file://` instead of waiting on a remote GET.
+ * No-op for data URLs / web / empty input. Failures leave the remote path.
+ */
+export async function seedMediaCache(args: {
+  readonly url: string;
+  readonly bytes: Uint8Array;
+  readonly key?: string;
+}): Promise<string | undefined> {
+  if (!shouldCacheUrl(args.url) || args.bytes.byteLength === 0) {
+    return undefined;
+  }
+  const key = (args.key?.trim() || mediaCacheKeyFromUrl(args.url)).trim();
+  if (!key) return undefined;
+
+  const existing = peekCachedMediaUri(key);
+  if (existing) return existing;
+
+  try {
+    const dest = new File(cacheDirectory(), sanitizeKey(key));
+    if (dest.exists) {
+      memory.set(key, dest.uri);
+      return dest.uri;
+    }
+    dest.create({ overwrite: true });
+    dest.writeSync(args.bytes);
+    memory.set(key, dest.uri);
+    return dest.uri;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Ensure `url` is on disk under `key`. Returns a file:// URI when cached,
  * otherwise the original remote URL (download failure / web).
  */

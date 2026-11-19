@@ -35,7 +35,7 @@ import { useCSSVariable } from "uniwind";
 import { Text } from "@/components/ui/text";
 
 import { uploadImageAttachment } from "@/src/image-attachment";
-import { useDisplayMediaUri } from "@/src/media-disk-cache";
+import { seedMediaCache, useDisplayMediaUri } from "@/src/media-disk-cache";
 import { uploadPdfAttachment } from "@/src/pdf-attachment";
 import {
   isSupportedAttachment,
@@ -430,6 +430,8 @@ export const ComposerAddAttachment: FC<{
         name,
         mediaType: "image/jpeg",
       });
+      // Seed disk before the chip mounts so later bubbles first-paint file://.
+      await seedMediaCache({ url: imageUri, bytes });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "";
       // Blob misconfig / private-store issues: still attach as a data URL so

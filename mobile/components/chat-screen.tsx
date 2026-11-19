@@ -71,7 +71,18 @@ import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
 import type { WaitingAction } from "@/components/assistant-ui/elements/waiting-action-card";
 import { SubagentTranscriptSheet } from "@/components/assistant-ui/elements/subagent-transcript-sheet";
 import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
-import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft, type LocalSend } from "@/src/send-feedback";
+import {
+  applyAttachmentHolds,
+  createAttachmentHold,
+  createLocalSend,
+  hasConfirmedSend,
+  hasUnresolvedSend,
+  holdSatisfied,
+  projectSendMessages,
+  shouldRestoreUnsentDraft,
+  type AttachmentHold,
+  type LocalSend,
+} from "@/src/send-feedback";
 import { EveEventsProvider, useChats } from "@/src/chat-context";
 import {
   ConversationProvider,
@@ -395,12 +406,18 @@ export function ChatScreen({
 
   const [sendError, setSendError] = useState<{ store: object; message: string } | null>(null);
   const [localSends, setLocalSends] = useState<Map<object, LocalSend>>(() => new Map());
+  // Composer image chips kept after deliveryId clears localSend until eve's
+  // user row carries a displayable file url (avoids `[file: name]` flash).
+  const [attachmentHoldsByStore, setAttachmentHoldsByStore] = useState(
+    () => new Map<object, AttachmentHold[]>(),
+  );
   // Sticky until eve publishes an assistant row — survives clearing localSend
   // on deliveryId so Thinking does not blank mid-send.
   const [expectingAssistantByStore, setExpectingAssistantByStore] = useState(
     () => new Map<object, boolean>(),
   );
   const localSend = localSends.get(store) ?? null;
+  const attachmentHolds = attachmentHoldsByStore.get(store) ?? [];
   const expectingAssistant = expectingAssistantByStore.get(store) ?? false;
   // One subscription for the active store — five separate hooks each paid a
   // full snapshot read on every line boundary.
@@ -590,15 +607,24 @@ export function ChatScreen({
   }, [messages]);
 
   const projectedMessages = useMemo(() => {
+    const pending = confirmed
+      ? null
+      : hasError && localSend
+        ? { ...localSend, phase: "uncertain" as const }
+        : localSend;
     const projected = projectSendMessages(
       toThreadMessages({ messages }, { isRunning, hasError }),
       messages,
-      confirmed ? null : hasError && localSend
-        ? { ...localSend, phase: "uncertain" }
-        : localSend,
+      pending,
     );
+    // Skip holds still covered by the localSend overlay for the same row.
+    const activeHolds =
+      pending && attachmentHolds.length > 0
+        ? attachmentHolds.filter((hold) => hold.baseline !== pending.baseline)
+        : attachmentHolds;
+    const withHolds = applyAttachmentHolds(projected, messages, activeHolds);
     const base = withPendingAssistant(
-      projected as Parameters<typeof withPendingAssistant>[0],
+      withHolds as Parameters<typeof withPendingAssistant>[0],
       messages,
       isRunning,
       awaitingReply,
@@ -618,6 +644,7 @@ export function ChatScreen({
   }, [
     messages,
     localSend,
+    attachmentHolds,
     confirmed,
     isRunning,
     hasError,
@@ -811,6 +838,25 @@ export function ChatScreen({
     }
   }, [expectingAssistant, messages, store, localSend, isBusy]);
 
+  // Drop attachment holds once eve's user row carries a displayable image.
+  useEffect(() => {
+    if (attachmentHolds.length === 0) return;
+    const remaining = attachmentHolds.filter(
+      (hold) => !holdSatisfied(messages, hold),
+    );
+    if (remaining.length === attachmentHolds.length) return;
+    setAttachmentHoldsByStore((current) => {
+      const existing = current.get(store);
+      if (!existing || existing.length === 0) return current;
+      const nextHolds = existing.filter((hold) => !holdSatisfied(messages, hold));
+      if (nextHolds.length === existing.length) return current;
+      const next = new Map(current);
+      if (nextHolds.length === 0) next.delete(store);
+      else next.set(store, nextHolds);
+      return next;
+    });
+  }, [attachmentHolds, messages, store]);
+
   // Callbacks read from this ref so the adapter object only rebuilds when
   // messages / run flags change — not on every localSend or project id tick.
   // assistant-ui compares `adapter.messages` by reference inside setAdapter,
@@ -981,14 +1027,22 @@ export function ChatScreen({
           : turn.message;
         // Paint the user turn before the durable marker's network round-trip.
         // This row is display-only; Eve still waits for prepareSend to persist it.
+        const baseline = activeStore.snapshot.messages.length;
         const preview = createLocalSend(
           activeStore,
-          activeStore.snapshot.messages.length,
+          baseline,
           activeStore.snapshot.events.length,
           message,
           outgoing,
         );
+        const hold = createAttachmentHold(baseline, message);
         setLocalSends((current) => new Map(current).set(activeStore, preview));
+        if (hold) {
+          setAttachmentHoldsByStore((current) => {
+            const existing = current.get(activeStore) ?? [];
+            return new Map(current).set(activeStore, [...existing, hold]);
+          });
+        }
         setExpectingAssistantByStore((current) => new Map(current).set(activeStore, true));
         // Light tick as the bubble appears; skip validation failures above.
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -1078,6 +1132,20 @@ export function ChatScreen({
               if (current.get(activeStore)?.preview !== preview.preview) return current;
               const next = new Map(current);
               next.delete(activeStore);
+              return next;
+            });
+            // Draft returns to the composer — drop the display hold so we do
+            // not leave a ghost bubble with the photo.
+            setAttachmentHoldsByStore((current) => {
+              const existing = current.get(activeStore);
+              if (!existing?.length) return current;
+              const nextHolds = existing.filter(
+                (hold) => hold.baseline !== preview.baseline,
+              );
+              if (nextHolds.length === existing.length) return current;
+              const next = new Map(current);
+              if (nextHolds.length === 0) next.delete(activeStore);
+              else next.set(activeStore, nextHolds);
               return next;
             });
             setExpectingAssistantByStore((current) => {
@@ -1185,6 +1253,19 @@ export function ChatScreen({
       if (!row) return current;
       return new Map(current).set(store, { ...row, phase: "preparing" });
     });
+    const resentHold = createAttachmentHold(pending.baseline, {
+      content: pending.preview.content,
+      attachments: pending.preview.attachments,
+    });
+    if (resentHold) {
+      setAttachmentHoldsByStore((current) => {
+        const existing = current.get(store) ?? [];
+        if (existing.some((hold) => hold.baseline === resentHold.baseline)) {
+          return current;
+        }
+        return new Map(current).set(store, [...existing, resentHold]);
+      });
+    }
     setExpectingAssistantByStore((current) => new Map(current).set(store, true));
     try {
       if (

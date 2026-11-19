@@ -1,9 +1,26 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { SessionStore } from "eve/client";
-import { createLocalSend, hasConfirmedSend, hasUnresolvedSend, projectSendMessages, shouldRestoreUnsentDraft } from "../mobile/src/send-feedback.ts";
+import {
+  applyAttachmentHolds,
+  createAttachmentHold,
+  createLocalSend,
+  hasConfirmedSend,
+  hasUnresolvedSend,
+  holdSatisfied,
+  projectSendMessages,
+  shouldRestoreUnsentDraft,
+} from "../mobile/src/send-feedback.ts";
 
 const user = (text) => ({ role: "user", content: [{ type: "text", text }] });
+const imageAttachment = (image, name = "photo.jpg") => ({
+  id: "image-1",
+  name,
+  type: "image",
+  contentType: "image/jpeg",
+  status: { type: "complete" },
+  content: [{ type: "image", image }],
+});
 
 test("eve rejects failed preparation; the draft must return", async () => {
   const store = new SessionStore({
@@ -95,4 +112,92 @@ test("uncertain local turn remains visible until server confirmation", () => {
   const during = projectSendMessages([user("old")], [{ role: "user" }], pending);
   assert.equal(during.at(-1).metadata.custom.mobileSendState, "uncertain");
   assert.equal(projectSendMessages([user("old")], [{ role: "user" }], null).length, 1);
+});
+
+test("attachment hold keeps the photo after deliveryId clears localSend", () => {
+  const image = "data:image/jpeg;base64,YWJj";
+  const hold = createAttachmentHold(0, {
+    content: [{ type: "text", text: "what's this" }],
+    attachments: [imageAttachment(image)],
+  });
+  assert.ok(hold);
+  const summary = user("what's this\n[file: photo.jpg]");
+  // localSend is null (cleared on deliveryId); hold still paints the chip.
+  const held = applyAttachmentHolds([summary], [{ role: "user" }], [hold]);
+  assert.equal(held[0].content[0].text, "what's this");
+  assert.equal(held[0].attachments[0].content[0].image, image);
+  assert.equal(holdSatisfied([{ role: "user", parts: [{ type: "text", text: "what's this\n[file: photo.jpg]" }] }], hold), false);
+});
+
+test("attachment hold appends the preview when eve has not published a user row", () => {
+  const image = "https://blob.example/attachments/photo.jpg?token=1";
+  const hold = createAttachmentHold(0, {
+    content: [{ type: "text", text: "fit check" }],
+    attachments: [imageAttachment(image)],
+  });
+  const held = applyAttachmentHolds([], [], [hold]);
+  assert.equal(held.length, 1);
+  assert.equal(held[0].attachments[0].content[0].image, image);
+  assert.equal(holdSatisfied([], hold), false);
+});
+
+test("attachment hold leaves a row alone once eve has a displayable image", () => {
+  const image = "https://blob.example/attachments/photo.jpg?token=1";
+  const hold = createAttachmentHold(0, {
+    content: [{ type: "text", text: "what's this" }],
+    attachments: [imageAttachment(image)],
+  });
+  const row = {
+    role: "user",
+    content: [{ type: "text", text: "what's this" }],
+    attachments: [imageAttachment(image, "IMG_7629.jpg")],
+  };
+  const held = applyAttachmentHolds([row], [{ role: "user" }], [hold]);
+  assert.equal(held[0], row);
+  assert.equal(
+    holdSatisfied(
+      [{
+        role: "user",
+        parts: [
+          { type: "text", text: "what's this" },
+          { type: "file", mediaType: "image/jpeg", url: image, filename: "IMG_7629.jpg" },
+        ],
+      }],
+      hold,
+    ),
+    true,
+  );
+});
+
+test("a second attachment hold targets the later user row", () => {
+  const first = "data:image/jpeg;base64,YWJj";
+  const second = "data:image/jpeg;base64,ZGVm";
+  const firstHold = createAttachmentHold(0, {
+    content: [{ type: "text", text: "first" }],
+    attachments: [imageAttachment(first, "one.jpg")],
+  });
+  const secondHold = createAttachmentHold(2, {
+    content: [{ type: "text", text: "second" }],
+    attachments: [imageAttachment(second, "two.jpg")],
+  });
+  const messages = [
+    {
+      role: "user",
+      content: [{ type: "text", text: "first" }],
+      attachments: [imageAttachment(first, "one.jpg")],
+    },
+    { role: "assistant", content: [{ type: "text", text: "nice" }] },
+    user("second\n[file: two.jpg]"),
+  ];
+  const source = [
+    { role: "user" },
+    { role: "assistant" },
+    { role: "user" },
+  ];
+  const held = applyAttachmentHolds(messages, source, [firstHold, secondHold]);
+  // First row already has its image — leave it alone.
+  assert.equal(held[0], messages[0]);
+  assert.equal(held[2].content[0].text, "second");
+  assert.equal(held[2].attachments[0].content[0].image, second);
+  assert.equal(held[2].attachments[0].name, "two.jpg");
 });

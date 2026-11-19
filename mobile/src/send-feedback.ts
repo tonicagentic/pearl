@@ -115,6 +115,98 @@ function withPreviewImages(row: ThreadMessageLike, preview: ThreadMessageLike): 
   };
 }
 
+/**
+ * Display-only snapshot of composer image chips after deliveryId clears
+ * localSend, until eve's user row carries a displayable file url.
+ */
+export type AttachmentHold = {
+  readonly baseline: number;
+  readonly preview: ThreadMessageLike;
+};
+
+export function createAttachmentHold(
+  baseline: number,
+  message: Pick<AppendMessage, "content" | "attachments">,
+): AttachmentHold | null {
+  const preview: ThreadMessageLike = {
+    role: "user",
+    content: message.content,
+    ...(message.attachments?.length ? { attachments: message.attachments } : {}),
+  };
+  if (imageParts(preview).length === 0) return null;
+  return { baseline, preview };
+}
+
+const displayableImageUrl = (value?: string) =>
+  (value && /^https:\/\//i.test(value) ? value : undefined) ??
+  (value && /^data:image\/(?:jpeg|jpg|png|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(value)
+    ? value
+    : undefined);
+
+type EveFilePartLike = {
+  readonly type: string;
+  readonly mediaType?: string;
+  readonly url?: string;
+};
+
+type EveMessageLike = {
+  readonly role: string;
+  readonly parts?: readonly EveFilePartLike[];
+};
+
+/** True once the eve user row at/after baseline has a paintable image file. */
+export function holdSatisfied(
+  eveMessages: readonly EveMessageLike[],
+  hold: AttachmentHold,
+): boolean {
+  const userIndex = eveMessages.findIndex(
+    (message, index) => index >= hold.baseline && message.role === "user",
+  );
+  if (userIndex < 0) return false;
+  const parts = eveMessages[userIndex]?.parts ?? [];
+  return parts.some(
+    (part) =>
+      part.type === "file" &&
+      typeof part.mediaType === "string" &&
+      part.mediaType.startsWith("image/") &&
+      Boolean(displayableImageUrl(part.url)),
+  );
+}
+
+/**
+ * Keep composer photos on the bubble after localSend is cleared on deliveryId.
+ * Skips holds that still have an active localSend overlay for the same row.
+ */
+export function applyAttachmentHolds(
+  messages: readonly ThreadMessageLike[],
+  sourceMessages: readonly { readonly role: string }[],
+  holds: readonly AttachmentHold[],
+): ThreadMessageLike[] {
+  if (holds.length === 0) return messages as ThreadMessageLike[];
+  let next: ThreadMessageLike[] | null = null;
+  for (const hold of holds) {
+    if (imageParts(hold.preview).length === 0) continue;
+    const userIndex = sourceMessages.findIndex(
+      (message, index) => index >= hold.baseline && message.role === "user",
+    );
+    if (userIndex < 0) {
+      const working = next ?? [...messages];
+      working.push(hold.preview);
+      next = working;
+      continue;
+    }
+    const row = (next ?? messages)[userIndex];
+    if (!row) continue;
+    if (imageParts(row).length > 0) continue;
+    const merged = withPreviewImages(row, hold.preview);
+    if (merged === row) continue;
+    const working = next ?? [...messages];
+    working[userIndex] = merged;
+    next = working;
+  }
+  return next ?? (messages as ThreadMessageLike[]);
+}
+
 /** Hand off at the same positional row when eve publishes its own user message. */
 export function projectSendMessages(
   messages: readonly ThreadMessageLike[],
