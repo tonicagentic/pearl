@@ -126,6 +126,17 @@ export const chat = pgTable(
       .$type<SpokenTurn[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    // Session-free quick-path lines waiting to join eve history on escalate.
+    quickTurns: jsonb("quick_turns")
+      .$type<
+        Array<{
+          id: string;
+          role: "user" | "assistant";
+          text: string;
+        }>
+      >()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     // Connected remote eve agent this thread is talking through (null = Pearl).
     // Late reference: connected_agent is declared below.
     remoteAgentId: text("remote_agent_id").references(

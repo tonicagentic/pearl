@@ -18,6 +18,10 @@ import type {
   ChatSearchHit,
 } from "@/lib/chat/types";
 import {
+  quickTurnsFromRow,
+  type QuickTurn,
+} from "@/lib/chat/quick-turns";
+import {
   spokenTurnsFromRow,
   type SpokenTurn,
 } from "@/lib/chat/spoken-turns";
@@ -322,6 +326,7 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
       projectId: chat.projectId,
       remoteAgentId: chat.remoteAgentId,
       spokenTurns: chat.spokenTurns,
+      quickTurns: chat.quickTurns,
       customAgentId: customAgent.id,
       customAgentName: customAgent.name,
       customAgentAccent: customAgent.accent,
@@ -391,6 +396,7 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
     customAgent: customAgentRef,
     session: row.eveSession ?? undefined,
     spokenTurns: Array.isArray(row.spokenTurns) ? row.spokenTurns : [],
+    quickTurns: Array.isArray(row.quickTurns) ? row.quickTurns : [],
     title: row.title,
   };
 }
@@ -452,6 +458,63 @@ export async function takeSpokenTurnsForUser({
   await db
     .update(chat)
     .set({ spokenTurns: [], updatedAt: new Date() })
+    .where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
+
+  return turns;
+}
+
+/** Replace the chat's quick-path transcript (session-free answers). */
+export async function saveQuickTurnsForUser({
+  chatId,
+  userId,
+  turns,
+}: {
+  readonly chatId: string;
+  readonly userId: string;
+  readonly turns: readonly QuickTurn[];
+}): Promise<boolean> {
+  const [row] = await db
+    .update(chat)
+    .set({
+      quickTurns: [...turns],
+      title: sql<string>`
+        case
+          when ${chat.title} = ${DEFAULT_CHAT_TITLE}
+          then ${createFallbackTitle(turns.find((turn) => turn.role === "user")?.text ?? "New chat")}
+          else ${chat.title}
+        end
+      `,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
+    .returning({ id: chat.id });
+
+  return Boolean(row);
+}
+
+/**
+ * Read and clear quick turns for a chat the caller owns.
+ * Used by the eve channel to import history when escalating to a session.
+ */
+export async function takeQuickTurnsForUser({
+  chatId,
+  userId,
+}: {
+  readonly chatId: string;
+  readonly userId: string;
+}): Promise<QuickTurn[]> {
+  const [row] = await db
+    .select({ quickTurns: chat.quickTurns })
+    .from(chat)
+    .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
+    .limit(1);
+
+  const turns = quickTurnsFromRow(row);
+  if (turns.length === 0) return [];
+
+  await db
+    .update(chat)
+    .set({ quickTurns: [], updatedAt: new Date() })
     .where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
 
   return turns;

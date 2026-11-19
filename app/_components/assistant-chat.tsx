@@ -58,7 +58,12 @@ import {
 } from "@/app/_components/remote-agent-selection";
 import { waitingLabelForText } from "@/lib/pearl-lane";
 import { setWaitingLabel } from "@/lib/waiting-label";
+import {
+  QuickPathProvider,
+  type QuickPathSendContext,
+} from "@/components/assistant-ui/elements/quick-path-context";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import type { QuickTurn } from "@/lib/chat/quick-turns";
 import {
   EditFileToolUI,
   ReadFileToolUI,
@@ -414,6 +419,10 @@ function AssistantChatSurfaceInner({
   const isDisabled = !viewer || !setupStatus.appReady;
 
   useEffect(() => {
+    activeChatIdRef.current = chatId;
+  }, [chatId]);
+
+  useEffect(() => {
     projectIdRef.current = activeChat?.projectId ?? null;
   }, [activeChat?.projectId]);
 
@@ -555,10 +564,13 @@ function AssistantChatSurfaceInner({
             remoteAgentId: getRemoteAgentSelection(),
             customAgent: activeChat?.customAgent ?? null,
             session,
-            // onMessage imports and clears spoken turns for a real send.
+            // onMessage imports and clears spoken / quick turns for a real send.
             spokenTurns: lastOutgoingMessageRef.current
               ? []
               : (activeChat?.spokenTurns ?? []),
+            quickTurns: lastOutgoingMessageRef.current
+              ? []
+              : (activeChat?.quickTurns ?? []),
             title: currentTitleRef.current,
           });
           onPendingUserMessageSettled?.();
@@ -788,9 +800,71 @@ function AssistantChatSurfaceInner({
     setLargePasteErrorHandler(setClientError);
   }, [setClientError]);
 
+  const getQuickSendContext = useCallback((): QuickPathSendContext => {
+    return {
+      chatId: activeChatIdRef.current,
+      projectId: projectIdRef.current,
+      customAgentId: customAgentIdRef.current,
+      hasEveSession: Boolean(activeChat?.session) && !freshSession,
+      onChatId: (id) => {
+        activeChatIdRef.current = id;
+        setActiveChatId(id);
+        touchChat({
+          id,
+          title: currentTitleRef.current,
+          updatedAt: new Date().toISOString(),
+          waitingForInput: false,
+          presence: "idle",
+        });
+        onChatCreated?.(id);
+      },
+      onTurns: (turns: readonly QuickTurn[]) => {
+        const id = activeChatIdRef.current;
+        if (!id) return;
+        const firstUser = turns.find((turn) => turn.role === "user")?.text;
+        if (firstUser && currentTitleRef.current === "New chat") {
+          currentTitleRef.current = createFallbackTitle(firstUser);
+        }
+        onActiveChatUpdated?.({
+          id,
+          events: activeChat?.events ?? EMPTY_EVENTS,
+          pendingUserMessage: null,
+          projectId: projectIdRef.current,
+          remoteAgentId: getRemoteAgentSelection(),
+          customAgent: activeChat?.customAgent ?? null,
+          session: activeChat?.session,
+          spokenTurns: activeChat?.spokenTurns ?? [],
+          quickTurns: turns,
+          title: currentTitleRef.current,
+        });
+        touchChat({
+          id,
+          title: currentTitleRef.current,
+          updatedAt: new Date().toISOString(),
+          waitingForInput: false,
+          presence: "idle",
+        });
+      },
+    };
+  }, [
+    activeChat?.customAgent,
+    activeChat?.events,
+    activeChat?.session,
+    activeChat?.spokenTurns,
+    freshSession,
+    onActiveChatUpdated,
+    onChatCreated,
+    setActiveChatId,
+    touchChat,
+  ]);
+
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ActiveCustomAgentProvider agent={activeChat?.customAgent ?? null}>
+      <QuickPathProvider
+        initialTurns={activeChat?.quickTurns ?? []}
+        getSendContext={getQuickSendContext}
+      >
       <CanvasProvider chatId={chatId}>
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-start justify-between gap-2 px-2 py-2 md:px-3">
@@ -854,6 +928,7 @@ function AssistantChatSurfaceInner({
         <SessionCursorPersistence chatId={chatId} storageMode={storageMode} />
         <EveErrorToast />
       </CanvasProvider>
+      </QuickPathProvider>
       </ActiveCustomAgentProvider>
     </AssistantRuntimeProvider>
   );

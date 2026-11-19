@@ -98,3 +98,38 @@ export function laneNeedsImageSurface(
   }
   return lane === null;
 }
+
+/**
+ * Cap on stored quick-path turns (user + assistant) before opening an eve
+ * session so memory and compaction exist for longer threads.
+ */
+export const QUICK_PATH_MAX_TURNS = 6;
+
+export type QuickPathEligibility = {
+  readonly text: string;
+  readonly hasEveSession: boolean;
+  readonly hasAttachments: boolean;
+  readonly hasCustomAgent: boolean;
+  readonly hasRemoteAgent: boolean;
+  readonly hasProject: boolean;
+  readonly hasPinnedModel: boolean;
+  /** Already-stored quick turns on the chat (user + assistant). */
+  readonly quickTurnCount: number;
+};
+
+/**
+ * Whether this send can use the session-free quick path.
+ * Ambiguous / tools / analysis / think heuristics go straight to eve.
+ */
+export function canUseQuickPath(input: QuickPathEligibility): boolean {
+  if (input.hasEveSession) return false;
+  if (input.hasAttachments) return false;
+  if (input.hasCustomAgent) return false;
+  if (input.hasRemoteAgent) return false;
+  if (input.hasProject) return false;
+  if (input.hasPinnedModel) return false;
+  if (input.quickTurnCount >= QUICK_PATH_MAX_TURNS) return false;
+  const trimmed = input.text.trim();
+  if (!trimmed) return false;
+  return classifyPearlHeuristic(trimmed) === "voice";
+}

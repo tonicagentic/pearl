@@ -1,4 +1,5 @@
 import type { ClientSessionState, SessionStreamEvent } from "eve/client";
+import type { QuickTurn } from "@/lib/chat/quick-turns";
 import type { SpokenTurn } from "@/lib/chat/spoken-turns";
 import type { CustomAgentRef } from "@/lib/custom-agents/types";
 
@@ -55,6 +56,7 @@ export type ActiveChat = {
   readonly customAgent: CustomAgentRef | null;
   readonly session: ClientSessionState | undefined;
   readonly spokenTurns: readonly SpokenTurn[];
+  readonly quickTurns: readonly QuickTurn[];
   readonly title: string;
 };
 

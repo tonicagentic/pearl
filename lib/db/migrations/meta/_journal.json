@@ -316,6 +316,13 @@
       "when": 1795706000000,
       "tag": "0047_custom_agent_accent_default",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1795707000000,
+      "tag": "0048_chat_quick_turns",
+      "breakpoints": true
     }
   ]
 }

@@ -178,6 +178,9 @@ type ChatsContextValue = {
   readonly spokenTurns: readonly SpokenTurn[];
   /** Persist a live call without starting a Pearl turn. */
   readonly saveSpokenTurns: (turns: readonly LiveSpokenDraft[]) => Promise<void>;
+  /** Session-free quick-path turns until eve imports them on escalate. */
+  readonly quickTurns: readonly SpokenTurn[];
+  readonly setQuickTurns: (turns: readonly SpokenTurn[]) => void;
 };
 
 const ChatsContext = createContext<ChatsContextValue | null>(null);
@@ -246,6 +249,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [spokenTurns, setSpokenTurns] = useState<readonly SpokenTurn[]>([]);
+  const [quickTurns, setQuickTurns] = useState<readonly SpokenTurn[]>([]);
 
   const setActiveCustomAgent = useCallback((agent: CustomAgentRef | null) => {
     activeCustomAgentRef.current = agent;
@@ -640,9 +644,10 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         }
         binding.pendingMessage = message || null;
         binding.sendPrepared = true;
-        // onMessage imports spoken turns for this send; drop the overlay source.
+        // onMessage imports spoken / quick turns for this send; drop overlays.
         if (message && activeStoreRef.current === store) {
           setSpokenTurns([]);
+          setQuickTurns([]);
         }
         traceSend(binding, "pending marker saved");
         if (binding.id) touchRetained(binding.id, store);
@@ -798,15 +803,17 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         if (hasHistory) binding.pendingMessage = null;
         setPendingMessage(pending);
         setSpokenTurns([]);
+        setQuickTurns([]);
         setPersistenceError(binding.syncFailed ? "Save failed" : null);
         touchRetained(chatId, retained);
         setStore(retained);
         pruneIdleStore(prior);
         markActiveChatRead(chatId);
-        // Retained stores skip a network round-trip; refresh spoken turns.
+        // Retained stores skip a network round-trip; refresh spoken / quick turns.
         void getChat(chatId).then((fresh) => {
           if (activeChatIdRef.current === chatId && fresh) {
             setSpokenTurns(fresh.spokenTurns ?? []);
+            setQuickTurns(fresh.quickTurns ?? []);
             binding.customAgent = fresh.customAgent ?? null;
             activeCustomAgentRef.current = fresh.customAgent ?? null;
             setActiveCustomAgentState(fresh.customAgent ?? null);
@@ -844,6 +851,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         setRemoteAgentSelection(chat.remoteAgentId ?? null);
         setPendingMessage(stillPending);
         setSpokenTurns(chat.spokenTurns ?? []);
+        setQuickTurns(chat.quickTurns ?? []);
         setPersistenceError(null);
         setStore(nextStore);
         pruneIdleStore(prior);
@@ -880,6 +888,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     setActiveTitle("New chat");
     setPendingMessage(null);
     setSpokenTurns([]);
+    setQuickTurns([]);
     setPersistenceError(null);
     setSelectionError(null);
     // Drop durable composer attachments for the prior chat and the draft key.
@@ -1215,6 +1224,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       setChatProject,
       spokenTurns,
       saveSpokenTurns,
+      quickTurns,
+      setQuickTurns,
     }),
     [
       store,
@@ -1249,6 +1260,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       setChatProject,
       spokenTurns,
       saveSpokenTurns,
+      quickTurns,
+      setQuickTurns,
     ],
   );
 

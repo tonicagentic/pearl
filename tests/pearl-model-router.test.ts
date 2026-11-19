@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  canUseQuickPath,
   classifyPearlHeuristic,
   laneNeedsImageSurface,
+  QUICK_PATH_MAX_TURNS,
   waitingLabelForText,
 } from "../lib/pearl-lane.ts";
 import {
@@ -85,6 +87,71 @@ describe("classifyPearlHeuristic", () => {
       "worth sitting with rather than rushing toward a conclusion today.";
     assert.ok(ambiguous.length >= 280);
     assert.equal(classifyPearlHeuristic(ambiguous), null);
+  });
+});
+
+describe("canUseQuickPath", () => {
+  const base = {
+    text: "hey, what do you think?",
+    hasEveSession: false,
+    hasAttachments: false,
+    hasCustomAgent: false,
+    hasRemoteAgent: false,
+    hasProject: false,
+    hasPinnedModel: false,
+    quickTurnCount: 0,
+  };
+
+  it("allows short voice chat with a clean thread", () => {
+    assert.equal(canUseQuickPath(base), true);
+  });
+
+  it("rejects once an eve session exists", () => {
+    assert.equal(canUseQuickPath({ ...base, hasEveSession: true }), false);
+  });
+
+  it("rejects attachments, agents, project, and pinned models", () => {
+    assert.equal(canUseQuickPath({ ...base, hasAttachments: true }), false);
+    assert.equal(canUseQuickPath({ ...base, hasCustomAgent: true }), false);
+    assert.equal(canUseQuickPath({ ...base, hasRemoteAgent: true }), false);
+    assert.equal(canUseQuickPath({ ...base, hasProject: true }), false);
+    assert.equal(canUseQuickPath({ ...base, hasPinnedModel: true }), false);
+  });
+
+  it("rejects tool, analysis, and think cues", () => {
+    assert.equal(
+      canUseQuickPath({ ...base, text: "What's on my calendar tomorrow?" }),
+      false,
+    );
+    assert.equal(
+      canUseQuickPath({ ...base, text: "Summarize this contract for diligence" }),
+      false,
+    );
+    assert.equal(
+      canUseQuickPath({ ...base, text: "Draft a blog post about our launch" }),
+      false,
+    );
+  });
+
+  it("rejects ambiguous long chat so eve handles it", () => {
+    const ambiguous =
+      "I have been wondering about the relationship between cities and memory " +
+      "for a while now, and I want to explore that carefully with some nuance " +
+      "across a few different angles before settling anywhere. There is history, " +
+      "architecture, and personal association mixed together in ways that feel " +
+      "worth sitting with rather than rushing toward a conclusion today.";
+    assert.equal(canUseQuickPath({ ...base, text: ambiguous }), false);
+  });
+
+  it("rejects once the quick transcript hits the turn cap", () => {
+    assert.equal(
+      canUseQuickPath({ ...base, quickTurnCount: QUICK_PATH_MAX_TURNS }),
+      false,
+    );
+    assert.equal(
+      canUseQuickPath({ ...base, quickTurnCount: QUICK_PATH_MAX_TURNS - 1 }),
+      true,
+    );
   });
 });
 

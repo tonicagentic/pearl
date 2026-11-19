@@ -781,6 +781,35 @@ export function appendSpokenTurnMessages(
   return [...projected, ...overlay];
 }
 
+/** Overlay session-free quick-path turns until eve imports them. */
+export function appendQuickTurnMessages(
+  projected: readonly ThreadMessageLike[],
+  quick: readonly { readonly id: string; readonly role: "user" | "assistant"; readonly text: string }[],
+  streamingText = "",
+): ThreadMessageLike[] {
+  if (quick.length === 0 && !streamingText) {
+    return projected as ThreadMessageLike[];
+  }
+  const overlay: ThreadMessageLike[] = quick.map((turn) => ({
+    role: turn.role === "assistant" ? ("assistant" as const) : ("user" as const),
+    content: [{ type: "text" as const, text: turn.text }],
+    metadata: {
+      custom: { historyId: turn.id, quickPath: true },
+    },
+  }));
+  if (streamingText) {
+    overlay.push({
+      role: "assistant",
+      content: [{ type: "text" as const, text: streamingText }],
+      status: { type: "running" },
+      metadata: {
+        custom: { quickPath: true, streaming: true },
+      },
+    });
+  }
+  return [...projected, ...overlay];
+}
+
 // Omit the message id: eve replaces the optimistic user id on acceptance, and
 // this external-store runtime would otherwise retain an extra sibling branch.
 export function toThreadMessages(

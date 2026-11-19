@@ -53,6 +53,7 @@ import { buildTurnClientContext } from "@/src/turn-client-context";
 import { isEditableCanvasPath } from "../../lib/design/file-preview";
 import { useWorkspace } from "@/src/workspace-context";
 import {
+  appendQuickTurnMessages,
   appendSpokenTurnMessages,
   composerWaitingQuestions,
   getPendingApprovals,
@@ -62,6 +63,11 @@ import {
   spokenTurnsPendingImport,
   type PendingApproval,
 } from "@/src/message-projection";
+import { readQuickPathStream } from "../../lib/chat/quick-path-stream";
+import { canUseQuickPath } from "../../lib/pearl-lane";
+import { DEFAULT_MODEL_KEY, getModelSelection } from "@/src/model-selection";
+import { getRemoteAgentSelection } from "@/src/remote-agent-selection";
+import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
 import type { WaitingAction } from "@/components/assistant-ui/elements/waiting-action-card";
 import { SubagentTranscriptSheet } from "@/components/assistant-ui/elements/subagent-transcript-sheet";
 import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
@@ -131,7 +137,11 @@ export function ChatScreen({
     clearPendingMessage,
     recoverDeadSession,
     spokenTurns,
+    quickTurns,
+    setQuickTurns,
   } = useChats();
+  const [quickStreamingText, setQuickStreamingText] = useState("");
+  const [quickStreaming, setQuickStreaming] = useState(false);
   const { setChatId, tabs, preferDetail, canvasOpen, openFile } =
     useWorkspace();
   const [computerOpen, setComputerOpen] = useState(false);
@@ -560,6 +570,14 @@ export function ChatScreen({
     () => spokenTurnsPendingImport(spokenTurns, messages),
     [spokenTurns, messages],
   );
+  const pendingQuick = useMemo(() => {
+    const imported = new Set(
+      messages
+        .map((message) => message.metadata?.historyId)
+        .filter((id): id is string => typeof id === "string"),
+    );
+    return quickTurns.filter((turn) => !imported.has(turn.id));
+  }, [quickTurns, messages]);
   // Per-delta text ahead of eve line commits — paints smaller chunks on device.
   const liveReplyVersion = useSyncExternalStore(
     subscribeLiveReplyText,
@@ -588,9 +606,14 @@ export function ChatScreen({
     const withLive = applyLiveReplyOverlay(
       base as Parameters<typeof applyLiveReplyOverlay>[0],
     );
-    return appendSpokenTurnMessages(
+    const withSpoken = appendSpokenTurnMessages(
       withLive as ThreadMessageLike[],
       pendingSpoken,
+    );
+    return appendQuickTurnMessages(
+      withSpoken,
+      pendingQuick,
+      quickStreaming ? quickStreamingText : "",
     );
   }, [
     messages,
@@ -600,6 +623,9 @@ export function ChatScreen({
     hasError,
     awaitingReply,
     pendingSpoken,
+    pendingQuick,
+    quickStreaming,
+    quickStreamingText,
     liveReplyVersion,
   ]);
 
@@ -803,6 +829,11 @@ export function ChatScreen({
     recoverDeadSession,
     ensureProjectForPlanMode,
     setActiveProjectId,
+    quickTurns,
+    setQuickTurns,
+    setQuickStreamingText,
+    setQuickStreaming,
+    selectChat,
   });
   useEffect(() => {
     sendCtxRef.current = {
@@ -819,6 +850,11 @@ export function ChatScreen({
       recoverDeadSession,
       ensureProjectForPlanMode,
       setActiveProjectId,
+      quickTurns,
+      setQuickTurns,
+      setQuickStreamingText,
+      setQuickStreaming,
+      selectChat,
     };
   });
 
@@ -829,10 +865,10 @@ export function ChatScreen({
       // positional fallback ids (the projection omits ids on purpose) and
       // honors the per-message status it carries.
       convertMessage: (message: ThreadMessageLike) => message,
-      isRunning,
+      isRunning: isRunning || quickStreaming,
       isDisabled: status === "resuming",
       // HITL, in-flight prepare, or unconfirmed prior turn — don't invite a throw.
-      isSendDisabled: composerBlocked || unresolvedSend,
+      isSendDisabled: composerBlocked || unresolvedSend || quickStreaming,
       onNew: async (message: AppendMessage) => {
         const ctx = sendCtxRef.current;
         const { store: activeStore } = ctx;
@@ -875,6 +911,69 @@ export function ChatScreen({
           setSendError({ store: activeStore, message: reason });
           throw new MessageNotSentError(reason);
         }
+
+        const hasAttachments = (message.attachments?.length ?? 0) > 0;
+        const hasEveSession = Boolean(activeStore.snapshot.session);
+        const pinned = getModelSelection() !== DEFAULT_MODEL_KEY;
+        if (
+          canUseQuickPath({
+            text: turn.text,
+            hasEveSession,
+            hasAttachments,
+            hasCustomAgent: Boolean(ctx.activeCustomAgentId),
+            hasRemoteAgent: Boolean(getRemoteAgentSelection()),
+            hasProject: Boolean(projectIdForTurn),
+            hasPinnedModel: pinned,
+            quickTurnCount: ctx.quickTurns.length,
+          })
+        ) {
+          const priorQuick = ctx.quickTurns;
+          const optimistic = {
+            id: `quick:pending:${Date.now()}`,
+            role: "user" as const,
+            text: turn.text.trim(),
+          };
+          ctx.setQuickTurns([...priorQuick, optimistic]);
+          ctx.setQuickStreaming(true);
+          ctx.setQuickStreamingText("");
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          try {
+            const credential = getAuthCookie();
+            const response = await fetch(`${AGENT_URL}/api/chat/quick`, {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                ...(credential ? { authorization: `Bearer ${credential}` } : {}),
+              },
+              body: JSON.stringify({
+                chatId: ctx.activeChatId,
+                message: turn.text.trim(),
+              }),
+            });
+            if (response.status !== 409) {
+              const result = await readQuickPathStream(response, {
+                onTextDelta: (delta) => {
+                  ctx.setQuickStreamingText((current) => current + delta);
+                },
+              });
+              if (result.outcome === "answered") {
+                ctx.setQuickTurns([...result.turns]);
+                ctx.setQuickStreaming(false);
+                ctx.setQuickStreamingText("");
+                if (result.chatId && result.chatId !== ctx.activeChatId) {
+                  await ctx.selectChat(result.chatId);
+                }
+                return;
+              }
+            }
+          } catch {
+            // Fall through to eve.
+          }
+          ctx.setQuickTurns(priorQuick);
+          ctx.setQuickStreaming(false);
+          ctx.setQuickStreamingText("");
+        }
+
         // Match an attachment-only pending row to this exact eve receive event
         // after a force-quit. The token is just a correlation label, not auth.
         const outgoing = !turn.text.trim() && Array.isArray(turn.message)
@@ -1041,6 +1140,7 @@ export function ChatScreen({
     [
       projectedMessages,
       isRunning,
+      quickStreaming,
       status,
       composerBlocked,
       unresolvedSend,

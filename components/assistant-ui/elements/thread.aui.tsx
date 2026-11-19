@@ -28,6 +28,8 @@ import {
   MessageSources,
   SourcePart,
 } from "@/components/assistant-ui/elements/citation";
+import { useOptionalQuickPath } from "@/components/assistant-ui/elements/quick-path-context";
+import { QuickTurnsOverlay } from "@/components/assistant-ui/elements/quick-turns-overlay";
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback.aui";
 import { DELEGATION_TOOLS } from "@/components/assistant-ui/elements/task-card.aui";
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
@@ -270,7 +272,13 @@ export const Thread: FC<ThreadProps> = ({
   components = EMPTY_COMPONENTS,
   autoFocus = true,
 }) => {
-  const isEmpty = useAuiState(isNewChatView);
+  const threadEmpty = useAuiState(isNewChatView);
+  const quick = useOptionalQuickPath();
+  const hasQuick =
+    Boolean(quick?.turns.length) ||
+    Boolean(quick?.streamingText) ||
+    Boolean(quick?.isStreaming);
+  const isEmpty = threadEmpty && !hasQuick;
 
   return (
     <ThreadComponentsContext.Provider value={components}>
@@ -284,6 +292,11 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
   autoFocus,
 }) => {
   const { Welcome } = useContext(ThreadComponentsContext);
+  const quick = useOptionalQuickPath();
+  const hasQuick =
+    Boolean(quick?.turns.length) ||
+    Boolean(quick?.streamingText) ||
+    Boolean(quick?.isStreaming);
 
   return (
     <ThreadPrimitive.Root
@@ -306,7 +319,7 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
             isEmpty && "justify-center",
           )}
         >
-          {Welcome ? (
+          {Welcome && !hasQuick ? (
             <AuiIf condition={isNewChatView}>
               <Welcome />
             </AuiIf>
@@ -314,6 +327,8 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
           <AuiIf condition={isHistoryLoadingView}>
             <ThreadHistorySkeleton />
           </AuiIf>
+
+          <QuickTurnsOverlay />
 
           <div
             data-slot="aui_message-group"
@@ -597,12 +612,39 @@ const WaitingActionCard: FC<{
 
 const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
   const { onComposerPaste } = useLargePasteComposer();
+  const aui = useAui();
+  const quick = useOptionalQuickPath();
   const sendBlocked = useAuiState((s) => getPendingComposerApprovalKey(s) !== "");
+  const quickBusy = Boolean(quick?.isStreaming);
+
+  const sendViaQuickOrEve = async () => {
+    if (sendBlocked || quickBusy) return;
+    const state = aui.composer.getState();
+    const text = state.text?.trim() ?? "";
+    const hasAttachments = (state.attachments?.length ?? 0) > 0;
+    if (!text && !hasAttachments) return;
+
+    if (quick) {
+      const outcome = await quick.tryQuickSend({ text, hasAttachments });
+      if (outcome === "answered") {
+        aui.composer.setText("");
+        return;
+      }
+    }
+    aui.composer.send();
+  };
 
   const blockSendKeys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!sendBlocked) return;
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+    if (sendBlocked || quickBusy) {
       event.preventDefault();
+      return;
+    }
+    if (quick) {
+      event.preventDefault();
+      void sendViaQuickOrEve();
     }
   };
 
@@ -625,16 +667,22 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
             onPaste={onComposerPaste}
             onKeyDown={blockSendKeys}
           />
-          <ComposerAction sendBlocked={sendBlocked} />
+          <ComposerAction
+            sendBlocked={sendBlocked}
+            quickBusy={quickBusy}
+            onQuickSend={quick ? () => void sendViaQuickOrEve() : undefined}
+          />
         </div>
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
   );
 };
 
-const ComposerAction: FC<{ sendBlocked?: boolean }> = ({
-  sendBlocked = false,
-}) => {
+const ComposerAction: FC<{
+  sendBlocked?: boolean;
+  quickBusy?: boolean;
+  onQuickSend?: () => void;
+}> = ({ sendBlocked = false, quickBusy = false, onQuickSend }) => {
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
       <div className="flex items-center gap-1">
@@ -677,9 +725,13 @@ const ComposerAction: FC<{ sendBlocked?: boolean }> = ({
           </AuiIf>
         </AuiIf>
         <AuiIf condition={(s) => !s.thread.isRunning}>
-          {sendBlocked ? (
+          {sendBlocked || quickBusy ? (
             <TooltipIconButton
-              tooltip="Respond to the approval above to continue"
+              tooltip={
+                quickBusy
+                  ? "Pearl is answering…"
+                  : "Respond to the approval above to continue"
+              }
               side="bottom"
               type="button"
               variant="default"
@@ -687,6 +739,19 @@ const ComposerAction: FC<{ sendBlocked?: boolean }> = ({
               className="aui-composer-send size-7 rounded-full"
               aria-label="Send message"
               disabled
+            >
+              <ArrowUpIcon className="aui-composer-send-icon size-4" />
+            </TooltipIconButton>
+          ) : onQuickSend ? (
+            <TooltipIconButton
+              tooltip="Send message"
+              side="bottom"
+              type="button"
+              variant="default"
+              size="icon"
+              className="aui-composer-send size-7 rounded-full"
+              aria-label="Send message"
+              onClick={onQuickSend}
             >
               <ArrowUpIcon className="aui-composer-send-icon size-4" />
             </TooltipIconButton>

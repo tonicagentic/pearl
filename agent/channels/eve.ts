@@ -1,10 +1,12 @@
 import { eveChannel, defaultEveAuth } from "eve/channels/eve";
 import { localDev, vercelOidc } from "eve/channels/auth";
 import { CHAT_ID_MARKER } from "@/lib/agent-mode-context";
+import { quickTurnsAsHistory } from "@/lib/chat/quick-turns";
 import { spokenTurnsAsHistory } from "@/lib/chat/spoken-turns";
 import { betterAuthEveAuth, passwordEveAuth } from "@/lib/eve-auth";
 import {
   resolveChatIdForSpokenTurns,
+  takeQuickTurnsForUser,
   takeSpokenTurnsForUser,
 } from "@/lib/db/queries";
 
@@ -27,7 +29,7 @@ export default eveChannel({
       return { auth };
     }
 
-    // Spoken-turn import must never fail the user's send. A DB/driver error
+    // History import must never fail the user's send. A DB/driver error
     // here previously surfaced as a false "delivery not confirmed" on mobile.
     try {
       const chatId = await resolveChatIdForSpokenTurns({
@@ -39,20 +41,28 @@ export default eveChannel({
         return { auth };
       }
 
-      const turns = await takeSpokenTurnsForUser({
+      const spoken = await takeSpokenTurnsForUser({
         chatId,
         userId: auth.principalId,
       });
-      if (turns.length === 0) {
+      const quick = await takeQuickTurnsForUser({
+        chatId,
+        userId: auth.principalId,
+      });
+      const history = [
+        ...spokenTurnsAsHistory(spoken),
+        ...quickTurnsAsHistory(quick),
+      ];
+      if (history.length === 0) {
         return { auth };
       }
 
       return {
         auth,
-        history: spokenTurnsAsHistory(turns),
+        history,
       };
     } catch (error) {
-      console.error("[eve.channel] spoken-turn import failed; continuing send", {
+      console.error("[eve.channel] history import failed; continuing send", {
         sessionId: ctx.eve.sessionId,
         error: error instanceof Error ? error.message : error,
       });

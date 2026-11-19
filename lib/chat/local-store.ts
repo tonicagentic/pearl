@@ -41,6 +41,7 @@ export function createLocalChat(pendingUserMessage?: string) {
     customAgent: null,
     session: undefined,
     spokenTurns: [],
+    quickTurns: [],
     title: pendingMessage ? createFallbackTitle(pendingMessage) : DEFAULT_CHAT_TITLE,
     updatedAt: now,
     lastReadAt: now,
@@ -249,6 +250,7 @@ function toActiveChat(chat: StoredChat): ActiveChat {
     customAgent: null,
     session: chat.session,
     spokenTurns: chat.spokenTurns ?? [],
+    quickTurns: chat.quickTurns ?? [],
     title: chat.title,
   };
 }
