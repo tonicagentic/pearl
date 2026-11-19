@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,21 +14,32 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeftIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
+import { PearlIntroPager } from "@/components/intro/pearl-intro-pager";
+import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Text, TEXT_METRICS } from "@/components/ui/text";
 import { useAuth, type AuthCtaFrame } from "@/src/auth";
 
+type GatePhase = "gate" | "email";
 type AuthFlow = "sign-up" | "sign-in" | "forgot";
 type AuthStep = "email" | "password";
 
 const INPUT_FONT = 28;
 const INPUT_LINE = 34;
 
-/** Email-first sign-up / sign-in gate (Cosmos-style stepped chrome). */
+const SOCIAL_UNAVAILABLE_TITLE = "Coming soon";
+const SOCIAL_UNAVAILABLE_BODY =
+  "Google and Apple sign-in aren’t available yet. Continue with email for now.";
+
+/**
+ * Signed-out gate: compact Pearl carousel + continue methods, then email.
+ * Sign-in vs sign-up is inferred from the email probe — never a user choice.
+ */
 export function SignInScreen({
   onCtaFrame,
   onBack,
   handOffActive = false,
+  skipIntro = false,
 }: {
   /** Latest measured CTA frame for the composer morph. */
   onCtaFrame?: (frame: AuthCtaFrame) => void;
@@ -35,6 +47,11 @@ export function SignInScreen({
   onBack?: () => void;
   /** Hide interactive chrome while the morph overlay owns the transition. */
   handOffActive?: boolean;
+  /**
+   * Hide the carousel (guest push / signup sheet). Cold signed-out entry
+   * keeps the swipeable intro above the continue buttons.
+   */
+  skipIntro?: boolean;
 }) {
   const {
     signIn,
@@ -62,6 +79,7 @@ export function SignInScreen({
     | string
     | undefined;
 
+  const [phase, setPhase] = useState<GatePhase>("gate");
   const [flow, setFlow] = useState<AuthFlow>("sign-up");
   const [step, setStep] = useState<AuthStep>("email");
   const [email, setEmail] = useState("");
@@ -95,13 +113,13 @@ export function SignInScreen({
           password === confirmPassword);
 
   useEffect(() => {
-    if (handOffActive) return;
+    if (handOffActive || phase !== "email") return;
     const id = requestAnimationFrame(() => {
-      if (step === "email") emailRef.current?.focus();
+      if (step === "email" || flow === "forgot") emailRef.current?.focus();
       else passwordRef.current?.focus();
     });
     return () => cancelAnimationFrame(id);
-  }, [step, flow, handOffActive]);
+  }, [step, flow, handOffActive, phase]);
 
   const onCtaLayout = (event: LayoutChangeEvent) => {
     const target = event.target;
@@ -121,12 +139,49 @@ export function SignInScreen({
     setInfo(null);
   };
 
-  const switchFlow = (next: AuthFlow) => {
+  const goToEmail = () => {
     clearMessages();
-    setFlow(next);
+    setFlow("sign-up");
     setStep("email");
     setPassword("");
     setConfirmPassword("");
+    setPhase("email");
+  };
+
+  const resetEmailFields = () => {
+    clearMessages();
+    setFlow("sign-up");
+    setStep("email");
+    setPassword("");
+    setConfirmPassword("");
+  };
+
+  const onGateBack = () => {
+    if (busy || handOffActive) return;
+    if (phase === "email") {
+      if (flow === "forgot") {
+        clearMessages();
+        setFlow("sign-in");
+        setStep("password");
+        setInfo(null);
+        return;
+      }
+      if (step === "password") {
+        clearMessages();
+        setStep("email");
+        setPassword("");
+        setConfirmPassword("");
+        return;
+      }
+      resetEmailFields();
+      setPhase("gate");
+      return;
+    }
+    onBack?.();
+  };
+
+  const showSocialUnavailable = () => {
+    Alert.alert(SOCIAL_UNAVAILABLE_TITLE, SOCIAL_UNAVAILABLE_BODY);
   };
 
   const goToPassword = async () => {
@@ -206,15 +261,13 @@ export function SignInScreen({
         ? "Enter your email address"
         : flow === "sign-up"
           ? "Create a password"
-          : "Welcome back";
+          : "Enter your password";
 
   const subtitle =
     flow === "forgot"
       ? "We’ll email you a link to reset it"
       : step === "email"
-        ? flow === "sign-up"
-          ? "Sign up or get started"
-          : "Welcome back"
+        ? "We’ll create an account if you’re new"
         : flow === "sign-up"
           ? "At least 8 characters"
           : trimmedEmail;
@@ -225,24 +278,84 @@ export function SignInScreen({
       : signInState === "signing-in"
         ? flow === "forgot"
           ? "Sending…"
-          : flow === "sign-up"
-            ? "Creating account…"
-            : "Signing in…"
+          : "Continuing…"
         : flow === "forgot"
           ? "Send reset link"
-          : step === "email"
-            ? "Continue"
-            : flow === "sign-up"
-              ? "Create account"
-              : "Sign in";
+          : "Continue";
 
-  const cornerLabel =
-    flow === "sign-up" ? "Log In" : flow === "sign-in" ? "Sign Up" : "Log In";
+  const showBack =
+    !handOffActive && (phase === "email" || Boolean(onBack));
 
-  const onCornerPress = () => {
-    if (busy) return;
-    switchFlow(flow === "sign-up" ? "sign-in" : "sign-up");
-  };
+  if (phase === "gate") {
+    return (
+      <SafeAreaView
+        style={[StyleSheet.absoluteFill, { backgroundColor }]}
+        pointerEvents={handOffActive ? "none" : "auto"}
+      >
+        <View
+          style={[
+            styles.gateRoot,
+            { opacity: handOffActive ? 0 : 1 },
+          ]}
+        >
+          {onBack && !handOffActive ? (
+            <View style={styles.gateTopBar}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                hitSlop={12}
+                onPress={onGateBack}
+                style={styles.backHit}
+              >
+                <Icon
+                  as={ChevronLeftIcon}
+                  className="size-5 text-foreground"
+                />
+                <Text variant="body" weight="medium">
+                  Back
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {!skipIntro ? (
+            <View style={styles.carousel}>
+              <PearlIntroPager compact showActions={false} />
+            </View>
+          ) : (
+            <View style={styles.methodsHeader}>
+              <Text
+                variant="title"
+                weight="semibold"
+                className="text-center tracking-tight"
+              >
+                Continue to Pearl
+              </Text>
+              <Text variant="body" tone="muted" className="text-center">
+                Use any option — new or returning
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.methodStack}>
+            <Button
+              label="Continue with Google"
+              variant="secondary"
+              onPress={showSocialUnavailable}
+            />
+            {Platform.OS === "ios" ? (
+              <Button
+                label="Continue with Apple"
+                variant="secondary"
+                onPress={showSocialUnavailable}
+              />
+            ) : null}
+            <Button label="Continue with Email" onPress={goToEmail} />
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -253,17 +366,15 @@ export function SignInScreen({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.flex}
       >
-        <View
-          style={[styles.column, { opacity: handOffActive ? 0 : 1 }]}
-        >
+        <View style={[styles.column, { opacity: handOffActive ? 0 : 1 }]}>
           <View style={styles.topBar}>
-            {onBack && !handOffActive ? (
+            {showBack ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Back"
                 disabled={busy}
                 hitSlop={12}
-                onPress={onBack}
+                onPress={onGateBack}
                 style={styles.backHit}
               >
                 <Icon
@@ -291,22 +402,7 @@ export function SignInScreen({
                 />
               ))}
             </View>
-            {!handOffActive ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={cornerLabel}
-                disabled={busy}
-                hitSlop={8}
-                onPress={onCornerPress}
-                style={styles.cornerHit}
-              >
-                <Text variant="body" tone="muted" weight="medium">
-                  {cornerLabel}
-                </Text>
-              </Pressable>
-            ) : (
-              <View style={styles.cornerHit} />
-            )}
+            <View style={styles.cornerHit} />
           </View>
 
           <View style={styles.header}>
@@ -448,26 +544,16 @@ export function SignInScreen({
                 accessibilityRole="button"
                 className="min-h-11 items-center justify-center"
                 disabled={busy}
-                onPress={() => switchFlow("forgot")}
-              >
-                <Text variant="body" tone="muted" className="text-center">
-                  Forgot password?
-                </Text>
-              </Pressable>
-            ) : step === "password" && !handOffActive ? (
-              <Pressable
-                accessibilityRole="button"
-                className="min-h-11 items-center justify-center"
-                disabled={busy}
                 onPress={() => {
                   clearMessages();
+                  setFlow("forgot");
                   setStep("email");
                   setPassword("");
                   setConfirmPassword("");
                 }}
               >
                 <Text variant="body" tone="muted" className="text-center">
-                  Use a different email
+                  Forgot password?
                 </Text>
               </Pressable>
             ) : (
@@ -510,6 +596,32 @@ export function SignInScreen({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  gateRoot: {
+    flex: 1,
+    paddingBottom: 12,
+  },
+  gateTopBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 44,
+    paddingHorizontal: 24,
+    paddingTop: 4,
+  },
+  carousel: {
+    flex: 1,
+    minHeight: 0,
+  },
+  methodsHeader: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    gap: 6,
+  },
+  methodStack: {
+    gap: 12,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+  },
   column: {
     flex: 1,
     paddingHorizontal: 24,
@@ -543,6 +655,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: "center",
     paddingLeft: 8,
+    minWidth: 48,
   },
   header: {
     paddingTop: 28,

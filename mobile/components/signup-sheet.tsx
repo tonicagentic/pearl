@@ -7,7 +7,8 @@ import { SignInScreen } from "@/components/sign-in-screen";
 import { Icon } from "@/components/ui/icon";
 
 /**
- * Modal hosting the email-first auth gate so a guest can upgrade in place.
+ * Modal hosting the continue-method auth gate so a guest can upgrade in place.
+ * Skips the Pearl intro carousel — that only runs on cold signed-out entry.
  */
 export function SignupSheet({
   open,
@@ -43,7 +44,7 @@ export function SignupSheet({
             <Icon as={XIcon} size={22} color={foregroundColor ?? "#111"} />
           </Pressable>
         </View>
-        <SignInScreen />
+        <SignInScreen skipIntro />
       </View>
     </Modal>
   );

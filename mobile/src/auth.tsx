@@ -196,36 +196,9 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     [readSessionUser],
   );
 
-  const signInAnonymous = useCallback(async (): Promise<AuthTokenResult | null> => {
-    try {
-      const timeout = AbortSignal.timeout(45_000);
-      const response = await fetch(`${AGENT_URL}/api/auth/sign-in/anonymous`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: "{}",
-        signal: timeout,
-      });
-      const body = (await response.json().catch(() => null)) as {
-        token?: string;
-        user?: unknown;
-      } | null;
-      const credential = body?.token ?? null;
-      if (!response.ok || !credential) return null;
-      return {
-        credential,
-        name: nameFromAuthUser(body?.user),
-        isAnonymous: true,
-      };
-    } catch {
-      return null;
-    }
-  }, []);
-
   // Cold-start restore: agent URL first (so API calls hit the right host),
-  // then the stored session. With no session, create a silent guest so the
-  // first launch lands in chat instead of the sign-in gate.
+  // then the stored session. No silent guest — signed-out users see the
+  // intro / continue gate before chat. Leftover anonymous sessions are cleared.
   useEffect(() => {
     let cancelled = false;
 
@@ -237,30 +210,22 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         if (cancelled) return;
         if (session) {
           setAuthCookie(session.cookie);
-          setViewerEmail(session.email || null);
           const user = await readSessionUser(session.cookie);
           if (cancelled) return;
-          setIsAnonymous(isAnonymousFromUser(user));
+          if (isAnonymousFromUser(user)) {
+            setAuthCookie(null);
+            await clearSession();
+            return;
+          }
+          setViewerEmail(session.email || null);
+          setIsAnonymous(false);
           const name = nameFromAuthUser(user);
           if (name) setViewerName(name);
           setSignedIn(true);
           await refreshBillingGate();
-          return;
-        }
-
-        const guest = await signInAnonymous();
-        if (cancelled) return;
-        if (guest?.credential) {
-          await saveSession(guest.credential, guest.name ?? "Guest");
-          setAuthCookie(guest.credential);
-          setViewerEmail(null);
-          setViewerName(guest.name);
-          setIsAnonymous(true);
-          setSignedIn(true);
-          await refreshBillingGate();
         }
       } catch {
-        // Corrupt storage or guest create failed: fall through to sign-in.
+        // Corrupt storage: fall through to sign-in.
       } finally {
         if (!cancelled) {
           setRestoring(false);
@@ -271,7 +236,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [readSessionUser, refreshBillingGate, signInAnonymous]);
+  }, [readSessionUser, refreshBillingGate]);
 
   const commitSession = useCallback(
     async (

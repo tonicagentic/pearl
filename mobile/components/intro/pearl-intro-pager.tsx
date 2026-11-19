@@ -17,21 +17,25 @@ import { Text } from "@/components/ui/text";
 
 /**
  * Full-bleed horizontal intro pager: graphic collage on top, short copy below,
- * page dots, and a primary CTA (Next / continue) with optional Self-host.
+ * page dots, and optional primary CTA (Next / continue) with Self-host.
+ * Pass `showActions={false}` for a swipe-only carousel (signed-out gate).
  */
 export function PearlIntroPager({
   onContinueWithHost,
   onSelfHost,
   continueLabel = "Get started",
   compact = false,
+  showActions = true,
 }: {
-  readonly onContinueWithHost: () => void;
+  readonly onContinueWithHost?: () => void;
   /** Omitted on locked TestFlight builds that only talk to the host. */
   readonly onSelfHost?: () => void;
-  /** Last-slide primary label (signed-out vs About). */
+  /** Last-slide primary label (About). */
   readonly continueLabel?: string;
-  /** Slightly tighter spacing for form sheets. */
+  /** Slightly tighter spacing for form sheets / signed-out gate. */
   readonly compact?: boolean;
+  /** When false, only the swipeable panels + dots render (no Next / Done). */
+  readonly showActions?: boolean;
 }) {
   const { width: windowWidth } = useWindowDimensions();
   const [pageWidth, setPageWidth] = useState(windowWidth);
@@ -57,7 +61,7 @@ export function PearlIntroPager({
 
   const goNext = useCallback(() => {
     if (onLast) {
-      onContinueWithHost();
+      onContinueWithHost?.();
       return;
     }
     const nextIndex = Math.min(lastIndex, index + 1);
@@ -91,7 +95,10 @@ export function PearlIntroPager({
         {PEARL_INTRO_PANELS.map((panel) => (
           <View key={panel.id} style={[styles.page, { width: pageWidth }]}>
             <View
-              style={[styles.graphic, compact ? styles.graphicCompact : null]}
+              style={[
+                styles.graphic,
+                compact ? styles.graphicCompact : null,
+              ]}
             >
               <PearlIntroGraphic panelId={panel.id} />
             </View>
@@ -118,7 +125,7 @@ export function PearlIntroPager({
         ))}
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, !showActions ? styles.footerDotsOnly : null]}>
         <View style={styles.dots}>
           {PEARL_INTRO_PANELS.map((panel, i) => (
             <View
@@ -134,19 +141,21 @@ export function PearlIntroPager({
             />
           ))}
         </View>
-        <View style={styles.ctaStack}>
-          <Button
-            label={onLast ? continueLabel : "Next"}
-            onPress={goNext}
-          />
-          {onLast && onSelfHost ? (
+        {showActions ? (
+          <View style={styles.ctaStack}>
             <Button
-              label="Self-host"
-              variant="secondary"
-              onPress={onSelfHost}
+              label={onLast ? continueLabel : "Next"}
+              onPress={goNext}
             />
-          ) : null}
-        </View>
+            {onLast && onSelfHost ? (
+              <Button
+                label="Self-host"
+                variant="secondary"
+                onPress={onSelfHost}
+              />
+            ) : null}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -172,8 +181,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   graphicCompact: {
-    minHeight: 180,
+    minHeight: 140,
     marginTop: 0,
+    marginBottom: 8,
   },
   copy: {
     gap: 10,
@@ -184,6 +194,10 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 4,
     gap: 14,
+  },
+  footerDotsOnly: {
+    paddingBottom: 0,
+    gap: 0,
   },
   dots: {
     flexDirection: "row",

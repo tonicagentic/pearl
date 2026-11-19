@@ -5,7 +5,8 @@ import { SignInScreen } from "@/components/sign-in-screen";
 import { useAuth } from "@/src/auth";
 
 /**
- * Signed-out entry: email sign-in / sign-up.
+ * Signed-out entry: compact Pearl carousel + continue methods → email.
+ * Guests / signup sheet skip the carousel and show methods only.
  * After auth, Stack.Protected swaps this route for the Home tabs.
  */
 export default function SignInRoute() {
@@ -21,6 +22,7 @@ export default function SignInRoute() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SignInScreen
+        skipIntro={isAnonymous}
         onBack={
           isAnonymous
             ? () => {

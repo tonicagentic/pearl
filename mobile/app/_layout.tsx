@@ -94,13 +94,14 @@ function AuthenticatedLayout() {
     void applyUpdatesOnLaunch();
   }, []);
   // Dispose in-memory chat state whenever an account signs out or changes.
-  const accountKey = signedIn ? `account:${viewerEmail}` : "signed-out";
+  const hasAccount = signedIn && !isAnonymous;
+  const accountKey = hasAccount ? `account:${viewerEmail}` : "signed-out";
   // Keep at least one Stack.Protected guard true while the session restores
   // (otherwise Expo Router warns that every route is protected).
-  const signedOut = !signedIn;
+  const signedOut = !hasAccount;
   // Billing is an empty-state on chats, not a Stack lock — Profile and other
   // tabs stay reachable while checkout is pending.
-  const appReady = signedIn;
+  const appReady = hasAccount;
 
   return (
     <ChatsProvider key={accountKey}>
@@ -122,9 +123,7 @@ function AuthenticatedLayout() {
                   // Remount per auth zone so home is the initial route, not a
                   // push on top of sign-in (animation: "none" alone is ignored
                   // for Protected guard swaps on iOS native-stack).
-                  // Guests stay on home; sign-in stays registered so Profile
-                  // can push it without dropping the guest session.
-                  key={signedIn ? "app" : "auth"}
+                  key={hasAccount ? "app" : "auth"}
                   screenOptions={({ route }) =>
                     route.name === "(home)" || route.name === "sign-in"
                       ? {
@@ -135,7 +134,7 @@ function AuthenticatedLayout() {
                   }
                 >
                   <Stack.Protected
-                    guard={signedOut || isAnonymous}
+                    guard={signedOut}
                     redirectTo="/"
                   >
                     <Stack.Screen
