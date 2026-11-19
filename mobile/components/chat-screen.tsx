@@ -1353,7 +1353,7 @@ export function ChatScreen({
               Platform.OS === "web"
                 ? () => (
                     <View className="flex-row items-center">
-                      {activeCustomAgent ? null : (
+                      {activeCustomAgent || activeChatId ? null : (
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel="History"
@@ -1368,7 +1368,6 @@ export function ChatScreen({
                       )}
                       {activeChatId ? (
                         <>
-                          {activeCustomAgent ? null : <View className="w-2" />}
                           <Pressable
                             accessibilityRole="button"
                             accessibilityLabel="New chat"
@@ -1416,11 +1415,7 @@ export function ChatScreen({
             accessibilityLabel="History"
             onPress={openHistory}
             tintColor={foregroundColor}
-            hidden={Boolean(activeCustomAgent)}
-          />
-          <Stack.Toolbar.Spacer
-            width={8}
-            hidden={!activeChatId || Boolean(activeCustomAgent)}
+            hidden={Boolean(activeCustomAgent) || Boolean(activeChatId)}
           />
           <Stack.Toolbar.Button
             icon="square.and.pencil"

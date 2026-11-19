@@ -6,7 +6,12 @@ import {
 } from "react";
 import { AppState, Platform, Pressable, View } from "react-native";
 import { Stack, router, useFocusEffect } from "expo-router";
-import { ClockIcon, PlusIcon, UserIcon } from "lucide-react-native";
+import {
+  ClockIcon,
+  PlusIcon,
+  SquarePenIcon,
+  UserIcon,
+} from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { ChatScreen } from "@/components/chat-screen";
@@ -30,7 +35,8 @@ const IS_IOS = Platform.OS === "ios";
 
 /**
  * Mail-style home: Profile left; Pearl|Agents switcher; History / New agent right.
- * Pearl tab embeds a new-chat composer with keyboard open.
+ * Pearl tab embeds the composer. History stays up on a draft; an active Pearl
+ * thread swaps that slot for New chat.
  */
 export function MailHomeScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
@@ -47,7 +53,14 @@ export function MailHomeScreen() {
   const openProfile = useCallback(() => {
     router.push(isAnonymous ? "/sign-in" : "/settings");
   }, [isAnonymous]);
-  const { chats, newChat, selectChat, reloadChats } = useChats();
+  const {
+    activeChatId,
+    activeCustomAgent,
+    chats,
+    newChat,
+    selectChat,
+    reloadChats,
+  } = useChats();
 
   const [homeTab, setHomeTab] = useState<HomeTab>("pearl");
   const [createAgentOpen, setCreateAgentOpen] = useState(false);
@@ -64,7 +77,11 @@ export function MailHomeScreen() {
   // callback identity churn does not wipe mid-compose.
   const pearlComposeArmedRef = useRef(false);
   const showAgentsPlus = homeTab === "agents" && !isAnonymous;
-  const showPearlHistory = homeTab === "pearl";
+  // Draft keeps History. A live Pearl thread takes that slot for New chat.
+  const pearlThreadActive =
+    homeTab === "pearl" && activeChatId != null && activeCustomAgent == null;
+  const showPearlHistory = homeTab === "pearl" && !pearlThreadActive;
+  const showPearlNewChat = pearlThreadActive;
 
   const armPearlCompose = useCallback(() => {
     if (pearlComposeArmedRef.current) return;
@@ -123,6 +140,15 @@ export function MailHomeScreen() {
   const openHistory = useCallback(() => {
     router.push("/history");
   }, []);
+
+  const openNewChat = useCallback(() => {
+    // Guests keep one saved thread; another chat starts after sign-in.
+    if (isAnonymous) {
+      router.push("/sign-in");
+      return;
+    }
+    newChat();
+  }, [isAnonymous, newChat]);
 
   const onAgentCreated = useCallback(
     (agent: CustomAgentDto) => {
@@ -196,6 +222,19 @@ export function MailHomeScreen() {
                       <Icon as={ClockIcon} className="size-5 text-foreground" />
                     </Pressable>
                   ) : null}
+                  {showPearlNewChat ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="New chat"
+                      className="h-10 w-10 items-center justify-center"
+                      onPress={openNewChat}
+                    >
+                      <Icon
+                        as={SquarePenIcon}
+                        className="size-5 text-foreground"
+                      />
+                    </Pressable>
+                  ) : null}
                   {showAgentsPlus ? (
                     <>
                       <View style={{ width: 8 }} />
@@ -260,6 +299,12 @@ export function MailHomeScreen() {
               accessibilityLabel="History"
               onPress={openHistory}
               hidden={!showPearlHistory}
+            />
+            <Stack.Toolbar.Button
+              icon="square.and.pencil"
+              accessibilityLabel="New chat"
+              onPress={openNewChat}
+              hidden={!showPearlNewChat}
             />
             <Stack.Toolbar.Spacer width={8} hidden={!showAgentsPlus} />
             <Stack.Toolbar.Button
