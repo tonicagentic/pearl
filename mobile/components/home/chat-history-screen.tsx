@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Platform,
@@ -12,6 +12,7 @@ import { FolderIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { ChatHistoryListIOS } from "@/components/home/chat-history-list";
+import type { ChatHistorySearchFeed } from "@/components/home/chat-history-types";
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
@@ -23,7 +24,11 @@ import {
 import { StackScreen } from "@/components/ui/stack-screen";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
-import { getChat, type ChatListItem } from "@/src/chats-client";
+import {
+  getChat,
+  searchChats,
+  type ChatListItem,
+} from "@/src/chats-client";
 import {
   CHAT_PRESENCE_AMBER,
   CHAT_PRESENCE_BLUE,
@@ -33,6 +38,9 @@ import {
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 import type { ThreadTraceEvent } from "@/src/thread-trace";
+import { useStackSearch } from "@/src/use-stack-search";
+
+const SEARCH_DEBOUNCE_MS = 250;
 
 /** Full chat history list (former home Recents). */
 export function ChatHistoryScreen() {
@@ -40,6 +48,7 @@ export function ChatHistoryScreen() {
     | string
     | undefined;
   const { deleteChat, renameChat, setChatProject, reloadChats } = useChats();
+  const search = useStackSearch();
 
   const [costOpen, setCostOpen] = useState(false);
   const [costEvents, setCostEvents] = useState<readonly ThreadTraceEvent[]>(
@@ -47,11 +56,68 @@ export function ChatHistoryScreen() {
   );
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectTargetId, setProjectTargetId] = useState<string | null>(null);
+  const [searchHits, setSearchHits] = useState<readonly ChatListItem[] | null>(
+    null,
+  );
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const searchGen = useRef(0);
 
   useFocusEffect(
     useCallback(() => {
       void reloadChats({ silent: true });
     }, [reloadChats]),
+  );
+
+  useEffect(() => {
+    if (!search.active) {
+      searchGen.current += 1;
+      setSearchHits(null);
+      setSearchLoading(false);
+      setSearchError(null);
+      return;
+    }
+
+    const gen = ++searchGen.current;
+    setSearchLoading(true);
+    const timer = setTimeout(() => {
+      void searchChats(search.trimmed)
+        .then((hits) => {
+          if (gen !== searchGen.current) return;
+          setSearchHits(
+            hits.map((hit) => ({
+              id: hit.id,
+              title: hit.title,
+              updatedAt: hit.updatedAt,
+              projectId: hit.projectId,
+              waitingForInput: hit.waitingForInput,
+              presence: hit.presence,
+            })),
+          );
+          setSearchError(null);
+        })
+        .catch(() => {
+          if (gen !== searchGen.current) return;
+          setSearchHits([]);
+          setSearchError("Could not search. Check your connection.");
+        })
+        .finally(() => {
+          if (gen !== searchGen.current) return;
+          setSearchLoading(false);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [search.active, search.trimmed]);
+
+  const searchFeed = useMemo<ChatHistorySearchFeed>(
+    () => ({
+      active: search.active,
+      loading: searchLoading,
+      error: searchError,
+      hits: searchHits,
+    }),
+    [search.active, searchLoading, searchError, searchHits],
   );
 
   const openChat = useCallback((_chatId: string) => {
@@ -169,15 +235,24 @@ export function ChatHistoryScreen() {
           headerTintColor: foregroundColor,
         }}
       />
+      <Stack.SearchBar
+        placeholder="Search history"
+        hideWhenScrolling
+        autoCapitalize="none"
+        onChangeText={search.onChangeText}
+        onCancelButtonPress={search.onCancelButtonPress}
+      />
       {Platform.OS === "ios" ? (
         <ChatHistoryListIOS
           onOpenChat={openChat}
           actions={chatActions}
+          search={searchFeed}
         />
       ) : (
         <ChatHistoryListAndroid
           onOpenChat={openChat}
           actions={chatActions}
+          search={searchFeed}
         />
       )}
       <ThreadCostDrawer
@@ -214,9 +289,11 @@ export function ChatHistoryScreen() {
 function ChatHistoryListAndroid({
   onOpenChat,
   actions,
+  search,
 }: {
   readonly onOpenChat: (chatId: string) => void;
   readonly actions: HistoryChatActionHandlers;
+  readonly search: ChatHistorySearchFeed;
 }) {
   const { signedIn } = useAuth();
   const {
@@ -231,6 +308,7 @@ function ChatHistoryListAndroid({
     selectChat,
     selectionError,
   } = useChats();
+  const rows = search.active ? (search.hits ?? []) : chats;
   const [projects, setProjects] = useState<readonly ProjectDto[] | null>(null);
   const projectNames = useMemo(
     () =>
@@ -289,8 +367,13 @@ function ChatHistoryListAndroid({
     ]);
   };
 
-  const emptyLabel =
-    chatsLoading || (signedIn && !chatsReady)
+  const emptyLabel = search.active
+    ? search.loading
+      ? "Searching…"
+      : search.error
+        ? search.error
+        : "No chats match"
+    : chatsLoading || (signedIn && !chatsReady)
       ? "Loading history…"
       : chatsError
         ? "Couldn’t load history"
@@ -302,15 +385,16 @@ function ChatHistoryListAndroid({
         className="flex-1"
         contentContainerClassName="px-4 pt-0"
         contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }}
-        data={chats}
-        extraData={`${activeChatId}:${chats.map((chat) => chat.presence ?? (chat.waitingForInput ? "waiting" : "idle")).join("")}`}
+        data={rows}
+        keyboardShouldPersistTaps="handled"
+        extraData={`${activeChatId}:${search.active}:${rows.map((chat) => chat.presence ?? (chat.waitingForInput ? "waiting" : "idle")).join("")}`}
         keyExtractor={(chat) => chat.id}
         ItemSeparatorComponent={() => (
           <View className="ml-7 border-b border-border/60" />
         )}
         ListHeaderComponent={
           <>
-            {selectionError ? (
+            {!search.active && selectionError ? (
               <Text
                 className="px-3 py-2 text-sm text-destructive"
                 accessibilityRole="alert"
@@ -318,7 +402,7 @@ function ChatHistoryListAndroid({
                 {selectionError}
               </Text>
             ) : null}
-            {chatsError && chats.length > 0 ? (
+            {!search.active && chatsError && chats.length > 0 ? (
               <Pressable
                 accessibilityRole="button"
                 className="min-h-12 justify-center px-3"
@@ -329,6 +413,14 @@ function ChatHistoryListAndroid({
                 </Text>
               </Pressable>
             ) : null}
+            {search.active && search.error ? (
+              <Text
+                className="px-3 py-2 text-sm text-destructive"
+                accessibilityRole="alert"
+              >
+                {search.error}
+              </Text>
+            ) : null}
           </>
         }
         ListEmptyComponent={
@@ -337,7 +429,7 @@ function ChatHistoryListAndroid({
           </View>
         }
         ListFooterComponent={
-          hasMoreChats ? (
+          !search.active && hasMoreChats ? (
             <Pressable
               accessibilityRole="button"
               className="min-h-12 justify-center rounded-lg px-3"

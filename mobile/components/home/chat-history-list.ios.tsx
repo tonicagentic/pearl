@@ -32,6 +32,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { useCSSVariable } from "uniwind";
 
+import type { ChatHistorySearchFeed } from "@/components/home/chat-history-types";
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
@@ -50,9 +51,11 @@ const PRESENCE_SLOT = 14;
 export function ChatHistoryListIOS({
   onOpenChat,
   actions,
+  search,
 }: {
   readonly onOpenChat: (chatId: string) => void;
   readonly actions: HistoryChatActionHandlers;
+  readonly search: ChatHistorySearchFeed;
 }) {
   const { signedIn } = useAuth();
   const {
@@ -66,6 +69,7 @@ export function ChatHistoryListIOS({
     selectChat,
     selectionError,
   } = useChats();
+  const rows = search.active ? (search.hits ?? []) : chats;
   const pageBackground = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -112,8 +116,13 @@ export function ChatHistoryListIOS({
     [onOpenChat, selectChat],
   );
 
-  const emptyLabel =
-    chatsLoading || (signedIn && !chatsReady)
+  const emptyLabel = search.active
+    ? search.loading
+      ? "Searching…"
+      : search.error
+        ? search.error
+        : "No chats match"
+    : chatsLoading || (signedIn && !chatsReady)
       ? "Loading history…"
       : chatsError
         ? "Couldn’t load history"
@@ -130,7 +139,7 @@ export function ChatHistoryListIOS({
           ]}
         >
           <Section>
-            {selectionError ? (
+            {!search.active && selectionError ? (
               <SwiftText
                 modifiers={[
                   foregroundStyle("#FF453A"),
@@ -141,15 +150,26 @@ export function ChatHistoryListIOS({
                 {selectionError}
               </SwiftText>
             ) : null}
-            {chatsError && chats.length > 0 ? (
+            {!search.active && chatsError && chats.length > 0 ? (
               <Button
                 label={`${chatsError} Tap to retry.`}
                 onPress={() => void reloadChats()}
                 modifiers={[buttonStyle("plain"), ...rowChrome]}
               />
             ) : null}
+            {search.active && search.error ? (
+              <SwiftText
+                modifiers={[
+                  foregroundStyle("#FF453A"),
+                  font({ size: 15 }),
+                  ...rowChrome,
+                ]}
+              >
+                {search.error}
+              </SwiftText>
+            ) : null}
 
-            {chats.length === 0 ? (
+            {rows.length === 0 ? (
               <SwiftText
                 modifiers={[
                   foregroundStyle({ type: "hierarchical", style: "secondary" }),
@@ -161,7 +181,7 @@ export function ChatHistoryListIOS({
               </SwiftText>
             ) : (
               <List.ForEach
-                data={chats}
+                data={rows}
                 keyExtractor={(chat) => chat.id}
                 estimatedItemSize={64}
                 recycling={false}
@@ -182,7 +202,7 @@ export function ChatHistoryListIOS({
               </List.ForEach>
             )}
 
-            {hasMoreChats ? (
+            {!search.active && hasMoreChats ? (
               <Button
                 label={chatsLoading ? "Loading…" : "Load more"}
                 onPress={() => void loadMoreChats()}

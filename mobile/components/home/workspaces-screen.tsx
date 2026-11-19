@@ -16,12 +16,14 @@ import { Icon } from "@/components/ui/icon";
 import { StackScreen } from "@/components/ui/stack-screen";
 import { Text } from "@/components/ui/text";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
+import { useStackSearch } from "@/src/use-stack-search";
 
 /** Lists workspaces (projects) and opens the new-workspace composer. */
 export function WorkspacesScreen() {
   const [projects, setProjects] = useState<readonly ProjectDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const search = useStackSearch();
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
@@ -36,6 +38,12 @@ export function WorkspacesScreen() {
       ),
     [projects],
   );
+  const visible = useMemo(() => {
+    if (!search.active) return ordered;
+    return ordered.filter((project) =>
+      search.matches(project.name, project.instructions),
+    );
+  }, [ordered, search.active, search.matches]);
 
   const reload = useCallback(async () => {
     try {
@@ -98,6 +106,13 @@ export function WorkspacesScreen() {
                 ),
         }}
       />
+      <Stack.SearchBar
+        placeholder="Search workspaces"
+        hideWhenScrolling
+        autoCapitalize="none"
+        onChangeText={search.onChangeText}
+        onCancelButtonPress={search.onCancelButtonPress}
+      />
       {Platform.OS === "ios" ? (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button
@@ -127,8 +142,9 @@ export function WorkspacesScreen() {
             contentContainerClassName="pt-0"
             contentContainerStyle={{ paddingBottom: 24 }}
             contentInsetAdjustmentBehavior="automatic"
+            keyboardShouldPersistTaps="handled"
           >
-            {ordered.length === 0 ? (
+            {!search.active && ordered.length === 0 ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="New workspace"
@@ -150,8 +166,12 @@ export function WorkspacesScreen() {
                   </Text>
                 </View>
               </Pressable>
+            ) : search.active && visible.length === 0 ? (
+              <View className="py-8">
+                <Text variant="secondary">No workspaces match</Text>
+              </View>
             ) : (
-              ordered.map((project) => (
+              visible.map((project) => (
                 <Pressable
                   key={project.id}
                   accessibilityRole="button"

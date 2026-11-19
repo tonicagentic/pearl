@@ -1,6 +1,6 @@
 import { useCallback, useState, useSyncExternalStore } from "react";
 import { Alert, Platform, Pressable, StyleSheet, View } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { router, Stack, useFocusEffect } from "expo-router";
 import {
   BotIcon,
   BrainIcon,
@@ -59,9 +59,11 @@ import {
   subscribeModelSelection,
 } from "@/src/model-selection";
 import { fetchUsageSummary, formatSpendCents } from "@/src/usage-client";
+import { useStackSearch } from "@/src/use-stack-search";
 
 export function SettingsScreen() {
   const { viewerEmail, viewerName, signOut } = useAuth();
+  const search = useStackSearch();
   const selectedKey = useSyncExternalStore(
     subscribeModelSelection,
     getModelSelection,
@@ -183,197 +185,348 @@ export function SettingsScreen() {
     ]);
   };
 
+  const accountHeading = accountTitle(viewerName, viewerEmail);
+  const showAccount = search.matches(
+    "Account",
+    accountHeading,
+    viewerName,
+    viewerEmail,
+  );
+  const showEmail = search.matches("Email", emailDetail);
+  const showCalendar = search.matches("Calendar", calendarRowDetail);
+  const showMoney = search.matches("Money", "Pearl Money");
+  const showTasks = search.matches("Tasks", "Pearl Tasks");
+  const showAnswers = search.matches("Answers", "Web and connected accounts");
+  const showResearch = search.matches("Research", "Deep research with citations");
+  const showPlan = search.matches("Plan", "Travel and how you plan");
+  const showDrafting = search.matches("Drafting", "Writing and style");
+  const showAnalysis = search.matches("Analysis", "PDF, images, tables, text");
+  const showCoder = search.matches("Coder", "Build, PR, deploy");
+  const showVisualize = search.matches(
+    "Visualize",
+    "Graphics, diagrams, images",
+  );
+  const showDesign = search.matches(
+    "Design",
+    "Presentations, documents, layouts",
+  );
+  const showModels = search.matches("Models", selectedLabel);
+  const showMemory = search.matches("Memory", memoryDetail);
+  const showSchemas = search.matches("Schemas", "Precise concept definitions");
+  const showSkills = search.matches("Skills", "Custom and published");
+  const showUsage = search.matches("Usage", usageDetail);
+  const showStorage = search.matches("Storage", "Chat, saved files, Drive");
+  const showConnected = search.matches(
+    "Connected agents",
+    "Private eve deployments",
+  );
+  const showSelfHost =
+    !isHostedLocked() && search.matches("Self-host", agentHostLabel);
+  const showSignOut = search.matches("Sign out");
+
+  const showAccountSection = showAccount || showEmail || showCalendar;
+  const showAppsCard = showMoney || showTasks;
+  const showThink =
+    showAnswers || showResearch || showPlan || showDrafting || showAnalysis;
+  const showMake = showCoder || showVisualize || showDesign;
+  const showAgent = showModels || showMemory || showSchemas || showSkills;
+  const showUsageSection = showUsage || showStorage || search.matches("Billing");
+  const showHostingCard = showConnected || showSelfHost;
+
   return (
-    <SheetScaffold>
-      <Section title="Account">
-        <AccountRow
-          name={viewerName}
-          email={viewerEmail}
-          onPress={() => router.push("/account")}
-        />
-        <SettingsRow
-          icon={<Icon as={MailIcon} className="size-5 text-sky-600" />}
-          label="Email"
-          detail={emailDetail}
-          onPress={() => router.push("/email")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={CalendarIcon} className="size-5 text-rose-500" />}
-          label="Calendar"
-          detail={calendarRowDetail}
-          onPress={() => router.push("/calendar")}
-        />
-      </Section>
+    <>
+      <Stack.SearchBar
+        placeholder="Search"
+        hideWhenScrolling
+        autoCapitalize="none"
+        onChangeText={search.onChangeText}
+        onCancelButtonPress={search.onCancelButtonPress}
+      />
+      <SheetScaffold>
+        {showAccountSection ? (
+          <Section title="Account">
+            {showAccount ? (
+              <AccountRow
+                name={viewerName}
+                email={viewerEmail}
+                onPress={() => router.push("/account")}
+              />
+            ) : null}
+            {showEmail ? (
+              <SettingsRow
+                icon={<Icon as={MailIcon} className="size-5 text-sky-600" />}
+                label="Email"
+                detail={emailDetail}
+                onPress={() => router.push("/email")}
+                showSeparator={showCalendar}
+              />
+            ) : null}
+            {showCalendar ? (
+              <SettingsRow
+                icon={
+                  <Icon as={CalendarIcon} className="size-5 text-rose-500" />
+                }
+                label="Calendar"
+                detail={calendarRowDetail}
+                onPress={() => router.push("/calendar")}
+              />
+            ) : null}
+          </Section>
+        ) : null}
 
-      <SettingsCard>
-        <SettingsRow
-          icon={
-            <Icon as={CircleDollarSignIcon} className="size-5 text-emerald-500" />
-          }
-          label="Money"
-          detail="Pearl Money"
-          onPress={() => router.push("/money")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={ListTodoIcon} className="size-5 text-teal-500" />}
-          label="Tasks"
-          detail="Pearl Tasks"
-          onPress={() => router.push("/tasks")}
-        />
-      </SettingsCard>
+        {showAppsCard ? (
+          <SettingsCard>
+            {showMoney ? (
+              <SettingsRow
+                icon={
+                  <Icon
+                    as={CircleDollarSignIcon}
+                    className="size-5 text-emerald-500"
+                  />
+                }
+                label="Money"
+                detail="Pearl Money"
+                onPress={() => router.push("/money")}
+                showSeparator={showTasks}
+              />
+            ) : null}
+            {showTasks ? (
+              <SettingsRow
+                icon={<Icon as={ListTodoIcon} className="size-5 text-teal-500" />}
+                label="Tasks"
+                detail="Pearl Tasks"
+                onPress={() => router.push("/tasks")}
+              />
+            ) : null}
+          </SettingsCard>
+        ) : null}
 
-      <Section title="Think">
-        <SettingsRow
-          icon={
-            <Icon
-              as={MessageCircleQuestionIcon}
-              className="size-5 text-sky-500"
+        {showThink ? (
+          <Section title="Think">
+            {showAnswers ? (
+              <SettingsRow
+                icon={
+                  <Icon
+                    as={MessageCircleQuestionIcon}
+                    className="size-5 text-sky-500"
+                  />
+                }
+                label="Answers"
+                detail="Web and connected accounts"
+                onPress={() => router.push("/answers")}
+                showSeparator={
+                  showResearch || showPlan || showDrafting || showAnalysis
+                }
+              />
+            ) : null}
+            {showResearch ? (
+              <SettingsRow
+                icon={
+                  <Icon as={ScanSearchIcon} className="size-5 text-violet-500" />
+                }
+                label="Research"
+                detail="Deep research with citations"
+                onPress={() => router.push("/research")}
+                showSeparator={showPlan || showDrafting || showAnalysis}
+              />
+            ) : null}
+            {showPlan ? (
+              <SettingsRow
+                icon={
+                  <Icon
+                    as={ClipboardListIcon}
+                    className="size-5 text-amber-500"
+                  />
+                }
+                label="Plan"
+                detail="Travel and how you plan"
+                onPress={() => router.push("/plan")}
+                showSeparator={showDrafting || showAnalysis}
+              />
+            ) : null}
+            {showDrafting ? (
+              <SettingsRow
+                icon={
+                  <Icon as={PenLineIcon} className="size-5 text-indigo-500" />
+                }
+                label="Drafting"
+                detail="Writing and style"
+                onPress={() => router.push("/drafting")}
+                showSeparator={showAnalysis}
+              />
+            ) : null}
+            {showAnalysis ? (
+              <SettingsRow
+                icon={
+                  <Icon as={FileSearchIcon} className="size-5 text-sky-600" />
+                }
+                label="Analysis"
+                detail="PDF, images, tables, text"
+                onPress={() => router.push("/analysis")}
+              />
+            ) : null}
+          </Section>
+        ) : null}
+
+        {showMake ? (
+          <Section title="Make">
+            {showCoder ? (
+              <SettingsRow
+                icon={
+                  <Icon as={Code2Icon} className="size-5 text-emerald-600" />
+                }
+                label="Coder"
+                detail="Build, PR, deploy"
+                onPress={() => router.push("/plugins/coder")}
+                showSeparator={showVisualize || showDesign}
+              />
+            ) : null}
+            {showVisualize ? (
+              <SettingsRow
+                icon={
+                  <Icon as={ImageIcon} className="size-5 text-fuchsia-500" />
+                }
+                label="Visualize"
+                detail="Graphics, diagrams, images"
+                onPress={() => router.push("/visualize")}
+                showSeparator={showDesign}
+              />
+            ) : null}
+            {showDesign ? (
+              <SettingsRow
+                icon={
+                  <Icon
+                    as={LayoutTemplateIcon}
+                    className="size-5 text-violet-500"
+                  />
+                }
+                label="Design"
+                detail="Presentations, documents, layouts"
+                onPress={() => router.push("/design")}
+              />
+            ) : null}
+          </Section>
+        ) : null}
+
+        {showAgent ? (
+          <Section title="Agent">
+            {showModels ? (
+              <SettingsRow
+                icon={
+                  <Icon as={SparklesIcon} className="size-5 text-violet-500" />
+                }
+                label="Models"
+                detail={selectedLabel}
+                onPress={() => router.push("/models")}
+                showSeparator={showMemory || showSchemas || showSkills}
+              />
+            ) : null}
+            {showMemory ? (
+              <SettingsRow
+                icon={
+                  <Icon as={NotebookPenIcon} className="size-5 text-rose-500" />
+                }
+                label="Memory"
+                detail={memoryDetail}
+                onPress={() => router.push("/memory")}
+                showSeparator={showSchemas || showSkills}
+              />
+            ) : null}
+            {showSchemas ? (
+              <SettingsRow
+                icon={
+                  <Icon as={ShapesIcon} className="size-5 text-violet-500" />
+                }
+                label="Schemas"
+                detail="Precise concept definitions"
+                onPress={() => router.push("/plugins/schema-designer")}
+                showSeparator={showSkills}
+              />
+            ) : null}
+            {showSkills ? (
+              <SettingsRow
+                icon={<Icon as={BrainIcon} className="size-5 text-amber-500" />}
+                label="Skills"
+                detail="Custom and published"
+                onPress={() => router.push("/skills")}
+              />
+            ) : null}
+          </Section>
+        ) : null}
+
+        {showUsageSection ? (
+          <Section title="Usage">
+            {showUsage ? (
+              <SettingsRow
+                icon={<Icon as={CoinsIcon} className="size-5 text-amber-500" />}
+                label="Usage"
+                detail={usageDetail}
+                onPress={() => router.push("/usage")}
+                showSeparator={showStorage || search.matches("Billing")}
+              />
+            ) : null}
+            {showStorage ? (
+              <SettingsRow
+                icon={
+                  <Icon as={HardDriveIcon} className="size-5 text-sky-600" />
+                }
+                label="Storage"
+                detail="Chat, saved files, Drive"
+                onPress={() => router.push("/storage")}
+                showSeparator={search.matches("Billing")}
+              />
+            ) : null}
+            <BillingRow matches={search.matches} />
+          </Section>
+        ) : null}
+
+        {showHostingCard ? (
+          <SettingsCard>
+            {showConnected ? (
+              <SettingsRow
+                icon={
+                  <Icon as={BotIcon} className="size-5 text-muted-foreground" />
+                }
+                label="Connected agents"
+                detail="Private eve deployments"
+                onPress={() => router.push("/connected-agents")}
+                showSeparator={showSelfHost}
+              />
+            ) : null}
+            {showSelfHost ? (
+              <SettingsRow
+                icon={
+                  <Icon
+                    as={CloudIcon}
+                    className="size-5 text-muted-foreground"
+                  />
+                }
+                label="Self-host"
+                detail={agentHostLabel}
+                onPress={() => router.push("/self-host")}
+              />
+            ) : null}
+          </SettingsCard>
+        ) : null}
+
+        {showSignOut ? (
+          <SettingsCard>
+            <SettingsRow
+              icon={<Icon as={LogOutIcon} className="size-5 text-destructive" />}
+              label="Sign out"
+              labelDestructive
+              onPress={confirmSignOut}
             />
-          }
-          label="Answers"
-          detail="Web and connected accounts"
-          onPress={() => router.push("/answers")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={ScanSearchIcon} className="size-5 text-violet-500" />}
-          label="Research"
-          detail="Deep research with citations"
-          onPress={() => router.push("/research")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={ClipboardListIcon} className="size-5 text-amber-500" />}
-          label="Plan"
-          detail="Travel and how you plan"
-          onPress={() => router.push("/plan")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={PenLineIcon} className="size-5 text-indigo-500" />}
-          label="Drafting"
-          detail="Writing and style"
-          onPress={() => router.push("/drafting")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={FileSearchIcon} className="size-5 text-sky-600" />}
-          label="Analysis"
-          detail="PDF, images, tables, text"
-          onPress={() => router.push("/analysis")}
-        />
-      </Section>
+          </SettingsCard>
+        ) : null}
 
-      <Section title="Make">
-        <SettingsRow
-          icon={<Icon as={Code2Icon} className="size-5 text-emerald-600" />}
-          label="Coder"
-          detail="Build, PR, deploy"
-          onPress={() => router.push("/plugins/coder")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={ImageIcon} className="size-5 text-fuchsia-500" />}
-          label="Visualize"
-          detail="Graphics, diagrams, images"
-          onPress={() => router.push("/visualize")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={
-            <Icon as={LayoutTemplateIcon} className="size-5 text-violet-500" />
-          }
-          label="Design"
-          detail="Presentations, documents, layouts"
-          onPress={() => router.push("/design")}
-        />
-      </Section>
-
-      <Section title="Agent">
-        <SettingsRow
-          icon={<Icon as={SparklesIcon} className="size-5 text-violet-500" />}
-          label="Models"
-          detail={selectedLabel}
-          onPress={() => router.push("/models")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={NotebookPenIcon} className="size-5 text-rose-500" />}
-          label="Memory"
-          detail={memoryDetail}
-          onPress={() => router.push("/memory")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={ShapesIcon} className="size-5 text-violet-500" />}
-          label="Schemas"
-          detail="Precise concept definitions"
-          onPress={() => router.push("/plugins/schema-designer")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={BrainIcon} className="size-5 text-amber-500" />}
-          label="Skills"
-          detail="Custom and published"
-          onPress={() => router.push("/skills")}
-        />
-      </Section>
-
-      <Section title="Usage">
-        <SettingsRow
-          icon={<Icon as={CoinsIcon} className="size-5 text-amber-500" />}
-          label="Usage"
-          detail={usageDetail}
-          onPress={() => router.push("/usage")}
-          showSeparator
-        />
-        <SettingsRow
-          icon={<Icon as={HardDriveIcon} className="size-5 text-sky-600" />}
-          label="Storage"
-          detail="Chat, saved files, Drive"
-          onPress={() => router.push("/storage")}
-          showSeparator
-        />
-        <BillingRow />
-      </Section>
-
-      <SettingsCard>
-        <SettingsRow
-          icon={
-            <Icon as={BotIcon} className="size-5 text-muted-foreground" />
-          }
-          label="Connected agents"
-          detail="Private eve deployments"
-          onPress={() => router.push("/connected-agents")}
-          showSeparator={!isHostedLocked()}
-        />
-        {isHostedLocked() ? null : (
-          <SettingsRow
-            icon={
-              <Icon as={CloudIcon} className="size-5 text-muted-foreground" />
-            }
-            label="Self-host"
-            detail={agentHostLabel}
-            onPress={() => router.push("/self-host")}
-          />
+        {search.active ? null : (
+          <Text variant="caption" className="px-1 pb-2 text-center opacity-70">
+            Pearl {getAppVersionDetail()}
+          </Text>
         )}
-      </SettingsCard>
-
-      <SettingsCard>
-        <SettingsRow
-          icon={<Icon as={LogOutIcon} className="size-5 text-destructive" />}
-          label="Sign out"
-          labelDestructive
-          onPress={confirmSignOut}
-        />
-      </SettingsCard>
-
-      <Text variant="caption" className="px-1 pb-2 text-center opacity-70">
-        Pearl {getAppVersionDetail()}
-      </Text>
-    </SheetScaffold>
+      </SheetScaffold>
+    </>
   );
 }
 
@@ -463,7 +616,13 @@ function formatCents(cents: number | null | undefined): string {
   return `$${(cents / 100).toFixed(0)}`;
 }
 
-function BillingRow() {
+function BillingRow({
+  matches,
+}: {
+  readonly matches: (
+    ...parts: readonly (string | null | undefined)[]
+  ) => boolean;
+}) {
   const [status, setStatus] = useState<MobileBillingStatus | null>(null);
 
   useFocusEffect(
@@ -488,6 +647,8 @@ function BillingRow() {
     if (status.needsCheckout) return "Subscribe";
     return `${formatCents(status.spentCents)} of ${formatCents(status.usageCapCents)}`;
   })();
+
+  if (!matches("Billing", detail)) return null;
 
   return (
     <SettingsRow
