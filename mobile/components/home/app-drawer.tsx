@@ -6,23 +6,28 @@ import {
   ChevronRightIcon,
   ClockIcon,
   FolderIcon,
-  SquarePenIcon,
 } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
-import { Icon } from "@/components/ui/icon";
-import { Text as AppText } from "@/components/ui/text";
+import {
+  AgentMark,
+  agentListSubtitle,
+} from "@/components/custom-agents/agent-mark";
 import {
   HistoryListIOS,
   type HistoryChatActionHandlers,
 } from "@/components/home/history-list";
-import { useAuth } from "@/src/auth";
+import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
+import { Icon } from "@/components/ui/icon";
+import { Text as AppText } from "@/components/ui/text";
 import { useChats } from "@/src/chat-context";
 import {
   fetchCustomAgents,
   type CustomAgentDto,
 } from "@/src/custom-agents-client";
-import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
+
+const AGENT_MARK_SIZE = 40;
+const PINNED_MARK_SIZE = 72;
 
 export type { HistoryChatActionHandlers };
 
@@ -81,7 +86,6 @@ function HistoryListAndroid({
   readonly onCreateAgent?: () => void;
   readonly bottomInset?: number;
 }) {
-  const { isAnonymous } = useAuth();
   const { chats, newChat, selectChat } = useChats();
   const [agents, setAgents] = useState<readonly CustomAgentDto[] | null>(null);
   const orderedAgents = useMemo(
@@ -120,16 +124,6 @@ function HistoryListAndroid({
     newChat();
     onOpenChat();
   };
-  const startNewPearlChat = () => {
-    if (isAnonymous && lastPearlChat) {
-      void selectChat(lastPearlChat.id).then((selected) => {
-        if (selected) onOpenChat();
-      });
-      return;
-    }
-    newChat();
-    onOpenChat();
-  };
 
   return (
     <SafeAreaView
@@ -142,63 +136,28 @@ function HistoryListAndroid({
         contentContainerClassName="px-4 pt-0"
         contentContainerStyle={{ paddingBottom: 32 + bottomInset }}
       >
-        <View className="mb-6">
-          <View className="mb-1 flex-row items-center justify-between px-3">
-            <AppText variant="secondary" weight="medium">
-              Agents
-            </AppText>
-            {onCreateAgent ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="New agent"
-                className="min-h-8 justify-center px-1"
-                onPress={onCreateAgent}
-              >
-                <AppText variant="secondary" weight="medium">
-                  New
-                </AppText>
-              </Pressable>
-            ) : null}
-          </View>
-          <View className="min-h-12 flex-row items-center">
+        <View className="mb-8">
+          <View className="mb-5 flex-row items-start px-5">
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={
-                lastPearlChat ? `Pearl, ${lastPearlChat.title}` : "Pearl"
-              }
-              className="min-h-12 min-w-0 flex-1 flex-row items-center gap-3 px-3 py-2"
+              accessibilityLabel="Pearl"
+              className="items-center active:opacity-80"
+              style={{ width: PINNED_MARK_SIZE + 8, gap: 6 }}
               onPress={openPearl}
             >
-              <View
-                className="size-3.5 items-center justify-center rounded-full"
-                style={{ backgroundColor: PEARL_IDENTITY_ACCENT }}
-              >
-                <View className="flex-row gap-0.5">
-                  <View className="h-1.5 w-0.5 rounded-full bg-white" />
-                  <View className="h-1.5 w-0.5 rounded-full bg-white" />
-                </View>
-              </View>
-              <View className="min-w-0 flex-1">
-                <AppText variant="body" weight="medium" numberOfLines={1}>
-                  Pearl
-                </AppText>
-                {lastPearlChat ? (
-                  <AppText variant="secondary" numberOfLines={1}>
-                    {lastPearlChat.title}
-                  </AppText>
-                ) : null}
-              </View>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="New Pearl chat"
-              className="min-h-12 min-w-11 items-center justify-center px-3"
-              onPress={startNewPearlChat}
-            >
-              <Icon
-                as={SquarePenIcon}
-                className="size-4 text-muted-foreground"
+              <AgentMark
+                accent={PEARL_IDENTITY_ACCENT}
+                size={PINNED_MARK_SIZE}
+                shape="squircle"
               />
+              <AppText
+                variant="caption"
+                weight="regular"
+                numberOfLines={1}
+                className="text-center"
+              >
+                Pearl
+              </AppText>
             </Pressable>
           </View>
           {agents !== null && orderedAgents.length === 0 ? (
@@ -206,57 +165,61 @@ function HistoryListAndroid({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="New agent"
-                className="min-h-12 flex-row items-center gap-3 px-3 py-2"
+                className="min-h-[60px] flex-row items-center gap-3 px-5 py-2.5"
                 onPress={onCreateAgent}
               >
-                <View
-                  className="size-3.5 items-center justify-center rounded-full"
-                  style={{ backgroundColor: "#2DD4BF" }}
-                >
-                  <View className="flex-row gap-0.5">
-                    <View className="h-1.5 w-0.5 rounded-full bg-white" />
-                    <View className="h-1.5 w-0.5 rounded-full bg-white" />
-                  </View>
-                </View>
-                <AppText variant="body" weight="medium">
+                <AgentMark accent="#2DD4BF" size={AGENT_MARK_SIZE} />
+                <AppText variant="label" weight="semibold">
                   New Agent
                 </AppText>
               </Pressable>
             ) : null
           ) : (
-            orderedAgents.map((agent) => (
-              <Pressable
-                key={agent.id}
-                accessibilityRole="button"
-                accessibilityLabel={agent.name}
-                className="min-h-12 w-full flex-row items-center gap-3 px-3 py-2"
-                onPress={() => {
-                  void selectChat(agent.chatId).then((selected) => {
-                    if (selected) onOpenChat();
-                  });
-                }}
-              >
-                <View
-                  className="size-3.5 items-center justify-center rounded-full"
-                  style={{
-                    backgroundColor: agent.accent || "#2DD4BF",
+            orderedAgents.map((agent) => {
+              const subtitle = agentListSubtitle({
+                name: agent.name,
+                chatTitle: agent.chatTitle,
+                instructions: agent.instructions,
+              });
+              return (
+                <Pressable
+                  key={agent.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    subtitle ? `${agent.name}, ${subtitle}` : agent.name
+                  }
+                  className="min-h-[60px] w-full flex-row items-center gap-3 px-5 py-2.5"
+                  onPress={() => {
+                    void selectChat(agent.chatId).then((selected) => {
+                      if (selected) onOpenChat();
+                    });
                   }}
                 >
-                  <View className="flex-row gap-0.5">
-                    <View className="h-1.5 w-0.5 rounded-full bg-white" />
-                    <View className="h-1.5 w-0.5 rounded-full bg-white" />
+                  <AgentMark
+                    accent={agent.accent || "#2DD4BF"}
+                    size={AGENT_MARK_SIZE}
+                  />
+                  <View className="min-w-0 flex-1" style={{ gap: 1 }}>
+                    <AppText
+                      variant="label"
+                      weight="semibold"
+                      numberOfLines={1}
+                    >
+                      {agent.name}
+                    </AppText>
+                    {subtitle ? (
+                      <AppText
+                        variant="secondary"
+                        weight="regular"
+                        numberOfLines={1}
+                      >
+                        {subtitle}
+                      </AppText>
+                    ) : null}
                   </View>
-                </View>
-                <AppText
-                  variant="body"
-                  weight="medium"
-                  className="min-w-0 flex-1"
-                  numberOfLines={1}
-                >
-                  {agent.name}
-                </AppText>
-              </Pressable>
-            ))
+                </Pressable>
+              );
+            })
           )}
         </View>
 
@@ -290,7 +253,7 @@ function NavRowAndroid({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      className="min-h-12 w-full flex-row items-center gap-3 px-3 py-2"
+      className="min-h-12 w-full flex-row items-center gap-3 px-5 py-3"
       onPress={onPress}
     >
       <Icon as={icon} className="size-3.5 text-muted-foreground" />

@@ -52,6 +52,7 @@ function normalizeAccent(raw: string | undefined): string {
 function toSummary(
   agent: CustomAgent,
   chatId: string,
+  chatTitle: string,
 ): CustomAgentSummary {
   return {
     id: agent.id,
@@ -59,6 +60,7 @@ function toSummary(
     instructions: agent.instructions,
     accent: agent.accent,
     chatId,
+    chatTitle,
     createdAt: agent.createdAt.toISOString(),
     updatedAt: agent.updatedAt.toISOString(),
   };
@@ -80,13 +82,16 @@ export async function listCustomAgents(
     .select({
       agent: customAgent,
       chatId: chat.id,
+      chatTitle: chat.title,
     })
     .from(customAgent)
     .innerJoin(chat, eq(chat.customAgentId, customAgent.id))
     .where(eq(customAgent.userId, userId))
     .orderBy(asc(customAgent.name));
 
-  return rows.map((row) => toSummary(row.agent, row.chatId));
+  return rows.map((row) =>
+    toSummary(row.agent, row.chatId, row.chatTitle),
+  );
 }
 
 export async function getCustomAgent(
@@ -97,13 +102,14 @@ export async function getCustomAgent(
     .select({
       agent: customAgent,
       chatId: chat.id,
+      chatTitle: chat.title,
     })
     .from(customAgent)
     .innerJoin(chat, eq(chat.customAgentId, customAgent.id))
     .where(and(eq(customAgent.userId, userId), eq(customAgent.id, agentId)))
     .limit(1);
   if (!row) return null;
-  return toSummary(row.agent, row.chatId);
+  return toSummary(row.agent, row.chatId, row.chatTitle);
 }
 
 export async function getCustomAgentRefForChat(
@@ -214,12 +220,12 @@ export async function createCustomAgent(
         title: name,
         customAgentId: agentId,
       })
-      .returning({ id: chat.id });
+      .returning({ id: chat.id, title: chat.title });
     if (!chatRow) {
       throw new CustomAgentError("Failed to create agent thread.");
     }
 
-    return toSummary(agent, chatRow.id);
+    return toSummary(agent, chatRow.id, chatRow.title);
   });
 
   return summary;
@@ -261,14 +267,16 @@ export async function updateCustomAgent(
   if (!agent) return null;
 
   // Keep the durable thread title aligned with the agent name.
+  let chatTitle = existing.chatTitle;
   if (name !== existing.name) {
     await db
       .update(chat)
       .set({ title: name, updatedAt: new Date() })
       .where(and(eq(chat.customAgentId, agentId), eq(chat.userId, userId)));
+    chatTitle = name;
   }
 
-  return toSummary(agent, existing.chatId);
+  return toSummary(agent, existing.chatId, chatTitle);
 }
 
 /** Deletes the agent; cascade removes its chat and events. */

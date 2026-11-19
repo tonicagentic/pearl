@@ -6,6 +6,8 @@ export type CustomAgentSummary = {
   readonly accent: string;
   /** The one durable chat for this agent. */
   readonly chatId: string;
+  /** Current title of the agent's durable chat (preview / activity). */
+  readonly chatTitle: string;
   readonly createdAt: string;
   readonly updatedAt: string;
 };

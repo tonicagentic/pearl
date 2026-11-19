@@ -9,6 +9,8 @@ export type CustomAgentDto = {
   readonly instructions: string;
   readonly accent: string;
   readonly chatId: string;
+  /** Current title of the agent's durable chat (list preview). */
+  readonly chatTitle: string;
   readonly createdAt: string;
   readonly updatedAt: string;
 };

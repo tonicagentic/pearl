@@ -7,6 +7,7 @@ import {
   HStack,
   Image,
   List,
+  RNHostView,
   Section,
   Spacer,
   Text as SwiftText,
@@ -22,10 +23,12 @@ import {
   lineLimit,
   listRowBackground,
   listRowInsets,
+  listRowSeparator,
+  listRowSpacing,
   listStyle,
+  multilineTextAlignment,
   onTapGesture,
   opacity,
-  padding,
   scrollContentBackground,
   scrollEdgeEffectStyle,
   shapes,
@@ -33,23 +36,32 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { useCSSVariable } from "uniwind";
 
-import { useAuth } from "@/src/auth";
+import {
+  AgentMark,
+  agentListSubtitle,
+} from "@/components/custom-agents/agent-mark";
+import type { HistoryChatActionHandlers } from "@/components/home/history-list";
+import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
 import { useChats } from "@/src/chat-context";
 import {
   fetchCustomAgents,
   type CustomAgentDto,
 } from "@/src/custom-agents-client";
-import type { HistoryChatActionHandlers } from "@/components/home/history-list";
-import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
 
-/** Fixed leading slot so titles stay aligned with or without a presence mark. */
+/** Fixed leading slot so NavRow icons stay aligned. */
 const PRESENCE_SLOT = 14;
+/** Circular eye-mark size for Agents list rows (Grok bots). */
+const AGENT_MARK_SIZE = 40;
+/** Squircle size for the pinned Pearl tile. */
+const PINNED_MARK_SIZE = 72;
+/** Shared horizontal inset for agent/nav rows. */
+const ROW_LEADING = 20;
 
 export type { HistoryChatActionHandlers } from "@/components/home/history-list";
 
 /**
- * iOS home: inset-grouped List — Agents, then a History / Workspaces
- * button group.
+ * iOS home: plain List — pinned Pearl, custom agents, then History /
+ * Workspaces. Styled after Grok bots (no separators, airy rows).
  */
 export function HistoryListIOS({
   onOpenChat,
@@ -62,7 +74,6 @@ export function HistoryListIOS({
   /** Opens the new-agent composer from the empty Agents row. */
   readonly onCreateAgent?: () => void;
 }) {
-  const { isAnonymous } = useAuth();
   const { chats, newChat, selectChat } = useChats();
   const pageBackground = useCSSVariable("--color-background") as
     | string
@@ -74,7 +85,14 @@ export function HistoryListIOS({
     | undefined;
   const mutedColor = mutedForeground ?? "#8E8E93";
   const rowChrome = [
-    listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
+    listRowInsets({
+      top: 14,
+      bottom: 14,
+      leading: ROW_LEADING,
+      trailing: ROW_LEADING,
+    }),
+    listRowBackground(backgroundColor),
+    listRowSeparator("hidden"),
   ];
 
   const [agents, setAgents] = useState<readonly CustomAgentDto[] | null>(null);
@@ -120,15 +138,6 @@ export function HistoryListIOS({
     onOpenChat();
   }, [lastPearlChat, newChat, onOpenChat, openChat]);
 
-  const startNewPearlChat = useCallback(() => {
-    if (isAnonymous && lastPearlChat) {
-      openChat(lastPearlChat.id);
-      return;
-    }
-    newChat();
-    onOpenChat();
-  }, [isAnonymous, lastPearlChat, newChat, onOpenChat, openChat]);
-
   const showAgents = agents !== null;
 
   return (
@@ -142,46 +151,16 @@ export function HistoryListIOS({
       <Host style={{ flex: 1, backgroundColor }}>
         <List
           modifiers={[
-            listStyle("insetGrouped"),
+            listStyle("plain"),
             scrollContentBackground("hidden"),
             scrollEdgeEffectStyle("soft"),
+            listRowSpacing(10),
           ]}
         >
-          <Section
-            header={
-              <HStack alignment="center">
-                <SwiftText
-                  modifiers={[
-                    font({ size: 13 }),
-                    foregroundStyle({
-                      type: "hierarchical",
-                      style: "secondary",
-                    }),
-                  ]}
-                >
-                  Agents
-                </SwiftText>
-                <Spacer />
-                {onCreateAgent ? (
-                  <Button
-                    onPress={onCreateAgent}
-                    modifiers={[buttonStyle("plain")]}
-                  >
-                    <Image
-                      systemName="plus"
-                      size={14}
-                      modifiers={[tint(mutedColor)]}
-                    />
-                  </Button>
-                ) : null}
-              </HStack>
-            }
-          >
-            <PearlAgentRow
-              lastTitle={lastPearlChat?.title ?? null}
-              mutedColor={mutedColor}
+          <Section>
+            <PearlPinnedRow
+              rowBackground={backgroundColor}
               onOpen={openPearl}
-              onNewChat={startNewPearlChat}
             />
             {showAgents && orderedAgents.length === 0 && onCreateAgent ? (
               <Button
@@ -195,12 +174,13 @@ export function HistoryListIOS({
               <List.ForEach
                 data={orderedAgents}
                 keyExtractor={(agent) => agent.id}
-                estimatedItemSize={52}
+                estimatedItemSize={68}
                 recycling={false}
               >
                 {({ item: agent }) => (
                   <AgentRow
                     agent={agent}
+                    rowBackground={backgroundColor}
                     onOpen={() => openChat(agent.chatId)}
                   />
                 )}
@@ -212,12 +192,14 @@ export function HistoryListIOS({
               label="History"
               systemImage="clock"
               mutedColor={mutedColor}
+              rowBackground={backgroundColor}
               onPress={() => router.push("/history")}
             />
             <NavRow
               label="Workspaces"
               systemImage="folder.fill"
               mutedColor={mutedColor}
+              rowBackground={backgroundColor}
               onPress={() => router.push("/workspaces")}
             />
           </Section>
@@ -227,6 +209,7 @@ export function HistoryListIOS({
                 modifiers={[
                   frame({ height: bottomInset }),
                   listRowBackground(clearRow),
+                  listRowSeparator("hidden"),
                   listRowInsets({
                     top: 0,
                     bottom: 0,
@@ -251,115 +234,135 @@ const FULL_ROW_HIT = [
   frame({ maxWidth: 9999, alignment: "leading" as const }),
 ];
 
-function PearlAgentRow({
-  lastTitle,
-  mutedColor,
-  onOpen,
-  onNewChat,
+function AgentListMark({
+  accent,
+  size = AGENT_MARK_SIZE,
+  shape = "circle",
 }: {
-  readonly lastTitle: string | null;
-  readonly mutedColor: string;
+  readonly accent: string;
+  readonly size?: number;
+  readonly shape?: "circle" | "squircle";
+}) {
+  return (
+    <RNHostView matchContents>
+      <View style={{ width: size, height: size }}>
+        <AgentMark accent={accent} size={size} shape={shape} />
+      </View>
+    </RNHostView>
+  );
+}
+
+/** Grok-style pinned Pearl: large squircle + label. */
+function PearlPinnedRow({
+  rowBackground,
+  onOpen,
+}: {
+  readonly rowBackground: string;
   readonly onOpen: () => void;
-  readonly onNewChat: () => void;
 }) {
   return (
     <HStack
       spacing={8}
-      alignment="center"
+      alignment="top"
       modifiers={[
-        listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 12 }),
+        listRowInsets({
+          top: 4,
+          bottom: 22,
+          leading: ROW_LEADING,
+          trailing: ROW_LEADING,
+        }),
+        listRowBackground(rowBackground),
+        listRowSeparator("hidden"),
         ...FULL_ROW_HIT,
-        padding({ vertical: 2 }),
+        onTapGesture(onOpen),
+        accessibilityLabel("Pearl"),
       ]}
     >
-      <HStack
-        spacing={12}
+      <VStack
+        spacing={6}
         alignment="center"
-        modifiers={[
-          ...FULL_ROW_HIT,
-          onTapGesture(onOpen),
-          accessibilityLabel(
-            lastTitle ? `Pearl, ${lastTitle}` : "Pearl",
-          ),
-        ]}
+        modifiers={[frame({ width: PINNED_MARK_SIZE + 8 })]}
       >
-        <Image
-          systemName="circle.fill"
-          size={14}
+        <AgentListMark
+          accent={PEARL_IDENTITY_ACCENT}
+          size={PINNED_MARK_SIZE}
+          shape="squircle"
+        />
+        <SwiftText
           modifiers={[
-            frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
-            tint(PEARL_IDENTITY_ACCENT),
+            lineLimit(1),
+            font({ size: 12, weight: "regular" }),
+            multilineTextAlignment("center"),
           ]}
-        />
-        <VStack spacing={2} alignment="leading">
-          <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
-            Pearl
-          </SwiftText>
-          {lastTitle ? (
-            <SwiftText
-              modifiers={[
-                lineLimit(1),
-                font({ size: 12 }),
-                foregroundStyle({
-                  type: "hierarchical",
-                  style: "secondary",
-                }),
-              ]}
-            >
-              {lastTitle}
-            </SwiftText>
-          ) : null}
-        </VStack>
-        <Spacer />
-      </HStack>
-      <Button
-        onPress={onNewChat}
-        modifiers={[
-          buttonStyle("plain"),
-          accessibilityLabel("New Pearl chat"),
-        ]}
-      >
-        <Image
-          systemName="square.and.pencil"
-          size={17}
-          modifiers={[tint(mutedColor)]}
-        />
-      </Button>
+        >
+          Pearl
+        </SwiftText>
+      </VStack>
+      <Spacer />
     </HStack>
   );
 }
 
 function AgentRow({
   agent,
+  rowBackground,
   onOpen,
 }: {
   readonly agent: CustomAgentDto;
+  readonly rowBackground: string;
   readonly onOpen: () => void;
 }) {
   const accent = agent.accent || "#2DD4BF";
+  const subtitle = agentListSubtitle({
+    name: agent.name,
+    chatTitle: agent.chatTitle,
+    instructions: agent.instructions,
+  });
   return (
     <HStack
       spacing={12}
       alignment="center"
       modifiers={[
-        listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
+        listRowInsets({
+          top: 10,
+          bottom: 10,
+          leading: ROW_LEADING,
+          trailing: ROW_LEADING,
+        }),
+        listRowBackground(rowBackground),
+        listRowSeparator("hidden"),
         ...FULL_ROW_HIT,
-        padding({ vertical: 2 }),
         onTapGesture(onOpen),
-        accessibilityLabel(agent.name),
+        accessibilityLabel(
+          subtitle ? `${agent.name}, ${subtitle}` : agent.name,
+        ),
       ]}
     >
-      <Image
-        systemName="circle.fill"
-        size={14}
-        modifiers={[
-          frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
-          tint(accent),
-        ]}
-      />
-      <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
-        {agent.name}
-      </SwiftText>
+      <AgentListMark accent={accent} />
+      <VStack spacing={1} alignment="leading">
+        <SwiftText
+          modifiers={[
+            lineLimit(1),
+            font({ size: 16, weight: "semibold" }),
+          ]}
+        >
+          {agent.name}
+        </SwiftText>
+        {subtitle ? (
+          <SwiftText
+            modifiers={[
+              lineLimit(1),
+              font({ size: 14, weight: "regular" }),
+              foregroundStyle({
+                type: "hierarchical",
+                style: "secondary",
+              }),
+            ]}
+          >
+            {subtitle}
+          </SwiftText>
+        ) : null}
+      </VStack>
       <Spacer />
     </HStack>
   );
@@ -369,11 +372,13 @@ function NavRow({
   label,
   systemImage,
   mutedColor,
+  rowBackground,
   onPress,
 }: {
   readonly label: string;
   readonly systemImage: "clock" | "folder.fill";
   readonly mutedColor: string;
+  readonly rowBackground: string;
   readonly onPress: () => void;
 }) {
   return (
@@ -381,9 +386,15 @@ function NavRow({
       spacing={12}
       alignment="center"
       modifiers={[
-        listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
+        listRowInsets({
+          top: 12,
+          bottom: 12,
+          leading: ROW_LEADING,
+          trailing: ROW_LEADING,
+        }),
+        listRowBackground(rowBackground),
+        listRowSeparator("hidden"),
         ...FULL_ROW_HIT,
-        padding({ vertical: 2 }),
         onTapGesture(onPress),
         accessibilityLabel(label),
       ]}
@@ -396,7 +407,9 @@ function NavRow({
           tint(mutedColor),
         ]}
       />
-      <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
+      <SwiftText
+        modifiers={[lineLimit(1), font({ size: 16, weight: "regular" })]}
+      >
         {label}
       </SwiftText>
       <Spacer />
@@ -408,4 +421,3 @@ function NavRow({
     </HStack>
   );
 }
-

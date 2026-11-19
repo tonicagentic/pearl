@@ -1,5 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 
+import { AgentMark } from "@/components/custom-agents/agent-mark";
+
 /** Mobile Grok-style attachment pill for Pearl / custom-agent threads. */
 export function AgentIdentityPill({
   name,
@@ -13,15 +15,7 @@ export function AgentIdentityPill({
   const label = name.trim() || "Agent";
   const body = (
     <>
-      <View
-        className="size-4 items-center justify-center rounded-full"
-        style={{ backgroundColor: accent }}
-      >
-        <View className="flex-row items-center gap-0.5">
-          <View className="h-1.5 w-0.5 rounded-full bg-white" />
-          <View className="h-1.5 w-0.5 rounded-full bg-white" />
-        </View>
-      </View>
+      <AgentMark accent={accent} size={16} />
       <Text
         numberOfLines={1}
         className="shrink text-xs font-medium text-foreground"

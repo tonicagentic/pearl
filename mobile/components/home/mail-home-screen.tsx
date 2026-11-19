@@ -6,7 +6,7 @@ import {
 } from "react";
 import { AppState, Platform, Pressable, View } from "react-native";
 import { Stack, router, useFocusEffect } from "expo-router";
-import { UserIcon } from "lucide-react-native";
+import { PlusIcon, UserIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { HistoryScreen } from "@/components/home/app-drawer";
@@ -25,8 +25,8 @@ import { Text } from "@/components/ui/text";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import { chatListPresence } from "@/src/chat-presence";
-import { initials as viewerInitials } from "@/src/initials";
 import type { CustomAgentDto } from "@/src/custom-agents-client";
+import { initials as viewerInitials } from "@/src/initials";
 
 const IS_IOS = Platform.OS === "ios";
 
@@ -204,45 +204,69 @@ export function MailHomeScreen() {
                   )}
                 </Pressable>
               ),
+          headerRight:
+            IS_IOS || isAnonymous
+              ? undefined
+              : () => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="New agent"
+                    className="h-10 w-10 items-center justify-center"
+                    onPress={openCreateAgent}
+                  >
+                    <Icon as={PlusIcon} className="size-5 text-foreground" />
+                  </Pressable>
+                ),
         }}
       />
       {IS_IOS ? (
-        <Stack.Toolbar placement="left">
-          {isAnonymous ? (
-            <Stack.Toolbar.Button
-              accessibilityLabel="Sign in"
-              onPress={openProfile}
-            >
-              Sign in
-            </Stack.Toolbar.Button>
-          ) : (
-            <Stack.Toolbar.View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Profile"
+        <>
+          <Stack.Toolbar placement="left">
+            {isAnonymous ? (
+              <Stack.Toolbar.Button
+                accessibilityLabel="Sign in"
                 onPress={openProfile}
-                style={{
-                  width: 36,
-                  height: 36,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
               >
-                {profileInitials ? (
-                  <Text
-                    variant="label"
-                    weight="semibold"
-                    style={{ color: foregroundColor }}
-                  >
-                    {profileInitials}
-                  </Text>
-                ) : (
-                  <Icon as={UserIcon} className="size-5 text-foreground" />
-                )}
-              </Pressable>
-            </Stack.Toolbar.View>
-          )}
-        </Stack.Toolbar>
+                Sign in
+              </Stack.Toolbar.Button>
+            ) : (
+              <Stack.Toolbar.View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Profile"
+                  onPress={openProfile}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {profileInitials ? (
+                    <Text
+                      variant="label"
+                      weight="semibold"
+                      style={{ color: foregroundColor }}
+                    >
+                      {profileInitials}
+                    </Text>
+                  ) : (
+                    <Icon as={UserIcon} className="size-5 text-foreground" />
+                  )}
+                </Pressable>
+              </Stack.Toolbar.View>
+            )}
+          </Stack.Toolbar>
+          {!isAnonymous ? (
+            <Stack.Toolbar placement="right">
+              <Stack.Toolbar.Button
+                icon="plus"
+                accessibilityLabel="New agent"
+                onPress={openCreateAgent}
+              />
+            </Stack.Toolbar>
+          ) : null}
+        </>
       ) : null}
       <View style={{ flex: 1, zIndex: 0, overflow: "hidden" }}>
         {!billingReady ? (
