@@ -1,13 +1,32 @@
+import { Icon } from "@/components/ui/icon";
 import { useAuth } from "@/src/auth";
 import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
 import { AuiIf, ThreadPrimitive } from "@assistant-ui/react-native";
+import {
+  ClapperboardIcon,
+  CompassIcon,
+  ImageIcon,
+  LightbulbIcon,
+  MessageCircleIcon,
+  SparklesIcon,
+  type LucideIcon,
+} from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 type SuggestedPrompt = {
   readonly title: string;
   readonly prompt: string;
 };
+
+const SUGGESTION_ICONS: readonly LucideIcon[] = [
+  SparklesIcon,
+  ImageIcon,
+  ClapperboardIcon,
+  LightbulbIcon,
+  MessageCircleIcon,
+  CompassIcon,
+];
 
 let cachedPrompts: readonly SuggestedPrompt[] = [];
 
@@ -74,25 +93,27 @@ const SuggestedPromptsRow = () => {
     return null;
   }
 
+  // Grok-style: a short left-aligned vertical stack above the composer.
+  const visible = prompts.slice(0, 3);
+
   return (
-    <View className="px-4 pb-2">
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerClassName="mx-auto flex min-h-8 w-max items-center gap-2 px-0.5"
-        className="-my-1 w-full py-1"
-      >
-        {prompts.map((suggestion) => (
+    <View className="items-start gap-2.5 px-4 pb-3">
+      {visible.map((suggestion, index) => {
+        const Glyph = SUGGESTION_ICONS[index % SUGGESTION_ICONS.length]!;
+        return (
           <ThreadPrimitive.Suggestion
             key={suggestion.prompt}
-            className="rounded-full border bg-background px-3 py-1 active:bg-muted/80"
+            className="max-w-full flex-row items-center gap-2.5 rounded-full bg-muted px-3.5 py-2.5 active:bg-muted/70"
             prompt={suggestion.prompt}
             send
           >
-            <Text className="text-sm text-foreground">{suggestion.title}</Text>
+            <Icon as={Glyph} className="text-foreground/70 size-4 shrink-0" />
+            <Text className="text-[15px] leading-5 text-muted-foreground" numberOfLines={1}>
+              {suggestion.title}
+            </Text>
           </ThreadPrimitive.Suggestion>
-        ))}
-      </ScrollView>
+        );
+      })}
     </View>
   );
 };

@@ -3,9 +3,27 @@
 import { useChatShell } from "@/app/_components/chat-shell-context";
 import type { SuggestedPrompt } from "@/lib/chat/suggested-prompts";
 import { AuiIf, ThreadPrimitive } from "@assistant-ui/react";
-import { useCallback, useEffect, useRef, useState, type FC } from "react";
+import {
+  ClapperboardIcon,
+  CompassIcon,
+  ImageIcon,
+  LightbulbIcon,
+  MessageCircleIcon,
+  SparklesIcon,
+  type LucideIcon,
+} from "lucide-react";
+import { useEffect, useState, type FC } from "react";
 
 let cachedPrompts: readonly SuggestedPrompt[] = [];
+
+const SUGGESTION_ICONS: readonly LucideIcon[] = [
+  SparklesIcon,
+  ImageIcon,
+  ClapperboardIcon,
+  LightbulbIcon,
+  MessageCircleIcon,
+  CompassIcon,
+];
 
 async function fetchSuggestedPrompts(): Promise<readonly SuggestedPrompt[]> {
   const response = await fetch("/api/chat/suggested-prompts", {
@@ -34,9 +52,6 @@ const SuggestedPromptsRow: FC = () => {
   const [prompts, setPrompts] = useState<readonly SuggestedPrompt[]>(
     () => cachedPrompts,
   );
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const rtlRef = useRef<boolean | null>(null);
-  const [fades, setFades] = useState({ left: false, right: false });
   const [ready, setReady] = useState(cachedPrompts.length > 0);
 
   useEffect(() => {
@@ -60,65 +75,41 @@ const SuggestedPromptsRow: FC = () => {
     };
   }, [viewer]);
 
-  const updateFades = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const maxScroll = el.scrollWidth - el.clientWidth;
-    const fromStart = Math.abs(el.scrollLeft);
-    const rtl = (rtlRef.current ??= getComputedStyle(el).direction === "rtl");
-    const [left, right] = rtl
-      ? [maxScroll - fromStart, fromStart]
-      : [fromStart, maxScroll - fromStart];
-    setFades((prev) => {
-      const next = { left: left > 1, right: right > 1 };
-      return prev.left === next.left && prev.right === next.right ? prev : next;
-    });
-  }, []);
-
-  useEffect(() => {
-    updateFades();
-    const el = scrollRef.current;
-    if (!el?.firstElementChild) return undefined;
-    const observer = new ResizeObserver(updateFades);
-    observer.observe(el);
-    observer.observe(el.firstElementChild);
-    return () => observer.disconnect();
-  }, [prompts, updateFades]);
-
   if (!viewer || !ready || prompts.length === 0) {
     return null;
   }
 
-  const maskImage = `linear-gradient(to right, ${
-    fades.left ? "transparent, black 2rem" : "black"
-  }, ${fades.right ? "black calc(100% - 2rem), transparent" : "black"})`;
+  // Grok-style: a short left-aligned vertical stack above the composer.
+  const visible = prompts.slice(0, 3);
 
   return (
-    <div
-      ref={scrollRef}
-      onScroll={updateFades}
-      className="aui-thread-suggested-prompts fade-in slide-in-from-bottom-2 animate-in -my-1 w-full overflow-x-auto py-1 fill-mode-both duration-200 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      style={{ maskImage, WebkitMaskImage: maskImage }}
-    >
-      <div className="mx-auto flex min-h-8 w-max items-center gap-2 px-0.5">
-        {prompts.map((suggestion) => (
+    <div className="aui-thread-suggested-prompts fade-in slide-in-from-bottom-2 animate-in flex w-full flex-col items-start gap-2.5 fill-mode-both duration-200">
+      {visible.map((suggestion, index) => {
+        const Glyph = SUGGESTION_ICONS[index % SUGGESTION_ICONS.length]!;
+        return (
           <ThreadPrimitive.Suggestion
             key={suggestion.prompt}
-            className="aui-thread-suggested-prompt bg-background hover:bg-muted/80 rounded-full border px-3 py-1 text-sm whitespace-nowrap transition-colors ease-in"
+            className="aui-thread-suggested-prompt text-muted-foreground hover:bg-muted/70 inline-flex max-w-full items-center gap-2.5 rounded-full bg-muted px-3.5 py-2.5 text-[15px] leading-5 transition-colors ease-in"
             prompt={suggestion.prompt}
             send
           >
-            {suggestion.title}
+            <Glyph className="text-foreground/70 size-4 shrink-0" aria-hidden />
+            <span className="truncate">{suggestion.title}</span>
           </ThreadPrimitive.Suggestion>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 };
 
 /** Personalized starter chips above the composer on an empty new chat. */
 export const ThreadSuggestedPrompts: FC = () => (
-  <AuiIf condition={(s) => s.thread.messages.length === 0 && (!s.thread.isLoading || s.threads.isLoading)}>
+  <AuiIf
+    condition={(s) =>
+      s.thread.messages.length === 0 &&
+      (!s.thread.isLoading || s.threads.isLoading)
+    }
+  >
     <SuggestedPromptsRow />
   </AuiIf>
 );
