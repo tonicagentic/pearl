@@ -2,11 +2,6 @@ import { useCallback, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  ChevronRightIcon,
-  ClockIcon,
-  FolderIcon,
-} from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import {
@@ -19,7 +14,6 @@ import {
   type HistoryChatActionHandlers,
 } from "@/components/home/history-list";
 import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
-import { Icon } from "@/components/ui/icon";
 import { Text as AppText } from "@/components/ui/text";
 import { useChats } from "@/src/chat-context";
 import {
@@ -39,7 +33,7 @@ const PINNED_MARK_SIZE = 72;
 export type { HistoryChatActionHandlers };
 
 /**
- * Home list: Agents plus History / Workspaces.
+ * Home list: pinned Pearl, then agents.
  * Selecting Pearl or an agent opens `/chat`.
  */
 export function HistoryScreen({
@@ -144,7 +138,7 @@ function HistoryListAndroid({
         contentContainerStyle={{ paddingBottom: 32 + bottomInset }}
       >
         <View className="mb-8">
-          <View className="mb-5 flex-row items-start px-5">
+          <View className="mb-5 flex-row items-end justify-center px-5">
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Pearl"
@@ -255,50 +249,8 @@ function HistoryListAndroid({
             })
           )}
         </View>
-
-        <View>
-          <NavRowAndroid
-            label="History"
-            icon={ClockIcon}
-            onPress={() => router.push("/history")}
-          />
-          <NavRowAndroid
-            label="Workspaces"
-            icon={FolderIcon}
-            onPress={() => router.push("/workspaces")}
-          />
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function NavRowAndroid({
-  label,
-  icon,
-  onPress,
-}: {
-  readonly label: string;
-  readonly icon: typeof ClockIcon;
-  readonly onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      className="min-h-12 w-full flex-row items-center gap-3 px-5 py-3"
-      onPress={onPress}
-    >
-      <Icon as={icon} className="size-3.5 text-muted-foreground" />
-      <AppText
-        variant="body"
-        weight="medium"
-        className="min-w-0 flex-1"
-        numberOfLines={1}
-      >
-        {label}
-      </AppText>
-      <Icon as={ChevronRightIcon} className="size-4 text-muted-foreground" />
-    </Pressable>
-  );
-}

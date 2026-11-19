@@ -6,7 +6,7 @@ import {
 } from "react";
 import { AppState, Platform, Pressable, View } from "react-native";
 import { Stack, router, useFocusEffect } from "expo-router";
-import { PlusIcon, UserIcon } from "lucide-react-native";
+import { ClockIcon, FolderIcon, PlusIcon, UserIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { HistoryScreen } from "@/components/home/app-drawer";
@@ -24,14 +24,13 @@ import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
-import { chatListPresence } from "@/src/chat-presence";
 import type { CustomAgentDto } from "@/src/custom-agents-client";
 import { initials as viewerInitials } from "@/src/initials";
 
 const IS_IOS = Platform.OS === "ios";
 
 /**
- * Mail-style home: Profile, Agents, and History / Workspaces buttons.
+ * Mail-style home: Profile left; History / Workspaces / New agent right.
  */
 export function MailHomeScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
@@ -48,19 +47,10 @@ export function MailHomeScreen() {
   const openProfile = useCallback(() => {
     router.push(isAnonymous ? "/sign-in" : "/settings");
   }, [isAnonymous]);
-  const {
-    chats,
-    chatsReady,
-    newChat,
-    selectChat,
-    reloadChats,
-  } = useChats();
+  const { chats, newChat, selectChat, reloadChats } = useChats();
 
   const [createAgentOpen, setCreateAgentOpen] = useState(false);
   const homeFocusedRef = useRef(false);
-  // Cold-start once: open new chat by default, or home when something is unread.
-  const didLaunchRef = useRef(false);
-  const [holdingLaunchHome, setHoldingLaunchHome] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
@@ -110,6 +100,14 @@ export function MailHomeScreen() {
     setCreateAgentOpen(true);
   }, [billingReady, isAnonymous]);
 
+  const openHistory = useCallback(() => {
+    router.push("/history");
+  }, []);
+
+  const openWorkspaces = useCallback(() => {
+    router.push("/workspaces");
+  }, []);
+
   const onAgentCreated = useCallback(
     (agent: CustomAgentDto) => {
       setCreateAgentOpen(false);
@@ -119,46 +117,6 @@ export function MailHomeScreen() {
     },
     [selectChat],
   );
-
-  useEffect(() => {
-    if (!billingReady || !chatsReady || didLaunchRef.current) return;
-    didLaunchRef.current = true;
-
-    // Guests keep a single thread — reopen it, or start one if empty.
-    if (isAnonymous) {
-      const existing = chats[0];
-      const open = existing
-        ? selectChat(existing.id).then((ok) => ok)
-        : Promise.resolve(true);
-      void open.then((ok) => {
-        if (!existing) newChat();
-        if (ok) {
-          router.push({ pathname: "/chat", params: { guestEntry: "1" } });
-        }
-        setHoldingLaunchHome(false);
-      });
-      return;
-    }
-
-    // Signed-in: land on new chat unless another thread has an unread reply.
-    const hasUnread = chats.some(
-      (chat) => chatListPresence(chat) === "unread",
-    );
-    if (hasUnread) {
-      setHoldingLaunchHome(false);
-      return;
-    }
-    newChat();
-    router.push({ pathname: "/chat", params: { settle: "1" } });
-    setHoldingLaunchHome(false);
-  }, [
-    billingReady,
-    chats,
-    chatsReady,
-    isAnonymous,
-    newChat,
-    selectChat,
-  ]);
 
   return (
     <View style={{ flex: 1, backgroundColor }}>
@@ -204,19 +162,44 @@ export function MailHomeScreen() {
                   )}
                 </Pressable>
               ),
-          headerRight:
-            IS_IOS || isAnonymous
-              ? undefined
-              : () => (
+          headerRight: IS_IOS
+            ? undefined
+            : () => (
+                <View className="flex-row items-center">
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="New agent"
+                    accessibilityLabel="History"
                     className="h-10 w-10 items-center justify-center"
-                    onPress={openCreateAgent}
+                    onPress={openHistory}
                   >
-                    <Icon as={PlusIcon} className="size-5 text-foreground" />
+                    <Icon as={ClockIcon} className="size-5 text-foreground" />
                   </Pressable>
-                ),
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Workspaces"
+                    className="h-10 w-10 items-center justify-center"
+                    onPress={openWorkspaces}
+                  >
+                    <Icon as={FolderIcon} className="size-5 text-foreground" />
+                  </Pressable>
+                  {!isAnonymous ? (
+                    <>
+                      <View style={{ width: 8 }} />
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="New agent"
+                        className="h-10 w-10 items-center justify-center"
+                        onPress={openCreateAgent}
+                      >
+                        <Icon
+                          as={PlusIcon}
+                          className="size-5 text-foreground"
+                        />
+                      </Pressable>
+                    </>
+                  ) : null}
+                </View>
+              ),
         }}
       />
       {IS_IOS ? (
@@ -257,21 +240,32 @@ export function MailHomeScreen() {
               </Stack.Toolbar.View>
             )}
           </Stack.Toolbar>
-          {!isAnonymous ? (
-            <Stack.Toolbar placement="right">
-              <Stack.Toolbar.Button
-                icon="plus"
-                accessibilityLabel="New agent"
-                onPress={openCreateAgent}
-              />
-            </Stack.Toolbar>
-          ) : null}
+          <Stack.Toolbar placement="right">
+            <Stack.Toolbar.Button
+              icon="clock"
+              accessibilityLabel="History"
+              onPress={openHistory}
+            />
+            <Stack.Toolbar.Button
+              icon="folder"
+              accessibilityLabel="Workspaces"
+              onPress={openWorkspaces}
+            />
+            <Stack.Toolbar.Spacer width={8} hidden={isAnonymous} />
+            <Stack.Toolbar.Button
+              icon="plus"
+              accessibilityLabel="New agent"
+              onPress={openCreateAgent}
+              separateBackground
+              hidden={isAnonymous}
+            />
+          </Stack.Toolbar>
         </>
       ) : null}
       <View style={{ flex: 1, zIndex: 0, overflow: "hidden" }}>
         {!billingReady ? (
           <BillingGateScreen onReady={markBillingReady} />
-        ) : holdingLaunchHome ? null : (
+        ) : (
           <HistoryScreen
             onOpenChat={openChat}
             bottomInset={listBottomInset}
@@ -280,11 +274,9 @@ export function MailHomeScreen() {
         )}
       </View>
 
-      {billingReady && !holdingLaunchHome && guestHasThread ? (
-        <SignInForNewChatCard />
-      ) : null}
+      {billingReady && guestHasThread ? <SignInForNewChatCard /> : null}
 
-      {billingReady && !holdingLaunchHome && !guestHasThread ? (
+      {billingReady && !guestHasThread ? (
         <HomeComposeFab onPress={openNewChat} />
       ) : null}
 

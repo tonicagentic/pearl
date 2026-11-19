@@ -1,11 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import {
   Button,
   Host,
   HStack,
-  Image,
   List,
   RNHostView,
   Section,
@@ -28,11 +27,9 @@ import {
   listStyle,
   multilineTextAlignment,
   onTapGesture,
-  opacity,
   scrollContentBackground,
   scrollEdgeEffectStyle,
   shapes,
-  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useCSSVariable } from "uniwind";
 
@@ -62,8 +59,6 @@ import {
   type AgentMarkTalk,
 } from "../../../lib/custom-agents/mark";
 
-/** Fixed leading slot so NavRow icons stay aligned. */
-const PRESENCE_SLOT = 14;
 /** Circular eye-mark size for Agents list rows (Grok bots). */
 const AGENT_MARK_SIZE = 40;
 /** Squircle size for the pinned Pearl tile. */
@@ -74,8 +69,8 @@ const ROW_LEADING = 20;
 export type { HistoryChatActionHandlers } from "@/components/home/history-list";
 
 /**
- * iOS home: plain List — pinned Pearl, custom agents, then History /
- * Workspaces. Styled after Grok bots (no separators, airy rows).
+ * iOS home: plain List — pinned Pearl, then custom agents.
+ * Styled after Grok bots (no separators, airy rows).
  */
 export function HistoryListIOS({
   onOpenChat,
@@ -94,10 +89,6 @@ export function HistoryListIOS({
     | undefined;
   const backgroundColor = pageBackground ?? "#FFFFFF";
   const clearRow = "#00000000";
-  const mutedForeground = useCSSVariable("--color-muted-foreground") as
-    | string
-    | undefined;
-  const mutedColor = mutedForeground ?? "#8E8E93";
   const rowChrome = [
     listRowInsets({
       top: 14,
@@ -174,7 +165,7 @@ export function HistoryListIOS({
           <Section>
             <PearlPinnedRow
               rowBackground={backgroundColor}
-              onOpen={openPearl}
+              onOpenPearl={openPearl}
             />
             {showAgents && orderedAgents.length === 0 && onCreateAgent ? (
               <Button
@@ -200,22 +191,6 @@ export function HistoryListIOS({
                 )}
               </List.ForEach>
             ) : null}
-          </Section>
-          <Section>
-            <NavRow
-              label="History"
-              systemImage="clock"
-              mutedColor={mutedColor}
-              rowBackground={backgroundColor}
-              onPress={() => router.push("/history")}
-            />
-            <NavRow
-              label="Workspaces"
-              systemImage="folder.fill"
-              mutedColor={mutedColor}
-              rowBackground={backgroundColor}
-              onPress={() => router.push("/workspaces")}
-            />
           </Section>
           {bottomInset > 0 ? (
             <Section>
@@ -287,18 +262,22 @@ function AgentListMark({
   );
 }
 
-/** Grok-style pinned Pearl: large squircle + label. */
+/** Centered pinned Pearl. */
 function PearlPinnedRow({
   rowBackground,
-  onOpen,
+  onOpenPearl,
 }: {
   readonly rowBackground: string;
-  readonly onOpen: () => void;
+  readonly onOpenPearl: () => void;
 }) {
+  const pearlMetrics = pearlMarkMetrics(
+    PINNED_MARK_SIZE,
+    PEARL_MARK_HEIGHT_RATIO,
+  );
   return (
     <HStack
-      spacing={8}
-      alignment="top"
+      spacing={0}
+      alignment="bottom"
       modifiers={[
         listRowInsets({
           top: 4,
@@ -308,20 +287,17 @@ function PearlPinnedRow({
         }),
         listRowBackground(rowBackground),
         listRowSeparator("hidden"),
-        ...FULL_ROW_HIT,
-        onTapGesture(onOpen),
-        accessibilityLabel("Pearl"),
       ]}
     >
+      <Spacer />
       <VStack
         spacing={6}
         alignment="center"
         modifiers={[
-          frame({
-            width:
-              pearlMarkMetrics(PINNED_MARK_SIZE, PEARL_MARK_HEIGHT_RATIO)
-                .width + 8,
-          }),
+          frame({ width: pearlMetrics.width + 8 }),
+          onTapGesture(onOpenPearl),
+          accessibilityLabel("Pearl"),
+          contentShape(shapes.rectangle()),
         ]}
       >
         <AgentListMark
@@ -423,56 +399,3 @@ function AgentRow({
   );
 }
 
-function NavRow({
-  label,
-  systemImage,
-  mutedColor,
-  rowBackground,
-  onPress,
-}: {
-  readonly label: string;
-  readonly systemImage: "clock" | "folder.fill";
-  readonly mutedColor: string;
-  readonly rowBackground: string;
-  readonly onPress: () => void;
-}) {
-  return (
-    <HStack
-      spacing={12}
-      alignment="center"
-      modifiers={[
-        listRowInsets({
-          top: 12,
-          bottom: 12,
-          leading: ROW_LEADING,
-          trailing: ROW_LEADING,
-        }),
-        listRowBackground(rowBackground),
-        listRowSeparator("hidden"),
-        ...FULL_ROW_HIT,
-        onTapGesture(onPress),
-        accessibilityLabel(label),
-      ]}
-    >
-      <Image
-        systemName={systemImage}
-        size={14}
-        modifiers={[
-          frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
-          tint(mutedColor),
-        ]}
-      />
-      <SwiftText
-        modifiers={[lineLimit(1), font({ size: 16, weight: "regular" })]}
-      >
-        {label}
-      </SwiftText>
-      <Spacer />
-      <Image
-        systemName="chevron.right"
-        size={13}
-        modifiers={[tint(mutedColor), opacity(0.55)]}
-      />
-    </HStack>
-  );
-}

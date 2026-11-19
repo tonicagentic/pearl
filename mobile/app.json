@@ -93,7 +93,15 @@
       "expo-font",
       "expo-sharing",
       "expo-updates",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "backgroundColor": "#FFFFFF",
+          "imageWidth": 200
+        }
+      ]
     ],
     "scheme": "pearl",
     "runtimeVersion": {
