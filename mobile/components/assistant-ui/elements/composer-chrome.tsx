@@ -10,6 +10,8 @@ export type ComposerChromeApi = {
   readonly liveActive: SharedValue<number>;
   /** 1 while a finger is dragging the keyboard. The composer hides its caret. */
   readonly keyboardDragging: SharedValue<number>;
+  /** Horizontal morph. Eased on show/hide; follows the finger during a drag. */
+  readonly widthProgress: SharedValue<number>;
   /** Hold full chrome (focus or chrome-control tap before a native menu opens). */
   readonly pinExpanded: () => void;
   /** Collapse shortly after blur once the keyboard is gone (menus get a beat to open). */

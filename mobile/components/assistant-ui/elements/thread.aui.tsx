@@ -284,6 +284,16 @@ const COMPOSER_SHELL_STYLE = {
   // and shell radius anti-alias as a double edge at the pill corners.
   overflow: "hidden",
 } as const;
+/**
+ * Same lift as the system liquid-glass controls (nav back button).
+ * Drawn on the shell so the corner clip does not cut it off.
+ */
+const LIQUID_GLASS_SHADOW_LIGHT = {
+  boxShadow: "0px 2px 8px rgba(0, 0, 0, 0.08)",
+} as const;
+const LIQUID_GLASS_SHADOW_DARK = {
+  boxShadow: "0px 2px 10px rgba(0, 0, 0, 0.22)",
+} as const;
 const GLASS_SURFACE_STYLE = {
   position: "absolute",
   top: 0,
@@ -312,6 +322,50 @@ function composerKeyboardProgress(keyboardHeight: number, span: number): number 
   return interpolate(keyboardHeight, [0, range], [0, 1], Extrapolation.CLAMP);
 }
 
+/** Expanded press grow. Fades out through halfway so the width does not pop. */
+function composerPressBump(
+  progress: number,
+  pressed: number,
+  enabled: boolean,
+): number {
+  "worklet";
+  if (!enabled) return 1;
+  const amount = interpolate(
+    progress,
+    [0.5, 1],
+    [0, Math.min(pressed, 1)],
+    Extrapolation.CLAMP,
+  );
+  return 1 + amount * 0.02;
+}
+
+/** Pressed shell shrink. Fades in below halfway so it does not pop the width. */
+function composerHoldScale(
+  progress: number,
+  pressed: number,
+  enabled: boolean,
+): number {
+  "worklet";
+  if (!enabled) return 1;
+  const pressAmount = interpolate(
+    progress,
+    [0.5, 0],
+    [0, Math.min(pressed, 1)],
+    Extrapolation.CLAMP,
+  );
+  return 1 - pressAmount * 0.025;
+}
+
+/** Side inset. Separate from keyboard progress so the shrink can ease out. */
+function composerWidthProgress(
+  widthProgress: number,
+  stickyExpanded: number,
+  textExpanded: number,
+): number {
+  "worklet";
+  return Math.max(widthProgress, stickyExpanded, textExpanded);
+}
+
 /** Chrome morph: keyboard progress, held open while sticky after menus steal focus. */
 function composerChromeProgress(
   keyboardHeight: number,
@@ -325,6 +379,31 @@ function composerChromeProgress(
     stickyExpanded,
     textExpanded,
   );
+}
+
+/**
+ * Input width at the two rest poses. Measured shell width lags the padding
+ * animation and makes the shrink step; height never reads that measurement.
+ */
+function composerInputWidth(windowWidth: number, progress: number): {
+  left: number;
+  width: number;
+} {
+  "worklet";
+  const shellPad = 16;
+  const expanded = Math.max(0, windowWidth - COMPOSER_EDGE * 2 - shellPad);
+  const collapsed = Math.max(
+    0,
+    windowWidth - COMPOSER_MINIMIZED_EDGE * 2 - shellPad,
+  );
+  const mini = Math.max(
+    0,
+    collapsed - COMPOSER_CHIP * 2 - COMPOSER_ROW_GAP * 2,
+  );
+  return {
+    left: interpolate(progress, [0, 1], [COMPOSER_CHIP + COMPOSER_ROW_GAP, 0]),
+    width: interpolate(progress, [0, 1], [mini, expanded]),
+  };
 }
 
 /** Placeholder is fully gone while the field crosses the model button. */
@@ -687,7 +766,10 @@ export const Thread: FC<ThreadProps> = ({
         }
         className={floatsComposer ? "absolute inset-x-0 bottom-0" : undefined}
         onLayout={floatsComposer ? measureComposerOverlay : undefined}
-        style={{ opacity: chromeRevealed ? 1 : 0 }}
+        style={{
+          opacity: chromeRevealed ? 1 : 0,
+          overflow: "visible",
+        }}
       >
         <ThreadFollowupSuggestions />
         <ComposerDock
@@ -771,10 +853,9 @@ const ComposerDock: FC<{
     }
     const lifted = keyboardHeight?.value ?? 0;
     const span = keyboardSpan?.value ?? COMPOSER_MORPH_RANGE;
-    const chrome = composerChromeProgress(
-      lifted,
+    const width = composerWidthProgress(
+      chromeApi?.widthProgress.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
-      span,
       chromeApi?.textExpanded.value ?? 0,
     );
     const keyboardProgress = composerKeyboardProgress(lifted, span);
@@ -782,7 +863,7 @@ const ComposerDock: FC<{
     // float above the keyboard spacer — no dip/rise mid-drag.
     return {
       paddingHorizontal: interpolate(
-        chrome,
+        width,
         [0, 1],
         [COMPOSER_MINIMIZED_EDGE, COMPOSER_EDGE],
         Extrapolation.CLAMP,
@@ -802,7 +883,7 @@ const ComposerDock: FC<{
       className={
         floats ? "aui-thread-viewport-footer" : "aui-thread-viewport-footer px-4"
       }
-      style={dockStyle}
+      style={[dockStyle, { overflow: "visible" }]}
     >
       <Composer
         autoFocus={autoFocus}
@@ -848,6 +929,8 @@ const IosKeyboardLayout: FC<{
   const textExpanded = useSharedValue(0);
   const liveActive = useSharedValue(0);
   const keyboardDragging = useSharedValue(0);
+  const widthProgress = useSharedValue(seedAtZero || !KeyboardController.isVisible() ? 0 : 1);
+  const widthAnimating = useSharedValue(0);
   const stickyClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuHoldUntil = useRef(0);
 
@@ -908,12 +991,13 @@ const IosKeyboardLayout: FC<{
       stickyExpanded,
       liveActive,
       keyboardDragging,
+      widthProgress,
       pinExpanded,
       scheduleCollapse,
       collapseNow,
       setLiveActive,
     }),
-    [textExpanded, stickyExpanded, liveActive, keyboardDragging, pinExpanded, scheduleCollapse, collapseNow, setLiveActive],
+    [textExpanded, stickyExpanded, liveActive, keyboardDragging, widthProgress, pinExpanded, scheduleCollapse, collapseNow, setLiveActive],
   );
 
   useKeyboardHandler({
@@ -925,6 +1009,19 @@ const IosKeyboardLayout: FC<{
       if (destination > COMPOSER_MORPH_RANGE) {
         keyboardSpan.value = destination;
       }
+      // Keyboard move events arrive in large steps. Play the width across
+      // the whole transition instead of copying those steps.
+      if (event.duration > 0) {
+        widthAnimating.value = 1;
+        widthProgress.value = withTiming(
+          destination > 0 ? 1 : 0,
+          { duration: event.duration, easing: Easing.linear },
+          (finished) => {
+            "worklet";
+            if (finished) widthAnimating.value = 0;
+          },
+        );
+      }
     },
     onMove: (event) => {
       "worklet";
@@ -933,23 +1030,30 @@ const IosKeyboardLayout: FC<{
       // animates upward, so a rising keyboard keeps the cursor.
       if (next + 1 < keyboardHeight.value) keyboardDragging.value = 1;
       keyboardHeight.value = next;
+      if (widthAnimating.value === 0) {
+        widthProgress.value = composerKeyboardProgress(next, keyboardSpan.value);
+      }
     },
     onInteractive: (event) => {
       "worklet";
       const next = Math.max(0, event.height);
       if (next + 1 < keyboardHeight.value) keyboardDragging.value = 1;
       keyboardHeight.value = next;
+      widthAnimating.value = 0;
+      widthProgress.value = composerKeyboardProgress(next, keyboardSpan.value);
       // Finger-drag dismiss collapses immediately and drops any menu hold.
       if (event.height < 40) runOnJS(collapseNow)();
     },
     onEnd: (event) => {
       "worklet";
-      keyboardHeight.value = Math.max(0, event.height);
+      const next = Math.max(0, event.height);
+      keyboardHeight.value = next;
       keyboardDragging.value = 0;
+      widthProgress.value = composerKeyboardProgress(next, keyboardSpan.value);
       // Do not latch sticky from keyboard motion — that left chrome stuck
       // expanded after dismiss. Menus pin explicitly via pinExpanded.
     },
-  }, [collapseNow, keyboardDragging, keyboardSpan]);
+  }, [collapseNow, keyboardDragging, keyboardSpan, widthAnimating, widthProgress]);
   const spacerStyle = useAnimatedStyle(() => ({
     // Tracks interactive drag; composer dock morphs against the same value.
     height: Math.max(0, keyboardHeight.value),
@@ -1446,14 +1550,14 @@ const Composer: FC<{
   const keyboardHeight = useContext(KeyboardHeightContext);
   const keyboardSpan = useContext(KeyboardSpanContext);
   const chromeApi = useContext(ComposerChromeContext);
-  // Start with a readable surface until the iOS accessibility setting is known.
-  const [reducedTransparency, setReducedTransparency] = useState(true);
+  // Prefer glass immediately; only swap to the solid card if Reduce
+  // Transparency is actually on.
+  const [reducedTransparency, setReducedTransparency] = useState(false);
   const [preparingAttachment, setPreparingAttachment] = useState(false);
   const [liveOpen, setLiveOpen] = useState(false);
   const motion = useMotion();
   const { width: windowWidth } = useWindowDimensions();
   const pressed = useSharedValue(0);
-  const shellWidth = useSharedValue(0);
   // Cancels rubber-band scroll so the shell stays glued to the keyboard while
   // a downward drag dismisses it (UI-thread only — no async onLayout lag).
   const dismissScrollY = useSharedValue(0);
@@ -1505,7 +1609,7 @@ const Composer: FC<{
       .then((enabled) => {
         if (mounted) setReducedTransparency(enabled);
       })
-      .catch(() => {}); // Keep the readable fallback if the setting cannot be read.
+      .catch(() => {});
     return () => {
       mounted = false;
       subscription.remove();
@@ -1519,6 +1623,9 @@ const Composer: FC<{
     [chromeApi],
   );
   const showGlass = CAN_USE_LIQUID_GLASS && !reducedTransparency;
+  const scheme = useColorScheme();
+  const glassShadow =
+    scheme === "dark" ? LIQUID_GLASS_SHADOW_DARK : LIQUID_GLASS_SHADOW_LIGHT;
   const holdEnabled = Platform.OS === "ios" && motion;
 
   // Outer chrome pulses slightly while expanded; never transform the TextInput.
@@ -1529,11 +1636,11 @@ const Composer: FC<{
       keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
       chromeApi?.textExpanded.value ?? 0,
     );
-    const bump =
-      holdEnabled && progress >= 0.5
-        ? interpolate(pressed.value, [0, 1], [1, 1.02])
-        : 1;
-    return { transform: [{ scale: bump }] };
+    const bump = composerPressBump(progress, pressed.value, holdEnabled);
+    return {
+      overflow: "visible" as const,
+      transform: [{ scale: bump }],
+    };
   });
 
   const shellStyle = useAnimatedStyle(() => {
@@ -1547,10 +1654,7 @@ const Composer: FC<{
           )
         : 1;
     // Collapsed hold shrink only — scaling the focused field dismisses the keyboard.
-    const holdScale =
-      holdEnabled && progress < 0.5
-        ? interpolate(pressed.value, [0, 1], [1, 0.975])
-        : 1;
+    const holdScale = composerHoldScale(progress, pressed.value, holdEnabled);
     return {
       paddingTop: interpolate(progress, [0, 1], [6, 8]),
       paddingBottom: interpolate(progress, [0, 1], [6, 8]),
@@ -1595,25 +1699,16 @@ const Composer: FC<{
     // Positioned inside the in-flow stack (not the shell), so top:0 lines up
     // with the spacer/action row — avoids padding-box drift that left the
     // collapsed field sitting high in the pill.
-    // Fall back to window width before the first onLayout so the TextInput
-    // never measures at width 0 and spikes expandedHeight.
-    const fallbackWidth = Math.max(
-      0,
-      windowWidth - COMPOSER_MINIMIZED_EDGE * 2 - 16,
+    const width = composerWidthProgress(
+      chromeApi?.widthProgress.value ?? 0,
+      chromeApi?.stickyExpanded.value ?? 0,
+      chromeApi?.textExpanded.value ?? 0,
     );
-    const contentWidth = Math.max(
-      0,
-      (shellWidth.value > 0 ? shellWidth.value : fallbackWidth) - 16,
-    );
-    const miniLeft = COMPOSER_CHIP + COMPOSER_ROW_GAP;
-    const miniWidth = Math.max(
-      0,
-      contentWidth - COMPOSER_CHIP * 2 - COMPOSER_ROW_GAP * 2,
-    );
+    const frame = composerInputWidth(windowWidth, width);
     return {
       position: "absolute" as const,
-      left: interpolate(progress, [0, 1], [miniLeft, 0]),
-      width: interpolate(progress, [0, 1], [miniWidth, contentWidth]),
+      left: frame.left,
+      width: frame.width,
       top: 0,
       height: interpolate(progress, [0, 1], [COMPOSER_MIN_INPUT, expandedHeight.value]),
       zIndex: 2,
@@ -1653,13 +1748,7 @@ const Composer: FC<{
     }, 120);
   }, [chromeApi, holdEnabled, pressed]);
 
-  const shellSurface = showGlass ? (
-    <GlassView
-      pointerEvents="none"
-      glassEffectStyle="regular"
-      style={GLASS_SURFACE_STYLE}
-    />
-  ) : (
+  const solidSurface = (
     <View
       pointerEvents="none"
       className="border-border/60 dark:border-muted-foreground/15 bg-card absolute inset-0 border"
@@ -1679,11 +1768,28 @@ const Composer: FC<{
         {liveOverlay}
         <ComposerPrimitive.Root className="aui-composer-root w-full">
           <View
-            className="aui-composer-shell relative p-3"
-            style={COMPOSER_SHELL_STYLE}
+            style={[
+              {
+                overflow: "visible",
+                borderRadius: COMPOSER_SHELL_RADIUS,
+                borderCurve: "continuous",
+              },
+              glassShadow,
+            ]}
           >
-            {shellSurface}
-            <WaitingActionCard action={waitingAction} variant="composer" />
+            <View className="aui-composer-shell relative p-3" style={COMPOSER_SHELL_STYLE}>
+              {showGlass ? (
+                <GlassView
+                  pointerEvents="none"
+                  glassEffectStyle="regular"
+                  isInteractive
+                  style={GLASS_SURFACE_STYLE}
+                />
+              ) : (
+                solidSurface
+              )}
+              <WaitingActionCard action={waitingAction} variant="composer" />
+            </View>
           </View>
         </ComposerPrimitive.Root>
       </>
@@ -1699,7 +1805,16 @@ const Composer: FC<{
           className="aui-composer-shell relative gap-2 p-2"
           style={COMPOSER_SHELL_STYLE}
         >
-          {shellSurface}
+          {showGlass ? (
+            <GlassView
+              pointerEvents="none"
+              glassEffectStyle="regular"
+              isInteractive
+              style={GLASS_SURFACE_STYLE}
+            />
+          ) : (
+            solidSurface
+          )}
           <ComposerAttachments conversationId={conversationId} />
           <ComposerInput key={focusNewChatKey} autoFocus={autoFocus} />
           <View className="aui-composer-action-wrapper flex-row items-center justify-between">
@@ -1738,21 +1853,39 @@ const Composer: FC<{
         directionalLockEnabled
         onScroll={onDismissScroll}
         onScrollEndDrag={onDismissScrollEndDrag}
+        // Do not clip the hold-grow or the drop shadow against the dock.
+        style={{ overflow: "visible" }}
       >
       <Animated.View style={dismissPinStyle}>
       <ComposerPrimitive.Root className="aui-composer-root w-full">
-        <Animated.View style={outerPressStyle}>
+        <Animated.View
+          style={[
+            {
+              overflow: "visible",
+              borderRadius: COMPOSER_SHELL_RADIUS,
+              borderCurve: "continuous",
+            },
+            glassShadow,
+            outerPressStyle,
+          ]}
+        >
           <Animated.View
             className="aui-composer-shell relative"
             style={[COMPOSER_SHELL_STYLE, shellStyle]}
-            onLayout={(event) => {
-              shellWidth.value = event.nativeEvent.layout.width;
-            }}
             onTouchStart={holdEnabled ? beginHold : undefined}
             onTouchEnd={holdEnabled ? clearHold : undefined}
             onTouchCancel={holdEnabled ? clearHold : undefined}
           >
-            {shellSurface}
+            {showGlass ? (
+              <GlassView
+                pointerEvents="none"
+                glassEffectStyle="regular"
+                isInteractive
+                style={GLASS_SURFACE_STYLE}
+              />
+            ) : (
+              solidSurface
+            )}
             <ComposerAttachments conversationId={conversationId} />
             <View collapsable={false}>
               <Animated.View pointerEvents="none" style={inputSpacerStyle} />
