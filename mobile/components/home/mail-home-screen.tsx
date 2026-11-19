@@ -6,7 +6,7 @@ import {
 } from "react";
 import { AppState, Platform, Pressable, View } from "react-native";
 import { Stack, router, useFocusEffect } from "expo-router";
-import { ClockIcon, FolderIcon, PlusIcon, UserIcon } from "lucide-react-native";
+import { ClockIcon, PlusIcon, UserIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { ChatScreen } from "@/components/chat-screen";
@@ -29,7 +29,7 @@ import { initials as viewerInitials } from "@/src/initials";
 const IS_IOS = Platform.OS === "ios";
 
 /**
- * Mail-style home: Profile left; Pearl|Agents switcher; Workspaces / New agent right.
+ * Mail-style home: Profile left; Pearl|Agents switcher; History / New agent right.
  * Pearl tab embeds a new-chat composer with keyboard open.
  */
 export function MailHomeScreen() {
@@ -120,10 +120,6 @@ export function MailHomeScreen() {
     setCreateAgentOpen(true);
   }, [billingReady, isAnonymous]);
 
-  const openWorkspaces = useCallback(() => {
-    router.push("/workspaces");
-  }, []);
-
   const openHistory = useCallback(() => {
     router.push("/history");
   }, []);
@@ -200,14 +196,6 @@ export function MailHomeScreen() {
                       <Icon as={ClockIcon} className="size-5 text-foreground" />
                     </Pressable>
                   ) : null}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Workspaces"
-                    className="h-10 w-10 items-center justify-center"
-                    onPress={openWorkspaces}
-                  >
-                    <Icon as={FolderIcon} className="size-5 text-foreground" />
-                  </Pressable>
                   {showAgentsPlus ? (
                     <>
                       <View style={{ width: 8 }} />
@@ -272,11 +260,6 @@ export function MailHomeScreen() {
               accessibilityLabel="History"
               onPress={openHistory}
               hidden={!showPearlHistory}
-            />
-            <Stack.Toolbar.Button
-              icon="folder"
-              accessibilityLabel="Workspaces"
-              onPress={openWorkspaces}
             />
             <Stack.Toolbar.Spacer width={8} hidden={!showAgentsPlus} />
             <Stack.Toolbar.Button

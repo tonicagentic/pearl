@@ -11,6 +11,7 @@ import {
   Code2Icon,
   CoinsIcon,
   FileSearchIcon,
+  FolderIcon,
   HardDriveIcon,
   ImageIcon,
   IdCardIcon,
@@ -194,6 +195,10 @@ export function SettingsScreen() {
   );
   const showEmail = search.matches("Email", emailDetail);
   const showCalendar = search.matches("Calendar", calendarRowDetail);
+  const showWorkspaces = search.matches(
+    "Workspaces",
+    "Projects for chats",
+  );
   const showMoney = search.matches("Money", "Pearl Money");
   const showTasks = search.matches("Tasks", "Pearl Tasks");
   const showAnswers = search.matches("Answers", "Web and connected accounts");
@@ -225,7 +230,7 @@ export function SettingsScreen() {
   const showSignOut = search.matches("Sign out");
 
   const showAccountSection = showAccount || showEmail || showCalendar;
-  const showAppsCard = showMoney || showTasks;
+  const showAppsCard = showWorkspaces || showMoney || showTasks;
   const showThink =
     showAnswers || showResearch || showPlan || showDrafting || showAnalysis;
   const showMake = showCoder || showVisualize || showDesign;
@@ -276,6 +281,17 @@ export function SettingsScreen() {
 
         {showAppsCard ? (
           <SettingsCard>
+            {showWorkspaces ? (
+              <SettingsRow
+                icon={
+                  <Icon as={FolderIcon} className="size-5 text-amber-600" />
+                }
+                label="Workspaces"
+                detail="Projects for chats"
+                onPress={() => router.push("/workspaces")}
+                showSeparator={showMoney || showTasks}
+              />
+            ) : null}
             {showMoney ? (
               <SettingsRow
                 icon={
