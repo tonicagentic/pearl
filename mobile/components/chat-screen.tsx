@@ -60,6 +60,7 @@ import {
   hasPendingAction,
   isTextOnlyPendingQuestion,
   pendingWaitKind,
+  showReplyInterruptedNotice,
   spokenTurnsPendingImport,
   type PendingApproval,
 } from "@/src/message-projection";
@@ -1351,7 +1352,8 @@ export function ChatScreen({
             ? {
                 text: "Couldn't confirm delivery. Open this chat again when you're online.",
               }
-            : hasError && !localSend
+            : // Match liveFailure in message-projection: settled reopen errors stay quiet.
+              showReplyInterruptedNotice(hasError, isRunning, Boolean(localSend))
               ? {
                   text: "Connection lost while Pearl was replying. Your last message was saved — send a follow-up when you're ready.",
                 }

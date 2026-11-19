@@ -699,6 +699,19 @@ function projectAssistantMessage(
   };
 }
 
+/**
+ * Same live-turn gate as `liveFailure` in `projectAssistantMessage`: a settled
+ * failure left on `snapshot.error` after reopen must not show the
+ * connection-lost card. Local sends keep the Resend notice instead.
+ */
+export function showReplyInterruptedNotice(
+  hasError: boolean,
+  isRunning: boolean,
+  hasLocalSend: boolean,
+): boolean {
+  return hasError && isRunning && !hasLocalSend;
+}
+
 function projectUserMessage(message: EveMessage): ThreadMessageLike {
   const documentParts = message.parts.filter((part): part is Extract<EveMessagePart, { type: "text" }> =>
     part.type === "text" && typeof part.text === "string" &&
