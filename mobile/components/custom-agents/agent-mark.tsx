@@ -21,10 +21,14 @@ import Svg, {
 
 import {
   DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_BROWS,
+  DEFAULT_AGENT_MARK_GAZE,
   DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
   markEyeColor,
+  type AgentMarkBrows,
+  type AgentMarkGaze,
   type AgentMarkMotion,
   type AgentMarkShape,
   type AgentMarkTalk,
@@ -38,28 +42,35 @@ const MOUTH_GAP_RATIO = 0.035;
 export type AgentMarkEyeMotion = "idle" | "off";
 
 type TalkProfile = {
+  /** Straight crown bounce (lift / chatter). */
   readonly topLift: number;
-  readonly topTiltDeg: number;
+  /** Extra tilt while bouncing (lift only). */
+  readonly bounceTiltDeg: number;
+  /** Rear-hinge open angle (hinge only) — V-shaped mouth. */
+  readonly hingeOpenDeg: number;
 };
 
-/** All talk styles: crown bounces up; jaw stays static. */
+/** Hinge = V-tilt open; lift/chatter = crown bounce. Jaw stays static. */
 function talkProfile(talk: AgentMarkTalk, size: number): TalkProfile {
   switch (talk) {
     case "lift":
       return {
         topLift: Math.max(4, Math.round(size * 0.16)),
-        topTiltDeg: 4,
+        bounceTiltDeg: 4,
+        hingeOpenDeg: 0,
       };
     case "chatter":
       return {
         topLift: Math.max(3, Math.round(size * 0.08)),
-        topTiltDeg: 0,
+        bounceTiltDeg: 0,
+        hingeOpenDeg: 0,
       };
     case "hinge":
     default:
       return {
-        topLift: Math.max(5, Math.round(size * 0.18)),
-        topTiltDeg: 0,
+        topLift: 0,
+        bounceTiltDeg: 0,
+        hingeOpenDeg: 16,
       };
   }
 }
@@ -313,13 +324,15 @@ function roundedBottomRect(
 
 /**
  * Accent-colored Canadian-style head mark: solid silhouette, mouth gap,
- * talk styles via `markTalk` (crown bounce). Idle blink when `eyeMotion="idle"`.
+ * talk via `markTalk`, optional brows/gaze. Idle blink when `eyeMotion="idle"`.
  */
 export function AgentMark({
   accent = DEFAULT_AGENT_MARK_ACCENT,
   size = 16,
   markShape = DEFAULT_AGENT_MARK_SHAPE,
   markTalk = DEFAULT_AGENT_MARK_TALK,
+  markBrows = DEFAULT_AGENT_MARK_BROWS,
+  markGaze = DEFAULT_AGENT_MARK_GAZE,
   motion = "burst",
   eyeMotion = "off",
   heightRatio = DEFAULT_AGENT_MARK_HEIGHT_RATIO,
@@ -328,6 +341,8 @@ export function AgentMark({
   readonly size?: number;
   readonly markShape?: AgentMarkShape;
   readonly markTalk?: AgentMarkTalk;
+  readonly markBrows?: AgentMarkBrows;
+  readonly markGaze?: AgentMarkGaze;
   readonly motion?: AgentMarkMotion;
   readonly eyeMotion?: AgentMarkEyeMotion;
   /** Height / width. Built-in Pearl uses 1 (circle). */
@@ -341,15 +356,28 @@ export function AgentMark({
   const mouthGap = Math.max(1.5, Math.round(size * MOUTH_GAP_RATIO));
   const topCut = mouthY - mouthGap / 2;
   const bottomCut = mouthY + mouthGap / 2;
+  // Fulcrum = left mouth corner on the silhouette (stays fixed while opening).
+  const hingeX = (() => {
+    const cy = height / 2;
+    const ry = height / 2;
+    const rx = width / 2;
+    const dy = topCut - cy;
+    const under = 1 - (dy * dy) / (ry * ry);
+    const dx = under > 0 ? rx * Math.sqrt(under) : 0;
+    return Math.round(width / 2 - dx);
+  })();
   const profile = talkProfile(markTalk, size);
   const eyeColor = markEyeColor(accent);
-  const eyeCxL = width * 0.4;
-  const eyeCxR = width * 0.6;
-  const eyeCy = topCut * 0.48;
-  const eyeRx = Math.max(1.1, size * 0.045);
-  const eyeRy = Math.max(2.2, size * 0.09);
+  const eyeBaseL = width * 0.4;
+  const eyeBaseR = width * 0.6;
+  const eyeBaseY = topCut * 0.48;
+  const eyeR = Math.max(1.4, size * 0.055);
+  const gazePad = Math.max(1.5, size * 0.04);
   const closedHalf = Math.max(2.2, size * 0.07);
   const closedStroke = Math.max(1.2, size * 0.028);
+  const browY = eyeBaseY - Math.max(3, size * 0.09);
+  const browHalf = Math.max(2.5, size * 0.08);
+  const browStroke = Math.max(1.1, size * 0.025);
   const clipUid = useId().replace(/:/g, "");
   const topClipId = `mark-top-${clipUid}`;
   const bottomClipId = `mark-bot-${clipUid}`;
@@ -365,6 +393,7 @@ export function AgentMark({
   const [reduceMotion, setReduceMotion] = useState(false);
   const [bursting, setBursting] = useState(false);
   const [eyesClosed, setEyesClosed] = useState(false);
+  const [gaze, setGaze] = useState({ x: 0, y: 0 });
   const open = useSharedValue(0);
 
   useEffect(() => {
@@ -461,12 +490,63 @@ export function AgentMark({
     };
   }, [eyeMotion, reduceMotion]);
 
-  const topStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: -open.value * profile.topLift },
-      { rotate: `${-open.value * profile.topTiltDeg}deg` },
-    ],
-  }));
+  useEffect(() => {
+    if (
+      eyeMotion !== "idle" ||
+      markGaze !== "wander" ||
+      reduceMotion
+    ) {
+      setGaze({ x: 0, y: 0 });
+      return;
+    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const schedule = () => {
+      if (cancelled) return;
+      const hold = 900 + Math.random() * 2200;
+      timer = setTimeout(() => {
+        if (cancelled) return;
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * gazePad;
+        setGaze({
+          x: Math.cos(angle) * dist,
+          y: Math.sin(angle) * dist * 0.65,
+        });
+        schedule();
+      }, hold);
+    };
+
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      setGaze({ x: 0, y: 0 });
+    };
+  }, [eyeMotion, markGaze, reduceMotion, gazePad]);
+
+  const eyeCxL = eyeBaseL + gaze.x;
+  const eyeCxR = eyeBaseR + gaze.x;
+  const eyeCy = eyeBaseY + gaze.y;
+
+  const topStyle = useAnimatedStyle(() => {
+    if (profile.hingeOpenDeg > 0) {
+      // Fixed fulcrum via transformOrigin — rotate only, no translate.
+      return {
+        transformOrigin: `${hingeX}px ${topCut}px`,
+        transform: [
+          { rotate: `${-open.value * profile.hingeOpenDeg}deg` },
+        ],
+      };
+    }
+    return {
+      transformOrigin: "50% 50%",
+      transform: [
+        { translateY: -open.value * profile.topLift },
+        { rotate: `${-open.value * profile.bounceTiltDeg}deg` },
+      ],
+    };
+  });
 
   const bottomStyle = useAnimatedStyle(() => ({ transform: [] }));
 
@@ -560,6 +640,28 @@ export function AgentMark({
             ) : (
               <Path d={paths.top} fill={accent} />
             )}
+            {markBrows === "line" ? (
+              <>
+                <Line
+                  x1={eyeCxL - browHalf}
+                  y1={browY + gaze.y * 0.3}
+                  x2={eyeCxL + browHalf}
+                  y2={browY + gaze.y * 0.3}
+                  stroke={eyeColor}
+                  strokeWidth={browStroke}
+                  strokeLinecap="round"
+                />
+                <Line
+                  x1={eyeCxR - browHalf}
+                  y1={browY + gaze.y * 0.3}
+                  x2={eyeCxR + browHalf}
+                  y2={browY + gaze.y * 0.3}
+                  stroke={eyeColor}
+                  strokeWidth={browStroke}
+                  strokeLinecap="round"
+                />
+              </>
+            ) : null}
             {eyesClosed ? (
               <>
                 <Line
@@ -586,15 +688,15 @@ export function AgentMark({
                 <Ellipse
                   cx={eyeCxL}
                   cy={eyeCy}
-                  rx={eyeRx}
-                  ry={eyeRy}
+                  rx={eyeR}
+                  ry={eyeR}
                   fill={eyeColor}
                 />
                 <Ellipse
                   cx={eyeCxR}
                   cy={eyeCy}
-                  rx={eyeRx}
-                  ry={eyeRy}
+                  rx={eyeR}
+                  ry={eyeR}
                   fill={eyeColor}
                 />
               </>

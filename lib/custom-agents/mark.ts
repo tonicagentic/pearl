@@ -17,6 +17,20 @@ export type AgentMarkTalk = (typeof AGENT_MARK_TALKS)[number];
 
 export const DEFAULT_AGENT_MARK_TALK: AgentMarkTalk = "hinge";
 
+/** Optional eyebrows above the eyes. */
+export const AGENT_MARK_BROWS = ["none", "line"] as const;
+
+export type AgentMarkBrows = (typeof AGENT_MARK_BROWS)[number];
+
+export const DEFAULT_AGENT_MARK_BROWS: AgentMarkBrows = "none";
+
+/** Idle eye gaze — still centered, or wander around the face. */
+export const AGENT_MARK_GAZES = ["still", "wander"] as const;
+
+export type AgentMarkGaze = (typeof AGENT_MARK_GAZES)[number];
+
+export const DEFAULT_AGENT_MARK_GAZE: AgentMarkGaze = "wander";
+
 /**
  * Where the mark animates:
  * - idle: continuous talk loop (thread identity only)
@@ -26,16 +40,15 @@ export const DEFAULT_AGENT_MARK_TALK: AgentMarkTalk = "hinge";
 export type AgentMarkMotion = "idle" | "burst" | "off";
 
 /**
- * Terrance/Phillip-style flesh tone — default for custom agents.
+ * Terrance/Phillip-style flesh tone — available in the accent picker.
  * Hex uppercase to match store normalization.
  */
 export const TERRANCE_FLESH = "#F5C9A0";
 
 /**
- * Built-in Pearl mark — soft natural pearl (warm off-white).
- * Distinct from Terrance flesh used by custom agents.
+ * Built-in Pearl + default agent accent — cosmos near-black (rgb 10,10,10).
  */
-export const PEARL_IDENTITY_ACCENT = "#F2E8D8";
+export const PEARL_IDENTITY_ACCENT = "#0A0A0A";
 
 /** Tall Canadian head for custom-agent ovals. */
 export const DEFAULT_AGENT_MARK_HEIGHT_RATIO = 1.28;
@@ -45,8 +58,9 @@ export const PEARL_MARK_HEIGHT_RATIO = 1;
 
 /** Solid accent swatches for agent configuration. */
 export const AGENT_MARK_ACCENTS = [
-  TERRANCE_FLESH,
   PEARL_IDENTITY_ACCENT,
+  TERRANCE_FLESH,
+  "#F2E8D8",
   "#2DD4BF",
   "#3B82F6",
   "#8B5CF6",
@@ -82,5 +96,19 @@ export function isAgentMarkTalk(value: unknown): value is AgentMarkTalk {
   return (
     typeof value === "string" &&
     (AGENT_MARK_TALKS as readonly string[]).includes(value)
+  );
+}
+
+export function isAgentMarkBrows(value: unknown): value is AgentMarkBrows {
+  return (
+    typeof value === "string" &&
+    (AGENT_MARK_BROWS as readonly string[]).includes(value)
+  );
+}
+
+export function isAgentMarkGaze(value: unknown): value is AgentMarkGaze {
+  return (
+    typeof value === "string" &&
+    (AGENT_MARK_GAZES as readonly string[]).includes(value)
   );
 }

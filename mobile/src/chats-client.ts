@@ -6,6 +6,8 @@ import type { ClientSessionState, SessionStreamEvent } from 'eve/client';
 
 import type { LiveSpokenDraft, SpokenTurn } from '../../lib/chat/spoken-turns';
 import type {
+  AgentMarkBrows,
+  AgentMarkGaze,
   AgentMarkShape,
   AgentMarkTalk,
 } from '../../lib/custom-agents/mark';
@@ -40,6 +42,8 @@ export type CustomAgentRef = {
   readonly accent: string;
   readonly markShape: AgentMarkShape;
   readonly markTalk: AgentMarkTalk;
+  readonly markBrows: AgentMarkBrows;
+  readonly markGaze: AgentMarkGaze;
   readonly instructions: string;
 };
 

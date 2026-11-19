@@ -32,6 +32,8 @@ import {
 } from "@/lib/db/schema";
 import { db } from "@/lib/db/client";
 import {
+  isAgentMarkBrows,
+  isAgentMarkGaze,
   isAgentMarkShape,
   isAgentMarkTalk,
 } from "@/lib/custom-agents/mark";
@@ -325,6 +327,8 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
       customAgentAccent: customAgent.accent,
       customAgentMarkShape: customAgent.markShape,
       customAgentMarkTalk: customAgent.markTalk,
+      customAgentMarkBrows: customAgent.markBrows,
+      customAgentMarkGaze: customAgent.markGaze,
       customAgentInstructions: customAgent.instructions,
     })
     .from(chat)
@@ -368,6 +372,12 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
           markTalk: isAgentMarkTalk(row.customAgentMarkTalk)
             ? row.customAgentMarkTalk
             : "hinge",
+          markBrows: isAgentMarkBrows(row.customAgentMarkBrows)
+            ? row.customAgentMarkBrows
+            : "none",
+          markGaze: isAgentMarkGaze(row.customAgentMarkGaze)
+            ? row.customAgentMarkGaze
+            : "wander",
           instructions: row.customAgentInstructions ?? "",
         }
       : null;

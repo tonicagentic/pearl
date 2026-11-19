@@ -15,8 +15,12 @@ import { Text, textVariants } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_BROWS,
+  DEFAULT_AGENT_MARK_GAZE,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
+  type AgentMarkBrows,
+  type AgentMarkGaze,
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "../../../lib/custom-agents/mark";
@@ -45,6 +49,12 @@ export function AgentSettingsModal({
   const [markTalk, setMarkTalk] = useState<AgentMarkTalk>(
     agent?.markTalk ?? DEFAULT_AGENT_MARK_TALK,
   );
+  const [markBrows, setMarkBrows] = useState<AgentMarkBrows>(
+    agent?.markBrows ?? DEFAULT_AGENT_MARK_BROWS,
+  );
+  const [markGaze, setMarkGaze] = useState<AgentMarkGaze>(
+    agent?.markGaze ?? DEFAULT_AGENT_MARK_GAZE,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const backgroundColor = useCSSVariable("--color-background") as
@@ -62,6 +72,8 @@ export function AgentSettingsModal({
     setAccent(agent.accent || DEFAULT_AGENT_MARK_ACCENT);
     setMarkShape(agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE);
     setMarkTalk(agent.markTalk ?? DEFAULT_AGENT_MARK_TALK);
+    setMarkBrows(agent.markBrows ?? DEFAULT_AGENT_MARK_BROWS);
+    setMarkGaze(agent.markGaze ?? DEFAULT_AGENT_MARK_GAZE);
     setError(null);
     setBusy(false);
   }, [open, agent]);
@@ -76,6 +88,8 @@ export function AgentSettingsModal({
       accent,
       markShape,
       markTalk,
+      markBrows,
+      markGaze,
     })
       .then((row) => {
         onSaved({
@@ -84,6 +98,8 @@ export function AgentSettingsModal({
           accent: row.accent,
           markShape: row.markShape,
           markTalk: row.markTalk,
+          markBrows: row.markBrows,
+          markGaze: row.markGaze,
           instructions: row.instructions,
         });
         onClose();
@@ -141,9 +157,13 @@ export function AgentSettingsModal({
             accent={accent}
             markShape={markShape}
             markTalk={markTalk}
+            markBrows={markBrows}
+            markGaze={markGaze}
             onAccentChange={setAccent}
             onMarkShapeChange={setMarkShape}
             onMarkTalkChange={setMarkTalk}
+            onMarkBrowsChange={setMarkBrows}
+            onMarkGazeChange={setMarkGaze}
           />
           {error ? (
             <Text variant="secondary" tone="destructive" className="mb-3">

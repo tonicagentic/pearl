@@ -1066,12 +1066,16 @@ export const customAgent = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     instructions: text("instructions").notNull().default(""),
-    /** Hex accent for the identity mark (Terrance flesh default). */
-    accent: text("accent").notNull().default("#F5C9A0"),
+    /** Hex accent for the identity mark (cosmos near-black default). */
+    accent: text("accent").notNull().default("#0A0A0A"),
     /** Canadian-style head silhouette: oval | diamond | square | trap. */
     markShape: text("mark_shape").notNull().default("oval"),
     /** Talk kinematics: hinge | lift | chatter. */
     markTalk: text("mark_talk").notNull().default("hinge"),
+    /** Eyebrows: none | line. */
+    markBrows: text("mark_brows").notNull().default("none"),
+    /** Idle gaze: still | wander. */
+    markGaze: text("mark_gaze").notNull().default("wander"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

@@ -4,8 +4,12 @@ import { AgentMark } from "@/components/custom-agents/agent-mark";
 import { Text } from "@/components/ui/text";
 import {
   AGENT_MARK_ACCENTS,
+  AGENT_MARK_BROWS,
+  AGENT_MARK_GAZES,
   AGENT_MARK_SHAPES,
   AGENT_MARK_TALKS,
+  type AgentMarkBrows,
+  type AgentMarkGaze,
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "../../../lib/custom-agents/mark";
@@ -19,25 +23,43 @@ const SHAPE_LABEL: Record<AgentMarkShape, string> = {
 
 const TALK_LABEL: Record<AgentMarkTalk, string> = {
   hinge: "Hinge",
-  lift: "Lift",
+  lift: "Bounce",
   chatter: "Chatter",
 };
 
-/** Live preview + shape/talk/color swatches for agent create/settings. */
+const BROWS_LABEL: Record<AgentMarkBrows, string> = {
+  none: "None",
+  line: "Line",
+};
+
+const GAZE_LABEL: Record<AgentMarkGaze, string> = {
+  still: "Still",
+  wander: "Wander",
+};
+
+/** Live preview + shape/talk/brows/gaze/color swatches for agent create/settings. */
 export function AgentMarkPicker({
   accent,
   markShape,
   markTalk,
+  markBrows,
+  markGaze,
   onAccentChange,
   onMarkShapeChange,
   onMarkTalkChange,
+  onMarkBrowsChange,
+  onMarkGazeChange,
 }: {
   readonly accent: string;
   readonly markShape: AgentMarkShape;
   readonly markTalk: AgentMarkTalk;
+  readonly markBrows: AgentMarkBrows;
+  readonly markGaze: AgentMarkGaze;
   readonly onAccentChange: (accent: string) => void;
   readonly onMarkShapeChange: (shape: AgentMarkShape) => void;
   readonly onMarkTalkChange: (talk: AgentMarkTalk) => void;
+  readonly onMarkBrowsChange: (brows: AgentMarkBrows) => void;
+  readonly onMarkGazeChange: (gaze: AgentMarkGaze) => void;
 }) {
   return (
     <View className="mb-4 gap-3">
@@ -47,7 +69,10 @@ export function AgentMarkPicker({
           size={56}
           markShape={markShape}
           markTalk={markTalk}
+          markBrows={markBrows}
+          markGaze={markGaze}
           motion="burst"
+          eyeMotion="idle"
         />
       </View>
 
@@ -72,6 +97,8 @@ export function AgentMarkPicker({
                   size={28}
                   markShape={shape}
                   markTalk={markTalk}
+                  markBrows={markBrows}
+                  markGaze={markGaze}
                   motion="burst"
                 />
                 <Text variant="caption" weight={selected ? "medium" : "regular"}>
@@ -104,10 +131,81 @@ export function AgentMarkPicker({
                   size={28}
                   markShape={markShape}
                   markTalk={talk}
+                  markBrows={markBrows}
+                  markGaze={markGaze}
                   motion="burst"
                 />
                 <Text variant="caption" weight={selected ? "medium" : "regular"}>
                   {TALK_LABEL[talk]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View>
+        <Text variant="secondary" weight="medium" className="mb-2">
+          Brows
+        </Text>
+        <View className="flex-row flex-wrap gap-2">
+          {AGENT_MARK_BROWS.map((brows) => {
+            const selected = brows === markBrows;
+            return (
+              <Pressable
+                key={brows}
+                accessibilityRole="button"
+                accessibilityLabel={`${BROWS_LABEL[brows]} brows`}
+                accessibilityState={{ selected }}
+                className={`items-center gap-1 rounded-xl px-2.5 py-2 ${selected ? "bg-muted" : "bg-transparent"}`}
+                onPress={() => onMarkBrowsChange(brows)}
+              >
+                <AgentMark
+                  accent={accent}
+                  size={28}
+                  markShape={markShape}
+                  markTalk={markTalk}
+                  markBrows={brows}
+                  markGaze={markGaze}
+                  motion="off"
+                />
+                <Text variant="caption" weight={selected ? "medium" : "regular"}>
+                  {BROWS_LABEL[brows]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View>
+        <Text variant="secondary" weight="medium" className="mb-2">
+          Gaze
+        </Text>
+        <View className="flex-row flex-wrap gap-2">
+          {AGENT_MARK_GAZES.map((gaze) => {
+            const selected = gaze === markGaze;
+            return (
+              <Pressable
+                key={gaze}
+                accessibilityRole="button"
+                accessibilityLabel={`${GAZE_LABEL[gaze]} gaze`}
+                accessibilityState={{ selected }}
+                className={`items-center gap-1 rounded-xl px-2.5 py-2 ${selected ? "bg-muted" : "bg-transparent"}`}
+                onPress={() => onMarkGazeChange(gaze)}
+              >
+                <AgentMark
+                  accent={accent}
+                  size={28}
+                  markShape={markShape}
+                  markTalk={markTalk}
+                  markBrows={markBrows}
+                  markGaze={gaze}
+                  motion="off"
+                  eyeMotion="idle"
+                />
+                <Text variant="caption" weight={selected ? "medium" : "regular"}>
+                  {GAZE_LABEL[gaze]}
                 </Text>
               </Pressable>
             );

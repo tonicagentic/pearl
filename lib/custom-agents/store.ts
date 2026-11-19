@@ -3,10 +3,16 @@ import { randomUUID } from "node:crypto";
 
 import {
   DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_BROWS,
+  DEFAULT_AGENT_MARK_GAZE,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
+  isAgentMarkBrows,
+  isAgentMarkGaze,
   isAgentMarkShape,
   isAgentMarkTalk,
+  type AgentMarkBrows,
+  type AgentMarkGaze,
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "@/lib/custom-agents/mark";
@@ -77,6 +83,22 @@ function normalizeMarkTalk(raw: string | undefined): AgentMarkTalk {
   return raw;
 }
 
+function normalizeMarkBrows(raw: string | undefined): AgentMarkBrows {
+  if (raw === undefined || raw === "") return DEFAULT_AGENT_MARK_BROWS;
+  if (!isAgentMarkBrows(raw)) {
+    throw new CustomAgentError("Mark brows must be none or line.");
+  }
+  return raw;
+}
+
+function normalizeMarkGaze(raw: string | undefined): AgentMarkGaze {
+  if (raw === undefined || raw === "") return DEFAULT_AGENT_MARK_GAZE;
+  if (!isAgentMarkGaze(raw)) {
+    throw new CustomAgentError("Mark gaze must be still or wander.");
+  }
+  return raw;
+}
+
 function markShapeOf(agent: CustomAgent): AgentMarkShape {
   return isAgentMarkShape(agent.markShape)
     ? agent.markShape
@@ -87,6 +109,18 @@ function markTalkOf(agent: CustomAgent): AgentMarkTalk {
   return isAgentMarkTalk(agent.markTalk)
     ? agent.markTalk
     : DEFAULT_AGENT_MARK_TALK;
+}
+
+function markBrowsOf(agent: CustomAgent): AgentMarkBrows {
+  return isAgentMarkBrows(agent.markBrows)
+    ? agent.markBrows
+    : DEFAULT_AGENT_MARK_BROWS;
+}
+
+function markGazeOf(agent: CustomAgent): AgentMarkGaze {
+  return isAgentMarkGaze(agent.markGaze)
+    ? agent.markGaze
+    : DEFAULT_AGENT_MARK_GAZE;
 }
 
 function toSummary(
@@ -101,6 +135,8 @@ function toSummary(
     accent: agent.accent,
     markShape: markShapeOf(agent),
     markTalk: markTalkOf(agent),
+    markBrows: markBrowsOf(agent),
+    markGaze: markGazeOf(agent),
     chatId,
     chatTitle,
     createdAt: agent.createdAt.toISOString(),
@@ -115,6 +151,8 @@ function toRef(agent: CustomAgent): CustomAgentRef {
     accent: agent.accent,
     markShape: markShapeOf(agent),
     markTalk: markTalkOf(agent),
+    markBrows: markBrowsOf(agent),
+    markGaze: markGazeOf(agent),
     instructions: agent.instructions,
   };
 }
@@ -235,6 +273,8 @@ export async function createCustomAgent(
     readonly accent?: string;
     readonly markShape?: string;
     readonly markTalk?: string;
+    readonly markBrows?: string;
+    readonly markGaze?: string;
   },
 ): Promise<CustomAgentSummary> {
   const name = requireName(input.name);
@@ -242,6 +282,8 @@ export async function createCustomAgent(
   const accent = normalizeAccent(input.accent);
   const markShape = normalizeMarkShape(input.markShape);
   const markTalk = normalizeMarkTalk(input.markTalk);
+  const markBrows = normalizeMarkBrows(input.markBrows);
+  const markGaze = normalizeMarkGaze(input.markGaze);
   const agentId = randomUUID();
   const chatId = randomUUID();
 
@@ -256,6 +298,8 @@ export async function createCustomAgent(
         accent,
         markShape,
         markTalk,
+        markBrows,
+        markGaze,
       })
       .returning();
     if (!agent) {
@@ -290,6 +334,8 @@ export async function updateCustomAgent(
     readonly accent?: string;
     readonly markShape?: string;
     readonly markTalk?: string;
+    readonly markBrows?: string;
+    readonly markGaze?: string;
   },
 ): Promise<CustomAgentSummary | null> {
   const existing = await getCustomAgent(userId, agentId);
@@ -313,6 +359,14 @@ export async function updateCustomAgent(
     input.markTalk !== undefined
       ? normalizeMarkTalk(input.markTalk)
       : existing.markTalk;
+  const markBrows =
+    input.markBrows !== undefined
+      ? normalizeMarkBrows(input.markBrows)
+      : existing.markBrows;
+  const markGaze =
+    input.markGaze !== undefined
+      ? normalizeMarkGaze(input.markGaze)
+      : existing.markGaze;
 
   const [agent] = await db
     .update(customAgent)
@@ -322,6 +376,8 @@ export async function updateCustomAgent(
       accent,
       markShape,
       markTalk,
+      markBrows,
+      markGaze,
       updatedAt: new Date(),
     })
     .where(and(eq(customAgent.userId, userId), eq(customAgent.id, agentId)))

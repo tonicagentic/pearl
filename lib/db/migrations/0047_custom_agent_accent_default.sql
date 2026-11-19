@@ -1,0 +1,1 @@
+ALTER TABLE "custom_agent" ALTER COLUMN "accent" SET DEFAULT '#0A0A0A';

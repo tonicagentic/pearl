@@ -16,8 +16,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_BROWS,
+  DEFAULT_AGENT_MARK_GAZE,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
+  type AgentMarkBrows,
+  type AgentMarkGaze,
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "@/lib/custom-agents/mark";
@@ -41,6 +45,12 @@ export function AgentSettingsDialog({
   const [markTalk, setMarkTalk] = useState<AgentMarkTalk>(
     agent?.markTalk ?? DEFAULT_AGENT_MARK_TALK,
   );
+  const [markBrows, setMarkBrows] = useState<AgentMarkBrows>(
+    agent?.markBrows ?? DEFAULT_AGENT_MARK_BROWS,
+  );
+  const [markGaze, setMarkGaze] = useState<AgentMarkGaze>(
+    agent?.markGaze ?? DEFAULT_AGENT_MARK_GAZE,
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -51,6 +61,8 @@ export function AgentSettingsDialog({
     setAccent(agent.accent || DEFAULT_AGENT_MARK_ACCENT);
     setMarkShape(agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE);
     setMarkTalk(agent.markTalk ?? DEFAULT_AGENT_MARK_TALK);
+    setMarkBrows(agent.markBrows ?? DEFAULT_AGENT_MARK_BROWS);
+    setMarkGaze(agent.markGaze ?? DEFAULT_AGENT_MARK_GAZE);
     setError(null);
   }, [open, agent]);
 
@@ -76,6 +88,8 @@ export function AgentSettingsDialog({
                   accent,
                   markShape,
                   markTalk,
+                  markBrows,
+                  markGaze,
                 });
                 updateAgent({
                   name: row.name,
@@ -83,6 +97,8 @@ export function AgentSettingsDialog({
                   accent: row.accent,
                   markShape: row.markShape,
                   markTalk: row.markTalk,
+                  markBrows: row.markBrows,
+                  markGaze: row.markGaze,
                 });
                 onOpenChange(false);
               } catch (cause) {
@@ -99,9 +115,13 @@ export function AgentSettingsDialog({
             accent={accent}
             markShape={markShape}
             markTalk={markTalk}
+            markBrows={markBrows}
+            markGaze={markGaze}
             onAccentChange={setAccent}
             onMarkShapeChange={setMarkShape}
             onMarkTalkChange={setMarkTalk}
+            onMarkBrowsChange={setMarkBrows}
+            onMarkGazeChange={setMarkGaze}
           />
           <Input
             maxLength={80}

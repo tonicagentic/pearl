@@ -57,6 +57,8 @@ export async function PATCH(
     readonly accent?: string;
     readonly markShape?: string;
     readonly markTalk?: string;
+    readonly markBrows?: string;
+    readonly markGaze?: string;
   };
 
   try {
@@ -66,6 +68,8 @@ export async function PATCH(
       accent: body.accent,
       markShape: body.markShape,
       markTalk: body.markTalk,
+      markBrows: body.markBrows,
+      markGaze: body.markGaze,
     });
     if (!agent) {
       return NextResponse.json({ error: "Agent not found." }, { status: 404 });

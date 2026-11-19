@@ -22,6 +22,8 @@ export function ThreadIdentityMenu({
   accent,
   markShape,
   markTalk,
+  markBrows,
+  markGaze,
   heightRatio,
   projectLabel,
   hasProject,
@@ -59,6 +61,8 @@ export function ThreadIdentityMenu({
                 accent={accent}
                 markShape={markShape}
                 markTalk={markTalk}
+                markBrows={markBrows}
+                markGaze={markGaze}
                 heightRatio={heightRatio}
                 motion="idle"
               />

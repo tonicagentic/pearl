@@ -10,8 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_BROWS,
+  DEFAULT_AGENT_MARK_GAZE,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
+  type AgentMarkBrows,
+  type AgentMarkGaze,
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "@/lib/custom-agents/mark";
@@ -26,6 +30,12 @@ export function CreateAgentForm() {
   );
   const [markTalk, setMarkTalk] = useState<AgentMarkTalk>(
     DEFAULT_AGENT_MARK_TALK,
+  );
+  const [markBrows, setMarkBrows] = useState<AgentMarkBrows>(
+    DEFAULT_AGENT_MARK_BROWS,
+  );
+  const [markGaze, setMarkGaze] = useState<AgentMarkGaze>(
+    DEFAULT_AGENT_MARK_GAZE,
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -44,12 +54,16 @@ export function CreateAgentForm() {
               accent,
               markShape,
               markTalk,
+              markBrows,
+              markGaze,
             });
             setName("");
             setInstructions("");
             setAccent(DEFAULT_AGENT_MARK_ACCENT);
             setMarkShape(DEFAULT_AGENT_MARK_SHAPE);
             setMarkTalk(DEFAULT_AGENT_MARK_TALK);
+            setMarkBrows(DEFAULT_AGENT_MARK_BROWS);
+            setMarkGaze(DEFAULT_AGENT_MARK_GAZE);
             router.push(`/chat/${row.chatId}`);
             router.refresh();
           } catch (cause) {
@@ -67,9 +81,13 @@ export function CreateAgentForm() {
         accent={accent}
         markShape={markShape}
         markTalk={markTalk}
+        markBrows={markBrows}
+        markGaze={markGaze}
         onAccentChange={setAccent}
         onMarkShapeChange={setMarkShape}
         onMarkTalkChange={setMarkTalk}
+        onMarkBrowsChange={setMarkBrows}
+        onMarkGazeChange={setMarkGaze}
       />
       <Input
         maxLength={80}

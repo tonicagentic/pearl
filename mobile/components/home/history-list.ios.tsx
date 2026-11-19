@@ -50,10 +50,14 @@ import {
 } from "@/src/custom-agents-client";
 import {
   DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_BROWS,
+  DEFAULT_AGENT_MARK_GAZE,
   DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
   PEARL_MARK_HEIGHT_RATIO,
+  type AgentMarkBrows,
+  type AgentMarkGaze,
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "../../../lib/custom-agents/mark";
@@ -249,12 +253,16 @@ function AgentListMark({
   size = AGENT_MARK_SIZE,
   markShape = DEFAULT_AGENT_MARK_SHAPE,
   markTalk = DEFAULT_AGENT_MARK_TALK,
+  markBrows,
+  markGaze,
   heightRatio = DEFAULT_AGENT_MARK_HEIGHT_RATIO,
 }: {
   readonly accent: string;
   readonly size?: number;
   readonly markShape?: AgentMarkShape;
   readonly markTalk?: AgentMarkTalk;
+  readonly markBrows?: AgentMarkBrows;
+  readonly markGaze?: AgentMarkGaze;
   readonly heightRatio?: number;
 }) {
   const metrics = pearlMarkMetrics(size, heightRatio);
@@ -268,6 +276,8 @@ function AgentListMark({
           size={size}
           markShape={markShape}
           markTalk={markTalk}
+          markBrows={markBrows}
+          markGaze={markGaze}
           heightRatio={heightRatio}
           motion="burst"
           eyeMotion="idle"
@@ -319,6 +329,8 @@ function PearlPinnedRow({
           size={PINNED_MARK_SIZE}
           markShape="oval"
           markTalk="hinge"
+          markBrows={DEFAULT_AGENT_MARK_BROWS}
+          markGaze={DEFAULT_AGENT_MARK_GAZE}
           heightRatio={PEARL_MARK_HEIGHT_RATIO}
         />
         <SwiftText
@@ -348,6 +360,8 @@ function AgentRow({
   const accent = agent.accent || DEFAULT_AGENT_MARK_ACCENT;
   const markShape = agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE;
   const markTalk = agent.markTalk ?? DEFAULT_AGENT_MARK_TALK;
+  const markBrows = agent.markBrows ?? DEFAULT_AGENT_MARK_BROWS;
+  const markGaze = agent.markGaze ?? DEFAULT_AGENT_MARK_GAZE;
   const subtitle = agentListSubtitle({
     name: agent.name,
     chatTitle: agent.chatTitle,
@@ -377,6 +391,8 @@ function AgentRow({
         accent={accent}
         markShape={markShape}
         markTalk={markTalk}
+        markBrows={markBrows}
+        markGaze={markGaze}
       />
       <VStack spacing={1} alignment="leading">
         <SwiftText

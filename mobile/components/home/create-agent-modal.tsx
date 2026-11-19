@@ -15,8 +15,12 @@ import { Text, textVariants } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_BROWS,
+  DEFAULT_AGENT_MARK_GAZE,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
+  type AgentMarkBrows,
+  type AgentMarkGaze,
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "../../../lib/custom-agents/mark";
@@ -44,6 +48,12 @@ export function CreateAgentModal({
   const [markTalk, setMarkTalk] = useState<AgentMarkTalk>(
     DEFAULT_AGENT_MARK_TALK,
   );
+  const [markBrows, setMarkBrows] = useState<AgentMarkBrows>(
+    DEFAULT_AGENT_MARK_BROWS,
+  );
+  const [markGaze, setMarkGaze] = useState<AgentMarkGaze>(
+    DEFAULT_AGENT_MARK_GAZE,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const backgroundColor = useCSSVariable("--color-background") as
@@ -61,6 +71,8 @@ export function CreateAgentModal({
     setAccent(DEFAULT_AGENT_MARK_ACCENT);
     setMarkShape(DEFAULT_AGENT_MARK_SHAPE);
     setMarkTalk(DEFAULT_AGENT_MARK_TALK);
+    setMarkBrows(DEFAULT_AGENT_MARK_BROWS);
+    setMarkGaze(DEFAULT_AGENT_MARK_GAZE);
     setError(null);
     setBusy(false);
   }, [open]);
@@ -75,6 +87,8 @@ export function CreateAgentModal({
       accent,
       markShape,
       markTalk,
+      markBrows,
+      markGaze,
     })
       .then(onCreated)
       .catch((cause) => {
@@ -130,9 +144,13 @@ export function CreateAgentModal({
             accent={accent}
             markShape={markShape}
             markTalk={markTalk}
+            markBrows={markBrows}
+            markGaze={markGaze}
             onAccentChange={setAccent}
             onMarkShapeChange={setMarkShape}
             onMarkTalkChange={setMarkTalk}
+            onMarkBrowsChange={setMarkBrows}
+            onMarkGazeChange={setMarkGaze}
           />
           {error ? (
             <Text variant="secondary" tone="destructive" className="mb-3">

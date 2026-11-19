@@ -78,6 +78,8 @@ async function ResolvedAgents() {
                     accent={row.accent}
                     markShape={row.markShape}
                     markTalk={row.markTalk}
+                    markBrows={row.markBrows}
+                    markGaze={row.markGaze}
                     size="md"
                     motion="burst"
                   />

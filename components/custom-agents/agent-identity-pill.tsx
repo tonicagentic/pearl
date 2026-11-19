@@ -4,10 +4,14 @@ import { useEffect, useId, useState } from "react";
 
 import {
   DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_BROWS,
+  DEFAULT_AGENT_MARK_GAZE,
   DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
   markEyeColor,
+  type AgentMarkBrows,
+  type AgentMarkGaze,
   type AgentMarkMotion,
   type AgentMarkShape,
   type AgentMarkTalk,
@@ -123,11 +127,11 @@ function bounceLiftPx(talk: AgentMarkTalk, width: number): number {
       return Math.max(3, Math.round(width * 0.08));
     case "hinge":
     default:
-      return Math.max(5, Math.round(width * 0.18));
+      return 0;
   }
 }
 
-/** All talk styles: crown bounces up; jaw stays static. */
+/** Hinge = V-tilt about a fixed fulcrum; lift/chatter = crown bounce. Jaw static. */
 function talkKeyframes(
   talk: AgentMarkTalk,
   width: number,
@@ -163,10 +167,10 @@ function talkKeyframes(
     default:
       return {
         crown: `
-          0%, 55%, 100% { transform: translateY(0); }
-          12%, 18% { transform: translateY(-${liftPx}px); }
-          28% { transform: translateY(-${Math.round(liftPx * 0.2)}px); }
-          36% { transform: translateY(-${Math.round(liftPx * 0.7)}px); }
+          0%, 55%, 100% { transform: rotate(0deg); }
+          12%, 18% { transform: rotate(-16deg); }
+          28% { transform: rotate(-4deg); }
+          36% { transform: rotate(-12deg); }
         `,
         jaw: STATIC_JAW,
         duration: "3.2s",
@@ -206,9 +210,9 @@ function burstKeyframes(
     default:
       return {
         crown: `
-          0% { transform: translateY(0); }
-          40% { transform: translateY(-${liftPx}px); }
-          100% { transform: translateY(0); }
+          0% { transform: rotate(0deg); }
+          40% { transform: rotate(-16deg); }
+          100% { transform: rotate(0deg); }
         `,
         jaw: STATIC_JAW,
         duration: "0.45s",
@@ -223,6 +227,8 @@ export function AgentAccentMark({
   accent = DEFAULT_AGENT_MARK_ACCENT,
   markShape = DEFAULT_AGENT_MARK_SHAPE,
   markTalk = DEFAULT_AGENT_MARK_TALK,
+  markBrows = DEFAULT_AGENT_MARK_BROWS,
+  markGaze = DEFAULT_AGENT_MARK_GAZE,
   motion = "burst",
   eyeMotion = "off",
   className,
@@ -232,6 +238,8 @@ export function AgentAccentMark({
   readonly accent?: string;
   readonly markShape?: AgentMarkShape;
   readonly markTalk?: AgentMarkTalk;
+  readonly markBrows?: AgentMarkBrows;
+  readonly markGaze?: AgentMarkGaze;
   readonly motion?: AgentMarkMotion;
   readonly eyeMotion?: AgentMarkEyeMotion;
   readonly className?: string;
@@ -243,6 +251,7 @@ export function AgentAccentMark({
   const [reduceMotion, setReduceMotion] = useState(false);
   const [bursting, setBursting] = useState(false);
   const [eyesClosed, setEyesClosed] = useState(false);
+  const [gaze, setGaze] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -316,14 +325,60 @@ export function AgentAccentMark({
   const mouthGap = Math.max(1.5, Math.round(width * MOUTH_GAP_RATIO));
   const topCut = mouthY - mouthGap / 2;
   const bottomCut = mouthY + mouthGap / 2;
+  // Fulcrum = left mouth corner on the silhouette (fixed while opening).
+  const hingeX = (() => {
+    const cy = height / 2;
+    const ry = height / 2;
+    const rx = width / 2;
+    const dy = topCut - cy;
+    const under = 1 - (dy * dy) / (ry * ry);
+    const dx = under > 0 ? rx * Math.sqrt(under) : 0;
+    return Math.round(width / 2 - dx);
+  })();
   const eyeColor = markEyeColor(accent);
-  const eyeCxL = width * 0.4;
-  const eyeCxR = width * 0.6;
-  const eyeCy = maxLift + topCut * 0.48;
-  const eyeRx = Math.max(1.1, width * 0.045);
-  const eyeRy = Math.max(2.2, width * 0.09);
+  const eyeBaseL = width * 0.4;
+  const eyeBaseR = width * 0.6;
+  const eyeBaseY = maxLift + topCut * 0.48;
+  const eyeR = Math.max(1.4, width * 0.055);
+  const gazePad = Math.max(1.5, width * 0.04);
   const closedHalf = Math.max(2.2, width * 0.07);
   const closedStroke = Math.max(1.2, width * 0.028);
+  const browY = eyeBaseY - Math.max(3, width * 0.09);
+  const browHalf = Math.max(2.5, width * 0.08);
+  const browStroke = Math.max(1.1, width * 0.025);
+  const isHinge = markTalk === "hinge";
+
+  useEffect(() => {
+    if (eyeMotion !== "idle" || markGaze !== "wander" || reduceMotion) {
+      setGaze({ x: 0, y: 0 });
+      return;
+    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      if (cancelled) return;
+      timer = setTimeout(() => {
+        if (cancelled) return;
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * gazePad;
+        setGaze({
+          x: Math.cos(angle) * dist,
+          y: Math.sin(angle) * dist * 0.65,
+        });
+        schedule();
+      }, 900 + Math.random() * 2200);
+    };
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      setGaze({ x: 0, y: 0 });
+    };
+  }, [eyeMotion, markGaze, reduceMotion, gazePad]);
+
+  const eyeCxL = eyeBaseL + gaze.x;
+  const eyeCxR = eyeBaseR + gaze.x;
+  const eyeCy = eyeBaseY + gaze.y;
   const isOval = markShape === "oval";
   const paths = isOval
     ? { top: "", bottom: "" }
@@ -400,7 +455,9 @@ export function AgentAccentMark({
           <g
             className={animating ? crownClass : undefined}
             style={{
-              transformOrigin: `${width / 2}px ${maxLift + topCut}px`,
+              transformOrigin: isHinge
+                ? `${hingeX}px ${maxLift + topCut}px`
+                : `${width / 2}px ${maxLift + topCut}px`,
             }}
           >
             {isOval ? (
@@ -419,6 +476,28 @@ export function AgentAccentMark({
                 transform={`translate(0 ${maxLift})`}
               />
             )}
+            {markBrows === "line" ? (
+              <>
+                <line
+                  x1={eyeCxL - browHalf}
+                  y1={browY + gaze.y * 0.3}
+                  x2={eyeCxL + browHalf}
+                  y2={browY + gaze.y * 0.3}
+                  stroke={eyeColor}
+                  strokeWidth={browStroke}
+                  strokeLinecap="round"
+                />
+                <line
+                  x1={eyeCxR - browHalf}
+                  y1={browY + gaze.y * 0.3}
+                  x2={eyeCxR + browHalf}
+                  y2={browY + gaze.y * 0.3}
+                  stroke={eyeColor}
+                  strokeWidth={browStroke}
+                  strokeLinecap="round"
+                />
+              </>
+            ) : null}
             {eyesClosed ? (
               <>
                 <line
@@ -445,15 +524,15 @@ export function AgentAccentMark({
                 <ellipse
                   cx={eyeCxL}
                   cy={eyeCy}
-                  rx={eyeRx}
-                  ry={eyeRy}
+                  rx={eyeR}
+                  ry={eyeR}
                   fill={eyeColor}
                 />
                 <ellipse
                   cx={eyeCxR}
                   cy={eyeCy}
-                  rx={eyeRx}
-                  ry={eyeRy}
+                  rx={eyeR}
+                  ry={eyeR}
                   fill={eyeColor}
                 />
               </>
@@ -490,6 +569,8 @@ export function AgentIdentityPill({
   accent = DEFAULT_AGENT_MARK_ACCENT,
   markShape = DEFAULT_AGENT_MARK_SHAPE,
   markTalk = DEFAULT_AGENT_MARK_TALK,
+  markBrows = DEFAULT_AGENT_MARK_BROWS,
+  markGaze = DEFAULT_AGENT_MARK_GAZE,
   motion = "idle",
   heightRatio = DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   className,
@@ -499,6 +580,8 @@ export function AgentIdentityPill({
   readonly accent?: string;
   readonly markShape?: AgentMarkShape;
   readonly markTalk?: AgentMarkTalk;
+  readonly markBrows?: AgentMarkBrows;
+  readonly markGaze?: AgentMarkGaze;
   readonly motion?: AgentMarkMotion;
   readonly heightRatio?: number;
   readonly className?: string;
@@ -517,6 +600,8 @@ export function AgentIdentityPill({
         accent={accent}
         markShape={markShape}
         markTalk={markTalk}
+        markBrows={markBrows}
+        markGaze={markGaze}
         motion={motion}
         heightRatio={heightRatio}
       />

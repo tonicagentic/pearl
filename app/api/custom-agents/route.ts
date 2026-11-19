@@ -47,6 +47,8 @@ export async function POST(request: Request) {
     readonly accent?: string;
     readonly markShape?: string;
     readonly markTalk?: string;
+    readonly markBrows?: string;
+    readonly markGaze?: string;
   };
 
   try {
@@ -56,6 +58,8 @@ export async function POST(request: Request) {
       accent: body.accent,
       markShape: body.markShape,
       markTalk: body.markTalk,
+      markBrows: body.markBrows,
+      markGaze: body.markGaze,
     });
     return NextResponse.json({ agent });
   } catch (error) {

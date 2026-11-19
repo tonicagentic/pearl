@@ -21,6 +21,8 @@ export function AgentThreadChrome() {
           accent={agent.accent}
           markShape={agent.markShape}
           markTalk={agent.markTalk}
+          markBrows={agent.markBrows}
+          markGaze={agent.markGaze}
           motion="idle"
           onClick={() => setSettingsOpen(true)}
         />

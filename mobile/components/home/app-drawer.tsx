@@ -162,6 +162,8 @@ function HistoryListAndroid({
                 size={PINNED_MARK_SIZE}
                 markShape="oval"
                 markTalk="hinge"
+                markBrows="none"
+                markGaze="wander"
                 heightRatio={PEARL_MARK_HEIGHT_RATIO}
                 motion="burst"
                 eyeMotion="idle"
@@ -189,6 +191,8 @@ function HistoryListAndroid({
                   size={AGENT_MARK_SIZE}
                   markShape={DEFAULT_AGENT_MARK_SHAPE}
                   markTalk="hinge"
+                  markBrows="none"
+                  markGaze="wander"
                   motion="burst"
                   eyeMotion="idle"
                 />
@@ -223,6 +227,8 @@ function HistoryListAndroid({
                     size={AGENT_MARK_SIZE}
                     markShape={agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE}
                     markTalk={agent.markTalk ?? DEFAULT_AGENT_MARK_TALK}
+                    markBrows={agent.markBrows}
+                    markGaze={agent.markGaze}
                     motion="burst"
                     eyeMotion="idle"
                   />

@@ -208,6 +208,8 @@ export function ChatScreen({
             accent: agent.accent,
             markShape: agent.markShape,
             markTalk: agent.markTalk,
+            markBrows: agent.markBrows,
+            markGaze: agent.markGaze,
             chatId: agent.chatId,
           })),
         );
@@ -1202,6 +1204,8 @@ export function ChatScreen({
               accent={activeCustomAgent?.accent ?? PEARL_IDENTITY_ACCENT}
               markShape={activeCustomAgent?.markShape}
               markTalk={activeCustomAgent?.markTalk}
+              markBrows={activeCustomAgent?.markBrows}
+              markGaze={activeCustomAgent?.markGaze}
               heightRatio={
                 activeCustomAgent ? undefined : PEARL_MARK_HEIGHT_RATIO
               }

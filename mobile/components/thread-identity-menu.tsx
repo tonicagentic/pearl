@@ -6,6 +6,8 @@ import {
   DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   PEARL_IDENTITY_ACCENT,
   PEARL_MARK_HEIGHT_RATIO,
+  type AgentMarkBrows,
+  type AgentMarkGaze,
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "../../lib/custom-agents/mark";
@@ -18,6 +20,8 @@ export type ThreadIdentityAgentOption = {
   readonly accent: string;
   readonly markShape?: AgentMarkShape;
   readonly markTalk?: AgentMarkTalk;
+  readonly markBrows?: AgentMarkBrows;
+  readonly markGaze?: AgentMarkGaze;
   readonly chatId: string;
 };
 
@@ -26,6 +30,8 @@ export type ThreadIdentityMenuProps = {
   readonly accent?: string;
   readonly markShape?: AgentMarkShape;
   readonly markTalk?: AgentMarkTalk;
+  readonly markBrows?: AgentMarkBrows;
+  readonly markGaze?: AgentMarkGaze;
   /** Rounder for built-in Pearl; tall oval for custom agents. */
   readonly heightRatio?: number;
   readonly projectLabel: string | null;
@@ -52,6 +58,8 @@ export function ThreadIdentityMenu({
   accent,
   markShape,
   markTalk,
+  markBrows,
+  markGaze,
   heightRatio = DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   projectLabel,
   hasProject,
@@ -74,6 +82,8 @@ export function ThreadIdentityMenu({
       accent={accent}
       markShape={markShape}
       markTalk={markTalk}
+      markBrows={markBrows}
+      markGaze={markGaze}
       heightRatio={heightRatio}
       motion="idle"
       onPress={() => {
