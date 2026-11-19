@@ -477,6 +477,10 @@ export async function saveQuickTurnsForUser({
     .update(chat)
     .set({
       quickTurns: [...turns],
+      // Quick turns are the transcript; clear any leftover Eve pending marker
+      // so selectChat cannot auto-send the same user line into an empty store.
+      pendingUserMessage: null,
+      pendingUserMessageCreatedAt: null,
       title: sql<string>`
         case
           when ${chat.title} = ${DEFAULT_CHAT_TITLE}

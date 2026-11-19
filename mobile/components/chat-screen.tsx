@@ -1162,13 +1162,18 @@ export function ChatScreen({
     if (events.length > 0 || messages.length > 0 || session) {
       return;
     }
+    // Quick-path chats already show their transcript via quickTurns. Never
+    // Eve-auto-send the same user line into an empty store.
+    if (quickTurns.length > 0) {
+      return;
+    }
     if (autoSentPendingFor.current === activeChatId) return;
     autoSentPendingFor.current = activeChatId;
     void store.send({
       message: pendingMessage,
       clientContext: buildTurnClientContext(activeProjectId, activeChatId, activeCustomAgent?.id),
     });
-  }, [pendingMessage, activeChatId, status, store, activeProjectId]);
+  }, [pendingMessage, activeChatId, status, store, activeProjectId, quickTurns]);
 
   const resendStoredMessage = useCallback(async () => {
     if (!localSend?.outgoing) return;

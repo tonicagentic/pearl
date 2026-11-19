@@ -107,9 +107,10 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     }
-    const created = await createChat(viewer.id, {
-      pendingUserMessage: message,
-    });
+    // Session-free quick answers must not set pendingUserMessage — that marker
+    // is for Carry-out / Eve auto-send and would re-send the same turn after
+    // selectChat, duplicating the quick pair in the thread.
+    const created = await createChat(viewer.id);
     chatId = created.id;
   }
 
