@@ -4,6 +4,8 @@ import {
   countWaitingChatsForUser,
   getChatLinkByEveSessionId,
 } from "@/lib/db/queries";
+import { filterAlertPushTokens } from "@/lib/attention/filter-alert-tokens";
+import { listClientAttentionForUser } from "@/lib/db/attention";
 import {
   claimPushDelivery,
   hasPushDelivery,
@@ -67,10 +69,22 @@ async function deliverPush(input: {
     return;
   }
 
+  const attention = await listClientAttentionForUser(input.userId);
+  const filtered = filterAlertPushTokens({
+    tokens,
+    attention,
+    chatId: input.chatId,
+    sessionId: input.sessionId,
+  });
+  if (filtered.tokens.length === 0) {
+    // Claim stays: a hook retry must not banner after the viewer leaves.
+    return;
+  }
+
   const waitingBadge = await countWaitingChatsForUser(input.userId);
 
   await sendExpoPush(
-    tokens.map((row) => ({
+    filtered.tokens.map((row) => ({
       to: row.token,
       title: input.title,
       body: input.body,

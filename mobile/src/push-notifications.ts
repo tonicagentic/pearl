@@ -1,24 +1,18 @@
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 
 import { getAuthCookie } from "./eve-transport";
 import { registerPushToken, unregisterPushToken } from "./push-client";
 
-/** Chat currently on screen — suppress banners for that session only. */
-let activeChatIdForPush: string | null = null;
 let registeredToken: string | null = null;
 let handlerInstalled = false;
-
-export function setActiveChatIdForPush(chatId: string | null) {
-  activeChatIdForPush = chatId;
-}
 
 export function getRegisteredPushToken(): string | null {
   return registeredToken;
 }
 
-function chatIdFromNotificationData(data: unknown): string | null {
+export function chatIdFromNotificationData(data: unknown): string | null {
   if (!data || typeof data !== "object") {
     return null;
   }
@@ -103,7 +97,10 @@ export function installPushNotificationHandler() {
       // Absolute badge is applied manually from data / Expo `badge` field.
       // Never let the OS increment so counts do not drift.
       const isPresence = Boolean(presenceFromNotificationData(data));
-      if (isPresence) {
+      // While the app is foregrounded, never show a system banner — the
+      // open thread / Recents already update from the stream and silent data.
+      const appForeground = AppState.currentState === "active";
+      if (isPresence || appForeground) {
         return {
           shouldPlaySound: false,
           shouldSetBadge: false,
@@ -111,14 +108,11 @@ export function installPushNotificationHandler() {
           shouldShowList: false,
         };
       }
-      const chatId = chatIdFromNotificationData(data);
-      const suppress =
-        Boolean(chatId) && chatId === activeChatIdForPush;
       return {
-        shouldPlaySound: !suppress,
+        shouldPlaySound: true,
         shouldSetBadge: false,
-        shouldShowBanner: !suppress,
-        shouldShowList: !suppress,
+        shouldShowBanner: true,
+        shouldShowList: true,
       };
     },
   });

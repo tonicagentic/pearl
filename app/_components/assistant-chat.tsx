@@ -56,6 +56,7 @@ import {
   getRemoteAgentSelection,
   setRemoteAgentSelection,
 } from "@/app/_components/remote-agent-selection";
+import { postWebAttention } from "@/lib/attention/web-client";
 import { waitingLabelForText } from "@/lib/pearl-lane";
 import { setWaitingLabel } from "@/lib/waiting-label";
 import {
@@ -928,6 +929,7 @@ function AssistantChatSurfaceInner({
         </div>
 
         <SessionCursorPersistence chatId={chatId} storageMode={storageMode} />
+        <WebAttentionHeartbeat chatId={chatId} />
         <EveErrorToast />
       </CanvasProvider>
       </QuickPathProvider>
@@ -1249,6 +1251,77 @@ function SessionCursorPersistence({
       () => {},
     );
   }, [chatId, session, storageMode]);
+
+  return null;
+}
+
+const WEB_ATTENTION_HEARTBEAT_MS = 10_000;
+
+/**
+ * Tell the server this tab is watching the open chat so mobile alert
+ * banners stay quiet. Background / hidden / unmount posts background
+ * immediately so a reply a second later still alerts the phone.
+ */
+function WebAttentionHeartbeat({
+  chatId,
+}: {
+  readonly chatId: string | null;
+}) {
+  const session = useEveSession();
+  const sessionId = session?.sessionId ?? null;
+  const chatIdRef = useRef(chatId);
+  const sessionIdRef = useRef(sessionId);
+  chatIdRef.current = chatId;
+  sessionIdRef.current = sessionId;
+
+  useEffect(() => {
+    const post = (state: "active" | "background") => {
+      void postWebAttention({
+        state,
+        chatId: chatIdRef.current,
+        sessionId: sessionIdRef.current,
+      });
+    };
+
+    const sync = () => {
+      if (document.visibilityState === "hidden") {
+        post("background");
+        return;
+      }
+      post("active");
+    };
+
+    const onPageHide = () => post("background");
+
+    sync();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        post("active");
+      }
+    }, WEB_ATTENTION_HEARTBEAT_MS);
+
+    document.addEventListener("visibilitychange", sync);
+    window.addEventListener("pagehide", onPageHide);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", sync);
+      window.removeEventListener("pagehide", onPageHide);
+      post("background");
+    };
+  }, []);
+
+  // Refresh chat / session on the live row without flipping to background.
+  useEffect(() => {
+    if (document.visibilityState !== "visible") {
+      return;
+    }
+    void postWebAttention({
+      state: "active",
+      chatId,
+      sessionId,
+    });
+  }, [chatId, sessionId]);
 
   return null;
 }

@@ -6,6 +6,7 @@ import {
   area,
   billingAccount,
   chat,
+  clientAttention,
   conceptSchema,
   conceptSchemaRevision,
   devicePushToken,
@@ -78,6 +79,10 @@ export async function reassignAnonymousUserData(input: {
       .update(devicePushToken)
       .set({ userId: toUserId })
       .where(eq(devicePushToken.userId, fromUserId)),
+    database
+      .update(clientAttention)
+      .set({ userId: toUserId })
+      .where(eq(clientAttention.userId, fromUserId)),
     database
       .update(usageEvent)
       .set({ userId: toUserId })

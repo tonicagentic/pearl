@@ -635,6 +635,40 @@ export const devicePushToken = pgTable(
 export type DevicePushToken = typeof devicePushToken.$inferSelect;
 
 /**
+ * Live client presence for push gating. Mobile uses the Expo push token as
+ * clientKey; web uses a per-tab id. Heartbeats refresh updatedAt while the
+ * surface is visible; background/unmount posts state=background immediately.
+ */
+export const clientAttention = pgTable(
+  "client_attention",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    surface: text("surface").notNull(),
+    clientKey: text("client_key").notNull(),
+    state: text("state").notNull(),
+    chatId: text("chat_id"),
+    sessionId: text("session_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_client_attention_user").on(table.userId),
+    uniqueIndex("idx_client_attention_user_surface_key").on(
+      table.userId,
+      table.surface,
+      table.clientKey,
+    ),
+  ],
+);
+
+export type ClientAttention = typeof clientAttention.$inferSelect;
+
+/**
  * At-most-once gate for mobile push: hooks are at-least-once, so a retried
  * step must not send a second banner for the same turn boundary.
  */

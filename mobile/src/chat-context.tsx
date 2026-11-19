@@ -144,6 +144,11 @@ type ChatsContextValue = {
     chatId: string,
     presence: ChatPresence,
   ) => void;
+  /**
+   * Resume an open or retained store when a foreground push names it and
+   * the stream is idle — catches a stalled thread without waiting on poll.
+   */
+  readonly resumeChatFromPush: (chatId: string) => void;
   /** Open a stored chat (replays its events, attaches its session). */
   readonly selectChat: (chatId: string) => Promise<boolean>;
   readonly selectionError: string | null;
@@ -772,6 +777,28 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     });
   }, []);
 
+  const resumeChatFromPush = useCallback(
+    (chatId: string) => {
+      const candidate =
+        (activeChatIdRef.current === chatId
+          ? activeStoreRef.current
+          : null) ??
+        retainedStores.get(chatId) ??
+        null;
+      if (!candidate?.snapshot.session) {
+        return;
+      }
+      const status = candidate.snapshot.status;
+      if (status === "busy" || status === "resuming") {
+        return;
+      }
+      void candidate.resume().catch(() => {
+        // Already streaming, or a transient network error — leave alone.
+      });
+    },
+    [retainedStores],
+  );
+
   const selectChat = useCallback(
     async (chatId: string): Promise<boolean> => {
       const generation = ++selectionGeneration.current;
@@ -1210,6 +1237,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       loadMoreChats,
       reloadChats,
       patchChatPresence,
+      resumeChatFromPush,
       selectChat,
       selectionError,
       persistenceError,
@@ -1246,6 +1274,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       loadMoreChats,
       reloadChats,
       patchChatPresence,
+      resumeChatFromPush,
       selectChat,
       selectionError,
       persistenceError,
