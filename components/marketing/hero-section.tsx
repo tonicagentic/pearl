@@ -39,7 +39,10 @@ export function HeroSection({
   if (!mounted) {
     return (
       <section id="hero">
-        <MarketingContainer className="flex flex-col items-center gap-12 pt-32 pb-16 text-center sm:gap-16 sm:pt-[148px] sm:pb-24">
+        <MarketingContainer
+          className="flex flex-col items-center gap-12 pt-32 pb-16 text-center sm:gap-16 sm:pt-[148px] sm:pb-24"
+          narrow
+        >
           <div className="flex flex-col items-center">
             <h1 className={marketingType.display} style={{ perspective: 1200 }}>
               <span className="inline-block opacity-0">Meet</span>{" "}
@@ -71,7 +74,10 @@ export function HeroSection({
 
   return (
     <section id="hero">
-      <MarketingContainer className="flex flex-col items-center gap-12 pt-32 pb-16 text-center sm:gap-16 sm:pt-[148px] sm:pb-24">
+      <MarketingContainer
+        className="flex flex-col items-center gap-12 pt-32 pb-16 text-center sm:gap-16 sm:pt-[148px] sm:pb-24"
+        narrow
+      >
         <div className="flex flex-col items-center">
           <h1 className={marketingType.display} style={{ perspective: 1200 }}>
             <HeroWords wordIndexOffset={0}>Meet</HeroWords>{" "}
