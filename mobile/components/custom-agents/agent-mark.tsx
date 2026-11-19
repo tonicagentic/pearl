@@ -10,7 +10,14 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import Svg, { ClipPath, Defs, Ellipse, Path, Rect } from "react-native-svg";
+import Svg, {
+  ClipPath,
+  Defs,
+  Ellipse,
+  Line,
+  Path,
+  Rect,
+} from "react-native-svg";
 
 import {
   DEFAULT_AGENT_MARK_ACCENT,
@@ -27,35 +34,31 @@ const MOUTH_Y_RATIO = 0.62;
 /** Closed mouth = small gap between halves (not a drawn line). */
 const MOUTH_GAP_RATIO = 0.035;
 
+/** Presentation-only eye idle. Default off outside home. */
+export type AgentMarkEyeMotion = "idle" | "off";
+
 type TalkProfile = {
-  readonly topOpenDeg: number;
-  readonly bottomOpenDeg: number;
   readonly topLift: number;
   readonly topTiltDeg: number;
 };
 
+/** All talk styles: crown bounces up; jaw stays static. */
 function talkProfile(talk: AgentMarkTalk, size: number): TalkProfile {
   switch (talk) {
     case "lift":
       return {
-        topOpenDeg: 0,
-        bottomOpenDeg: 0,
         topLift: Math.max(4, Math.round(size * 0.16)),
         topTiltDeg: 4,
       };
     case "chatter":
       return {
-        topOpenDeg: 8,
-        bottomOpenDeg: 4,
-        topLift: 0,
+        topLift: Math.max(3, Math.round(size * 0.08)),
         topTiltDeg: 0,
       };
     case "hinge":
     default:
       return {
-        topOpenDeg: 14,
-        bottomOpenDeg: 7,
-        topLift: 0,
+        topLift: Math.max(5, Math.round(size * 0.18)),
         topTiltDeg: 0,
       };
   }
@@ -310,7 +313,7 @@ function roundedBottomRect(
 
 /**
  * Accent-colored Canadian-style head mark: solid silhouette, mouth gap,
- * talk styles via `markTalk`. Idle loop only when `motion="idle"`.
+ * talk styles via `markTalk` (crown bounce). Idle blink when `eyeMotion="idle"`.
  */
 export function AgentMark({
   accent = DEFAULT_AGENT_MARK_ACCENT,
@@ -318,6 +321,7 @@ export function AgentMark({
   markShape = DEFAULT_AGENT_MARK_SHAPE,
   markTalk = DEFAULT_AGENT_MARK_TALK,
   motion = "burst",
+  eyeMotion = "off",
   heightRatio = DEFAULT_AGENT_MARK_HEIGHT_RATIO,
 }: {
   readonly accent?: string;
@@ -325,6 +329,7 @@ export function AgentMark({
   readonly markShape?: AgentMarkShape;
   readonly markTalk?: AgentMarkTalk;
   readonly motion?: AgentMarkMotion;
+  readonly eyeMotion?: AgentMarkEyeMotion;
   /** Height / width. Built-in Pearl uses 1 (circle). */
   readonly heightRatio?: number;
 }) {
@@ -336,9 +341,15 @@ export function AgentMark({
   const mouthGap = Math.max(1.5, Math.round(size * MOUTH_GAP_RATIO));
   const topCut = mouthY - mouthGap / 2;
   const bottomCut = mouthY + mouthGap / 2;
-  const hingeX = Math.round(width * 0.12);
   const profile = talkProfile(markTalk, size);
   const eyeColor = markEyeColor(accent);
+  const eyeCxL = width * 0.4;
+  const eyeCxR = width * 0.6;
+  const eyeCy = topCut * 0.48;
+  const eyeRx = Math.max(1.1, size * 0.045);
+  const eyeRy = Math.max(2.2, size * 0.09);
+  const closedHalf = Math.max(2.2, size * 0.07);
+  const closedStroke = Math.max(1.2, size * 0.028);
   const clipUid = useId().replace(/:/g, "");
   const topClipId = `mark-top-${clipUid}`;
   const bottomClipId = `mark-bot-${clipUid}`;
@@ -353,6 +364,7 @@ export function AgentMark({
 
   const [reduceMotion, setReduceMotion] = useState(false);
   const [bursting, setBursting] = useState(false);
+  const [eyesClosed, setEyesClosed] = useState(false);
   const open = useSharedValue(0);
 
   useEffect(() => {
@@ -393,42 +405,70 @@ export function AgentMark({
     };
   }, [bursting, markTalk, motion, open, reduceMotion]);
 
-  const topStyle = useAnimatedStyle(() => {
-    if (markTalk === "lift") {
-      return {
-        transform: [
-          { translateY: -open.value * profile.topLift },
-          {
-            rotate: `${-open.value * profile.topTiltDeg}deg`,
-          },
-        ],
-      };
+  useEffect(() => {
+    if (eyeMotion !== "idle" || reduceMotion) {
+      setEyesClosed(false);
+      return;
     }
-    return {
-      transform: [
-        { translateX: hingeX },
-        { translateY: mouthY },
-        { rotate: `${-open.value * profile.topOpenDeg}deg` },
-        { translateX: -hingeX },
-        { translateY: -mouthY },
-      ],
-    };
-  });
+    let cancelled = false;
+    let waitTimer: ReturnType<typeof setTimeout> | undefined;
+    let blinkTimers: ReturnType<typeof setTimeout>[] = [];
 
-  const bottomStyle = useAnimatedStyle(() => {
-    if (markTalk === "lift") {
-      return { transform: [] };
-    }
-    return {
-      transform: [
-        { translateX: hingeX },
-        { translateY: mouthY },
-        { rotate: `${open.value * profile.bottomOpenDeg}deg` },
-        { translateX: -hingeX },
-        { translateY: -mouthY },
-      ],
+    const clearBlinkTimers = () => {
+      for (const t of blinkTimers) clearTimeout(t);
+      blinkTimers = [];
     };
-  });
+
+    const scheduleNext = () => {
+      if (cancelled) return;
+      const delay = 2500 + Math.random() * 3500;
+      waitTimer = setTimeout(() => {
+        if (cancelled) return;
+        const doubleBlink = Math.random() < 0.28;
+        setEyesClosed(true);
+        blinkTimers.push(
+          setTimeout(() => {
+            if (cancelled) return;
+            setEyesClosed(false);
+            if (!doubleBlink) {
+              scheduleNext();
+              return;
+            }
+            blinkTimers.push(
+              setTimeout(() => {
+                if (cancelled) return;
+                setEyesClosed(true);
+                blinkTimers.push(
+                  setTimeout(() => {
+                    if (cancelled) return;
+                    setEyesClosed(false);
+                    scheduleNext();
+                  }, 90),
+                );
+              }, 120),
+            );
+          }, 100),
+        );
+      }, delay);
+    };
+
+    scheduleNext();
+    return () => {
+      cancelled = true;
+      if (waitTimer) clearTimeout(waitTimer);
+      clearBlinkTimers();
+      setEyesClosed(false);
+    };
+  }, [eyeMotion, reduceMotion]);
+
+  const topStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: -open.value * profile.topLift },
+      { rotate: `${-open.value * profile.topTiltDeg}deg` },
+    ],
+  }));
+
+  const bottomStyle = useAnimatedStyle(() => ({ transform: [] }));
 
   const mark = (
     <View
@@ -520,20 +560,45 @@ export function AgentMark({
             ) : (
               <Path d={paths.top} fill={accent} />
             )}
-            <Ellipse
-              cx={width * 0.4}
-              cy={topCut * 0.48}
-              rx={Math.max(1.1, size * 0.045)}
-              ry={Math.max(2.2, size * 0.09)}
-              fill={eyeColor}
-            />
-            <Ellipse
-              cx={width * 0.6}
-              cy={topCut * 0.48}
-              rx={Math.max(1.1, size * 0.045)}
-              ry={Math.max(2.2, size * 0.09)}
-              fill={eyeColor}
-            />
+            {eyesClosed ? (
+              <>
+                <Line
+                  x1={eyeCxL - closedHalf}
+                  y1={eyeCy}
+                  x2={eyeCxL + closedHalf}
+                  y2={eyeCy}
+                  stroke={eyeColor}
+                  strokeWidth={closedStroke}
+                  strokeLinecap="round"
+                />
+                <Line
+                  x1={eyeCxR - closedHalf}
+                  y1={eyeCy}
+                  x2={eyeCxR + closedHalf}
+                  y2={eyeCy}
+                  stroke={eyeColor}
+                  strokeWidth={closedStroke}
+                  strokeLinecap="round"
+                />
+              </>
+            ) : (
+              <>
+                <Ellipse
+                  cx={eyeCxL}
+                  cy={eyeCy}
+                  rx={eyeRx}
+                  ry={eyeRy}
+                  fill={eyeColor}
+                />
+                <Ellipse
+                  cx={eyeCxR}
+                  cy={eyeCy}
+                  rx={eyeRx}
+                  ry={eyeRy}
+                  fill={eyeColor}
+                />
+              </>
+            )}
           </Svg>
         </Animated.View>
       </View>

@@ -164,6 +164,7 @@ function HistoryListAndroid({
                 markTalk="hinge"
                 heightRatio={PEARL_MARK_HEIGHT_RATIO}
                 motion="burst"
+                eyeMotion="idle"
               />
               <AppText
                 variant="caption"
@@ -189,6 +190,7 @@ function HistoryListAndroid({
                   markShape={DEFAULT_AGENT_MARK_SHAPE}
                   markTalk="hinge"
                   motion="burst"
+                  eyeMotion="idle"
                 />
                 <AppText variant="label" weight="semibold">
                   New Agent
@@ -222,6 +224,7 @@ function HistoryListAndroid({
                     markShape={agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE}
                     markTalk={agent.markTalk ?? DEFAULT_AGENT_MARK_TALK}
                     motion="burst"
+                    eyeMotion="idle"
                   />
                   <View className="min-w-0 flex-1" style={{ gap: 1 }}>
                     <AppText

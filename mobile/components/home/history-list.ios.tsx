@@ -270,6 +270,7 @@ function AgentListMark({
           markTalk={markTalk}
           heightRatio={heightRatio}
           motion="burst"
+          eyeMotion="idle"
         />
       </View>
     </RNHostView>

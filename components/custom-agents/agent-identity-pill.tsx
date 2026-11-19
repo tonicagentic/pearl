@@ -113,11 +113,26 @@ function halfPaths(
   }
 }
 
+const STATIC_JAW = `0%, 100% { transform: none; }`;
+
+function bounceLiftPx(talk: AgentMarkTalk, width: number): number {
+  switch (talk) {
+    case "lift":
+      return Math.max(4, Math.round(width * 0.16));
+    case "chatter":
+      return Math.max(3, Math.round(width * 0.08));
+    case "hinge":
+    default:
+      return Math.max(5, Math.round(width * 0.18));
+  }
+}
+
+/** All talk styles: crown bounces up; jaw stays static. */
 function talkKeyframes(
   talk: AgentMarkTalk,
   width: number,
 ): { readonly crown: string; readonly jaw: string; readonly duration: string } {
-  const liftPx = Math.max(4, Math.round(width * 0.16));
+  const liftPx = bounceLiftPx(talk, width);
   switch (talk) {
     case "lift":
       return {
@@ -127,48 +142,33 @@ function talkKeyframes(
           28% { transform: translateY(-${Math.round(liftPx * 0.2)}px) rotate(-1deg); }
           36% { transform: translateY(-${Math.round(liftPx * 0.7)}px) rotate(-3deg); }
         `,
-        jaw: `
-          0%, 100% { transform: none; }
-        `,
+        jaw: STATIC_JAW,
         duration: "3.2s",
       };
     case "chatter":
       return {
         crown: `
-          0%, 70%, 100% { transform: rotate(0deg); }
-          8% { transform: rotate(-8deg); }
-          14% { transform: rotate(-1deg); }
-          20% { transform: rotate(-7deg); }
-          26% { transform: rotate(0deg); }
-          32% { transform: rotate(-5deg); }
-          38% { transform: rotate(0deg); }
+          0%, 70%, 100% { transform: translateY(0); }
+          8% { transform: translateY(-${liftPx}px); }
+          14% { transform: translateY(-${Math.round(liftPx * 0.15)}px); }
+          20% { transform: translateY(-${Math.round(liftPx * 0.85)}px); }
+          26% { transform: translateY(0); }
+          32% { transform: translateY(-${Math.round(liftPx * 0.55)}px); }
+          38% { transform: translateY(0); }
         `,
-        jaw: `
-          0%, 70%, 100% { transform: rotate(0deg); }
-          8% { transform: rotate(4deg); }
-          14% { transform: rotate(0.5deg); }
-          20% { transform: rotate(3.5deg); }
-          26% { transform: rotate(0deg); }
-          32% { transform: rotate(2.5deg); }
-          38% { transform: rotate(0deg); }
-        `,
+        jaw: STATIC_JAW,
         duration: "1.6s",
       };
     case "hinge":
     default:
       return {
         crown: `
-          0%, 55%, 100% { transform: rotate(0deg); }
-          12%, 18% { transform: rotate(-12deg); }
-          28% { transform: rotate(-3deg); }
-          36% { transform: rotate(-9deg); }
+          0%, 55%, 100% { transform: translateY(0); }
+          12%, 18% { transform: translateY(-${liftPx}px); }
+          28% { transform: translateY(-${Math.round(liftPx * 0.2)}px); }
+          36% { transform: translateY(-${Math.round(liftPx * 0.7)}px); }
         `,
-        jaw: `
-          0%, 55%, 100% { transform: rotate(0deg); }
-          12%, 18% { transform: rotate(6deg); }
-          28% { transform: rotate(1deg); }
-          36% { transform: rotate(4deg); }
-        `,
+        jaw: STATIC_JAW,
         duration: "3.2s",
       };
   }
@@ -178,7 +178,7 @@ function burstKeyframes(
   talk: AgentMarkTalk,
   width: number,
 ): { readonly crown: string; readonly jaw: string; readonly duration: string } {
-  const liftPx = Math.max(4, Math.round(width * 0.16));
+  const liftPx = bounceLiftPx(talk, width);
   switch (talk) {
     case "lift":
       return {
@@ -187,44 +187,36 @@ function burstKeyframes(
           40% { transform: translateY(-${liftPx}px) rotate(-4deg); }
           100% { transform: translateY(0) rotate(0deg); }
         `,
-        jaw: `0%, 100% { transform: none; }`,
+        jaw: STATIC_JAW,
         duration: "0.45s",
       };
     case "chatter":
       return {
         crown: `
-          0% { transform: rotate(0deg); }
-          25% { transform: rotate(-8deg); }
-          45% { transform: rotate(-1deg); }
-          65% { transform: rotate(-7deg); }
-          100% { transform: rotate(0deg); }
+          0% { transform: translateY(0); }
+          25% { transform: translateY(-${liftPx}px); }
+          45% { transform: translateY(-${Math.round(liftPx * 0.15)}px); }
+          65% { transform: translateY(-${Math.round(liftPx * 0.85)}px); }
+          100% { transform: translateY(0); }
         `,
-        jaw: `
-          0% { transform: rotate(0deg); }
-          25% { transform: rotate(4deg); }
-          45% { transform: rotate(0.5deg); }
-          65% { transform: rotate(3.5deg); }
-          100% { transform: rotate(0deg); }
-        `,
+        jaw: STATIC_JAW,
         duration: "0.35s",
       };
     case "hinge":
     default:
       return {
         crown: `
-          0% { transform: rotate(0deg); }
-          40% { transform: rotate(-12deg); }
-          100% { transform: rotate(0deg); }
+          0% { transform: translateY(0); }
+          40% { transform: translateY(-${liftPx}px); }
+          100% { transform: translateY(0); }
         `,
-        jaw: `
-          0% { transform: rotate(0deg); }
-          40% { transform: rotate(6deg); }
-          100% { transform: rotate(0deg); }
-        `,
+        jaw: STATIC_JAW,
         duration: "0.45s",
       };
   }
 }
+
+export type AgentMarkEyeMotion = "idle" | "off";
 
 /** Solid Canadian-style head mark (Terrance/Phillip default). */
 export function AgentAccentMark({
@@ -232,6 +224,7 @@ export function AgentAccentMark({
   markShape = DEFAULT_AGENT_MARK_SHAPE,
   markTalk = DEFAULT_AGENT_MARK_TALK,
   motion = "burst",
+  eyeMotion = "off",
   className,
   size = "sm",
   heightRatio = DEFAULT_AGENT_MARK_HEIGHT_RATIO,
@@ -240,14 +233,16 @@ export function AgentAccentMark({
   readonly markShape?: AgentMarkShape;
   readonly markTalk?: AgentMarkTalk;
   readonly motion?: AgentMarkMotion;
+  readonly eyeMotion?: AgentMarkEyeMotion;
   readonly className?: string;
   readonly size?: "sm" | "md" | "lg";
-  /** Height / width. Built-in Pearl uses a rounder ratio (~1.05). */
+  /** Height / width. Built-in Pearl uses 1 (circle). */
   readonly heightRatio?: number;
 }) {
   const reactId = useId().replace(/:/g, "");
   const [reduceMotion, setReduceMotion] = useState(false);
   const [bursting, setBursting] = useState(false);
+  const [eyesClosed, setEyesClosed] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -257,6 +252,62 @@ export function AgentAccentMark({
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
+  useEffect(() => {
+    if (eyeMotion !== "idle" || reduceMotion) {
+      setEyesClosed(false);
+      return;
+    }
+    let cancelled = false;
+    let waitTimer: ReturnType<typeof setTimeout> | undefined;
+    let blinkTimers: ReturnType<typeof setTimeout>[] = [];
+
+    const clearBlinkTimers = () => {
+      for (const t of blinkTimers) clearTimeout(t);
+      blinkTimers = [];
+    };
+
+    const scheduleNext = () => {
+      if (cancelled) return;
+      const delay = 2500 + Math.random() * 3500;
+      waitTimer = setTimeout(() => {
+        if (cancelled) return;
+        const doubleBlink = Math.random() < 0.28;
+        setEyesClosed(true);
+        blinkTimers.push(
+          setTimeout(() => {
+            if (cancelled) return;
+            setEyesClosed(false);
+            if (!doubleBlink) {
+              scheduleNext();
+              return;
+            }
+            blinkTimers.push(
+              setTimeout(() => {
+                if (cancelled) return;
+                setEyesClosed(true);
+                blinkTimers.push(
+                  setTimeout(() => {
+                    if (cancelled) return;
+                    setEyesClosed(false);
+                    scheduleNext();
+                  }, 90),
+                );
+              }, 120),
+            );
+          }, 100),
+        );
+      }, delay);
+    };
+
+    scheduleNext();
+    return () => {
+      cancelled = true;
+      if (waitTimer) clearTimeout(waitTimer);
+      clearBlinkTimers();
+      setEyesClosed(false);
+    };
+  }, [eyeMotion, reduceMotion]);
+
   const width = size === "lg" ? 56 : size === "md" ? 24 : 16;
   const height = Math.round(width * heightRatio);
   const maxLift = Math.max(3, Math.round(width * 0.22));
@@ -265,10 +316,14 @@ export function AgentAccentMark({
   const mouthGap = Math.max(1.5, Math.round(width * MOUTH_GAP_RATIO));
   const topCut = mouthY - mouthGap / 2;
   const bottomCut = mouthY + mouthGap / 2;
-  const hingeX = Math.round(width * 0.12);
   const eyeColor = markEyeColor(accent);
+  const eyeCxL = width * 0.4;
+  const eyeCxR = width * 0.6;
+  const eyeCy = maxLift + topCut * 0.48;
   const eyeRx = Math.max(1.1, width * 0.045);
   const eyeRy = Math.max(2.2, width * 0.09);
+  const closedHalf = Math.max(2.2, width * 0.07);
+  const closedStroke = Math.max(1.2, width * 0.028);
   const isOval = markShape === "oval";
   const paths = isOval
     ? { top: "", bottom: "" }
@@ -324,12 +379,7 @@ export function AgentAccentMark({
               </clipPath>
             </defs>
           ) : null}
-          <g
-            className={animating ? jawClass : undefined}
-            style={{
-              transformOrigin: `${hingeX}px ${mouthY + maxLift}px`,
-            }}
-          >
+          <g className={animating ? jawClass : undefined}>
             {isOval ? (
               <ellipse
                 cx={width / 2}
@@ -350,7 +400,7 @@ export function AgentAccentMark({
           <g
             className={animating ? crownClass : undefined}
             style={{
-              transformOrigin: `${hingeX}px ${mouthY + maxLift}px`,
+              transformOrigin: `${width / 2}px ${maxLift + topCut}px`,
             }}
           >
             {isOval ? (
@@ -369,20 +419,45 @@ export function AgentAccentMark({
                 transform={`translate(0 ${maxLift})`}
               />
             )}
-            <ellipse
-              cx={width * 0.4}
-              cy={maxLift + topCut * 0.48}
-              rx={eyeRx}
-              ry={eyeRy}
-              fill={eyeColor}
-            />
-            <ellipse
-              cx={width * 0.6}
-              cy={maxLift + topCut * 0.48}
-              rx={eyeRx}
-              ry={eyeRy}
-              fill={eyeColor}
-            />
+            {eyesClosed ? (
+              <>
+                <line
+                  x1={eyeCxL - closedHalf}
+                  y1={eyeCy}
+                  x2={eyeCxL + closedHalf}
+                  y2={eyeCy}
+                  stroke={eyeColor}
+                  strokeWidth={closedStroke}
+                  strokeLinecap="round"
+                />
+                <line
+                  x1={eyeCxR - closedHalf}
+                  y1={eyeCy}
+                  x2={eyeCxR + closedHalf}
+                  y2={eyeCy}
+                  stroke={eyeColor}
+                  strokeWidth={closedStroke}
+                  strokeLinecap="round"
+                />
+              </>
+            ) : (
+              <>
+                <ellipse
+                  cx={eyeCxL}
+                  cy={eyeCy}
+                  rx={eyeRx}
+                  ry={eyeRy}
+                  fill={eyeColor}
+                />
+                <ellipse
+                  cx={eyeCxR}
+                  cy={eyeCy}
+                  rx={eyeRx}
+                  ry={eyeRy}
+                  fill={eyeColor}
+                />
+              </>
+            )}
           </g>
         </svg>
       </span>
