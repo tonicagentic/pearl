@@ -6,15 +6,14 @@ import {
 } from "react";
 import { AppState, Platform, Pressable, View } from "react-native";
 import { Stack, router, useFocusEffect } from "expo-router";
-import { FolderIcon, PlusIcon, UserIcon } from "lucide-react-native";
+import { ClockIcon, FolderIcon, PlusIcon, UserIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
+import { ChatScreen } from "@/components/chat-screen";
 import { HistoryScreen } from "@/components/home/app-drawer";
 import { CreateAgentModal } from "@/components/home/create-agent-modal";
-import {
-  HOME_COMPOSE_FAB_CLEARANCE,
-  HomeComposeFab,
-} from "@/components/home/home-composer-dock";
+import type { HomeTab } from "@/components/home/home-tab";
+import { HomeTabSwitcher } from "@/components/home/home-tab-switcher";
 import {
   SIGN_IN_CARD_CLEARANCE,
   SignInForNewChatCard,
@@ -30,8 +29,8 @@ import { initials as viewerInitials } from "@/src/initials";
 const IS_IOS = Platform.OS === "ios";
 
 /**
- * Mail-style home: Profile left; Workspaces / New agent right.
- * History lives on Pearl chat threads.
+ * Mail-style home: Profile left; Pearl|Agents switcher; Workspaces / New agent right.
+ * Pearl tab embeds a new-chat composer with keyboard open.
  */
 export function MailHomeScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
@@ -50,51 +49,71 @@ export function MailHomeScreen() {
   }, [isAnonymous]);
   const { chats, newChat, selectChat, reloadChats } = useChats();
 
+  const [homeTab, setHomeTab] = useState<HomeTab>("pearl");
   const [createAgentOpen, setCreateAgentOpen] = useState(false);
   const homeFocusedRef = useRef(false);
+  const homeTabRef = useRef(homeTab);
+  homeTabRef.current = homeTab;
+  const billingReadyRef = useRef(billingReady);
+  billingReadyRef.current = billingReady;
+  const reloadChatsRef = useRef(reloadChats);
+  reloadChatsRef.current = reloadChats;
+  const newChatRef = useRef(newChat);
+  newChatRef.current = newChat;
+  // Pearl tab = fresh compose + keyboard. Armed while the draft is live so
+  // callback identity churn does not wipe mid-compose.
+  const pearlComposeArmedRef = useRef(false);
+  const showAgentsPlus = homeTab === "agents" && !isAnonymous;
+  const showPearlHistory = homeTab === "pearl";
+
+  const armPearlCompose = useCallback(() => {
+    if (pearlComposeArmedRef.current) return;
+    pearlComposeArmedRef.current = true;
+    newChatRef.current();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       homeFocusedRef.current = true;
-      void reloadChats({ silent: true });
+      void reloadChatsRef.current({ silent: true });
+      // Returning to home on Pearl always starts a fresh draft.
+      if (homeTabRef.current === "pearl" && billingReadyRef.current) {
+        pearlComposeArmedRef.current = false;
+        armPearlCompose();
+      }
       return () => {
         homeFocusedRef.current = false;
+        pearlComposeArmedRef.current = false;
       };
-    }, [reloadChats]),
+    }, [armPearlCompose]),
   );
 
   useEffect(() => {
     const onChange = (next: string) => {
       if (next === "active" && homeFocusedRef.current) {
-        void reloadChats({ silent: true });
+        void reloadChatsRef.current({ silent: true });
       }
     };
     const subscription = AppState.addEventListener("change", onChange);
     return () => subscription.remove();
-  }, [reloadChats]);
+  }, []);
+
+  // Agents → Pearl while home stays focused (focus effect does not re-fire).
+  useEffect(() => {
+    if (homeTab !== "pearl" || !billingReady) {
+      pearlComposeArmedRef.current = false;
+      return;
+    }
+    if (!homeFocusedRef.current) return;
+    armPearlCompose();
+  }, [armPearlCompose, billingReady, homeTab]);
 
   const openChat = useCallback(() => {
     router.push("/chat");
   }, []);
 
   const guestHasThread = isAnonymous && chats.length > 0;
-  const listBottomInset = guestHasThread
-    ? SIGN_IN_CARD_CLEARANCE
-    : HOME_COMPOSE_FAB_CLEARANCE;
-
-  const openNewChat = useCallback(() => {
-    if (!billingReady) return;
-    // Guests get a single thread. Ask Pearl reopens it instead of starting another.
-    const existing = isAnonymous ? chats[0] : undefined;
-    if (existing) {
-      void selectChat(existing.id).then((ok) => {
-        if (ok) router.push("/chat");
-      });
-      return;
-    }
-    newChat();
-    router.push("/chat");
-  }, [billingReady, chats, isAnonymous, newChat, selectChat]);
+  const agentsBottomInset = guestHasThread ? SIGN_IN_CARD_CLEARANCE : 24;
 
   const openCreateAgent = useCallback(() => {
     if (!billingReady || isAnonymous) return;
@@ -105,9 +124,14 @@ export function MailHomeScreen() {
     router.push("/workspaces");
   }, []);
 
+  const openHistory = useCallback(() => {
+    router.push("/history");
+  }, []);
+
   const onAgentCreated = useCallback(
     (agent: CustomAgentDto) => {
       setCreateAgentOpen(false);
+      setHomeTab("agents");
       void selectChat(agent.chatId).then((ok) => {
         if (ok) router.push("/chat");
       });
@@ -125,6 +149,9 @@ export function MailHomeScreen() {
           headerTransparent: IS_IOS,
           headerTintColor: foregroundColor,
           headerStyle: IS_IOS ? undefined : { backgroundColor },
+          headerTitle: () => (
+            <HomeTabSwitcher tab={homeTab} onChange={setHomeTab} />
+          ),
           headerLeft: IS_IOS
             ? undefined
             : () => (
@@ -163,6 +190,16 @@ export function MailHomeScreen() {
             ? undefined
             : () => (
                 <View className="flex-row items-center">
+                  {showPearlHistory ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="History"
+                      className="h-10 w-10 items-center justify-center"
+                      onPress={openHistory}
+                    >
+                      <Icon as={ClockIcon} className="size-5 text-foreground" />
+                    </Pressable>
+                  ) : null}
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Workspaces"
@@ -171,7 +208,7 @@ export function MailHomeScreen() {
                   >
                     <Icon as={FolderIcon} className="size-5 text-foreground" />
                   </Pressable>
-                  {!isAnonymous ? (
+                  {showAgentsPlus ? (
                     <>
                       <View style={{ width: 8 }} />
                       <Pressable
@@ -231,17 +268,23 @@ export function MailHomeScreen() {
           </Stack.Toolbar>
           <Stack.Toolbar placement="right">
             <Stack.Toolbar.Button
+              icon="clock"
+              accessibilityLabel="History"
+              onPress={openHistory}
+              hidden={!showPearlHistory}
+            />
+            <Stack.Toolbar.Button
               icon="folder"
               accessibilityLabel="Workspaces"
               onPress={openWorkspaces}
             />
-            <Stack.Toolbar.Spacer width={8} hidden={isAnonymous} />
+            <Stack.Toolbar.Spacer width={8} hidden={!showAgentsPlus} />
             <Stack.Toolbar.Button
               icon="plus"
               accessibilityLabel="New agent"
               onPress={openCreateAgent}
               separateBackground
-              hidden={isAnonymous}
+              hidden={!showAgentsPlus}
             />
           </Stack.Toolbar>
         </>
@@ -249,18 +292,19 @@ export function MailHomeScreen() {
       <View style={{ flex: 1, zIndex: 0, overflow: "hidden" }}>
         {!billingReady ? (
           <BillingGateScreen onReady={markBillingReady} />
+        ) : homeTab === "pearl" ? (
+          <ChatScreen embedded />
         ) : (
           <HistoryScreen
+            tab="agents"
             onOpenChat={openChat}
-            bottomInset={listBottomInset}
+            bottomInset={agentsBottomInset}
           />
         )}
       </View>
 
-      {billingReady && guestHasThread ? <SignInForNewChatCard /> : null}
-
-      {billingReady && !guestHasThread ? (
-        <HomeComposeFab onPress={openNewChat} />
+      {billingReady && homeTab === "pearl" && guestHasThread ? (
+        <SignInForNewChatCard />
       ) : null}
 
       <CreateAgentModal

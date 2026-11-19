@@ -85,12 +85,18 @@ const COMPUTER_SHEET_SNAP_POINTS = ["92%"] as const;
 /**
  * Nested chat thread (route `/chat`): assistant-ui Thread over the eve session.
  * System back / swipe-pop returns to home.
+ *
+ * `embedded` renders the same thread under the Home Pearl tab (no chat
+ * header/toolbar — Home owns the nav chrome) with immediate composer focus.
  */
 export function ChatScreen({
   chromeRevealed = true,
+  embedded = false,
 }: {
   /** False while the auth→composer morph overlay owns the transition. */
   chromeRevealed?: boolean;
+  /** Home Pearl tab: skip stack header/toolbar; autofocus without waiting for push. */
+  embedded?: boolean;
 } = {}) {
   // The safe-area container is a native codegen view, so uniwind's className
   // binding cannot reach it; paint the theme background through style instead
@@ -138,8 +144,8 @@ export function ChatScreen({
   const tabCountRef = useRef(tabs.length);
   const navigation = useNavigation();
   // Defer new-chat autofocus until the stack push finishes so keyboard +
-  // composer morph do not fight the transition.
-  const [navSettled, setNavSettled] = useState(false);
+  // composer morph do not fight the transition. Embedded Pearl tab skips this.
+  const [navSettled, setNavSettled] = useState(embedded);
   /** Queued while the Computer sheet closes — RN Modal can't beat the sheet. */
   const pendingCanvasRef = useRef<{
     readonly id?: string;
@@ -228,6 +234,10 @@ export function ChatScreen({
   }, [isAnonymous, signupOpen]);
 
   useEffect(() => {
+    if (embedded) {
+      setNavSettled(true);
+      return;
+    }
     // Only gate the new-chat autofocus path.
     if (!(Platform.OS === "ios" && activeChatId === null && chromeRevealed)) {
       return;
@@ -252,7 +262,13 @@ export function ChatScreen({
       unsub();
       clearTimeout(fallback);
     };
-  }, [navigation, activeChatId, chromeRevealed, newChatEntry]);
+  }, [embedded, navigation, activeChatId, chromeRevealed, newChatEntry]);
+
+  // Pearl tab should always be a Pearl draft — clear custom-agent context.
+  useEffect(() => {
+    if (!embedded) return;
+    if (activeCustomAgent != null) newChat();
+  }, [embedded, activeCustomAgent, newChat]);
 
   // Auto-present Computer for browser/non-text tabs. Text write_file claims
   // stay as an inline Writing card until the user opens the canvas.
@@ -1189,109 +1205,111 @@ export function ChatScreen({
   );
   return (
     <StackScreen>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: "",
-          headerBackButtonDisplayMode: "minimal",
-          // Thread content draws under the bar and pads itself so the first
-          // message rests below the nav; scrolling can fade under it.
-          headerTransparent: Platform.OS === "ios",
-          headerStyle: Platform.OS === "web" ? { backgroundColor } : undefined,
-          // Native needs this too — without it the system back item can flash
-          // the default (light) tint for a frame on push.
-          headerTintColor: foregroundColor,
-          headerTitleStyle:
-            Platform.OS === "web" ? { color: foregroundColor } : undefined,
-          headerTitle: () => (
-            <ThreadIdentityMenu
-              name={activeCustomAgent?.name ?? "Pearl"}
-              accent={activeCustomAgent?.accent ?? PEARL_IDENTITY_ACCENT}
-              markShape={activeCustomAgent?.markShape}
-              markTalk={activeCustomAgent?.markTalk}
-              markBrows={activeCustomAgent?.markBrows}
-              markGaze={activeCustomAgent?.markGaze}
-              heightRatio={
-                activeCustomAgent ? undefined : PEARL_MARK_HEIGHT_RATIO
-              }
-              projectLabel={projectLabel}
-              hasProject={Boolean(activeProjectId)}
-              canManageThread={Boolean(activeChatId)}
-              showAgentSettings={Boolean(activeCustomAgent)}
-              onAgentSettings={
-                activeCustomAgent ? openAgentSettings : undefined
-              }
-              onAddOrChangeProject={openProjectPicker}
-              onRemoveProject={clearProject}
-              onViewCost={openCost}
-              onDelete={confirmDelete}
-              allowAgentSwitch={allowAgentSwitch}
-              agents={switchableAgents}
-              currentAgentId={activeCustomAgent?.id ?? null}
-              onSelectPearl={selectPearlAgent}
-              onSelectAgent={selectCustomAgent}
-            />
-          ),
-          headerRight:
-            Platform.OS === "web"
-              ? () => (
-                  <View className="flex-row items-center">
-                    {activeCustomAgent ? null : (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="History"
-                        className="h-10 w-10 items-center justify-center"
-                        onPress={openHistory}
-                      >
-                        <Icon
-                          as={ClockIcon}
-                          className="size-5 text-foreground"
-                        />
-                      </Pressable>
-                    )}
-                    {activeChatId ? (
-                      <>
-                        {activeCustomAgent ? null : <View className="w-2" />}
+      {embedded ? null : (
+        <Stack.Screen
+          options={{
+            headerShown: true,
+            title: "",
+            headerBackButtonDisplayMode: "minimal",
+            // Thread content draws under the bar and pads itself so the first
+            // message rests below the nav; scrolling can fade under it.
+            headerTransparent: Platform.OS === "ios",
+            headerStyle: Platform.OS === "web" ? { backgroundColor } : undefined,
+            // Native needs this too — without it the system back item can flash
+            // the default (light) tint for a frame on push.
+            headerTintColor: foregroundColor,
+            headerTitleStyle:
+              Platform.OS === "web" ? { color: foregroundColor } : undefined,
+            headerTitle: () => (
+              <ThreadIdentityMenu
+                name={activeCustomAgent?.name ?? "Pearl"}
+                accent={activeCustomAgent?.accent ?? PEARL_IDENTITY_ACCENT}
+                markShape={activeCustomAgent?.markShape}
+                markTalk={activeCustomAgent?.markTalk}
+                markBrows={activeCustomAgent?.markBrows}
+                markGaze={activeCustomAgent?.markGaze}
+                heightRatio={
+                  activeCustomAgent ? undefined : PEARL_MARK_HEIGHT_RATIO
+                }
+                projectLabel={projectLabel}
+                hasProject={Boolean(activeProjectId)}
+                canManageThread={Boolean(activeChatId)}
+                showAgentSettings={Boolean(activeCustomAgent)}
+                onAgentSettings={
+                  activeCustomAgent ? openAgentSettings : undefined
+                }
+                onAddOrChangeProject={openProjectPicker}
+                onRemoveProject={clearProject}
+                onViewCost={openCost}
+                onDelete={confirmDelete}
+                allowAgentSwitch={allowAgentSwitch}
+                agents={switchableAgents}
+                currentAgentId={activeCustomAgent?.id ?? null}
+                onSelectPearl={selectPearlAgent}
+                onSelectAgent={selectCustomAgent}
+              />
+            ),
+            headerRight:
+              Platform.OS === "web"
+                ? () => (
+                    <View className="flex-row items-center">
+                      {activeCustomAgent ? null : (
                         <Pressable
                           accessibilityRole="button"
-                          accessibilityLabel="New chat"
+                          accessibilityLabel="History"
                           className="h-10 w-10 items-center justify-center"
-                          onPress={openCompose}
+                          onPress={openHistory}
                         >
                           <Icon
-                            as={SquarePenIcon}
+                            as={ClockIcon}
                             className="size-5 text-foreground"
                           />
                         </Pressable>
-                        {activeCustomAgent ? null : (
-                          <>
-                            <View className="w-2" />
-                            <Pressable
-                              accessibilityRole="button"
-                              accessibilityLabel="Computer"
-                              accessibilityState={{ selected: computerOpen }}
-                              className="h-10 w-10 items-center justify-center"
-                              onPress={toggleComputer}
-                            >
-                              <Icon
-                                as={MonitorIcon}
-                                className={
-                                  computerOpen
-                                    ? "size-5 text-foreground"
-                                    : "size-5 text-muted-foreground"
-                                }
-                              />
-                            </Pressable>
-                          </>
-                        )}
-                      </>
-                    ) : null}
-                  </View>
-                )
-              : undefined,
-        }}
-      />
-      {Platform.OS !== "web" ? (
+                      )}
+                      {activeChatId ? (
+                        <>
+                          {activeCustomAgent ? null : <View className="w-2" />}
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="New chat"
+                            className="h-10 w-10 items-center justify-center"
+                            onPress={openCompose}
+                          >
+                            <Icon
+                              as={SquarePenIcon}
+                              className="size-5 text-foreground"
+                            />
+                          </Pressable>
+                          {activeCustomAgent ? null : (
+                            <>
+                              <View className="w-2" />
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Computer"
+                                accessibilityState={{ selected: computerOpen }}
+                                className="h-10 w-10 items-center justify-center"
+                                onPress={toggleComputer}
+                              >
+                                <Icon
+                                  as={MonitorIcon}
+                                  className={
+                                    computerOpen
+                                      ? "size-5 text-foreground"
+                                      : "size-5 text-muted-foreground"
+                                  }
+                                />
+                              </Pressable>
+                            </>
+                          )}
+                        </>
+                      ) : null}
+                    </View>
+                  )
+                : undefined,
+          }}
+        />
+      )}
+      {!embedded && Platform.OS !== "web" ? (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button
             icon="clock"
@@ -1338,7 +1356,7 @@ export function ChatScreen({
                     <EveAuthorization />
                     <Thread
                       autoFocus={
-                        Platform.OS === "ios" &&
+                        (embedded || Platform.OS === "ios") &&
                         activeChatId === null &&
                         chromeRevealed &&
                         navSettled &&

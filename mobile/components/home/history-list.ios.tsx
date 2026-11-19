@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import {
   Host,
@@ -36,7 +36,9 @@ import {
   pearlMarkMetrics,
 } from "@/components/custom-agents/agent-mark";
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
+import type { HomeTab } from "@/components/home/home-tab";
 import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
+import { Text as AppText } from "@/components/ui/text";
 import { useChats } from "@/src/chat-context";
 import {
   fetchCustomAgents,
@@ -58,18 +60,22 @@ import {
 
 /** Circular eye-mark size for Agents list rows (Grok bots). */
 const AGENT_MARK_SIZE = 40;
+/** Pearl tab hero mark. */
+const PEARL_HERO_SIZE = 88;
 /** Shared horizontal inset for agent/nav rows. */
 const ROW_LEADING = 20;
 
 export type { HistoryChatActionHandlers } from "@/components/home/history-list";
 
 /**
- * iOS home: plain List — Pearl first (same row style as agents), then custom agents.
+ * iOS home body: Pearl compose surface, or Agents list.
  */
 export function HistoryListIOS({
+  tab,
   onOpenChat,
   bottomInset = 0,
 }: {
+  readonly tab: HomeTab;
   readonly onOpenChat: () => void;
   readonly actions?: HistoryChatActionHandlers;
   readonly bottomInset?: number;
@@ -114,10 +120,46 @@ export function HistoryListIOS({
   );
 
   const openPearl = useCallback(() => {
-    // Fresh Pearl thread — don't reopen a custom-agent chat that happens to be first.
     newChat();
     onOpenChat();
   }, [newChat, onOpenChat]);
+
+  if (tab === "pearl") {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingBottom: bottomInset,
+        }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Pearl"
+          className="items-center active:opacity-80"
+          style={{ gap: 10 }}
+          onPress={openPearl}
+        >
+          <AgentMark
+            accent={PEARL_IDENTITY_ACCENT}
+            size={PEARL_HERO_SIZE}
+            markShape="oval"
+            markTalk="hinge"
+            markBrows={DEFAULT_AGENT_MARK_BROWS}
+            markGaze={DEFAULT_AGENT_MARK_GAZE}
+            heightRatio={PEARL_MARK_HEIGHT_RATIO}
+            motion="idle"
+            eyeMotion="idle"
+          />
+          <AppText variant="label" weight="semibold">
+            Pearl
+          </AppText>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View
@@ -137,10 +179,6 @@ export function HistoryListIOS({
           ]}
         >
           <Section>
-            <PearlRow
-              rowBackground={backgroundColor}
-              onOpen={openPearl}
-            />
             {agents !== null ? (
               <List.ForEach
                 data={orderedAgents}
@@ -230,55 +268,6 @@ function AgentListMark({
   );
 }
 
-/** Pearl as a normal agent-style list row (top of the list). */
-function PearlRow({
-  rowBackground,
-  onOpen,
-}: {
-  readonly rowBackground: string;
-  readonly onOpen: () => void;
-}) {
-  return (
-    <HStack
-      spacing={12}
-      alignment="center"
-      modifiers={[
-        listRowInsets({
-          top: 10,
-          bottom: 10,
-          leading: ROW_LEADING,
-          trailing: ROW_LEADING,
-        }),
-        listRowBackground(rowBackground),
-        listRowSeparator("hidden"),
-        ...FULL_ROW_HIT,
-        onTapGesture(onOpen),
-        accessibilityLabel("Pearl"),
-      ]}
-    >
-      <AgentListMark
-        accent={PEARL_IDENTITY_ACCENT}
-        markShape="oval"
-        markTalk="hinge"
-        markBrows={DEFAULT_AGENT_MARK_BROWS}
-        markGaze={DEFAULT_AGENT_MARK_GAZE}
-        heightRatio={PEARL_MARK_HEIGHT_RATIO}
-      />
-      <VStack spacing={1} alignment="leading">
-        <SwiftText
-          modifiers={[
-            lineLimit(1),
-            font({ size: 16, weight: "semibold" }),
-          ]}
-        >
-          Pearl
-        </SwiftText>
-      </VStack>
-      <Spacer />
-    </HStack>
-  );
-}
-
 function AgentRow({
   agent,
   rowBackground,
@@ -353,4 +342,3 @@ function AgentRow({
     </HStack>
   );
 }
-
