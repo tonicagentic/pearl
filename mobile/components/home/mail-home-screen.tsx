@@ -1,19 +1,15 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
-import { Alert, AppState, Platform, Pressable, View } from "react-native";
+import { AppState, Platform, Pressable, View } from "react-native";
 import { Stack, router, useFocusEffect } from "expo-router";
 import { UserIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
-import {
-  HistoryScreen,
-  type HistoryChatActionHandlers,
-} from "@/components/home/app-drawer";
+import { HistoryScreen } from "@/components/home/app-drawer";
 import { CreateAgentModal } from "@/components/home/create-agent-modal";
 import {
   HOME_COMPOSE_FAB_CLEARANCE,
@@ -23,24 +19,19 @@ import {
   SIGN_IN_CARD_CLEARANCE,
   SignInForNewChatCard,
 } from "@/components/home/sign-in-for-new-chat-card";
-import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
-import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import { chatListPresence } from "@/src/chat-presence";
-import { getChat, type ChatListItem } from "@/src/chats-client";
 import { initials as viewerInitials } from "@/src/initials";
 import type { CustomAgentDto } from "@/src/custom-agents-client";
-import type { ThreadTraceEvent } from "@/src/thread-trace";
 
 const IS_IOS = Platform.OS === "ios";
 
 /**
- * Mail-style home: Profile, bottom-right compose, Agents, Recents, and a
- * Workspaces button that opens the list screen.
+ * Mail-style home: Profile, Agents, and History / Workspaces buttons.
  */
 export function MailHomeScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
@@ -61,16 +52,10 @@ export function MailHomeScreen() {
     chats,
     chatsReady,
     newChat,
-    deleteChat,
-    renameChat,
-    setChatProject,
     selectChat,
     reloadChats,
   } = useChats();
 
-  const [costOpen, setCostOpen] = useState(false);
-  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
-  const [projectTargetId, setProjectTargetId] = useState<string | null>(null);
   const [createAgentOpen, setCreateAgentOpen] = useState(false);
   const homeFocusedRef = useRef(false);
   // Cold-start once: open new chat by default, or home when something is unread.
@@ -175,111 +160,6 @@ export function MailHomeScreen() {
     selectChat,
   ]);
 
-  const promptRename = useCallback(
-    (chat: ChatListItem) => {
-      if (Platform.OS === "ios" && typeof Alert.prompt === "function") {
-        Alert.prompt(
-          "Rename chat",
-          undefined,
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Save",
-              onPress: (value?: string) => {
-                const next = value?.trim();
-                if (!next || next === chat.title) return;
-                void renameChat(chat.id, next).catch(() => {
-                  Alert.alert(
-                    "Could not rename",
-                    "Check your connection and try again.",
-                  );
-                });
-              },
-            },
-          ],
-          "plain-text",
-          chat.title,
-        );
-        return;
-      }
-      Alert.alert("Rename", "Renaming is available on iOS.");
-    },
-    [renameChat],
-  );
-
-  const confirmDelete = useCallback(
-    (chat: ChatListItem) => {
-      Alert.alert("Delete thread?", "This cannot be undone.", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            void deleteChat(chat.id).catch(() => {
-              Alert.alert(
-                "Could not delete",
-                "Check your connection and try again.",
-              );
-            });
-          },
-        },
-      ]);
-    },
-    [deleteChat],
-  );
-
-  const [costEvents, setCostEvents] = useState<readonly ThreadTraceEvent[]>(
-    [],
-  );
-
-  const openCost = useCallback((chat: ChatListItem) => {
-    void getChat(chat.id)
-      .then((full) => {
-        setCostEvents((full?.events ?? []) as readonly ThreadTraceEvent[]);
-        setCostOpen(true);
-      })
-      .catch(() => {
-        Alert.alert(
-          "Could not open cost",
-          "Check your connection and try again.",
-        );
-      });
-  }, []);
-
-  const openProjectPicker = useCallback((chat: ChatListItem) => {
-    setProjectTargetId(chat.id);
-    setProjectPickerOpen(true);
-  }, []);
-
-  const removeFromProject = useCallback(
-    (chat: ChatListItem) => {
-      void setChatProject(chat.id, null).catch(() => {
-        Alert.alert(
-          "Could not update project",
-          "Check your connection and try again.",
-        );
-      });
-    },
-    [setChatProject],
-  );
-
-  const chatActions = useMemo<HistoryChatActionHandlers>(
-    () => ({
-      onRename: promptRename,
-      onViewCost: openCost,
-      onMoveToProject: openProjectPicker,
-      onRemoveFromProject: removeFromProject,
-      onDelete: confirmDelete,
-    }),
-    [
-      promptRename,
-      openCost,
-      openProjectPicker,
-      removeFromProject,
-      confirmDelete,
-    ],
-  );
-
   return (
     <View style={{ flex: 1, backgroundColor }}>
       <Stack.Screen
@@ -287,7 +167,6 @@ export function MailHomeScreen() {
           headerShown: true,
           title: "",
           headerShadowVisible: false,
-          // Let recent threads scroll under the profile chrome with soft edge fade.
           headerTransparent: IS_IOS,
           headerTintColor: foregroundColor,
           headerStyle: IS_IOS ? undefined : { backgroundColor },
@@ -337,8 +216,6 @@ export function MailHomeScreen() {
               Sign in
             </Stack.Toolbar.Button>
           ) : (
-            // Fixed square hit target so liquid glass forms a circle instead of
-            // a text-width pill around two-letter initials.
             <Stack.Toolbar.View>
               <Pressable
                 accessibilityRole="button"
@@ -373,7 +250,6 @@ export function MailHomeScreen() {
         ) : holdingLaunchHome ? null : (
           <HistoryScreen
             onOpenChat={openChat}
-            chatActions={chatActions}
             bottomInset={listBottomInset}
             onCreateAgent={isAnonymous ? undefined : openCreateAgent}
           />
@@ -388,37 +264,10 @@ export function MailHomeScreen() {
         <HomeComposeFab onPress={openNewChat} />
       ) : null}
 
-      <ThreadCostDrawer
-        open={costOpen}
-        events={costEvents}
-        onClose={() => {
-          setCostOpen(false);
-          setCostEvents([]);
-        }}
-      />
       <CreateAgentModal
         open={createAgentOpen}
         onClose={() => setCreateAgentOpen(false)}
         onCreated={onAgentCreated}
-      />
-      <ProjectPickerModal
-        open={projectPickerOpen}
-        onClose={() => {
-          setProjectPickerOpen(false);
-          setProjectTargetId(null);
-        }}
-        onSelect={(project) => {
-          const chatId = projectTargetId;
-          setProjectPickerOpen(false);
-          setProjectTargetId(null);
-          if (!chatId) return;
-          void setChatProject(chatId, project.id).catch(() => {
-            Alert.alert(
-              "Could not update project",
-              "Check your connection and try again.",
-            );
-          });
-        }}
       />
     </View>
   );

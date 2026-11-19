@@ -134,6 +134,14 @@ export default function HomeLayout() {
         }}
       />
       <Stack.Screen
+        name="history"
+        options={{
+          title: "History",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
         name="workspaces"
         options={{
           title: "Workspaces",

@@ -191,13 +191,6 @@ function AuthenticatedLayout() {
                       }}
                     />
                     <Stack.Screen
-                      name="history"
-                      options={{
-                        title: "History",
-                        headerShown: false,
-                      }}
-                    />
-                    <Stack.Screen
                       name="repos"
                       options={{ headerShown: false }}
                     />

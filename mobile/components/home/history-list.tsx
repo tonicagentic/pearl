@@ -11,7 +11,7 @@ export type HistoryChatActionHandlers = {
 /** Android / web stub — iOS uses `history-list.ios.tsx`. */
 export function HistoryListIOS(_props: {
   readonly onOpenChat: () => void;
-  readonly actions: HistoryChatActionHandlers;
+  readonly actions?: HistoryChatActionHandlers;
   readonly bottomInset?: number;
   readonly onCreateAgent?: () => void;
 }) {
