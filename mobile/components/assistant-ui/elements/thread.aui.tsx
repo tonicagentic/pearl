@@ -8,7 +8,6 @@ import {
   type ComposerChromeApi,
 } from "@/components/assistant-ui/elements/composer-chrome";
 import { ComposerOwnsHitlContext } from "@/components/assistant-ui/elements/composer-owns-hitl";
-import { ComposerModeModelPicker } from "@/components/mode-model-picker";
 import {
   composerControlHitSlop,
   groupedIconButtonHitSlop,
@@ -131,13 +130,16 @@ import {
   useKeyboardHandler,
 } from "react-native-keyboard-controller";
 import Animated, {
+  Easing,
   Extrapolation,
   interpolate,
   runOnJS,
+  useAnimatedReaction,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
   type SharedValue,
 } from "react-native-reanimated";
 
@@ -270,6 +272,11 @@ const COMPOSER_MIN_INPUT = COMPOSER_CHIP;
 const COMPOSER_COLLAPSED_INPUT_PAD_Y = (COMPOSER_MIN_INPUT - 22) / 2;
 const COMPOSER_EXPANDED_INPUT_MIN = 44;
 const COMPOSER_EXPANDED_INPUT_MAX = 192;
+/** Line-count changes ease instead of snapping the shell. */
+const COMPOSER_SIZE_TIMING = {
+  duration: 200,
+  easing: Easing.out(Easing.cubic),
+} as const;
 const COMPOSER_SHELL_STYLE = {
   borderRadius: COMPOSER_SHELL_RADIUS,
   borderCurve: "continuous",
@@ -310,12 +317,23 @@ function composerChromeProgress(
   keyboardHeight: number,
   stickyExpanded: number,
   span: number,
+  textExpanded = 0,
 ): number {
   "worklet";
   return Math.max(
     composerKeyboardProgress(keyboardHeight, span),
     stickyExpanded,
+    textExpanded,
   );
+}
+
+/** Placeholder is fully gone while the field crosses the model button. */
+function composerPlaceholderOpacity(progress: number): number {
+  "worklet";
+  if (progress < 0.5) {
+    return interpolate(progress, [0, 0.1], [1, 0], Extrapolation.CLAMP);
+  }
+  return interpolate(progress, [0.92, 1], [0, 1], Extrapolation.CLAMP);
 }
 
 const ThreadViewportContext = createContext<ThreadViewportStore>({
@@ -757,6 +775,7 @@ const ComposerDock: FC<{
       lifted,
       chromeApi?.stickyExpanded.value ?? 0,
       span,
+      chromeApi?.textExpanded.value ?? 0,
     );
     const keyboardProgress = composerKeyboardProgress(lifted, span);
     // Monotonic: tuck near the home indicator when closed, then a fixed
@@ -826,7 +845,9 @@ const IosKeyboardLayout: FC<{
   // Sticky is only for native menus stealing focus — keyboard height alone
   // drives the morph while the field is selected.
   const stickyExpanded = useSharedValue(0);
+  const textExpanded = useSharedValue(0);
   const liveActive = useSharedValue(0);
+  const keyboardDragging = useSharedValue(0);
   const stickyClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuHoldUntil = useRef(0);
 
@@ -883,14 +904,16 @@ const IosKeyboardLayout: FC<{
 
   const chromeApi = useMemo<ComposerChromeApi>(
     () => ({
+      textExpanded,
       stickyExpanded,
       liveActive,
+      keyboardDragging,
       pinExpanded,
       scheduleCollapse,
       collapseNow,
       setLiveActive,
     }),
-    [stickyExpanded, liveActive, pinExpanded, scheduleCollapse, collapseNow, setLiveActive],
+    [textExpanded, stickyExpanded, liveActive, keyboardDragging, pinExpanded, scheduleCollapse, collapseNow, setLiveActive],
   );
 
   useKeyboardHandler({
@@ -905,21 +928,28 @@ const IosKeyboardLayout: FC<{
     },
     onMove: (event) => {
       "worklet";
-      keyboardHeight.value = Math.max(0, event.height);
+      const next = Math.max(0, event.height);
+      // Hide the caret while the keyboard travels down. Showing it still
+      // animates upward, so a rising keyboard keeps the cursor.
+      if (next + 1 < keyboardHeight.value) keyboardDragging.value = 1;
+      keyboardHeight.value = next;
     },
     onInteractive: (event) => {
       "worklet";
-      keyboardHeight.value = Math.max(0, event.height);
+      const next = Math.max(0, event.height);
+      if (next + 1 < keyboardHeight.value) keyboardDragging.value = 1;
+      keyboardHeight.value = next;
       // Finger-drag dismiss collapses immediately and drops any menu hold.
       if (event.height < 40) runOnJS(collapseNow)();
     },
     onEnd: (event) => {
       "worklet";
       keyboardHeight.value = Math.max(0, event.height);
+      keyboardDragging.value = 0;
       // Do not latch sticky from keyboard motion — that left chrome stuck
       // expanded after dismiss. Menus pin explicitly via pinExpanded.
     },
-  }, [collapseNow, keyboardSpan]);
+  }, [collapseNow, keyboardDragging, keyboardSpan]);
   const spacerStyle = useAnimatedStyle(() => ({
     // Tracks interactive drag; composer dock morphs against the same value.
     height: Math.max(0, keyboardHeight.value),
@@ -1187,6 +1217,18 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
   // Short fields pass downward drags to the dismiss ScrollView; only scroll
   // the UITextView once text fills the expanded max height.
   const [inputScrolls, setInputScrolls] = useState(false);
+  const heightTarget = useRef(COMPOSER_EXPANDED_INPUT_MIN);
+  const textOpenTarget = useRef(0);
+  const settleHeight = (next: number) => {
+    if (!expandedHeight || Math.abs(heightTarget.current - next) < 1) return;
+    heightTarget.current = next;
+    expandedHeight.value = withTiming(next, COMPOSER_SIZE_TIMING);
+  };
+  const settleTextOpen = (open: number) => {
+    if (!chromeApi || textOpenTarget.current === open) return;
+    textOpenTarget.current = open;
+    chromeApi.textExpanded.value = withTiming(open, COMPOSER_SIZE_TIMING);
+  };
   useEffect(() => {
     if (storeText === publishedRef.current) {
       awaitingEchoRef.current = false;
@@ -1197,25 +1239,32 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
     awaitingEchoRef.current = false;
     setValue(storeText);
   }, [storeText]);
-  // Draft seeds / paste can land while the collapsed field is still narrow, so
-  // onContentSizeChange ignores them. Approximate height until a full-width
-  // measure runs (keyboard morph or a later edit).
+  // iOS reports the view bounds as content size and skips the event when a
+  // line is deleted. Count wrapped lines so the field can grow and shrink
+  // without chasing its own height.
   useEffect(() => {
     if (!expandedHeight) return;
     if (value.length === 0) {
-      if (expandedHeight.value !== COMPOSER_EXPANDED_INPUT_MIN) {
-        expandedHeight.value = COMPOSER_EXPANDED_INPUT_MIN;
-      }
+      settleHeight(COMPOSER_EXPANDED_INPUT_MIN);
+      settleTextOpen(0);
       setInputScrolls((current) => (current ? false : current));
       return;
     }
-    const lines = Math.max(1, value.split("\n").length);
+    const inputWidth = Math.max(160, windowWidth - COMPOSER_EDGE * 2 - 32);
+    const charsPerLine = Math.max(12, Math.floor(inputWidth / 8.4));
+    let lines = 0;
+    for (const line of value.split("\n")) {
+      lines += Math.max(1, Math.ceil(line.length / charsPerLine));
+    }
     const estimated = Math.min(
       COMPOSER_EXPANDED_INPUT_MAX,
       Math.max(COMPOSER_EXPANDED_INPUT_MIN, lines * 22 + 12),
     );
-    if (estimated > expandedHeight.value) expandedHeight.value = estimated;
-  }, [expandedHeight, value]);
+    settleHeight(estimated);
+    settleTextOpen(lines > 1 ? 1 : 0);
+    const atMax = estimated >= COMPOSER_EXPANDED_INPUT_MAX;
+    setInputScrolls((current) => (current === atMax ? current : atMax));
+  }, [expandedHeight, value, windowWidth, chromeApi]);
   const placeholderColor = Platform.OS === "ios"
     ? "accent-muted-foreground/85"
     : "accent-muted-foreground/60";
@@ -1225,11 +1274,24 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
       keyboardHeight?.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
       keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
+      chromeApi?.textExpanded.value ?? 0,
     );
     return {
       paddingTop: interpolate(progress, [0, 1], [COMPOSER_COLLAPSED_INPUT_PAD_Y, 8]),
       paddingBottom: interpolate(progress, [0, 1], [COMPOSER_COLLAPSED_INPUT_PAD_Y, 4]),
     };
+  });
+  const scheme = useColorScheme();
+  const placeholderInk = scheme === "dark" ? "rgba(235,235,245,0.62)" : "rgba(60,60,67,0.55)";
+  // Gone for the whole morph so it never sits on the model button, then back at rest.
+  const placeholderFade = useAnimatedStyle(() => {
+    const progress = composerChromeProgress(
+      keyboardHeight?.value ?? 0,
+      chromeApi?.stickyExpanded.value ?? 0,
+      keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
+      chromeApi?.textExpanded.value ?? 0,
+    );
+    return { opacity: composerPlaceholderOpacity(progress) };
   });
   // Native TextInput often ignores Tailwind type classes for the caret glyph /
   // placeholder — pin the message size so "Ask anything" matches thread prose.
@@ -1268,8 +1330,20 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
       nativeInput.current?.focus();
     });
   }, []);
+  const [hideCaret, setHideCaret] = useState(false);
+  const applyHideCaret = useCallback((hidden: boolean) => {
+    setHideCaret(hidden);
+  }, []);
+  useAnimatedReaction(
+    () => chromeApi?.keyboardDragging.value ?? 0,
+    (dragging, previous) => {
+      if (dragging === previous) return;
+      runOnJS(applyHideCaret)(dragging > 0);
+    },
+  );
 
   return Platform.OS === "ios" ? (
+    <>
     <AnimatedTextInput
       ref={nativeInput}
       value={value}
@@ -1287,9 +1361,8 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
         aui.composer.setText(next);
         if (next.length === 0) {
           setInputScrolls(false);
-          if (expandedHeight && expandedHeight.value !== COMPOSER_EXPANDED_INPUT_MIN) {
-            expandedHeight.value = COMPOSER_EXPANDED_INPUT_MIN;
-          }
+          settleHeight(COMPOSER_EXPANDED_INPUT_MIN);
+          settleTextOpen(0);
         }
       }}
       onContentSizeChange={(event) => {
@@ -1297,27 +1370,55 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
         // Empty field stays one line. A narrow collapsed frame wraps the
         // placeholder and reports a tall size that then collapses.
         if (value.length === 0) {
-          if (expandedHeight.value !== COMPOSER_EXPANDED_INPUT_MIN) {
-            expandedHeight.value = COMPOSER_EXPANDED_INPUT_MIN;
-          }
+          settleHeight(COMPOSER_EXPANDED_INPUT_MIN);
+          settleTextOpen(0);
           setInputScrolls((current) => (current ? false : current));
           return;
         }
         const { height, width } = event.nativeEvent.contentSize;
-        if (width > 0 && width < minExpandedMeasureWidth - 24) return;
-        const measured = Math.ceil(height) + 12;
+        const rejected = width > 0 && width < minExpandedMeasureWidth - 24;
+        // contentSize already includes the field's vertical padding. Ignore
+        // a report that only echoes the frame or the height we already chose.
+        const contentH = Math.ceil(height);
+        const echo =
+          Math.abs(contentH - expandedHeight.value) <= 1 ||
+          Math.abs(contentH - heightTarget.current) <= 1;
         const next = Math.min(
           COMPOSER_EXPANDED_INPUT_MAX,
-          Math.max(COMPOSER_EXPANDED_INPUT_MIN, measured),
+          Math.max(COMPOSER_EXPANDED_INPUT_MIN, contentH),
         );
-        if (expandedHeight.value !== next) expandedHeight.value = next;
-        const atMax = measured >= COMPOSER_EXPANDED_INPUT_MAX;
+        if (rejected || echo) return;
+        settleHeight(next);
+        const atMax = contentH >= COMPOSER_EXPANDED_INPUT_MAX;
         setInputScrolls((current) => (current === atMax ? current : atMax));
       }}
       scrollEnabled={inputScrolls}
       {...inputProps}
+      caretHidden={hideCaret}
+      placeholder=""
       style={[iosPadStyle, composerTypeStyle]}
     />
+    {value.length === 0 ? (
+      <Animated.Text
+        pointerEvents="none"
+        numberOfLines={1}
+        style={[
+          placeholderFade,
+          iosPadStyle,
+          composerTypeStyle,
+          {
+            position: "absolute",
+            left: 8,
+            right: 8,
+            top: 0,
+            color: placeholderInk,
+          },
+        ]}
+      >
+        Ask anything
+      </Animated.Text>
+    ) : null}
+    </>
   ) : (
     <ComposerPrimitive.Input
       autoFocus={autoFocus}
@@ -1426,6 +1527,7 @@ const Composer: FC<{
       keyboardHeight?.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
       keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
+      chromeApi?.textExpanded.value ?? 0,
     );
     const bump =
       holdEnabled && progress >= 0.5
@@ -1441,6 +1543,7 @@ const Composer: FC<{
             keyboardHeight.value,
             chromeApi?.stickyExpanded.value ?? 0,
             keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
+            chromeApi?.textExpanded.value ?? 0,
           )
         : 1;
     // Collapsed hold shrink only — scaling the focused field dismisses the keyboard.
@@ -1461,6 +1564,7 @@ const Composer: FC<{
       keyboardHeight?.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
       keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
+      chromeApi?.textExpanded.value ?? 0,
     );
     return {
       height: interpolate(progress, [0, 1], [0, expandedHeight.value]),
@@ -1472,6 +1576,7 @@ const Composer: FC<{
       keyboardHeight?.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
       keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
+      chromeApi?.textExpanded.value ?? 0,
     );
     return {
       marginTop: interpolate(progress, [0, 1], [0, 16]),
@@ -1480,28 +1585,12 @@ const Composer: FC<{
     };
   });
 
-  // Mode/model fades in beside the attachment chip; stay left-anchored
-  // (no flexGrow swap that slid the brain across the bar).
-  const modelChipStyle = useAnimatedStyle(() => {
-    const progress = composerChromeProgress(
-      keyboardHeight?.value ?? 0,
-      chromeApi?.stickyExpanded.value ?? 0,
-      keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
-    );
-    // Fade + width hide the chip — avoid a second overflow clip that would
-    // fight the shell's continuous corner.
-    return {
-      opacity: progress,
-      width: interpolate(progress, [0, 1], [0, COMPOSER_CHIP]),
-      marginLeft: interpolate(progress, [0, 1], [0, COMPOSER_ROW_GAP]),
-    };
-  });
-
   const inputFrameStyle = useAnimatedStyle(() => {
     const progress = composerChromeProgress(
       keyboardHeight?.value ?? 0,
       chromeApi?.stickyExpanded.value ?? 0,
       keyboardSpan?.value ?? COMPOSER_MORPH_RANGE,
+      chromeApi?.textExpanded.value ?? 0,
     );
     // Positioned inside the in-flow stack (not the shell), so top:0 lines up
     // with the spacer/action row — avoids padding-box drift that left the
@@ -1620,7 +1709,6 @@ const Composer: FC<{
                 onPreparingChange={setPreparingAttachment}
                 conversationId={conversationId}
               />
-              <ComposerModeModelPicker disabled={preparingAttachment} />
             </View>
             <ComposerTrailingControls
               preparingAttachment={preparingAttachment}
@@ -1677,9 +1765,6 @@ const Composer: FC<{
                   onPreparingChange={setPreparingAttachment}
                   conversationId={conversationId}
                 />
-                <Animated.View style={modelChipStyle} pointerEvents="box-none">
-                  <ComposerModeModelPicker disabled={preparingAttachment} />
-                </Animated.View>
                 <View style={{ flexGrow: 1, flexBasis: 0, minWidth: 8 }} />
                 <ComposerTrailingControls
                   preparingAttachment={preparingAttachment}

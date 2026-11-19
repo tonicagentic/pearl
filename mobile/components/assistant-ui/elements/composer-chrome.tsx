@@ -3,9 +3,13 @@ import type { SharedValue } from "react-native-reanimated";
 import { KeyboardController } from "react-native-keyboard-controller";
 
 export type ComposerChromeApi = {
+  /** 1 while the draft needs more than one line, so the shell can open with the keyboard down. */
+  readonly textExpanded: SharedValue<number>;
   readonly stickyExpanded: SharedValue<number>;
   /** 1 while a live call fills the composer — keeps dock inset expanded with no keyboard. */
   readonly liveActive: SharedValue<number>;
+  /** 1 while a finger is dragging the keyboard. The composer hides its caret. */
+  readonly keyboardDragging: SharedValue<number>;
   /** Hold full chrome (focus or chrome-control tap before a native menu opens). */
   readonly pinExpanded: () => void;
   /** Collapse shortly after blur once the keyboard is gone (menus get a beat to open). */
