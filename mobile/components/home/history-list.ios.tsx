@@ -16,6 +16,7 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityLabel,
   buttonStyle,
   clipped,
   font,
@@ -49,6 +50,7 @@ import {
 } from "@/src/custom-agents-client";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
+import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
 
 /** Fixed leading slot so titles stay aligned with or without a presence mark. */
 const PRESENCE_SLOT = 14;
@@ -59,7 +61,7 @@ export type { HistoryChatActionHandlers } from "@/components/home/history-list";
 const RECENT_PREVIEW_COUNT = 6;
 
 /**
- * iOS home: inset-grouped List — Recents, then Projects, then Agents —
+ * iOS home: inset-grouped List — Agents, then Recents, then Projects —
  * with swipe delete and context menu actions.
  */
 export function HistoryListIOS({
@@ -77,7 +79,7 @@ export function HistoryListIOS({
   /** Opens the new-agent composer from the empty Agents row. */
   readonly onCreateAgent?: () => void;
 }) {
-  const { signedIn } = useAuth();
+  const { isAnonymous, signedIn } = useAuth();
   const {
     chats,
     chatsLoading,
@@ -85,6 +87,7 @@ export function HistoryListIOS({
     chatsError,
     hasMoreChats,
     loadMoreChats,
+    newChat,
     reloadChats,
     selectChat,
     selectionError,
@@ -162,6 +165,27 @@ export function HistoryListIOS({
     [onOpenChat, selectChat],
   );
 
+  const lastPearlChat = chats[0] ?? null;
+
+  const openPearl = useCallback(() => {
+    if (lastPearlChat) {
+      openChat(lastPearlChat.id);
+      return;
+    }
+    newChat();
+    onOpenChat();
+  }, [lastPearlChat, newChat, onOpenChat, openChat]);
+
+  const startNewPearlChat = useCallback(() => {
+    // Guests keep a single thread — the compose control reopens it.
+    if (isAnonymous && lastPearlChat) {
+      openChat(lastPearlChat.id);
+      return;
+    }
+    newChat();
+    onOpenChat();
+  }, [isAnonymous, lastPearlChat, newChat, onOpenChat, openChat]);
+
   const showEmptyCard =
     chatsReady &&
     signedIn &&
@@ -228,6 +252,66 @@ export function HistoryListIOS({
             scrollEdgeEffectStyle("soft"),
           ]}
         >
+          <Section
+              header={
+                <HStack alignment="center">
+                  <SwiftText
+                    modifiers={[
+                      font({ size: 13 }),
+                      foregroundStyle({
+                        type: "hierarchical",
+                        style: "secondary",
+                      }),
+                    ]}
+                  >
+                    Agents
+                  </SwiftText>
+                  <Spacer />
+                  {onCreateAgent ? (
+                    <Button
+                      onPress={onCreateAgent}
+                      modifiers={[buttonStyle("plain")]}
+                    >
+                      <Image
+                        systemName="plus"
+                        size={14}
+                        modifiers={[tint(mutedColor)]}
+                      />
+                    </Button>
+                  ) : null}
+                </HStack>
+              }
+            >
+              <PearlAgentRow
+                lastTitle={lastPearlChat?.title ?? null}
+                mutedColor={mutedColor}
+                onOpen={openPearl}
+                onNewChat={startNewPearlChat}
+              />
+              {showAgents && orderedAgents.length === 0 && onCreateAgent ? (
+                <Button
+                  label="New Agent"
+                  systemImage="person.crop.circle.badge.plus"
+                  onPress={onCreateAgent}
+                  modifiers={[buttonStyle("plain"), ...rowChrome]}
+                />
+              ) : null}
+              {showAgents && orderedAgents.length > 0 ? (
+                <List.ForEach
+                  data={orderedAgents}
+                  keyExtractor={(agent) => agent.id}
+                  estimatedItemSize={52}
+                  recycling={false}
+                >
+                  {({ item: agent }) => (
+                    <AgentRow
+                      agent={agent}
+                      onOpen={() => openChat(agent.chatId)}
+                    />
+                  )}
+                </List.ForEach>
+              ) : null}
+            </Section>
           {showEmptyCard ? null : (
           <Section title="Recents">
             {selectionError ? (
@@ -364,76 +448,6 @@ export function HistoryListIOS({
               )}
             </Section>
           ) : null}
-          {showAgents ? (
-            <Section
-              header={
-                <HStack alignment="center">
-                  <SwiftText
-                    modifiers={[
-                      font({ size: 13 }),
-                      foregroundStyle({
-                        type: "hierarchical",
-                        style: "secondary",
-                      }),
-                    ]}
-                  >
-                    Agents
-                  </SwiftText>
-                  <Spacer />
-                  {onCreateAgent ? (
-                    <Button
-                      onPress={onCreateAgent}
-                      modifiers={[buttonStyle("plain")]}
-                    >
-                      <Image
-                        systemName="plus"
-                        size={14}
-                        modifiers={[tint(mutedColor)]}
-                      />
-                    </Button>
-                  ) : null}
-                </HStack>
-              }
-            >
-              {orderedAgents.length === 0 ? (
-                onCreateAgent ? (
-                  <Button
-                    label="New Agent"
-                    systemImage="person.crop.circle.badge.plus"
-                    onPress={onCreateAgent}
-                    modifiers={[buttonStyle("plain"), ...rowChrome]}
-                  />
-                ) : (
-                  <SwiftText
-                    modifiers={[
-                      foregroundStyle({
-                        type: "hierarchical",
-                        style: "secondary",
-                      }),
-                      font({ size: 15 }),
-                      ...rowChrome,
-                    ]}
-                  >
-                    No agents yet
-                  </SwiftText>
-                )
-              ) : (
-                <List.ForEach
-                  data={orderedAgents}
-                  keyExtractor={(agent) => agent.id}
-                  estimatedItemSize={52}
-                  recycling={false}
-                >
-                  {({ item: agent }) => (
-                    <AgentRow
-                      agent={agent}
-                      onOpen={() => openChat(agent.chatId)}
-                    />
-                  )}
-                </List.ForEach>
-              )}
-            </Section>
-          ) : null}
           {bottomInset > 0 ? (
             <Section>
               <HStack
@@ -453,6 +467,83 @@ export function HistoryListIOS({
         </List>
       </Host>
     </View>
+  );
+}
+
+function PearlAgentRow({
+  lastTitle,
+  mutedColor,
+  onOpen,
+  onNewChat,
+}: {
+  readonly lastTitle: string | null;
+  readonly mutedColor: string;
+  readonly onOpen: () => void;
+  readonly onNewChat: () => void;
+}) {
+  return (
+    <HStack
+      spacing={8}
+      alignment="center"
+      modifiers={[
+        listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 12 }),
+        padding({ vertical: 2 }),
+      ]}
+    >
+      <Button
+        onPress={onOpen}
+        modifiers={[
+          buttonStyle("plain"),
+          frame({ maxWidth: 9999, alignment: "leading" }),
+          accessibilityLabel(
+            lastTitle ? `Pearl, ${lastTitle}` : "Pearl",
+          ),
+        ]}
+      >
+        <HStack spacing={12} alignment="center">
+          <Image
+            systemName="circle.fill"
+            size={14}
+            modifiers={[
+              frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
+              tint(PEARL_IDENTITY_ACCENT),
+            ]}
+          />
+          <VStack spacing={2} alignment="leading">
+            <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
+              Pearl
+            </SwiftText>
+            {lastTitle ? (
+              <SwiftText
+                modifiers={[
+                  lineLimit(1),
+                  font({ size: 12 }),
+                  foregroundStyle({
+                    type: "hierarchical",
+                    style: "secondary",
+                  }),
+                ]}
+              >
+                {lastTitle}
+              </SwiftText>
+            ) : null}
+          </VStack>
+        </HStack>
+      </Button>
+      <Button
+        onPress={onNewChat}
+        modifiers={[
+          buttonStyle("plain"),
+          accessibilityLabel("New Pearl chat"),
+        ]}
+      >
+        <Image
+          systemName="square.and.pencil"
+          size={17}
+          modifiers={[tint(mutedColor)]}
+        />
+      </Button>
+    </HStack>
   );
 }
 

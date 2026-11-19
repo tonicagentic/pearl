@@ -9,7 +9,7 @@ import {
 import { router, useFocusEffect } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { FolderIcon } from "lucide-react-native";
+import { FolderIcon, SquarePenIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { EmptyChatsCard } from "@/components/home/empty-chats-card";
@@ -39,6 +39,7 @@ import {
   type CustomAgentDto,
 } from "@/src/custom-agents-client";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
+import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
 
 export type { HistoryChatActionHandlers };
 
@@ -116,7 +117,7 @@ function HistoryListAndroid({
   readonly chatActions?: HistoryChatActionHandlers;
   readonly bottomInset?: number;
 }) {
-  const { signedIn } = useAuth();
+  const { isAnonymous, signedIn } = useAuth();
   const {
     chats,
     activeChatId,
@@ -125,6 +126,7 @@ function HistoryListAndroid({
     chatsError,
     hasMoreChats,
     loadMoreChats,
+    newChat,
     reloadChats,
     selectChat,
     selectionError,
@@ -184,6 +186,28 @@ function HistoryListAndroid({
     }, []),
   );
 
+  const lastPearlChat = chats[0] ?? null;
+  const openPearl = () => {
+    if (lastPearlChat) {
+      void selectChat(lastPearlChat.id).then((selected) => {
+        if (selected) onOpenChat();
+      });
+      return;
+    }
+    newChat();
+    onOpenChat();
+  };
+  const startNewPearlChat = () => {
+    if (isAnonymous && lastPearlChat) {
+      void selectChat(lastPearlChat.id).then((selected) => {
+        if (selected) onOpenChat();
+      });
+      return;
+    }
+    newChat();
+    onOpenChat();
+  };
+
   const openChatActions = (chat: ChatListItem) => {
     if (!chatActions) return;
     const projectId = chat.projectId ?? null;
@@ -223,9 +247,16 @@ function HistoryListAndroid({
           contentContainerClassName="px-4 pt-0"
           contentContainerStyle={{
             paddingBottom: 32 + bottomInset,
-            flexGrow: showEmptyCard && orderedProjects.length === 0 ? 1 : undefined,
+            flexGrow:
+              showEmptyCard &&
+              orderedProjects.length === 0 &&
+              orderedAgents.length === 0
+                ? 1
+                : undefined,
             justifyContent:
-              showEmptyCard && orderedProjects.length === 0
+              showEmptyCard &&
+              orderedProjects.length === 0 &&
+              orderedAgents.length === 0
                 ? "center"
                 : undefined,
           }}
@@ -257,6 +288,120 @@ function HistoryListAndroid({
           )}
           ListHeaderComponent={
             <>
+              <View className="mb-6">
+                  <View className="mb-1 flex-row items-center justify-between px-3">
+                    <AppText variant="secondary" weight="medium">
+                      Agents
+                    </AppText>
+                    {onCreateAgent ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="New agent"
+                        className="min-h-8 justify-center px-1"
+                        onPress={onCreateAgent}
+                      >
+                        <AppText variant="secondary" weight="medium">
+                          New
+                        </AppText>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <View className="min-h-12 flex-row items-center">
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        lastPearlChat
+                          ? `Pearl, ${lastPearlChat.title}`
+                          : "Pearl"
+                      }
+                      className="min-h-12 min-w-0 flex-1 flex-row items-center gap-3 px-3 py-2"
+                      onPress={openPearl}
+                    >
+                      <View
+                        className="size-3.5 items-center justify-center rounded-full"
+                        style={{ backgroundColor: PEARL_IDENTITY_ACCENT }}
+                      >
+                        <View className="flex-row gap-0.5">
+                          <View className="h-1.5 w-0.5 rounded-full bg-white" />
+                          <View className="h-1.5 w-0.5 rounded-full bg-white" />
+                        </View>
+                      </View>
+                      <View className="min-w-0 flex-1">
+                        <AppText variant="body" weight="medium" numberOfLines={1}>
+                          Pearl
+                        </AppText>
+                        {lastPearlChat ? (
+                          <AppText variant="secondary" numberOfLines={1}>
+                            {lastPearlChat.title}
+                          </AppText>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="New Pearl chat"
+                      className="min-h-12 min-w-11 items-center justify-center px-3"
+                      onPress={startNewPearlChat}
+                    >
+                      <Icon
+                        as={SquarePenIcon}
+                        className="size-4 text-muted-foreground"
+                      />
+                    </Pressable>
+                  </View>
+                  {agents !== null && orderedAgents.length === 0 ? (
+                    onCreateAgent ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="New agent"
+                        className="min-h-12 flex-row items-center gap-3 px-3 py-2"
+                        onPress={onCreateAgent}
+                      >
+                        <View
+                          className="size-3.5 items-center justify-center rounded-full"
+                          style={{ backgroundColor: "#2DD4BF" }}
+                        >
+                          <View className="flex-row gap-0.5">
+                            <View className="h-1.5 w-0.5 rounded-full bg-white" />
+                            <View className="h-1.5 w-0.5 rounded-full bg-white" />
+                          </View>
+                        </View>
+                        <AppText variant="body" weight="medium">
+                          New Agent
+                        </AppText>
+                      </Pressable>
+                    ) : null
+                  ) : (
+                    orderedAgents.map((agent) => (
+                      <Pressable
+                        key={agent.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={agent.name}
+                        className="min-h-12 flex-row items-center gap-3 px-3 py-2"
+                        onPress={() => {
+                          void selectChat(agent.chatId).then((selected) => {
+                            if (selected) onOpenChat();
+                          });
+                        }}
+                      >
+                        <View
+                          className="size-3.5 items-center justify-center rounded-full"
+                          style={{
+                            backgroundColor: agent.accent || "#2DD4BF",
+                          }}
+                        >
+                          <View className="flex-row gap-0.5">
+                            <View className="h-1.5 w-0.5 rounded-full bg-white" />
+                            <View className="h-1.5 w-0.5 rounded-full bg-white" />
+                          </View>
+                        </View>
+                        <AppText variant="body" weight="medium" numberOfLines={1}>
+                          {agent.name}
+                        </AppText>
+                      </Pressable>
+                    ))
+                  )}
+                </View>
               {selectionError ? (
                 <Text
                   className="px-3 py-2 text-sm text-destructive"
@@ -371,79 +516,6 @@ function HistoryListAndroid({
                       </AppText>
                     </Pressable>
                   ))}
-                </View>
-              ) : null}
-              {orderedAgents.length > 0 || onCreateAgent ? (
-                <View className="mt-6">
-                  <View className="mb-1 flex-row items-center justify-between px-3">
-                    <AppText variant="secondary" weight="medium">
-                      Agents
-                    </AppText>
-                    {onCreateAgent ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="New agent"
-                        className="min-h-8 justify-center px-1"
-                        onPress={onCreateAgent}
-                      >
-                        <AppText variant="secondary" weight="medium">
-                          New
-                        </AppText>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                  {orderedAgents.length === 0 ? (
-                    onCreateAgent ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="New agent"
-                        className="min-h-12 flex-row items-center gap-3 px-3 py-2"
-                        onPress={onCreateAgent}
-                      >
-                        <View
-                          className="size-3.5 items-center justify-center rounded-full"
-                          style={{ backgroundColor: "#2DD4BF" }}
-                        >
-                          <View className="flex-row gap-0.5">
-                            <View className="h-1.5 w-0.5 rounded-full bg-white" />
-                            <View className="h-1.5 w-0.5 rounded-full bg-white" />
-                          </View>
-                        </View>
-                        <AppText variant="body" weight="medium">
-                          New Agent
-                        </AppText>
-                      </Pressable>
-                    ) : null
-                  ) : (
-                    orderedAgents.map((agent) => (
-                      <Pressable
-                        key={agent.id}
-                        accessibilityRole="button"
-                        accessibilityLabel={agent.name}
-                        className="min-h-12 flex-row items-center gap-3 px-3 py-2"
-                        onPress={() => {
-                          void selectChat(agent.chatId).then((selected) => {
-                            if (selected) onOpenChat();
-                          });
-                        }}
-                      >
-                        <View
-                          className="size-3.5 items-center justify-center rounded-full"
-                          style={{
-                            backgroundColor: agent.accent || "#2DD4BF",
-                          }}
-                        >
-                          <View className="flex-row gap-0.5">
-                            <View className="h-1.5 w-0.5 rounded-full bg-white" />
-                            <View className="h-1.5 w-0.5 rounded-full bg-white" />
-                          </View>
-                        </View>
-                        <AppText variant="body" weight="medium" numberOfLines={1}>
-                          {agent.name}
-                        </AppText>
-                      </Pressable>
-                    ))
-                  )}
                 </View>
               ) : null}
             </>
