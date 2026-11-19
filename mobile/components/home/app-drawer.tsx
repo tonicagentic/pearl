@@ -8,6 +8,7 @@ import {
   AgentMark,
   agentListSubtitle,
 } from "@/components/custom-agents/agent-mark";
+import { EmptyAgentsState } from "@/components/home/empty-agents-state";
 import {
   HistoryListIOS,
   type HistoryChatActionHandlers,
@@ -161,6 +162,8 @@ function HistoryListAndroid({
     );
   }
 
+  const agentsEmpty = agents !== null && orderedAgents.length === 0;
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: pageBackground }}
@@ -170,61 +173,71 @@ function HistoryListAndroid({
       <ScrollView
         className="flex-1"
         contentContainerClassName="px-4 pt-0"
-        contentContainerStyle={{ paddingBottom: 32 + bottomInset }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingBottom: 32 + bottomInset,
+          ...(agentsEmpty
+            ? { justifyContent: "center" as const, alignItems: "center" as const }
+            : null),
+        }}
       >
-        <View className="mb-8">
-          {orderedAgents.map((agent) => {
-            const subtitle = agentListSubtitle({
-              name: agent.name,
-              chatTitle: agent.chatTitle,
-              instructions: agent.instructions,
-            });
-            return (
-              <Pressable
-                key={agent.id}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  subtitle ? `${agent.name}, ${subtitle}` : agent.name
-                }
-                className="min-h-[60px] w-full flex-row items-center gap-3 px-5 py-2.5"
-                onPress={() => {
-                  void selectChat(agent.chatId).then((selected) => {
-                    if (selected) onOpenChat();
-                  });
-                }}
-              >
-                <AgentMark
-                  accent={agent.accent || DEFAULT_AGENT_MARK_ACCENT}
-                  size={AGENT_MARK_SIZE}
-                  markShape={agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE}
-                  markTalk={agent.markTalk ?? DEFAULT_AGENT_MARK_TALK}
-                  markBrows={agent.markBrows}
-                  markGaze={agent.markGaze}
-                  motion="off"
-                  eyeMotion="idle"
-                />
-                <View className="min-w-0 flex-1" style={{ gap: 1 }}>
-                  <AppText
-                    variant="label"
-                    weight="semibold"
-                    numberOfLines={1}
-                  >
-                    {agent.name}
-                  </AppText>
-                  {subtitle ? (
+        {agentsEmpty ? (
+          <EmptyAgentsState />
+        ) : (
+          <View className="mb-8">
+            {orderedAgents.map((agent) => {
+              const subtitle = agentListSubtitle({
+                name: agent.name,
+                chatTitle: agent.chatTitle,
+                instructions: agent.instructions,
+              });
+              return (
+                <Pressable
+                  key={agent.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    subtitle ? `${agent.name}, ${subtitle}` : agent.name
+                  }
+                  className="min-h-[60px] w-full flex-row items-center gap-3 px-5 py-2.5"
+                  onPress={() => {
+                    void selectChat(agent.chatId).then((selected) => {
+                      if (selected) onOpenChat();
+                    });
+                  }}
+                >
+                  <AgentMark
+                    accent={agent.accent || DEFAULT_AGENT_MARK_ACCENT}
+                    size={AGENT_MARK_SIZE}
+                    markShape={agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE}
+                    markTalk={agent.markTalk ?? DEFAULT_AGENT_MARK_TALK}
+                    markBrows={agent.markBrows}
+                    markGaze={agent.markGaze}
+                    motion="off"
+                    eyeMotion="idle"
+                  />
+                  <View className="min-w-0 flex-1" style={{ gap: 1 }}>
                     <AppText
-                      variant="secondary"
-                      weight="regular"
+                      variant="label"
+                      weight="semibold"
                       numberOfLines={1}
                     >
-                      {subtitle}
+                      {agent.name}
                     </AppText>
-                  ) : null}
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
+                    {subtitle ? (
+                      <AppText
+                        variant="secondary"
+                        weight="regular"
+                        numberOfLines={1}
+                      >
+                        {subtitle}
+                      </AppText>
+                    ) : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

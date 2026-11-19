@@ -35,6 +35,7 @@ import {
   agentListSubtitle,
   pearlMarkMetrics,
 } from "@/components/custom-agents/agent-mark";
+import { EmptyAgentsState } from "@/components/home/empty-agents-state";
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
 import type { HomeTab } from "@/components/home/home-tab";
 import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
@@ -161,6 +162,8 @@ export function HistoryListIOS({
     );
   }
 
+  const agentsEmpty = agents !== null && orderedAgents.length === 0;
+
   return (
     <View
       style={{
@@ -179,7 +182,7 @@ export function HistoryListIOS({
           ]}
         >
           <Section>
-            {agents !== null ? (
+            {agents !== null && !agentsEmpty ? (
               <List.ForEach
                 data={orderedAgents}
                 keyExtractor={(agent) => agent.id}
@@ -217,6 +220,23 @@ export function HistoryListIOS({
           ) : null}
         </List>
       </Host>
+      {agentsEmpty ? (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingBottom: bottomInset,
+          }}
+        >
+          <EmptyAgentsState />
+        </View>
+      ) : null}
     </View>
   );
 }
