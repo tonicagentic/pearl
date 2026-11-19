@@ -15,7 +15,6 @@ import {
   type ThreadMessageLike,
 } from "@assistant-ui/react-native";
 import {
-  ClockIcon,
   MonitorIcon,
   SquarePenIcon,
 } from "lucide-react-native";
@@ -24,6 +23,8 @@ import { useCSSVariable } from "uniwind";
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
+import { HistorySidebarButton } from "@/components/home/history-sidebar-button";
+import { useHistorySidebarOptional } from "@/components/home/history-sidebar";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { SignupSheet } from "@/components/signup-sheet";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
@@ -1368,10 +1369,16 @@ export function ChatScreen({
     dismissComputer();
     newChat();
   }, [dismissComputer, newChat]);
+  const historySidebar = useHistorySidebarOptional();
+  const historyOpen = historySidebar?.open ?? false;
   const openHistory = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (historySidebar) {
+      historySidebar.openSidebar();
+      return;
+    }
     router.push("/history");
-  }, []);
+  }, [historySidebar]);
   const openAgentSettings = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setAgentSettingsOpen(true);
@@ -1440,19 +1447,9 @@ export function ChatScreen({
             headerRight:
               Platform.OS === "web"
                 ? () => (
-                    <View className="flex-row items-center">
-                      {activeCustomAgent || activeChatId ? null : (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="History"
-                          className="h-10 w-10 items-center justify-center"
-                          onPress={openHistory}
-                        >
-                          <Icon
-                            as={ClockIcon}
-                            className="size-5 text-foreground"
-                          />
-                        </Pressable>
+                    <View className="flex-row items-center gap-2">
+                      {historyOpen ? null : (
+                        <HistorySidebarButton onPress={openHistory} />
                       )}
                       {activeChatId ? (
                         <>
@@ -1492,19 +1489,63 @@ export function ChatScreen({
                       ) : null}
                     </View>
                   )
-                : undefined,
+                : Platform.OS === "android"
+                  ? () => (
+                      <View className="flex-row items-center gap-2">
+                        {historyOpen ? null : (
+                          <HistorySidebarButton onPress={openHistory} />
+                        )}
+                        {activeChatId ? (
+                          <>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="New chat"
+                              className="h-10 w-10 items-center justify-center"
+                              onPress={openCompose}
+                            >
+                              <Icon
+                                as={SquarePenIcon}
+                                className="size-5 text-foreground"
+                              />
+                            </Pressable>
+                            {activeCustomAgent ? null : (
+                              <>
+                                <View className="w-2" />
+                                <Pressable
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Computer"
+                                  accessibilityState={{ selected: computerOpen }}
+                                  className="h-10 w-10 items-center justify-center"
+                                  onPress={toggleComputer}
+                                >
+                                  <Icon
+                                    as={MonitorIcon}
+                                    className={
+                                      computerOpen
+                                        ? "size-5 text-foreground"
+                                        : "size-5 text-muted-foreground"
+                                    }
+                                  />
+                                </Pressable>
+                              </>
+                            )}
+                          </>
+                        ) : null}
+                      </View>
+                    )
+                  : undefined,
           }}
         />
       )}
-      {!embedded && Platform.OS !== "web" ? (
+      {!embedded && Platform.OS === "ios" ? (
         <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon="clock"
-            accessibilityLabel="History"
-            onPress={openHistory}
-            tintColor={foregroundColor}
-            hidden={Boolean(activeCustomAgent) || Boolean(activeChatId)}
-          />
+          {historyOpen ? null : (
+            <Stack.Toolbar.View hidesSharedBackground>
+              <View style={{ width: 44, height: 44 }}>
+                <HistorySidebarButton onPress={openHistory} />
+              </View>
+            </Stack.Toolbar.View>
+          )}
           <Stack.Toolbar.Button
             icon="square.and.pencil"
             accessibilityLabel="New chat"

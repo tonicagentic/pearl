@@ -1,15 +1,17 @@
 import { Platform } from "react-native";
 import { Stack } from "expo-router";
+import { HistorySidebarHost } from "@/components/home/history-sidebar";
 import { ObserveInteractiveMarker } from "@/src/observe";
 
 /**
  * Signed-in home stack: Mail home plus chat/profile/detail so the
  * Profile control shares one UINavigationBar and morphs natively.
  * Profile destinations live here too so back stays on this stack.
+ * HistorySidebarHost overlays a draggable history panel on this stack.
  */
 export default function HomeLayout() {
   return (
-    <>
+    <HistorySidebarHost>
       <ObserveInteractiveMarker />
       <Stack>
       <Stack.Screen
@@ -242,6 +244,6 @@ export default function HomeLayout() {
         options={{ title: "Self-host", headerShown: true }}
       />
       </Stack>
-    </>
+    </HistorySidebarHost>
   );
 }

@@ -22,7 +22,9 @@ import {
   foregroundStyle,
   frame,
   lineLimit,
+  listRowBackground,
   listRowInsets,
+  listRowSeparator,
   listStyle,
   opacity,
   padding,
@@ -47,15 +49,20 @@ import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 
 const PRESENCE_SLOT = 14;
 
-/** iOS History: inset-grouped chat list with swipe and context actions. */
+/** iOS History: grouped page list, or flat drawer list (ChatGPT-style). */
 export function ChatHistoryListIOS({
   onOpenChat,
   actions,
   search,
+  chrome = "page",
+  onSeeAll,
 }: {
   readonly onOpenChat: (chatId: string) => void;
   readonly actions: HistoryChatActionHandlers;
   readonly search: ChatHistorySearchFeed;
+  /** `drawer` = flat plain list; `page` = inset grouped (History route). */
+  readonly chrome?: "page" | "drawer";
+  readonly onSeeAll?: () => void;
 }) {
   const { signedIn } = useAuth();
   const {
@@ -78,8 +85,18 @@ export function ChatHistoryListIOS({
     | string
     | undefined;
   const mutedColor = mutedForeground ?? "#8E8E93";
+  const isDrawer = chrome === "drawer";
+  const clearRow = "#00000000";
   const rowChrome = [
-    listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
+    listRowInsets({
+      top: isDrawer ? 12 : 10,
+      bottom: isDrawer ? 12 : 10,
+      leading: isDrawer ? 20 : 16,
+      trailing: isDrawer ? 20 : 16,
+    }),
+    ...(isDrawer
+      ? [listRowSeparator("hidden" as const), listRowBackground(clearRow)]
+      : []),
   ];
 
   const [projects, setProjects] = useState<readonly ProjectDto[] | null>(null);
@@ -133,7 +150,7 @@ export function ChatHistoryListIOS({
       <Host style={{ flex: 1, backgroundColor }}>
         <List
           modifiers={[
-            listStyle("insetGrouped"),
+            listStyle(isDrawer ? "plain" : "insetGrouped"),
             scrollContentBackground("hidden"),
             scrollEdgeEffectStyle("soft"),
           ]}
@@ -183,7 +200,7 @@ export function ChatHistoryListIOS({
               <List.ForEach
                 data={rows}
                 keyExtractor={(chat) => chat.id}
-                estimatedItemSize={64}
+                estimatedItemSize={isDrawer ? 48 : 64}
                 recycling={false}
               >
                 {({ item: chat }) => (
@@ -197,6 +214,7 @@ export function ChatHistoryListIOS({
                     }
                     onOpen={() => openChat(chat.id)}
                     actions={actions}
+                    chrome={chrome}
                   />
                 )}
               </List.ForEach>
@@ -207,6 +225,20 @@ export function ChatHistoryListIOS({
                 label={chatsLoading ? "Loading…" : "Load more"}
                 onPress={() => void loadMoreChats()}
                 modifiers={[buttonStyle("plain"), ...rowChrome]}
+              />
+            ) : null}
+            {isDrawer && onSeeAll && rows.length > 0 ? (
+              <Button
+                label="See all…"
+                onPress={onSeeAll}
+                modifiers={[
+                  buttonStyle("plain"),
+                  ...rowChrome,
+                  foregroundStyle({
+                    type: "hierarchical",
+                    style: "secondary",
+                  }),
+                ]}
               />
             ) : null}
           </Section>
@@ -222,16 +254,19 @@ function RecentChatRow({
   projectName,
   onOpen,
   actions,
+  chrome = "page",
 }: {
   readonly chat: ChatListItem;
   readonly mutedColor: string;
   readonly projectName: string | null;
   readonly onOpen: () => void;
   readonly actions: HistoryChatActionHandlers;
+  readonly chrome?: "page" | "drawer";
 }) {
   const presence = chatListPresence(chat);
   const when = formatChatUpdatedAt(chat.updatedAt);
   const projectId = chat.projectId ?? null;
+  const isDrawer = chrome === "drawer";
   const markTint =
     presence === "waiting"
       ? CHAT_PRESENCE_AMBER
@@ -261,16 +296,21 @@ function RecentChatRow({
   const row = (
     <Button onPress={onOpen} modifiers={[buttonStyle("plain")]}>
       <HStack
-        spacing={12}
+        spacing={isDrawer ? 0 : 12}
         alignment="center"
         modifiers={[padding({ vertical: 2 })]}
       >
-        {statusMark}
+        {isDrawer ? null : statusMark}
         <VStack spacing={2} alignment="leading">
-          <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
+          <SwiftText
+            modifiers={[
+              lineLimit(1),
+              font({ size: isDrawer ? 16 : 17 }),
+            ]}
+          >
             {chat.title}
           </SwiftText>
-          {projectName ? (
+          {!isDrawer && projectName ? (
             <HStack spacing={4} alignment="center">
               <Image
                 systemName="folder.fill"
@@ -293,7 +333,7 @@ function RecentChatRow({
           ) : null}
         </VStack>
         <Spacer />
-        {when ? (
+        {!isDrawer && when ? (
           <SwiftText
             modifiers={[
               foregroundStyle({ type: "hierarchical", style: "secondary" }),
@@ -310,7 +350,18 @@ function RecentChatRow({
   return (
     <SwipeActions
       modifiers={[
-        listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
+        listRowInsets({
+          top: isDrawer ? 12 : 10,
+          bottom: isDrawer ? 12 : 10,
+          leading: isDrawer ? 20 : 16,
+          trailing: isDrawer ? 20 : 16,
+        }),
+        ...(isDrawer
+          ? [
+              listRowSeparator("hidden" as const),
+              listRowBackground("#00000000"),
+            ]
+          : []),
       ]}
     >
       <ContextMenu>

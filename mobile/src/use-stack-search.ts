@@ -32,6 +32,10 @@ export function useStackSearch() {
     [active, trimmed],
   );
 
+  const setQueryText = useCallback((text: string) => {
+    setQuery(text);
+  }, []);
+
   return {
     query,
     trimmed,
@@ -39,5 +43,6 @@ export function useStackSearch() {
     matches,
     onChangeText,
     onCancelButtonPress,
+    setQueryText,
   };
 }

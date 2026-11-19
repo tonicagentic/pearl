@@ -9,7 +9,7 @@ import {
   type HomeTab,
 } from "@/components/home/home-tab";
 
-/** Native Pearl | Agents segmented control for the home header. */
+/** Native Chat | Agents segmented control for the home header. */
 export function HomeTabSwitcher({
   tab,
   onChange,

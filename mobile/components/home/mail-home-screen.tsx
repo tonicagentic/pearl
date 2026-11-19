@@ -6,17 +6,14 @@ import {
 } from "react";
 import { AppState, Platform, Pressable, View } from "react-native";
 import { Stack, router, useFocusEffect } from "expo-router";
-import {
-  ClockIcon,
-  PlusIcon,
-  SquarePenIcon,
-  UserIcon,
-} from "lucide-react-native";
+import { PlusIcon, SquarePenIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { ChatScreen } from "@/components/chat-screen";
 import { HistoryScreen } from "@/components/home/app-drawer";
 import { CreateAgentModal } from "@/components/home/create-agent-modal";
+import { HistorySidebarButton } from "@/components/home/history-sidebar-button";
+import { useHistorySidebar } from "@/components/home/history-sidebar";
 import type { HomeTab } from "@/components/home/home-tab";
 import { HomeTabSwitcher } from "@/components/home/home-tab-switcher";
 import {
@@ -25,18 +22,15 @@ import {
 } from "@/components/home/sign-in-for-new-chat-card";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { Icon } from "@/components/ui/icon";
-import { Text } from "@/components/ui/text";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { CustomAgentDto } from "@/src/custom-agents-client";
-import { initials as viewerInitials } from "@/src/initials";
 
 const IS_IOS = Platform.OS === "ios";
 
 /**
- * Mail-style home: Profile left; Pearl|Agents switcher; History / New agent right.
- * Pearl tab embeds the composer. History stays up on a draft; an active Pearl
- * thread swaps that slot for New chat.
+ * Mail-style home: history sidebar button left; Pearl|Agents switcher;
+ * New chat / New agent right. Profile lives in the drawer dock.
  */
 export function MailHomeScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
@@ -45,14 +39,9 @@ export function MailHomeScreen() {
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
-  const { billingReady, isAnonymous, markBillingReady, viewerEmail, viewerName } =
-    useAuth();
-  const profileInitials = isAnonymous
-    ? null
-    : viewerInitials(viewerName, viewerEmail);
-  const openProfile = useCallback(() => {
-    router.push(isAnonymous ? "/sign-in" : "/settings");
-  }, [isAnonymous]);
+  const { billingReady, isAnonymous, markBillingReady } = useAuth();
+  const { open: historyOpen, openSidebar, setHomeChatHandler } =
+    useHistorySidebar();
   const {
     activeChatId,
     activeCustomAgent,
@@ -73,28 +62,45 @@ export function MailHomeScreen() {
   reloadChatsRef.current = reloadChats;
   const newChatRef = useRef(newChat);
   newChatRef.current = newChat;
+  const activeChatIdRef = useRef(activeChatId);
+  activeChatIdRef.current = activeChatId;
   // Pearl tab = fresh compose + keyboard. Armed while the draft is live so
   // callback identity churn does not wipe mid-compose.
   const pearlComposeArmedRef = useRef(false);
   const showAgentsPlus = homeTab === "agents" && !isAnonymous;
-  // Draft keeps History. A live Pearl thread takes that slot for New chat.
+  // A live Pearl thread takes the trailing slot for New chat.
   const pearlThreadActive =
     homeTab === "pearl" && activeChatId != null && activeCustomAgent == null;
-  const showPearlHistory = homeTab === "pearl" && !pearlThreadActive;
   const showPearlNewChat = pearlThreadActive;
 
   const armPearlCompose = useCallback(() => {
     if (pearlComposeArmedRef.current) return;
+    // Keep a thread selected from the history drawer (don't wipe with newChat).
+    if (activeChatIdRef.current != null) {
+      pearlComposeArmedRef.current = true;
+      return;
+    }
     pearlComposeArmedRef.current = true;
     newChatRef.current();
   }, []);
+
+  useEffect(() => {
+    setHomeChatHandler(() => {
+      setHomeTab("pearl");
+    });
+    return () => setHomeChatHandler(null);
+  }, [setHomeChatHandler]);
 
   useFocusEffect(
     useCallback(() => {
       homeFocusedRef.current = true;
       void reloadChatsRef.current({ silent: true });
-      // Returning to home on Pearl always starts a fresh draft.
-      if (homeTabRef.current === "pearl" && billingReadyRef.current) {
+      // Fresh draft only when nothing is selected (history picks keep their chat).
+      if (
+        homeTabRef.current === "pearl" &&
+        billingReadyRef.current &&
+        activeChatIdRef.current == null
+      ) {
         pearlComposeArmedRef.current = false;
         armPearlCompose();
       }
@@ -137,10 +143,6 @@ export function MailHomeScreen() {
     setCreateAgentOpen(true);
   }, [billingReady, isAnonymous]);
 
-  const openHistory = useCallback(() => {
-    router.push("/history");
-  }, []);
-
   const openNewChat = useCallback(() => {
     // Guests keep one saved thread; another chat starts after sign-in.
     if (isAnonymous) {
@@ -176,52 +178,14 @@ export function MailHomeScreen() {
           ),
           headerLeft: IS_IOS
             ? undefined
-            : () => (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={isAnonymous ? "Sign in" : "Profile"}
-                  className={
-                    isAnonymous
-                      ? "h-10 items-center justify-center px-1"
-                      : "bg-muted h-9 w-9 items-center justify-center rounded-full"
-                  }
-                  onPress={openProfile}
-                >
-                  {isAnonymous ? (
-                    <Text
-                      variant="label"
-                      weight="semibold"
-                      className="text-foreground"
-                    >
-                      Sign in
-                    </Text>
-                  ) : profileInitials ? (
-                    <Text
-                      variant="label"
-                      weight="semibold"
-                      className="text-foreground"
-                    >
-                      {profileInitials}
-                    </Text>
-                  ) : (
-                    <Icon as={UserIcon} className="size-5 text-foreground" />
-                  )}
-                </Pressable>
-              ),
+            : () =>
+                historyOpen ? null : (
+                  <HistorySidebarButton onPress={openSidebar} />
+                ),
           headerRight: IS_IOS
             ? undefined
             : () => (
                 <View className="flex-row items-center">
-                  {showPearlHistory ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="History"
-                      className="h-10 w-10 items-center justify-center"
-                      onPress={openHistory}
-                    >
-                      <Icon as={ClockIcon} className="size-5 text-foreground" />
-                    </Pressable>
-                  ) : null}
                   {showPearlNewChat ? (
                     <Pressable
                       accessibilityRole="button"
@@ -258,48 +222,15 @@ export function MailHomeScreen() {
       {IS_IOS ? (
         <>
           <Stack.Toolbar placement="left">
-            {isAnonymous ? (
-              <Stack.Toolbar.Button
-                accessibilityLabel="Sign in"
-                onPress={openProfile}
-              >
-                Sign in
-              </Stack.Toolbar.Button>
-            ) : (
-              <Stack.Toolbar.View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Profile"
-                  onPress={openProfile}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {profileInitials ? (
-                    <Text
-                      variant="label"
-                      weight="semibold"
-                      style={{ color: foregroundColor }}
-                    >
-                      {profileInitials}
-                    </Text>
-                  ) : (
-                    <Icon as={UserIcon} className="size-5 text-foreground" />
-                  )}
-                </Pressable>
+            {historyOpen ? null : (
+              <Stack.Toolbar.View hidesSharedBackground>
+                <View style={{ width: 44, height: 44 }}>
+                  <HistorySidebarButton onPress={openSidebar} />
+                </View>
               </Stack.Toolbar.View>
             )}
           </Stack.Toolbar>
           <Stack.Toolbar placement="right">
-            <Stack.Toolbar.Button
-              icon="clock"
-              accessibilityLabel="History"
-              onPress={openHistory}
-              hidden={!showPearlHistory}
-            />
             <Stack.Toolbar.Button
               icon="square.and.pencil"
               accessibilityLabel="New chat"
