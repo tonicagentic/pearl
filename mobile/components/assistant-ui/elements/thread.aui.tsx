@@ -271,7 +271,8 @@ const COMPOSER_ROW_GAP = 6;
 const COMPOSER_MIN_INPUT = COMPOSER_CHIP;
 /** 17px / 22 leading centered in COMPOSER_MIN_INPUT. */
 const COMPOSER_COLLAPSED_INPUT_PAD_Y = (COMPOSER_MIN_INPUT - 22) / 2;
-const COMPOSER_EXPANDED_INPUT_MIN = 44;
+/** One line + compact pad — keep tight to the action row when empty. */
+const COMPOSER_EXPANDED_INPUT_MIN = 34;
 const COMPOSER_EXPANDED_INPUT_MAX = 192;
 /** Line-count changes ease instead of snapping the shell. */
 const COMPOSER_SIZE_TIMING = {
@@ -1382,8 +1383,8 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({
       chromeApi?.textExpanded.value ?? 0,
     );
     return {
-      paddingTop: interpolate(progress, [0, 1], [COMPOSER_COLLAPSED_INPUT_PAD_Y, 8]),
-      paddingBottom: interpolate(progress, [0, 1], [COMPOSER_COLLAPSED_INPUT_PAD_Y, 4]),
+      paddingTop: interpolate(progress, [0, 1], [COMPOSER_COLLAPSED_INPUT_PAD_Y, 6]),
+      paddingBottom: interpolate(progress, [0, 1], [COMPOSER_COLLAPSED_INPUT_PAD_Y, 2]),
     };
   });
   const scheme = useColorScheme();
@@ -1658,7 +1659,7 @@ const Composer: FC<{
     const holdScale = composerHoldScale(progress, pressed.value, holdEnabled);
     return {
       paddingTop: interpolate(progress, [0, 1], [6, 8]),
-      paddingBottom: interpolate(progress, [0, 1], [6, 8]),
+      paddingBottom: interpolate(progress, [0, 1], [6, 6]),
       paddingHorizontal: 8,
       transform: [{ scale: holdScale }],
     };
@@ -1684,7 +1685,8 @@ const Composer: FC<{
       chromeApi?.textExpanded.value ?? 0,
     );
     return {
-      marginTop: interpolate(progress, [0, 1], [0, 16]),
+      // Was 16 — left a tall empty gutter under a one-line Ask anything.
+      marginTop: interpolate(progress, [0, 1], [0, 6]),
       height: COMPOSER_MIN_INPUT,
       alignItems: "center" as const,
     };
