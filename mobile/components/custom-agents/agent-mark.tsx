@@ -368,10 +368,12 @@ export function AgentMark({
   })();
   const profile = talkProfile(markTalk, size);
   const eyeColor = markEyeColor(accent);
-  const eyeBaseL = width * 0.4;
-  const eyeBaseR = width * 0.6;
+  // South Park Canadian-style: close-set vertical ovals.
+  const eyeBaseL = width * 0.43;
+  const eyeBaseR = width * 0.57;
   const eyeBaseY = topCut * 0.48;
-  const eyeR = Math.max(1.4, size * 0.055);
+  const eyeRx = Math.max(1.1, size * 0.038);
+  const eyeRy = Math.max(2.2, size * 0.09);
   const gazePad = Math.max(1.5, size * 0.04);
   const closedHalf = Math.max(2.2, size * 0.07);
   const closedStroke = Math.max(1.2, size * 0.028);
@@ -688,15 +690,15 @@ export function AgentMark({
                 <Ellipse
                   cx={eyeCxL}
                   cy={eyeCy}
-                  rx={eyeR}
-                  ry={eyeR}
+                  rx={eyeRx}
+                  ry={eyeRy}
                   fill={eyeColor}
                 />
                 <Ellipse
                   cx={eyeCxR}
                   cy={eyeCy}
-                  rx={eyeR}
-                  ry={eyeR}
+                  rx={eyeRx}
+                  ry={eyeRy}
                   fill={eyeColor}
                 />
               </>

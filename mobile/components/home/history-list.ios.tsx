@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import {
-  Button,
   Host,
   HStack,
   List,
@@ -14,7 +13,6 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   accessibilityLabel,
-  buttonStyle,
   contentShape,
   font,
   foregroundStyle,
@@ -25,7 +23,6 @@ import {
   listRowSeparator,
   listRowSpacing,
   listStyle,
-  multilineTextAlignment,
   onTapGesture,
   scrollContentBackground,
   scrollEdgeEffectStyle,
@@ -61,44 +58,28 @@ import {
 
 /** Circular eye-mark size for Agents list rows (Grok bots). */
 const AGENT_MARK_SIZE = 40;
-/** Squircle size for the pinned Pearl tile. */
-const PINNED_MARK_SIZE = 72;
 /** Shared horizontal inset for agent/nav rows. */
 const ROW_LEADING = 20;
 
 export type { HistoryChatActionHandlers } from "@/components/home/history-list";
 
 /**
- * iOS home: plain List — pinned Pearl, then custom agents.
- * Styled after Grok bots (no separators, airy rows).
+ * iOS home: plain List — Pearl first (same row style as agents), then custom agents.
  */
 export function HistoryListIOS({
   onOpenChat,
   bottomInset = 0,
-  onCreateAgent,
 }: {
   readonly onOpenChat: () => void;
   readonly actions?: HistoryChatActionHandlers;
   readonly bottomInset?: number;
-  /** Opens the new-agent composer from the empty Agents row. */
-  readonly onCreateAgent?: () => void;
 }) {
-  const { chats, newChat, selectChat } = useChats();
+  const { newChat, selectChat } = useChats();
   const pageBackground = useCSSVariable("--color-background") as
     | string
     | undefined;
   const backgroundColor = pageBackground ?? "#FFFFFF";
   const clearRow = "#00000000";
-  const rowChrome = [
-    listRowInsets({
-      top: 14,
-      bottom: 14,
-      leading: ROW_LEADING,
-      trailing: ROW_LEADING,
-    }),
-    listRowBackground(backgroundColor),
-    listRowSeparator("hidden"),
-  ];
 
   const [agents, setAgents] = useState<readonly CustomAgentDto[] | null>(null);
   const orderedAgents = useMemo(
@@ -132,18 +113,11 @@ export function HistoryListIOS({
     [onOpenChat, selectChat],
   );
 
-  const lastPearlChat = chats[0] ?? null;
-
   const openPearl = useCallback(() => {
-    if (lastPearlChat) {
-      openChat(lastPearlChat.id);
-      return;
-    }
+    // Fresh Pearl thread — don't reopen a custom-agent chat that happens to be first.
     newChat();
     onOpenChat();
-  }, [lastPearlChat, newChat, onOpenChat, openChat]);
-
-  const showAgents = agents !== null;
+  }, [newChat, onOpenChat]);
 
   return (
     <View
@@ -163,19 +137,11 @@ export function HistoryListIOS({
           ]}
         >
           <Section>
-            <PearlPinnedRow
+            <PearlRow
               rowBackground={backgroundColor}
-              onOpenPearl={openPearl}
+              onOpen={openPearl}
             />
-            {showAgents && orderedAgents.length === 0 && onCreateAgent ? (
-              <Button
-                label="New Agent"
-                systemImage="person.crop.circle.badge.plus"
-                onPress={onCreateAgent}
-                modifiers={[buttonStyle("plain"), ...rowChrome]}
-              />
-            ) : null}
-            {showAgents && orderedAgents.length > 0 ? (
+            {agents !== null ? (
               <List.ForEach
                 data={orderedAgents}
                 keyExtractor={(agent) => agent.id}
@@ -243,7 +209,9 @@ function AgentListMark({
   const metrics = pearlMarkMetrics(size, heightRatio);
   return (
     <RNHostView matchContents>
+      {/* Let the SwiftUI row own taps — burst Pressable would steal them. */}
       <View
+        pointerEvents="none"
         style={{ width: metrics.width, height: metrics.layoutHeight }}
       >
         <AgentMark
@@ -254,7 +222,7 @@ function AgentListMark({
           markBrows={markBrows}
           markGaze={markGaze}
           heightRatio={heightRatio}
-          motion="burst"
+          motion="off"
           eyeMotion="idle"
         />
       </View>
@@ -262,58 +230,45 @@ function AgentListMark({
   );
 }
 
-/** Centered pinned Pearl. */
-function PearlPinnedRow({
+/** Pearl as a normal agent-style list row (top of the list). */
+function PearlRow({
   rowBackground,
-  onOpenPearl,
+  onOpen,
 }: {
   readonly rowBackground: string;
-  readonly onOpenPearl: () => void;
+  readonly onOpen: () => void;
 }) {
-  const pearlMetrics = pearlMarkMetrics(
-    PINNED_MARK_SIZE,
-    PEARL_MARK_HEIGHT_RATIO,
-  );
   return (
     <HStack
-      spacing={0}
-      alignment="bottom"
+      spacing={12}
+      alignment="center"
       modifiers={[
         listRowInsets({
-          top: 4,
-          bottom: 22,
+          top: 10,
+          bottom: 10,
           leading: ROW_LEADING,
           trailing: ROW_LEADING,
         }),
         listRowBackground(rowBackground),
         listRowSeparator("hidden"),
+        ...FULL_ROW_HIT,
+        onTapGesture(onOpen),
+        accessibilityLabel("Pearl"),
       ]}
     >
-      <Spacer />
-      <VStack
-        spacing={6}
-        alignment="center"
-        modifiers={[
-          frame({ width: pearlMetrics.width + 8 }),
-          onTapGesture(onOpenPearl),
-          accessibilityLabel("Pearl"),
-          contentShape(shapes.rectangle()),
-        ]}
-      >
-        <AgentListMark
-          accent={PEARL_IDENTITY_ACCENT}
-          size={PINNED_MARK_SIZE}
-          markShape="oval"
-          markTalk="hinge"
-          markBrows={DEFAULT_AGENT_MARK_BROWS}
-          markGaze={DEFAULT_AGENT_MARK_GAZE}
-          heightRatio={PEARL_MARK_HEIGHT_RATIO}
-        />
+      <AgentListMark
+        accent={PEARL_IDENTITY_ACCENT}
+        markShape="oval"
+        markTalk="hinge"
+        markBrows={DEFAULT_AGENT_MARK_BROWS}
+        markGaze={DEFAULT_AGENT_MARK_GAZE}
+        heightRatio={PEARL_MARK_HEIGHT_RATIO}
+      />
+      <VStack spacing={1} alignment="leading">
         <SwiftText
           modifiers={[
             lineLimit(1),
-            font({ size: 12, weight: "regular" }),
-            multilineTextAlignment("center"),
+            font({ size: 16, weight: "semibold" }),
           ]}
         >
           Pearl

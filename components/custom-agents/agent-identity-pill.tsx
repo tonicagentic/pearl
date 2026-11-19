@@ -336,10 +336,12 @@ export function AgentAccentMark({
     return Math.round(width / 2 - dx);
   })();
   const eyeColor = markEyeColor(accent);
-  const eyeBaseL = width * 0.4;
-  const eyeBaseR = width * 0.6;
+  // South Park Canadian-style: close-set vertical ovals.
+  const eyeBaseL = width * 0.43;
+  const eyeBaseR = width * 0.57;
   const eyeBaseY = maxLift + topCut * 0.48;
-  const eyeR = Math.max(1.4, width * 0.055);
+  const eyeRx = Math.max(1.1, width * 0.038);
+  const eyeRy = Math.max(2.2, width * 0.09);
   const gazePad = Math.max(1.5, width * 0.04);
   const closedHalf = Math.max(2.2, width * 0.07);
   const closedStroke = Math.max(1.2, width * 0.028);
@@ -524,15 +526,15 @@ export function AgentAccentMark({
                 <ellipse
                   cx={eyeCxL}
                   cy={eyeCy}
-                  rx={eyeR}
-                  ry={eyeR}
+                  rx={eyeRx}
+                  ry={eyeRy}
                   fill={eyeColor}
                 />
                 <ellipse
                   cx={eyeCxR}
                   cy={eyeCy}
-                  rx={eyeR}
-                  ry={eyeR}
+                  rx={eyeRx}
+                  ry={eyeRy}
                   fill={eyeColor}
                 />
               </>

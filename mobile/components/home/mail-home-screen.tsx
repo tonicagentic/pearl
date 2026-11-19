@@ -6,7 +6,7 @@ import {
 } from "react";
 import { AppState, Platform, Pressable, View } from "react-native";
 import { Stack, router, useFocusEffect } from "expo-router";
-import { ClockIcon, FolderIcon, PlusIcon, UserIcon } from "lucide-react-native";
+import { FolderIcon, PlusIcon, UserIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { HistoryScreen } from "@/components/home/app-drawer";
@@ -30,7 +30,8 @@ import { initials as viewerInitials } from "@/src/initials";
 const IS_IOS = Platform.OS === "ios";
 
 /**
- * Mail-style home: Profile left; History / Workspaces / New agent right.
+ * Mail-style home: Profile left; Workspaces / New agent right.
+ * History lives on Pearl chat threads.
  */
 export function MailHomeScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
@@ -100,10 +101,6 @@ export function MailHomeScreen() {
     setCreateAgentOpen(true);
   }, [billingReady, isAnonymous]);
 
-  const openHistory = useCallback(() => {
-    router.push("/history");
-  }, []);
-
   const openWorkspaces = useCallback(() => {
     router.push("/workspaces");
   }, []);
@@ -166,14 +163,6 @@ export function MailHomeScreen() {
             ? undefined
             : () => (
                 <View className="flex-row items-center">
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="History"
-                    className="h-10 w-10 items-center justify-center"
-                    onPress={openHistory}
-                  >
-                    <Icon as={ClockIcon} className="size-5 text-foreground" />
-                  </Pressable>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Workspaces"
@@ -242,11 +231,6 @@ export function MailHomeScreen() {
           </Stack.Toolbar>
           <Stack.Toolbar placement="right">
             <Stack.Toolbar.Button
-              icon="clock"
-              accessibilityLabel="History"
-              onPress={openHistory}
-            />
-            <Stack.Toolbar.Button
               icon="folder"
               accessibilityLabel="Workspaces"
               onPress={openWorkspaces}
@@ -269,7 +253,6 @@ export function MailHomeScreen() {
           <HistoryScreen
             onOpenChat={openChat}
             bottomInset={listBottomInset}
-            onCreateAgent={isAnonymous ? undefined : openCreateAgent}
           />
         )}
       </View>

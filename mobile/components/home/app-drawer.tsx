@@ -7,7 +7,6 @@ import { useCSSVariable } from "uniwind";
 import {
   AgentMark,
   agentListSubtitle,
-  pearlMarkMetrics,
 } from "@/components/custom-agents/agent-mark";
 import {
   HistoryListIOS,
@@ -28,26 +27,22 @@ import {
 } from "../../../lib/custom-agents/mark";
 
 const AGENT_MARK_SIZE = 40;
-const PINNED_MARK_SIZE = 72;
 
 export type { HistoryChatActionHandlers };
 
 /**
- * Home list: pinned Pearl, then agents.
+ * Home list: Pearl first (same row style as agents), then agents.
  * Selecting Pearl or an agent opens `/chat`.
  */
 export function HistoryScreen({
   onOpenChat,
   visible = true,
   bottomInset = 0,
-  onCreateAgent,
 }: {
   /** Called after selecting an existing chat (caller should push `/chat`). */
   onOpenChat?: () => void;
   visible?: boolean;
   readonly bottomInset?: number;
-  /** Opens the new-agent composer (empty Agents row). */
-  readonly onCreateAgent?: () => void;
 }) {
   const openChatRoute = () => {
     if (onOpenChat) onOpenChat();
@@ -60,7 +55,6 @@ export function HistoryScreen({
         <HistoryListIOS
           onOpenChat={openChatRoute}
           bottomInset={bottomInset}
-          onCreateAgent={onCreateAgent}
         />
       </View>
     );
@@ -71,7 +65,6 @@ export function HistoryScreen({
       visible={visible}
       onOpenChat={openChatRoute}
       bottomInset={bottomInset}
-      onCreateAgent={onCreateAgent}
     />
   );
 }
@@ -80,14 +73,12 @@ function HistoryListAndroid({
   visible,
   onOpenChat,
   bottomInset = 0,
-  onCreateAgent,
 }: {
   readonly visible: boolean;
   readonly onOpenChat: () => void;
-  readonly onCreateAgent?: () => void;
   readonly bottomInset?: number;
 }) {
-  const { chats, newChat, selectChat } = useChats();
+  const { newChat, selectChat } = useChats();
   const [agents, setAgents] = useState<readonly CustomAgentDto[] | null>(null);
   const orderedAgents = useMemo(
     () =>
@@ -114,14 +105,7 @@ function HistoryListAndroid({
     }, []),
   );
 
-  const lastPearlChat = chats[0] ?? null;
   const openPearl = () => {
-    if (lastPearlChat) {
-      void selectChat(lastPearlChat.id).then((selected) => {
-        if (selected) onOpenChat();
-      });
-      return;
-    }
     newChat();
     onOpenChat();
   };
@@ -138,119 +122,82 @@ function HistoryListAndroid({
         contentContainerStyle={{ paddingBottom: 32 + bottomInset }}
       >
         <View className="mb-8">
-          <View className="mb-5 flex-row items-end justify-center px-5">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Pearl"
-              className="items-center active:opacity-80"
-              style={{
-                width:
-                  pearlMarkMetrics(PINNED_MARK_SIZE, PEARL_MARK_HEIGHT_RATIO)
-                    .width + 8,
-                gap: 6,
-              }}
-              onPress={openPearl}
-            >
-              <AgentMark
-                accent={PEARL_IDENTITY_ACCENT}
-                size={PINNED_MARK_SIZE}
-                markShape="oval"
-                markTalk="hinge"
-                markBrows="none"
-                markGaze="wander"
-                heightRatio={PEARL_MARK_HEIGHT_RATIO}
-                motion="burst"
-                eyeMotion="idle"
-              />
-              <AppText
-                variant="caption"
-                weight="regular"
-                numberOfLines={1}
-                className="text-center"
-              >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Pearl"
+            className="min-h-[60px] w-full flex-row items-center gap-3 px-5 py-2.5"
+            onPress={openPearl}
+          >
+            <AgentMark
+              accent={PEARL_IDENTITY_ACCENT}
+              size={AGENT_MARK_SIZE}
+              markShape="oval"
+              markTalk="hinge"
+              markBrows="none"
+              markGaze="wander"
+              heightRatio={PEARL_MARK_HEIGHT_RATIO}
+              motion="off"
+              eyeMotion="idle"
+            />
+            <View className="min-w-0 flex-1" style={{ gap: 1 }}>
+              <AppText variant="label" weight="semibold" numberOfLines={1}>
                 Pearl
               </AppText>
-            </Pressable>
-          </View>
-          {agents !== null && orderedAgents.length === 0 ? (
-            onCreateAgent ? (
+            </View>
+          </Pressable>
+          {orderedAgents.map((agent) => {
+            const subtitle = agentListSubtitle({
+              name: agent.name,
+              chatTitle: agent.chatTitle,
+              instructions: agent.instructions,
+            });
+            return (
               <Pressable
+                key={agent.id}
                 accessibilityRole="button"
-                accessibilityLabel="New agent"
-                className="min-h-[60px] flex-row items-center gap-3 px-5 py-2.5"
-                onPress={onCreateAgent}
+                accessibilityLabel={
+                  subtitle ? `${agent.name}, ${subtitle}` : agent.name
+                }
+                className="min-h-[60px] w-full flex-row items-center gap-3 px-5 py-2.5"
+                onPress={() => {
+                  void selectChat(agent.chatId).then((selected) => {
+                    if (selected) onOpenChat();
+                  });
+                }}
               >
                 <AgentMark
-                  accent={DEFAULT_AGENT_MARK_ACCENT}
+                  accent={agent.accent || DEFAULT_AGENT_MARK_ACCENT}
                   size={AGENT_MARK_SIZE}
-                  markShape={DEFAULT_AGENT_MARK_SHAPE}
-                  markTalk="hinge"
-                  markBrows="none"
-                  markGaze="wander"
-                  motion="burst"
+                  markShape={agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE}
+                  markTalk={agent.markTalk ?? DEFAULT_AGENT_MARK_TALK}
+                  markBrows={agent.markBrows}
+                  markGaze={agent.markGaze}
+                  motion="off"
                   eyeMotion="idle"
                 />
-                <AppText variant="label" weight="semibold">
-                  New Agent
-                </AppText>
-              </Pressable>
-            ) : null
-          ) : (
-            orderedAgents.map((agent) => {
-              const subtitle = agentListSubtitle({
-                name: agent.name,
-                chatTitle: agent.chatTitle,
-                instructions: agent.instructions,
-              });
-              return (
-                <Pressable
-                  key={agent.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    subtitle ? `${agent.name}, ${subtitle}` : agent.name
-                  }
-                  className="min-h-[60px] w-full flex-row items-center gap-3 px-5 py-2.5"
-                  onPress={() => {
-                    void selectChat(agent.chatId).then((selected) => {
-                      if (selected) onOpenChat();
-                    });
-                  }}
-                >
-                  <AgentMark
-                    accent={agent.accent || DEFAULT_AGENT_MARK_ACCENT}
-                    size={AGENT_MARK_SIZE}
-                    markShape={agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE}
-                    markTalk={agent.markTalk ?? DEFAULT_AGENT_MARK_TALK}
-                    markBrows={agent.markBrows}
-                    markGaze={agent.markGaze}
-                    motion="burst"
-                    eyeMotion="idle"
-                  />
-                  <View className="min-w-0 flex-1" style={{ gap: 1 }}>
+                <View className="min-w-0 flex-1" style={{ gap: 1 }}>
+                  <AppText
+                    variant="label"
+                    weight="semibold"
+                    numberOfLines={1}
+                  >
+                    {agent.name}
+                  </AppText>
+                  {subtitle ? (
                     <AppText
-                      variant="label"
-                      weight="semibold"
+                      variant="secondary"
+                      weight="regular"
                       numberOfLines={1}
                     >
-                      {agent.name}
+                      {subtitle}
                     </AppText>
-                    {subtitle ? (
-                      <AppText
-                        variant="secondary"
-                        weight="regular"
-                        numberOfLines={1}
-                      >
-                        {subtitle}
-                      </AppText>
-                    ) : null}
-                  </View>
-                </Pressable>
-              );
-            })
-          )}
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
-

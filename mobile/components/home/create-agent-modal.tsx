@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
+  ScrollView,
   TextInput,
   View,
 } from "react-native";
 import { BottomSheet, RNHostView } from "@expo/ui";
-import { ArrowUpIcon, XIcon } from "lucide-react-native";
+import { SymbolView } from "expo-symbols";
 import { useCSSVariable } from "uniwind";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AgentMarkPicker } from "@/components/custom-agents/agent-mark-picker";
-import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
 import { Text, textVariants } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import {
@@ -19,8 +22,6 @@ import {
   DEFAULT_AGENT_MARK_GAZE,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
-  type AgentMarkBrows,
-  type AgentMarkGaze,
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "../../../lib/custom-agents/mark";
@@ -39,6 +40,7 @@ export function CreateAgentModal({
   readonly onClose: () => void;
   readonly onCreated: (agent: CustomAgentDto) => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
   const [instructions, setInstructions] = useState("");
   const [accent, setAccent] = useState<string>(DEFAULT_AGENT_MARK_ACCENT);
@@ -48,18 +50,15 @@ export function CreateAgentModal({
   const [markTalk, setMarkTalk] = useState<AgentMarkTalk>(
     DEFAULT_AGENT_MARK_TALK,
   );
-  const [markBrows, setMarkBrows] = useState<AgentMarkBrows>(
-    DEFAULT_AGENT_MARK_BROWS,
-  );
-  const [markGaze, setMarkGaze] = useState<AgentMarkGaze>(
-    DEFAULT_AGENT_MARK_GAZE,
-  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
+    | string
+    | undefined;
+  const mutedColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
   const canSubmit = name.trim().length > 0 && !busy;
@@ -71,8 +70,6 @@ export function CreateAgentModal({
     setAccent(DEFAULT_AGENT_MARK_ACCENT);
     setMarkShape(DEFAULT_AGENT_MARK_SHAPE);
     setMarkTalk(DEFAULT_AGENT_MARK_TALK);
-    setMarkBrows(DEFAULT_AGENT_MARK_BROWS);
-    setMarkGaze(DEFAULT_AGENT_MARK_GAZE);
     setError(null);
     setBusy(false);
   }, [open]);
@@ -87,8 +84,8 @@ export function CreateAgentModal({
       accent,
       markShape,
       markTalk,
-      markBrows,
-      markGaze,
+      markBrows: DEFAULT_AGENT_MARK_BROWS,
+      markGaze: DEFAULT_AGENT_MARK_GAZE,
     })
       .then(onCreated)
       .catch((cause) => {
@@ -105,84 +102,106 @@ export function CreateAgentModal({
     <BottomSheet
       isPresented={open}
       onDismiss={onClose}
-      snapPoints={["half", "full"]}
+      snapPoints={["full"]}
       containerColor={backgroundColor}
       contentPadding={{ top: 4, left: 0, right: 0, bottom: 0 }}
     >
-      <RNHostView matchContents>
-        <View className="px-5 pb-6 pt-1">
-          <View className="mb-3 flex-row items-center justify-between">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              hitSlop={8}
-              className="h-10 w-10 items-center justify-center rounded-full bg-muted/60 active:opacity-80"
-              onPress={onClose}
-            >
-              <Icon as={XIcon} className="size-5 text-foreground" />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Create agent"
-              hitSlop={8}
-              className={`h-10 w-10 items-center justify-center rounded-full ${canSubmit ? "bg-foreground" : "bg-muted/60"}`}
-              disabled={!canSubmit}
-              onPress={submit}
-            >
-              {busy ? (
-                <ActivityIndicator size="small" />
-              ) : (
-                <Icon
-                  as={ArrowUpIcon}
-                  className={`size-5 ${canSubmit ? "text-background" : "text-muted-foreground"}`}
+      {/* Parent-sized host so ScrollView can fill the sheet (not matchContents). */}
+      <RNHostView>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ flex: 1 }}
+        >
+          <View className="flex-1 px-5 pt-1">
+            <View className="mb-2 h-10 flex-row items-center">
+              <View className="w-8" />
+              <Text
+                variant="label"
+                weight="semibold"
+                className="flex-1 text-center text-foreground"
+              >
+                New Agent
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                hitSlop={8}
+                className="h-8 w-8 items-center justify-center active:opacity-70"
+                onPress={onClose}
+              >
+                <SymbolView
+                  name={{
+                    ios: "xmark.circle.fill",
+                    android: "close",
+                    web: "close",
+                  }}
+                  size={28}
+                  tintColor={mutedColor ?? "#8E8E93"}
+                  type="hierarchical"
                 />
-              )}
-            </Pressable>
-          </View>
+              </Pressable>
+            </View>
 
-          <AgentMarkPicker
-            accent={accent}
-            markShape={markShape}
-            markTalk={markTalk}
-            markBrows={markBrows}
-            markGaze={markGaze}
-            onAccentChange={setAccent}
-            onMarkShapeChange={setMarkShape}
-            onMarkTalkChange={setMarkTalk}
-            onMarkBrowsChange={setMarkBrows}
-            onMarkGazeChange={setMarkGaze}
-          />
-          {error ? (
-            <Text variant="secondary" tone="destructive" className="mb-3">
-              {error}
-            </Text>
-          ) : null}
-          <TextInput
-            accessibilityLabel="Agent name"
-            autoFocus
-            className={cn(
-              "min-h-12 tracking-tight",
-              textVariants({ variant: "display" }),
-            )}
-            maxLength={80}
-            onChangeText={setName}
-            onSubmitEditing={submit}
-            placeholder="Agent name"
-            placeholderTextColor={placeholderColor}
-            returnKeyType="next"
-            value={name}
-          />
-          <TextInput
-            accessibilityLabel="Standing instructions"
-            className={cn("mt-2 min-h-24", textVariants({ variant: "body" }))}
-            multiline
-            onChangeText={setInstructions}
-            placeholder="Standing instructions…"
-            placeholderTextColor={placeholderColor}
-            textAlignVertical="top"
-            value={instructions}
-          />
-        </View>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerClassName="pb-4"
+              style={{ flex: 1 }}
+            >
+              <AgentMarkPicker
+                accent={accent}
+                markShape={markShape}
+                markTalk={markTalk}
+                showBrows={false}
+                showGaze={false}
+                onAccentChange={setAccent}
+                onMarkShapeChange={setMarkShape}
+                onMarkTalkChange={setMarkTalk}
+              />
+              {error ? (
+                <Text variant="secondary" tone="destructive" className="mb-3">
+                  {error}
+                </Text>
+              ) : null}
+              <TextInput
+                accessibilityLabel="Agent name"
+                className={cn(
+                  "min-h-12 tracking-tight",
+                  textVariants({ variant: "display" }),
+                )}
+                maxLength={80}
+                onChangeText={setName}
+                placeholder="Agent name"
+                placeholderTextColor={placeholderColor}
+                returnKeyType="next"
+                value={name}
+              />
+              <TextInput
+                accessibilityLabel="Standing instructions"
+                className={cn(
+                  "mt-2 min-h-24",
+                  textVariants({ variant: "body" }),
+                )}
+                multiline
+                onChangeText={setInstructions}
+                placeholder="Standing instructions…"
+                placeholderTextColor={placeholderColor}
+                textAlignVertical="top"
+                value={instructions}
+              />
+            </ScrollView>
+
+            <View style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
+              <Button
+                label="Create"
+                loading={busy}
+                loadingLabel="Creating…"
+                disabled={name.trim().length === 0}
+                onPress={submit}
+              />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </RNHostView>
     </BottomSheet>
   );

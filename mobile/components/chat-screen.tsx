@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Alert, Platform, Pressable, View } from "react-native";
-import { Stack, useNavigation } from "expo-router";
+import { Stack, router, useNavigation } from "expo-router";
 import * as Haptics from "expo-haptics";
 import {
   BottomSheetModal,
@@ -15,6 +15,7 @@ import {
   type ThreadMessageLike,
 } from "@assistant-ui/react-native";
 import {
+  ClockIcon,
   MonitorIcon,
   SquarePenIcon,
 } from "lucide-react-native";
@@ -1163,6 +1164,10 @@ export function ChatScreen({
     dismissComputer();
     newChat();
   }, [dismissComputer, newChat]);
+  const openHistory = useCallback(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push("/history");
+  }, []);
   const openAgentSettings = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setAgentSettingsOpen(true);
@@ -1231,8 +1236,22 @@ export function ChatScreen({
             Platform.OS === "web"
               ? () => (
                   <View className="flex-row items-center">
+                    {activeCustomAgent ? null : (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="History"
+                        className="h-10 w-10 items-center justify-center"
+                        onPress={openHistory}
+                      >
+                        <Icon
+                          as={ClockIcon}
+                          className="size-5 text-foreground"
+                        />
+                      </Pressable>
+                    )}
                     {activeChatId ? (
                       <>
+                        {activeCustomAgent ? null : <View className="w-2" />}
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel="New chat"
@@ -1274,6 +1293,17 @@ export function ChatScreen({
       />
       {Platform.OS !== "web" ? (
         <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon="clock"
+            accessibilityLabel="History"
+            onPress={openHistory}
+            tintColor={foregroundColor}
+            hidden={Boolean(activeCustomAgent)}
+          />
+          <Stack.Toolbar.Spacer
+            width={8}
+            hidden={!activeChatId || Boolean(activeCustomAgent)}
+          />
           <Stack.Toolbar.Button
             icon="square.and.pencil"
             accessibilityLabel="New chat"
