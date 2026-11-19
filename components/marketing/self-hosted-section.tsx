@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GITHUB_URL } from "@/components/marketing/constants";
 import { MarketingSection } from "@/components/marketing/section";
 import { marketingType } from "@/components/marketing/type";
 
@@ -29,8 +30,6 @@ const POINTS = [
 ] as const;
 
 const PROVIDERS = ["AI Gateway", "Auto", "Sol", "Astra", "Grok Imagine"] as const;
-
-const GITHUB_URL = "https://github.com/tonicagentic/pearl";
 
 export function SelfHostedSection({
   onGetStarted,

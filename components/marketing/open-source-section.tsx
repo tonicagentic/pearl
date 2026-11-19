@@ -1,10 +1,12 @@
 import { FolderGit2Icon } from "lucide-react";
+import {
+  GITHUB_REPO,
+  GITHUB_URL,
+} from "@/components/marketing/constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MarketingSection } from "@/components/marketing/section";
 import { marketingType } from "@/components/marketing/type";
-
-const GITHUB_URL = "https://github.com/tonicagentic/pearl";
 
 const RECENT = [
   {
@@ -48,7 +50,7 @@ export function OpenSourceSection() {
           <CardHeader className="flex-row items-center gap-3 space-y-0 border-b border-border px-5 py-4">
             <FolderGit2Icon aria-hidden className="size-4 text-foreground" />
             <CardTitle className="text-sm font-medium tracking-tight">
-              tonicagentic/pearl
+              {GITHUB_REPO}
             </CardTitle>
             <span className="ml-auto text-xs text-muted-foreground">
               Apache-2.0

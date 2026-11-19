@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { ChatAppShell } from "@/app/_components/chat-app-shell";
 import { HomeChatPage } from "@/app/_components/home-chat-page";
 import { MarketingHomePage } from "@/components/marketing/marketing-home-page";
+import { getGithubStars } from "@/lib/github-stars";
 import { getServerViewer } from "@/lib/session";
 import { getInitialSetupStatus } from "@/lib/setup";
 
@@ -46,14 +47,26 @@ async function ResolvedHome({
   const forceHome =
     process.env.NODE_ENV === "development" && paramIsOne(params.home);
 
+  const githubStars = await getGithubStars();
+
   if (forceHome) {
-    return <MarketingHomePage authMode={setupStatus.authMode} />;
+    return (
+      <MarketingHomePage
+        authMode={setupStatus.authMode}
+        githubStars={githubStars}
+      />
+    );
   }
 
   const viewer = await getServerViewer(setupStatus);
 
   if (setupStatus.appReady && !viewer) {
-    return <MarketingHomePage authMode={setupStatus.authMode} />;
+    return (
+      <MarketingHomePage
+        authMode={setupStatus.authMode}
+        githubStars={githubStars}
+      />
+    );
   }
 
   return (
@@ -65,7 +78,9 @@ async function ResolvedHome({
 
 function HomeFallback() {
   const setupStatus = getInitialSetupStatus();
-  return <MarketingHomePage authMode={setupStatus.authMode} />;
+  return (
+    <MarketingHomePage authMode={setupStatus.authMode} githubStars={null} />
+  );
 }
 
 function paramIsOne(value: string | string[] | undefined) {

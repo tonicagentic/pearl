@@ -1,0 +1,7 @@
+export {
+  GITHUB_API_URL,
+  GITHUB_REPO,
+  GITHUB_URL,
+  HOSTED_PRICE_LABEL,
+  HOSTED_USAGE_CAP_LABEL,
+} from "@/lib/marketing";
