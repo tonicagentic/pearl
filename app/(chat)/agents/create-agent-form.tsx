@@ -4,14 +4,29 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { createCustomAgentAction } from "@/app/actions/custom-agents";
+import { AgentMarkPicker } from "@/components/custom-agents/agent-mark-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_SHAPE,
+  DEFAULT_AGENT_MARK_TALK,
+  type AgentMarkShape,
+  type AgentMarkTalk,
+} from "@/lib/custom-agents/mark";
 
 export function CreateAgentForm() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [accent, setAccent] = useState<string>(DEFAULT_AGENT_MARK_ACCENT);
+  const [markShape, setMarkShape] = useState<AgentMarkShape>(
+    DEFAULT_AGENT_MARK_SHAPE,
+  );
+  const [markTalk, setMarkTalk] = useState<AgentMarkTalk>(
+    DEFAULT_AGENT_MARK_TALK,
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -26,9 +41,15 @@ export function CreateAgentForm() {
             const row = await createCustomAgentAction({
               name,
               instructions: instructions.trim() || undefined,
+              accent,
+              markShape,
+              markTalk,
             });
             setName("");
             setInstructions("");
+            setAccent(DEFAULT_AGENT_MARK_ACCENT);
+            setMarkShape(DEFAULT_AGENT_MARK_SHAPE);
+            setMarkTalk(DEFAULT_AGENT_MARK_TALK);
             router.push(`/chat/${row.chatId}`);
             router.refresh();
           } catch (cause) {
@@ -42,6 +63,14 @@ export function CreateAgentForm() {
       }}
     >
       <div className="text-sm font-medium">New agent</div>
+      <AgentMarkPicker
+        accent={accent}
+        markShape={markShape}
+        markTalk={markTalk}
+        onAccentChange={setAccent}
+        onMarkShapeChange={setMarkShape}
+        onMarkTalkChange={setMarkTalk}
+      />
       <Input
         maxLength={80}
         onChange={(event) => setName(event.target.value)}

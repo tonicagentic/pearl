@@ -19,6 +19,9 @@ export function AgentThreadChrome() {
         <AgentIdentityPill
           name={agent.name}
           accent={agent.accent}
+          markShape={agent.markShape}
+          markTalk={agent.markTalk}
+          motion="idle"
           onClick={() => setSettingsOpen(true)}
         />
       </div>

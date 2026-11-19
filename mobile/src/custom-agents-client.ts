@@ -3,11 +3,18 @@
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
 import { sessionInvalid } from "./session-store";
 
+import type {
+  AgentMarkShape,
+  AgentMarkTalk,
+} from "../../lib/custom-agents/mark";
+
 export type CustomAgentDto = {
   readonly id: string;
   readonly name: string;
   readonly instructions: string;
   readonly accent: string;
+  readonly markShape: AgentMarkShape;
+  readonly markTalk: AgentMarkTalk;
   readonly chatId: string;
   /** Current title of the agent's durable chat (list preview). */
   readonly chatTitle: string;
@@ -55,6 +62,8 @@ export async function createCustomAgentRequest(input: {
   readonly name: string;
   readonly instructions?: string;
   readonly accent?: string;
+  readonly markShape?: AgentMarkShape;
+  readonly markTalk?: AgentMarkTalk;
 }): Promise<CustomAgentDto> {
   const response = await fetch(`${AGENT_URL}/api/custom-agents`, {
     method: "POST",
@@ -75,6 +84,8 @@ export async function updateCustomAgentRequest(
     readonly name?: string;
     readonly instructions?: string;
     readonly accent?: string;
+    readonly markShape?: AgentMarkShape;
+    readonly markTalk?: AgentMarkTalk;
   },
 ): Promise<CustomAgentDto> {
   const response = await fetch(

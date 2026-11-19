@@ -1,6 +1,15 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
+import {
+  DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_SHAPE,
+  DEFAULT_AGENT_MARK_TALK,
+  isAgentMarkShape,
+  isAgentMarkTalk,
+  type AgentMarkShape,
+  type AgentMarkTalk,
+} from "@/lib/custom-agents/mark";
 import type {
   CustomAgentRef,
   CustomAgentSummary,
@@ -14,7 +23,6 @@ import {
 
 const MAX_NAME = 80;
 const MAX_INSTRUCTIONS = 20_000;
-const DEFAULT_ACCENT = "#2DD4BF";
 const ACCENT_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
 export class CustomAgentError extends Error {
@@ -42,11 +50,43 @@ function normalizeInstructions(raw: string | undefined): string {
 }
 
 function normalizeAccent(raw: string | undefined): string {
-  const accent = (raw ?? DEFAULT_ACCENT).trim();
+  const accent = (raw ?? DEFAULT_AGENT_MARK_ACCENT).trim();
   if (!ACCENT_PATTERN.test(accent)) {
     throw new CustomAgentError("Accent must be a hex color like #2DD4BF.");
   }
   return accent.toUpperCase();
+}
+
+function normalizeMarkShape(raw: string | undefined): AgentMarkShape {
+  if (raw === undefined || raw === "") return DEFAULT_AGENT_MARK_SHAPE;
+  if (!isAgentMarkShape(raw)) {
+    throw new CustomAgentError(
+      "Mark shape must be oval, diamond, square, or trap.",
+    );
+  }
+  return raw;
+}
+
+function normalizeMarkTalk(raw: string | undefined): AgentMarkTalk {
+  if (raw === undefined || raw === "") return DEFAULT_AGENT_MARK_TALK;
+  if (!isAgentMarkTalk(raw)) {
+    throw new CustomAgentError(
+      "Mark talk must be hinge, lift, or chatter.",
+    );
+  }
+  return raw;
+}
+
+function markShapeOf(agent: CustomAgent): AgentMarkShape {
+  return isAgentMarkShape(agent.markShape)
+    ? agent.markShape
+    : DEFAULT_AGENT_MARK_SHAPE;
+}
+
+function markTalkOf(agent: CustomAgent): AgentMarkTalk {
+  return isAgentMarkTalk(agent.markTalk)
+    ? agent.markTalk
+    : DEFAULT_AGENT_MARK_TALK;
 }
 
 function toSummary(
@@ -59,6 +99,8 @@ function toSummary(
     name: agent.name,
     instructions: agent.instructions,
     accent: agent.accent,
+    markShape: markShapeOf(agent),
+    markTalk: markTalkOf(agent),
     chatId,
     chatTitle,
     createdAt: agent.createdAt.toISOString(),
@@ -71,6 +113,8 @@ function toRef(agent: CustomAgent): CustomAgentRef {
     id: agent.id,
     name: agent.name,
     accent: agent.accent,
+    markShape: markShapeOf(agent),
+    markTalk: markTalkOf(agent),
     instructions: agent.instructions,
   };
 }
@@ -189,11 +233,15 @@ export async function createCustomAgent(
     readonly name: string;
     readonly instructions?: string;
     readonly accent?: string;
+    readonly markShape?: string;
+    readonly markTalk?: string;
   },
 ): Promise<CustomAgentSummary> {
   const name = requireName(input.name);
   const instructions = normalizeInstructions(input.instructions);
   const accent = normalizeAccent(input.accent);
+  const markShape = normalizeMarkShape(input.markShape);
+  const markTalk = normalizeMarkTalk(input.markTalk);
   const agentId = randomUUID();
   const chatId = randomUUID();
 
@@ -206,6 +254,8 @@ export async function createCustomAgent(
         name,
         instructions,
         accent,
+        markShape,
+        markTalk,
       })
       .returning();
     if (!agent) {
@@ -238,6 +288,8 @@ export async function updateCustomAgent(
     readonly name?: string;
     readonly instructions?: string;
     readonly accent?: string;
+    readonly markShape?: string;
+    readonly markTalk?: string;
   },
 ): Promise<CustomAgentSummary | null> {
   const existing = await getCustomAgent(userId, agentId);
@@ -253,6 +305,14 @@ export async function updateCustomAgent(
     input.accent !== undefined
       ? normalizeAccent(input.accent)
       : existing.accent;
+  const markShape =
+    input.markShape !== undefined
+      ? normalizeMarkShape(input.markShape)
+      : existing.markShape;
+  const markTalk =
+    input.markTalk !== undefined
+      ? normalizeMarkTalk(input.markTalk)
+      : existing.markTalk;
 
   const [agent] = await db
     .update(customAgent)
@@ -260,6 +320,8 @@ export async function updateCustomAgent(
       name,
       instructions,
       accent,
+      markShape,
+      markTalk,
       updatedAt: new Date(),
     })
     .where(and(eq(customAgent.userId, userId), eq(customAgent.id, agentId)))

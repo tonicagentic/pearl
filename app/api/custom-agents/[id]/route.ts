@@ -55,10 +55,18 @@ export async function PATCH(
     readonly name?: string;
     readonly instructions?: string;
     readonly accent?: string;
+    readonly markShape?: string;
+    readonly markTalk?: string;
   };
 
   try {
-    const agent = await updateCustomAgent(viewer.id, id, body);
+    const agent = await updateCustomAgent(viewer.id, id, {
+      name: body.name,
+      instructions: body.instructions,
+      accent: body.accent,
+      markShape: body.markShape,
+      markTalk: body.markTalk,
+    });
     if (!agent) {
       return NextResponse.json({ error: "Agent not found." }, { status: 404 });
     }

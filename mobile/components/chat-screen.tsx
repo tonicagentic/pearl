@@ -205,6 +205,8 @@ export function ChatScreen({
             id: agent.id,
             name: agent.name,
             accent: agent.accent,
+            markShape: agent.markShape,
+            markTalk: agent.markTalk,
             chatId: agent.chatId,
           })),
         );
@@ -1197,6 +1199,8 @@ export function ChatScreen({
             <ThreadIdentityMenu
               name={activeCustomAgent?.name ?? "Pearl"}
               accent={activeCustomAgent?.accent ?? PEARL_IDENTITY_ACCENT}
+              markShape={activeCustomAgent?.markShape}
+              markTalk={activeCustomAgent?.markTalk}
               projectLabel={projectLabel}
               hasProject={Boolean(activeProjectId)}
               canManageThread={Boolean(activeChatId)}

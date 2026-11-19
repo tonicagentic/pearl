@@ -31,6 +31,10 @@ import {
   agentAttachment,
 } from "@/lib/db/schema";
 import { db } from "@/lib/db/client";
+import {
+  isAgentMarkShape,
+  isAgentMarkTalk,
+} from "@/lib/custom-agents/mark";
 import type { CustomAgentRef } from "@/lib/custom-agents/types";
 
 const CHAT_HISTORY_PAGE_SIZE = 20;
@@ -319,6 +323,8 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
       customAgentId: customAgent.id,
       customAgentName: customAgent.name,
       customAgentAccent: customAgent.accent,
+      customAgentMarkShape: customAgent.markShape,
+      customAgentMarkTalk: customAgent.markTalk,
       customAgentInstructions: customAgent.instructions,
     })
     .from(chat)
@@ -356,6 +362,12 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
           id: row.customAgentId,
           name: row.customAgentName,
           accent: row.customAgentAccent,
+          markShape: isAgentMarkShape(row.customAgentMarkShape)
+            ? row.customAgentMarkShape
+            : "oval",
+          markTalk: isAgentMarkTalk(row.customAgentMarkTalk)
+            ? row.customAgentMarkTalk
+            : "hinge",
           instructions: row.customAgentInstructions ?? "",
         }
       : null;

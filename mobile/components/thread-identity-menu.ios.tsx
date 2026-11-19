@@ -20,6 +20,8 @@ import type { ThreadIdentityMenuProps } from "./thread-identity-menu";
 export function ThreadIdentityMenu({
   name,
   accent,
+  markShape,
+  markTalk,
   projectLabel,
   hasProject,
   canManageThread,
@@ -51,7 +53,13 @@ export function ThreadIdentityMenu({
                 ).catch(() => {});
               }}
             >
-              <AgentIdentityPill name={label} accent={accent} />
+              <AgentIdentityPill
+                name={label}
+                accent={accent}
+                markShape={markShape}
+                markTalk={markTalk}
+                motion="idle"
+              />
             </View>
           </RNHostView>
         }

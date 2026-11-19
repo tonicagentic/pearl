@@ -74,7 +74,13 @@ async function ResolvedAgents() {
                 href={`/chat/${row.chatId}`}
               >
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <AgentAccentMark accent={row.accent} size="md" />
+                  <AgentAccentMark
+                    accent={row.accent}
+                    markShape={row.markShape}
+                    markTalk={row.markTalk}
+                    size="md"
+                    motion="burst"
+                  />
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium">
                       {row.name}

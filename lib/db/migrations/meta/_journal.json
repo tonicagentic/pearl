@@ -288,6 +288,20 @@
       "when": 1795400000000,
       "tag": "0043_custom_agents",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1795500000000,
+      "tag": "0044_custom_agent_mark_shape",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1795600000000,
+      "tag": "0045_custom_agent_mark_talk",
+      "breakpoints": true
     }
   ]
 }

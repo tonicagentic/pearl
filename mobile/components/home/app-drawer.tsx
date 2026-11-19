@@ -12,6 +12,7 @@ import { useCSSVariable } from "uniwind";
 import {
   AgentMark,
   agentListSubtitle,
+  pearlMarkMetrics,
 } from "@/components/custom-agents/agent-mark";
 import {
   HistoryListIOS,
@@ -25,6 +26,11 @@ import {
   fetchCustomAgents,
   type CustomAgentDto,
 } from "@/src/custom-agents-client";
+import {
+  DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_SHAPE,
+  DEFAULT_AGENT_MARK_TALK,
+} from "../../../lib/custom-agents/mark";
 
 const AGENT_MARK_SIZE = 40;
 const PINNED_MARK_SIZE = 72;
@@ -142,13 +148,18 @@ function HistoryListAndroid({
               accessibilityRole="button"
               accessibilityLabel="Pearl"
               className="items-center active:opacity-80"
-              style={{ width: PINNED_MARK_SIZE + 8, gap: 6 }}
+              style={{
+                width: pearlMarkMetrics(PINNED_MARK_SIZE).width + 8,
+                gap: 6,
+              }}
               onPress={openPearl}
             >
               <AgentMark
                 accent={PEARL_IDENTITY_ACCENT}
                 size={PINNED_MARK_SIZE}
-                shape="squircle"
+                markShape="oval"
+                markTalk="hinge"
+                motion="burst"
               />
               <AppText
                 variant="caption"
@@ -168,7 +179,13 @@ function HistoryListAndroid({
                 className="min-h-[60px] flex-row items-center gap-3 px-5 py-2.5"
                 onPress={onCreateAgent}
               >
-                <AgentMark accent="#2DD4BF" size={AGENT_MARK_SIZE} />
+                <AgentMark
+                  accent={DEFAULT_AGENT_MARK_ACCENT}
+                  size={AGENT_MARK_SIZE}
+                  markShape={DEFAULT_AGENT_MARK_SHAPE}
+                  markTalk="hinge"
+                  motion="burst"
+                />
                 <AppText variant="label" weight="semibold">
                   New Agent
                 </AppText>
@@ -196,8 +213,11 @@ function HistoryListAndroid({
                   }}
                 >
                   <AgentMark
-                    accent={agent.accent || "#2DD4BF"}
+                    accent={agent.accent || DEFAULT_AGENT_MARK_ACCENT}
                     size={AGENT_MARK_SIZE}
+                    markShape={agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE}
+                    markTalk={agent.markTalk ?? DEFAULT_AGENT_MARK_TALK}
+                    motion="burst"
                   />
                   <View className="min-w-0 flex-1" style={{ gap: 1 }}>
                     <AppText

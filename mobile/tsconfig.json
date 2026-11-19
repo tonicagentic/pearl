@@ -31,7 +31,9 @@
     "../lib/plugins/catalog.ts",
     "../lib/sandbox/settings.ts",
     "../lib/plugins/capabilities.ts",
-    "../lib/connections/catalog.ts"
+    "../lib/connections/catalog.ts",
+    "../lib/custom-agents/mark.ts",
+    "../lib/custom-agents/types.ts"
   ],
   "exclude": [
     "**/__tests__/**",

@@ -42,6 +42,8 @@ export async function createCustomAgentAction(input: {
   readonly name: string;
   readonly instructions?: string;
   readonly accent?: string;
+  readonly markShape?: string;
+  readonly markTalk?: string;
 }) {
   const viewer = await requireDatabaseViewer();
   const row = await createCustomAgent(viewer.id, input);
@@ -54,6 +56,8 @@ export async function updateCustomAgentAction(input: {
   readonly name?: string;
   readonly instructions?: string;
   readonly accent?: string;
+  readonly markShape?: string;
+  readonly markTalk?: string;
 }) {
   const viewer = await requireDatabaseViewer();
   const row = await updateCustomAgent(viewer.id, input.agentId, input);

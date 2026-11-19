@@ -39,6 +39,7 @@ import { useCSSVariable } from "uniwind";
 import {
   AgentMark,
   agentListSubtitle,
+  pearlMarkMetrics,
 } from "@/components/custom-agents/agent-mark";
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
 import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
@@ -47,6 +48,13 @@ import {
   fetchCustomAgents,
   type CustomAgentDto,
 } from "@/src/custom-agents-client";
+import {
+  DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_SHAPE,
+  DEFAULT_AGENT_MARK_TALK,
+  type AgentMarkShape,
+  type AgentMarkTalk,
+} from "../../../lib/custom-agents/mark";
 
 /** Fixed leading slot so NavRow icons stay aligned. */
 const PRESENCE_SLOT = 14;
@@ -237,16 +245,27 @@ const FULL_ROW_HIT = [
 function AgentListMark({
   accent,
   size = AGENT_MARK_SIZE,
-  shape = "circle",
+  markShape = DEFAULT_AGENT_MARK_SHAPE,
+  markTalk = DEFAULT_AGENT_MARK_TALK,
 }: {
   readonly accent: string;
   readonly size?: number;
-  readonly shape?: "circle" | "squircle";
+  readonly markShape?: AgentMarkShape;
+  readonly markTalk?: AgentMarkTalk;
 }) {
+  const metrics = pearlMarkMetrics(size);
   return (
     <RNHostView matchContents>
-      <View style={{ width: size, height: size }}>
-        <AgentMark accent={accent} size={size} shape={shape} />
+      <View
+        style={{ width: metrics.width, height: metrics.layoutHeight }}
+      >
+        <AgentMark
+          accent={accent}
+          size={size}
+          markShape={markShape}
+          markTalk={markTalk}
+          motion="burst"
+        />
       </View>
     </RNHostView>
   );
@@ -281,12 +300,17 @@ function PearlPinnedRow({
       <VStack
         spacing={6}
         alignment="center"
-        modifiers={[frame({ width: PINNED_MARK_SIZE + 8 })]}
+        modifiers={[
+          frame({
+            width: pearlMarkMetrics(PINNED_MARK_SIZE).width + 8,
+          }),
+        ]}
       >
         <AgentListMark
           accent={PEARL_IDENTITY_ACCENT}
           size={PINNED_MARK_SIZE}
-          shape="squircle"
+          markShape="oval"
+          markTalk="hinge"
         />
         <SwiftText
           modifiers={[
@@ -312,7 +336,9 @@ function AgentRow({
   readonly rowBackground: string;
   readonly onOpen: () => void;
 }) {
-  const accent = agent.accent || "#2DD4BF";
+  const accent = agent.accent || DEFAULT_AGENT_MARK_ACCENT;
+  const markShape = agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE;
+  const markTalk = agent.markTalk ?? DEFAULT_AGENT_MARK_TALK;
   const subtitle = agentListSubtitle({
     name: agent.name,
     chatTitle: agent.chatTitle,
@@ -338,7 +364,11 @@ function AgentRow({
         ),
       ]}
     >
-      <AgentListMark accent={accent} />
+      <AgentListMark
+        accent={accent}
+        markShape={markShape}
+        markTalk={markTalk}
+      />
       <VStack spacing={1} alignment="leading">
         <SwiftText
           modifiers={[

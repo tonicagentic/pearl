@@ -9,9 +9,17 @@ import { BottomSheet, RNHostView } from "@expo/ui";
 import { ArrowUpIcon, XIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
+import { AgentMarkPicker } from "@/components/custom-agents/agent-mark-picker";
 import { Icon } from "@/components/ui/icon";
 import { Text, textVariants } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
+import {
+  DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_SHAPE,
+  DEFAULT_AGENT_MARK_TALK,
+  type AgentMarkShape,
+  type AgentMarkTalk,
+} from "../../../lib/custom-agents/mark";
 import {
   createCustomAgentRequest,
   type CustomAgentDto,
@@ -29,6 +37,13 @@ export function CreateAgentModal({
 }) {
   const [name, setName] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [accent, setAccent] = useState<string>(DEFAULT_AGENT_MARK_ACCENT);
+  const [markShape, setMarkShape] = useState<AgentMarkShape>(
+    DEFAULT_AGENT_MARK_SHAPE,
+  );
+  const [markTalk, setMarkTalk] = useState<AgentMarkTalk>(
+    DEFAULT_AGENT_MARK_TALK,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const backgroundColor = useCSSVariable("--color-background") as
@@ -43,6 +58,9 @@ export function CreateAgentModal({
     if (!open) return;
     setName("");
     setInstructions("");
+    setAccent(DEFAULT_AGENT_MARK_ACCENT);
+    setMarkShape(DEFAULT_AGENT_MARK_SHAPE);
+    setMarkTalk(DEFAULT_AGENT_MARK_TALK);
     setError(null);
     setBusy(false);
   }, [open]);
@@ -54,6 +72,9 @@ export function CreateAgentModal({
     void createCustomAgentRequest({
       name: name.trim(),
       instructions: instructions.trim() || undefined,
+      accent,
+      markShape,
+      markTalk,
     })
       .then(onCreated)
       .catch((cause) => {
@@ -105,16 +126,14 @@ export function CreateAgentModal({
             </Pressable>
           </View>
 
-          <View
-            accessibilityElementsHidden
-            className="mb-4 size-10 items-center justify-center rounded-full"
-            style={{ backgroundColor: "#2DD4BF" }}
-          >
-            <View className="flex-row items-center gap-0.5">
-              <View className="h-2.5 w-0.5 rounded-full bg-white" />
-              <View className="h-2.5 w-0.5 rounded-full bg-white" />
-            </View>
-          </View>
+          <AgentMarkPicker
+            accent={accent}
+            markShape={markShape}
+            markTalk={markTalk}
+            onAccentChange={setAccent}
+            onMarkShapeChange={setMarkShape}
+            onMarkTalkChange={setMarkTalk}
+          />
           {error ? (
             <Text variant="secondary" tone="destructive" className="mb-3">
               {error}

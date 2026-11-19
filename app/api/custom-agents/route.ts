@@ -45,6 +45,8 @@ export async function POST(request: Request) {
     readonly name?: string;
     readonly instructions?: string;
     readonly accent?: string;
+    readonly markShape?: string;
+    readonly markTalk?: string;
   };
 
   try {
@@ -52,6 +54,8 @@ export async function POST(request: Request) {
       name: body.name ?? "",
       instructions: body.instructions,
       accent: body.accent,
+      markShape: body.markShape,
+      markTalk: body.markTalk,
     });
     return NextResponse.json({ agent });
   } catch (error) {
