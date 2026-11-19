@@ -1,5 +1,6 @@
 import type { ClientSessionState, SessionStreamEvent } from "eve/client";
 import type { SpokenTurn } from "@/lib/chat/spoken-turns";
+import type { CustomAgentRef } from "@/lib/custom-agents/types";
 
 export type Viewer = {
   readonly email: string;
@@ -18,6 +19,8 @@ export type ChatListItem = {
   readonly title: string;
   readonly updatedAt: string;
   readonly projectId?: string | null;
+  /** Connected remote eve agent for this thread; null/undefined = Pearl. */
+  readonly remoteAgentId?: string | null;
   /** Parked on an approval, question, or authorization the user must answer. */
   readonly waitingForInput: boolean;
   /** Home-list status: working / waiting / unread / idle. */
@@ -46,6 +49,10 @@ export type ActiveChat = {
   readonly id: string;
   readonly pendingUserMessage: string | null;
   readonly projectId: string | null;
+  /** Connected remote eve agent for this thread; null = Pearl. */
+  readonly remoteAgentId: string | null;
+  /** User-defined agent identity when this is that agent's durable thread. */
+  readonly customAgent: CustomAgentRef | null;
   readonly session: ClientSessionState | undefined;
   readonly spokenTurns: readonly SpokenTurn[];
   readonly title: string;

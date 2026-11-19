@@ -39,4 +39,20 @@ describe("lib/crypto/secrets", () => {
         /not configured/i.test(error.message),
     );
   });
+
+  it("prefers USER_SECRETS_KEY over the calendar key", () => {
+    const env = {
+      USER_SECRETS_KEY: Buffer.alloc(32, 3).toString("base64"),
+      ICLOUD_CALDAV_CREDENTIALS_KEY: Buffer.alloc(32, 9).toString("base64"),
+    };
+    const { ciphertext } = encryptSecret("token", "v1", env);
+    assert.equal(decryptSecret(ciphertext, env), "token");
+    assert.throws(
+      () =>
+        decryptSecret(ciphertext, {
+          ICLOUD_CALDAV_CREDENTIALS_KEY: env.ICLOUD_CALDAV_CREDENTIALS_KEY,
+        }),
+      (error: unknown) => error instanceof SecretCryptoError,
+    );
+  });
 });

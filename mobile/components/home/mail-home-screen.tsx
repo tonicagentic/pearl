@@ -14,6 +14,7 @@ import {
   HistoryScreen,
   type HistoryChatActionHandlers,
 } from "@/components/home/app-drawer";
+import { CreateAgentModal } from "@/components/home/create-agent-modal";
 import { CreateProjectModal } from "@/components/home/create-project-modal";
 import {
   HOME_COMPOSE_FAB_CLEARANCE,
@@ -33,6 +34,7 @@ import { useChats } from "@/src/chat-context";
 import { chatListPresence } from "@/src/chat-presence";
 import { getChat, type ChatListItem } from "@/src/chats-client";
 import { initials as viewerInitials } from "@/src/initials";
+import type { CustomAgentDto } from "@/src/custom-agents-client";
 import type { ProjectDto } from "@/src/projects-client";
 import type { ThreadTraceEvent } from "@/src/thread-trace";
 
@@ -72,6 +74,7 @@ export function MailHomeScreen() {
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectTargetId, setProjectTargetId] = useState<string | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [createAgentOpen, setCreateAgentOpen] = useState(false);
   const homeFocusedRef = useRef(false);
   // Cold-start once: open new chat by default, or home when something is unread.
   const didLaunchRef = useRef(false);
@@ -125,10 +128,25 @@ export function MailHomeScreen() {
     setCreateProjectOpen(true);
   }, [billingReady, isAnonymous]);
 
+  const openCreateAgent = useCallback(() => {
+    if (!billingReady || isAnonymous) return;
+    setCreateAgentOpen(true);
+  }, [billingReady, isAnonymous]);
+
   const onProjectCreated = useCallback((project: ProjectDto) => {
     setCreateProjectOpen(false);
     router.push(`/projects/${encodeURIComponent(project.id)}`);
   }, []);
+
+  const onAgentCreated = useCallback(
+    (agent: CustomAgentDto) => {
+      setCreateAgentOpen(false);
+      void selectChat(agent.chatId).then((ok) => {
+        if (ok) router.push("/chat");
+      });
+    },
+    [selectChat],
+  );
 
   useEffect(() => {
     if (!billingReady || !chatsReady || didLaunchRef.current) return;
@@ -371,6 +389,7 @@ export function MailHomeScreen() {
             chatActions={chatActions}
             bottomInset={listBottomInset}
             onCreateProject={isAnonymous ? undefined : openCreateProject}
+            onCreateAgent={isAnonymous ? undefined : openCreateAgent}
           />
         )}
       </View>
@@ -395,6 +414,11 @@ export function MailHomeScreen() {
         open={createProjectOpen}
         onClose={() => setCreateProjectOpen(false)}
         onCreated={onProjectCreated}
+      />
+      <CreateAgentModal
+        open={createAgentOpen}
+        onClose={() => setCreateAgentOpen(false)}
+        onCreated={onAgentCreated}
       />
       <ProjectPickerModal
         open={projectPickerOpen}

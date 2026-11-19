@@ -25,11 +25,13 @@ import { createFallbackTitle, DEFAULT_CHAT_TITLE } from "@/lib/chat/title";
 import {
   chat,
   chatEvent,
+  customAgent,
   agentFile,
   agentFileRevision,
   agentAttachment,
 } from "@/lib/db/schema";
 import { db } from "@/lib/db/client";
+import type { CustomAgentRef } from "@/lib/custom-agents/types";
 
 const CHAT_HISTORY_PAGE_SIZE = 20;
 const CHAT_SEARCH_LIMIT = 40;
@@ -97,12 +99,15 @@ export async function listChatsPageByUser(
       title: chat.title,
       updatedAt: chat.updatedAt,
       projectId: chat.projectId,
+      remoteAgentId: chat.remoteAgentId,
       lastReadAt: chat.lastReadAt,
     })
     .from(chat)
     .where(
       and(
         eq(chat.userId, userId),
+        // Custom-agent threads live under Agents, not the chat history list.
+        isNull(chat.customAgentId),
         parsedCursor
           ? or(
               lt(chat.updatedAt, parsedCursor.updatedAt),
@@ -132,6 +137,7 @@ export async function listChatsPageByUser(
         title: row.title,
         updatedAt: row.updatedAt.toISOString(),
         projectId: row.projectId ?? null,
+        remoteAgentId: row.remoteAgentId ?? null,
         waitingForInput: presence === "waiting",
         presence,
       };
@@ -261,6 +267,7 @@ export async function createChat(
       title: chat.title,
       updatedAt: chat.updatedAt,
       projectId: chat.projectId,
+      remoteAgentId: chat.remoteAgentId,
     });
 
   if (!row) {
@@ -272,6 +279,7 @@ export async function createChat(
     title: row.title,
     updatedAt: row.updatedAt.toISOString(),
     projectId: row.projectId ?? null,
+    remoteAgentId: row.remoteAgentId ?? null,
     waitingForInput: false,
     presence: "idle" as const,
   };
@@ -306,9 +314,15 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
       pendingUserMessage: chat.pendingUserMessage,
       pendingUserMessageCreatedAt: chat.pendingUserMessageCreatedAt,
       projectId: chat.projectId,
+      remoteAgentId: chat.remoteAgentId,
       spokenTurns: chat.spokenTurns,
+      customAgentId: customAgent.id,
+      customAgentName: customAgent.name,
+      customAgentAccent: customAgent.accent,
+      customAgentInstructions: customAgent.instructions,
     })
     .from(chat)
+    .leftJoin(customAgent, eq(customAgent.id, chat.customAgentId))
     .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
     .limit(1);
 
@@ -336,11 +350,23 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
     ),
   );
 
+  const customAgentRef: CustomAgentRef | null =
+    row.customAgentId && row.customAgentName && row.customAgentAccent
+      ? {
+          id: row.customAgentId,
+          name: row.customAgentName,
+          accent: row.customAgentAccent,
+          instructions: row.customAgentInstructions ?? "",
+        }
+      : null;
+
   return {
     events: eventValues,
     id: row.id,
     pendingUserMessage: hasCurrentTurnCompleted ? null : row.pendingUserMessage,
     projectId: row.projectId ?? null,
+    remoteAgentId: row.remoteAgentId ?? null,
+    customAgent: customAgentRef,
     session: row.eveSession ?? undefined,
     spokenTurns: Array.isArray(row.spokenTurns) ? row.spokenTurns : [],
     title: row.title,
@@ -839,7 +865,10 @@ export async function deleteChatForUser(
   },
 ) {
   const [row] = await db
-    .select({ eveSession: chat.eveSession })
+    .select({
+      eveSession: chat.eveSession,
+      customAgentId: chat.customAgentId,
+    })
     .from(chat)
     .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
     .limit(1);
@@ -852,6 +881,20 @@ export async function deleteChatForUser(
       requestHeaders: options?.requestHeaders,
       reason: "chat_deleted",
     });
+  }
+
+  // Custom-agent threads own the agent: deleting the chat removes the agent
+  // (and cascade removes the chat). Normal chats delete the row only.
+  if (row?.customAgentId) {
+    await db
+      .delete(customAgent)
+      .where(
+        and(
+          eq(customAgent.id, row.customAgentId),
+          eq(customAgent.userId, userId),
+        ),
+      );
+    return;
   }
 
   await db.delete(chat).where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
@@ -891,6 +934,7 @@ export async function searchChatsForUser(
     .where(
       and(
         eq(chat.userId, userId),
+        isNull(chat.customAgentId),
         or(
           sql`${chat.title} ilike ${pattern} escape '\\'`,
           sql`${chatEvent.event}::text ilike ${pattern} escape '\\'`,

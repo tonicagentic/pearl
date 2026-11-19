@@ -214,6 +214,10 @@ export default function HomeLayout() {
         options={{ title: "About", headerShown: true }}
       />
       <Stack.Screen
+        name="connected-agents"
+        options={{ title: "Connected agents", headerShown: true }}
+      />
+      <Stack.Screen
         name="self-host"
         options={{ title: "Self-host", headerShown: true }}
       />

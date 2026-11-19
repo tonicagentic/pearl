@@ -47,9 +47,15 @@ import { ProjectPickerDialog } from "@/app/_components/project-picker-dialog";
 import { attachChatToProjectAction } from "@/app/actions/projects";
 import {
   CHAT_ID_MARKER,
+  CUSTOM_AGENT_ID_MARKER,
   MODE_MARKER,
   PROJECT_ID_MARKER,
+  REMOTE_AGENT_ID_MARKER,
 } from "@/lib/agent-mode-context";
+import {
+  getRemoteAgentSelection,
+  setRemoteAgentSelection,
+} from "@/app/_components/remote-agent-selection";
 import { waitingLabelForText } from "@/lib/pearl-lane";
 import { setWaitingLabel } from "@/lib/waiting-label";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
@@ -74,6 +80,8 @@ import { MermaidBlock } from "@/components/assistant-ui/elements/mermaid-block";
 import { SceneViewer } from "@/components/assistant-ui/elements/scene-viewer";
 import { previewKindForPath } from "@/lib/design/preview-kind";
 import { ghostButton, mono } from "@/lib/surfaces";
+import { ActiveCustomAgentProvider } from "@/components/custom-agents/active-custom-agent-context";
+import { AgentThreadChrome } from "@/components/custom-agents/agent-thread-chrome";
 import { ThreadActionsMenu } from "@/components/chat/thread-actions-menu";
 import { EveAuthorization } from "@/components/eve-authorization";
 import {
@@ -382,6 +390,9 @@ function AssistantChatSurfaceInner({
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const activeChatIdRef = useRef<string | null>(chatId);
   const projectIdRef = useRef<string | null>(activeChat?.projectId ?? null);
+  const customAgentIdRef = useRef<string | null>(
+    activeChat?.customAgent?.id ?? null,
+  );
   const eventIndexRef = useRef(
     Math.max(seedEvents.length, activeChat?.events.length ?? 0),
   );
@@ -405,6 +416,14 @@ function AssistantChatSurfaceInner({
   useEffect(() => {
     projectIdRef.current = activeChat?.projectId ?? null;
   }, [activeChat?.projectId]);
+
+  useEffect(() => {
+    customAgentIdRef.current = activeChat?.customAgent?.id ?? null;
+  }, [activeChat?.customAgent?.id]);
+
+  useEffect(() => {
+    setRemoteAgentSelection(activeChat?.remoteAgentId ?? null);
+  }, [activeChat?.id, activeChat?.remoteAgentId]);
 
   const persistSessionChange = useCallback(
     (session: ClientSessionState | undefined) => {
@@ -533,6 +552,8 @@ function AssistantChatSurfaceInner({
             events,
             pendingUserMessage: null,
             projectId: projectIdRef.current,
+            remoteAgentId: getRemoteAgentSelection(),
+            customAgent: activeChat?.customAgent ?? null,
             session,
             // onMessage imports and clears spoken turns for a real send.
             spokenTurns: lastOutgoingMessageRef.current
@@ -594,6 +615,16 @@ function AssistantChatSurfaceInner({
         setActiveChatId(created.id);
         touchChat(created);
         onChatCreated?.(created.id);
+        const remoteAgentId = getRemoteAgentSelection();
+        if (remoteAgentId && storageMode === "database") {
+          void fetch(`/api/chats/${encodeURIComponent(created.id)}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ remoteAgentId }),
+          }).catch(() => {
+            // Selection still rides clientContext for this turn.
+          });
+        }
       } else if (
         projectIdRef.current &&
         storageMode === "database" &&
@@ -636,6 +667,13 @@ function AssistantChatSurfaceInner({
         }
         if (activeChatIdRef.current) {
           clientContext[CHAT_ID_MARKER] = activeChatIdRef.current;
+        }
+        if (customAgentIdRef.current) {
+          clientContext[CUSTOM_AGENT_ID_MARKER] = customAgentIdRef.current;
+        }
+        const remoteAgentId = getRemoteAgentSelection();
+        if (remoteAgentId) {
+          clientContext[REMOTE_AGENT_ID_MARKER] = remoteAgentId;
         }
         if (selected && selected.key !== DEFAULT_MODEL_KEY) {
           clientContext.eveModelSelection = selected.key;
@@ -752,9 +790,11 @@ function AssistantChatSurfaceInner({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
+      <ActiveCustomAgentProvider agent={activeChat?.customAgent ?? null}>
       <CanvasProvider chatId={chatId}>
         <div className="relative flex min-h-0 flex-1 flex-col">
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-start justify-end px-2 py-2 md:px-3">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-start justify-between gap-2 px-2 py-2 md:px-3">
+            <AgentThreadChrome />
             <ThreadActionsMenu chatId={chatId} />
           </div>
 
@@ -814,6 +854,7 @@ function AssistantChatSurfaceInner({
         <SessionCursorPersistence chatId={chatId} storageMode={storageMode} />
         <EveErrorToast />
       </CanvasProvider>
+      </ActiveCustomAgentProvider>
     </AssistantRuntimeProvider>
   );
 }

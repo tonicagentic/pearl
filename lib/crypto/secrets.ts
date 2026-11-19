@@ -23,16 +23,20 @@ export type CredentialsEnv = {
 };
 
 /**
- * Resolve the AES-256 key for encrypting user CalDAV credentials.
+ * Resolve the AES-256 key for encrypting user secrets at rest (iCloud
+ * Calendar passwords, connected-agent bearers, …). Prefers
+ * `USER_SECRETS_KEY`, then the older `ICLOUD_CALDAV_CREDENTIALS_KEY`.
  * Accepts 32 raw bytes as base64 or 64-char hex.
  */
 export function resolveCredentialsKey(
   env: CredentialsEnv = process.env,
 ): Buffer {
-  const raw = env.ICLOUD_CALDAV_CREDENTIALS_KEY?.trim();
+  const raw =
+    env.USER_SECRETS_KEY?.trim() ||
+    env.ICLOUD_CALDAV_CREDENTIALS_KEY?.trim();
   if (!raw) {
     throw new SecretCryptoError(
-      "ICLOUD_CALDAV_CREDENTIALS_KEY is not configured.",
+      "USER_SECRETS_KEY (or ICLOUD_CALDAV_CREDENTIALS_KEY) is not configured.",
     );
   }
 
@@ -48,7 +52,7 @@ export function resolveCredentialsKey(
   }
 
   throw new SecretCryptoError(
-    "ICLOUD_CALDAV_CREDENTIALS_KEY must be 32 bytes (base64) or 64 hex chars.",
+    "USER_SECRETS_KEY must be 32 bytes (base64) or 64 hex chars.",
   );
 }
 

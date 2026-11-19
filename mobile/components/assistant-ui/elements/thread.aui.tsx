@@ -8,6 +8,7 @@ import {
   type ComposerChromeApi,
 } from "@/components/assistant-ui/elements/composer-chrome";
 import { ComposerOwnsHitlContext } from "@/components/assistant-ui/elements/composer-owns-hitl";
+import { ComposerRemoteAgentPicker } from "@/components/remote-agent-picker";
 import {
   composerControlHitSlop,
   groupedIconButtonHitSlop,
@@ -1824,6 +1825,7 @@ const Composer: FC<{
                 onPreparingChange={setPreparingAttachment}
                 conversationId={conversationId}
               />
+              <ComposerRemoteAgentPicker disabled={preparingAttachment} />
             </View>
             <ComposerTrailingControls
               preparingAttachment={preparingAttachment}
@@ -1898,6 +1900,7 @@ const Composer: FC<{
                   onPreparingChange={setPreparingAttachment}
                   conversationId={conversationId}
                 />
+                <ComposerRemoteAgentPicker disabled={preparingAttachment} />
                 <View style={{ flexGrow: 1, flexBasis: 0, minWidth: 8 }} />
                 <ComposerTrailingControls
                   preparingAttachment={preparingAttachment}

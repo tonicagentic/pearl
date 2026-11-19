@@ -131,6 +131,26 @@ describe("deriveLiveThinkingState", () => {
     assert.equal(state.label, "Planning next moves");
   });
 
+  it("does not flash Planning next moves over trailing reply text", () => {
+    const state = deriveLiveThinkingState({
+      statusType: "running",
+      parts: [
+        {
+          type: "tool-call",
+          toolName: "web_search",
+          args: { query: "done" },
+          status: { type: "complete" },
+        },
+        {
+          type: "text",
+          text: "I'm your Brand Manager — I help with fashion branding.",
+        },
+      ],
+    });
+    assert.equal(state.label, undefined);
+    assert.equal(state.phase, "idle");
+  });
+
   it("surfaces streaming tool chips from argsText", () => {
     const state = deriveLiveThinkingState({
       statusType: "running",

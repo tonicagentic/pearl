@@ -126,6 +126,19 @@ export const chat = pgTable(
       .$type<SpokenTurn[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    // Connected remote eve agent this thread is talking through (null = Pearl).
+    // Late reference: connected_agent is declared below.
+    remoteAgentId: text("remote_agent_id").references(
+      (): AnyPgColumn => connectedAgent.id,
+      { onDelete: "set null" },
+    ),
+    // User-defined custom agent this thread belongs to (null = normal chat).
+    // Unique: each custom agent has exactly one durable thread. Late
+    // reference: custom_agent is declared below.
+    customAgentId: text("custom_agent_id").references(
+      (): AnyPgColumn => customAgent.id,
+      { onDelete: "cascade" },
+    ),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -133,6 +146,8 @@ export const chat = pgTable(
     index("idx_chat_user_updated").on(table.userId, table.updatedAt),
     index("idx_chat_user_created").on(table.userId, table.createdAt),
     index("idx_chat_project").on(table.projectId),
+    index("idx_chat_remote_agent").on(table.remoteAgentId),
+    uniqueIndex("idx_chat_custom_agent").on(table.customAgentId),
     // Lookup chats from eve hooks by durable session id (jsonb path).
     index("idx_chat_eve_session_id").using(
       "btree",
@@ -1034,3 +1049,65 @@ export const icloudCalendarAccount = pgTable(
 
 export type IcloudCalendarAccountRow =
   typeof icloudCalendarAccount.$inferSelect;
+
+/**
+ * User-defined Pearl personas: name + standing instructions, each with
+ * exactly one durable chat (chat.customAgentId). Same Pearl eve agent,
+ * tools, and session sandbox — only the system role block differs.
+ */
+export const customAgent = pgTable(
+  "custom_agent",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    instructions: text("instructions").notNull().default(""),
+    /** Hex accent for the identity pill avatar (e.g. #2DD4BF). */
+    accent: text("accent").notNull().default("#2DD4BF"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_custom_agent_user").on(table.userId),
+    uniqueIndex("idx_custom_agent_user_name").on(table.userId, table.name),
+  ],
+);
+
+export type CustomAgent = typeof customAgent.$inferSelect;
+
+/**
+ * Private eve deployments the signed-in user linked from Settings.
+ * The bearer is stored only as AES-GCM ciphertext and never returned
+ * to clients. Pearl calls these as remote agents via defineRemoteAgent.
+ */
+export const connectedAgent = pgTable(
+  "connected_agent",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** Display name in the composer switcher. */
+    label: text("label").notNull(),
+    /** Normalized https base URL of the remote eve deployment (no trailing slash). */
+    url: text("url").notNull(),
+    /** base64(iv || authTag || ciphertext) of the bearer token. */
+    tokenCiphertext: text("token_ciphertext").notNull(),
+    tokenKeyId: text("token_key_id").notNull().default("v1"),
+    lastVerifiedAt: timestamp("last_verified_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_connected_agent_user").on(table.userId),
+    uniqueIndex("idx_connected_agent_user_url").on(table.userId, table.url),
+  ],
+);
+
+export type ConnectedAgentRow = typeof connectedAgent.$inferSelect;

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { setChatRemoteAgent } from "@/lib/connected-agents/store";
 import {
   deleteChatForUser,
   getChatForUser,
@@ -60,15 +61,20 @@ export async function PATCH(
 
   const body = (await request.json().catch(() => ({}))) as {
     readonly projectId?: string | null;
+    readonly remoteAgentId?: string | null;
     readonly title?: string;
   };
 
   const hasProject = body.projectId !== undefined;
+  const hasRemoteAgent = body.remoteAgentId !== undefined;
   const hasTitle = typeof body.title === "string";
 
-  if (!hasProject && !hasTitle) {
+  if (!hasProject && !hasRemoteAgent && !hasTitle) {
     return NextResponse.json(
-      { error: "Provide title and/or projectId (string or null)." },
+      {
+        error:
+          "Provide title, projectId, and/or remoteAgentId (string or null).",
+      },
       { status: 400 },
     );
   }
@@ -76,6 +82,7 @@ export async function PATCH(
   let title: string | undefined;
   let updatedAt: string | undefined;
   let projectId: string | null | undefined;
+  let remoteAgentId: string | null | undefined;
 
   if (hasTitle) {
     try {
@@ -107,10 +114,26 @@ export async function PATCH(
     projectId = body.projectId!;
   }
 
+  if (hasRemoteAgent) {
+    const next =
+      typeof body.remoteAgentId === "string" && body.remoteAgentId.trim()
+        ? body.remoteAgentId.trim()
+        : null;
+    const ok = await setChatRemoteAgent(viewer.id, id, next);
+    if (!ok) {
+      return NextResponse.json(
+        { error: "Could not set the connected agent for this chat." },
+        { status: 400 },
+      );
+    }
+    remoteAgentId = next;
+  }
+
   return NextResponse.json({
     ok: true,
     ...(title !== undefined ? { title, updatedAt } : {}),
     ...(projectId !== undefined ? { projectId } : {}),
+    ...(remoteAgentId !== undefined ? { remoteAgentId } : {}),
   });
 }
 

@@ -274,6 +274,20 @@
       "when": 1795200000000,
       "tag": "0041_body_food_barcode",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1795300000000,
+      "tag": "0042_connected_agents",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1795400000000,
+      "tag": "0043_custom_agents",
+      "breakpoints": true
     }
   ]
 }

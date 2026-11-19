@@ -32,6 +32,7 @@ export type AskPearlContext = {
   readonly getStore: () => SessionStore;
   readonly getActiveChatId: () => string | null;
   readonly activeProjectId: string | null;
+  readonly activeCustomAgentId?: string | null;
   readonly selectChat: (chatId: string) => Promise<boolean>;
   readonly wasSendPrepared: (source: SessionStore) => boolean;
   readonly clearPendingMessage: (source: SessionStore) => void;
@@ -121,7 +122,11 @@ export async function runAskPearl(
 
   const sendPayload = {
     message,
-    clientContext: buildTurnClientContext(ctx.activeProjectId, chatId),
+    clientContext: buildTurnClientContext(
+      ctx.activeProjectId,
+      chatId,
+      ctx.activeCustomAgentId,
+    ),
   };
 
   try {

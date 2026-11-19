@@ -310,6 +310,33 @@ function hasVisibleWork(parts: readonly ThinkingMessagePart[]): boolean {
   });
 }
 
+/**
+ * True when the newest concrete part is answer content (text / media /
+ * standalone card), scanning past empty text. Used so Planning next moves
+ * does not flash back over a reply that already painted while the turn is
+ * still marked running.
+ */
+export function hasTrailingAnswerContent(
+  parts: readonly ThinkingMessagePart[],
+): boolean {
+  for (let i = parts.length - 1; i >= 0; i -= 1) {
+    const part = parts[i];
+    if (!part) continue;
+    if (part.type === "tool-call" || part.type === "reasoning") return false;
+    if (
+      part.type === "text" &&
+      typeof part.text === "string" &&
+      part.text.trim().length > 0
+    ) {
+      return true;
+    }
+    if (part.type === "file" || part.type === "image" || part.type === "data") {
+      return true;
+    }
+  }
+  return false;
+}
+
 function activeChildLabel(
   agents: Readonly<Record<string, ThinkingAgentSession>> | undefined,
 ): string | undefined {
@@ -431,8 +458,19 @@ export function deriveLiveThinkingState(
   }
 
   // Opaque Cursor-style wait: before any parts, or in the gap after settled
-  // tools/reasoning while the model decides the next move.
-  if (!hasVisibleWork(parts) || !hasActiveLiveWork(parts)) {
+  // tools/reasoning while the model decides the next move — but never over
+  // trailing answer text (that flash is what "responded then Planning"
+  // looks like on mobile when status stays running after the reply paints).
+  if (!hasVisibleWork(parts)) {
+    const trimmed = waitingLabel.trim();
+    const label =
+      trimmed && trimmed !== DEFAULT_THINKING_LABEL
+        ? trimmed
+        : PLANNING_NEXT_MOVES_LABEL;
+    return { phase: "pre-content", label };
+  }
+
+  if (!hasActiveLiveWork(parts) && !hasTrailingAnswerContent(parts)) {
     const trimmed = waitingLabel.trim();
     const label =
       trimmed && trimmed !== DEFAULT_THINKING_LABEL

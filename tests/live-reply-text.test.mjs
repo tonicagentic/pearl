@@ -72,3 +72,15 @@ test("reconcile clears live text once the snapshot catches up", () => {
   assert.deepEqual(getLiveReplyParts(), []);
   clearLiveReplyText();
 });
+
+test("reconcile clears when snapshot text covers live without matching ids", () => {
+  __resetLiveReplyTextForTests();
+  pushLiveReplyDelta({ partId: "run_0.0", kind: "text", delta: "I'm Launch Bot." });
+  reconcileLiveReplyWithSnapshot([
+    {
+      role: "assistant",
+      parts: [{ type: "text", text: "I'm Launch Bot." }],
+    },
+  ]);
+  assert.deepEqual(getLiveReplyParts(), []);
+});

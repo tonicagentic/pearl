@@ -43,6 +43,10 @@ import {
   chatListPresence,
 } from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
+import {
+  fetchCustomAgents,
+  type CustomAgentDto,
+} from "@/src/custom-agents-client";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
 
@@ -55,20 +59,23 @@ export type { HistoryChatActionHandlers } from "@/components/home/history-list";
 const RECENT_PREVIEW_COUNT = 6;
 
 /**
- * iOS home: inset-grouped List — Recents, then Projects — with swipe delete
- * and context menu actions.
+ * iOS home: inset-grouped List — Recents, then Projects, then Agents —
+ * with swipe delete and context menu actions.
  */
 export function HistoryListIOS({
   onOpenChat,
   actions,
   bottomInset = 0,
   onCreateProject,
+  onCreateAgent,
 }: {
   readonly onOpenChat: () => void;
   readonly actions: HistoryChatActionHandlers;
   readonly bottomInset?: number;
   /** Opens the shared new-project composer from the empty Projects row. */
   readonly onCreateProject?: () => void;
+  /** Opens the new-agent composer from the empty Agents row. */
+  readonly onCreateAgent?: () => void;
 }) {
   const { signedIn } = useAuth();
   const {
@@ -98,6 +105,7 @@ export function HistoryListIOS({
   ];
 
   const [projects, setProjects] = useState<readonly ProjectDto[] | null>(null);
+  const [agents, setAgents] = useState<readonly CustomAgentDto[] | null>(null);
   const [recentsExpanded, setRecentsExpanded] = useState(false);
   const orderedProjects = useMemo(
     () =>
@@ -105,6 +113,11 @@ export function HistoryListIOS({
         b.updatedAt.localeCompare(a.updatedAt),
       ),
     [projects],
+  );
+  const orderedAgents = useMemo(
+    () =>
+      [...(agents ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
+    [agents],
   );
   const projectNames = useMemo(
     () => new Map(orderedProjects.map((project) => [project.id, project.name])),
@@ -126,6 +139,13 @@ export function HistoryListIOS({
         })
         .catch(() => {
           if (!cancelled) setProjects((current) => current ?? []);
+        });
+      void fetchCustomAgents()
+        .then((rows) => {
+          if (!cancelled) setAgents(rows);
+        })
+        .catch(() => {
+          if (!cancelled) setAgents((current) => current ?? []);
         });
       return () => {
         cancelled = true;
@@ -156,9 +176,10 @@ export function HistoryListIOS({
         ? "Couldn’t load history"
         : "Sign in to see chats";
 
-  // Show the Projects group once the fetch settles — empty state included —
-  // so it is not mistaken for a missing section.
+  // Show the Projects/Agents groups once the fetch settles — empty state
+  // included — so they are not mistaken for missing sections.
   const showProjects = projects !== null;
+  const showAgents = agents !== null;
 
   if (showEmptyCard && !showProjects) {
     return (
@@ -343,6 +364,76 @@ export function HistoryListIOS({
               )}
             </Section>
           ) : null}
+          {showAgents ? (
+            <Section
+              header={
+                <HStack alignment="center">
+                  <SwiftText
+                    modifiers={[
+                      font({ size: 13 }),
+                      foregroundStyle({
+                        type: "hierarchical",
+                        style: "secondary",
+                      }),
+                    ]}
+                  >
+                    Agents
+                  </SwiftText>
+                  <Spacer />
+                  {onCreateAgent ? (
+                    <Button
+                      onPress={onCreateAgent}
+                      modifiers={[buttonStyle("plain")]}
+                    >
+                      <Image
+                        systemName="plus"
+                        size={14}
+                        modifiers={[tint(mutedColor)]}
+                      />
+                    </Button>
+                  ) : null}
+                </HStack>
+              }
+            >
+              {orderedAgents.length === 0 ? (
+                onCreateAgent ? (
+                  <Button
+                    label="New Agent"
+                    systemImage="person.crop.circle.badge.plus"
+                    onPress={onCreateAgent}
+                    modifiers={[buttonStyle("plain"), ...rowChrome]}
+                  />
+                ) : (
+                  <SwiftText
+                    modifiers={[
+                      foregroundStyle({
+                        type: "hierarchical",
+                        style: "secondary",
+                      }),
+                      font({ size: 15 }),
+                      ...rowChrome,
+                    ]}
+                  >
+                    No agents yet
+                  </SwiftText>
+                )
+              ) : (
+                <List.ForEach
+                  data={orderedAgents}
+                  keyExtractor={(agent) => agent.id}
+                  estimatedItemSize={52}
+                  recycling={false}
+                >
+                  {({ item: agent }) => (
+                    <AgentRow
+                      agent={agent}
+                      onOpen={() => openChat(agent.chatId)}
+                    />
+                  )}
+                </List.ForEach>
+              )}
+            </Section>
+          ) : null}
           {bottomInset > 0 ? (
             <Section>
               <HStack
@@ -362,6 +453,44 @@ export function HistoryListIOS({
         </List>
       </Host>
     </View>
+  );
+}
+
+function AgentRow({
+  agent,
+  onOpen,
+}: {
+  readonly agent: CustomAgentDto;
+  readonly onOpen: () => void;
+}) {
+  const accent = agent.accent || "#2DD4BF";
+  return (
+    <Button
+      onPress={onOpen}
+      modifiers={[
+        buttonStyle("plain"),
+        listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
+      ]}
+    >
+      <HStack
+        spacing={12}
+        alignment="center"
+        modifiers={[padding({ vertical: 2 })]}
+      >
+        <Image
+          systemName="circle.fill"
+          size={14}
+          modifiers={[
+            frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
+            tint(accent),
+          ]}
+        />
+        <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
+          {agent.name}
+        </SwiftText>
+        <Spacer />
+      </HStack>
+    </Button>
   );
 }
 

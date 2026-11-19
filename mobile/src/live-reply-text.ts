@@ -104,14 +104,26 @@ export function reconcileLiveReplyWithSnapshot(
   const last = messages[messages.length - 1];
   if (!last || last.role !== "assistant" || !last.parts) return;
 
+  const textParts = last.parts.filter(
+    (part) => part.type === "text" && typeof part.text === "string",
+  );
+
   let allCaughtUp = true;
   for (const partId of state.order) {
     const live = state.parts.get(partId);
     if (!live) continue;
-    const snap = last.parts.find(
-      (part) => part.type === "text" && part.id === partId,
-    );
-    const snapText = typeof snap?.text === "string" ? snap.text : "";
+    const byId = textParts.find((part) => part.id === partId);
+    const snapText =
+      typeof byId?.text === "string"
+        ? byId.text
+        : // Projection sometimes omits part ids — accept any text that
+          // already covers the live buffer so settle does not strand overlay.
+          textParts.find(
+            (part) =>
+              typeof part.text === "string" &&
+              part.text.length >= live.text.length &&
+              (part.text === live.text || part.text.endsWith(live.text) || live.text.endsWith(part.text)),
+          )?.text ?? "";
     if (snapText.length < live.text.length) {
       allCaughtUp = false;
       break;

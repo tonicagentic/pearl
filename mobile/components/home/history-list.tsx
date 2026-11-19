@@ -14,6 +14,7 @@ export function HistoryListIOS(_props: {
   readonly actions: HistoryChatActionHandlers;
   readonly bottomInset?: number;
   readonly onCreateProject?: () => void;
+  readonly onCreateAgent?: () => void;
 }) {
   return null;
 }

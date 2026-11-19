@@ -18,6 +18,7 @@ import {
 import {
   createThinkingStateDweller,
   deriveLiveThinkingState,
+  hasTrailingAnswerContent,
   type ThinkingMessagePart,
 } from "../../../../lib/stream-thinking-state";
 
@@ -58,8 +59,13 @@ export function AssistantThinking() {
       (/\S+\s/.test(part.text) ||
         (statusType !== "running" && part.text.trim().length > 0)),
   );
+  // Prefer block-split + painted word; also accept trailing answer content so
+  // Planning cannot return over a painted reply while status stays running.
   const answerOwnsChrome =
-    answerPhase && answerHasPaintedWord && !askingQuestions && !personWaitLabel;
+    ((answerPhase && answerHasPaintedWord) ||
+      hasTrailingAnswerContent(parts as readonly ThinkingMessagePart[])) &&
+    !askingQuestions &&
+    !personWaitLabel;
 
   const derived = useMemo(
     () =>

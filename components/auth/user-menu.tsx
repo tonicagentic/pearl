@@ -109,6 +109,14 @@ export function UserMenu({
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
+            router.push("/settings/agents");
+          }}
+        >
+          Connected agents
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
             router.push("/settings/skills");
           }}
         >

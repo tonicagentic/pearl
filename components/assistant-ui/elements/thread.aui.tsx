@@ -16,6 +16,7 @@ import { SessionTodoList } from "@/components/assistant-ui/elements/todo-list";
 import { useLargePasteComposer, useHeldLargePastes } from "@/app/_components/large-paste";
 import { ComposerModePicker } from "@/app/_components/mode-picker";
 import { ComposerModelPicker } from "@/app/_components/model-picker";
+import { ComposerRemoteAgentPicker } from "@/app/_components/remote-agent-picker";
 import { buildApprovalBrief } from "@/lib/chat/approval-brief";
 import { splitPasteBlocks } from "@/lib/chat/large-paste";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
@@ -640,6 +641,7 @@ const ComposerAction: FC<{ sendBlocked?: boolean }> = ({
         <ComposerAddAttachment />
         <ComposerModePicker />
         <ComposerModelPicker />
+        <ComposerRemoteAgentPicker />
       </div>
       <div className="flex items-center gap-1.5">
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>

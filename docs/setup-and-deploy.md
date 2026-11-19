@@ -427,6 +427,13 @@ printf '%s' "<base64-key>" | vercel env add ICLOUD_CALDAV_CREDENTIALS_KEY produc
 Without `ICLOUD_CALDAV_CREDENTIALS_KEY`, the iCloud Calendar UI shows as
 unavailable; Google Calendar still works via `CALENDAR_CONNECTOR`.
 
+The same AES-GCM helper encrypts bearers for **Connected agents** (private eve
+deployments Pearl calls as remote agents). Prefer `USER_SECRETS_KEY` (same
+32-byte base64 or 64-hex format); if unset, Pearl falls back to
+`ICLOUD_CALDAV_CREDENTIALS_KEY`. Users add agents under Settings → Connected
+agents. On each private deployment, accept that bearer on the eve channel and
+set `EVE_CALLBACK_TRUSTED_ORIGINS` to this Pearl origin.
+
 ### Gmail (REST + Vercel Connect)
 
 Gmail does **not** use Google's MCP server. Pearl calls `gmail.googleapis.com`

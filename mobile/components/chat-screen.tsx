@@ -28,6 +28,8 @@ import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { SignupSheet } from "@/components/signup-sheet";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { ComputerPanel } from "@/components/computer-panel";
+import { AgentIdentityPill } from "@/components/custom-agents/agent-identity-pill";
+import { AgentSettingsModal } from "@/components/custom-agents/agent-settings-modal";
 import { FileCanvas } from "@/components/file-canvas";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { Icon } from "@/components/ui/icon";
@@ -104,6 +106,8 @@ export function ChatScreen({
     activeProjectId,
     setActiveProjectId,
     setChatProject,
+    activeCustomAgent,
+    setActiveCustomAgent,
     newChatEntry,
     newChat,
     activeTitle,
@@ -119,6 +123,7 @@ export function ChatScreen({
   const { setChatId, tabs, preferDetail, canvasOpen, openFile } =
     useWorkspace();
   const [computerOpen, setComputerOpen] = useState(false);
+  const [agentSettingsOpen, setAgentSettingsOpen] = useState(false);
   const computerSheetRef = useRef<BottomSheetModalRef>(null);
   const [signupOpen, setSignupOpen] = useState(false);
   const tabCountRef = useRef(tabs.length);
@@ -413,7 +418,7 @@ export function ChatScreen({
             ...(response.text !== undefined ? { text: response.text } : {}),
           },
         ],
-        clientContext: buildTurnClientContext(activeProjectId, activeChatId),
+        clientContext: buildTurnClientContext(activeProjectId, activeChatId, activeCustomAgent?.id),
       });
     },
     [store, activeProjectId],
@@ -445,7 +450,7 @@ export function ChatScreen({
               ...(response.text !== undefined ? { text: response.text } : {}),
             },
           ],
-          clientContext: buildTurnClientContext(activeProjectId, activeChatId),
+          clientContext: buildTurnClientContext(activeProjectId, activeChatId, activeCustomAgent?.id),
         });
       };
       return {
@@ -501,7 +506,7 @@ export function ChatScreen({
                 ...(response.text !== undefined ? { text: response.text } : {}),
               },
             ],
-            clientContext: buildTurnClientContext(activeProjectId, activeChatId),
+            clientContext: buildTurnClientContext(activeProjectId, activeChatId, activeCustomAgent?.id),
           });
         },
       };
@@ -769,6 +774,7 @@ export function ChatScreen({
     unresolvedSend,
     activeChatId,
     activeProjectId,
+    activeCustomAgentId: activeCustomAgent?.id ?? null,
     wasSendPrepared,
     clearPendingMessage,
     recoverDeadSession,
@@ -784,6 +790,7 @@ export function ChatScreen({
       unresolvedSend,
       activeChatId,
       activeProjectId,
+      activeCustomAgentId: activeCustomAgent?.id ?? null,
       wasSendPrepared,
       clearPendingMessage,
       recoverDeadSession,
@@ -865,7 +872,7 @@ export function ChatScreen({
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         const sendPayload = {
           message: outgoing,
-          clientContext: buildTurnClientContext(projectIdForTurn, ctx.activeChatId),
+          clientContext: buildTurnClientContext(projectIdForTurn, ctx.activeChatId, ctx.activeCustomAgentId),
         };
         try {
           // Mode, project, and model ride the turn as ephemeral clientContext.
@@ -1003,7 +1010,7 @@ export function ChatScreen({
               ...(response.text !== undefined ? { text: response.text } : {}),
             },
           ],
-          clientContext: buildTurnClientContext(ctx.activeProjectId, ctx.activeChatId),
+          clientContext: buildTurnClientContext(ctx.activeProjectId, ctx.activeChatId, ctx.activeCustomAgentId),
         });
       },
     }),
@@ -1036,7 +1043,7 @@ export function ChatScreen({
     autoSentPendingFor.current = activeChatId;
     void store.send({
       message: pendingMessage,
-      clientContext: buildTurnClientContext(activeProjectId, activeChatId),
+      clientContext: buildTurnClientContext(activeProjectId, activeChatId, activeCustomAgent?.id),
     });
   }, [pendingMessage, activeChatId, status, store, activeProjectId]);
 
@@ -1061,7 +1068,7 @@ export function ChatScreen({
       const delivery = await store.send({
         // Outgoing was built by toEveTurn for this same store.send shape.
         message: payload as never,
-        clientContext: buildTurnClientContext(activeProjectId, activeChatId),
+        clientContext: buildTurnClientContext(activeProjectId, activeChatId, activeCustomAgent?.id),
       });
       const accepted =
         Boolean(delivery?.deliveryId) ||
@@ -1150,6 +1157,10 @@ export function ChatScreen({
     dismissComputer();
     newChat();
   }, [dismissComputer, newChat]);
+  const openAgentSettings = useCallback(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAgentSettingsOpen(true);
+  }, []);
   return (
     <StackScreen>
       <Stack.Screen
@@ -1166,6 +1177,16 @@ export function ChatScreen({
           headerTintColor: foregroundColor,
           headerTitleStyle:
             Platform.OS === "web" ? { color: foregroundColor } : undefined,
+          headerTitle:
+            Platform.OS !== "web" && activeCustomAgent
+              ? () => (
+                  <AgentIdentityPill
+                    name={activeCustomAgent.name}
+                    accent={activeCustomAgent.accent}
+                    onPress={openAgentSettings}
+                  />
+                )
+              : undefined,
           headerRight:
             Platform.OS === "web"
               ? () => (
@@ -1184,22 +1205,30 @@ export function ChatScreen({
                           />
                         </Pressable>
                         <View className="w-2" />
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Computer"
-                          accessibilityState={{ selected: computerOpen }}
-                          className="h-10 w-10 items-center justify-center"
-                          onPress={toggleComputer}
-                        >
-                          <Icon
-                            as={MonitorIcon}
-                            className={
-                              computerOpen
-                                ? "size-5 text-foreground"
-                                : "size-5 text-muted-foreground"
-                            }
+                        {activeCustomAgent ? (
+                          <AgentIdentityPill
+                            name={activeCustomAgent.name}
+                            accent={activeCustomAgent.accent}
+                            onPress={openAgentSettings}
                           />
-                        </Pressable>
+                        ) : (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Computer"
+                            accessibilityState={{ selected: computerOpen }}
+                            className="h-10 w-10 items-center justify-center"
+                            onPress={toggleComputer}
+                          >
+                            <Icon
+                              as={MonitorIcon}
+                              className={
+                                computerOpen
+                                  ? "size-5 text-foreground"
+                                  : "size-5 text-muted-foreground"
+                              }
+                            />
+                          </Pressable>
+                        )}
                       </>
                     ) : null}
                     {projectedMessages.length > 0 ? (
@@ -1230,14 +1259,17 @@ export function ChatScreen({
             separateBackground
             hidden={!activeChatId}
           />
-          <Stack.Toolbar.Spacer width={8} hidden={!activeChatId} />
+          <Stack.Toolbar.Spacer
+            width={8}
+            hidden={!activeChatId || Boolean(activeCustomAgent)}
+          />
           <Stack.Toolbar.Button
             icon="desktopcomputer"
             accessibilityLabel="Computer"
             selected={computerOpen}
             onPress={toggleComputer}
             tintColor={foregroundColor}
-            hidden={!activeChatId}
+            hidden={!activeChatId || Boolean(activeCustomAgent)}
           />
           <Stack.Toolbar.Menu
             icon="ellipsis"
@@ -1324,6 +1356,12 @@ export function ChatScreen({
                     </BottomSheetModal>
                     <FileCanvas />
                   </AssistantRuntimeProvider>
+                  <AgentSettingsModal
+                    open={agentSettingsOpen}
+                    agent={activeCustomAgent}
+                    onClose={() => setAgentSettingsOpen(false)}
+                    onSaved={setActiveCustomAgent}
+                  />
                   <SubagentInspectHost onAnswer={answerInteraction} />
                   <ThreadCostDrawer open={costOpen} onClose={() => setCostOpen(false)} />
                   <ProjectPickerModal

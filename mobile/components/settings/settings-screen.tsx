@@ -2,6 +2,7 @@ import { useCallback, useState, useSyncExternalStore } from "react";
 import { Alert, Platform, Pressable, StyleSheet, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import {
+  BotIcon,
   BrainIcon,
   CalendarIcon,
   CircleDollarSignIcon,
@@ -338,8 +339,17 @@ export function SettingsScreen() {
         <BillingRow />
       </Section>
 
-      {isHostedLocked() ? null : (
-        <SettingsCard>
+      <SettingsCard>
+        <SettingsRow
+          icon={
+            <Icon as={BotIcon} className="size-5 text-muted-foreground" />
+          }
+          label="Connected agents"
+          detail="Private eve deployments"
+          onPress={() => router.push("/connected-agents")}
+          showSeparator={!isHostedLocked()}
+        />
+        {isHostedLocked() ? null : (
           <SettingsRow
             icon={
               <Icon as={CloudIcon} className="size-5 text-muted-foreground" />
@@ -348,8 +358,8 @@ export function SettingsScreen() {
             detail={agentHostLabel}
             onPress={() => router.push("/self-host")}
           />
-        </SettingsCard>
-      )}
+        )}
+      </SettingsCard>
 
       <SettingsCard>
         <SettingsRow

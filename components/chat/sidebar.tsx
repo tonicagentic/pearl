@@ -2,6 +2,7 @@
 
 import {
   ArrowRightIcon,
+  BotIcon,
   EllipsisIcon,
   FolderKanbanIcon,
   InboxIcon,
@@ -72,6 +73,7 @@ export function ChatSidebar({
   const newSessionActive = activeChatId === null && onChatRoute;
   const issuesActive = pathname?.startsWith("/issues") ?? false;
   const projectsActive = pathname?.startsWith("/projects") ?? false;
+  const agentsActive = pathname?.startsWith("/agents") ?? false;
   const areasActive =
     pathname?.startsWith("/settings/areas") ?? false;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -165,6 +167,16 @@ export function ChatSidebar({
         >
           <FolderKanbanIcon className="size-4" />
           Projects
+        </Link>
+        <Link
+          className={cn(
+            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
+            agentsActive ? activeRowClass : inactiveRowClass,
+          )}
+          href="/agents"
+        >
+          <BotIcon className="size-4" />
+          Agents
         </Link>
         {/* Issues inbox: styled like the chat rows but anchored to its own
             route rather than the chat list. */}

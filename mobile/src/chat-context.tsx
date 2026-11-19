@@ -17,9 +17,13 @@ import {
 } from "eve/client";
 
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
+import {
+  getRemoteAgentSelection,
+  setRemoteAgentSelection,
+} from "./remote-agent-selection";
+import { setChatRemoteAgent } from "./connected-agents-client";
 import { beginStreamTrace, traceStream } from "./stream-trace";
 import {
-  clearLiveReplyText,
   pushLiveReplyDelta,
   reconcileLiveReplyWithSnapshot,
 } from "./live-reply-text";
@@ -42,6 +46,7 @@ import {
   type ActiveChat,
   type ChatListItem,
   type ChatPresence,
+  type CustomAgentRef,
 } from "./chats-client";
 import { mergeEventsForSnapshot } from "../../lib/chat/eve-session-recovery";
 import { waitingLabelForText } from "../../lib/pearl-lane";
@@ -115,6 +120,9 @@ type ChatsContextValue = {
   /** Project linked to the active chat (Plan mode / project chats). */
   readonly activeProjectId: string | null;
   readonly setActiveProjectId: (projectId: string | null) => void;
+  /** User-defined agent for the active durable thread, if any. */
+  readonly activeCustomAgent: CustomAgentRef | null;
+  readonly setActiveCustomAgent: (agent: CustomAgentRef | null) => void;
   /** Advances only when the user enters a fresh chat, never during a send. */
   readonly newChatEntry: number;
   readonly activeTitle: string;
@@ -178,6 +186,8 @@ type ChatBinding = {
   id: string | null;
   title: string;
   projectId: string | null;
+  remoteAgentId: string | null;
+  customAgent: CustomAgentRef | null;
   pendingMessage: string | null;
   sendPrepared: boolean;
   sendStartedAt: number | null;
@@ -222,6 +232,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectIdState] = useState<string | null>(null);
   const activeProjectIdRef = useRef<string | null>(null);
+  const [activeCustomAgent, setActiveCustomAgentState] =
+    useState<CustomAgentRef | null>(null);
+  const activeCustomAgentRef = useRef<CustomAgentRef | null>(null);
   const [newChatEntry, setNewChatEntry] = useState(0);
   const [activeTitle, setActiveTitle] = useState("New chat");
   const [chats, setChats] = useState<readonly ChatListItem[]>([]);
@@ -233,6 +246,16 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [spokenTurns, setSpokenTurns] = useState<readonly SpokenTurn[]>([]);
+
+  const setActiveCustomAgent = useCallback((agent: CustomAgentRef | null) => {
+    activeCustomAgentRef.current = agent;
+    setActiveCustomAgentState(agent);
+    const store = activeStoreRef.current;
+    if (store) {
+      const binding = bindings.get(store);
+      if (binding) binding.customAgent = agent;
+    }
+  }, [bindings]);
 
   const setActiveProjectId = useCallback((projectId: string | null) => {
     activeProjectIdRef.current = projectId;
@@ -322,6 +345,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       id: chat?.id ?? null,
       title: chat?.title ?? "New chat",
       projectId: chat?.projectId ?? null,
+      remoteAgentId: chat?.remoteAgentId ?? null,
+      customAgent: chat?.customAgent ?? null,
       pendingMessage: chat?.pendingUserMessage ?? null,
       sendPrepared: false,
       sendStartedAt: null,
@@ -485,7 +510,11 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
             }
           }
         } else if (event.type === "turn.settled") {
-          clearLiveReplyText();
+          // Do not clear the live overlay here — the snapshot may still lag
+          // endOfLine commits. Clearing blanks the bubble and brings
+          // "Planning next moves" back while status is still running.
+          // reconcileLiveReplyWithSnapshot drops the overlay once messages
+          // catch up (and on the next idle tick after settle).
           traceStream("settled");
         }
         if (!binding.id) return;
@@ -561,6 +590,13 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           const created = await createChat(message || undefined, projectId);
           binding.id = created.id;
           binding.projectId = created.projectId ?? projectId;
+          const remoteAgentId = getRemoteAgentSelection();
+          binding.remoteAgentId = remoteAgentId;
+          if (remoteAgentId) {
+            void setChatRemoteAgent(created.id, remoteAgentId).catch(() => {
+              // Selection still rides clientContext for this turn.
+            });
+          }
           if (activeStoreRef.current === store) {
             activeChatIdRef.current = created.id;
             setActiveChatId(created.id);
@@ -571,6 +607,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           setChats((current) => [
             {
               ...created,
+              remoteAgentId,
               waitingForInput: false,
               presence: "idle" as const,
             },
@@ -748,6 +785,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         setActiveTitle(binding.title);
         activeProjectIdRef.current = binding.projectId;
         setActiveProjectIdState(binding.projectId);
+        activeCustomAgentRef.current = binding.customAgent;
+        setActiveCustomAgentState(binding.customAgent);
+        setRemoteAgentSelection(binding.remoteAgentId);
         // Pending is only for empty "Carry out" chats. If this store already
         // has a session/history, reopening must resume — never resend.
         const hasHistory =
@@ -767,6 +807,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         void getChat(chatId).then((fresh) => {
           if (activeChatIdRef.current === chatId && fresh) {
             setSpokenTurns(fresh.spokenTurns ?? []);
+            binding.customAgent = fresh.customAgent ?? null;
+            activeCustomAgentRef.current = fresh.customAgent ?? null;
+            setActiveCustomAgentState(fresh.customAgent ?? null);
           }
         });
         return true;
@@ -796,6 +839,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         setActiveTitle(chat.title);
         activeProjectIdRef.current = chat.projectId ?? null;
         setActiveProjectIdState(chat.projectId ?? null);
+        activeCustomAgentRef.current = chat.customAgent ?? null;
+        setActiveCustomAgentState(chat.customAgent ?? null);
+        setRemoteAgentSelection(chat.remoteAgentId ?? null);
         setPendingMessage(stillPending);
         setSpokenTurns(chat.spokenTurns ?? []);
         setPersistenceError(null);
@@ -827,6 +873,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     setActiveChatId(null);
     activeProjectIdRef.current = null;
     setActiveProjectIdState(null);
+    activeCustomAgentRef.current = null;
+    setActiveCustomAgentState(null);
+    setRemoteAgentSelection(null);
     setNewChatEntry((current) => current + 1);
     setActiveTitle("New chat");
     setPendingMessage(null);
@@ -1140,6 +1189,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       activeChatId,
       activeProjectId,
       setActiveProjectId,
+      activeCustomAgent,
+      setActiveCustomAgent,
       newChatEntry,
       activeTitle,
       chats,
@@ -1172,6 +1223,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       activeChatId,
       activeProjectId,
       setActiveProjectId,
+      activeCustomAgent,
+      setActiveCustomAgent,
       newChatEntry,
       activeTitle,
       chats,
