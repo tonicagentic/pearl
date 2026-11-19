@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { AgentMark } from "@/components/custom-agents/agent-mark";
 import {
   DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
   type AgentMarkMotion,
@@ -17,6 +18,7 @@ export function AgentIdentityPill({
   markShape = DEFAULT_AGENT_MARK_SHAPE,
   markTalk = DEFAULT_AGENT_MARK_TALK,
   motion = "idle",
+  heightRatio = DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   onPress,
 }: {
   readonly name: string;
@@ -24,6 +26,7 @@ export function AgentIdentityPill({
   readonly markShape?: AgentMarkShape;
   readonly markTalk?: AgentMarkTalk;
   readonly motion?: AgentMarkMotion;
+  readonly heightRatio?: number;
   readonly onPress?: () => void;
 }) {
   const label = name.trim() || "Agent";
@@ -35,6 +38,7 @@ export function AgentIdentityPill({
         markShape={markShape}
         markTalk={markTalk}
         motion={motion}
+        heightRatio={heightRatio}
       />
       <Text
         numberOfLines={1}

@@ -32,6 +32,7 @@ import { FileCanvas } from "@/components/file-canvas";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import {
   PEARL_IDENTITY_ACCENT,
+  PEARL_MARK_HEIGHT_RATIO,
   ThreadIdentityMenu,
   type ThreadIdentityAgentOption,
 } from "@/components/thread-identity-menu";
@@ -1201,6 +1202,9 @@ export function ChatScreen({
               accent={activeCustomAgent?.accent ?? PEARL_IDENTITY_ACCENT}
               markShape={activeCustomAgent?.markShape}
               markTalk={activeCustomAgent?.markTalk}
+              heightRatio={
+                activeCustomAgent ? undefined : PEARL_MARK_HEIGHT_RATIO
+              }
               projectLabel={projectLabel}
               hasProject={Boolean(activeProjectId)}
               canManageThread={Boolean(activeChatId)}

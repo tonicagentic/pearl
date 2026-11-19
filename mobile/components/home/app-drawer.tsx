@@ -30,6 +30,7 @@ import {
   DEFAULT_AGENT_MARK_ACCENT,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
+  PEARL_MARK_HEIGHT_RATIO,
 } from "../../../lib/custom-agents/mark";
 
 const AGENT_MARK_SIZE = 40;
@@ -149,7 +150,9 @@ function HistoryListAndroid({
               accessibilityLabel="Pearl"
               className="items-center active:opacity-80"
               style={{
-                width: pearlMarkMetrics(PINNED_MARK_SIZE).width + 8,
+                width:
+                  pearlMarkMetrics(PINNED_MARK_SIZE, PEARL_MARK_HEIGHT_RATIO)
+                    .width + 8,
                 gap: 6,
               }}
               onPress={openPearl}
@@ -159,6 +162,7 @@ function HistoryListAndroid({
                 size={PINNED_MARK_SIZE}
                 markShape="oval"
                 markTalk="hinge"
+                heightRatio={PEARL_MARK_HEIGHT_RATIO}
                 motion="burst"
               />
               <AppText

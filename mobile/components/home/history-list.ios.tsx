@@ -50,8 +50,10 @@ import {
 } from "@/src/custom-agents-client";
 import {
   DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
+  PEARL_MARK_HEIGHT_RATIO,
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "../../../lib/custom-agents/mark";
@@ -247,13 +249,15 @@ function AgentListMark({
   size = AGENT_MARK_SIZE,
   markShape = DEFAULT_AGENT_MARK_SHAPE,
   markTalk = DEFAULT_AGENT_MARK_TALK,
+  heightRatio = DEFAULT_AGENT_MARK_HEIGHT_RATIO,
 }: {
   readonly accent: string;
   readonly size?: number;
   readonly markShape?: AgentMarkShape;
   readonly markTalk?: AgentMarkTalk;
+  readonly heightRatio?: number;
 }) {
-  const metrics = pearlMarkMetrics(size);
+  const metrics = pearlMarkMetrics(size, heightRatio);
   return (
     <RNHostView matchContents>
       <View
@@ -264,6 +268,7 @@ function AgentListMark({
           size={size}
           markShape={markShape}
           markTalk={markTalk}
+          heightRatio={heightRatio}
           motion="burst"
         />
       </View>
@@ -302,7 +307,9 @@ function PearlPinnedRow({
         alignment="center"
         modifiers={[
           frame({
-            width: pearlMarkMetrics(PINNED_MARK_SIZE).width + 8,
+            width:
+              pearlMarkMetrics(PINNED_MARK_SIZE, PEARL_MARK_HEIGHT_RATIO)
+                .width + 8,
           }),
         ]}
       >
@@ -311,6 +318,7 @@ function PearlPinnedRow({
           size={PINNED_MARK_SIZE}
           markShape="oval"
           markTalk="hinge"
+          heightRatio={PEARL_MARK_HEIGHT_RATIO}
         />
         <SwiftText
           modifiers={[

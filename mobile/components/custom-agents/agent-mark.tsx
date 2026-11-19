@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { AccessibilityInfo, Pressable, View } from "react-native";
 import Animated, {
   cancelAnimation,
@@ -10,21 +10,20 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import Svg, { Ellipse, Path } from "react-native-svg";
+import Svg, { ClipPath, Defs, Ellipse, Path, Rect } from "react-native-svg";
 
 import {
   DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
+  markEyeColor,
   type AgentMarkMotion,
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "../../../lib/custom-agents/mark";
 
-/** Tall oval like Terrance/Phillip. */
-const PEARL_HEIGHT_RATIO = 1.28;
 const MOUTH_Y_RATIO = 0.62;
-const EYE_COLOR = "#111111";
 /** Closed mouth = small gap between halves (not a drawn line). */
 const MOUTH_GAP_RATIO = 0.035;
 
@@ -170,14 +169,17 @@ function burstSequence(talk: AgentMarkTalk, onDone: () => void) {
 }
 
 /** Layout size for a pearl mark at the given nominal `size` (includes flap room). */
-export function pearlMarkMetrics(size: number): {
+export function pearlMarkMetrics(
+  size: number,
+  heightRatio: number = DEFAULT_AGENT_MARK_HEIGHT_RATIO,
+): {
   readonly width: number;
   readonly height: number;
   readonly maxLift: number;
   readonly layoutHeight: number;
 } {
   const width = size;
-  const height = Math.round(size * PEARL_HEIGHT_RATIO);
+  const height = Math.round(size * heightRatio);
   const maxLift = Math.max(3, Math.round(size * 0.22));
   return {
     width,
@@ -242,6 +244,19 @@ function halfPaths(
   }
 }
 
+function ovalMouthDx(
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  mouthY: number,
+): number {
+  const dy = mouthY - cy;
+  const under = 1 - (dy * dy) / (ry * ry);
+  return under > 0 ? rx * Math.sqrt(under) : 0;
+}
+
+/** Exact ellipse halves via SVG arcs (no polyline / quadratic pinch at poles). */
 function ovalTopPath(
   cx: number,
   cy: number,
@@ -249,13 +264,11 @@ function ovalTopPath(
   ry: number,
   mouthY: number,
 ): string {
-  const dy = mouthY - cy;
-  const under = 1 - (dy * dy) / (ry * ry);
-  const dx = under > 0 ? rx * Math.sqrt(under) : 0;
+  const dx = ovalMouthDx(cx, cy, rx, ry, mouthY);
   const leftX = cx - dx;
   const rightX = cx + dx;
-  const topY = cy - ry;
-  return `M ${leftX} ${mouthY} Q ${cx - rx} ${(topY + mouthY) / 2} ${cx} ${topY} Q ${cx + rx} ${(topY + mouthY) / 2} ${rightX} ${mouthY} Z`;
+  // Left → right, large-arc + clockwise = through the top pole.
+  return `M ${leftX} ${mouthY} A ${rx} ${ry} 0 1 1 ${rightX} ${mouthY} Z`;
 }
 
 function ovalBottomPath(
@@ -264,15 +277,13 @@ function ovalBottomPath(
   rx: number,
   ry: number,
   mouthY: number,
-  height: number,
+  _height: number,
 ): string {
-  const dy = mouthY - cy;
-  const under = 1 - (dy * dy) / (ry * ry);
-  const dx = under > 0 ? rx * Math.sqrt(under) : 0;
+  const dx = ovalMouthDx(cx, cy, rx, ry, mouthY);
   const leftX = cx - dx;
   const rightX = cx + dx;
-  const botY = Math.min(height, cy + ry);
-  return `M ${leftX} ${mouthY} L ${rightX} ${mouthY} Q ${cx + rx} ${(botY + mouthY) / 2} ${cx} ${botY} Q ${cx - rx} ${(botY + mouthY) / 2} ${leftX} ${mouthY} Z`;
+  // Chord, then right → left, small-arc + clockwise = through the bottom pole.
+  return `M ${leftX} ${mouthY} L ${rightX} ${mouthY} A ${rx} ${ry} 0 0 1 ${leftX} ${mouthY} Z`;
 }
 
 function roundedTopRect(
@@ -307,23 +318,37 @@ export function AgentMark({
   markShape = DEFAULT_AGENT_MARK_SHAPE,
   markTalk = DEFAULT_AGENT_MARK_TALK,
   motion = "burst",
+  heightRatio = DEFAULT_AGENT_MARK_HEIGHT_RATIO,
 }: {
   readonly accent?: string;
   readonly size?: number;
   readonly markShape?: AgentMarkShape;
   readonly markTalk?: AgentMarkTalk;
   readonly motion?: AgentMarkMotion;
+  /** Height / width. Built-in Pearl uses 1 (circle). */
+  readonly heightRatio?: number;
 }) {
-  const { width, height, maxLift, layoutHeight } = pearlMarkMetrics(size);
+  const { width, height, maxLift, layoutHeight } = pearlMarkMetrics(
+    size,
+    heightRatio,
+  );
   const mouthY = Math.round(height * MOUTH_Y_RATIO);
   const mouthGap = Math.max(1.5, Math.round(size * MOUTH_GAP_RATIO));
   const topCut = mouthY - mouthGap / 2;
   const bottomCut = mouthY + mouthGap / 2;
   const hingeX = Math.round(width * 0.12);
   const profile = talkProfile(markTalk, size);
+  const eyeColor = markEyeColor(accent);
+  const clipUid = useId().replace(/:/g, "");
+  const topClipId = `mark-top-${clipUid}`;
+  const bottomClipId = `mark-bot-${clipUid}`;
+  const isOval = markShape === "oval";
   const paths = useMemo(
-    () => halfPaths(markShape, width, height, topCut, bottomCut),
-    [markShape, width, height, topCut, bottomCut],
+    () =>
+      isOval
+        ? { top: "", bottom: "" }
+        : halfPaths(markShape, width, height, topCut, bottomCut),
+    [isOval, markShape, width, height, topCut, bottomCut],
   );
 
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -436,7 +461,30 @@ export function AgentMark({
           ]}
         >
           <Svg width={width} height={height}>
-            <Path d={paths.bottom} fill={accent} />
+            {isOval ? (
+              <>
+                <Defs>
+                  <ClipPath id={bottomClipId}>
+                    <Rect
+                      x={0}
+                      y={bottomCut}
+                      width={width}
+                      height={Math.max(0, height - bottomCut)}
+                    />
+                  </ClipPath>
+                </Defs>
+                <Ellipse
+                  cx={width / 2}
+                  cy={height / 2}
+                  rx={width / 2}
+                  ry={height / 2}
+                  fill={accent}
+                  clipPath={`url(#${bottomClipId})`}
+                />
+              </>
+            ) : (
+              <Path d={paths.bottom} fill={accent} />
+            )}
           </Svg>
         </Animated.View>
 
@@ -453,20 +501,38 @@ export function AgentMark({
           ]}
         >
           <Svg width={width} height={height}>
-            <Path d={paths.top} fill={accent} />
+            {isOval ? (
+              <>
+                <Defs>
+                  <ClipPath id={topClipId}>
+                    <Rect x={0} y={0} width={width} height={topCut} />
+                  </ClipPath>
+                </Defs>
+                <Ellipse
+                  cx={width / 2}
+                  cy={height / 2}
+                  rx={width / 2}
+                  ry={height / 2}
+                  fill={accent}
+                  clipPath={`url(#${topClipId})`}
+                />
+              </>
+            ) : (
+              <Path d={paths.top} fill={accent} />
+            )}
             <Ellipse
               cx={width * 0.4}
               cy={topCut * 0.48}
               rx={Math.max(1.1, size * 0.045)}
               ry={Math.max(2.2, size * 0.09)}
-              fill={EYE_COLOR}
+              fill={eyeColor}
             />
             <Ellipse
               cx={width * 0.6}
               cy={topCut * 0.48}
               rx={Math.max(1.1, size * 0.045)}
               ry={Math.max(2.2, size * 0.09)}
-              fill={EYE_COLOR}
+              fill={eyeColor}
             />
           </Svg>
         </Animated.View>

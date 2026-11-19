@@ -4,18 +4,59 @@ import { useEffect, useId, useState } from "react";
 
 import {
   DEFAULT_AGENT_MARK_ACCENT,
+  DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
+  markEyeColor,
   type AgentMarkMotion,
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "@/lib/custom-agents/mark";
 import { cn } from "@/lib/utils";
 
-const EYE_COLOR = "#111111";
-const HEIGHT_RATIO = 1.28;
 const MOUTH_Y_RATIO = 0.62;
 const MOUTH_GAP_RATIO = 0.035;
+
+function ovalMouthDx(
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  mouthY: number,
+): number {
+  const dy = mouthY - cy;
+  const under = 1 - (dy * dy) / (ry * ry);
+  return under > 0 ? rx * Math.sqrt(under) : 0;
+}
+
+/** Exact ellipse halves via SVG arcs (no polyline / quadratic pinch at poles). */
+function ovalTopPath(
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  mouthY: number,
+): string {
+  const dx = ovalMouthDx(cx, cy, rx, ry, mouthY);
+  const leftX = cx - dx;
+  const rightX = cx + dx;
+  // Left → right, large-arc + clockwise = through the top pole.
+  return `M ${leftX} ${mouthY} A ${rx} ${ry} 0 1 1 ${rightX} ${mouthY} Z`;
+}
+
+function ovalBottomPath(
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  mouthY: number,
+): string {
+  const dx = ovalMouthDx(cx, cy, rx, ry, mouthY);
+  const leftX = cx - dx;
+  const rightX = cx + dx;
+  // Chord, then right → left, small-arc + clockwise = through the bottom pole.
+  return `M ${leftX} ${mouthY} L ${rightX} ${mouthY} A ${rx} ${ry} 0 0 1 ${leftX} ${mouthY} Z`;
+}
 
 function halfPaths(
   shape: AgentMarkShape,
@@ -64,17 +105,9 @@ function halfPaths(
       const ry = h / 2;
       const cx = w / 2;
       const cy = h / 2;
-      const topDy = topCut - cy;
-      const topUnder = 1 - (topDy * topDy) / (ry * ry);
-      const topDx = topUnder > 0 ? rx * Math.sqrt(topUnder) : 0;
-      const botDy = bottomCut - cy;
-      const botUnder = 1 - (botDy * botDy) / (ry * ry);
-      const botDx = botUnder > 0 ? rx * Math.sqrt(botUnder) : 0;
-      const topY = cy - ry;
-      const botY = Math.min(h, cy + ry);
       return {
-        top: `M ${cx - topDx} ${topCut} Q ${cx - rx} ${(topY + topCut) / 2} ${cx} ${topY} Q ${cx + rx} ${(topY + topCut) / 2} ${cx + topDx} ${topCut} Z`,
-        bottom: `M ${cx - botDx} ${bottomCut} L ${cx + botDx} ${bottomCut} Q ${cx + rx} ${(botY + bottomCut) / 2} ${cx} ${botY} Q ${cx - rx} ${(botY + bottomCut) / 2} ${cx - botDx} ${bottomCut} Z`,
+        top: ovalTopPath(cx, cy, rx, ry, topCut),
+        bottom: ovalBottomPath(cx, cy, rx, ry, bottomCut),
       };
     }
   }
@@ -201,6 +234,7 @@ export function AgentAccentMark({
   motion = "burst",
   className,
   size = "sm",
+  heightRatio = DEFAULT_AGENT_MARK_HEIGHT_RATIO,
 }: {
   readonly accent?: string;
   readonly markShape?: AgentMarkShape;
@@ -208,6 +242,8 @@ export function AgentAccentMark({
   readonly motion?: AgentMarkMotion;
   readonly className?: string;
   readonly size?: "sm" | "md" | "lg";
+  /** Height / width. Built-in Pearl uses a rounder ratio (~1.05). */
+  readonly heightRatio?: number;
 }) {
   const reactId = useId().replace(/:/g, "");
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -222,7 +258,7 @@ export function AgentAccentMark({
   }, []);
 
   const width = size === "lg" ? 56 : size === "md" ? 24 : 16;
-  const height = Math.round(width * HEIGHT_RATIO);
+  const height = Math.round(width * heightRatio);
   const maxLift = Math.max(3, Math.round(width * 0.22));
   const layoutHeight = height + maxLift;
   const mouthY = Math.round(height * MOUTH_Y_RATIO);
@@ -230,14 +266,20 @@ export function AgentAccentMark({
   const topCut = mouthY - mouthGap / 2;
   const bottomCut = mouthY + mouthGap / 2;
   const hingeX = Math.round(width * 0.12);
+  const eyeColor = markEyeColor(accent);
   const eyeRx = Math.max(1.1, width * 0.045);
   const eyeRy = Math.max(2.2, width * 0.09);
-  const paths = halfPaths(markShape, width, height, topCut, bottomCut);
+  const isOval = markShape === "oval";
+  const paths = isOval
+    ? { top: "", bottom: "" }
+    : halfPaths(markShape, width, height, topCut, bottomCut);
   const canAnimate = !reduceMotion && motion !== "off";
   const idleActive = canAnimate && motion === "idle";
   const burstActive = canAnimate && motion === "burst" && bursting;
   const crownClass = `pearl-crown-${reactId}`;
   const jawClass = `pearl-jaw-${reactId}`;
+  const topClipId = `pearl-top-${reactId}`;
+  const bottomClipId = `pearl-bot-${reactId}`;
   const animating = idleActive || burstActive;
   const frames = idleActive
     ? talkKeyframes(markTalk, width)
@@ -267,17 +309,43 @@ export function AgentAccentMark({
           viewBox={`0 0 ${width} ${height + maxLift}`}
           className="overflow-visible"
         >
+          {isOval ? (
+            <defs>
+              <clipPath id={topClipId}>
+                <rect x={0} y={maxLift} width={width} height={topCut} />
+              </clipPath>
+              <clipPath id={bottomClipId}>
+                <rect
+                  x={0}
+                  y={maxLift + bottomCut}
+                  width={width}
+                  height={Math.max(0, height - bottomCut)}
+                />
+              </clipPath>
+            </defs>
+          ) : null}
           <g
             className={animating ? jawClass : undefined}
             style={{
               transformOrigin: `${hingeX}px ${mouthY + maxLift}px`,
             }}
           >
-            <path
-              d={paths.bottom}
-              fill={accent}
-              transform={`translate(0 ${maxLift})`}
-            />
+            {isOval ? (
+              <ellipse
+                cx={width / 2}
+                cy={maxLift + height / 2}
+                rx={width / 2}
+                ry={height / 2}
+                fill={accent}
+                clipPath={`url(#${bottomClipId})`}
+              />
+            ) : (
+              <path
+                d={paths.bottom}
+                fill={accent}
+                transform={`translate(0 ${maxLift})`}
+              />
+            )}
           </g>
           <g
             className={animating ? crownClass : undefined}
@@ -285,24 +353,35 @@ export function AgentAccentMark({
               transformOrigin: `${hingeX}px ${mouthY + maxLift}px`,
             }}
           >
-            <path
-              d={paths.top}
-              fill={accent}
-              transform={`translate(0 ${maxLift})`}
-            />
+            {isOval ? (
+              <ellipse
+                cx={width / 2}
+                cy={maxLift + height / 2}
+                rx={width / 2}
+                ry={height / 2}
+                fill={accent}
+                clipPath={`url(#${topClipId})`}
+              />
+            ) : (
+              <path
+                d={paths.top}
+                fill={accent}
+                transform={`translate(0 ${maxLift})`}
+              />
+            )}
             <ellipse
               cx={width * 0.4}
               cy={maxLift + topCut * 0.48}
               rx={eyeRx}
               ry={eyeRy}
-              fill={EYE_COLOR}
+              fill={eyeColor}
             />
             <ellipse
               cx={width * 0.6}
               cy={maxLift + topCut * 0.48}
               rx={eyeRx}
               ry={eyeRy}
-              fill={EYE_COLOR}
+              fill={eyeColor}
             />
           </g>
         </svg>
@@ -337,6 +416,7 @@ export function AgentIdentityPill({
   markShape = DEFAULT_AGENT_MARK_SHAPE,
   markTalk = DEFAULT_AGENT_MARK_TALK,
   motion = "idle",
+  heightRatio = DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   className,
   onClick,
 }: {
@@ -345,6 +425,7 @@ export function AgentIdentityPill({
   readonly markShape?: AgentMarkShape;
   readonly markTalk?: AgentMarkTalk;
   readonly motion?: AgentMarkMotion;
+  readonly heightRatio?: number;
   readonly className?: string;
   readonly onClick?: () => void;
 }) {
@@ -362,6 +443,7 @@ export function AgentIdentityPill({
         markShape={markShape}
         markTalk={markTalk}
         motion={motion}
+        heightRatio={heightRatio}
       />
       <span className="min-w-0 truncate">{label}</span>
     </>

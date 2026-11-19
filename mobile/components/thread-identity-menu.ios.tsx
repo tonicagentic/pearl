@@ -22,6 +22,7 @@ export function ThreadIdentityMenu({
   accent,
   markShape,
   markTalk,
+  heightRatio,
   projectLabel,
   hasProject,
   canManageThread,
@@ -58,6 +59,7 @@ export function ThreadIdentityMenu({
                 accent={accent}
                 markShape={markShape}
                 markTalk={markTalk}
+                heightRatio={heightRatio}
                 motion="idle"
               />
             </View>

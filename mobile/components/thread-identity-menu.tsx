@@ -2,13 +2,15 @@ import * as Haptics from "expo-haptics";
 import { Alert } from "react-native";
 
 import { AgentIdentityPill } from "@/components/custom-agents/agent-identity-pill";
-import type {
-  AgentMarkShape,
-  AgentMarkTalk,
+import {
+  DEFAULT_AGENT_MARK_HEIGHT_RATIO,
+  PEARL_IDENTITY_ACCENT,
+  PEARL_MARK_HEIGHT_RATIO,
+  type AgentMarkShape,
+  type AgentMarkTalk,
 } from "../../lib/custom-agents/mark";
 
-/** Default Pearl mark — Terrance/Phillip flesh (Canadian pearl). */
-export const PEARL_IDENTITY_ACCENT = "#F5C9A0";
+export { PEARL_IDENTITY_ACCENT, PEARL_MARK_HEIGHT_RATIO };
 
 export type ThreadIdentityAgentOption = {
   readonly id: string;
@@ -24,6 +26,8 @@ export type ThreadIdentityMenuProps = {
   readonly accent?: string;
   readonly markShape?: AgentMarkShape;
   readonly markTalk?: AgentMarkTalk;
+  /** Rounder for built-in Pearl; tall oval for custom agents. */
+  readonly heightRatio?: number;
   readonly projectLabel: string | null;
   readonly hasProject: boolean;
   readonly canManageThread: boolean;
@@ -48,6 +52,7 @@ export function ThreadIdentityMenu({
   accent,
   markShape,
   markTalk,
+  heightRatio = DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   projectLabel,
   hasProject,
   canManageThread,
@@ -69,6 +74,7 @@ export function ThreadIdentityMenu({
       accent={accent}
       markShape={markShape}
       markTalk={markTalk}
+      heightRatio={heightRatio}
       motion="idle"
       onPress={() => {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
