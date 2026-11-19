@@ -2051,18 +2051,55 @@ const ComposerTrailingControls: FC<{
 // as assistant chat copy (ErrorPrimitive / failure banners).
 
 /**
- * Same renderer as assistant answers — iOS UITextView + Marked styles —
- * so bubble copy cannot drift to the TextInput default (~14pt).
+ * Detect structured markdown so plain user lines can hug Text width instead
+ * of expanding through the iOS TextInput Marked path.
  */
-const UserText: TextMessagePartComponent = ({ text, status }) => (
-  <View className="aui-user-message-text">
-    <MarkdownText
-      type="text"
-      text={text}
-      status={status ?? { type: "complete" }}
-    />
-  </View>
-);
+function userTextHasMarkdown(text: string): boolean {
+  return (
+    /```/.test(text) ||
+    /`[^`\n]+`/.test(text) ||
+    /\*\*[^*\n]+\*\*/.test(text) ||
+    /__[^_\n]+__/.test(text) ||
+    /\[[^\]]+\]\([^)\s]+\)/.test(text) ||
+    /!\[[^\]]*\]\([^)\s]+\)/.test(text) ||
+    /^#{1,6}\s/m.test(text) ||
+    /^>\s/m.test(text) ||
+    /^[-*+]\s+\S/m.test(text) ||
+    /^\d+\.\s+\S/m.test(text)
+  );
+}
+
+/**
+ * Plain user copy uses label Text so the bubble shrinks to the longest line
+ * (capped by the shell's max-w). Markdown keeps the shared Marked renderer.
+ */
+const UserText: TextMessagePartComponent = ({ text, status }) => {
+  if (userTextHasMarkdown(text)) {
+    return (
+      <View className="aui-user-message-text">
+        <MarkdownText
+          type="text"
+          text={text}
+          status={status ?? { type: "complete" }}
+        />
+      </View>
+    );
+  }
+  return (
+    <Text
+      variant="label"
+      className="aui-user-message-text"
+      onLongPress={() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+          () => {},
+        );
+        void copyToClipboard(text);
+      }}
+    >
+      {text}
+    </Text>
+  );
+};
 
 const ReasoningHidden = () => null;
 
@@ -2309,7 +2346,7 @@ const UserMessage: FC = () => {
         )}
       >
         <UserMessageAttachments />
-        <View className="aui-user-message-content bg-muted max-w-[85%] rounded-2xl px-4 py-2.5">
+        <View className="aui-user-message-content bg-muted max-w-[85%] rounded-2xl px-4 py-2">
           <MessagePrimitive.Parts components={{ Text: UserText, Image, File }} />
         </View>
         {branchCount > 1 ? (
