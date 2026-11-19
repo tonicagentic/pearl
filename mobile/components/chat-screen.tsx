@@ -1448,10 +1448,10 @@ export function ChatScreen({
               Platform.OS === "web"
                 ? () => (
                     <View className="flex-row items-center gap-2">
-                      {historyOpen ? null : (
+                      {historyOpen || activeCustomAgent ? null : (
                         <HistorySidebarButton onPress={openHistory} />
                       )}
-                      {activeChatId ? (
+                      {activeChatId && !activeCustomAgent ? (
                         <>
                           <Pressable
                             accessibilityRole="button"
@@ -1464,27 +1464,23 @@ export function ChatScreen({
                               className="size-5 text-foreground"
                             />
                           </Pressable>
-                          {activeCustomAgent ? null : (
-                            <>
-                              <View className="w-2" />
-                              <Pressable
-                                accessibilityRole="button"
-                                accessibilityLabel="Computer"
-                                accessibilityState={{ selected: computerOpen }}
-                                className="h-10 w-10 items-center justify-center"
-                                onPress={toggleComputer}
-                              >
-                                <Icon
-                                  as={MonitorIcon}
-                                  className={
-                                    computerOpen
-                                      ? "size-5 text-foreground"
-                                      : "size-5 text-muted-foreground"
-                                  }
-                                />
-                              </Pressable>
-                            </>
-                          )}
+                          <View className="w-2" />
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Computer"
+                            accessibilityState={{ selected: computerOpen }}
+                            className="h-10 w-10 items-center justify-center"
+                            onPress={toggleComputer}
+                          >
+                            <Icon
+                              as={MonitorIcon}
+                              className={
+                                computerOpen
+                                  ? "size-5 text-foreground"
+                                  : "size-5 text-muted-foreground"
+                              }
+                            />
+                          </Pressable>
                         </>
                       ) : null}
                     </View>
@@ -1492,10 +1488,10 @@ export function ChatScreen({
                 : Platform.OS === "android"
                   ? () => (
                       <View className="flex-row items-center gap-2">
-                        {historyOpen ? null : (
+                        {historyOpen || activeCustomAgent ? null : (
                           <HistorySidebarButton onPress={openHistory} />
                         )}
-                        {activeChatId ? (
+                        {activeChatId && !activeCustomAgent ? (
                           <>
                             <Pressable
                               accessibilityRole="button"
@@ -1508,27 +1504,23 @@ export function ChatScreen({
                                 className="size-5 text-foreground"
                               />
                             </Pressable>
-                            {activeCustomAgent ? null : (
-                              <>
-                                <View className="w-2" />
-                                <Pressable
-                                  accessibilityRole="button"
-                                  accessibilityLabel="Computer"
-                                  accessibilityState={{ selected: computerOpen }}
-                                  className="h-10 w-10 items-center justify-center"
-                                  onPress={toggleComputer}
-                                >
-                                  <Icon
-                                    as={MonitorIcon}
-                                    className={
-                                      computerOpen
-                                        ? "size-5 text-foreground"
-                                        : "size-5 text-muted-foreground"
-                                    }
-                                  />
-                                </Pressable>
-                              </>
-                            )}
+                            <View className="w-2" />
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Computer"
+                              accessibilityState={{ selected: computerOpen }}
+                              className="h-10 w-10 items-center justify-center"
+                              onPress={toggleComputer}
+                            >
+                              <Icon
+                                as={MonitorIcon}
+                                className={
+                                  computerOpen
+                                    ? "size-5 text-foreground"
+                                    : "size-5 text-muted-foreground"
+                                }
+                              />
+                            </Pressable>
                           </>
                         ) : null}
                       </View>
@@ -1539,7 +1531,7 @@ export function ChatScreen({
       )}
       {!embedded && Platform.OS === "ios" ? (
         <Stack.Toolbar placement="right">
-          {historyOpen ? null : (
+          {historyOpen || activeCustomAgent ? null : (
             <Stack.Toolbar.View hidesSharedBackground>
               <View style={{ width: 44, height: 44 }}>
                 <HistorySidebarButton onPress={openHistory} />
@@ -1552,7 +1544,7 @@ export function ChatScreen({
             onPress={openCompose}
             tintColor={foregroundColor}
             separateBackground
-            hidden={!activeChatId}
+            hidden={!activeChatId || Boolean(activeCustomAgent)}
           />
           <Stack.Toolbar.Spacer
             width={8}
