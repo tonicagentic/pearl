@@ -16,7 +16,6 @@ import {
 } from "@assistant-ui/react-native";
 import {
   MonitorIcon,
-  MoreHorizontalIcon,
   SquarePenIcon,
 } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
@@ -28,14 +27,19 @@ import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { SignupSheet } from "@/components/signup-sheet";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { ComputerPanel } from "@/components/computer-panel";
-import { AgentIdentityPill } from "@/components/custom-agents/agent-identity-pill";
 import { AgentSettingsModal } from "@/components/custom-agents/agent-settings-modal";
 import { FileCanvas } from "@/components/file-canvas";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
+import {
+  PEARL_IDENTITY_ACCENT,
+  ThreadIdentityMenu,
+  type ThreadIdentityAgentOption,
+} from "@/components/thread-identity-menu";
 import { Icon } from "@/components/ui/icon";
 import { StackScreen } from "@/components/ui/stack-screen";
 import { useAuth } from "@/src/auth";
 import { getAgentMode } from "@/src/agent-mode";
+import { fetchCustomAgents } from "@/src/custom-agents-client";
 import { withPendingAssistant } from "@/src/stream-presentation";
 import { applyLiveReplyOverlay } from "@/src/apply-live-reply";
 import {
@@ -110,7 +114,7 @@ export function ChatScreen({
     setActiveCustomAgent,
     newChatEntry,
     newChat,
-    activeTitle,
+    selectChat,
     persistenceError,
     retrySync,
     pendingMessage,
@@ -124,6 +128,9 @@ export function ChatScreen({
     useWorkspace();
   const [computerOpen, setComputerOpen] = useState(false);
   const [agentSettingsOpen, setAgentSettingsOpen] = useState(false);
+  const [switchableAgents, setSwitchableAgents] = useState<
+    readonly ThreadIdentityAgentOption[]
+  >([]);
   const computerSheetRef = useRef<BottomSheetModalRef>(null);
   const [signupOpen, setSignupOpen] = useState(false);
   const tabCountRef = useRef(tabs.length);
@@ -180,6 +187,35 @@ export function ChatScreen({
   useEffect(() => {
     setChatId(activeChatId);
   }, [activeChatId, setChatId]);
+
+  // New chat + custom-agent threads: load agents so the identity pill can switch.
+  const allowAgentSwitch =
+    !isAnonymous && (activeChatId === null || Boolean(activeCustomAgent));
+  useEffect(() => {
+    if (!allowAgentSwitch || !billingReady) {
+      setSwitchableAgents([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchCustomAgents()
+      .then((rows) => {
+        if (cancelled) return;
+        setSwitchableAgents(
+          rows.map((agent) => ({
+            id: agent.id,
+            name: agent.name,
+            accent: agent.accent,
+            chatId: agent.chatId,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setSwitchableAgents([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [allowAgentSwitch, billingReady, activeCustomAgent?.id, newChatEntry]);
 
   useEffect(() => {
     if (!isAnonymous && signupOpen) setSignupOpen(false);
@@ -324,41 +360,6 @@ export function ChatScreen({
       void setChatProject(activeChatId, null).catch(() => {});
     }
   }, [activeChatId, setActiveProjectId, setChatProject]);
-
-  /** Web fallback — native uses Stack.Toolbar.Menu. */
-  const openThreadActions = useCallback(() => {
-    dismissKeyboard();
-    const buttons: {
-      text: string;
-      style?: "cancel" | "destructive" | "default";
-      onPress?: () => void;
-    }[] = [
-      {
-        text: projectLabel ? "Change project" : "Add to project",
-        onPress: openProjectPicker,
-      },
-    ];
-    if (activeProjectId) {
-      buttons.push({ text: "Remove from project", onPress: clearProject });
-    }
-    buttons.push(
-      { text: "View cost", onPress: openCost },
-      ...(activeChatId
-        ? [{ text: "Delete", style: "destructive" as const, onPress: confirmDelete }]
-        : []),
-      { text: "Cancel", style: "cancel" },
-    );
-    Alert.alert(activeTitle === "New chat" ? "Thread" : activeTitle, undefined, buttons);
-  }, [
-    activeChatId,
-    activeProjectId,
-    activeTitle,
-    clearProject,
-    confirmDelete,
-    openCost,
-    openProjectPicker,
-    projectLabel,
-  ]);
 
   const [sendError, setSendError] = useState<{ store: object; message: string } | null>(null);
   const [localSends, setLocalSends] = useState<Map<object, LocalSend>>(() => new Map());
@@ -1161,6 +1162,21 @@ export function ChatScreen({
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setAgentSettingsOpen(true);
   }, []);
+  const selectPearlAgent = useCallback(() => {
+    if (activeCustomAgent == null && activeChatId === null) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    newChat();
+  }, [activeChatId, activeCustomAgent, newChat]);
+  const selectCustomAgent = useCallback(
+    (agent: ThreadIdentityAgentOption) => {
+      if (activeCustomAgent?.id === agent.id) return;
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+        () => {},
+      );
+      void selectChat(agent.chatId);
+    },
+    [activeCustomAgent?.id, selectChat],
+  );
   return (
     <StackScreen>
       <Stack.Screen
@@ -1177,16 +1193,28 @@ export function ChatScreen({
           headerTintColor: foregroundColor,
           headerTitleStyle:
             Platform.OS === "web" ? { color: foregroundColor } : undefined,
-          headerTitle:
-            Platform.OS !== "web" && activeCustomAgent
-              ? () => (
-                  <AgentIdentityPill
-                    name={activeCustomAgent.name}
-                    accent={activeCustomAgent.accent}
-                    onPress={openAgentSettings}
-                  />
-                )
-              : undefined,
+          headerTitle: () => (
+            <ThreadIdentityMenu
+              name={activeCustomAgent?.name ?? "Pearl"}
+              accent={activeCustomAgent?.accent ?? PEARL_IDENTITY_ACCENT}
+              projectLabel={projectLabel}
+              hasProject={Boolean(activeProjectId)}
+              canManageThread={Boolean(activeChatId)}
+              showAgentSettings={Boolean(activeCustomAgent)}
+              onAgentSettings={
+                activeCustomAgent ? openAgentSettings : undefined
+              }
+              onAddOrChangeProject={openProjectPicker}
+              onRemoveProject={clearProject}
+              onViewCost={openCost}
+              onDelete={confirmDelete}
+              allowAgentSwitch={allowAgentSwitch}
+              agents={switchableAgents}
+              currentAgentId={activeCustomAgent?.id ?? null}
+              onSelectPearl={selectPearlAgent}
+              onSelectAgent={selectCustomAgent}
+            />
+          ),
           headerRight:
             Platform.OS === "web"
               ? () => (
@@ -1204,45 +1232,28 @@ export function ChatScreen({
                             className="size-5 text-foreground"
                           />
                         </Pressable>
-                        <View className="w-2" />
-                        {activeCustomAgent ? (
-                          <AgentIdentityPill
-                            name={activeCustomAgent.name}
-                            accent={activeCustomAgent.accent}
-                            onPress={openAgentSettings}
-                          />
-                        ) : (
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Computer"
-                            accessibilityState={{ selected: computerOpen }}
-                            className="h-10 w-10 items-center justify-center"
-                            onPress={toggleComputer}
-                          >
-                            <Icon
-                              as={MonitorIcon}
-                              className={
-                                computerOpen
-                                  ? "size-5 text-foreground"
-                                  : "size-5 text-muted-foreground"
-                              }
-                            />
-                          </Pressable>
+                        {activeCustomAgent ? null : (
+                          <>
+                            <View className="w-2" />
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Computer"
+                              accessibilityState={{ selected: computerOpen }}
+                              className="h-10 w-10 items-center justify-center"
+                              onPress={toggleComputer}
+                            >
+                              <Icon
+                                as={MonitorIcon}
+                                className={
+                                  computerOpen
+                                    ? "size-5 text-foreground"
+                                    : "size-5 text-muted-foreground"
+                                }
+                              />
+                            </Pressable>
+                          </>
                         )}
                       </>
-                    ) : null}
-                    {projectedMessages.length > 0 ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Thread actions"
-                        className="h-10 w-10 items-center justify-center"
-                        onPress={openThreadActions}
-                      >
-                        <Icon
-                          as={MoreHorizontalIcon}
-                          className="size-5 text-foreground"
-                        />
-                      </Pressable>
                     ) : null}
                   </View>
                 )
@@ -1271,41 +1282,6 @@ export function ChatScreen({
             tintColor={foregroundColor}
             hidden={!activeChatId || Boolean(activeCustomAgent)}
           />
-          <Stack.Toolbar.Menu
-            icon="ellipsis"
-            accessibilityLabel="Thread actions"
-            hidden={projectedMessages.length === 0}
-            tintColor={foregroundColor}
-          >
-            <Stack.Toolbar.MenuAction
-              icon="folder"
-              subtitle={projectLabel ?? undefined}
-              onPress={openProjectPicker}
-            >
-              {projectLabel ? "Change project" : "Add to project"}
-            </Stack.Toolbar.MenuAction>
-            <Stack.Toolbar.MenuAction
-              icon="folder.badge.minus"
-              hidden={!activeProjectId}
-              onPress={clearProject}
-            >
-              Remove from project
-            </Stack.Toolbar.MenuAction>
-            <Stack.Toolbar.MenuAction
-              icon="dollarsign.circle"
-              onPress={openCost}
-            >
-              View cost
-            </Stack.Toolbar.MenuAction>
-            <Stack.Toolbar.MenuAction
-              icon="trash"
-              destructive
-              hidden={!activeChatId}
-              onPress={confirmDelete}
-            >
-              Delete
-            </Stack.Toolbar.MenuAction>
-          </Stack.Toolbar.Menu>
         </Stack.Toolbar>
       ) : null}
       <View style={{ flex: 1 }}>
