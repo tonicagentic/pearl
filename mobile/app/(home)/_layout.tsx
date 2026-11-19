@@ -134,6 +134,14 @@ export default function HomeLayout() {
         }}
       />
       <Stack.Screen
+        name="workspaces"
+        options={{
+          title: "Workspaces",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
         name="projects/[id]/index"
         options={{
           title: "Project",

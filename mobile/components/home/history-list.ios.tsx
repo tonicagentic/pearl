@@ -57,25 +57,22 @@ const PRESENCE_SLOT = 14;
 
 export type { HistoryChatActionHandlers } from "@/components/home/history-list";
 
-/** Keep Recents short so the Projects group stays on the first screen. */
+/** Keep Recents short so Agents and Workspaces stay on the first screen. */
 const RECENT_PREVIEW_COUNT = 6;
 
 /**
- * iOS home: inset-grouped List — Agents, then Recents, then Projects —
- * with swipe delete and context menu actions.
+ * iOS home: inset-grouped List — Agents, then Recents, then a Workspaces
+ * row — with swipe delete and context menu actions.
  */
 export function HistoryListIOS({
   onOpenChat,
   actions,
   bottomInset = 0,
-  onCreateProject,
   onCreateAgent,
 }: {
   readonly onOpenChat: () => void;
   readonly actions: HistoryChatActionHandlers;
   readonly bottomInset?: number;
-  /** Opens the shared new-project composer from the empty Projects row. */
-  readonly onCreateProject?: () => void;
   /** Opens the new-agent composer from the empty Agents row. */
   readonly onCreateAgent?: () => void;
 }) {
@@ -200,26 +197,9 @@ export function HistoryListIOS({
         ? "Couldn’t load history"
         : "Sign in to see chats";
 
-  // Show the Projects/Agents groups once the fetch settles — empty state
-  // included — so they are not mistaken for missing sections.
-  const showProjects = projects !== null;
+  // Show the Agents group once the fetch settles — empty state included —
+  // so it is not mistaken for a missing section.
   const showAgents = agents !== null;
-
-  if (showEmptyCard && !showProjects) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor,
-          paddingBottom: bottomInset,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <EmptyChatsCard />
-      </View>
-    );
-  }
 
   return (
     <View
@@ -381,73 +361,9 @@ export function HistoryListIOS({
             ) : null}
           </Section>
           )}
-          {showProjects ? (
-            <Section
-              header={
-                <HStack alignment="center">
-                  <SwiftText
-                    modifiers={[
-                      font({ size: 13 }),
-                      foregroundStyle({
-                        type: "hierarchical",
-                        style: "secondary",
-                      }),
-                    ]}
-                  >
-                    Projects
-                  </SwiftText>
-                  <Spacer />
-                  {onCreateProject ? (
-                    <Button
-                      onPress={onCreateProject}
-                      modifiers={[buttonStyle("plain")]}
-                    >
-                      <Image
-                        systemName="plus"
-                        size={14}
-                        modifiers={[tint(mutedColor)]}
-                      />
-                    </Button>
-                  ) : null}
-                </HStack>
-              }
-            >
-              {orderedProjects.length === 0 ? (
-                onCreateProject ? (
-                  <Button
-                    label="New Project"
-                    systemImage="folder.badge.plus"
-                    onPress={onCreateProject}
-                    modifiers={[buttonStyle("plain"), ...rowChrome]}
-                  />
-                ) : (
-                  <SwiftText
-                    modifiers={[
-                      foregroundStyle({
-                        type: "hierarchical",
-                        style: "secondary",
-                      }),
-                      font({ size: 15 }),
-                      ...rowChrome,
-                    ]}
-                  >
-                    No projects yet
-                  </SwiftText>
-                )
-              ) : (
-                <List.ForEach
-                  data={orderedProjects}
-                  keyExtractor={(project) => project.id}
-                  estimatedItemSize={52}
-                  recycling={false}
-                >
-                  {({ item: project }) => (
-                    <ProjectRow project={project} mutedColor={mutedColor} />
-                  )}
-                </List.ForEach>
-              )}
-            </Section>
-          ) : null}
+          <Section>
+            <WorkspacesRow mutedColor={mutedColor} />
+          </Section>
           {bottomInset > 0 ? (
             <Section>
               <HStack
@@ -585,21 +501,14 @@ function AgentRow({
   );
 }
 
-function ProjectRow({
-  project,
-  mutedColor,
-}: {
-  readonly project: ProjectDto;
-  readonly mutedColor: string;
-}) {
+function WorkspacesRow({ mutedColor }: { readonly mutedColor: string }) {
   return (
     <Button
-      onPress={() =>
-        router.push(`/projects/${encodeURIComponent(project.id)}`)
-      }
+      onPress={() => router.push("/workspaces")}
       modifiers={[
         buttonStyle("plain"),
         listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
+        accessibilityLabel("Workspaces"),
       ]}
     >
       <HStack
@@ -616,9 +525,14 @@ function ProjectRow({
           ]}
         />
         <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
-          {project.name}
+          Workspaces
         </SwiftText>
         <Spacer />
+        <Image
+          systemName="chevron.right"
+          size={13}
+          modifiers={[tint(mutedColor), opacity(0.55)]}
+        />
       </HStack>
     </Button>
   );

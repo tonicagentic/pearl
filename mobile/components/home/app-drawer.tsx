@@ -9,11 +9,10 @@ import {
 import { router, useFocusEffect } from "expo-router";
 import { FlatList } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { FolderIcon, SquarePenIcon } from "lucide-react-native";
+import { ChevronRightIcon, FolderIcon, SquarePenIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { EmptyChatsCard } from "@/components/home/empty-chats-card";
-import { ProjectMark } from "@/components/project-mark";
 import { Icon } from "@/components/ui/icon";
 import { Text as AppText } from "@/components/ui/text";
 import {
@@ -53,7 +52,6 @@ export function HistoryScreen({
   visible = true,
   chatActions,
   bottomInset = 0,
-  onCreateProject,
   onCreateAgent,
 }: {
   /** Called after selecting an existing chat (caller should push `/chat`). */
@@ -62,8 +60,6 @@ export function HistoryScreen({
   /** iOS swipe / context-menu handlers (required on iOS for row actions). */
   chatActions?: HistoryChatActionHandlers;
   readonly bottomInset?: number;
-  /** Opens the new-project composer (empty Projects row + home New menu). */
-  readonly onCreateProject?: () => void;
   /** Opens the new-agent composer (empty Agents row). */
   readonly onCreateAgent?: () => void;
 }) {
@@ -86,7 +82,6 @@ export function HistoryScreen({
           onOpenChat={openChatRoute}
           actions={actions}
           bottomInset={bottomInset}
-          onCreateProject={onCreateProject}
           onCreateAgent={onCreateAgent}
         />
       </View>
@@ -248,15 +243,9 @@ function HistoryListAndroid({
           contentContainerStyle={{
             paddingBottom: 32 + bottomInset,
             flexGrow:
-              showEmptyCard &&
-              orderedProjects.length === 0 &&
-              orderedAgents.length === 0
-                ? 1
-                : undefined,
+              showEmptyCard && orderedAgents.length === 0 ? 1 : undefined,
             justifyContent:
-              showEmptyCard &&
-              orderedProjects.length === 0 &&
-              orderedAgents.length === 0
+              showEmptyCard && orderedAgents.length === 0
                 ? "center"
                 : undefined,
           }}
@@ -489,35 +478,26 @@ function HistoryListAndroid({
                   </Text>
                 </Pressable>
               ) : null}
-              {orderedProjects.length > 0 ? (
-                <View className="mt-6">
-                  <AppText
-                    variant="secondary"
-                    weight="medium"
-                    className="mb-1 px-3"
-                  >
-                    Projects
-                  </AppText>
-                  {orderedProjects.map((project) => (
-                    <Pressable
-                      key={project.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={project.name}
-                      className="min-h-12 flex-row items-center gap-3 px-3 py-2"
-                      onPress={() =>
-                        router.push(
-                          `/projects/${encodeURIComponent(project.id)}`,
-                        )
-                      }
-                    >
-                      <ProjectMark name={project.name} size="sm" />
-                      <AppText variant="body" weight="medium" numberOfLines={1}>
-                        {project.name}
-                      </AppText>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Workspaces"
+                className="mt-6 min-h-12 flex-row items-center gap-3 px-3 py-2"
+                onPress={() => router.push("/workspaces")}
+              >
+                <Icon as={FolderIcon} className="size-3.5 text-muted-foreground" />
+                <AppText
+                  variant="body"
+                  weight="medium"
+                  className="min-w-0 flex-1"
+                  numberOfLines={1}
+                >
+                  Workspaces
+                </AppText>
+                <Icon
+                  as={ChevronRightIcon}
+                  className="size-4 text-muted-foreground"
+                />
+              </Pressable>
             </>
           }
         />

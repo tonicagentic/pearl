@@ -18,7 +18,7 @@ import {
   type ProjectDto,
 } from "@/src/projects-client";
 
-/** New-project composer in an Expo UI bottom sheet. */
+/** New-workspace composer in an Expo UI bottom sheet. */
 export function CreateProjectModal({
   open,
   onClose,
@@ -61,7 +61,7 @@ export function CreateProjectModal({
         setError(
           cause instanceof Error
             ? cause.message
-            : "Could not create the project.",
+            : "Could not create the workspace.",
         );
         setBusy(false);
       });
@@ -90,7 +90,7 @@ export function CreateProjectModal({
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Create project"
+              accessibilityLabel="Create workspace"
               hitSlop={8}
               className={`h-10 w-10 items-center justify-center rounded-full ${canSubmit ? "bg-foreground" : "bg-muted/60"}`}
               disabled={!canSubmit}
@@ -108,7 +108,7 @@ export function CreateProjectModal({
           </View>
 
           <View className="mb-4">
-            <ProjectMark name={name || "project"} size="lg" />
+            <ProjectMark name={name || "workspace"} size="lg" />
           </View>
           {error ? (
             <Text variant="secondary" tone="destructive" className="mb-3">
@@ -116,7 +116,7 @@ export function CreateProjectModal({
             </Text>
           ) : null}
           <TextInput
-            accessibilityLabel="Project name"
+            accessibilityLabel="Workspace name"
             autoFocus
             className={cn(
               "min-h-12 tracking-tight",
@@ -125,13 +125,13 @@ export function CreateProjectModal({
             maxLength={120}
             onChangeText={setName}
             onSubmitEditing={submit}
-            placeholder="Project name"
+            placeholder="Workspace name"
             placeholderTextColor={placeholderColor}
             returnKeyType="next"
             value={name}
           />
           <TextInput
-            accessibilityLabel="Project summary"
+            accessibilityLabel="Workspace summary"
             className={cn("mt-2 min-h-24", textVariants({ variant: "body" }))}
             multiline
             onChangeText={setInstructions}
