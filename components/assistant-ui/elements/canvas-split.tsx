@@ -6,6 +6,7 @@ import {
   CopyIcon,
   FileTextIcon,
   GlobeIcon,
+  MonitorIcon,
   XIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,7 +15,7 @@ import { field, ghostButton, mono, paper } from "@/lib/surfaces";
 export type CanvasTabItem = {
   readonly id: string;
   readonly label: string;
-  readonly kind: "file" | "page";
+  readonly kind: "file" | "page" | "desktop";
   readonly active: boolean;
 };
 
@@ -183,7 +184,12 @@ export function CanvasTabStrip({
     >
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
         {tabs.map((tab) => {
-          const Icon = tab.kind === "page" ? GlobeIcon : FileTextIcon;
+          const Icon =
+            tab.kind === "page"
+              ? GlobeIcon
+              : tab.kind === "desktop"
+                ? MonitorIcon
+                : FileTextIcon;
           return (
             <div
               key={tab.id}

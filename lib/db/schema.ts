@@ -100,6 +100,10 @@ export const chat = pgTable(
     // and agent control HTTP. Never return the secret in chat list payloads.
     browserSandboxName: text("browser_sandbox_name"),
     browserControlSecret: text("browser_control_secret"),
+    // screen-relay desktop sandbox (port 8080). viewerUrl includes #token=
+    // and must never appear in model-visible tool results or chat lists.
+    desktopSandboxName: text("desktop_sandbox_name"),
+    desktopViewerUrl: text("desktop_viewer_url"),
     // Optional project workspace. Deleting a project unlinks chats
     // (set null) so history remains in the sidebar. Late reference: the
     // project table is declared below.

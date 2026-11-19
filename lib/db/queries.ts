@@ -1161,6 +1161,45 @@ export async function setChatBrowserSession({
     .where(eq(chat.id, chatId));
 }
 
+/**
+ * screen-relay desktop credentials for a chat. The viewer URL includes a
+ * token fragment and must never appear in chat list or model-visible payloads.
+ */
+export async function getChatDesktopSession(chatId: string): Promise<{
+  readonly desktopSandboxName: string | null;
+  readonly desktopViewerUrl: string | null;
+} | null> {
+  const [row] = await db
+    .select({
+      desktopSandboxName: chat.desktopSandboxName,
+      desktopViewerUrl: chat.desktopViewerUrl,
+    })
+    .from(chat)
+    .where(eq(chat.id, chatId))
+    .limit(1);
+
+  return row ?? null;
+}
+
+export async function setChatDesktopSession({
+  chatId,
+  desktopSandboxName,
+  desktopViewerUrl,
+}: {
+  readonly chatId: string;
+  readonly desktopSandboxName: string;
+  readonly desktopViewerUrl: string | null;
+}): Promise<void> {
+  await db
+    .update(chat)
+    .set({
+      desktopSandboxName,
+      desktopViewerUrl,
+      updatedAt: new Date(),
+    })
+    .where(eq(chat.id, chatId));
+}
+
 // ============================================================================
 // Agent files
 // ============================================================================

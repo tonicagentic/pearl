@@ -72,7 +72,17 @@ export type WorkspacePageTab = {
   readonly title: string;
 };
 
-export type WorkspaceTab = WorkspaceFileTab | WorkspacePageTab;
+/** Full Linux desktop via screen-relay (separate from Chromium page tabs). */
+export type WorkspaceDesktopTab = {
+  readonly kind: "desktop";
+  readonly id: string;
+  readonly title: string;
+};
+
+export type WorkspaceTab =
+  | WorkspaceFileTab
+  | WorkspacePageTab
+  | WorkspaceDesktopTab;
 
 export type WorkspaceState = {
   readonly tabs: readonly WorkspaceTab[];

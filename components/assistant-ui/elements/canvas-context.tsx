@@ -15,6 +15,7 @@ import {
   closeActiveTab,
   closeTab,
   emptyWorkspace,
+  openDesktopTab,
   openFileTab,
   openPageTab,
   selectTab,
@@ -80,6 +81,8 @@ type CanvasContextValue = {
   readonly document: CanvasDocument | null;
   readonly controlMode: BrowserControlMode;
   readonly viewUrl: string | null;
+  /** screen-relay viewer URL (token in hash). Separate from Chromium viewUrl. */
+  readonly desktopViewUrl: string | null;
   openDocument: (doc: CanvasDocument) => void;
   openPath: (path: string, content?: string) => void;
   updateDocument: (
@@ -95,8 +98,10 @@ type CanvasContextValue = {
   closeWorkspaceTab: (tabId: string) => void;
   syncBrowserPages: (pages: readonly BrowserTabInfo[]) => void;
   openBrowserPage: (page: Omit<WorkspacePageTab, "kind" | "id">) => void;
+  openDesktop: (title?: string) => void;
   setControlMode: (mode: BrowserControlMode) => void;
   setViewUrl: (url: string | null) => void;
+  setDesktopViewUrl: (url: string | null) => void;
 };
 
 const CanvasContext = createContext<CanvasContextValue | null>(null);
@@ -112,6 +117,7 @@ export function CanvasProvider({
   const [workspace, setWorkspace] = useState<WorkspaceState>(emptyWorkspace);
   const [controlMode, setControlMode] = useState<BrowserControlMode>("agent");
   const [viewUrl, setViewUrl] = useState<string | null>(null);
+  const [desktopViewUrl, setDesktopViewUrl] = useState<string | null>(null);
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
 
@@ -254,6 +260,10 @@ export function CanvasProvider({
     [],
   );
 
+  const openDesktop = useCallback((title?: string) => {
+    setWorkspace((prev) => openDesktopTab(prev, title ?? "Desktop"));
+  }, []);
+
   const value = useMemo(
     () => ({
       chatId: chatId ?? null,
@@ -263,6 +273,7 @@ export function CanvasProvider({
       document,
       controlMode,
       viewUrl,
+      desktopViewUrl,
       openDocument,
       openPath,
       updateDocument,
@@ -272,8 +283,10 @@ export function CanvasProvider({
       closeWorkspaceTab,
       syncBrowserPages,
       openBrowserPage,
+      openDesktop,
       setControlMode,
       setViewUrl,
+      setDesktopViewUrl,
     }),
     [
       chatId,
@@ -281,6 +294,7 @@ export function CanvasProvider({
       document,
       controlMode,
       viewUrl,
+      desktopViewUrl,
       openDocument,
       openPath,
       updateDocument,
@@ -290,6 +304,7 @@ export function CanvasProvider({
       closeWorkspaceTab,
       syncBrowserPages,
       openBrowserPage,
+      openDesktop,
     ],
   );
 

@@ -1,9 +1,12 @@
 import type {
+  WorkspaceDesktopTab,
   WorkspaceFileTab,
   WorkspacePageTab,
   WorkspaceState,
   WorkspaceTab,
 } from "./types.ts";
+
+export const DESKTOP_TAB_ID = "desktop:main";
 
 export function emptyWorkspace(): WorkspaceState {
   return { tabs: [], activeTabId: null };
@@ -101,13 +104,36 @@ type SyncPageInput = Omit<WorkspacePageTab, "kind" | "id"> & {
   readonly active?: boolean;
 };
 
-/** Replace page tabs with the live Chromium tab list; keep file tabs. */
+/** Open or focus the screen-relay desktop tab. */
+export function openDesktopTab(
+  state: WorkspaceState,
+  title = "Desktop",
+): WorkspaceState {
+  const existing = state.tabs.findIndex((tab) => tab.kind === "desktop");
+  if (existing >= 0) {
+    const prev = state.tabs[existing] as WorkspaceDesktopTab;
+    const next: WorkspaceDesktopTab = { ...prev, title };
+    const tabs = state.tabs.map((tab, i) => (i === existing ? next : tab));
+    return { tabs, activeTabId: next.id };
+  }
+  const tab: WorkspaceDesktopTab = {
+    kind: "desktop",
+    id: DESKTOP_TAB_ID,
+    title,
+  };
+  return { tabs: [...state.tabs, tab], activeTabId: tab.id };
+}
+
+/** Replace page tabs with the live Chromium tab list; keep file + desktop tabs. */
 export function syncPageTabs(
   state: WorkspaceState,
   pages: readonly SyncPageInput[],
 ): WorkspaceState {
   const files = state.tabs.filter(
     (tab): tab is WorkspaceFileTab => tab.kind === "file",
+  );
+  const desktop = state.tabs.filter(
+    (tab): tab is WorkspaceDesktopTab => tab.kind === "desktop",
   );
   const pageTabs: WorkspacePageTab[] = pages.map((page) => ({
     kind: "page",
@@ -116,10 +142,10 @@ export function syncPageTabs(
     url: page.url,
     title: page.title,
   }));
-  const tabs: WorkspaceTab[] = [...files, ...pageTabs];
+  const tabs: WorkspaceTab[] = [...files, ...desktop, ...pageTabs];
   const activeStillOpen = tabs.some((tab) => tab.id === state.activeTabId);
   // Prefer keeping the current selection; otherwise focus the active Chromium
-  // page, then the first page tab, then the first file.
+  // page, then the first page tab, then desktop, then the first file.
   let activeTabId = activeStillOpen ? state.activeTabId : null;
   if (!activeTabId) {
     const activeFromServer = pages.find((page) => page.active);
@@ -127,6 +153,8 @@ export function syncPageTabs(
       activeTabId = `page:${activeFromServer.pageId}`;
     } else if (pageTabs[0]) {
       activeTabId = pageTabs[0].id;
+    } else if (desktop[0]) {
+      activeTabId = desktop[0].id;
     } else if (files[0]) {
       activeTabId = files[0].id;
     }

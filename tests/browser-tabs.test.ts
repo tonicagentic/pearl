@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   closeTab,
   emptyWorkspace,
+  openDesktopTab,
   openFileTab,
   openPageTab,
   selectTab,
@@ -112,4 +113,27 @@ test("syncPageTabs replaces pages and keeps files", () => {
     assert.equal(state.tabs[1].pageId, "p2");
   }
   assert.equal(state.activeTabId, "page:p2");
+});
+
+test("openDesktopTab and syncPageTabs keep the desktop tab", () => {
+  let state = emptyWorkspace();
+  state = openDesktopTab(state, "Desktop");
+  assert.equal(state.tabs.length, 1);
+  assert.equal(state.tabs[0]?.kind, "desktop");
+  assert.equal(state.activeTabId, "desktop:main");
+  state = openPageTab(state, {
+    pageId: "p1",
+    url: "https://example.com",
+    title: "Example",
+  });
+  state = syncPageTabs(state, [
+    {
+      pageId: "p2",
+      url: "https://new.example",
+      title: "New",
+      active: true,
+    },
+  ]);
+  assert.equal(state.tabs.some((tab) => tab.kind === "desktop"), true);
+  assert.equal(state.tabs.some((tab) => tab.kind === "page"), true);
 });

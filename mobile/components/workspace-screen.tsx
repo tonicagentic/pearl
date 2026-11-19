@@ -11,6 +11,7 @@ import {
 import {
   FileTextIcon,
   GlobeIcon,
+  MonitorIcon,
   ShareIcon,
   XIcon,
 } from "lucide-react-native";
@@ -35,6 +36,7 @@ type WebViewComponent = ComponentType<{
   readonly originWhitelist?: readonly string[];
   readonly javaScriptEnabled?: boolean;
   readonly scalesPageToFit?: boolean;
+  readonly mediaPlaybackRequiresUserAction?: boolean;
 }>;
 
 function loadWebView(): WebViewComponent | null {
@@ -190,12 +192,14 @@ export function WorkspacePanel({
     tabs,
     activeTabId,
     viewUrl,
+    desktopViewUrl,
     controlMode,
     chatId,
     selectWorkspaceTab,
     closeWorkspaceTab,
     setControlMode,
     ensureViewUrl,
+    ensureDesktopViewUrl,
   } = useWorkspace();
   const { height } = useWindowDimensions();
   const WebView = useMemo(() => loadWebView(), []);
@@ -207,7 +211,10 @@ export function WorkspacePanel({
     if (active?.kind === "page") {
       void ensureViewUrl();
     }
-  }, [active?.kind, ensureViewUrl]);
+    if (active?.kind === "desktop") {
+      void ensureDesktopViewUrl();
+    }
+  }, [active?.kind, ensureViewUrl, ensureDesktopViewUrl]);
 
   const onSelect = (tabId: string) => {
     selectWorkspaceTab(tabId);
@@ -258,6 +265,10 @@ export function WorkspacePanel({
       }).finally(done);
       return;
     }
+    if (active.kind === "desktop") {
+      done();
+      return;
+    }
     void shareWorkspacePage({
       url: active.url,
       title: active.title,
@@ -285,7 +296,9 @@ export function WorkspacePanel({
             const label =
               tab.kind === "file"
                 ? basename(tab.path)
-                : tab.title || tab.url || "Page";
+                : tab.kind === "desktop"
+                  ? tab.title || "Desktop"
+                  : tab.title || tab.url || "Page";
             return (
               <View
                 key={tab.id}
@@ -300,7 +313,13 @@ export function WorkspacePanel({
                   onPress={() => onSelect(tab.id)}
                 >
                   <Icon
-                    as={tab.kind === "page" ? GlobeIcon : FileTextIcon}
+                    as={
+                      tab.kind === "page"
+                        ? GlobeIcon
+                        : tab.kind === "desktop"
+                          ? MonitorIcon
+                          : FileTextIcon
+                    }
                     className="text-muted-foreground size-3.5"
                   />
                   <Text
@@ -377,6 +396,22 @@ export function WorkspacePanel({
             <View className="flex-1 items-center justify-center px-6">
               <Text className="text-muted-foreground text-sm">
                 {WebView ? "Starting browser…" : "WebView is unavailable."}
+              </Text>
+            </View>
+          )
+        ) : active?.kind === "desktop" ? (
+          desktopViewUrl && WebView ? (
+            <WebView
+              source={{ uri: desktopViewUrl }}
+              style={{ flex: 1 }}
+              startInLoadingState
+              allowsBackForwardNavigationGestures
+              mediaPlaybackRequiresUserAction={false}
+            />
+          ) : (
+            <View className="flex-1 items-center justify-center px-6">
+              <Text className="text-muted-foreground text-sm">
+                {WebView ? "Starting desktop…" : "WebView is unavailable."}
               </Text>
             </View>
           )

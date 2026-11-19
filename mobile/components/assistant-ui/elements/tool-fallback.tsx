@@ -491,6 +491,17 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
     }
     void workspace.ensureViewUrl();
   }, [toolName, result, workspace]);
+
+  useEffect(() => {
+    if (toolName !== "desktop" || !workspace) return;
+    if (!result || typeof result !== "object" || Array.isArray(result)) return;
+    const ready = (result as { ready?: unknown }).ready;
+    const ok = (result as { ok?: unknown }).ok;
+    if (ready === true || ok === true) {
+      workspace.openDesktop("Desktop");
+      void workspace.ensureDesktopViewUrl();
+    }
+  }, [toolName, result, workspace]);
   const resolution = approvalResolution(approval);
   const detail = approvalDetail(
     args && typeof args === "object" && !Array.isArray(args)

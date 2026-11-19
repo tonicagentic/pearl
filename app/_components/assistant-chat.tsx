@@ -70,6 +70,7 @@ import {
   WriteFileToolUI,
 } from "@/components/assistant-ui/elements/file-tool.aui";
 import { BrowserToolUI } from "@/components/assistant-ui/elements/browser-tool.aui";
+import { DesktopToolUI } from "@/components/assistant-ui/elements/desktop-tool.aui";
 import { GenerateImageToolUI } from "@/components/assistant-ui/elements/generate-image-tool.aui";
 import {
   CanvasProvider,
@@ -883,6 +884,7 @@ function AssistantChatSurfaceInner({
           <EditFileToolUI />
           <ReadFileToolUI />
           <BrowserToolUI />
+          <DesktopToolUI />
           <GenerateImageToolUI />
           <SessionStatusBanner isRunning={isRunning} />
           {(activeChat?.spokenTurns?.length ?? 0) > 0 ? (
@@ -1027,15 +1029,18 @@ function CanvasLayout() {
     document: doc,
     controlMode,
     viewUrl,
+    desktopViewUrl,
     selectWorkspaceTab,
     closeWorkspaceTab,
     setControlMode,
     setViewUrl,
+    setDesktopViewUrl,
   } = useCanvas();
 
   const open = tabs.length > 0;
   const active = tabs.find((tab) => tab.id === activeTabId) ?? null;
   const hasPageTab = tabs.some((tab) => tab.kind === "page");
+  const hasDesktopTab = tabs.some((tab) => tab.kind === "desktop");
 
   useEffect(() => {
     if (!chatId || !hasPageTab || viewUrl) return;
@@ -1054,6 +1059,24 @@ function CanvasLayout() {
       cancelled = true;
     };
   }, [chatId, hasPageTab, viewUrl, setViewUrl]);
+
+  useEffect(() => {
+    if (!chatId || !hasDesktopTab || desktopViewUrl) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/chats/${chatId}/desktop`);
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { viewUrl?: string };
+        if (data.viewUrl && !cancelled) setDesktopViewUrl(data.viewUrl);
+      } catch {
+        // Leave the starting state; a later tool call can retry.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId, hasDesktopTab, desktopViewUrl, setDesktopViewUrl]);
 
   const onSelectTab = (tabId: string) => {
     selectWorkspaceTab(tabId);
@@ -1105,7 +1128,9 @@ function CanvasLayout() {
                 label:
                   tab.kind === "file"
                     ? basename(tab.path)
-                    : tab.title || tab.url || "Page",
+                    : tab.kind === "desktop"
+                      ? tab.title || "Desktop"
+                      : tab.title || tab.url || "Page",
               }))}
               onSelectTab={onSelectTab}
               onCloseTab={closeWorkspaceTab}
@@ -1125,6 +1150,10 @@ function CanvasLayout() {
                       {controlMode === "user" ? "Hand back" : "Take over"}
                     </button>
                   </>
+                ) : active?.kind === "desktop" ? (
+                  <span className={cn(mono, "text-foreground/35 hidden sm:inline")}>
+                    screen-relay
+                  </span>
                 ) : doc ? (
                   <span className={cn(mono, "text-foreground/30 px-1")}>
                     v{doc.version}
@@ -1145,6 +1174,22 @@ function CanvasLayout() {
                 ) : (
                   <div className="text-foreground/45 flex h-full items-center justify-center text-[13px]">
                     Starting browser…
+                  </div>
+                )}
+              </div>
+            ) : active?.kind === "desktop" ? (
+              <div className="bg-foreground/[0.03] relative min-h-0 flex-1">
+                {desktopViewUrl ? (
+                  <iframe
+                    title={active.title || "Desktop"}
+                    src={desktopViewUrl}
+                    className="absolute inset-0 h-full w-full border-0"
+                    referrerPolicy="no-referrer"
+                    allow="autoplay; clipboard-read; clipboard-write"
+                  />
+                ) : (
+                  <div className="text-foreground/45 flex h-full items-center justify-center text-[13px]">
+                    Starting desktop…
                   </div>
                 )}
               </div>

@@ -11,6 +11,7 @@ import {
   activeFileTab,
   closeTab,
   emptyWorkspace,
+  openDesktopTab,
   openFileTab,
   selectTab,
   syncPageTabs,
@@ -45,6 +46,7 @@ type WorkspaceContextValue = {
   readonly open: boolean;
   readonly controlMode: BrowserControlMode;
   readonly viewUrl: string | null;
+  readonly desktopViewUrl: string | null;
   readonly chatId: string | null;
   /**
    * When true, Computer should show the workspace reader instead of the
@@ -106,12 +108,14 @@ type WorkspaceContextValue = {
   /** Persist the active (or named) file tab to the chat files API. */
   saveFile: (path?: string) => Promise<boolean>;
   openBrowserPages: (pages: readonly BrowserTabInfo[]) => void;
+  openDesktop: (title?: string) => void;
   selectWorkspaceTab: (tabId: string) => void;
   closeWorkspaceTab: (tabId: string) => void;
   closeWorkspace: () => void;
   closeCanvas: () => void;
   setControlMode: (mode: BrowserControlMode) => void;
   ensureViewUrl: () => Promise<void>;
+  ensureDesktopViewUrl: () => Promise<void>;
   setChatId: (chatId: string | null) => void;
   clearPreferDetail: () => void;
   requestDetail: () => void;
@@ -142,6 +146,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [workspace, setWorkspace] = useState<WorkspaceState>(emptyWorkspace);
   const [controlMode, setControlMode] = useState<BrowserControlMode>("agent");
   const [viewUrl, setViewUrl] = useState<string | null>(null);
+  const [desktopViewUrl, setDesktopViewUrl] = useState<string | null>(null);
   const [chatId, setChatId] = useState<string | null>(null);
   const [preferDetail, setPreferDetail] = useState(false);
   const [canvasOpen, setCanvasOpen] = useState(false);
@@ -354,6 +359,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const openDesktop = useCallback((title?: string) => {
+    setWorkspace((prev) => openDesktopTab(prev, title ?? "Desktop"));
+    setPreferDetail(true);
+  }, []);
+
   const selectWorkspaceTab = useCallback((tabId: string) => {
     setWorkspace((prev) => {
       const next = selectTab(prev, tabId);
@@ -411,6 +421,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [chatId, viewUrl]);
 
+  const ensureDesktopViewUrl = useCallback(async () => {
+    if (!chatId || desktopViewUrl) return;
+    try {
+      const res = await fetch(
+        `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/desktop`,
+        { headers: authHeaders() },
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as { viewUrl?: string };
+      if (data.viewUrl) setDesktopViewUrl(data.viewUrl);
+    } catch {
+      // Leave desktopViewUrl null; the workspace shows a starting state.
+    }
+  }, [chatId, desktopViewUrl]);
+
   const activeFile = useMemo(() => activeFileTab(workspace), [workspace]);
 
   const value = useMemo(
@@ -422,6 +447,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       open: workspace.tabs.length > 0,
       controlMode,
       viewUrl,
+      desktopViewUrl,
       chatId,
       preferDetail,
       canvasOpen,
@@ -433,12 +459,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       applyEditPatch,
       saveFile,
       openBrowserPages,
+      openDesktop,
       selectWorkspaceTab,
       closeWorkspaceTab,
       closeWorkspace,
       closeCanvas,
       setControlMode,
       ensureViewUrl,
+      ensureDesktopViewUrl,
       setChatId,
       clearPreferDetail,
       requestDetail,
@@ -448,6 +476,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       activeFile,
       controlMode,
       viewUrl,
+      desktopViewUrl,
       chatId,
       preferDetail,
       canvasOpen,
@@ -459,11 +488,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       applyEditPatch,
       saveFile,
       openBrowserPages,
+      openDesktop,
       selectWorkspaceTab,
       closeWorkspaceTab,
       closeWorkspace,
       closeCanvas,
       ensureViewUrl,
+      ensureDesktopViewUrl,
       clearPreferDetail,
       requestDetail,
     ],
