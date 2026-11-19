@@ -15,6 +15,7 @@ import {
 import {
   accessibilityLabel,
   buttonStyle,
+  contentShape,
   font,
   foregroundStyle,
   frame,
@@ -22,10 +23,12 @@ import {
   listRowBackground,
   listRowInsets,
   listStyle,
+  onTapGesture,
   opacity,
   padding,
   scrollContentBackground,
   scrollEdgeEffectStyle,
+  shapes,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useCSSVariable } from "uniwind";
@@ -205,70 +208,18 @@ export function HistoryListIOS({
             ) : null}
           </Section>
           <Section>
-            <Button
+            <NavRow
+              label="History"
+              systemImage="clock"
+              mutedColor={mutedColor}
               onPress={() => router.push("/history")}
-              modifiers={[
-                buttonStyle("plain"),
-                listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
-                accessibilityLabel("History"),
-              ]}
-            >
-              <HStack
-                spacing={12}
-                alignment="center"
-                modifiers={[padding({ vertical: 2 })]}
-              >
-                <Image
-                  systemName="clock"
-                  size={14}
-                  modifiers={[
-                    frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
-                    tint(mutedColor),
-                  ]}
-                />
-                <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
-                  History
-                </SwiftText>
-                <Spacer />
-                <Image
-                  systemName="chevron.right"
-                  size={13}
-                  modifiers={[tint(mutedColor), opacity(0.55)]}
-                />
-              </HStack>
-            </Button>
-            <Button
+            />
+            <NavRow
+              label="Workspaces"
+              systemImage="folder.fill"
+              mutedColor={mutedColor}
               onPress={() => router.push("/workspaces")}
-              modifiers={[
-                buttonStyle("plain"),
-                listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
-                accessibilityLabel("Workspaces"),
-              ]}
-            >
-              <HStack
-                spacing={12}
-                alignment="center"
-                modifiers={[padding({ vertical: 2 })]}
-              >
-                <Image
-                  systemName="folder.fill"
-                  size={14}
-                  modifiers={[
-                    frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
-                    tint(mutedColor),
-                  ]}
-                />
-                <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
-                  Workspaces
-                </SwiftText>
-                <Spacer />
-                <Image
-                  systemName="chevron.right"
-                  size={13}
-                  modifiers={[tint(mutedColor), opacity(0.55)]}
-                />
-              </HStack>
-            </Button>
+            />
           </Section>
           {bottomInset > 0 ? (
             <Section>
@@ -294,6 +245,12 @@ export function HistoryListIOS({
   );
 }
 
+/** Full-row hit target: plain Buttons only hit visible labels unless shaped. */
+const FULL_ROW_HIT = [
+  contentShape(shapes.rectangle()),
+  frame({ maxWidth: 9999, alignment: "leading" as const }),
+];
+
 function PearlAgentRow({
   lastTitle,
   mutedColor,
@@ -311,49 +268,50 @@ function PearlAgentRow({
       alignment="center"
       modifiers={[
         listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 12 }),
+        ...FULL_ROW_HIT,
         padding({ vertical: 2 }),
       ]}
     >
-      <Button
-        onPress={onOpen}
+      <HStack
+        spacing={12}
+        alignment="center"
         modifiers={[
-          buttonStyle("plain"),
-          frame({ maxWidth: 9999, alignment: "leading" }),
+          ...FULL_ROW_HIT,
+          onTapGesture(onOpen),
           accessibilityLabel(
             lastTitle ? `Pearl, ${lastTitle}` : "Pearl",
           ),
         ]}
       >
-        <HStack spacing={12} alignment="center">
-          <Image
-            systemName="circle.fill"
-            size={14}
-            modifiers={[
-              frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
-              tint(PEARL_IDENTITY_ACCENT),
-            ]}
-          />
-          <VStack spacing={2} alignment="leading">
-            <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
-              Pearl
+        <Image
+          systemName="circle.fill"
+          size={14}
+          modifiers={[
+            frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
+            tint(PEARL_IDENTITY_ACCENT),
+          ]}
+        />
+        <VStack spacing={2} alignment="leading">
+          <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
+            Pearl
+          </SwiftText>
+          {lastTitle ? (
+            <SwiftText
+              modifiers={[
+                lineLimit(1),
+                font({ size: 12 }),
+                foregroundStyle({
+                  type: "hierarchical",
+                  style: "secondary",
+                }),
+              ]}
+            >
+              {lastTitle}
             </SwiftText>
-            {lastTitle ? (
-              <SwiftText
-                modifiers={[
-                  lineLimit(1),
-                  font({ size: 12 }),
-                  foregroundStyle({
-                    type: "hierarchical",
-                    style: "secondary",
-                  }),
-                ]}
-              >
-                {lastTitle}
-              </SwiftText>
-            ) : null}
-          </VStack>
-        </HStack>
-      </Button>
+          ) : null}
+        </VStack>
+        <Spacer />
+      </HStack>
       <Button
         onPress={onNewChat}
         modifiers={[
@@ -380,32 +338,74 @@ function AgentRow({
 }) {
   const accent = agent.accent || "#2DD4BF";
   return (
-    <Button
-      onPress={onOpen}
+    <HStack
+      spacing={12}
+      alignment="center"
       modifiers={[
-        buttonStyle("plain"),
         listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
+        ...FULL_ROW_HIT,
+        padding({ vertical: 2 }),
+        onTapGesture(onOpen),
+        accessibilityLabel(agent.name),
       ]}
     >
-      <HStack
-        spacing={12}
-        alignment="center"
-        modifiers={[padding({ vertical: 2 })]}
-      >
-        <Image
-          systemName="circle.fill"
-          size={14}
-          modifiers={[
-            frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
-            tint(accent),
-          ]}
-        />
-        <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
-          {agent.name}
-        </SwiftText>
-        <Spacer />
-      </HStack>
-    </Button>
+      <Image
+        systemName="circle.fill"
+        size={14}
+        modifiers={[
+          frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
+          tint(accent),
+        ]}
+      />
+      <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
+        {agent.name}
+      </SwiftText>
+      <Spacer />
+    </HStack>
+  );
+}
+
+function NavRow({
+  label,
+  systemImage,
+  mutedColor,
+  onPress,
+}: {
+  readonly label: string;
+  readonly systemImage: "clock" | "folder.fill";
+  readonly mutedColor: string;
+  readonly onPress: () => void;
+}) {
+  return (
+    <HStack
+      spacing={12}
+      alignment="center"
+      modifiers={[
+        listRowInsets({ top: 10, bottom: 10, leading: 16, trailing: 16 }),
+        ...FULL_ROW_HIT,
+        padding({ vertical: 2 }),
+        onTapGesture(onPress),
+        accessibilityLabel(label),
+      ]}
+    >
+      <Image
+        systemName={systemImage}
+        size={14}
+        modifiers={[
+          frame({ width: PRESENCE_SLOT, height: PRESENCE_SLOT }),
+          tint(mutedColor),
+        ]}
+      />
+      <SwiftText modifiers={[lineLimit(1), font({ size: 17 })]}>
+        {label}
+      </SwiftText>
+      <Spacer />
+      <Image
+        systemName="chevron.right"
+        size={13}
+        modifiers={[tint(mutedColor), opacity(0.55)]}
+      />
+    </HStack>
   );
 }
 

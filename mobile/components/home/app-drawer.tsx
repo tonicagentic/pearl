@@ -229,7 +229,7 @@ function HistoryListAndroid({
                 key={agent.id}
                 accessibilityRole="button"
                 accessibilityLabel={agent.name}
-                className="min-h-12 flex-row items-center gap-3 px-3 py-2"
+                className="min-h-12 w-full flex-row items-center gap-3 px-3 py-2"
                 onPress={() => {
                   void selectChat(agent.chatId).then((selected) => {
                     if (selected) onOpenChat();
@@ -247,7 +247,12 @@ function HistoryListAndroid({
                     <View className="h-1.5 w-0.5 rounded-full bg-white" />
                   </View>
                 </View>
-                <AppText variant="body" weight="medium" numberOfLines={1}>
+                <AppText
+                  variant="body"
+                  weight="medium"
+                  className="min-w-0 flex-1"
+                  numberOfLines={1}
+                >
                   {agent.name}
                 </AppText>
               </Pressable>
@@ -285,7 +290,7 @@ function NavRowAndroid({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      className="min-h-12 flex-row items-center gap-3 px-3 py-2"
+      className="min-h-12 w-full flex-row items-center gap-3 px-3 py-2"
       onPress={onPress}
     >
       <Icon as={icon} className="size-3.5 text-muted-foreground" />
