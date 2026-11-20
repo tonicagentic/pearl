@@ -6,7 +6,7 @@ import {
   MARKETPLACE_EXAMPLES,
   type MarketplaceExample,
 } from "@/components/marketing/marketplace-examples";
-import { MarketingSection } from "@/components/marketing/section";
+import { MarketingContainer } from "@/components/marketing/section";
 import { MarketingShell } from "@/components/marketing/marketing-shell";
 import { marketingType } from "@/components/marketing/type";
 import { Button } from "@/components/ui/button";
@@ -65,99 +65,101 @@ function MarketplacePageContent({
   const showFeatured = category === "All" && !query.trim() && featured.length > 0;
 
   return (
-    <MarketingSection className="pt-28 sm:pt-32">
-      <div className="mx-auto max-w-3xl text-center">
-        <h1 className={marketingType.sectionTitle}>Marketplace</h1>
-        <p className={`mt-4 ${marketingType.body}`}>
-          Ready-made roles you can add as custom agents. Sign in to install
-          one into your Pearl.
-        </p>
-      </div>
-
-      <div className="mx-auto mt-10 flex max-w-3xl flex-col gap-4">
-        <div className="flex flex-wrap justify-center gap-1.5">
-          {categories.map((name) => (
-            <button
-              className={cn(
-                "rounded-full border px-3 py-1.5 text-sm transition-colors",
-                category === name
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-              )}
-              key={name}
-              onClick={() => setCategory(name)}
-              type="button"
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-        <Input
-          className="rounded-full bg-card"
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search by name or description"
-          value={query}
-        />
-      </div>
-
-      {showFeatured ? (
-        <div className="mx-auto mt-12 max-w-5xl">
-          <h2 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Featured
-          </h2>
-          <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {featured.map((row) => (
-              <li key={row.slug}>
-                <TemplateCard
-                  example={row}
-                  featured
-                  onGetStarted={onGetStarted}
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <div className="mx-auto mt-12 max-w-5xl">
-        {showFeatured ? (
-          <h2 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            All roles
-          </h2>
-        ) : null}
-        {filtered.length === 0 ? (
-          <p className="mt-4 rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            No templates match.
+    <section className="pt-28 pb-16 sm:pt-32 sm:pb-24">
+      <MarketingContainer>
+        <div className="mx-auto max-w-2xl text-center">
+          <h1 className={marketingType.sectionTitle}>Marketplace</h1>
+          <p className={`mt-4 ${marketingType.body}`}>
+            Ready-made roles you can add as custom agents. Sign in to install
+            one into your Pearl.
           </p>
-        ) : (
-          <ul
-            className={cn(
-              "grid gap-3 sm:grid-cols-2 lg:grid-cols-3",
-              showFeatured ? "mt-4" : "mt-0",
-            )}
-          >
-            {filtered.map((row) => (
-              <li key={row.slug}>
-                <TemplateCard example={row} onGetStarted={onGetStarted} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+        </div>
 
-      <div className="mx-auto mt-14 max-w-xl text-center">
-        <p className={marketingType.caption}>
-          After you sign in, add any role from Agents → Directory.
-        </p>
-        <Button
-          className="mt-4 rounded-full"
-          onClick={onGetStarted}
-          type="button"
-        >
-          Get started
-        </Button>
-      </div>
-    </MarketingSection>
+        <div className="mx-auto mt-10 flex max-w-2xl flex-col gap-4">
+          <div className="flex flex-wrap justify-center gap-1.5">
+            {categories.map((name) => (
+              <button
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-sm transition-colors",
+                  category === name
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                )}
+                key={name}
+                onClick={() => setCategory(name)}
+                type="button"
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+          <Input
+            className="rounded-full bg-card"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by name or description"
+            value={query}
+          />
+        </div>
+
+        {showFeatured ? (
+          <div className="mt-12">
+            <h2 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Featured
+            </h2>
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {featured.map((row) => (
+                <li key={row.slug}>
+                  <TemplateCard
+                    example={row}
+                    featured
+                    onGetStarted={onGetStarted}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="mt-12">
+          {showFeatured ? (
+            <h2 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              All roles
+            </h2>
+          ) : null}
+          {filtered.length === 0 ? (
+            <p className="mt-4 rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+              No templates match.
+            </p>
+          ) : (
+            <ul
+              className={cn(
+                "grid gap-3 sm:grid-cols-2 lg:grid-cols-3",
+                showFeatured ? "mt-4" : "mt-0",
+              )}
+            >
+              {filtered.map((row) => (
+                <li key={row.slug}>
+                  <TemplateCard example={row} onGetStarted={onGetStarted} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="mx-auto mt-14 max-w-xl text-center">
+          <p className={marketingType.caption}>
+            After you sign in, add any role from Agents → Directory.
+          </p>
+          <Button
+            className="mt-4 rounded-full"
+            onClick={onGetStarted}
+            type="button"
+          >
+            Get started
+          </Button>
+        </div>
+      </MarketingContainer>
+    </section>
   );
 }
 

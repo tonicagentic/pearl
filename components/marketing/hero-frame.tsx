@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { PlusIcon, SearchIcon } from "lucide-react";
+import { PauseIcon, PlayIcon, PlusIcon, SearchIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { AgentAccentMark } from "@/components/custom-agents/agent-identity-pill";
 import { PearlIcon } from "@/components/icons";
@@ -14,6 +14,7 @@ import { MarketingJsonCard } from "@/components/marketing/marketing-json-card";
 import { MARKETPLACE_EXAMPLES } from "@/components/marketing/marketplace-examples";
 import { useAskExampleLoop } from "@/components/marketing/use-ask-example-loop";
 import { usePrefersReducedMotion } from "@/components/marketing/use-prefers-reduced-motion";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const HERO_COVER_SRC = "/marketing/hero-cover.jpg";
@@ -53,51 +54,73 @@ function firstUserPreview(example: AskExample): string {
 
 function ExampleTabs({
   index,
+  progress,
+  userPlaying,
+  canAutoplay,
   onSelect,
-  panelId,
-  tabIdPrefix,
-  compact = false,
+  onTogglePlaying,
 }: {
   readonly index: number;
+  readonly progress: number;
+  readonly userPlaying: boolean;
+  readonly canAutoplay: boolean;
   readonly onSelect: (next: number) => void;
-  readonly panelId: string;
-  readonly tabIdPrefix: string;
-  readonly compact?: boolean;
+  readonly onTogglePlaying: () => void;
 }) {
   return (
-    <div
-      aria-label="Ask Pearl examples"
-      className={cn(
-        "flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-        compact ? "px-2 pb-2" : "px-3 pb-2.5",
-      )}
-      role="tablist"
-    >
-      {ASK_EXAMPLES.map((example, i) => {
-        const selected = i === index;
-        return (
-          <button
-            aria-controls={panelId}
-            aria-selected={selected}
-            className={cn(
-              "inline-flex shrink-0 cursor-pointer items-center rounded-full border font-medium whitespace-nowrap transition-colors",
-              compact
-                ? "h-6 px-2 text-[10px]"
-                : "h-7 px-2.5 text-[11px]",
-              selected
-                ? "border-foreground bg-foreground text-background"
-                : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-            )}
-            id={`${tabIdPrefix}-${example.slug}`}
-            key={example.slug}
-            onClick={() => onSelect(i)}
-            role="tab"
-            type="button"
-          >
-            {example.tab}
-          </button>
-        );
-      })}
+    <div className="flex items-center justify-center gap-2">
+      <div
+        aria-label="Ask Pearl examples"
+        className="flex min-w-0 gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="tablist"
+      >
+        {ASK_EXAMPLES.map((example, i) => {
+          const selected = i === index;
+          return (
+            <button
+              aria-controls="hero-ask-panel"
+              aria-selected={selected}
+              className={cn(
+                "relative inline-flex h-9 shrink-0 cursor-pointer items-center overflow-hidden rounded-full border px-3 text-sm font-medium whitespace-nowrap transition-colors",
+                selected
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              )}
+              id={`hero-ask-tab-${example.slug}`}
+              key={example.slug}
+              onClick={() => onSelect(i)}
+              role="tab"
+              type="button"
+            >
+              <span className="relative z-10">{example.tab}</span>
+              {selected && canAutoplay ? (
+                <span
+                  aria-hidden
+                  className="absolute inset-x-0 bottom-0 h-0.5 origin-left bg-background/80"
+                  style={{ transform: `scaleX(${progress})` }}
+                />
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
+      {canAutoplay ? (
+        <Button
+          aria-label={userPlaying ? "Pause examples" : "Play examples"}
+          className="size-9 shrink-0 rounded-full"
+          onClick={onTogglePlaying}
+          size="icon"
+          type="button"
+          variant="outline"
+        >
+          {userPlaying ? (
+            <PauseIcon className="size-3.5" />
+          ) : (
+            <PlayIcon className="size-3.5" />
+          )}
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -156,12 +179,7 @@ function AskChatMessages({
                   )}
                 />
               </div>
-              <div
-                className={cn(
-                  "flex min-w-0 flex-col gap-2.5",
-                  compact ? "max-w-[90%]" : "max-w-[90%]",
-                )}
-              >
+              <div className="flex min-w-0 max-w-[90%] flex-col gap-2.5">
                 <p
                   className={cn(
                     "rounded-2xl bg-secondary text-secondary-foreground",
@@ -275,9 +293,7 @@ function DesktopAppWindow({
             <button
               className={cn(
                 "w-full rounded-lg px-2.5 py-2 text-left transition-colors",
-                exampleIndex === index
-                  ? "bg-card"
-                  : "hover:bg-card/60",
+                exampleIndex === index ? "bg-card" : "hover:bg-card/60",
               )}
               key={example.slug}
               onClick={() => select(exampleIndex)}
@@ -304,32 +320,21 @@ function DesktopAppWindow({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex flex-col border-b border-border">
-          <div className="flex items-center justify-center px-4 pt-2.5 pb-2">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/60 px-2.5 py-1">
-              <PearlIcon className="size-3 text-foreground" />
-              <span className="text-[11px] font-medium text-foreground">
-                Pearl
-              </span>
-            </div>
+        <div className="flex items-center justify-center border-b border-border px-4 py-2.5">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/60 px-2.5 py-1">
+            <PearlIcon className="size-3 text-foreground" />
+            <span className="text-[11px] font-medium text-foreground">
+              Pearl
+            </span>
           </div>
-          <ExampleTabs
-            index={index}
-            onSelect={select}
-            panelId="hero-ask-panel-desktop"
-            tabIdPrefix="hero-ask-tab-desktop"
-          />
         </div>
         <div
-          aria-labelledby={`hero-ask-tab-desktop-${active.slug}`}
+          aria-labelledby={`hero-ask-tab-${active.slug}`}
           className="min-h-0 flex-1 overflow-y-auto"
-          id="hero-ask-panel-desktop"
+          id="hero-ask-panel"
           role="tabpanel"
         >
-          <AskChatMessages
-            example={active}
-            reduceMotion={reduceMotion}
-          />
+          <AskChatMessages example={active} reduceMotion={reduceMotion} />
         </div>
         <Composer />
       </div>
@@ -339,10 +344,8 @@ function DesktopAppWindow({
 
 /** Phone frame for small screens — portrait chat, no desktop sidebar. */
 function MobileAppWindow({
-  index,
   active,
   reduceMotion,
-  select,
 }: AskWindowProps) {
   return (
     <div
@@ -351,29 +354,19 @@ function MobileAppWindow({
         "mx-auto flex aspect-[9/19.5] w-[min(272px,72vw)] flex-col rounded-[1.75rem]",
       )}
     >
-      <div className="relative flex flex-col border-b border-border">
-        <div className="relative flex items-center justify-center px-3 pt-3 pb-2">
-          <span
-            aria-hidden
-            className="absolute top-2 left-1/2 h-1.5 w-16 -translate-x-1/2 rounded-full bg-foreground/15"
-          />
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/60 px-2.5 py-1">
-            <PearlIcon className="size-3 text-foreground" />
-            <span className="text-[11px] font-medium text-foreground">Pearl</span>
-          </div>
-        </div>
-        <ExampleTabs
-          compact
-          index={index}
-          onSelect={select}
-          panelId="hero-ask-panel-mobile"
-          tabIdPrefix="hero-ask-tab-mobile"
+      <div className="relative flex items-center justify-center border-b border-border px-3 py-3">
+        <span
+          aria-hidden
+          className="absolute top-2 left-1/2 h-1.5 w-16 -translate-x-1/2 rounded-full bg-foreground/15"
         />
+        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/60 px-2.5 py-1">
+          <PearlIcon className="size-3 text-foreground" />
+          <span className="text-[11px] font-medium text-foreground">Pearl</span>
+        </div>
       </div>
       <div
-        aria-labelledby={`hero-ask-tab-mobile-${active.slug}`}
+        aria-labelledby={`hero-ask-tab-${active.slug}`}
         className="min-h-0 flex-1 overflow-y-auto"
-        id="hero-ask-panel-mobile"
         role="tabpanel"
       >
         <AskChatMessages
@@ -409,18 +402,45 @@ function HeroStage({
   );
 }
 
-function AppWindows({ rotate }: { readonly rotate: boolean }) {
-  const { index, active, reduceMotion, select, pauseBind } =
-    useAskExampleLoop({ rotate });
+function HeroAskDemo({
+  rotate,
+  className,
+}: {
+  readonly rotate: boolean;
+  readonly className?: string;
+}) {
+  const {
+    index,
+    active,
+    progress,
+    userPlaying,
+    canAutoplay,
+    reduceMotion,
+    select,
+    togglePlaying,
+    pauseBind,
+  } = useAskExampleLoop({ rotate });
   const windowProps = { index, active, reduceMotion, select };
 
   return (
-    <div {...pauseBind}>
-      <div className="hidden md:block">
-        <DesktopAppWindow {...windowProps} />
-      </div>
-      <div className="md:hidden">
-        <MobileAppWindow {...windowProps} />
+    <div className={cn("w-full", className)} {...pauseBind}>
+      <HeroStage>
+        <div className="hidden md:block">
+          <DesktopAppWindow {...windowProps} />
+        </div>
+        <div className="md:hidden">
+          <MobileAppWindow {...windowProps} />
+        </div>
+      </HeroStage>
+      <div className="mt-6 sm:mt-8">
+        <ExampleTabs
+          canAutoplay={canAutoplay}
+          index={index}
+          onSelect={select}
+          onTogglePlaying={togglePlaying}
+          progress={progress}
+          userPlaying={userPlaying}
+        />
       </div>
     </div>
   );
@@ -436,11 +456,7 @@ export function HeroFrame({
   const reduceMotion = usePrefersReducedMotion();
 
   if (isStatic) {
-    return (
-      <HeroStage className={className}>
-        <AppWindows rotate={false} />
-      </HeroStage>
-    );
+    return <HeroAskDemo className={className} rotate={false} />;
   }
 
   return (
@@ -454,9 +470,7 @@ export function HeroFrame({
           : { duration: 1, ease: EASE, delay: 0.8 }
       }
     >
-      <HeroStage>
-        <AppWindows rotate />
-      </HeroStage>
+      <HeroAskDemo rotate />
     </motion.div>
   );
 }

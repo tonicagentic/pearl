@@ -184,9 +184,31 @@ html[data-eve-chat-sidebar="closed"] [data-desktop-sidebar] {
   }
 }
 
+@keyframes pearl-jobs-ticker {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.pearl-jobs-ticker {
+  animation: pearl-jobs-ticker 48s linear infinite;
+}
+
+.pearl-jobs-ticker:hover,
+.group:hover .pearl-jobs-ticker {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .t-shimmer::before,
   .shimmer-text::before {
+    animation: none !important;
+  }
+
+  .pearl-jobs-ticker {
     animation: none !important;
   }
 }

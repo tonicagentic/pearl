@@ -90,7 +90,7 @@ export function FeaturesSection() {
     <section className="py-16 sm:py-24" id="features">
       <MarketingContainer>
         <div className="max-w-2xl">
-          <h2 className={marketingType.sectionTitle}>More than chat.</h2>
+          <h2 className={marketingType.sectionTitle}>More than just search.</h2>
           <p className={`mt-4 ${marketingType.body}`}>
             Connections, memory, routines, and approvals around the conversation.
           </p>
@@ -137,7 +137,13 @@ export function FeaturesSection() {
         ) : null}
 
         <div
-          className="-mx-0 flex touch-pan-x gap-6 overflow-x-auto px-4 pb-2 [scrollbar-width:none] md:px-8 [&::-webkit-scrollbar]:hidden"
+          className={cn(
+            "flex touch-pan-x gap-6 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            // Start flush with MarketingContainer (px-4 / lg:px-6 / xl:max-w-7xl);
+            // scrolling lets cards travel past that inset to the viewport edge.
+            "pl-[max(1rem,calc((100vw-80rem)/2+1.5rem))] pr-[max(1rem,calc((100vw-80rem)/2+1.5rem))]",
+            "lg:pl-[max(1.5rem,calc((100vw-80rem)/2+1.5rem))] lg:pr-[max(1.5rem,calc((100vw-80rem)/2+1.5rem))]",
+          )}
           ref={scrollerRef}
         >
           {FEATURES.map((feature) => {

@@ -83,7 +83,7 @@ function KnowsVisual() {
 export function KnowsSection() {
   return (
     <MarketingSection id="knows">
-      <div className="mx-auto max-w-2xl text-center">
+      <div className="mx-auto max-w-3xl text-center">
         <h2 className={marketingType.sectionTitle}>
           Pearl learns about you, your goals, and how you like things done.
         </h2>
@@ -91,7 +91,7 @@ export function KnowsSection() {
 
       <KnowsVisual />
 
-      <ul className="mx-auto mt-12 grid max-w-4xl gap-8 sm:grid-cols-3 sm:gap-6 lg:gap-10">
+      <ul className="mt-12 grid gap-8 sm:grid-cols-3 sm:gap-6 lg:gap-10">
         {COLUMNS.map((column) => (
           <li key={column.title}>
             <h3 className="text-base font-medium tracking-tight">

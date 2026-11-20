@@ -1,16 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState, type FocusEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FocusEvent,
+} from "react";
 import { ASK_EXAMPLES } from "@/components/marketing/ask-examples";
 import { usePrefersReducedMotion } from "@/components/marketing/use-prefers-reduced-motion";
 
-const ROTATE_MS = 12000;
-const RESUME_IDLE_MS = 8000;
+export const ASK_ROTATE_MS = 12000;
 
 /**
- * Rotates Ask Pearl examples with pause on hover/focus/manual select.
- * When `rotate` is false (SSR static frame or reduced motion), index stays
- * put unless the user picks a tab.
+ * Rotates Ask Pearl examples with progress, play/pause, and hover/focus pause.
+ * When `rotate` is false (SSR static frame), index stays put unless the user
+ * picks a tab; play is forced off.
  */
 export function useAskExampleLoop({
   rotate = true,
@@ -19,47 +24,70 @@ export function useAskExampleLoop({
 } = {}) {
   const reduceMotion = usePrefersReducedMotion();
   const [index, setIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [playing, setPlaying] = useState(rotate);
   const [hoverPaused, setHoverPaused] = useState(false);
   const [focusPaused, setFocusPaused] = useState(false);
-  const [manualPaused, setManualPaused] = useState(false);
-  const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressRef = useRef(0);
   const active = ASK_EXAMPLES[index] ?? ASK_EXAMPLES[0];
-  const paused = hoverPaused || focusPaused || manualPaused;
-  const shouldRotate = rotate && !reduceMotion && !paused;
+  const canAutoplay = rotate && !reduceMotion;
+  const advancing =
+    canAutoplay && playing && !hoverPaused && !focusPaused;
 
   useEffect(() => {
-    return () => {
-      if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    if (!rotate || reduceMotion) {
+      setPlaying(false);
+    }
+  }, [reduceMotion, rotate]);
+
+  useEffect(() => {
+    if (!advancing) return;
+
+    let frame = 0;
+    let last = performance.now();
+
+    const tick = (now: number) => {
+      const delta = now - last;
+      last = now;
+      const next = Math.min(1, progressRef.current + delta / ASK_ROTATE_MS);
+      progressRef.current = next;
+      setProgress(next);
+
+      if (next >= 1) {
+        progressRef.current = 0;
+        setProgress(0);
+        setIndex((current) => (current + 1) % ASK_EXAMPLES.length);
+        last = performance.now();
+      }
+
+      frame = requestAnimationFrame(tick);
     };
+
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [advancing, index]);
+
+  const select = useCallback((next: number) => {
+    progressRef.current = 0;
+    setProgress(0);
+    setIndex(next);
   }, []);
 
-  useEffect(() => {
-    if (!shouldRotate) return;
-    const id = setInterval(() => {
-      setIndex((current) => (current + 1) % ASK_EXAMPLES.length);
-    }, ROTATE_MS);
-    return () => clearInterval(id);
-  }, [shouldRotate]);
-
-  const pauseForInteraction = () => {
-    setManualPaused(true);
-    if (resumeTimer.current) clearTimeout(resumeTimer.current);
-    resumeTimer.current = setTimeout(() => {
-      resumeTimer.current = null;
-      setManualPaused(false);
-    }, RESUME_IDLE_MS);
-  };
-
-  const select = (next: number) => {
-    setIndex(next);
-    pauseForInteraction();
-  };
+  const togglePlaying = useCallback(() => {
+    if (!canAutoplay) return;
+    setPlaying((current) => !current);
+  }, [canAutoplay]);
 
   return {
     index,
     active,
+    progress,
+    /** User play toggle (true even while hover/focus temporarily freezes progress). */
+    userPlaying: playing && canAutoplay,
+    canAutoplay,
     reduceMotion,
     select,
+    togglePlaying,
     pauseBind: {
       onMouseEnter: () => setHoverPaused(true),
       onMouseLeave: () => setHoverPaused(false),
