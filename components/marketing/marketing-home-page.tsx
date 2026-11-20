@@ -24,7 +24,7 @@ export function MarketingHomePage({
       {({ onGetStarted }) => (
         <>
           <HeroSection onGetStarted={onGetStarted} />
-          <JobsSection />
+          <JobsSection onGetStarted={onGetStarted} />
           <ConnectionsSection />
           <FeaturesSection />
           <SelfHostedSection onGetStarted={onGetStarted} />

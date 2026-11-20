@@ -2,9 +2,8 @@
 
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
-import { PearlIcon } from "@/components/icons";
 import { HeroFrame } from "@/components/marketing/hero-frame";
-import { EASE, HeroWord, HeroWords } from "@/components/marketing/hero-word";
+import { EASE, HeroWords } from "@/components/marketing/hero-word";
 import { MarketingContainer } from "@/components/marketing/section";
 import { marketingType } from "@/components/marketing/type";
 import { usePrefersReducedMotion } from "@/components/marketing/use-prefers-reduced-motion";
@@ -45,20 +44,14 @@ export function HeroSection({
         >
           <div className="flex flex-col items-center">
             <h1 className={marketingType.display} style={{ perspective: 1200 }}>
-              <span className="inline-block opacity-0">Meet</span>{" "}
-              <span
-                aria-hidden
-                className="ml-[-0.04em] mr-[-0.14em] inline-block size-[1em] translate-y-[0.12em] opacity-0 align-baseline"
-              >
-                <PearlIcon className="size-full text-foreground" />
-              </span>{" "}
-              <span className="inline-block opacity-0">Pearl</span>
+              <span className="inline-block opacity-0">
+                Meet Pearl
+              </span>
             </h1>
             <p
               className={`mt-4 max-w-xl opacity-0 sm:mt-5 sm:max-w-2xl ${marketingType.body}`}
             >
-              A personal agent for thinking, research, writing, and keeping track
-              of what matters.
+              Your AI sidekick
             </p>
             <div className="mt-6 flex items-center justify-center gap-2 opacity-0 sm:mt-7 md:gap-3">
               <HeroActions onGetStarted={onGetStarted} />
@@ -80,16 +73,7 @@ export function HeroSection({
       >
         <div className="flex flex-col items-center">
           <h1 className={marketingType.display} style={{ perspective: 1200 }}>
-            <HeroWords wordIndexOffset={0}>Meet</HeroWords>{" "}
-            <HeroWord wordIndex={1}>
-              <span
-                aria-hidden
-                className="ml-[-0.04em] mr-[-0.14em] inline-block size-[1em] translate-y-[0.12em] align-baseline"
-              >
-                <PearlIcon className="size-full text-foreground" />
-              </span>
-            </HeroWord>{" "}
-            <HeroWords wordIndexOffset={2}>Pearl</HeroWords>
+            <HeroWords>Pearl, your AI sidekick.</HeroWords>
           </h1>
 
           <motion.p
@@ -100,8 +84,7 @@ export function HeroSection({
               reduceMotion ? { duration: 0 } : { duration: 1.1, ease: EASE }
             }
           >
-            A personal agent for thinking, research, writing, and keeping track
-            of what matters.
+            An always-on collaborator who helps you keep momentum in work and life.
           </motion.p>
 
           <motion.div
