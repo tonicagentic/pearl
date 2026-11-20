@@ -15,6 +15,7 @@ export type MarketplaceExample = {
   readonly name: string;
   readonly description: string;
   readonly category: string;
+  readonly featured: boolean;
   readonly accent: string;
   readonly markShape: AgentMarkShape;
   readonly markTalk: AgentMarkTalk;
@@ -29,6 +30,7 @@ export const MARKETPLACE_EXAMPLES: readonly MarketplaceExample[] = [
     description:
       "A research and fact-check desk that prefers live web search and dated, sourced claims over training-only answers.",
     category: "Research",
+    featured: true,
     accent: "#3B82F6",
     markShape: "diamond",
     markTalk: "hinge",
@@ -41,6 +43,7 @@ export const MARKETPLACE_EXAMPLES: readonly MarketplaceExample[] = [
     description:
       "Triages your Gmail: surfaces what needs a reply, drafts when asked, and never sends without you.",
     category: "Mail",
+    featured: true,
     accent: "#F97316",
     markShape: "oval",
     markTalk: "chatter",
@@ -53,6 +56,7 @@ export const MARKETPLACE_EXAMPLES: readonly MarketplaceExample[] = [
     description:
       "A morning brief from calendar and mail: what's on today, what's waiting, and what can wait.",
     category: "Home",
+    featured: true,
     accent: "#EAB308",
     markShape: "trap",
     markTalk: "lift",
@@ -65,6 +69,7 @@ export const MARKETPLACE_EXAMPLES: readonly MarketplaceExample[] = [
     description:
       "Finds open time across Google Calendar and iCloud, and drafts holds without booking until you say so.",
     category: "Calendar",
+    featured: false,
     accent: "#22C55E",
     markShape: "square",
     markTalk: "hinge",
@@ -77,6 +82,7 @@ export const MARKETPLACE_EXAMPLES: readonly MarketplaceExample[] = [
     description:
       "Line-edits drafts so they read like a person wrote them. Shows every change and why.",
     category: "Writing",
+    featured: false,
     accent: "#8B5CF6",
     markShape: "oval",
     markTalk: "lift",
@@ -89,6 +95,7 @@ export const MARKETPLACE_EXAMPLES: readonly MarketplaceExample[] = [
     description:
       "Explains changes in your GitHub repos: what landed, what it touches, and what to review.",
     category: "Engineering",
+    featured: false,
     accent: "#64748B",
     markShape: "diamond",
     markTalk: "chatter",
@@ -101,6 +108,7 @@ export const MARKETPLACE_EXAMPLES: readonly MarketplaceExample[] = [
     description:
       "Reads Google Sheets you point it at and answers with the numbers that are actually there.",
     category: "Data",
+    featured: false,
     accent: "#2DD4BF",
     markShape: "square",
     markTalk: "hinge",
@@ -113,6 +121,7 @@ export const MARKETPLACE_EXAMPLES: readonly MarketplaceExample[] = [
     description:
       "Checks Vercel deployments on a weekday cadence and tells you what shipped or broke.",
     category: "Engineering",
+    featured: false,
     accent: "#EC4899",
     markShape: "trap",
     markTalk: "chatter",

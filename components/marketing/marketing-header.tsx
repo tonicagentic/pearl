@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
+  { href: "/marketplace", label: "Marketplace" },
   { href: "/download", label: "Download" },
   { href: "/pricing", label: "Pricing" },
 ] as const;

@@ -4,6 +4,7 @@ import { MarketingContainer } from "@/components/marketing/section";
 import { marketingType } from "@/components/marketing/type";
 
 const FOOTER_LINKS = [
+  { href: "/marketplace", label: "Marketplace" },
   { href: "/download", label: "Download" },
   { href: "/pricing", label: "Pricing" },
   { href: "/about", label: "About" },
