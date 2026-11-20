@@ -10,11 +10,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tonicagentic.pearl",
+      "usesAppleSignIn": true,
       "associatedDomains": [
+        "webcredentials:pearl.diy",
         "webcredentials:pearl.tonicagentic.com"
       ],
       "entitlements": {
         "com.apple.developer.associated-domains": [
+          "webcredentials:pearl.diy",
           "webcredentials:pearl.tonicagentic.com"
         ],
         "keychain-access-groups": [
@@ -89,11 +92,18 @@
         }
       ],
       "./plugins/with-live-audio-session.js",
+      "expo-apple-authentication",
       "expo-asset",
       "expo-font",
       "expo-sharing",
       "expo-updates",
       "expo-video",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.350590311352-1ee8ut2vddsj94q52a7i9bg0kjvkbdgc"
+        }
+      ],
       [
         "expo-splash-screen",
         {

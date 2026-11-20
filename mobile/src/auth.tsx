@@ -25,6 +25,12 @@ import {
   clearAppIconBadge,
   unregisterForPushNotifications,
 } from "./push-notifications";
+import {
+  describeAppleSignInError,
+  describeGoogleSignInError,
+  requestAppleIdToken,
+  requestGoogleIdToken,
+} from "./social-auth";
 
 export type SignInState = "idle" | "signing-in" | "error";
 
@@ -78,6 +84,10 @@ type AuthContextValue = {
     password: string,
     handOffFrom?: AuthCtaFrame | null,
   ) => Promise<void>;
+  /** Native Google ID token → better-auth bearer session. */
+  readonly signInWithGoogle: (handOffFrom?: AuthCtaFrame | null) => Promise<void>;
+  /** Native Apple ID token → better-auth bearer session (iOS). */
+  readonly signInWithApple: (handOffFrom?: AuthCtaFrame | null) => Promise<void>;
   /** Returns true when the request was accepted (email may or may not exist). */
   readonly requestPasswordReset: (email: string) => Promise<boolean>;
   readonly resetPassword: (
@@ -266,6 +276,14 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     [refreshBillingGate, refreshViewerName],
   );
 
+  const parseAuthErrorBody = (body: {
+    message?: string;
+    error?: { message?: string } | string;
+  } | null) =>
+    (typeof body?.error === "string"
+      ? body.error
+      : body?.error?.message) ?? body?.message ?? null;
+
   const requestToken = useCallback(
     async (
       path: "sign-in/email" | "sign-up/email",
@@ -303,10 +321,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
 
       if (!response.ok || (options?.requireToken !== false && !credential)) {
         const detail =
-          (typeof body?.error === "string"
-            ? body.error
-            : body?.error?.message) ??
-          body?.message ??
+          parseAuthErrorBody(body) ??
           (body ? JSON.stringify(body).slice(0, 160) : "");
         throw new Error(
           detail ||
@@ -318,6 +333,65 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         credential,
         name: nameFromAuthUser(body?.user),
         isAnonymous: isAnonymousFromUser(body?.user),
+      };
+    },
+    [],
+  );
+
+  const requestSocialToken = useCallback(
+    async (params: {
+      readonly provider: "google" | "apple";
+      readonly idToken: string;
+      readonly nonce?: string;
+      readonly accessToken?: string;
+    }): Promise<AuthTokenResult & { readonly email: string | null }> => {
+      const timeout = AbortSignal.timeout(45_000);
+      const guestCredential = getAuthCookie();
+      const response = await fetch(`${AGENT_URL}/api/auth/sign-in/social`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(guestCredential
+            ? { authorization: `Bearer ${guestCredential}` }
+            : {}),
+        },
+        body: JSON.stringify({
+          provider: params.provider,
+          idToken: {
+            token: params.idToken,
+            ...(params.nonce ? { nonce: params.nonce } : {}),
+            ...(params.accessToken
+              ? { accessToken: params.accessToken }
+              : {}),
+          },
+        }),
+        signal: timeout,
+      });
+      const body = (await response.json().catch(() => null)) as {
+        token?: string;
+        user?: unknown;
+        message?: string;
+        error?: { message?: string } | string;
+      } | null;
+      const credential = body?.token ?? null;
+      if (!response.ok || !credential) {
+        const detail =
+          parseAuthErrorBody(body) ??
+          (body ? JSON.stringify(body).slice(0, 160) : "");
+        throw new Error(
+          detail || `Social sign-in failed (${response.status}).`,
+        );
+      }
+      const user = body?.user;
+      const emailFromUser =
+        user && typeof user === "object" && typeof (user as { email?: unknown }).email === "string"
+          ? ((user as { email: string }).email)
+          : null;
+      return {
+        credential,
+        name: nameFromAuthUser(user),
+        isAnonymous: isAnonymousFromUser(user),
+        email: emailFromUser,
       };
     },
     [],
@@ -398,6 +472,84 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       }
     },
     [commitSession, requestToken],
+  );
+
+  const signInWithGoogle = useCallback(
+    async (handOffFrom?: AuthCtaFrame | null) => {
+      setSignInState("signing-in");
+      setSignInError(null);
+      try {
+        const id = await requestGoogleIdToken();
+        const result = await requestSocialToken({
+          provider: "google",
+          idToken: id.token,
+          accessToken: id.accessToken,
+        });
+        if (!result.credential) {
+          throw new Error("Google sign-in failed.");
+        }
+        await commitSession(
+          result.credential,
+          result.email ?? id.email ?? "google-user",
+          handOffFrom,
+          result.name ?? id.name,
+          false,
+        );
+      } catch (cause) {
+        setSignInState("error");
+        const message = describeGoogleSignInError(cause);
+        if (message.toLowerCase().includes("cancel")) {
+          setSignInState("idle");
+          setSignInError(null);
+          return;
+        }
+        setSignInError(
+          message.toLowerCase().includes("abort")
+            ? "Can't reach Pearl. Check your connection and try again."
+            : message,
+        );
+      }
+    },
+    [commitSession, requestSocialToken],
+  );
+
+  const signInWithApple = useCallback(
+    async (handOffFrom?: AuthCtaFrame | null) => {
+      setSignInState("signing-in");
+      setSignInError(null);
+      try {
+        const id = await requestAppleIdToken();
+        const result = await requestSocialToken({
+          provider: "apple",
+          idToken: id.token,
+          nonce: id.nonce,
+        });
+        if (!result.credential) {
+          throw new Error("Apple sign-in failed.");
+        }
+        await commitSession(
+          result.credential,
+          result.email ?? id.email ?? "apple-user",
+          handOffFrom,
+          result.name ?? id.name,
+          false,
+        );
+      } catch (cause) {
+        setSignInState("error");
+        const message = describeAppleSignInError(cause);
+        if (message.toLowerCase().includes("cancel")) {
+          setSignInState("idle");
+          setSignInError(null);
+          return;
+        }
+        setSignInError(
+          message.toLowerCase().includes("abort")
+            ? "Can't reach Pearl. Check your connection and try again."
+            : message,
+        );
+      }
+    },
+    [commitSession, requestSocialToken],
   );
 
   const checkEmailExists = useCallback(async (email: string) => {
@@ -542,6 +694,8 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       signInError,
       signIn,
       signUp,
+      signInWithGoogle,
+      signInWithApple,
       requestPasswordReset,
       resetPassword,
       checkEmailExists,
@@ -564,6 +718,8 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       signInError,
       signIn,
       signUp,
+      signInWithGoogle,
+      signInWithApple,
       requestPasswordReset,
       resetPassword,
       checkEmailExists,

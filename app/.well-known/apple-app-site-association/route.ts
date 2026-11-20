@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 
 /**
  * Apple App Site Association for password Autofill (webcredentials).
- * Served at https://pearl.tonicagentic.com/.well-known/apple-app-site-association
+ * Served at https://pearl.diy/.well-known/apple-app-site-association
+ * (and any other production host for the same deploy).
  *
  * Set APPLE_TEAM_ID on the deploy (e.g. Vercel env). Without it, apps list is empty
  * so Autofill association stays off until configured.

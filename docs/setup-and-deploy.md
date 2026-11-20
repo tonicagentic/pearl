@@ -217,13 +217,68 @@ The app derives the auth origin in this order:
 BETTER_AUTH_URL -> VERCEL_PROJECT_PRODUCTION_URL -> VERCEL_URL -> http://localhost:3000
 ```
 
-You usually do not need `BETTER_AUTH_URL` for the first Vercel deployment. Set it explicitly when you use a custom production domain:
+Production primary domain is **`https://pearl.diy`**. Set it explicitly:
 
 ```bash
-printf '%s' "https://<your-custom-domain>" | vercel env add BETTER_AUTH_URL production preview development
+printf '%s' "https://pearl.diy" | vercel env add BETTER_AUTH_URL production preview development
 ```
 
+Keep `pearl.tonicagentic.com` on the project (trusted origin) during cutover. Mobile production builds use `EXPO_PUBLIC_AGENT_URL=https://pearl.diy` in `mobile/eas.json`.
+
 `VERCEL_PROJECT_PRODUCTION_URL` and `VERCEL_URL` are Vercel system env vars. See [system environment variables](https://vercel.com/docs/environment-variables/system-environment-variables).
+
+## Google and Apple sign-in
+
+Better Auth accepts browser OAuth on web and **native ID tokens** on mobile (`POST /api/auth/sign-in/social`). Register callbacks:
+
+```text
+https://pearl.diy/api/auth/callback/google
+https://pearl.diy/api/auth/callback/apple
+```
+
+### Google Cloud
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → OAuth consent screen → app **Pearl**, authorized domain `pearl.diy`.
+2. Credentials → Create OAuth client ID (same project):
+   - **Web** — redirect URIs: `https://pearl.diy/api/auth/callback/google`, optional `http://localhost:3000/api/auth/callback/google`.
+   - **iOS** — bundle ID `com.tonicagentic.pearl`.
+   - **Android** (optional) — package `com.tonicagentic.pearl` + SHA-1.
+3. Vercel / `.env.local`:
+
+```bash
+GOOGLE_CLIENT_ID=<web-client-id>
+GOOGLE_CLIENT_SECRET=<web-secret>
+GOOGLE_IOS_CLIENT_ID=<ios-client-id>
+GOOGLE_ANDROID_CLIENT_ID=<android-client-id>   # optional
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=<web-client-id>  # shows web button
+```
+
+4. Mobile EAS / Expo env:
+
+```bash
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=<web-client-id>
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<ios-client-id>
+```
+
+5. After the iOS client exists, set the Google Sign-In Expo plugin URL scheme in `mobile/app.json` to the **reversed** iOS client ID (e.g. client `123-abc.apps.googleusercontent.com` → scheme `com.googleusercontent.apps.123-abc`), then ship a new native build.
+
+### Apple Developer
+
+1. App ID `com.tonicagentic.pearl` → enable **Sign In with Apple**.
+2. Services ID e.g. `com.tonicagentic.pearl.web` → domains `pearl.diy` (+ `pearl.tonicagentic.com` while dual-hosting) → return URL `https://pearl.diy/api/auth/callback/apple` (HTTPS only; no localhost).
+3. Keys → Sign In with Apple → download `.p8` once; note Key ID and Team ID.
+4. Vercel / `.env.local`:
+
+```bash
+APPLE_CLIENT_ID=com.tonicagentic.pearl.web
+APPLE_APP_BUNDLE_IDENTIFIER=com.tonicagentic.pearl
+APPLE_TEAM_ID=<team-id>
+APPLE_KEY_ID=<key-id>
+APPLE_PRIVATE_KEY="<pem with \n newlines>"
+NEXT_PUBLIC_APPLE_CLIENT_ID=com.tonicagentic.pearl.web
+```
+
+5. Mobile already enables `usesAppleSignIn` + `expo-apple-authentication`. Rebuild with EAS **preview** or **production** after env is set (not OTA-only).
 
 ## Database Migrations
 

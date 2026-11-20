@@ -4,6 +4,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { anonymous, bearer } from "better-auth/plugins";
+import { generateAppleClientSecret } from "@/lib/auth/apple-client-secret";
 import { reassignAnonymousUserData } from "@/lib/auth/link-anonymous-user";
 import { getAppUrlHost, getEffectiveAppUrl } from "@/lib/auth-url";
 import { db } from "@/lib/db/client";
@@ -33,7 +34,26 @@ function localLanAgentHosts(): string[] {
 const vercelClientId = process.env.NEXT_PUBLIC_VERCEL_APP_CLIENT_ID?.trim() ?? "";
 const vercelClientSecret = process.env.VERCEL_APP_CLIENT_SECRET?.trim() ?? "";
 const betterAuthSecret = process.env.BETTER_AUTH_SECRET?.trim();
-const vercelProviderConfigured = Boolean(betterAuthSecret && vercelClientId && vercelClientSecret);
+const vercelProviderConfigured = Boolean(
+  betterAuthSecret && vercelClientId && vercelClientSecret,
+);
+
+const googleWebClientId = process.env.GOOGLE_CLIENT_ID?.trim() ?? "";
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() ?? "";
+const googleIosClientId = process.env.GOOGLE_IOS_CLIENT_ID?.trim() ?? "";
+const googleAndroidClientId = process.env.GOOGLE_ANDROID_CLIENT_ID?.trim() ?? "";
+const googleProviderConfigured = Boolean(googleWebClientId && googleClientSecret);
+
+const appleServiceClientId = process.env.APPLE_CLIENT_ID?.trim() ?? "";
+const appleTeamId = process.env.APPLE_TEAM_ID?.trim() ?? "";
+const appleKeyId = process.env.APPLE_KEY_ID?.trim() ?? "";
+const applePrivateKey = process.env.APPLE_PRIVATE_KEY?.trim() ?? "";
+const appleBundleId =
+  process.env.APPLE_APP_BUNDLE_IDENTIFIER?.trim() || "com.tonicagentic.pearl";
+const appleProviderConfigured = Boolean(
+  appleServiceClientId && appleTeamId && appleKeyId && applePrivateKey,
+);
+
 const authBaseUrl = getEffectiveAppUrl();
 const authProtocol = new URL(authBaseUrl).protocol === "https:" ? "https" : "http";
 
@@ -50,8 +70,11 @@ const productionTrustedOrigins = [
   process.env.BETTER_AUTH_URL?.trim()
     ? `https://${getAppUrlHost(process.env.BETTER_AUTH_URL)}`
     : null,
+  "https://pearl.diy",
   "https://my-agent-pi-eight.vercel.app",
   "https://pearl.tonicagentic.com",
+  // Required for Sign in with Apple web + native flows.
+  "https://appleid.apple.com",
   // Companion apps (shared account)
   process.env.FINANCE_APP_URL?.trim() || null,
   "pearlmoney://",
@@ -60,6 +83,8 @@ const productionTrustedOrigins = [
   "pearltasks://*",
   "pearlbody://",
   "pearlbody://*",
+  "pearl://",
+  "pearl://*",
 ].filter((origin, index, list): origin is string => {
   if (!origin) return false;
   // Custom schemes are not valid URL origins; keep them as-is.
@@ -120,12 +145,27 @@ const allowedHosts = [
   "127.0.0.1:3001",
   ...localLanAgentHosts(),
   "*.vercel.app",
+  "pearl.diy",
   "pearl.tonicagentic.com",
   "my-agent-pi-eight.vercel.app",
   getAppUrlHost(process.env.BETTER_AUTH_URL),
   getAppUrlHost(process.env.VERCEL_PROJECT_PRODUCTION_URL),
   getAppUrlHost(process.env.VERCEL_URL),
 ].filter((host): host is string => Boolean(host));
+
+const trustedSocialProviders = [
+  vercelProviderConfigured ? ("vercel" as const) : null,
+  googleProviderConfigured ? ("google" as const) : null,
+  appleProviderConfigured ? ("apple" as const) : null,
+].filter((provider): provider is "vercel" | "google" | "apple" =>
+  Boolean(provider),
+);
+
+const googleClientIds = [
+  googleWebClientId,
+  googleIosClientId,
+  googleAndroidClientId,
+].filter(Boolean);
 
 export const auth = betterAuth({
   baseURL: {
@@ -140,7 +180,7 @@ export const auth = betterAuth({
     encryptOAuthTokens: true,
     accountLinking: {
       enabled: true,
-      trustedProviders: ["vercel"],
+      trustedProviders: trustedSocialProviders,
       allowDifferentEmails: true,
     },
   },
@@ -197,16 +237,44 @@ export const auth = betterAuth({
   onAPIError: {
     errorURL: "/auth/error",
   },
-  socialProviders: vercelProviderConfigured
-    ? {
-        vercel: {
-          clientId: vercelClientId,
-          clientSecret: vercelClientSecret,
-          overrideUserInfoOnSignIn: true,
-          scope: ["openid", "email", "profile"],
-        },
-      }
-    : {},
+  socialProviders: {
+    ...(vercelProviderConfigured
+      ? {
+          vercel: {
+            clientId: vercelClientId,
+            clientSecret: vercelClientSecret,
+            overrideUserInfoOnSignIn: true,
+            scope: ["openid", "email", "profile"],
+          },
+        }
+      : {}),
+    ...(googleProviderConfigured
+      ? {
+          google: {
+            clientId:
+              googleClientIds.length > 1
+                ? googleClientIds
+                : googleWebClientId,
+            clientSecret: googleClientSecret,
+            prompt: "select_account" as const,
+          },
+        }
+      : {}),
+    ...(appleProviderConfigured
+      ? {
+          apple: async () => ({
+            clientId: [appleServiceClientId, appleBundleId],
+            clientSecret: await generateAppleClientSecret({
+              clientId: appleServiceClientId,
+              teamId: appleTeamId,
+              keyId: appleKeyId,
+              privateKey: applePrivateKey,
+            }),
+            appBundleIdentifier: appleBundleId,
+          }),
+        }
+      : {}),
+  },
   plugins: [
     anonymous({
       emailDomainName: "anonymous.pearl.local",

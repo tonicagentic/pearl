@@ -2,9 +2,11 @@
 
 import { Loader2Icon } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { SocialSignInButtons } from "@/components/auth/social-sign-in-buttons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { getPublicSocialProviders } from "@/lib/auth-social";
 
 type FormMode = "sign-in" | "sign-up" | "forgot";
 
@@ -15,6 +17,8 @@ export function EmailSignInForm({
   readonly callbackPath?: string;
   readonly onBeforeSignIn?: () => void;
 }) {
+  const social = getPublicSocialProviders();
+  const showSocial = social.google || social.apple;
   const [mode, setMode] = useState<FormMode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -128,7 +132,27 @@ export function EmailSignInForm({
   }
 
   return (
-    <form className="space-y-3" onSubmit={handleSubmit}>
+    <div className="space-y-3">
+      {showSocial && mode !== "forgot" ? (
+        <>
+          <SocialSignInButtons
+            callbackPath={callbackPath}
+            disabled={pending}
+            onBeforeSignIn={onBeforeSignIn}
+          />
+          <div className="relative py-1">
+            <div className="absolute inset-0 flex items-center" aria-hidden>
+              <div className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-background px-2 text-muted-foreground">
+                or continue with email
+              </span>
+            </div>
+          </div>
+        </>
+      ) : null}
+      <form className="space-y-3" onSubmit={handleSubmit}>
       <Input
         aria-label="Email"
         autoComplete="email"
@@ -218,7 +242,8 @@ export function EmailSignInForm({
             ? "Need an account? Create one"
             : "Already have an account? Sign in"}
       </button>
-    </form>
+      </form>
+    </div>
   );
 }
 

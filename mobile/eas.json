@@ -35,9 +35,11 @@
         "resourceClass": "m-medium"
       },
       "env": {
-        "EXPO_PUBLIC_AGENT_URL": "https://pearl.tonicagentic.com",
+        "EXPO_PUBLIC_AGENT_URL": "https://pearl.diy",
         "EXPO_PUBLIC_LOCK_HOSTED": "1",
-        "EXPO_PUBLIC_APPLE_TEAM_ID": "5829T4LMH6"
+        "EXPO_PUBLIC_APPLE_TEAM_ID": "5829T4LMH6",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "350590311352-8iaqc08ipt5nofaf0eugjfuqlkubdg19.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "350590311352-1ee8ut2vddsj94q52a7i9bg0kjvkbdgc.apps.googleusercontent.com"
       }
     }
   },

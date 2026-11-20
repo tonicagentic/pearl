@@ -2,7 +2,7 @@
 
 Pearl, Pearl Money, and Pearl Tasks use the same better-auth user. System Autofill and iOS silent SSO need Associated Domains, Digital Asset Links, and a shared Keychain access group.
 
-## Server env (Pearl / pearl.tonicagentic.com)
+## Server env (Pearl / pearl.diy)
 
 | Variable | Purpose |
 |----------|---------|
@@ -15,18 +15,18 @@ Endpoints (deployed with this app):
 - `GET /.well-known/apple-app-site-association`
 - `GET /.well-known/assetlinks.json`
 
-Verify after deploy: open those URLs on the production host (no redirect). AASA must list all three app IDs once `APPLE_TEAM_ID` is set.
+Verify after deploy: open those URLs on `https://pearl.diy` (no redirect). AASA must list all three app IDs once `APPLE_TEAM_ID` is set. Keep `pearl.tonicagentic.com` trusted during cutover.
 
 ## Mobile env (Expo apps)
 
 | Variable | Purpose |
 |----------|---------|
 | `EXPO_PUBLIC_APPLE_TEAM_ID` | Same Team ID; builds the Keychain `accessGroup` (`TEAMID.com.tonicagentic.pearl.shared`) |
-| `EXPO_PUBLIC_PEARL_URL` / `EXPO_PUBLIC_AGENT_URL` | Production: `https://pearl.tonicagentic.com` so Autofill matches the AASA domain |
+| `EXPO_PUBLIC_PEARL_URL` / `EXPO_PUBLIC_AGENT_URL` | Production: `https://pearl.diy` so Autofill matches the AASA domain |
 
 ## Native config
 
-- `ios.associatedDomains`: `webcredentials:pearl.tonicagentic.com`
+- `ios.associatedDomains`: `webcredentials:pearl.diy` (and `webcredentials:pearl.tonicagentic.com` during cutover)
 - `ios.entitlements.keychain-access-groups`: `$(AppIdentifierPrefix)com.tonicagentic.pearl.shared`
 - Bundle / package: `com.tonicagentic.pearl`, `com.tonicagentic.pearlmoney`, `com.tonicagentic.pearltasks`
 - Scheme: `pearl` / `pearlmoney` / `pearltasks`

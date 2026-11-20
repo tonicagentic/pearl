@@ -56,7 +56,7 @@ export function SignInModal({
             {usesPassword
               ? "Use the password configured by the person who deployed this agent."
               : usesEmailPassword
-                ? "Sign in with the email and password provisioned by the person who deployed this agent."
+                ? "Continue with Google, Apple, or email — new and returning accounts use the same path."
                 : "Connect your Vercel account to send messages and save sessions."}
           </DialogDescription>
         </DialogHeader>

@@ -112,6 +112,9 @@ importers:
       eve:
         specifier: 1.0.0-rc.16
         version: 1.0.0-rc.16(@opentelemetry/api@1.9.0)(@vercel/connect@2.9.0)(ai@7.0.166(zod@4.4.3))(just-bash@3.6.0)(next@16.3.1(@opentelemetry/api@1.9.0)(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+      jose:
+        specifier: ^6.2.18
+        version: 6.2.18
       jszip:
         specifier: ^3.10.2
         version: 3.10.2

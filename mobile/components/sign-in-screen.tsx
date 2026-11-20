@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Text, TEXT_METRICS } from "@/components/ui/text";
 import { useAuth, type AuthCtaFrame } from "@/src/auth";
+import { isGoogleSignInAvailable } from "@/src/social-auth";
 
 type GatePhase = "gate" | "email";
 type AuthFlow = "sign-up" | "sign-in" | "forgot";
@@ -26,10 +26,6 @@ type AuthStep = "email" | "password";
 
 const INPUT_FONT = 28;
 const INPUT_LINE = 34;
-
-const SOCIAL_UNAVAILABLE_TITLE = "Coming soon";
-const SOCIAL_UNAVAILABLE_BODY =
-  "Google and Apple sign-in aren’t available yet. Continue with email for now.";
 
 /**
  * Signed-out gate: compact Pearl carousel + continue methods, then email.
@@ -56,11 +52,15 @@ export function SignInScreen({
   const {
     signIn,
     signUp,
+    signInWithGoogle,
+    signInWithApple,
     requestPasswordReset,
     checkEmailExists,
     signInState,
     signInError,
   } = useAuth();
+  const googleAvailable = isGoogleSignInAvailable();
+  const appleAvailable = Platform.OS === "ios";
 
   const backgroundColor = useCSSVariable("--color-background") as
     | string
@@ -178,10 +178,6 @@ export function SignInScreen({
       return;
     }
     onBack?.();
-  };
-
-  const showSocialUnavailable = () => {
-    Alert.alert(SOCIAL_UNAVAILABLE_TITLE, SOCIAL_UNAVAILABLE_BODY);
   };
 
   const goToPassword = async () => {
@@ -338,19 +334,38 @@ export function SignInScreen({
           )}
 
           <View style={styles.methodStack}>
-            <Button
-              label="Continue with Google"
-              variant="secondary"
-              onPress={showSocialUnavailable}
-            />
-            {Platform.OS === "ios" ? (
+            {googleAvailable ? (
+              <Button
+                label="Continue with Google"
+                variant="secondary"
+                loading={busy}
+                disabled={busy || handOffActive}
+                onPress={() => void signInWithGoogle()}
+              />
+            ) : null}
+            {appleAvailable ? (
               <Button
                 label="Continue with Apple"
                 variant="secondary"
-                onPress={showSocialUnavailable}
+                loading={busy}
+                disabled={busy || handOffActive}
+                onPress={() => void signInWithApple()}
               />
             ) : null}
-            <Button label="Continue with Email" onPress={goToEmail} />
+            <Button
+              label="Continue with Email"
+              disabled={busy || handOffActive}
+              onPress={goToEmail}
+            />
+            {error && phase === "gate" && !handOffActive ? (
+              <Text
+                accessibilityRole="alert"
+                variant="secondary"
+                style={{ color: destructiveColor, textAlign: "center" }}
+              >
+                {error}
+              </Text>
+            ) : null}
           </View>
         </View>
       </SafeAreaView>
