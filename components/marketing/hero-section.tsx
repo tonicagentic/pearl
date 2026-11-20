@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { HeroFrame } from "@/components/marketing/hero-frame";
 import { EASE, HeroWords } from "@/components/marketing/hero-word";
 import { MarketingContainer } from "@/components/marketing/section";
@@ -37,40 +37,37 @@ export function HeroSection({
   // Motion only mounts afterward — avoids transform/filter hydration mismatches.
   if (!mounted) {
     return (
-      <section id="hero">
-        <MarketingContainer
-          className="flex flex-col items-center gap-12 pt-32 pb-16 text-center sm:gap-16 sm:pt-[148px] sm:pb-24"
-          narrow
-        >
+      <HeroLayout
+        copy={
           <div className="flex flex-col items-center">
             <h1 className={marketingType.display} style={{ perspective: 1200 }}>
               <span className="inline-block opacity-0">
-                Meet Pearl
+                Pearl, your AI sidekick.
               </span>
             </h1>
             <p
               className={`mt-4 max-w-xl opacity-0 sm:mt-5 sm:max-w-2xl ${marketingType.body}`}
             >
-              Your AI sidekick
+              An always-on collaborator who helps you keep momentum in work and
+              life.
             </p>
             <div className="mt-6 flex items-center justify-center gap-2 opacity-0 sm:mt-7 md:gap-3">
               <HeroActions onGetStarted={onGetStarted} />
             </div>
           </div>
+        }
+        media={
           <div className="w-full opacity-0">
             <HeroFrame static />
           </div>
-        </MarketingContainer>
-      </section>
+        }
+      />
     );
   }
 
   return (
-    <section id="hero">
-      <MarketingContainer
-        className="flex flex-col items-center gap-12 pt-32 pb-16 text-center sm:gap-16 sm:pt-[148px] sm:pb-24"
-        narrow
-      >
+    <HeroLayout
+      copy={
         <div className="flex flex-col items-center">
           <h1 className={marketingType.display} style={{ perspective: 1200 }}>
             <HeroWords>Pearl, your AI sidekick.</HeroWords>
@@ -84,7 +81,8 @@ export function HeroSection({
               reduceMotion ? { duration: 0 } : { duration: 1.1, ease: EASE }
             }
           >
-            An always-on collaborator who helps you keep momentum in work and life.
+            An always-on collaborator who helps you keep momentum in work and
+            life.
           </motion.p>
 
           <motion.div
@@ -100,9 +98,25 @@ export function HeroSection({
             <HeroActions onGetStarted={onGetStarted} />
           </motion.div>
         </div>
+      }
+      media={<HeroFrame />}
+    />
+  );
+}
 
-        <HeroFrame />
+function HeroLayout({
+  copy,
+  media,
+}: {
+  readonly copy: ReactNode;
+  readonly media: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-12 pt-32 pb-16 sm:gap-16 sm:pt-[148px] sm:pb-24" id="hero">
+      <MarketingContainer className="text-center" narrow>
+        {copy}
       </MarketingContainer>
+      <MarketingContainer>{media}</MarketingContainer>
     </section>
   );
 }
