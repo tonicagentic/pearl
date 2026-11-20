@@ -12,6 +12,9 @@ import { getAgentTemplate } from "@/lib/custom-agents/templates";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
+/** Auth + DB template lookup; do not require instant prerender. */
+export const instant = false;
+
 export async function generateMetadata({
   params,
 }: {
