@@ -6,6 +6,7 @@ import { FeaturesSection } from "@/components/marketing/features-section";
 import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 import { HeroSection } from "@/components/marketing/hero-section";
 import { JobsSection } from "@/components/marketing/jobs-section";
+import { KnowsSection } from "@/components/marketing/knows-section";
 import { MarketingShell } from "@/components/marketing/marketing-shell";
 import { OpenSourceSection } from "@/components/marketing/open-source-section";
 import { PlatformsSection } from "@/components/marketing/platforms-section";
@@ -26,6 +27,7 @@ export function MarketingHomePage({
           <HeroSection onGetStarted={onGetStarted} />
           <JobsSection onGetStarted={onGetStarted} />
           <ConnectionsSection />
+          <KnowsSection />
           <FeaturesSection />
           <SelfHostedSection onGetStarted={onGetStarted} />
           <PlatformsSection />
