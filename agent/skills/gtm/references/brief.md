@@ -15,8 +15,10 @@ Capture only what changes the work. Ask for what is missing; never fill it in.
 | Signal | Skill | Output |
 | --- | --- | --- |
 | "What am I selling", vague or new offer | `offer-discovery` | offer brief |
-| Segments, ICP, positioning, competitors | `market-positioning` | positioning doc |
-| Lead or prospect list from an ICP | `lead-generation` | scored list |
+| Who has a problem worth solving, niche markets, interviews, size/competition before committing | `market-discovery` | candidate segments, interview plan, landscape |
+| Sales prospecting, offer/ICP records, angles, qualify ICP, shared-pain ICPs, short targeted lists | `sales-prospecting` | records, angles, scorecard, short list |
+| Segments, ICP, positioning, competitors (segment already chosen) | `market-positioning` | positioning doc |
+| Lead or prospect list from a confirmed ICP | `lead-generation` / `sales-prospecting` | scored list |
 | One company in depth | `company-research` | research note |
 | Price, packaging, proposal terms | `pricing-and-terms` | pricing options |
 | Cold email, follow-ups, sequences, replies | `outreach-and-messaging` | drafts, tracker |

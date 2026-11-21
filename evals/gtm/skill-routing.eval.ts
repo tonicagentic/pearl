@@ -3,6 +3,8 @@ import { defineEval } from "eve/evals";
 const GTM_SKILLS = [
   "gtm",
   "offer-discovery",
+  "sales-prospecting",
+  "market-discovery",
   "market-positioning",
   "pricing-and-terms",
   "outreach-and-messaging",
@@ -13,10 +15,10 @@ export default defineEval({
   description:
     "GTM routing: a writing request loads no gtm skill; a vague go-to-market " +
     "request loads the gtm director and clarifies instead of inventing an ICP " +
-    "or price; a cold-email request loads outreach-and-messaging, drafts " +
-    "without sending, and does not run market research.",
+    "or price; a prospecting ask loads sales-prospecting without research; a " +
+    "cold-email request loads outreach-and-messaging, drafts without sending.",
   tags: ["smoke", "reliability"],
-  timeoutMs: 300_000,
+  timeoutMs: 360_000,
   async test(t) {
     const writing = await t.send(
       "Draft a three-paragraph blog post about why durable agents matter. " +
@@ -37,10 +39,24 @@ export default defineEval({
     vague.notCalledTool("exa_agent_run");
     vague.notCalledTool("send_gmail_message");
     t.judge(
-      "The reply asks one or two clarifying questions about the user's offer " +
+      "The reply asks clarifying questions about the user's offer " +
         "or buyer, and does not invent an ICP, price, customer, or result for " +
         "the user as if settled.",
       { on: vague.reply },
+    );
+
+    const prospect = await t.session();
+    const prospectTurn = await prospect.send(
+      "I want to start sales prospecting. Build me a list of companies to reach out to. " +
+        "Don't research yet.",
+    );
+    t.succeeded();
+    prospectTurn.calledSkill("sales-prospecting", { count: 1 });
+    prospectTurn.notCalledTool("exa_agent_run");
+    t.judge(
+      "The reply shows blank Offer and/or ICP fields and asks for missing offer " +
+        "or customer details without inventing a settled ICP or running research.",
+      { on: prospectTurn.reply },
     );
 
     const outreach = await t.send(

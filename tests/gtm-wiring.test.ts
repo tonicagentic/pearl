@@ -10,6 +10,8 @@ test("GTM skill pack and instructions are present", async () => {
   const skills = [
     "agent/skills/gtm/SKILL.md",
     "agent/skills/offer-discovery/SKILL.md",
+    "agent/skills/sales-prospecting/SKILL.md",
+    "agent/skills/market-discovery/SKILL.md",
     "agent/skills/market-positioning/SKILL.md",
     "agent/skills/pricing-and-terms/SKILL.md",
     "agent/skills/outreach-and-messaging/SKILL.md",
@@ -32,6 +34,22 @@ test("GTM skill pack and instructions are present", async () => {
   assert.match(outreach, /Sheets playbook/);
   assert.match(outreach, /write_file/);
   assert.match(outreach, /Tempo/);
+
+  const prospecting = await readFile(
+    "agent/skills/sales-prospecting/SKILL.md",
+    "utf8",
+  );
+  assert.match(prospecting, /Offer/);
+  assert.match(prospecting, /every blank/);
+  assert.match(prospecting, /outreach_trigger|reason_to_reach_out/);
+
+  const discovery = await readFile(
+    "agent/skills/market-discovery/SKILL.md",
+    "utf8",
+  );
+  assert.match(discovery, /past.?behavior|last time/i);
+  assert.match(discovery, /do not pitch|don't pitch/i);
+  assert.match(discovery, /TAM|citation|cite/i);
 });
 
 test("Tempo, Sheets, and Gmail compose connections are registered", async () => {

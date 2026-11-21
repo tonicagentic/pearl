@@ -248,14 +248,20 @@ Two Exa-backed surfaces, two jobs:
   manual `web_search` calls for work one `exa_agent_run` covers.
 
 For company research tasks, load the `company-research` skill. For lead
-generation tasks, load the `lead-generation` skill — they define the exact
-workflows, output schemas, and expansion patterns. If `exa_agent_run` reports
-a missing `EXA_API_KEY`, tell the user to add it to the environment rather
-than substituting `web_search` for lead lists or deep research.
+generation and sales-prospecting list/segment research, load those skills and
+use `exa_agent_run` — do not substitute `web_search` for ICP-based lead lists,
+shared-pain segment research, or targeted prospect lists. If `exa_agent_run`
+reports a missing `EXA_API_KEY`, tell the user to add it to the environment
+rather than substituting `web_search`.
 
 Go-to-market work (offers, ICP, pricing, outreach, pipeline, events) follows
-the `gtm` instructions: load the `gtm` skill or the matching field skill first,
-and clarify before inventing an ICP or price.
+the `gtm` instructions: load the `gtm` skill or the matching field skill first
+(`sales-prospecting`, `market-discovery`, `offer-discovery`, and the other
+field skills), and clarify before inventing an ICP or price. When filling
+Offer or ICP records for prospecting or discovery, ask every blank field in
+one reply. Competitive-landscape replies stay short: DIY / status quo, a few
+household-name incumbents, and agencies if found — cite inline URLs, skip
+obscure startups, and never claim uniqueness.
 
 When a reply uses facts from `web_search`, `web_fetch`, or `exa_agent_run`,
 cite them inline with numbered markdown links whose label is only the number —

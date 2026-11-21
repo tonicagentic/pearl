@@ -1,5 +1,5 @@
 ---
-description: Use when generating leads, building prospect lists, finding companies to sell to, doing outbound research, or ICP-based company discovery. Triggers on "leads", "lead gen", "prospect list", "find companies", "ICP", "outbound list".
+description: Use when generating leads or building a company prospect list from a stated industry or ICP — "leads", "lead gen", "lead list", "find companies", "outbound list", "build a lead list of N". Prefer this over sales-prospecting when the user already named the sector and asked for a scored company list with fields. If they are still defining the offer or ICP (sales prospecting, who to sell to, blanks everywhere), load sales-prospecting first.
 ---
 
 # Lead Generation with the Exa Agent
@@ -10,15 +10,32 @@ list you want plus the per-company fields, and Exa handles query decomposition,
 searching, verification, enrichment, and structured output internally. You do
 NOT need to orchestrate parallel searches, subagents, or manual deduplication.
 
+## Before you run
+
+If the user is still choosing who to sell to (blank industry, "start sales
+prospecting", "who could I sell to") with no sector given, load
+`sales-prospecting` first. **Never** invent industry, size, role, or problem.
+
+If they already named the industry/sector and asked for a lead list of N
+companies with fields, **run `exa_agent_run` in this turn** even when Offer or
+some ICP fields are blank — put "not specified" for missing fields in the
+query rather than stopping to interview.
+
+When the user wants a targeted list and says fit matters more than volume (or
+gives no count), default `maxItems` to at most 15 — not 200. When they give an
+explicit count (e.g. 5 or 10), use that count.
+
 ## Tool Restriction
 
-Use `exa_agent_run` for the lead list itself. Do NOT use generic `web_search`
-for building the list.
+Use `exa_agent_run` for the lead list itself. Do NOT use generic `web_search`,
+`bash`, or a subagent for building the list or for shared-pain segment
+research. When the user has confirmed the ICP and asked for a list, call
+`exa_agent_run` as the first research tool in that turn.
 
 ## Workflow
 
 ```
-1. Confirm the ICP with the user (one small low-effort run if research is needed)
+1. Confirm the offer and ICP with the user (ask blanks — do not research them)
 2. Call exa_agent_run with preset "leads" and maxItems
 3. If the run is still in progress, call exa_agent_run again with the same runId
 4. Read output.structured.companies from the result
@@ -26,37 +43,34 @@ for building the list.
 6. Optional: expand with follow-up runs (previousRunId + exclusions)
 ```
 
-## Step 1: Understand the ICP
+## Step 1: Confirm the ICP
 
-When the user says something like "Make a list of 200 leads for [company]",
-first establish the Ideal Customer Profile. If the user already described the
-ICP, confirm it. If not, run one small low-effort run to research it:
+When the user says something like "Make a list of leads for [company]" or
+"build a prospect list":
 
-```
-exa_agent_run {
-  "query": "Research {company_name}: what they sell, who their existing customers are, and what their ideal customer profile is.",
-  "effort": "low",
-  "listItemFields": [
-    { "name": "company_description", "description": "What the company does in 2 sentences or less" },
-    { "name": "icp_description", "description": "Concise ICP description that clearly defines target companies" },
-    { "name": "sub_verticals", "description": "Sub-verticals breaking down the ICP" },
-    { "name": "useful_enrichments", "description": "Enrichment columns useful for filtering high-signal companies" }
-  ]
-}
-```
+1. Restate the Offer and ICP records from what they already said.
+2. If any field is blank, ask for every blank in one reply and wait. Do not call
+   `exa_agent_run` yet.
+3. If the Offer and ICP are already filled in this turn (or the prior turn just
+   filled them) and the user asked to build a list, **call `exa_agent_run`
+   immediately** — do not stop to re-confirm list size or exclusions. Default
+   `maxItems` to ≤ 15 when they said fit over volume or gave no count. Only ask
+   about exclusions or a larger count when those answers are still missing and
+   would change the run.
 
-Present the ICP to the user and confirm:
-
-- Is the ICP description accurate?
-- Any companies to exclude (competitors, existing customers)?
-- How many leads do they want? (default 200)
-- Any specific enrichment columns they care about?
+Do **not** run a low-effort Exa job to invent an ICP for them.
 
 ## Step 2: Create the Lead-Gen Run
 
 Use the `leads` preset — it applies the standard scored fields and the tool
 builds the JSON schema internally. Set `maxItems` to the list size and `effort`
-for depth (`low` by default; higher for large or hard lists).
+for depth (`low` by default; higher for large or hard lists). Put the offer
+name and the four ICP phrases in `query` so the run is driven by what the user
+confirmed.
+
+For prospecting lists that need a reason to reach out, also pass
+`listItemFields` that include a trigger field named `outreach_trigger`,
+`trigger`, or `reason_to_reach_out`.
 
 **Fields the preset returns per company:**
 
@@ -70,10 +84,13 @@ Example:
 
 ```
 exa_agent_run {
-  "query": "Find 100 companies matching this ICP: {icp_description}. Prioritize {sub_verticals}. For each company, score ICP fit 1-10 for {user_company}.",
+  "query": "Find companies matching this ICP: industry {industry}, size {size}, buyer {role}, problem {problem}. Offer: {offer_name}. Prefer fit over volume.",
   "preset": "leads",
-  "maxItems": 100,
+  "maxItems": 10,
   "effort": "low",
+  "listItemFields": [
+    { "name": "outreach_trigger", "description": "Public reason to reach out (new hire, expansion, post) or note none found" }
+  ],
   "systemPrompt": "Prefer official company sites and recent funding announcements. Do not include duplicates or subsidiaries of the same parent company.",
   "exclusions": [
     { "company_name": "{competitor_1}" },
@@ -90,8 +107,10 @@ escape hatches.
 
 ## Step 3: Read Output
 
-Read `output.structured.items` from the result. Do not paste full raw output
-into the conversation — summarize the list for the user.
+Read `output.structured.items` or `output.structured.companies` from the
+result. Do not paste full raw output into the conversation — summarize the
+list for the user. Do not invent emails, mutual connections, or customer
+results. Mark unverified contact details as unverified.
 
 ## Step 4: Expanding the List
 

@@ -4,18 +4,25 @@ When the task is go-to-market — defining an offer, choosing a market or ICP,
 pricing and terms, outreach, proposals, pipeline tracking, or events and
 meetings — call `load_skill` for the matching skill before producing anything.
 Start with `gtm` when the stage is unclear; otherwise load the field skill that
-matches the request (`offer-discovery`, `market-positioning`,
-`pricing-and-terms`, `outreach-and-messaging`, or `events-and-meetings`).
-Existing skills still apply: `lead-generation` for prospect lists and
-`company-research` for deep dives on one company.
+matches the request (`offer-discovery`, `sales-prospecting`, `market-discovery`,
+`market-positioning`, `pricing-and-terms`, `outreach-and-messaging`, or
+`events-and-meetings`). Existing skills still apply: `lead-generation` for
+prospect lists from a confirmed ICP and `company-research` for deep dives on
+one company.
 
 ## Clarify before inventing
 
 Never invent an ICP, price, discount, guarantee, case study, customer name, or
-metric the user did not give you. If the answer changes the deliverable, ask
-the one or two questions that unblock it, at the end of the reply, and wait.
-Offers, markets, and prices are the user's decisions; you propose options and
-mark them as options.
+metric the user did not give you. Offers, markets, and prices are the user's
+decisions; you propose options and mark them as options.
+
+If the answer changes the deliverable, ask clarifying questions at the end of
+the reply and wait. For most GTM stages, ask at most one or two questions.
+
+**Exception — prospecting and discovery records:** when filling an Offer record
+(Name, Kind, What it does, Pain) or an ICP record (Industry, Company size,
+Buyer role, Problem) for `sales-prospecting` or `market-discovery`, ask for
+**every blank field in that same reply**. Still do not invent answers.
 
 ## Where pipeline data lives
 
@@ -34,10 +41,12 @@ mark them as options.
 
 ## Market lists
 
-Use `exa_agent_run` (through the `lead-generation` skill) for company and
-prospect lists, and `web_search` only for a single quick fact. Confirm the ICP
-first. Cite what you found; do not fabricate contacts or emails. Mark any
-contact detail you could not verify as unverified.
+Use `exa_agent_run` (through `sales-prospecting` / `lead-generation`) for
+company and prospect lists, and `web_search` only for a single quick fact.
+Confirm the offer and ICP first — ask blanks; do not research an invented ICP.
+Cite what you found; do not fabricate contacts or emails. Mark any contact
+detail you could not verify as unverified. Prefer short lists (≤ 15) when the
+user wants fit over volume.
 
 ## Email
 

@@ -14,11 +14,19 @@ export const PEARL_LANE_LABELS: Record<PearlLane, string> = {
   think: "Thinking this through",
 };
 
+// Avoid bare "email"/"mail" — "companies to email" is a prospecting ask, not
+// a mailbox tool ask. Prefer gmail/inbox or "my email" / "send an email".
 const TOOL_CUES =
-  /\b(calendar|gmail|inbox|email|mail|weather|look\s*up|search|check\s+my|add\s+to|send\s+|schedule|remind|notification|browser|open\s+the\s+page|fetch)\b/i;
+  /\b(calendar|gmail|inbox|my\s+e-?mails?|send\s+(?:an?\s+)?e-?mail|weather|look\s*up|search|check\s+my|add\s+to|send\s+|schedule|remind|notification|browser|open\s+the\s+page|fetch)\b/i;
 
 const ANALYSIS_CUES =
-  /\b(summarize|analyse|analyze|diligence|contract|memo|briefing|financial|finance|legal|operations|ops\b|research\s+this|compare\s+these|review\s+this\s+(doc|document|pdf|deck|spreadsheet))\b/i;
+  /\b(summarize|analyse|analyze|diligence|contract|memo|briefing|financial|finance|legal|operations|ops\b|research\s+this|compare\s+these|review\s+this\s+(doc|document|pdf|deck|spreadsheet)|lead\s+list|lead\s+gen|prospect(?:ing|s)?|ideal\s+customer|\bICP\b|market\s+size|competitive\s+landscape|pricing\s+landscape|sales\s+prospecting|who\s+else\s+has|kinds\s+of\s+customers|icp_fit|outbound\s+list|fit\s+(?:over|matters)|targeted\s+(?:company\s+)?list|company\s+list|share(?:s|d)?\s+(?:that\s+)?pain|unplanned\s+compressor|customer\s+kinds|workspace\s+file)\b/i;
+
+/** Research / GTM asks that must keep the Exa analysis surface even when a
+ *  weak tool or prose cue also matches (e.g. "write the offer to a file",
+ *  "not a list of companies to email"). */
+const STRONG_ANALYSIS_CUES =
+  /\b(lead\s+list|lead\s+gen|prospect(?:ing|s)?|ideal\s+customer|\bICP\b|market\s+size|competitive\s+landscape|pricing\s+landscape|sales\s+prospecting|who\s+else\s+has|kinds\s+of\s+customers|icp_fit|outbound\s+list|fit\s+(?:over|matters)|targeted\s+(?:company\s+)?list|company\s+list|share(?:s|d)?\s+(?:that\s+)?pain|unplanned\s+compressor|customer\s+kinds|diligence|summarize|analyse|analyze)\b/i;
 
 const PROSE_CUES =
   /\b(draft|rewrite|revise|edit\s+this|think\s+(this|it)\s+through|help\s+me\s+write|write\s+(a|an|the|my)|tone|voice|essay|blog\s+post)\b/i;
@@ -37,11 +45,18 @@ export function classifyPearlHeuristic(text: string): PearlLane | null {
   const hasTool = TOOL_CUES.test(trimmed);
   const hasAnalysis = ANALYSIS_CUES.test(trimmed) || longPaste;
   const hasProse = PROSE_CUES.test(trimmed);
+  const strongAnalysis = STRONG_ANALYSIS_CUES.test(trimmed);
 
-  // Prose ask wins over a bare long paste.
-  if (hasProse && !hasTool) return "think";
+  // Strong research / GTM cues need the Exa analysis surface. Prefer them over
+  // prose ("Write the offer to a workspace file") and over tool false-positives.
+  if (strongAnalysis) return "analysis";
+
+  // Prose ask wins over a bare long paste (but not over strong analysis above).
+  if (hasProse && !hasTool && !hasAnalysis) return "think";
+  if (hasProse && !hasTool && hasAnalysis) return "analysis";
   if (hasTool && !hasProse && !hasAnalysis) return "tools";
   if (hasAnalysis && !hasTool && !hasProse) return "analysis";
+  // Mixed tool + analysis without strong research phrasing → tools (gmail + glance).
   if (hasTool && hasAnalysis && !hasProse) return "tools";
 
   // Short chat with no action or writing cue.

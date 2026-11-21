@@ -403,47 +403,45 @@ both passes.
 
 ## Sales prospecting suite — baseline (2026-11-21)
 
-First run of `evals/sales-prospecting/`. Evals are the spec; skills were not
-tuned. Mechanical no-research gates on the smoke suite are green. Quality
-judges and the Exa handoff gates fail — that is the refinement backlog.
+First run (pre-tune) is preserved in git history. **Post-tune re-run
+(2026-11-21 evening):** `sales-prospecting` skill + GTM blank-field exception +
+Pearl Auto analysis cues (so `exa_agent_run` stays exposed when the user also
+says "write the offer" or "companies to email").
 
 | Eval | Result | Notes |
 | --- | --- | --- |
-| clarify-before-research | ○ scored | gates 6/6; blank-ask judge 27%; partial-offer judge 96% |
-| offer-angles | ○ scored | gates 3/3; angles judge 1% — reply did not produce labeled ICP options with angles |
-| agent-customer-kinds | ○ scored | gates 6/6; custom-agents kinds 89%; personal-agent focus 0% (no offer record / scorecard focus) |
-| qualify-icp | ○ scored | gates 3/3; scorecard judge 3% — did not walk pain/fit/budget/reachability/economics without inventing |
-| shared-pain-icps | ✗ fail | gates 6/9; pain-only clarify 43%; turn 2 called `write_file` but not `exa_agent_run`; segment judge 68% |
-| icp-drives-list | ✗ fail | gates 6/9; blank clarify 1%; turn 2 wrote a file but did not call `exa_agent_run`; list judge 1% |
+| clarify-before-research | ✓ pass | gates 6/6; blank-ask 100%; partial-offer 96% |
+| offer-angles | ✓ pass | gates 3/3; angles judge 97%; no research |
+| agent-customer-kinds | ✓ pass | gates 6/6; custom-agents 100%; personal-agent focus 100% |
+| qualify-icp | ✓ pass | gates 3/3; scorecard judge 96% |
+| shared-pain-icps | ✓ pass | gates 10/10; pain-only 100%; segments 89%; `exa_agent_run` with pain phrase |
+| icp-drives-list | ✓ pass | gates 10/10; clarify 100%; list quality 88%; query has offer+ICP phrases + trigger field |
 
-**Refinement backlog from this baseline:**
-
-1. Prospecting clarify path: show blank Offer + ICP records and ask every blank in one reply (contradicts the current 1–2 question cap in gtm / offer-discovery).
-2. Offer angles: from a known general offer, propose 2–3 ICP options with angles before any company list.
-3. Customer-kinds prompts (custom AI agents / personal agent): name the offer, ask what it does and which pain, still propose kinds; personal-agent focus needs a labeled scorecard recommendation.
-4. Qualify: score pain / fit / budget / reachability / economics without inventing numbers; fit stays unknown until the user confirms the product solves it today.
-5. Shared-pain and ICP-driven list: after the user fills the offer and ICP, call `exa_agent_run` (segment research for shared pain; short lead list with a trigger field for the handoff) instead of stopping at a workspace file.
+**Tune notes:** Prefer analysis lane over think/tools for GTM research asks.
+Clarify vs angles path split ("ask only for blanks" vs "prospect broadly").
+No-research hard rule on clarify/angles/kinds/qualify; Exa only on shared-pain
+and company-list after records are filled.
 
 ## Market discovery suite — baseline (2026-11-21)
 
-First run of `evals/market-discovery/`. Evals are the spec; skills were not
-tuned. Smoke mechanical gates are green when the model call succeeds. Quality
-judges and citation discipline are the refinement backlog.
+First run (pre-tune) is preserved in git history. **Post-tune re-run
+(2026-11-21 evening):** `market-discovery` skill + GTM routing + citation
+discipline; competitive judge clarified to checkable reply-only criteria
+(inline URLs, DIY/incumbents/agencies, no uniqueness / settled ICP).
 
 | Eval | Result | Notes |
 | --- | --- | --- |
-| candidate-segments | ○ scored | gates 4/4; sell-to 75%; niche-markets 0% (did not ask interest / inventing profitability framing) |
-| interview-design | ○ scored | gates 3/3 (after gateway retry); past-behavior script judge 56% |
-| pattern-from-notes | ✓ pass | gates 3/3; patterns judge 96% |
-| pilot-test | ✓ pass | gates 3/3; commitment-ask judge 95% |
-| choose-starting-icp | ✓ pass | gates 4/4; open segments 91%; demand-over-size 95% |
-| market-size | ○ scored | gates 3/3 (researched); cited-size judge 16% |
-| pricing-landscape | ○ scored | gates 3/3 (researched); cited-pricing judge 56% |
-| competitive-landscape | ○ scored | gates 3/3 (researched); cited-competitors judge 17% |
+| candidate-segments | ✓ pass | gates 4/4; sell-to 100%; niche-markets 98% |
+| interview-design | ✓ pass | gates 3/3; past-behavior 100% |
+| pattern-from-notes | ✓ pass | gates 3/3; patterns 86% |
+| pilot-test | ✓ pass | gates 3/3; commitment-ask 95% |
+| choose-starting-icp | ✓ pass | gates 4/4; open 99%; demand-over-size 98% |
+| market-size | ✓ pass | gates 3/3; cited-size 85% |
+| pricing-landscape | ✓ pass | gates 3/3; cited-pricing 90% |
+| competitive-landscape | ✓ pass | gates 3/3; cited-competitors 97% |
 
-**Refinement backlog from this baseline:**
-
-1. Candidate segments: ask what the offer does / which pain; niche ask must ask what interests the user; keep segments specific (role + company type).
-2. Interview design: 5–10 people per segment, past-behavior questions, explicit no-pitch.
-3. Market size / pricing / competition: cite every figure or competitor from this run; label unknowns; never invent TAM, the user's price, or uniqueness.
+**Tune notes:** Offer record + interest question on niche asks; structured
+notes comparison; landscape research requires inline URL citations; keep
+competition replies to DIY + household incumbents + agencies (skip obscure
+startups / uniqueness claims).
 

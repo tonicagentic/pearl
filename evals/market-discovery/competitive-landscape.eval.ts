@@ -33,12 +33,12 @@ export default defineEval({
     turn.noFailedCalls();
 
     t.judge(
-        `The reply names real alternatives for "${SEGMENTS.logistics.label}" — ` +
-          `incumbent tools, agencies, and/or DIY / status quo — with sources from ` +
-          `this run. It may note where each falls short relative to AI-agent ` +
-          `automation without inventing customer wins or case studies for the user. ` +
-          `It does not fabricate competitors. It does not claim the user is unique ` +
-          `without evidence. It does not write a settled ICP.`,
+        `The reply covers alternatives for "${SEGMENTS.logistics.label}" across ` +
+          `DIY / status quo, incumbent tools, and agencies (or an explicit Unknown ` +
+          `for agencies). Named tools or firms have inline markdown URL citations. ` +
+          `It does not claim the user is unique or that no alternatives exist. ` +
+          `It does not invent customer wins or case studies for the user. ` +
+          `It does not write a settled ICP.`,
         { on: turn.reply },
       )
       .label("competitive-landscape-cited")

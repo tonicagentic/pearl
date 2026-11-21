@@ -5,28 +5,41 @@ description: Use when the user wants go-to-market help and the stage is unclear 
 # GTM director
 
 Work the stages in order, and start at the earliest stage that is still
-unknown. Skip a stage only when the user has already answered it. Ask at most
-one or two questions, at the end of the reply, only when the answer changes the
-deliverable. Never invent an ICP, price, customer, or metric.
+unknown. Skip a stage only when the user has already answered it. Never invent
+an ICP, price, customer, or metric.
+
+Ask clarifying questions at the end of the reply only when the answer changes
+the deliverable. For most stages, ask at most one or two. **Exception:** when
+filling Offer or ICP records for `sales-prospecting` or `market-discovery`, ask
+every blank field in that same reply.
 
 ## Stages
 
 1. **Offer** — what is sold, to whom, for what outcome → `offer-discovery`
 2. **Clarify** — fill gaps in the offer with the user before going further
-3. **Market** — segments, ICP, positioning, competitors → `market-positioning`
-4. **Pricing and terms** — price model, scope, guarantees, contract terms →
+3. **Discover** — who has a problem worth solving (candidates, interviews,
+   size/competition before committing) → `market-discovery`
+4. **Prospect** — offer + ICP records, angles, qualify, short lists →
+   `sales-prospecting`
+5. **Market / position** — confirmed segment positioning → `market-positioning`
+6. **Pricing and terms** — price model, scope, guarantees, contract terms →
    `pricing-and-terms`
-5. **Materials** — one-pager, deck outline, proposal, case-study asks; written
+7. **Materials** — one-pager, deck outline, proposal, case-study asks; written
    as workspace files
-6. **Pipeline** — where leads and deals live (see below)
-7. **Outreach** — sequences, drafts, follow-ups → `outreach-and-messaging`
+8. **Pipeline** — where leads and deals live (see below)
+9. **Outreach** — sequences, drafts, follow-ups → `outreach-and-messaging`
 
 Events, conference prep, and meeting briefs or follow-ups →
 `events-and-meetings`.
 
 ## Routing to existing skills
 
-- Build a prospect or company list from an ICP → `lead-generation`
+- Build a prospect or company list from a **confirmed** offer and ICP →
+  `sales-prospecting` (then `lead-generation` mechanics)
+- Still defining who to sell to, "kinds of customers" for a named product,
+  qualify an ICP, shared-pain ICPs, prospect broadly → `sales-prospecting`
+- Capability-first discovery ("I know how to build X"), niche markets,
+  interviews, market size / competition before committing → `market-discovery`
 - Deep dive on one named company or competitor → `company-research`
 - Voice for written copy → the user's house style skills when they apply
 
@@ -43,7 +56,8 @@ State which home you chose and why. Do not duplicate rows in both.
 
 The deliverable is a file in the workspace, not a long chat reply. Chat gets a
 one-line note and a `file://` link. Label every assumption you had to make so
-the user can correct it.
+the user can correct it. Prospecting and discovery replies that show Offer/ICP
+records and ask blanks may stay in chat until the user confirms.
 
 ## References
 

@@ -61,6 +61,45 @@ describe("classifyPearlHeuristic", () => {
     );
   });
 
+  it("routes lead-gen and prospecting cues to analysis (exa surface)", () => {
+    assert.equal(
+      classifyPearlHeuristic(
+        "Build a lead list of 5 AI infrastructure startups in San Francisco.",
+      ),
+      "analysis",
+    );
+    assert.equal(
+      classifyPearlHeuristic(
+        "I want to start sales prospecting. Build me a targeted list.",
+      ),
+      "analysis",
+    );
+  });
+
+  it("keeps analysis when prospecting also asks to write a file or avoid email lists", () => {
+    // "Write the offer…" is a prose cue; must not steal the Exa surface.
+    assert.equal(
+      classifyPearlHeuristic(
+        "Here is the filled offer and the ICP I chose:\n\n" +
+          "Offer\nKind: general offer\nName: maintenance monitoring\n" +
+          "ICP\nIndustry: industrial refrigeration\n" +
+          "Build a targeted company list. Fit matters more than volume. " +
+          "Write the offer to a workspace file. Use effort low.",
+      ),
+      "analysis",
+    );
+    // "companies to email" must not route to the tools lane.
+    assert.equal(
+      classifyPearlHeuristic(
+        "Here is the offer:\n\nOffer\nName: maintenance monitoring\n" +
+          "Pain: unplanned compressor downtime\n\n" +
+          "Find other ideal customers who share that pain. I want customer kinds " +
+          "(industry and buyer role), not a list of companies to email. Use effort low.",
+      ),
+      "analysis",
+    );
+  });
+
   it("routes drafting cues to think", () => {
     assert.equal(
       classifyPearlHeuristic("Draft a blog post about our launch"),

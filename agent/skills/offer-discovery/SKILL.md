@@ -15,7 +15,10 @@ the user has chosen. Your job is to draw it out of the user, not to invent it.
    buys and who uses, what is included and excluded, how delivery works, what
    proof exists, and what the buyer does today instead.
 3. Ask only the one or two unknowns that change the offer most, at the end of
-   the reply. Stop and wait.
+   the reply. Stop and wait. (If the user is in sales prospecting or market
+   discovery and needs the short Offer record filled, load `sales-prospecting`
+   or `market-discovery` instead — those skills ask every blank Offer/ICP field
+   in one reply.)
 4. Once answered, write the offer brief to a workspace file.
 
 ## Offer brief
