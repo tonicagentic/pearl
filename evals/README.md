@@ -71,6 +71,50 @@ editing**. Every eval below traces to a requirement in one of them.
 | `citations-verified` | Citable-claim request → `web_search`, findings tied to real named sources; fabricated sources fail. | gate (`web_search`) + judge |
 | `section-feedback` | Mid-draft section → specific quoted fixes, what works, a next step; no unprompted rewrite. | judge gate |
 
+### `sales-prospecting/` — offer, ICP angles, qualify, then a short list
+
+One offer can point at several ideal customers. A company list starts only after
+the user has picked one customer and the offer is known. Shared phrases live in
+`sales-prospecting/fixtures/offer.ts`.
+
+| Eval | Flow it pins | Layer |
+| --- | --- | --- |
+| `clarify-before-research` | Blank prospecting ask → blank Offer + ICP records, every blank asked in one turn, no research; filled offer with incomplete ICP asks only for blank customer fields. | gates + judge |
+| `offer-angles` | Known general offer, no chosen ICP → two or three customer options with angles; no company list. | gates + judge |
+| `agent-customer-kinds` | "What kinds of customers could we sell custom AI agents to?" / "Which kinds of customers should we focus on marketing of a personal agent to?" → offer record, kinds with angles, optional focus + scorecard; no research. | gates + judge |
+| `qualify-icp` | Filled offer + ICP → pain / fit / budget / reachability / economics without inventing numbers or researching. | gates + judge |
+| `shared-pain-icps` | Pain-only ask clarifies the offer; then segment research finds other ICPs who share that pain (not a company lead list). | gates + judge (`costs-exa`) |
+| `icp-drives-list` | Clarify blank ask → filled offer + chosen ICP drive a short company-list query with a trigger per row. | gates + judge (`costs-exa`) |
+
+```bash
+pnpm exec eve eval sales-prospecting/clarify-before-research sales-prospecting/offer-angles sales-prospecting/agent-customer-kinds sales-prospecting/qualify-icp
+pnpm exec eve eval sales-prospecting/shared-pain-icps sales-prospecting/icp-drives-list
+```
+
+### `market-discovery/` — who has a problem worth solving before committing
+
+Finds candidate segments and validates them (interviews, patterns, pilots)
+before locking an ICP. Market size, pricing landscape, and competition are
+researched with citations when asked. Distinct from `sales-prospecting/`
+(which builds a company list after an ICP is chosen). Fixtures in
+`market-discovery/fixtures/discovery.ts`.
+
+| Eval | Flow it pins | Layer |
+| --- | --- | --- |
+| `candidate-segments` | "who could I sell to?" / niche markets → 2–3 specific role+company segments as hypotheses; ask offer blanks; no company list. | gates + judge |
+| `interview-design` | Validate two segments → 5–10 past-behavior interviews per segment, no pitch. | gates + judge |
+| `pattern-from-notes` | Pasted interview notes → compare pain/cost/urgency/budget; no invented quotes. | gates + judge |
+| `pilot-test` | Strongest segment → small paid pilot / commitment of money, time, or access. | gates + judge |
+| `choose-starting-icp` | Evidence in → recommend demand+reachability over largest-sounding market; ICP as proposal. | gates + judge |
+| `market-size` | Named segments → researched size with citations or labeled unknowns; no invented TAM; no ICP lock. | gates + judge (`costs-exa`) |
+| `pricing-landscape` | What buyers pay today for workarounds; distinct from user's price; cited. | gates + judge (`costs-exa`) |
+| `competitive-landscape` | Alternatives (tools, agencies, status quo) with sources; no fabricated competitors. | gates + judge (`costs-exa`) |
+
+```bash
+pnpm exec eve eval market-discovery --tag smoke
+pnpm exec eve eval market-discovery/market-size market-discovery/pricing-landscape market-discovery/competitive-landscape
+```
+
 ## Infrastructure each suite depends on
 
 | Capability | Status | Pinned by |
@@ -356,4 +400,50 @@ PDFs flow through a template-local `PdfAttachmentAdapter` (data URL) in
 
 No regressions elsewhere: research/ and the smoke tier stayed green through
 both passes.
+
+## Sales prospecting suite — baseline (2026-11-21)
+
+First run of `evals/sales-prospecting/`. Evals are the spec; skills were not
+tuned. Mechanical no-research gates on the smoke suite are green. Quality
+judges and the Exa handoff gates fail — that is the refinement backlog.
+
+| Eval | Result | Notes |
+| --- | --- | --- |
+| clarify-before-research | ○ scored | gates 6/6; blank-ask judge 27%; partial-offer judge 96% |
+| offer-angles | ○ scored | gates 3/3; angles judge 1% — reply did not produce labeled ICP options with angles |
+| agent-customer-kinds | ○ scored | gates 6/6; custom-agents kinds 89%; personal-agent focus 0% (no offer record / scorecard focus) |
+| qualify-icp | ○ scored | gates 3/3; scorecard judge 3% — did not walk pain/fit/budget/reachability/economics without inventing |
+| shared-pain-icps | ✗ fail | gates 6/9; pain-only clarify 43%; turn 2 called `write_file` but not `exa_agent_run`; segment judge 68% |
+| icp-drives-list | ✗ fail | gates 6/9; blank clarify 1%; turn 2 wrote a file but did not call `exa_agent_run`; list judge 1% |
+
+**Refinement backlog from this baseline:**
+
+1. Prospecting clarify path: show blank Offer + ICP records and ask every blank in one reply (contradicts the current 1–2 question cap in gtm / offer-discovery).
+2. Offer angles: from a known general offer, propose 2–3 ICP options with angles before any company list.
+3. Customer-kinds prompts (custom AI agents / personal agent): name the offer, ask what it does and which pain, still propose kinds; personal-agent focus needs a labeled scorecard recommendation.
+4. Qualify: score pain / fit / budget / reachability / economics without inventing numbers; fit stays unknown until the user confirms the product solves it today.
+5. Shared-pain and ICP-driven list: after the user fills the offer and ICP, call `exa_agent_run` (segment research for shared pain; short lead list with a trigger field for the handoff) instead of stopping at a workspace file.
+
+## Market discovery suite — baseline (2026-11-21)
+
+First run of `evals/market-discovery/`. Evals are the spec; skills were not
+tuned. Smoke mechanical gates are green when the model call succeeds. Quality
+judges and citation discipline are the refinement backlog.
+
+| Eval | Result | Notes |
+| --- | --- | --- |
+| candidate-segments | ○ scored | gates 4/4; sell-to 75%; niche-markets 0% (did not ask interest / inventing profitability framing) |
+| interview-design | ○ scored | gates 3/3 (after gateway retry); past-behavior script judge 56% |
+| pattern-from-notes | ✓ pass | gates 3/3; patterns judge 96% |
+| pilot-test | ✓ pass | gates 3/3; commitment-ask judge 95% |
+| choose-starting-icp | ✓ pass | gates 4/4; open segments 91%; demand-over-size 95% |
+| market-size | ○ scored | gates 3/3 (researched); cited-size judge 16% |
+| pricing-landscape | ○ scored | gates 3/3 (researched); cited-pricing judge 56% |
+| competitive-landscape | ○ scored | gates 3/3 (researched); cited-competitors judge 17% |
+
+**Refinement backlog from this baseline:**
+
+1. Candidate segments: ask what the offer does / which pain; niche ask must ask what interests the user; keep segments specific (role + company type).
+2. Interview design: 5–10 people per segment, past-behavior questions, explicit no-pitch.
+3. Market size / pricing / competition: cite every figure or competitor from this run; label unknowns; never invent TAM, the user's price, or uniqueness.
 
