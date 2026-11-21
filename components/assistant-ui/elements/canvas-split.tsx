@@ -9,6 +9,7 @@ import {
   MonitorIcon,
   XIcon,
 } from "lucide-react";
+import { WorkspaceFileLink } from "@/components/assistant-ui/elements/workspace-file-link";
 import { cn } from "@/lib/utils";
 import { field, ghostButton, mono, paper } from "@/lib/surfaces";
 
@@ -17,6 +18,8 @@ export type CanvasTabItem = {
   readonly label: string;
   readonly kind: "file" | "page" | "desktop";
   readonly active: boolean;
+  /** Workspace path for file tabs — enables right-click Save. */
+  readonly path?: string;
 };
 
 export function CanvasSplit({ className, ...props }: ComponentProps<"div">) {
@@ -200,14 +203,25 @@ export function CanvasTabStrip({
                   : "text-foreground/55 hover:bg-foreground/[0.04]",
               )}
             >
-              <button
-                type="button"
-                onClick={() => onSelectTab(tab.id)}
-                className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-              >
-                <Icon className="size-3 shrink-0 opacity-60" />
-                <span className="truncate font-medium">{tab.label}</span>
-              </button>
+              {tab.kind === "file" && tab.path ? (
+                <WorkspaceFileLink
+                  path={tab.path}
+                  onOpen={() => onSelectTab(tab.id)}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left no-underline"
+                >
+                  <Icon className="size-3 shrink-0 opacity-60" />
+                  <span className="truncate font-medium">{tab.label}</span>
+                </WorkspaceFileLink>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onSelectTab(tab.id)}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                >
+                  <Icon className="size-3 shrink-0 opacity-60" />
+                  <span className="truncate font-medium">{tab.label}</span>
+                </button>
+              )}
               <button
                 type="button"
                 aria-label={`Close ${tab.label}`}

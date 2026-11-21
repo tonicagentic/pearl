@@ -161,6 +161,20 @@ describe("toActivityStep", () => {
     assert.equal(settled.verb, "Used");
   });
 
+  it("writes SVGs as Writing / Wrote", () => {
+    const live = toActivityStep(
+      tool("generate_svg", { filePath: "/workspace/mark.svg" }, { type: "running" }),
+      { live: true },
+    );
+    assert.equal(live.verb, "Writing");
+    assert.equal(live.chip, "mark.svg");
+
+    const settled = toActivityStep(
+      tool("generate_svg", { filePath: "/workspace/mark.svg" }),
+    );
+    assert.equal(settled.verb, "Wrote");
+  });
+
   it("lists glob as Listed, not Explored, on the row", () => {
     assert.equal(toActivityStep(tool("glob", { pattern: "**/*.ts" })).verb, "Listed");
   });

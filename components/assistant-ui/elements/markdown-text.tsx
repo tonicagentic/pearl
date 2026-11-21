@@ -24,11 +24,15 @@ import { CheckIcon, CopyIcon, FileIcon } from "lucide-react";
 
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
-import { useCanvas } from "@/components/assistant-ui/elements/canvas-context";
 import {
   FilePreviewCard,
   isFilePreviewCardElement,
 } from "@/components/assistant-ui/elements/file-preview-card";
+import { WorkspaceFileLink } from "@/components/assistant-ui/elements/workspace-file-link";
+import {
+  WorkspaceSvgPreview,
+  isWorkspaceSvgPath,
+} from "@/components/assistant-ui/elements/workspace-svg-preview";
 import { MermaidBlock } from "@/components/assistant-ui/elements/mermaid-block";
 import { cn } from "@/lib/utils";
 import {
@@ -86,12 +90,9 @@ const FilePathLink: FC<{ path: string; children: ReactNode }> = ({
   path,
   children,
 }) => {
-  const { openPath } = useCanvas();
   return (
-    <button
-      type="button"
-      title={`Open ${path}`}
-      onClick={() => openPath(path)}
+    <WorkspaceFileLink
+      path={path}
       className="group/path relative inline-flex max-w-full items-baseline align-baseline"
     >
       {children}
@@ -99,7 +100,7 @@ const FilePathLink: FC<{ path: string; children: ReactNode }> = ({
         aria-hidden
         className="text-muted-foreground/0 group-hover/path:text-muted-foreground/70 ms-1 inline-block size-3 shrink-0 self-center transition-colors"
       />
-    </button>
+    </WorkspaceFileLink>
   );
 };
 
@@ -187,7 +188,9 @@ const defaultComponents = memoizeMarkdownComponents({
     const hasCard = kids.some(
       (child) =>
         isValidElement(child) &&
-        (child.type === FilePreviewCard || isFilePreviewCardElement(child)),
+        (child.type === FilePreviewCard ||
+          isFilePreviewCardElement(child) ||
+          child.type === WorkspaceSvgPreview),
     );
     const Comp = hasCard ? "div" : "p";
     return (
@@ -232,6 +235,15 @@ const defaultComponents = memoizeMarkdownComponents({
 
     if (href?.startsWith("file://")) {
       const path = decodeURIComponent(href.slice("file://".length));
+      if (isWorkspaceSvgPath(path)) {
+        return (
+          <WorkspaceSvgPreview
+            path={path}
+            label={label || path}
+            className={className}
+          />
+        );
+      }
       return <FilePreviewCard path={path} className={className} />;
     }
     return (

@@ -98,6 +98,7 @@ const VERB_PAIRS: Record<string, VerbPair> = {
   run_with_env: { live: "Running", settled: "Ran", infinitive: "run" },
   edit_file: { live: "Editing", settled: "Edited", infinitive: "edit" },
   write_file: { live: "Writing", settled: "Wrote", infinitive: "write" },
+  generate_svg: { live: "Writing", settled: "Wrote", infinitive: "write" },
   load_skill: { live: "Loading", settled: "Loaded", infinitive: "load" },
   get_profile: { live: "Loading", settled: "Loaded", infinitive: "load" },
   file__save_memory: {

@@ -24,6 +24,7 @@ import {
 } from "./surfaces";
 import { getToolPresentation } from "./tool-presentation";
 import { GenerateImageToolCard } from "./generate-image-tool";
+import { GenerateSvgToolCard } from "./generate-svg-tool";
 import { WritingFileCard } from "./writing-file-card";
 import { formatUnknownValue } from "../utils/task";
 import { useWorkspaceOptional } from "@/src/workspace-context";
@@ -521,15 +522,6 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
     status.type === "incomplete" && status.error != null
       ? formatUnknownValue(status.error)
       : "";
-  const generatedSvgPath =
-    toolName === "generate_svg" &&
-    result &&
-    typeof result === "object" &&
-    !Array.isArray(result) &&
-    (result as { success?: unknown }).success === true &&
-    typeof (result as { filePath?: unknown }).filePath === "string"
-      ? (result as { filePath: string }).filePath
-      : null;
   const resultSummary =
     result && typeof result === "object" && !Array.isArray(result) && typeof (result as { summary?: unknown }).summary === "string"
       ? (result as { summary: string }).summary
@@ -566,6 +558,20 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
                 size?: string;
                 aspectRatio?: string;
               })
+            : undefined
+        }
+        result={result}
+        status={status}
+      />
+    );
+  }
+
+  if (toolName === "generate_svg") {
+    return (
+      <GenerateSvgToolCard
+        args={
+          args && typeof args === "object" && !Array.isArray(args)
+            ? (args as { prompt?: string; filePath?: string })
             : undefined
         }
         result={result}
@@ -654,20 +660,6 @@ export const ToolFallback: ToolCallMessagePartComponent = ({
           </Text>
         </View>
       )}
-      {generatedSvgPath && workspace ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Open ${generatedSvgPath}`}
-          className="min-h-11 justify-center ps-6"
-          onPress={() => {
-            void workspace.openPath(generatedSvgPath);
-          }}
-        >
-          <Text variant="secondary" tone="primary" numberOfLines={1}>
-            Open {generatedSvgPath}
-          </Text>
-        </Pressable>
-      ) : null}
       {shouldRenderApproval && (
         <ToolFallbackApproval
           addResult={addResult}

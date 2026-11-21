@@ -59,3 +59,8 @@ export function workspaceSvgPath(slug?: string): string {
     : `${withoutSlash}.svg`;
   return `/workspace/${withExt}`;
 }
+
+/** Data URL for painting a sanitized SVG document in an `<img>` or RN Image. */
+export function svgToDataUrl(svg: string): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}

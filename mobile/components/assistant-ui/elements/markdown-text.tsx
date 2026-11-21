@@ -10,6 +10,10 @@ import {
   linkChildrenToText,
 } from "@/components/assistant-ui/elements/citation";
 import { FilePreviewCard } from "@/components/assistant-ui/elements/file-preview-card";
+import {
+  WorkspaceSvgPreview,
+  isWorkspaceSvgPath,
+} from "@/components/assistant-ui/elements/workspace-svg-preview";
 import { openWebUrl } from "@/src/open-web-url";
 import { traceStream } from "@/src/stream-trace";
 import {
@@ -84,7 +88,8 @@ function isViewHost(node: ReactNode): node is ReactElement {
   return (
     node.type === View ||
     node.type === Pressable ||
-    node.type === FilePreviewCard
+    node.type === FilePreviewCard ||
+    node.type === WorkspaceSvgPreview
   );
 }
 
@@ -154,8 +159,17 @@ export class TaskListTokenizer extends MarkedTokenizer {
 const taskListTokenizer = new TaskListTokenizer();
 
 /** Preview card for agent `file://` workspace links (matches web canvas). */
-function WorkspaceFileCard({ href }: { readonly href: string }) {
+function WorkspaceFileCard({
+  href,
+  label,
+}: {
+  readonly href: string;
+  readonly label?: string;
+}) {
   const path = decodeURIComponent(href.replace(/^file:\/\//i, ""));
+  if (isWorkspaceSvgPath(path)) {
+    return <WorkspaceSvgPreview path={path} label={label || path} />;
+  }
   return <FilePreviewCard path={path} />;
 }
 
@@ -325,7 +339,13 @@ class MarkdownRenderer extends Renderer {
       );
     }
     if (/^file:\/\//i.test(href)) {
-      return <WorkspaceFileCard key={this.getKey()} href={href} />;
+      return (
+        <WorkspaceFileCard
+          key={this.getKey()}
+          href={href}
+          label={label || undefined}
+        />
+      );
     }
     return super.link(children, href, styles, title);
   }

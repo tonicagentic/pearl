@@ -7,6 +7,13 @@ import {
   isDesignFilePath,
 } from "../agent/lib/design-files.ts";
 import {
+  chatFileUrl,
+  dispositionFilename,
+  isSvgWorkspacePath,
+  pathsMatchWorkspaceFile,
+  sanitizeWorkspaceLookupPath,
+} from "../lib/design/chat-file-url.ts";
+import {
   fileBasename,
   mimeTypeForPath,
   prefersInAppPreview,
@@ -19,6 +26,7 @@ import {
   extractSvgDocument,
   prepareSvgDocument,
   sanitizeSvgDocument,
+  svgToDataUrl,
   workspaceSvgPath,
 } from "../lib/design/svg.ts";
 
@@ -117,6 +125,44 @@ describe("svg extract and sanitize", () => {
     assert.equal(workspaceSvgPath("mark"), "/workspace/mark.svg");
     assert.equal(workspaceSvgPath("/workspace/logo.svg"), "/workspace/logo.svg");
     assert.equal(workspaceSvgPath("workspace/icon"), "/workspace/icon.svg");
+  });
+
+  it("builds data URLs for SVG documents", () => {
+    const dataUrl = svgToDataUrl('<svg viewBox="0 0 1 1"/>');
+    assert.match(dataUrl, /^data:image\/svg\+xml;charset=utf-8,/);
+    assert.match(dataUrl, /viewBox/);
+  });
+});
+
+describe("chat file URLs", () => {
+  it("rejects unsafe lookup paths", () => {
+    assert.equal(sanitizeWorkspaceLookupPath("../etc/passwd"), null);
+    assert.equal(sanitizeWorkspaceLookupPath("/workspace/mark.svg"), "/workspace/mark.svg");
+  });
+
+  it("builds download and inline URLs", () => {
+    assert.equal(
+      chatFileUrl({ chatId: "c1", path: "/workspace/a.svg" }),
+      "/api/chats/c1/files?path=%2Fworkspace%2Fa.svg",
+    );
+    assert.equal(
+      chatFileUrl({ chatId: "c1", path: "/workspace/a.svg", download: true }),
+      "/api/chats/c1/files?path=%2Fworkspace%2Fa.svg&download=1",
+    );
+  });
+
+  it("matches stored paths and detects SVGs", () => {
+    assert.equal(isSvgWorkspacePath("/workspace/mark.svg"), true);
+    assert.equal(isSvgWorkspacePath("/workspace/note.md"), false);
+    assert.equal(
+      pathsMatchWorkspaceFile("/workspace/mark.svg", "/workspace/mark.svg"),
+      true,
+    );
+    assert.equal(
+      pathsMatchWorkspaceFile("/workspace/mark.svg", "mark.svg"),
+      true,
+    );
+    assert.equal(dispositionFilename('/workspace/say "hi".svg'), "say _hi_.svg");
   });
 });
 

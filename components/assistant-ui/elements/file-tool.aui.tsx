@@ -21,6 +21,10 @@ import {
   versionForCall,
   type CanvasDocument,
 } from "@/components/assistant-ui/elements/canvas-context";
+import { WorkspaceFileLink } from "@/components/assistant-ui/elements/workspace-file-link";
+import { WorkspaceSvgPreview } from "@/components/assistant-ui/elements/workspace-svg-preview";
+import { isSvgWorkspacePath } from "@/lib/design/chat-file-url";
+import { prepareSvgDocument } from "@/lib/design/svg";
 import { cn } from "@/lib/utils";
 
 const PREVIEW_CHAR_LIMIT = 5_000;
@@ -264,16 +268,36 @@ function WriteFileRender({
     }
   };
 
+  const svgContent =
+    isSvgWorkspacePath(path) && content
+      ? prepareSvgDocument(content) ??
+        (content.trim().startsWith("<") ? content : null)
+      : null;
+
   return (
     <div className="flex w-full flex-col gap-1.5" data-slot="write-file-tool">
-      <ArtifactCard
-        title={path}
-        meta={meta}
-        generating={running}
-        words={countWords(content)}
-        aria-expanded={isOpen}
-        onClick={toggleCanvas}
-      />
+      {svgContent && !running ? (
+        <WorkspaceSvgPreview path={path} content={svgContent} label={path} />
+      ) : (
+        <ArtifactCard
+          title={path}
+          meta={meta}
+          generating={running}
+          words={countWords(content)}
+          aria-expanded={isOpen}
+          onClick={toggleCanvas}
+        />
+      )}
+      {svgContent && running ? (
+        <ArtifactCard
+          title={path}
+          meta={meta}
+          generating
+          words={countWords(content)}
+          aria-expanded={isOpen}
+          onClick={toggleCanvas}
+        />
+      ) : null}
       {note ? (
         <div
           data-slot="write-file-note"
@@ -281,15 +305,16 @@ function WriteFileRender({
         >
           <span>{note}</span>
           {!running && content ? (
-            <button
-              type="button"
+            <WorkspaceFileLink
+              path={path}
+              content={content}
               aria-label={`Download ${path.split("/").pop() || "file"}`}
               className="hover:text-foreground inline-flex shrink-0 items-center gap-1 transition-colors"
-              onClick={() => downloadTextFile(path, content)}
+              onOpen={() => downloadTextFile(path, content)}
             >
               <DownloadIcon className="size-3" aria-hidden="true" />
               Download
-            </button>
+            </WorkspaceFileLink>
           ) : null}
         </div>
       ) : null}

@@ -73,6 +73,7 @@ import {
 import { BrowserToolUI } from "@/components/assistant-ui/elements/browser-tool.aui";
 import { DesktopToolUI } from "@/components/assistant-ui/elements/desktop-tool.aui";
 import { GenerateImageToolUI } from "@/components/assistant-ui/elements/generate-image-tool.aui";
+import { GenerateSvgToolUI } from "@/components/assistant-ui/elements/generate-svg-tool.aui";
 import {
   CanvasProvider,
   useCanvas,
@@ -887,6 +888,7 @@ function AssistantChatSurfaceInner({
           <BrowserToolUI />
           <DesktopToolUI />
           <GenerateImageToolUI />
+          <GenerateSvgToolUI />
           <SessionStatusBanner isRunning={isRunning} />
           {(activeChat?.spokenTurns?.length ?? 0) > 0 ? (
             <div className="border-border/60 bg-muted/40 text-muted-foreground mx-3 mb-2 rounded-xl border px-3 py-2 text-[13px] leading-relaxed">
@@ -1133,6 +1135,7 @@ function CanvasLayout() {
                     : tab.kind === "desktop"
                       ? tab.title || "Desktop"
                       : tab.title || tab.url || "Page",
+                ...(tab.kind === "file" ? { path: tab.path } : {}),
               }))}
               onSelectTab={onSelectTab}
               onCloseTab={closeWorkspaceTab}
@@ -1157,9 +1160,20 @@ function CanvasLayout() {
                     screen-relay
                   </span>
                 ) : doc ? (
-                  <span className={cn(mono, "text-foreground/30 px-1")}>
-                    v{doc.version}
-                  </span>
+                  <>
+                    <span className={cn(mono, "text-foreground/30 px-1")}>
+                      v{doc.version}
+                    </span>
+                    {chatId ? (
+                      <a
+                        href={`/api/chats/${encodeURIComponent(chatId)}/files?path=${encodeURIComponent(doc.path)}&download=1`}
+                        download={basename(doc.path)}
+                        className={cn(ghostButton, "h-7 px-2 text-[12px]")}
+                      >
+                        Download
+                      </a>
+                    ) : null}
+                  </>
                 ) : null
               }
             />

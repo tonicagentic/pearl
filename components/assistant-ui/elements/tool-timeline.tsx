@@ -7,6 +7,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { WorkspaceFileLink } from "@/components/assistant-ui/elements/workspace-file-link";
 import { cn } from "@/lib/utils";
 import { formatWorkedFor } from "@/lib/thread-activity";
 import {
@@ -157,17 +158,14 @@ function StepRow({
       )}
       {/* File chips open the canvas; long commands/patterns truncate. */}
       {showChip && step.filePath && onOpenFile ? (
-        <button
-          type="button"
-          title={`Open ${step.filePath}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpenFile(step.filePath!);
-          }}
+        <WorkspaceFileLink
+          path={step.filePath}
+          onOpen={(path) => onOpenFile(path)}
+          onClickCapture={(event) => event.stopPropagation()}
           className="text-muted-foreground hover:text-foreground/80 min-w-0 max-w-full cursor-pointer truncate transition-colors outline-none"
         >
           {step.chip}
-        </button>
+        </WorkspaceFileLink>
       ) : showChip ? (
         <span className="text-muted-foreground min-w-0 truncate">{step.chip}</span>
       ) : null}

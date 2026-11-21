@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ComponentProps } from "react";
+import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import {
   FileTextIcon,
   ImageIcon,
@@ -8,6 +8,8 @@ import {
   FileIcon,
 } from "lucide-react";
 import { useCanvas } from "@/components/assistant-ui/elements/canvas-context";
+import { WorkspaceFileLink } from "@/components/assistant-ui/elements/workspace-file-link";
+import { chatFileUrl } from "@/lib/design/chat-file-url";
 import { previewKindForPath } from "@/lib/design/preview-kind";
 import {
   fileBasename,
@@ -15,6 +17,7 @@ import {
   isContentUrl,
   previewKindLabel,
 } from "@/lib/design/file-preview";
+import { prepareSvgDocument, svgToDataUrl } from "@/lib/design/svg";
 import { cn } from "@/lib/utils";
 import { mono, paper } from "@/lib/surfaces";
 
@@ -91,16 +94,16 @@ function KindIcon({ path }: { readonly path: string }) {
 
 /**
  * Chat mention of a workspace file: card with a short preview that opens
- * the canvas explorer.
+ * the canvas explorer. The card is a real download link for right-click Save.
  */
 export function FilePreviewCard({
   path,
   className,
   ...props
-}: Omit<ComponentProps<"button">, "children" | "type" | "onClick"> & {
+}: Omit<ComponentProps<"a">, "children" | "href" | "download" | "onClick"> & {
   readonly path: string;
 }) {
-  const { chatId, openPath } = useCanvas();
+  const { chatId } = useCanvas();
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(chatId));
   const name = fileBasename(path);
@@ -131,12 +134,13 @@ export function FilePreviewCard({
       ? isContentUrl(content)
         ? content.trim()
         : null
-      : // Inline SVG: render via data URL for the card thumb.
-        content.trim().startsWith("<")
-        ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(content)}`
+      : content.trim().startsWith("<")
+        ? svgToDataUrl(prepareSvgDocument(content) ?? content)
         : isContentUrl(content)
           ? content.trim()
-          : null);
+          : chatId
+            ? chatFileUrl({ chatId, path })
+            : null);
 
   const snippet =
     content &&
@@ -144,19 +148,8 @@ export function FilePreviewCard({
       ? filePreviewSnippet(content)
       : null;
 
-  return (
-    <button
-      type="button"
-      data-slot="file-preview-card"
-      title={`Open ${path}`}
-      onClick={() => openPath(path, content ?? undefined)}
-      className={cn(
-        paper,
-        "group flex w-full max-w-sm flex-col overflow-hidden rounded-2xl text-left transition-transform duration-150 hover:-translate-y-px active:scale-[0.98]",
-        className,
-      )}
-      {...props}
-    >
+  const body: ReactNode = (
+    <>
       {imageSrc ? (
         <div className="bg-foreground/[0.03] max-h-40 overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -183,7 +176,23 @@ export function FilePreviewCard({
           ) : null}
         </div>
       </div>
-    </button>
+    </>
+  );
+
+  return (
+    <WorkspaceFileLink
+      path={path}
+      content={content ?? undefined}
+      data-slot="file-preview-card"
+      className={cn(
+        paper,
+        "group flex w-full max-w-sm flex-col overflow-hidden rounded-2xl text-left no-underline transition-transform duration-150 hover:-translate-y-px active:scale-[0.98]",
+        className,
+      )}
+      {...props}
+    >
+      {body}
+    </WorkspaceFileLink>
   );
 }
 

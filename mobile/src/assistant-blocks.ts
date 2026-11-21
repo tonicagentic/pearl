@@ -38,6 +38,7 @@ export function isStandaloneTool(toolName: string): boolean {
     toolName === "todo" ||
     toolName === "write_file" ||
     toolName === "generate_image" ||
+    toolName === "generate_svg" ||
     DELEGATION_TOOLS.has(toolName)
   );
 }

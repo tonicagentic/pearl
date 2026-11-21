@@ -21,7 +21,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
+import { isSvgWorkspacePath } from "../../../../lib/design/chat-file-url";
 import { fileBasename } from "../../../../lib/design/file-preview";
+import { prepareSvgDocument } from "../../../../lib/design/svg";
 import {
   useWorkspaceOptional,
   type CanvasOrigin,
@@ -30,6 +32,7 @@ import {
   writeFileContentFromArgs,
   writeFilePathFromArgs,
 } from "@/src/write-file-args";
+import { WorkspaceSvgPreview } from "./workspace-svg-preview";
 import {
   mono,
   monoStyle,
@@ -93,6 +96,13 @@ export function WritingFileCard({
   const title = running ? "Writing" : fileBasename(path);
   const preview = useMemo(() => previewText(content), [content]);
   const words = wordCount(content);
+  const svgContent = useMemo(() => {
+    if (!isSvgWorkspacePath(path) || !content) return null;
+    return (
+      prepareSvgDocument(content) ??
+      (content.trim().startsWith("<") ? content : null)
+    );
+  }, [path, content]);
 
   const measureOrigin = useCallback((): Promise<CanvasOrigin | undefined> => {
     return new Promise((resolve) => {
@@ -131,6 +141,17 @@ export function WritingFileCard({
     await Clipboard.setStringAsync(content);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [content]);
+
+  if (svgContent && !running) {
+    return (
+      <Animated.View
+        entering={nativeMotion ? stepEnter : undefined}
+        className="w-full max-w-lg"
+      >
+        <WorkspaceSvgPreview path={path} content={svgContent} label={path} />
+      </Animated.View>
+    );
+  }
 
   return (
     <>

@@ -48,6 +48,7 @@ const TOOL_PRESENTATION: Record<string, ToolPresentation> = {
   edit_file: { label: "Edit file", icon: FilePenLineIcon },
   read_file: { label: "Read file", icon: FileTextIcon },
   generate_image: { label: "Generate image", icon: ImageIcon },
+  generate_svg: { label: "Generate SVG", icon: ImageIcon },
   bash: { label: "Run command", icon: TerminalIcon },
   web_search: { label: "Search the web", icon: SearchIcon },
   web_fetch: { label: "Fetch page", icon: GlobeIcon },

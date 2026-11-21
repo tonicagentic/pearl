@@ -7,6 +7,12 @@ import {
 } from "@/agent/lib/artifacts";
 import { contentTypeForWorkspacePath } from "@/agent/lib/design-files";
 import {
+  dispositionFilename,
+  pathsMatchWorkspaceFile,
+  sanitizeWorkspaceLookupPath,
+} from "@/lib/design/chat-file-url";
+import { isContentUrl } from "@/lib/design/file-preview";
+import {
   getAgentFile,
   getChatForUser,
   listAgentFiles,
@@ -14,6 +20,36 @@ import {
 } from "@/lib/db/queries";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
+
+function fileResponseHeaders(args: {
+  readonly path: string;
+  readonly download: boolean;
+}): HeadersInit {
+  const filename = dispositionFilename(args.path);
+  const type = contentTypeForWorkspacePath(args.path);
+  const disposition = args.download
+    ? `attachment; filename="${filename}"`
+    : `inline; filename="${filename}"`;
+  return {
+    "content-type": type,
+    "content-disposition": disposition,
+  };
+}
+
+function isRemoteContentUrl(content: string): boolean {
+  return isContentUrl(content) && /^https?:\/\//i.test(content.trim());
+}
+
+async function resolveFileByPath(
+  chatId: string,
+  path: string,
+): Promise<{ readonly id: string; readonly path: string } | null> {
+  const files = await listAgentFiles(chatId);
+  const match = files.find((entry) =>
+    pathsMatchWorkspaceFile(entry.path, path),
+  );
+  return match ? { id: match.id, path: match.path } : null;
+}
 
 export async function GET(
   request: Request,
@@ -39,8 +75,12 @@ export async function GET(
   }
 
   const url = new URL(request.url);
+  const download = url.searchParams.get("download") === "1";
   const fileId = url.searchParams.get("fileId");
+  const pathParam = sanitizeWorkspaceLookupPath(url.searchParams.get("path"));
 
+  // fileId: legacy content fetch for chat clients — always return the stored
+  // string (SVG/markdown body, or a signed Blob URL for binary paths).
   if (fileId) {
     const file = await getAgentFile(id, fileId);
 
@@ -48,11 +88,40 @@ export async function GET(
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
+    if (download && isRemoteContentUrl(file.content)) {
+      return NextResponse.redirect(file.content.trim(), 302);
+    }
+
     return new NextResponse(file.content, {
-      headers: {
-        "content-type": "text/plain; charset=utf-8",
-        "content-disposition": `attachment; filename="${file.path.split("/").pop() || "file"}"`,
-      },
+      headers: download
+        ? fileResponseHeaders({ path: file.path, download: true })
+        : {
+            "content-type": "text/plain; charset=utf-8",
+            "content-disposition": `inline; filename="${dispositionFilename(file.path)}"`,
+          },
+    });
+  }
+
+  // path: browser-facing URL for <img src> and right-click Save.
+  if (pathParam) {
+    const match = await resolveFileByPath(id, pathParam);
+    if (!match) {
+      return NextResponse.json({ error: "File not found" }, { status: 404 });
+    }
+    const file = await getAgentFile(id, match.id);
+    if (!file) {
+      return NextResponse.json({ error: "File not found" }, { status: 404 });
+    }
+
+    if (isRemoteContentUrl(file.content)) {
+      return NextResponse.redirect(file.content.trim(), 302);
+    }
+
+    return new NextResponse(file.content, {
+      headers: fileResponseHeaders({
+        path: file.path,
+        download,
+      }),
     });
   }
 
