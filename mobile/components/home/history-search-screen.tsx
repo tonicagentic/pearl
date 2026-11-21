@@ -13,7 +13,7 @@ import { MessageSquareIcon } from "lucide-react-native";
 import {
   KeyboardController,
   useKeyboardHandler,
-} from "react-native-keyboard-controller";
+} from "@/src/keyboard-controller";
 import Animated, {
   Easing,
   Extrapolation,

@@ -130,7 +130,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   KeyboardController,
   useKeyboardHandler,
-} from "react-native-keyboard-controller";
+} from "@/src/keyboard-controller";
 import Animated, {
   Easing,
   Extrapolation,

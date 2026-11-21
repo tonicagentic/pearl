@@ -19,7 +19,7 @@ import { useCSSVariable } from "uniwind";
 import {
   KeyboardController,
   useKeyboardHandler,
-} from "react-native-keyboard-controller";
+} from "@/src/keyboard-controller";
 import Animated, {
   Easing,
   Extrapolation,

@@ -16,7 +16,7 @@ import {
   SparklesIcon,
 } from "lucide-react-native";
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
-import { KeyboardController } from "react-native-keyboard-controller";
+import { KeyboardController } from "@/src/keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useComposerChrome } from "@/components/assistant-ui/elements/composer-chrome";

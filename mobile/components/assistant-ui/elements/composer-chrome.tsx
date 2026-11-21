@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 import type { SharedValue } from "react-native-reanimated";
-import { KeyboardController } from "react-native-keyboard-controller";
+import { KeyboardController } from "@/src/keyboard-controller";
 
 export type ComposerChromeApi = {
   /** 1 while the draft needs more than one line, so the shell can open with the keyboard down. */

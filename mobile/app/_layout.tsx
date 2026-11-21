@@ -3,7 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { Platform, View } from "react-native";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
+import { KeyboardProvider } from "@/src/keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 

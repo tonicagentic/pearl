@@ -1,12 +1,23 @@
 import { Platform } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { CryptoDigestAlgorithm, digestStringAsync } from "expo-crypto";
-import {
-  GoogleSignin,
-  isErrorWithCode,
-  isSuccessResponse,
-  statusCodes,
-} from "@react-native-google-signin/google-signin";
+
+type GoogleSigninModule = typeof import("@react-native-google-signin/google-signin");
+
+let googleModule: GoogleSigninModule | null | undefined;
+
+/** Expo Go does not include RNGoogleSignin; the package throws while loading. */
+function loadGoogleSignin(): GoogleSigninModule | null {
+  if (googleModule !== undefined) return googleModule;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    googleModule =
+      require("@react-native-google-signin/google-signin") as GoogleSigninModule;
+  } catch {
+    googleModule = null;
+  }
+  return googleModule;
+}
 
 export type SocialIdToken = {
   readonly provider: "google" | "apple";
@@ -25,13 +36,17 @@ const googleIosClientId =
 let googleConfigured = false;
 
 function ensureGoogleConfigured() {
+  const google = loadGoogleSignin();
+  if (!google) {
+    throw new Error("Google sign-in isn’t available in Expo Go.");
+  }
   if (googleConfigured) return;
   if (!googleWebClientId) {
     throw new Error(
       "Google sign-in isn’t configured. Set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID.",
     );
   }
-  GoogleSignin.configure({
+  google.GoogleSignin.configure({
     webClientId: googleWebClientId,
     iosClientId: googleIosClientId || undefined,
     offlineAccess: false,
@@ -40,7 +55,7 @@ function ensureGoogleConfigured() {
 }
 
 export function isGoogleSignInAvailable() {
-  return Boolean(googleWebClientId);
+  return Boolean(googleWebClientId) && loadGoogleSignin() != null;
 }
 
 export async function isAppleSignInAvailable() {
@@ -53,10 +68,14 @@ export async function isAppleSignInAvailable() {
 }
 
 export async function requestGoogleIdToken(): Promise<SocialIdToken> {
+  const google = loadGoogleSignin();
+  if (!google) {
+    throw new Error("Google sign-in isn’t available in Expo Go.");
+  }
   ensureGoogleConfigured();
-  await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-  const response = await GoogleSignin.signIn();
-  if (!isSuccessResponse(response) || !response.data.idToken) {
+  await google.GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+  const response = await google.GoogleSignin.signIn();
+  if (!google.isSuccessResponse(response) || !response.data.idToken) {
     throw new Error("Google sign-in was cancelled.");
   }
   const user = response.data.user;
@@ -69,14 +88,15 @@ export async function requestGoogleIdToken(): Promise<SocialIdToken> {
 }
 
 export function describeGoogleSignInError(cause: unknown): string {
-  if (isErrorWithCode(cause)) {
-    if (cause.code === statusCodes.SIGN_IN_CANCELLED) {
+  const google = loadGoogleSignin();
+  if (google?.isErrorWithCode(cause)) {
+    if (cause.code === google.statusCodes.SIGN_IN_CANCELLED) {
       return "Google sign-in was cancelled.";
     }
-    if (cause.code === statusCodes.IN_PROGRESS) {
+    if (cause.code === google.statusCodes.IN_PROGRESS) {
       return "Google sign-in is already in progress.";
     }
-    if (cause.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+    if (cause.code === google.statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
       return "Google Play Services aren’t available on this device.";
     }
   }
