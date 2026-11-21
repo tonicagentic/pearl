@@ -135,7 +135,7 @@ function HeroActions({ onGetStarted }: { readonly onGetStarted: () => void }) {
         className="h-9 rounded-full px-4 md:h-11 md:px-6 md:text-base"
         onClick={() => {
           document
-            .getElementById("jobs")
+            .getElementById("capabilities")
             ?.scrollIntoView({ behavior: "smooth" });
         }}
         type="button"

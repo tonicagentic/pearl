@@ -1,17 +1,16 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { PauseIcon, PlayIcon, PlusIcon, SearchIcon } from "lucide-react";
+import { CheckIcon, PauseIcon, PlayIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { AgentAccentMark } from "@/components/custom-agents/agent-identity-pill";
 import { PearlIcon } from "@/components/icons";
 import {
   ASK_EXAMPLES,
-  type AskExample,
+  type AskSlide,
+  type AskTask,
 } from "@/components/marketing/ask-examples";
 import { EASE } from "@/components/marketing/hero-word";
 import { MarketingJsonCard } from "@/components/marketing/marketing-json-card";
-import { MARKETPLACE_EXAMPLES } from "@/components/marketing/marketplace-examples";
 import { useAskExampleLoop } from "@/components/marketing/use-ask-example-loop";
 import { usePrefersReducedMotion } from "@/components/marketing/use-prefers-reduced-motion";
 import { Button } from "@/components/ui/button";
@@ -22,35 +21,8 @@ const HERO_COVER_SRC = "/marketing/hero-cover.jpg";
 /** Cover plate — theme radius + border. */
 const HERO_SHELL = "overflow-hidden rounded-lg border border-border";
 
-/** App window — closer to the reference’s softer chrome. */
-const APP_SHELL =
-  "overflow-hidden rounded-2xl border border-border bg-card text-left shadow-[0_28px_90px_-28px_rgba(0,0,0,0.45)]";
-
-const SIDEBAR_AGENTS = MARKETPLACE_EXAMPLES.slice(0, 3);
-
-function TrafficLights() {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span
-        aria-hidden
-        className="size-2.5 rounded-full bg-[#ff5f57] shadow-[inset_0_0_0_0.5px_rgba(0,0,0,0.2)]"
-      />
-      <span
-        aria-hidden
-        className="size-2.5 rounded-full bg-[#febc2e] shadow-[inset_0_0_0_0.5px_rgba(0,0,0,0.2)]"
-      />
-      <span
-        aria-hidden
-        className="size-2.5 rounded-full bg-[#28c840] shadow-[inset_0_0_0_0.5px_rgba(0,0,0,0.2)]"
-      />
-    </div>
-  );
-}
-
-function firstUserPreview(example: AskExample): string {
-  const first = example.messages.find((message) => message.role === "user");
-  return first?.text ?? "";
-}
+const FLOAT_SHADOW =
+  "shadow-[0_28px_90px_-28px_rgba(0,0,0,0.45)]";
 
 function ExampleTabs({
   index,
@@ -125,258 +97,99 @@ function ExampleTabs({
   );
 }
 
-function AskChatMessages({
-  example,
-  compact = false,
+function PromptPill({ text }: { readonly text: string }) {
+  return (
+    <p className="mx-auto max-w-md rounded-2xl border border-border bg-card px-4 py-3 text-center text-sm leading-snug text-foreground shadow-sm">
+      {text}
+    </p>
+  );
+}
+
+function TaskRow({ task }: { readonly task: AskTask }) {
+  return (
+    <li
+      className={cn(
+        "flex items-center gap-3 rounded-full border border-border bg-card px-3.5 py-2.5",
+        FLOAT_SHADOW,
+      )}
+    >
+      <span
+        aria-hidden
+        className="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background"
+      >
+        <CheckIcon className="size-3.5" strokeWidth={2.5} />
+      </span>
+      <span className="inline-flex shrink-0 rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-foreground">
+        {task.verb}
+      </span>
+      <span className="min-w-0 text-sm leading-snug text-muted-foreground">
+        {task.rest}
+      </span>
+    </li>
+  );
+}
+
+function TasksSlide({ slide }: { readonly slide: Extract<AskSlide, { kind: "tasks" }> }) {
+  return (
+    <div className="mx-auto flex w-full max-w-md flex-col items-stretch gap-4">
+      <ul className="flex flex-col gap-2.5">
+        {slide.tasks.map((task) => (
+          <TaskRow key={task.verb + task.rest} task={task} />
+        ))}
+      </ul>
+      <PromptPill text={slide.prompt} />
+    </div>
+  );
+}
+
+function CardSlide({ slide }: { readonly slide: Extract<AskSlide, { kind: "card" }> }) {
+  return (
+    <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-4">
+      <PromptPill text={slide.prompt} />
+      <div
+        className={cn(
+          "w-full space-y-3 overflow-hidden rounded-2xl border border-border bg-card p-3 sm:p-4",
+          FLOAT_SHADOW,
+        )}
+      >
+        {slide.cards.map((spec, i) => (
+          <MarketingJsonCard key={`${slide.slug}-card-${i}`} spec={spec} />
+        ))}
+      </div>
+      <p className="max-w-md text-center text-sm leading-snug text-white/90 drop-shadow-sm">
+        {slide.outcome}
+      </p>
+    </div>
+  );
+}
+
+function HeroSlide({
+  slide,
   reduceMotion,
 }: {
-  readonly example: AskExample;
-  readonly compact?: boolean;
+  readonly slide: AskSlide;
   readonly reduceMotion: boolean;
 }) {
   return (
     <AnimatePresence initial={false} mode="wait">
       <motion.div
         animate={{ opacity: 1, y: 0 }}
-        className={cn("space-y-3", compact ? "px-3 py-3" : "px-5 py-4")}
-        exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
-        initial={reduceMotion ? false : { opacity: 0, y: 4 }}
-        key={example.slug}
-        transition={{ duration: reduceMotion ? 0 : 0.22 }}
+        aria-labelledby={`hero-ask-tab-${slide.slug}`}
+        className="flex size-full items-center justify-center overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        exit={reduceMotion ? undefined : { opacity: 0, y: -6 }}
+        id="hero-ask-panel"
+        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+        key={slide.slug}
+        role="tabpanel"
+        transition={{ duration: reduceMotion ? 0 : 0.28 }}
       >
-        {example.messages.map((message, messageIndex) =>
-          message.role === "user" ? (
-            <div
-              className="flex justify-end"
-              key={`${example.slug}-u-${messageIndex}`}
-            >
-              <p
-                className={cn(
-                  "rounded-2xl bg-foreground text-background",
-                  compact
-                    ? "max-w-[90%] px-3 py-2 text-[11px] leading-4"
-                    : "max-w-[85%] px-3.5 py-2.5 text-sm leading-5",
-                )}
-              >
-                {message.text}
-              </p>
-            </div>
-          ) : (
-            <div
-              className="flex items-start gap-2.5"
-              key={`${example.slug}-a-${messageIndex}`}
-            >
-              <div
-                className={cn(
-                  "mt-0.5 flex shrink-0 items-center justify-center rounded-full border border-border bg-muted",
-                  compact ? "size-6" : "size-7",
-                )}
-              >
-                <PearlIcon
-                  className={cn(
-                    "text-foreground",
-                    compact ? "size-3" : "size-3.5",
-                  )}
-                />
-              </div>
-              <div className="flex min-w-0 max-w-[90%] flex-col gap-2.5">
-                <p
-                  className={cn(
-                    "rounded-2xl bg-secondary text-secondary-foreground",
-                    compact
-                      ? "px-3 py-2 text-[11px] leading-4"
-                      : "px-3.5 py-2.5 text-sm leading-5",
-                  )}
-                >
-                  {message.text}
-                </p>
-                {message.spec ? (
-                  <MarketingJsonCard spec={message.spec} />
-                ) : null}
-              </div>
-            </div>
-          ),
+        {slide.kind === "tasks" ? (
+          <TasksSlide slide={slide} />
+        ) : (
+          <CardSlide slide={slide} />
         )}
       </motion.div>
     </AnimatePresence>
-  );
-}
-
-function Composer({ compact = false }: { readonly compact?: boolean }) {
-  return (
-    <div
-      className={cn(
-        "border-t border-border",
-        compact ? "px-3 py-2.5" : "px-4 py-3",
-      )}
-    >
-      <div
-        className={cn(
-          "flex items-center gap-2 rounded-full border border-border bg-muted/60",
-          compact ? "px-3 py-2" : "px-3.5 py-2.5",
-        )}
-      >
-        <PlusIcon
-          aria-hidden
-          className={cn(
-            "shrink-0 text-muted-foreground",
-            compact ? "size-3.5" : "size-4",
-          )}
-        />
-        <p
-          className={cn(
-            "min-w-0 flex-1 text-muted-foreground",
-            compact ? "text-[11px]" : "text-sm",
-          )}
-        >
-          Message Pearl…
-        </p>
-      </div>
-    </div>
-  );
-}
-
-type AskWindowProps = Pick<
-  ReturnType<typeof useAskExampleLoop>,
-  "index" | "active" | "reduceMotion" | "select"
->;
-
-/** Desktop Pearl window — locked 3:2 like the reference app mock. */
-function DesktopAppWindow({
-  index,
-  active,
-  reduceMotion,
-  select,
-}: AskWindowProps) {
-  return (
-    <div className={cn(APP_SHELL, "flex aspect-[3/2] w-full")}>
-      <aside className="flex w-[30%] min-w-0 flex-col border-r border-border bg-muted/40">
-        <div className="flex items-center justify-between px-3 py-3">
-          <TrafficLights />
-          <div className="flex items-center gap-1">
-            <span className="flex size-6 items-center justify-center rounded-full text-muted-foreground">
-              <SearchIcon aria-hidden className="size-3.5" />
-            </span>
-            <span className="flex size-6 items-center justify-center rounded-full text-muted-foreground">
-              <PlusIcon aria-hidden className="size-3.5" />
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-1.5 px-2.5 pb-3">
-          {SIDEBAR_AGENTS.map((agent, agentIndex) => (
-            <div
-              className={cn(
-                "flex flex-col items-center gap-1 rounded-xl px-1 py-2",
-                agentIndex === 0 ? "bg-card shadow-sm" : "opacity-80",
-              )}
-              key={agent.slug}
-            >
-              <AgentAccentMark
-                accent={agent.accent}
-                markBrows={agent.markBrows}
-                markGaze={agent.markGaze}
-                markShape={agent.markShape}
-                markTalk={agent.markTalk}
-                motion="off"
-                size="sm"
-              />
-              <span className="line-clamp-1 text-center text-[9px] font-medium tracking-tight text-foreground">
-                {agent.name.split(" ")[0]}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {ASK_EXAMPLES.map((example, exampleIndex) => (
-            <button
-              className={cn(
-                "w-full rounded-lg px-2.5 py-2 text-left transition-colors",
-                exampleIndex === index ? "bg-card" : "hover:bg-card/60",
-              )}
-              key={example.slug}
-              onClick={() => select(exampleIndex)}
-              type="button"
-            >
-              <p className="truncate text-[11px] font-medium text-foreground">
-                {example.tab}
-              </p>
-              <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                {firstUserPreview(example)}
-              </p>
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-auto flex items-center gap-2 border-t border-border px-3 py-2.5">
-          <div className="flex size-6 items-center justify-center rounded-full border border-border bg-card">
-            <PearlIcon className="size-3 text-foreground" />
-          </div>
-          <span className="truncate text-[11px] font-medium text-foreground">
-            Pearl
-          </span>
-        </div>
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-center border-b border-border px-4 py-2.5">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/60 px-2.5 py-1">
-            <PearlIcon className="size-3 text-foreground" />
-            <span className="text-[11px] font-medium text-foreground">
-              Pearl
-            </span>
-          </div>
-        </div>
-        <div
-          aria-labelledby={`hero-ask-tab-${active.slug}`}
-          className="min-h-0 flex-1 overflow-y-auto"
-          id="hero-ask-panel"
-          role="tabpanel"
-        >
-          <AskChatMessages example={active} reduceMotion={reduceMotion} />
-        </div>
-        <Composer />
-      </div>
-    </div>
-  );
-}
-
-/** Phone frame for small screens — portrait chat, no desktop sidebar. */
-function MobileAppWindow({
-  active,
-  reduceMotion,
-}: AskWindowProps) {
-  return (
-    <div
-      className={cn(
-        APP_SHELL,
-        "mx-auto flex aspect-[9/19.5] w-[min(272px,72vw)] flex-col rounded-[1.75rem]",
-      )}
-    >
-      <div className="relative flex items-center justify-center border-b border-border px-3 py-3">
-        <span
-          aria-hidden
-          className="absolute top-2 left-1/2 h-1.5 w-16 -translate-x-1/2 rounded-full bg-foreground/15"
-        />
-        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/60 px-2.5 py-1">
-          <PearlIcon className="size-3 text-foreground" />
-          <span className="text-[11px] font-medium text-foreground">Pearl</span>
-        </div>
-      </div>
-      <div
-        aria-labelledby={`hero-ask-tab-${active.slug}`}
-        className="min-h-0 flex-1 overflow-y-auto"
-        role="tabpanel"
-      >
-        <AskChatMessages
-          compact
-          example={active}
-          reduceMotion={reduceMotion}
-        />
-      </div>
-      <Composer compact />
-    </div>
   );
 }
 
@@ -388,7 +201,12 @@ function HeroStage({
   readonly className?: string;
 }) {
   return (
-    <div className={cn(`relative w-full ${HERO_SHELL}`, className)}>
+    <div
+      className={cn(
+        `relative aspect-[4/5] w-full sm:aspect-[3/2] ${HERO_SHELL}`,
+        className,
+      )}
+    >
       <div aria-hidden className="absolute inset-0">
         <img
           alt=""
@@ -398,7 +216,7 @@ function HeroStage({
         />
       </div>
       <PearlIcon className="pointer-events-none absolute top-4 left-4 z-20 size-8 text-white drop-shadow-sm sm:top-5 sm:left-5 sm:size-9" />
-      <div className="relative z-10 p-[2em]">{children}</div>
+      <div className="absolute inset-0 z-10 p-[1.25em] sm:p-[2em]">{children}</div>
     </div>
   );
 }
@@ -421,17 +239,11 @@ function HeroAskDemo({
     togglePlaying,
     pauseBind,
   } = useAskExampleLoop({ rotate });
-  const windowProps = { index, active, reduceMotion, select };
 
   return (
     <div className={cn("w-full", className)} {...pauseBind}>
       <HeroStage>
-        <div className="hidden md:block">
-          <DesktopAppWindow {...windowProps} />
-        </div>
-        <div className="md:hidden">
-          <MobileAppWindow {...windowProps} />
-        </div>
+        <HeroSlide reduceMotion={reduceMotion} slide={active} />
       </HeroStage>
       <div className="mt-6 sm:mt-8">
         <ExampleTabs

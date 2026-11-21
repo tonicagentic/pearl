@@ -1,18 +1,26 @@
 import type { Spec } from "@json-render/core";
 
-export type AskMessage =
-  | { readonly role: "user"; readonly text: string }
-  | {
-      readonly role: "assistant";
-      readonly text: string;
-      readonly spec?: Spec;
-    };
-
-export type AskExample = {
-  readonly slug: string;
-  readonly tab: string;
-  readonly messages: readonly AskMessage[];
+export type AskTask = {
+  readonly verb: string;
+  readonly rest: string;
 };
+
+export type AskSlide =
+  | {
+      readonly slug: string;
+      readonly tab: string;
+      readonly kind: "tasks";
+      readonly prompt: string;
+      readonly tasks: readonly AskTask[];
+    }
+  | {
+      readonly slug: string;
+      readonly tab: string;
+      readonly kind: "card";
+      readonly prompt: string;
+      readonly outcome: string;
+      readonly cards: readonly Spec[];
+    };
 
 function cardSpec(
   childId: string,
@@ -242,144 +250,75 @@ const inboxDraft = cardSpec(
   null,
 );
 
-export const ASK_EXAMPLES: readonly AskExample[] = [
+export const ASK_EXAMPLES: readonly AskSlide[] = [
+  {
+    slug: "tasks",
+    tab: "Tasks",
+    kind: "tasks",
+    prompt: "Find me three things you can help me with now.",
+    tasks: [
+      { verb: "Archived", rest: "61 newsletter threads in Gmail" },
+      { verb: "Booked", rest: "UCSF Imaging — Thu 2:40p" },
+      { verb: "Drafted", rest: "Mercury outreach (waiting on you)" },
+    ],
+  },
   {
     slug: "insurance",
     tab: "Insurance",
-    messages: [
-      {
-        role: "user",
-        text: "I need an MRI of my right knee. I’m on Anthem PPO through work — how much am I looking at, and who’s in-network near Mission?",
-      },
-      {
-        role: "assistant",
-        text: "From the SBC you shared: $500 imaging deductible left, then 20% coinsurance. In-network MRI facilities near Mission typically bill $1,100–$1,800 for a knee study — your share lands around $220–$360 after the deductible.",
-      },
-      {
-        role: "user",
-        text: "Who would you book with?",
-      },
-      {
-        role: "assistant",
-        text: "Three in-network options with openings this week. UCSF is usually cheapest after Anthem’s contracted rate. Want me to draft a referral request for your PCP?",
-        spec: insuranceCompare,
-      },
-    ],
+    kind: "card",
+    prompt:
+      "MRI of my right knee — Anthem PPO. How much, and who’s in-network near Mission?",
+    outcome:
+      "Three in-network options this week. UCSF is usually cheapest after Anthem’s rate.",
+    cards: [insuranceCompare],
   },
   {
     slug: "portfolio",
     tab: "Portfolio",
-    messages: [
-      {
-        role: "user",
-        text: "I shoot weddings and editorial portraits. Can you help me build a portfolio site that feels calm, not template-y?",
-      },
-      {
-        role: "assistant",
-        text: "Yes. I’d keep it sparse: full-bleed work first, short about, and a quiet contact. Two directions — warm paper + serif, or cool concrete + sans. Which feels closer?",
-      },
-      {
-        role: "user",
-        text: "Warm paper. And I need a passworded client gallery somehow.",
-      },
-      {
-        role: "assistant",
-        text: "Got it. Scaffolding a Next.js site with a home grid, project pages, and a simple client gallery behind a shared password. Drop a Drive folder of selects when you’re ready.",
-        spec: portfolioTimeline,
-      },
-    ],
+    kind: "card",
+    prompt:
+      "Help me build a calm portfolio site — warm paper, passworded client galleries.",
+    outcome:
+      "Scaffolding Next.js with a home grid, project pages, and shared-password galleries.",
+    cards: [portfolioTimeline],
   },
   {
     slug: "taxes",
     tab: "Taxes",
-    messages: [
-      {
-        role: "user",
-        text: "How much should I put aside for taxes? I’m a contractor, ~$140k this year so far, California, single, no big deductions yet.",
-      },
-      {
-        role: "assistant",
-        text: "Rough cut for CA + federal self-employment: plan on ~30–35% of profit. On $140k that’s about $3,500–$4,100 a month if income stays even. I’ll refine once you share Q1–Q3 1099s and any retirement or health premiums.",
-      },
-      {
-        role: "user",
-        text: "I put $8k into a SEP-IRA already.",
-      },
-      {
-        role: "assistant",
-        text: "That helps. Updated set-aside: closer to 28–32%, or about $3,300–$3,700/mo. This isn’t advice — worth confirming quarterly estimates with your CPA before April.",
-        spec: taxesChart,
-      },
-    ],
+    kind: "card",
+    prompt:
+      "Contractor ~$140k, California, single — how much should I put aside for taxes?",
+    outcome:
+      "With $8k SEP-IRA in, set aside about $3,300–$3,700/mo — confirm with your CPA.",
+    cards: [taxesChart],
   },
   {
     slug: "prospecting",
     tab: "Prospecting",
-    messages: [
-      {
-        role: "user",
-        text: "We’re selling design systems work to mid-size fintechs. Who should I actually email this quarter?",
-      },
-      {
-        role: "assistant",
-        text: "I pulled 12 companies that recently raised or posted design-system / platform roles. Best first outreach: Heads of Design or Staff Product Designers — not generic recruiters. Top three: Mercury, Ramp-adjacent tooling shops, and a Series B payments API based in NYC.",
-      },
-      {
-        role: "user",
-        text: "Draft something short for the Mercury person.",
-      },
-      {
-        role: "assistant",
-        text: "Draft ready — two sentences, mentions their public component docs, asks for a 15-minute chat. I won’t send until you approve.",
-        spec: prospectingDraft,
-      },
-    ],
+    kind: "card",
+    prompt:
+      "Design systems for mid-size fintechs — who should I email this quarter?",
+    outcome:
+      "Draft ready for Mercury — two sentences, won’t send until you approve.",
+    cards: [prospectingDraft],
   },
   {
     slug: "coffee-shop",
     tab: "Coffee shop",
-    messages: [
-      {
-        role: "user",
-        text: "I’m thinking about opening a coffee shop. What’s a good place in San Francisco to do this?",
-      },
-      {
-        role: "assistant",
-        text: "Depends on rent vs. daytime density. Using ACS demographics, LEHD workplace counts, and recent retail listings: Outer Sunset and Excelsior score well on residents-per-café; SoMa and FiDi have high weekday traffic but brutal rent and saturation.",
-      },
-      {
-        role: "user",
-        text: "I care more about neighborhood regulars than office lunch.",
-      },
-      {
-        role: "assistant",
-        text: "Shortlist below — Irving balances daytime foot traffic and rent without FiDi saturation. Want a one-pager with rent comps and competitor maps next?",
-        spec: coffeeCompare,
-      },
-    ],
+    kind: "card",
+    prompt:
+      "Good place in SF for a coffee shop — neighborhood regulars over office lunch.",
+    outcome:
+      "Irving balances daytime foot traffic and rent without FiDi saturation.",
+    cards: [coffeeCompare],
   },
   {
     slug: "inbox",
     tab: "Inbox",
-    messages: [
-      {
-        role: "user",
-        text: "My inbox is a mess. Can you clean it up from here — archive the noise, keep anything that needs me?",
-      },
-      {
-        role: "assistant",
-        text: "I scanned the last 7 days: 214 unread. 61 look like newsletters/receipts, 18 need a reply, 4 look time-sensitive. Propose archiving the noise first — nothing irreversible without you.",
-        spec: inboxBatch,
-      },
-      {
-        role: "user",
-        text: "Archive the noise and draft the hiring thread. Leave the invoices for me.",
-      },
-      {
-        role: "assistant",
-        text: "Archived 61. Draft for Maya on the hiring thread is ready — warm yes + two scheduling options. Invoices left unread and starred.",
-        spec: inboxDraft,
-      },
-    ],
+    kind: "card",
+    prompt: "Inbox is a mess — archive the noise, keep anything that needs me.",
+    outcome:
+      "Archived 61. Draft for Maya is ready. Invoices left unread and starred.",
+    cards: [inboxBatch, inboxDraft],
   },
 ];

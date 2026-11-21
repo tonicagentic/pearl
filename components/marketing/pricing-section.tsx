@@ -34,8 +34,9 @@ export function PricingSection({
         <div className="mx-auto max-w-2xl text-center">
           <TitleTag className={marketingType.sectionTitle}>Pricing</TitleTag>
           <p className={`mt-4 ${marketingType.body}`}>
-            Free to self-host under Apache-2.0. Hosted Pearl is a flat
-            subscription plus metered usage.
+            Open source under Apache-2.0. Run Pearl yourself, plug in your own
+            models, and keep data on your servers — or start hosted and move
+            anytime.
           </p>
         </div>
 
@@ -48,15 +49,15 @@ export function PricingSection({
                 </CardTitle>
                 <p className="text-3xl font-medium tracking-tight">Free</p>
                 <CardDescription className="text-sm leading-relaxed">
-                  Open source. Your machine, your models, your control.
+                  Your stack, your models, your control.
                 </CardDescription>
               </CardHeader>
               <CardContent className="text-sm leading-relaxed text-muted-foreground">
                 <ul className="list-disc space-y-2 pl-5 text-left">
                   <li>Full source under Apache-2.0</li>
-                  <li>Run Pearl on your own stack</li>
+                  <li>Host on your own infrastructure</li>
                   <li>Bring your own models and keys</li>
-                  <li>Pick models, schedules, and approval limits</li>
+                  <li>Data stays under your control</li>
                 </ul>
               </CardContent>
               <CardFooter>
@@ -92,6 +93,7 @@ export function PricingSection({
                   <li>Web and iOS against the hosted service</li>
                   <li>Models, research, sandboxes, and images metered</li>
                   <li>Subscribe after sign-in — billing stays in-app</li>
+                  <li>Start here; move to self-hosted when you’re ready</li>
                 </ul>
               </CardContent>
               <CardFooter>
