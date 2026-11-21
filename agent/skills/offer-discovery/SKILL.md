@@ -10,7 +10,8 @@ the user has chosen. Your job is to draw it out of the user, not to invent it.
 ## Process
 
 1. Read what the user already gave you (chat, project instructions, memory,
-   attached files). Reuse their words.
+   stored capabilities via `list_capabilities` when relevant, attached files).
+   Reuse their words.
 2. List what is still unknown from this set: the outcome the buyer gets, who
    buys and who uses, what is included and excluded, how delivery works, what
    proof exists, and what the buyer does today instead.

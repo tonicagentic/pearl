@@ -176,6 +176,10 @@ export default function HomeLayout() {
         options={{ title: "Memory", headerShown: true }}
       />
       <Stack.Screen
+        name="capabilities"
+        options={{ title: "Capabilities", headerShown: true }}
+      />
+      <Stack.Screen
         name="skills"
         options={{ title: "Skills", headerShown: true }}
       />

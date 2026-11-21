@@ -185,6 +185,25 @@ describe("toActivityStep", () => {
       "Created",
     );
   });
+
+  it("saves and archives capabilities with chips", () => {
+    assert.equal(
+      toActivityStep(tool("save_capability", { name: "Agents" })).verb,
+      "Saved",
+    );
+    assert.equal(
+      toActivityStep(tool("save_capability", { name: "Agents" })).chip,
+      "Agents",
+    );
+    assert.equal(
+      toActivityStep(tool("archive_capability", { id: "cap_1" })).verb,
+      "Archived",
+    );
+    assert.equal(
+      toActivityStep(tool("archive_capability", { id: "cap_1" })).chip,
+      "capability",
+    );
+  });
 });
 
 describe("composeActivityHeader", () => {

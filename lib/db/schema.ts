@@ -525,6 +525,57 @@ export const project = pgTable(
 
 export type Project = typeof project.$inferSelect;
 
+export type CapabilityKind = "skill" | "product" | "service";
+export type CapabilityStatus = "active" | "exploring" | "archived";
+
+// Marketable skills, products, and services the user can sell. Separate from
+// file memory (unstructured facts), user_profile (identity/fit/home), and
+// user_skill (agent playbooks). Loaded as a short index each turn; full
+// fields via list_capabilities / save_capability.
+export const capability = pgTable(
+  "capability",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    kind: text("kind", {
+      enum: ["skill", "product", "service"],
+    })
+      .notNull()
+      .$type<CapabilityKind>(),
+    summary: text("summary").notNull(),
+    audience: text("audience"),
+    proof: text("proof"),
+    status: text("status", {
+      enum: ["active", "exploring", "archived"],
+    })
+      .notNull()
+      .default("active")
+      .$type<CapabilityStatus>(),
+    projectId: text("project_id").references(() => project.id, {
+      onDelete: "set null",
+    }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_capability_user").on(table.userId),
+    index("idx_capability_user_status").on(table.userId, table.status),
+    // Case-insensitive name uniqueness so a second save updates the same row.
+    uniqueIndex("idx_capability_user_name").on(
+      table.userId,
+      sql`lower(${table.name})`,
+    ),
+  ],
+);
+
+export type Capability = typeof capability.$inferSelect;
+
 export type TaskListCadence = "daily" | "weekly" | "monthly";
 
 // Reusable checklists (packing, apartment maintenance). Checking an item

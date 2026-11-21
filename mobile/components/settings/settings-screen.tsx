@@ -48,6 +48,7 @@ import {
 } from "@/src/connections-client";
 import { listCalendarAccounts } from "@/src/calendar-accounts-client";
 import { listMailboxes } from "@/src/mailboxes-client";
+import { fetchCapabilities } from "@/src/capabilities-client";
 import { fetchMemories } from "@/src/memory-client";
 import {
   getAgentUrl,
@@ -85,6 +86,9 @@ export function SettingsScreen() {
   const [mailboxCount, setMailboxCount] = useState<number | null>(null);
   const [calendarDetail, setCalendarDetail] = useState<string | null>(null);
   const [memoryDetail, setMemoryDetail] = useState("Facts Pearl keeps");
+  const [capabilitiesDetail, setCapabilitiesDetail] = useState(
+    "What you can sell",
+  );
   const [usageDetail, setUsageDetail] = useState("Spend by period");
 
   useFocusEffect(
@@ -93,6 +97,19 @@ export function SettingsScreen() {
       void fetchMemories()
         .then((snapshot) => {
           if (!cancelled) setMemoryDetail(memoryCountLabel(snapshot.entries.length));
+        })
+        .catch(() => {});
+      void fetchCapabilities(false)
+        .then((rows) => {
+          if (!cancelled) {
+            setCapabilitiesDetail(
+              rows.length === 0
+                ? "What you can sell"
+                : rows.length === 1
+                  ? "1 capability"
+                  : `${String(rows.length)} capabilities`,
+            );
+          }
         })
         .catch(() => {});
       void getConnections()
@@ -217,6 +234,13 @@ export function SettingsScreen() {
   );
   const showModels = search.matches("Models", selectedLabel);
   const showMemory = search.matches("Memory", memoryDetail);
+  const showCapabilities = search.matches(
+    "Capabilities",
+    capabilitiesDetail,
+    "sell",
+    "product",
+    "service",
+  );
   const showSchemas = search.matches("Schemas", "Precise concept definitions");
   const showSkills = search.matches("Skills", "Custom and published");
   const showUsage = search.matches("Usage", usageDetail);
@@ -234,7 +258,12 @@ export function SettingsScreen() {
   const showThink =
     showAnswers || showResearch || showPlan || showDrafting || showAnalysis;
   const showMake = showCoder || showVisualize || showDesign;
-  const showAgent = showModels || showMemory || showSchemas || showSkills;
+  const showAgent =
+    showModels ||
+    showMemory ||
+    showCapabilities ||
+    showSchemas ||
+    showSkills;
   const showUsageSection = showUsage || showStorage || search.matches("Billing");
   const showHostingCard = showConnected || showSelfHost;
 
@@ -434,7 +463,12 @@ export function SettingsScreen() {
                 label="Models"
                 detail={selectedLabel}
                 onPress={() => router.push("/models")}
-                showSeparator={showMemory || showSchemas || showSkills}
+                showSeparator={
+                  showMemory ||
+                  showCapabilities ||
+                  showSchemas ||
+                  showSkills
+                }
               />
             ) : null}
             {showMemory ? (
@@ -445,6 +479,19 @@ export function SettingsScreen() {
                 label="Memory"
                 detail={memoryDetail}
                 onPress={() => router.push("/memory")}
+                showSeparator={
+                  showCapabilities || showSchemas || showSkills
+                }
+              />
+            ) : null}
+            {showCapabilities ? (
+              <SettingsRow
+                icon={
+                  <Icon as={SparklesIcon} className="size-5 text-emerald-500" />
+                }
+                label="Capabilities"
+                detail={capabilitiesDetail}
+                onPress={() => router.push("/capabilities")}
                 showSeparator={showSchemas || showSkills}
               />
             ) : null}

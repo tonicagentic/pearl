@@ -101,6 +101,21 @@ const VERB_PAIRS: Record<string, VerbPair> = {
   generate_svg: { live: "Writing", settled: "Wrote", infinitive: "write" },
   load_skill: { live: "Loading", settled: "Loaded", infinitive: "load" },
   get_profile: { live: "Loading", settled: "Loaded", infinitive: "load" },
+  list_capabilities: {
+    live: "Loading",
+    settled: "Loaded",
+    infinitive: "load",
+  },
+  save_capability: {
+    live: "Saving",
+    settled: "Saved",
+    infinitive: "save",
+  },
+  archive_capability: {
+    live: "Archiving",
+    settled: "Archived",
+    infinitive: "archive",
+  },
   file__save_memory: {
     live: "Remembering",
     settled: "Remembered",
@@ -139,6 +154,9 @@ const VERB_PAIRS: Record<string, VerbPair> = {
 
 const DEFAULT_CHIPS: Record<string, string> = {
   get_profile: "profile",
+  list_capabilities: "capabilities",
+  save_capability: "capability",
+  archive_capability: "capability",
   build_run: "EAS build",
   build_submit: "EAS submit",
   simulator_start: "Expo simulator",

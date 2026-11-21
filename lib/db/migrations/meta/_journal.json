@@ -351,6 +351,13 @@
       "when": 1795711000000,
       "tag": "0052_directory_listing",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1795712000000,
+      "tag": "0053_capability",
+      "breakpoints": true
     }
   ]
 }

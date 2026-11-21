@@ -85,6 +85,14 @@ export function UserMenu({
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
+            router.push("/settings/capabilities");
+          }}
+        >
+          Capabilities
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
             router.push("/artifacts");
           }}
         >

@@ -50,6 +50,17 @@ test("GTM skill pack and instructions are present", async () => {
   assert.match(discovery, /past.?behavior|last time/i);
   assert.match(discovery, /do not pitch|don't pitch/i);
   assert.match(discovery, /TAM|citation|cite/i);
+  assert.match(discovery, /list_capabilities/);
+
+  const offer = await readFile(
+    "agent/skills/offer-discovery/SKILL.md",
+    "utf8",
+  );
+  assert.match(offer, /list_capabilities|stored capabilities/);
+
+  const root = await readFile("agent/instructions.md", "utf8");
+  assert.match(root, /save_capability/);
+  assert.match(root, /list_capabilities/);
 });
 
 test("Tempo, Sheets, and Gmail compose connections are registered", async () => {

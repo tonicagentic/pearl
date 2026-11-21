@@ -16,9 +16,11 @@ the user's price, or uniqueness claims without evidence from this turn.
 When the user has a capability ("I know how to build X") or asks for niche
 markets:
 
-1. Show a light Offer record in the reply — Name from their words (e.g.
-   "AI agents"), Kind `specific product` or blank, **What it does: blank /
-   unknown**, **Pain: blank / unknown**.
+1. Read stored capabilities with `list_capabilities` when the catalog may
+   already hold what they sell. Show a light Offer record in the reply —
+   Name from their words or a stored capability (e.g. "AI agents"), Kind
+   `specific product` or blank, **What it does: blank / unknown**, **Pain:
+   blank / unknown**.
 2. Ask for those blanks in the same reply (what it does + which pain). On
    niche / "interest me and be profitable" asks, also ask what would interest
    them and what "profitable" means — in this same message (interest question

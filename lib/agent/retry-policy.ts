@@ -349,6 +349,25 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     2,
     "DB read of the caller's own identity profile, no side effect.",
   ),
+  // Marketable capabilities (skills/products/services the user can sell).
+  list_capabilities: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "DB read of the caller's capability catalog, no side effect.",
+  ),
+  save_capability: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Upsert by id or case-insensitive name; identical retries converge on the same row.",
+  ),
+  archive_capability: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Idempotent status write to archived; a second archive is a no-op.",
+  ),
   // Opt-in HITL question (eve ask_question). Parks; no durable write.
   ask_question: policy(
     true,
