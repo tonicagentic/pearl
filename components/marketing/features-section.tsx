@@ -5,7 +5,6 @@ import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   AgentsDemo,
   ApprovalsDemo,
-  ConnectionsDemo,
   MemoryDemo,
   RoutinesDemo,
   SkillsDemo,
@@ -16,11 +15,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const FEATURES = [
-  {
-    title: "Works in your apps",
-    body: "Connect Gmail, Calendar, Drive, GitHub, and more from Settings.",
-    Demo: ConnectionsDemo,
-  },
   {
     title: "Skills",
     body: "Teach Pearl a workflow once. It can reuse the steps later.",
