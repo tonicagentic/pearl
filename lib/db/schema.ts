@@ -1342,3 +1342,50 @@ export const connectedAgent = pgTable(
 );
 
 export type ConnectedAgentRow = typeof connectedAgent.$inferSelect;
+
+/** Status for self-serve / curated directory partners Pearl can suggest. */
+export type DirectoryListingStatus = "pending" | "approved" | "rejected";
+
+/** How the listing entered the directory. */
+export type DirectoryListingSource = "self_serve";
+
+/**
+ * Local businesses and creatives that Pearl may suggest.
+ * Self-serve joins start as `pending`; operators approve via SQL for v1.
+ */
+export const directoryListing = pgTable(
+  "directory_listing",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    category: text("category").notNull(),
+    city: text("city").notNull(),
+    region: text("region"),
+    country: text("country").notNull().default("US"),
+    description: text("description").notNull(),
+    website: text("website"),
+    instagram: text("instagram"),
+    contactEmail: text("contact_email"),
+    contactPhone: text("contact_phone"),
+    status: text("status")
+      .$type<DirectoryListingStatus>()
+      .notNull()
+      .default("pending"),
+    source: text("source")
+      .$type<DirectoryListingSource>()
+      .notNull()
+      .default("self_serve"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_directory_listing_slug").on(table.slug),
+    index("idx_directory_listing_status").on(table.status, table.createdAt),
+    index("idx_directory_listing_category").on(table.category, table.status),
+  ],
+);
+
+export type DirectoryListing = typeof directoryListing.$inferSelect;

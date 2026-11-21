@@ -14,12 +14,14 @@ type FooterNavLink = {
 const PRODUCT_LINKS: readonly FooterNavLink[] = [
   { href: "/#features", label: "Features" },
   { href: "/marketplace", label: "Marketplace" },
+  { href: "/business", label: "For businesses" },
   { href: "/pricing", label: "Pricing" },
   { href: "/download", label: "Download" },
 ];
 
 const RESOURCE_LINKS: readonly FooterNavLink[] = [
   { href: "/marketplace", label: "Marketplace" },
+  { href: "/business", label: "For businesses" },
   { href: "/#faq", label: "FAQ" },
   { href: GITHUB_URL, label: "GitHub", external: true },
 ];
