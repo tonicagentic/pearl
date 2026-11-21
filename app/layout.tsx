@@ -35,7 +35,21 @@ export const metadata: Metadata = {
   description,
   applicationName: title,
   icons: {
-    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      {
+        url: "/favicon-dark.png",
+        type: "image/png",
+        sizes: "64x64",
+        media: "(prefers-color-scheme: light)",
+      },
+      {
+        url: "/favicon-light.png",
+        type: "image/png",
+        sizes: "64x64",
+        media: "(prefers-color-scheme: dark)",
+      },
+    ],
     shortcut: ["/icon.svg"],
     apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
   },

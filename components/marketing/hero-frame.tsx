@@ -397,6 +397,7 @@ function HeroStage({
           src={HERO_COVER_SRC}
         />
       </div>
+      <PearlIcon className="pointer-events-none absolute top-4 left-4 z-20 size-8 text-white drop-shadow-sm sm:top-5 sm:left-5 sm:size-9" />
       <div className="relative z-10 p-[2em]">{children}</div>
     </div>
   );

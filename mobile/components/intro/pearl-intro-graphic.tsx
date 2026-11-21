@@ -1,4 +1,4 @@
-import { Image, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useCSSVariable } from "uniwind";
 
 import type {
@@ -6,9 +6,8 @@ import type {
   PearlIntroPanelId,
 } from "@/components/intro/pearl-intro-panels";
 import { PEARL_INTRO_PANELS } from "@/components/intro/pearl-intro-panels";
+import { PearlIcon } from "@/components/pearl-icon";
 import { Text } from "@/components/ui/text";
-
-const icon = require("../../assets/icon.png");
 
 /** Decorative chat-bubble collage for one intro panel. */
 export function PearlIntroGraphic({
@@ -57,11 +56,7 @@ export function PearlIntroGraphic({
           },
         ]}
       >
-        <Image
-          source={icon}
-          style={styles.avatar}
-          accessibilityIgnoresInvertColors
-        />
+        <PearlIcon size={56} color={foregroundColor ?? "#111111"} />
       </View>
     </View>
   );
@@ -148,10 +143,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
     zIndex: 2,
-  },
-  avatar: {
-    width: 72,
-    height: 72,
   },
   bubble: {
     position: "absolute",

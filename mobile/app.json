@@ -16,6 +16,7 @@
         "webcredentials:pearl.tonicagentic.com"
       ],
       "entitlements": {
+        "com.apple.developer.applesignin": ["Default"],
         "com.apple.developer.associated-domains": [
           "webcredentials:pearl.diy",
           "webcredentials:pearl.tonicagentic.com"
@@ -86,7 +87,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+          "icon": "./assets/notification-icon.png",
           "color": "#111111",
           "defaultChannel": "default"
         }
