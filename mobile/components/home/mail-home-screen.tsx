@@ -29,7 +29,7 @@ import type { CustomAgentDto } from "@/src/custom-agents-client";
 const IS_IOS = Platform.OS === "ios";
 
 /**
- * Mail-style home: history sidebar button left; Pearl|Agents switcher;
+ * Mail-style home: history sidebar button left; Chat|Delegate switcher;
  * New chat / New agent right. Profile lives in the drawer dock.
  */
 export function MailHomeScreen() {

@@ -9,7 +9,7 @@ import {
   type HomeTab,
 } from "@/components/home/home-tab";
 
-/** Native Chat | Agents segmented control for the home header. */
+/** Native Chat | Delegate segmented control for the home header. */
 export function HomeTabSwitcher({
   tab,
   onChange,
@@ -19,7 +19,7 @@ export function HomeTabSwitcher({
 }) {
   if (Platform.OS === "ios") {
     return (
-      <Host matchContents={{ vertical: true }} style={{ minWidth: 180 }}>
+      <Host matchContents={{ vertical: true }} style={{ minWidth: 210 }}>
         <Picker
           selection={tab}
           onSelectionChange={(value) => {
