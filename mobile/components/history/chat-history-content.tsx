@@ -43,6 +43,11 @@ import {
   chatPresenceAccessibilityLabel,
 } from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
+import {
+  usePearlForeground,
+  usePearlMutedBackground,
+  usePearlScreenBackground,
+} from "@/src/navigation-theme";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 import type { ThreadTraceEvent } from "@/src/thread-trace";
 import { useStackSearch } from "@/src/use-stack-search";
@@ -92,13 +97,9 @@ export function ChatHistoryContent({
   const mutedForeground = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
-  const foregroundColor = useCSSVariable("--color-foreground") as
-    | string
-    | undefined;
-  const mutedColor = useCSSVariable("--color-muted") as string | undefined;
-  const pageBackground = useCSSVariable("--color-background") as
-    | string
-    | undefined;
+  const foregroundColor = usePearlForeground();
+  const mutedColor = usePearlMutedBackground();
+  const pageBackground = usePearlScreenBackground();
 
   useFocusEffect(
     useCallback(() => {
@@ -283,7 +284,7 @@ export function ChatHistoryContent({
             paddingHorizontal: 12,
             height: 40,
             borderRadius: 12,
-            backgroundColor: mutedColor ?? "#F2F2F7",
+            backgroundColor: mutedColor,
           }}
         >
           <Icon as={SearchIcon} className="size-4 text-muted-foreground" />
@@ -393,9 +394,7 @@ export function ChatHistoryListAndroid({
       ),
     [projects],
   );
-  const pageBackground = useCSSVariable("--color-background") as
-    | string
-    | undefined;
+  const pageBackground = usePearlScreenBackground();
   const borderColor = useCSSVariable("--color-border") as string | undefined;
   const mutedDot = borderColor ?? "#3A3A3C";
 

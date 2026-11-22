@@ -12,7 +12,10 @@ import {
   isGlassEffectAPIAvailable,
   isLiquidGlassAvailable,
 } from "expo-glass-effect";
-import { useCSSVariable } from "uniwind";
+import {
+  usePearlCardBackground,
+  usePearlHairlineBorder,
+} from "@/src/navigation-theme";
 
 /** True when iOS liquid glass APIs are present (ignores Reduce Transparency). */
 export function canUseLiquidGlass(): boolean {
@@ -36,7 +39,8 @@ export function LiquidGlassSurface({
   readonly interactive?: boolean;
   readonly fallbackColor?: string;
 }) {
-  const cardColor = useCSSVariable("--color-card") as string | undefined;
+  const cardColor = usePearlCardBackground();
+  const hairline = usePearlHairlineBorder();
   const [reducedTransparency, setReducedTransparency] = useState(
     !canUseLiquidGlass(),
   );
@@ -77,9 +81,9 @@ export function LiquidGlassSurface({
       style={[
         StyleSheet.absoluteFill,
         {
-          backgroundColor: fallbackColor ?? cardColor ?? "#FFFFFF",
+          backgroundColor: fallbackColor ?? cardColor,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: "rgba(0,0,0,0.08)",
+          borderColor: hairline,
         },
         style,
       ]}

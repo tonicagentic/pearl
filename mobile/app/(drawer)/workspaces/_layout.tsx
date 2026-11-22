@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
 
 import { DrawerScene } from "@/components/navigation/drawer-scene";
+import { usePearlStackScreenOptions } from "@/src/navigation-theme";
 
 /** Keep Workspaces list under project/plan pushes so native back works. */
 export const unstable_settings = {
@@ -8,15 +9,11 @@ export const unstable_settings = {
 };
 
 export default function WorkspacesStackLayout() {
+  const screenOptions = usePearlStackScreenOptions();
+
   return (
     <DrawerScene>
-      <Stack
-        screenOptions={{
-          headerShown: true,
-          headerShadowVisible: false,
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      >
+      <Stack screenOptions={screenOptions}>
         <Stack.Screen name="index" options={{ title: "Workspaces" }} />
         <Stack.Screen
           name="projects/[id]/index"

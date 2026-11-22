@@ -1,5 +1,9 @@
 import { Pressable, View, type StyleProp, type ViewStyle } from "react-native";
-import { useCSSVariable } from "uniwind";
+
+import {
+  usePearlCardBackground,
+  usePearlForeground,
+} from "@/src/navigation-theme";
 
 /**
  * Menu handle: two bars (top slightly longer).
@@ -17,15 +21,8 @@ export function DrawerButton({
   readonly style?: StyleProp<ViewStyle>;
   readonly variant?: "disc" | "bare";
 }) {
-  const foreground = useCSSVariable("--color-foreground") as
-    | string
-    | undefined;
-  const card = useCSSVariable("--color-card") as string | undefined;
-  const background = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const lineColor = foreground ?? "#3A3A3C";
-  const backgroundColor = card ?? background ?? "#F4F4F5";
+  const lineColor = usePearlForeground();
+  const backgroundColor = usePearlCardBackground();
   const bare = variant === "bare";
 
   return (

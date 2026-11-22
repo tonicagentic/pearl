@@ -6,7 +6,8 @@ import Animated, {
   useAnimatedStyle,
 } from "react-native-reanimated";
 import { useDrawerProgress } from "expo-router/drawer";
-import { useCSSVariable } from "uniwind";
+
+import { usePearlScreenBackground } from "@/src/navigation-theme";
 
 /** Rounded peek card (ChatGPT-style). */
 const SHEET_RADIUS = 38;
@@ -19,10 +20,7 @@ const DRAWER_SCALE_FROM = 0.96;
  */
 export function DrawerScene({ children }: { readonly children: ReactNode }) {
   const progress = useDrawerProgress();
-  const pageBackground = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const sheetFill = pageBackground ?? "#FFFFFF";
+  const sheetFill = usePearlScreenBackground();
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [

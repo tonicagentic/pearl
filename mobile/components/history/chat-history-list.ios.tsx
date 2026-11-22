@@ -42,6 +42,11 @@ import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
 import {
+  usePearlCardBackground,
+  usePearlMutedBackground,
+  usePearlScreenBackground,
+} from "@/src/navigation-theme";
+import {
   CHAT_PRESENCE_AMBER,
   CHAT_PRESENCE_BLUE,
   chatListPresence,
@@ -86,19 +91,16 @@ export function ChatHistoryListIOS({
     selectionError,
   } = useChats();
   const rows = search.active ? (search.hits ?? []) : chats;
-  const pageBackground = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const backgroundColor = pageBackground ?? "#FFFFFF";
+  const backgroundColor = usePearlScreenBackground();
+  const cardBackground = usePearlCardBackground();
   const mutedForeground = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
-  const mutedFill = useCSSVariable("--color-muted") as string | undefined;
+  const selectedRowBg = usePearlMutedBackground();
   const mutedColor = mutedForeground ?? "#8E8E93";
-  /** Selected-row wash (matches Android `bg-muted/50`). */
-  const selectedRowBg = mutedFill ?? "rgba(120, 120, 128, 0.18)";
   const isDrawer = chrome === "drawer";
-  const clearRow = "#00000000";
+  /** Unselected drawer rows paint page bg so SwiftUI light press wash can't show. */
+  const unselectedRowBg = isDrawer ? backgroundColor : cardBackground;
   const rowChrome = [
     listRowInsets({
       top: isDrawer ? 12 : 10,
@@ -107,7 +109,10 @@ export function ChatHistoryListIOS({
       trailing: isDrawer ? 20 : 16,
     }),
     ...(isDrawer
-      ? [listRowSeparator("hidden" as const), listRowBackground(clearRow)]
+      ? [
+          listRowSeparator("hidden" as const),
+          listRowBackground(unselectedRowBg),
+        ]
       : []),
   ];
 
@@ -220,6 +225,7 @@ export function ChatHistoryListIOS({
                     chat={chat}
                     selected={activeChatId === chat.id}
                     selectedRowBg={selectedRowBg}
+                    unselectedRowBg={unselectedRowBg}
                     mutedColor={mutedColor}
                     projectName={
                       chat.projectId
@@ -266,6 +272,7 @@ function RecentChatRow({
   chat,
   selected,
   selectedRowBg,
+  unselectedRowBg,
   mutedColor,
   projectName,
   onOpen,
@@ -275,6 +282,7 @@ function RecentChatRow({
   readonly chat: ChatListItem;
   readonly selected: boolean;
   readonly selectedRowBg: string;
+  readonly unselectedRowBg: string;
   readonly mutedColor: string;
   readonly projectName: string | null;
   readonly onOpen: () => void;
@@ -285,11 +293,7 @@ function RecentChatRow({
   const when = formatChatUpdatedAt(chat.updatedAt);
   const projectId = chat.projectId ?? null;
   const isDrawer = chrome === "drawer";
-  const rowBackground = selected
-    ? selectedRowBg
-    : isDrawer
-      ? "#00000000"
-      : null;
+  const rowBackground = selected ? selectedRowBg : unselectedRowBg;
   const markTint =
     presence === "waiting"
       ? CHAT_PRESENCE_AMBER
@@ -384,7 +388,7 @@ function RecentChatRow({
           trailing: isDrawer ? 20 : 16,
         }),
         ...(isDrawer ? [listRowSeparator("hidden" as const)] : []),
-        ...(rowBackground != null ? [listRowBackground(rowBackground)] : []),
+        listRowBackground(rowBackground),
       ]}
     >
       <ContextMenu>

@@ -9,6 +9,7 @@ import {
   HOME_TABS,
   type HomeTab,
 } from "@/components/home/home-tab";
+import { usePearlCardBackground } from "@/src/navigation-theme";
 
 const CAPSULE_RADIUS = 18;
 const CAPSULE_MIN_WIDTH = 210;
@@ -21,9 +22,12 @@ export function HomeTabSwitcher({
   readonly tab: HomeTab;
   readonly onChange: (tab: HomeTab) => void;
 }) {
+  const cardColor = usePearlCardBackground();
+
   if (Platform.OS === "ios") {
     return (
       <LiquidGlassShell
+        fallbackColor={cardColor}
         style={{
           minWidth: CAPSULE_MIN_WIDTH,
           borderRadius: CAPSULE_RADIUS,
@@ -56,6 +60,7 @@ export function HomeTabSwitcher({
 
   return (
     <LiquidGlassShell
+      fallbackColor={cardColor}
       style={{
         borderRadius: CAPSULE_RADIUS,
         borderCurve: "continuous",

@@ -1,10 +1,13 @@
 import { useWindowDimensions } from "react-native";
 import { Drawer } from "expo-router/drawer";
-import { useCSSVariable } from "uniwind";
 
 import { DrawerPanel } from "@/components/navigation/drawer-panel";
 import { PearlDrawerProvider } from "@/components/navigation/drawer-context";
 import { HeaderDrawerButton } from "@/components/navigation/header-drawer-button";
+import {
+  usePearlHeaderTint,
+  usePearlScreenBackground,
+} from "@/src/navigation-theme";
 import { ObserveInteractiveMarker } from "@/src/observe";
 
 const MAX_PANEL_WIDTH = 320;
@@ -17,9 +20,8 @@ const MAX_PANEL_WIDTH = 320;
 export default function DrawerLayout() {
   const { width: windowWidth } = useWindowDimensions();
   const panelWidth = Math.min(MAX_PANEL_WIDTH, Math.round(windowWidth * 0.82));
-  const pageBackground = useCSSVariable("--color-background") as
-    | string
-    | undefined;
+  const pageBackground = usePearlScreenBackground();
+  const headerTintColor = usePearlHeaderTint();
 
   return (
     <PearlDrawerProvider>
@@ -31,6 +33,8 @@ export default function DrawerLayout() {
         screenOptions={{
           headerShown: true,
           headerShadowVisible: false,
+          headerTintColor,
+          headerStyle: { backgroundColor: pageBackground },
           drawerType: "back",
           overlayColor: "transparent",
           swipeEnabled: true,
@@ -41,10 +45,10 @@ export default function DrawerLayout() {
           headerLeft: () => null,
           drawerStyle: {
             width: panelWidth,
-            backgroundColor: pageBackground ?? "#F7F7F8",
+            backgroundColor: pageBackground,
           },
           sceneStyle: {
-            backgroundColor: pageBackground ?? "#FFFFFF",
+            backgroundColor: pageBackground,
           },
         }}
       >

@@ -1,17 +1,14 @@
 import { Stack } from "expo-router";
 
 import { DrawerScene } from "@/components/navigation/drawer-scene";
+import { usePearlStackScreenOptions } from "@/src/navigation-theme";
 
 export default function SettingsStackLayout() {
+  const screenOptions = usePearlStackScreenOptions();
+
   return (
     <DrawerScene>
-      <Stack
-        screenOptions={{
-          headerShown: true,
-          headerShadowVisible: false,
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      >
+      <Stack screenOptions={screenOptions}>
         <Stack.Screen name="index" options={{ title: "Profile" }} />
         <Stack.Screen name="account" options={{ title: "Account" }} />
         <Stack.Screen name="identity" options={{ title: "Identity" }} />

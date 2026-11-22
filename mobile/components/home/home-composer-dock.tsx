@@ -18,6 +18,10 @@ import { SquarePenIcon } from "lucide-react-native";
 
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
+import {
+  usePearlCardBackground,
+  usePearlHairlineBorder,
+} from "@/src/navigation-theme";
 
 const CAN_USE_LIQUID_GLASS =
   Platform.OS === "ios" &&
@@ -46,11 +50,14 @@ export function HomeComposerDock({
   readonly dockRef?: React.RefObject<ComponentRef<typeof View> | null>;
 }) {
   const insets = useSafeAreaInsets();
-  const [reducedTransparency, setReducedTransparency] = useState(true);
+  const [reducedTransparency, setReducedTransparency] = useState(
+    !CAN_USE_LIQUID_GLASS,
+  );
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
-  const cardColor = useCSSVariable("--color-card") as string | undefined;
+  const cardColor = usePearlCardBackground();
+  const hairline = usePearlHairlineBorder();
 
   const restingPad = Math.max(insets.bottom, 12) + 4;
   const useGlass = CAN_USE_LIQUID_GLASS && !reducedTransparency;
@@ -93,9 +100,9 @@ export function HomeComposerDock({
             StyleSheet.absoluteFill,
             {
               borderRadius: COMPOSER_HEIGHT / 2,
-              backgroundColor: cardColor ?? "#FFFFFF",
+              backgroundColor: cardColor,
               borderWidth: StyleSheet.hairlineWidth,
-              borderColor: "rgba(0,0,0,0.08)",
+              borderColor: hairline,
             },
           ]}
         />

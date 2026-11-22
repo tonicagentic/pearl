@@ -28,8 +28,6 @@ import {
   scrollEdgeEffectStyle,
   shapes,
 } from "@expo/ui/swift-ui/modifiers";
-import { useCSSVariable } from "uniwind";
-
 import {
   AgentMark,
   agentListSubtitle,
@@ -45,6 +43,7 @@ import {
   fetchCustomAgents,
   type CustomAgentDto,
 } from "@/src/custom-agents-client";
+import { usePearlScreenBackground } from "@/src/navigation-theme";
 import {
   DEFAULT_AGENT_MARK_ACCENT,
   DEFAULT_AGENT_MARK_BROWS,
@@ -82,11 +81,8 @@ export function HistoryListIOS({
   readonly bottomInset?: number;
 }) {
   const { newChat, selectChat } = useChats();
-  const pageBackground = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const backgroundColor = pageBackground ?? "#FFFFFF";
-  const clearRow = "#00000000";
+  const backgroundColor = usePearlScreenBackground();
+  const clearRow = backgroundColor;
 
   const [agents, setAgents] = useState<readonly CustomAgentDto[] | null>(null);
   const orderedAgents = useMemo(

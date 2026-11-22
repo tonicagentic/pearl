@@ -13,8 +13,6 @@ import {
 import { useFocusEffect } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { FileIcon, ImageIcon, Trash2Icon } from "lucide-react-native";
-import { useCSSVariable } from "uniwind";
-
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
@@ -26,6 +24,10 @@ import {
   listArtifacts,
   type ArtifactDto,
 } from "@/src/artifacts-client";
+import {
+  usePearlMutedBackground,
+  usePearlScreenBackground,
+} from "@/src/navigation-theme";
 import { useStackSearch } from "@/src/use-stack-search";
 
 type Filter = "all" | "files" | "images";
@@ -38,10 +40,8 @@ export function LibraryScreen() {
   const [busyPath, setBusyPath] = useState<string | null>(null);
   const search = useStackSearch();
   const { width } = useWindowDimensions();
-  const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const mutedColor = useCSSVariable("--color-muted") as string | undefined;
+  const backgroundColor = usePearlScreenBackground();
+  const mutedColor = usePearlMutedBackground();
 
   const visible = useMemo(() => {
     const rows = items ?? [];
@@ -255,7 +255,7 @@ export function LibraryScreen() {
                         width: tile,
                         borderRadius: 12,
                         overflow: "hidden",
-                        backgroundColor: mutedColor ?? "#F2F2F7",
+                        backgroundColor: mutedColor,
                       }}
                     >
                       <Image

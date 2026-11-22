@@ -25,6 +25,13 @@ import { usePearlDrawer } from "@/components/navigation/drawer-context";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import { initials as viewerInitials } from "@/src/initials";
+import {
+  usePearlForeground,
+  usePearlHairlineBorder,
+  usePearlMutedBackground,
+  usePearlPressWash,
+  usePearlScreenBackground,
+} from "@/src/navigation-theme";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 
 const CHAT_PILL_BLUE = "#007AFF";
@@ -82,16 +89,14 @@ export function DrawerPanel({
   );
   const { isAnonymous, viewerEmail, viewerName } = useAuth();
   const { newChat } = useChats();
-  const foregroundColor = useCSSVariable("--color-foreground") as
-    | string
-    | undefined;
+  const foregroundColor = usePearlForeground();
   const mutedForeground = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
-  const mutedColor = useCSSVariable("--color-muted") as string | undefined;
-  const pageBackground = useCSSVariable("--color-background") as
-    | string
-    | undefined;
+  const mutedColor = usePearlMutedBackground();
+  const pageBackground = usePearlScreenBackground();
+  const pressWash = usePearlPressWash();
+  const hairline = usePearlHairlineBorder();
   const [drawerSearchOpen, setDrawerSearchOpen] = useState(false);
   const [projects, setProjects] = useState<readonly ProjectDto[]>([]);
   const profileInitials = isAnonymous
@@ -159,7 +164,7 @@ export function DrawerPanel({
     <View
       style={{
         flex: 1,
-        backgroundColor: pageBackground ?? "#F7F7F8",
+        backgroundColor: pageBackground,
         paddingBottom: Math.max(insets.bottom, 12),
         paddingTop: Math.max(insets.top, 8),
       }}
@@ -203,7 +208,7 @@ export function DrawerPanel({
               borderRadius: 18,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: mutedColor ?? "#EFEFF0",
+              backgroundColor: mutedColor,
             }}
           >
             <Icon
@@ -229,6 +234,7 @@ export function DrawerPanel({
                   icon={row.Icon}
                   onPress={() => go(row.href)}
                   color={foregroundColor}
+                  pressWash={pressWash}
                 />
               ))}
               {projects.length > 0 ? (
@@ -255,6 +261,7 @@ export function DrawerPanel({
                         })
                       }
                       color={foregroundColor}
+                      pressWash={pressWash}
                     />
                   ))}
                 </View>
@@ -262,7 +269,7 @@ export function DrawerPanel({
               <View
                 style={{
                   height: StyleSheet.hairlineWidth,
-                  backgroundColor: "rgba(0,0,0,0.08)",
+                  backgroundColor: hairline,
                   marginHorizontal: 12,
                   marginTop: 12,
                   marginBottom: 4,
@@ -318,9 +325,7 @@ export function DrawerPanel({
             borderRadius: 22,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: isAnonymous
-              ? mutedColor ?? "#E5E5EA"
-              : "#2A9D8F",
+            backgroundColor: isAnonymous ? mutedColor : "#2A9D8F",
           }}
         >
           {isAnonymous ? (
@@ -350,11 +355,13 @@ function DrawerNavRow({
   icon: RowIcon,
   onPress,
   color,
+  pressWash,
 }: {
   readonly label: string;
   readonly icon: typeof InboxIcon;
   readonly onPress: (event: GestureResponderEvent) => void;
   readonly color?: string;
+  readonly pressWash: string;
 }) {
   return (
     <Pressable
@@ -368,13 +375,13 @@ function DrawerNavRow({
         paddingHorizontal: 12,
         paddingVertical: 12,
         borderRadius: 12,
-        backgroundColor: pressed ? "rgba(0,0,0,0.04)" : "transparent",
+        backgroundColor: pressed ? pressWash : "transparent",
       })}
     >
       <Icon as={RowIcon} className="size-5 text-foreground" />
       <Text
         style={{
-          color: color ?? "#111",
+          color: color,
           fontSize: 17,
           fontWeight: "500",
           flexShrink: 1,

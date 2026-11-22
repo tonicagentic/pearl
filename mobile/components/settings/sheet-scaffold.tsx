@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { RefreshControl, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCSSVariable } from "uniwind";
+
+import { usePearlScreenBackground } from "@/src/navigation-theme";
 
 /**
  * Scroll body for stack screens that use the native header for the title.
@@ -21,9 +22,7 @@ export function SheetScaffold({
   readonly refreshing?: boolean;
   readonly onRefresh?: () => void;
 }) {
-  const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
+  const backgroundColor = usePearlScreenBackground();
 
   return (
     <SafeAreaView

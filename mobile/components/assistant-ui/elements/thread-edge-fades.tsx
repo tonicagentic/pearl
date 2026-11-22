@@ -1,6 +1,7 @@
 import { StyleSheet, View } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
-import { useCSSVariable } from "uniwind";
+
+import { usePearlScreenBackground } from "@/src/navigation-theme";
 
 /** Soft top/bottom fades so message overflow dissolves into the chrome. */
 export function ThreadEdgeFades({
@@ -10,8 +11,7 @@ export function ThreadEdgeFades({
   readonly topHeight: number;
   readonly bottomHeight: number;
 }) {
-  const background = (useCSSVariable("--color-background") as string | undefined) ??
-    "#FFFFFF";
+  const background = usePearlScreenBackground();
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>

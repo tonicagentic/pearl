@@ -1,11 +1,10 @@
-import { Stack } from "expo-router";
+import { Stack, ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Platform, View } from "react-native";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "@/src/keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useCSSVariable } from "uniwind";
 
 import { ObserveErrorFallback } from "@/components/observe-error-fallback";
 import { PushNotificationsBridge } from "@/components/push-notifications-bridge";
@@ -28,6 +27,11 @@ import {
   saveModelSelection,
   saveVectorModelSelection,
 } from "@/src/model-preferences";
+import {
+  usePearlHeaderTint,
+  usePearlNavigationTheme,
+  usePearlScreenBackground,
+} from "@/src/navigation-theme";
 import { Observe, ObserveRoot, observeAvailable } from "@/src/observe";
 import { WorkspaceProvider } from "@/src/workspace-context";
 
@@ -77,9 +81,9 @@ export default function RootLayout() {
 
 function AuthenticatedLayout() {
   const { isAnonymous, signedIn, restoring, viewerEmail } = useAuth();
-  const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
+  const navigationTheme = usePearlNavigationTheme();
+  const backgroundColor = usePearlScreenBackground();
+  const headerTintColor = usePearlHeaderTint();
   useEffect(() => {
     configureModelSelectionPersistence(saveModelSelection);
     configureImageModelSelectionPersistence(saveImageModelSelection);
@@ -107,7 +111,10 @@ function AuthenticatedLayout() {
     <ChatsProvider key={accountKey}>
       <WorkspaceProvider>
         <PushNotificationsBridge />
-        <GestureHandlerRootView className="flex-1">
+        <GestureHandlerRootView
+          className="flex-1"
+          style={{ backgroundColor }}
+        >
           <SafeAreaProvider>
             <KeyboardProvider
               enabled={Platform.OS === "ios" && !Platform.isPad}
@@ -119,6 +126,7 @@ function AuthenticatedLayout() {
                 // slides in with the default stack animation.
                 <View style={{ flex: 1, backgroundColor }} />
               ) : (
+                <ThemeProvider value={navigationTheme}>
                 <Stack
                   // Remount per auth zone so home is the initial route, not a
                   // push on top of sign-in (animation: "none" alone is ignored
@@ -129,8 +137,15 @@ function AuthenticatedLayout() {
                       ? {
                           animation: "none",
                           animationTypeForReplace: "pop",
+                          contentStyle: { backgroundColor },
+                          headerStyle: { backgroundColor },
+                          headerTintColor,
                         }
-                      : {}
+                      : {
+                          contentStyle: { backgroundColor },
+                          headerStyle: { backgroundColor },
+                          headerTintColor,
+                        }
                   }
                 >
                   <Stack.Protected
@@ -229,6 +244,7 @@ function AuthenticatedLayout() {
                     />
                   </Stack.Protected>
                 </Stack>
+                </ThemeProvider>
               )}
             </KeyboardProvider>
           </SafeAreaProvider>

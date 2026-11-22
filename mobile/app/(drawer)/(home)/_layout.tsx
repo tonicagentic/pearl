@@ -3,6 +3,10 @@ import { Stack } from "expo-router";
 
 import { DrawerOpenSync } from "@/components/navigation/drawer-context";
 import { DrawerScene } from "@/components/navigation/drawer-scene";
+import {
+  usePearlHeaderTint,
+  usePearlScreenBackground,
+} from "@/src/navigation-theme";
 
 /** Keep Mail/Delegate under /chat pushes so native back morphs to the menu. */
 export const unstable_settings = {
@@ -14,6 +18,9 @@ export const unstable_settings = {
  * custom-agent threads — restores native back and Stack.Toolbar chrome.
  */
 export default function HomeStackLayout() {
+  const backgroundColor = usePearlScreenBackground();
+  const headerTintColor = usePearlHeaderTint();
+
   return (
     <DrawerScene>
       <DrawerOpenSync />
@@ -22,6 +29,9 @@ export default function HomeStackLayout() {
           headerShown: true,
           headerShadowVisible: false,
           headerBackButtonDisplayMode: "minimal",
+          headerTintColor,
+          // Transparent headers stay transparent; content behind must be dark.
+          contentStyle: { backgroundColor },
         }}
       >
         <Stack.Screen
