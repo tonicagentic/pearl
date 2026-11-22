@@ -127,12 +127,19 @@ export function CreateAgentModal({
       onSubmit={primary}
       canSubmit={canSubmit}
       busy={busy && step === 2}
+      sheetTitle="New agent"
+      submitLabel={
+        step === 2 ? "Create agent" : step === 1 ? "Continue" : "Continue"
+      }
       submitAccessibilityLabel={
-        step === 2 ? "Create agent" : step === 1 ? "Continue to character" : "Continue"
+        step === 2
+          ? "Create agent"
+          : step === 1
+            ? "Continue to character"
+            : "Continue"
       }
       leading={step === 0 ? "close" : "back"}
       onLeadingPress={step === 0 ? onClose : goBack}
-      trailing={step === 2 ? "submit" : "forward"}
       showTitleField={step === 0}
       title={name}
       onChangeTitle={setName}
@@ -140,9 +147,22 @@ export function CreateAgentModal({
       titleAccessibilityLabel="Agent name"
       titleMaxLength={80}
       titleAutoFocus={step === 0}
-      snapPoints={["full"]}
-      scrollable
+      scrollable={step !== 0}
       error={error}
+      footer={
+        step === 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Choose from a template"
+            className="self-center rounded-full border border-border bg-card px-4 py-2 active:opacity-80"
+            onPress={openDirectory}
+          >
+            <Text variant="label" weight="semibold">
+              Choose from a template
+            </Text>
+          </Pressable>
+        ) : undefined
+      }
       hero={
         step === 2 ? (
           <AgentMarkPicker
@@ -158,18 +178,6 @@ export function CreateAgentModal({
         ) : undefined
       }
     >
-      {step === 0 ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Choose from a template"
-          className="mt-6 self-start rounded-full border border-border bg-card px-4 py-2 active:opacity-80"
-          onPress={openDirectory}
-        >
-          <Text variant="label" weight="semibold">
-            Choose from a template
-          </Text>
-        </Pressable>
-      ) : null}
       {step === 1 ? (
         <TextInput
           accessibilityLabel="Standing instructions"

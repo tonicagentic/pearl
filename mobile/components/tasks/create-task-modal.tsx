@@ -11,7 +11,9 @@ import {
   type IssueDto,
 } from "@/src/issues-client";
 
-/** New-task composer in the shared AddComposer sheet. */
+type Step = 0 | 1;
+
+/** New-task wizard: Title → Notes + dates. */
 export function CreateTaskModal({
   open,
   onClose,
@@ -21,6 +23,7 @@ export function CreateTaskModal({
   readonly onClose: () => void;
   readonly onCreated: (issue: IssueDto) => void;
 }) {
+  const [step, setStep] = useState<Step>(0);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -30,10 +33,10 @@ export function CreateTaskModal({
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
-  const canSubmit = title.trim().length > 0 && !busy;
 
   useEffect(() => {
     if (!open) return;
+    setStep(0);
     setTitle("");
     setDescription("");
     setDueDate("");
@@ -42,8 +45,8 @@ export function CreateTaskModal({
     setBusy(false);
   }, [open]);
 
-  const submit = () => {
-    if (!canSubmit) return;
+  const create = () => {
+    if (busy || title.trim().length === 0) return;
     setBusy(true);
     setError(null);
     void createIssueRequest({
@@ -63,39 +66,69 @@ export function CreateTaskModal({
       });
   };
 
+  const goBack = () => {
+    if (step === 0) {
+      onClose();
+      return;
+    }
+    setError(null);
+    setStep(0);
+  };
+
+  const primary = () => {
+    if (step === 0) {
+      if (title.trim().length === 0) return;
+      setError(null);
+      setStep(1);
+      return;
+    }
+    create();
+  };
+
   return (
     <AddComposer
       open={open}
       onClose={onClose}
-      onSubmit={submit}
-      canSubmit={canSubmit}
-      busy={busy}
-      submitAccessibilityLabel="Create task"
+      onSubmit={primary}
+      canSubmit={step === 0 ? title.trim().length > 0 && !busy : !busy}
+      busy={busy && step === 1}
+      sheetTitle="New task"
+      submitLabel={step === 0 ? "Continue" : "Create task"}
+      leading={step === 0 ? "close" : "back"}
+      onLeadingPress={step === 0 ? onClose : goBack}
+      showTitleField={step === 0}
       title={title}
       onChangeTitle={setTitle}
       titlePlaceholder="What needs doing?"
       titleAccessibilityLabel="Task title"
       titleMaxLength={200}
+      titleAutoFocus={step === 0}
+      scrollable={step === 1}
       error={error}
     >
-      <TextInput
-        accessibilityLabel="Task notes"
-        className={cn("mt-2 min-h-24", textVariants({ variant: "body" }))}
-        multiline
-        onChangeText={setDescription}
-        placeholder="Notes"
-        placeholderTextColor={placeholderColor}
-        textAlignVertical="top"
-        value={description}
-      />
-      <View className="mt-6 flex-row gap-3">
-        <TaskDateField label="Due" value={dueDate} onChange={setDueDate} />
-        <TaskDateField
-          label="Review"
-          value={reviewDate}
-          onChange={setReviewDate}
-        />
-      </View>
+      {step === 1 ? (
+        <>
+          <TextInput
+            accessibilityLabel="Task notes"
+            autoFocus
+            className={cn("min-h-24", textVariants({ variant: "body" }))}
+            multiline
+            onChangeText={setDescription}
+            placeholder="Notes"
+            placeholderTextColor={placeholderColor}
+            textAlignVertical="top"
+            value={description}
+          />
+          <View className="mt-6 flex-row gap-3">
+            <TaskDateField label="Due" value={dueDate} onChange={setDueDate} />
+            <TaskDateField
+              label="Review"
+              value={reviewDate}
+              onChange={setReviewDate}
+            />
+          </View>
+        </>
+      ) : null}
     </AddComposer>
   );
 }
