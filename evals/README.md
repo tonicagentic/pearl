@@ -134,6 +134,86 @@ pnpm exec eve eval market-discovery --tag smoke
 pnpm exec eve eval market-discovery/market-size market-discovery/pricing-landscape market-discovery/competitive-landscape
 ```
 
+Together with the suites below, Market Discovery and Sales Prospecting are
+product-facing GTM flows (not the reliability/behavior infra suites).
+
+### `positioning/` — how to talk about the offer for a chosen buyer
+
+Draft ICP and positioning from a known offer + segment, as hypotheses — not a
+prospect list.
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `draft-positioning` | “How should we position this for that buyer?” — ICP/positioning draft marked as hypotheses; no lead list. | gates + judge |
+
+```bash
+pnpm exec eve eval positioning --tag smoke
+```
+
+### `find/` — find companies that match a sector brief
+
+Classic “find N companies in X” list building with Exa (distinct from
+prospecting after a filled Offer/ICP record).
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `find-companies` | “Find me N companies in this sector” — short researched company list. | gates + judge (`costs-exa`) |
+
+```bash
+pnpm exec eve eval find --tag smoke
+```
+
+### `plan-a-trip/` — short trip plans that respect weather
+
+Destination + dates → check weather, then a concise itinerary.
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `weather-itinerary` | “Plan a short trip to X on these dates” — weather check + weather-aware bullets. | gates + judge |
+
+```bash
+pnpm exec eve eval plan-a-trip --tag smoke
+```
+
+### `explain/` — make a mechanism clear
+
+Teach how something works without inventing citations.
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `explain-mechanism` | “Explain how X works” — concrete mechanism explanation; no fabricated sources. | gates + judge |
+
+```bash
+pnpm exec eve eval explain --tag smoke
+```
+
+### `answer/` — short factual answers with sources
+
+Current questions get search + attributable sources.
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `answer-with-sources` | “What’s going on with X this week?” — short answer with search citations. | gates + judge |
+
+```bash
+pnpm exec eve eval answer --tag smoke
+```
+
+### `create-visual-assets/` — images (and honest limits on motion)
+
+Generate Image and product shots via `generate_image`. Motion graphics have no
+video tool yet — the smoke pins honesty (no invented motion URLs).
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `generate-image` | “Generate an illustration of …” — real `generate_image` URL. | gates + judge (`costs-image`) |
+| `create-product-images` | “Create a product photo of …” — catalog-style shot via `generate_image`. | gates + judge (`costs-image`) |
+| `create-motion-graphic` | “Make a short motion graphic …” — no invented video URL; keyframe or clarify. | gates + judge (`costs-image`) |
+
+```bash
+pnpm exec eve eval create-visual-assets --tag smoke
+```
+
 ## Infrastructure each suite depends on
 
 | Capability | Status | Pinned by |
