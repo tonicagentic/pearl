@@ -1,13 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, View } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { Alert, Pressable, View } from "react-native";
+import { useFocusEffect } from "expo-router";
 import {
+  Button,
   Host,
   HStack,
   List,
   RNHostView,
   Section,
   Spacer,
+  SwipeActions,
   Text as SwiftText,
   VStack,
 } from "@expo/ui/swift-ui";
@@ -40,6 +42,7 @@ import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
 import { Text as AppText } from "@/components/ui/text";
 import { useChats } from "@/src/chat-context";
 import {
+  deleteCustomAgentRequest,
   fetchCustomAgents,
   type CustomAgentDto,
 } from "@/src/custom-agents-client";
@@ -121,6 +124,34 @@ export function HistoryListIOS({
     onOpenChat();
   }, [newChat, onOpenChat]);
 
+  const deleteAgent = useCallback((agent: CustomAgentDto) => {
+    Alert.alert(
+      "Delete agent?",
+      `Remove ${agent.name}? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            setAgents((current) =>
+              (current ?? []).filter((row) => row.id !== agent.id),
+            );
+            void deleteCustomAgentRequest(agent.id).catch(() => {
+              Alert.alert(
+                "Could not delete agent",
+                "Check your connection and try again.",
+              );
+              void fetchCustomAgents()
+                .then(setAgents)
+                .catch(() => undefined);
+            });
+          },
+        },
+      ],
+    );
+  }, []);
+
   if (tab === "pearl") {
     return (
       <View
@@ -177,27 +208,6 @@ export function HistoryListIOS({
             listRowSpacing(10),
           ]}
         >
-          {agents !== null && !agentsEmpty ? (
-            <Section>
-              <HStack
-                modifiers={[
-                  listRowBackground(clearRow),
-                  listRowSeparator("hidden"),
-                  onTapGesture(() => router.push("/agent-directory")),
-                  accessibilityLabel("Browse agent directory"),
-                  contentShape(shapes.rectangle()),
-                  frame({ maxWidth: 9999, alignment: "leading" as const }),
-                ]}
-              >
-                <SwiftText
-                  modifiers={[font({ size: 15 }), foregroundStyle("secondary")]}
-                >
-                  Browse directory
-                </SwiftText>
-                <Spacer />
-              </HStack>
-            </Section>
-          ) : null}
           <Section>
             {agents !== null && !agentsEmpty ? (
               <List.ForEach
@@ -211,6 +221,7 @@ export function HistoryListIOS({
                     agent={agent}
                     rowBackground={backgroundColor}
                     onOpen={() => openChat(agent.chatId)}
+                    onDelete={() => deleteAgent(agent)}
                   />
                 )}
               </List.ForEach>
@@ -309,10 +320,12 @@ function AgentRow({
   agent,
   rowBackground,
   onOpen,
+  onDelete,
 }: {
   readonly agent: CustomAgentDto;
   readonly rowBackground: string;
   readonly onOpen: () => void;
+  readonly onDelete: () => void;
 }) {
   const accent = agent.accent || DEFAULT_AGENT_MARK_ACCENT;
   const markShape = agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE;
@@ -325,9 +338,7 @@ function AgentRow({
     instructions: agent.instructions,
   });
   return (
-    <HStack
-      spacing={12}
-      alignment="center"
+    <SwipeActions
       modifiers={[
         listRowInsets({
           top: 10,
@@ -337,45 +348,60 @@ function AgentRow({
         }),
         listRowBackground(rowBackground),
         listRowSeparator("hidden"),
-        ...FULL_ROW_HIT,
-        onTapGesture(onOpen),
-        accessibilityLabel(
-          subtitle ? `${agent.name}, ${subtitle}` : agent.name,
-        ),
       ]}
     >
-      <AgentListMark
-        accent={accent}
-        markShape={markShape}
-        markTalk={markTalk}
-        markBrows={markBrows}
-        markGaze={markGaze}
-      />
-      <VStack spacing={1} alignment="leading">
-        <SwiftText
-          modifiers={[
-            lineLimit(1),
-            font({ size: 16, weight: "semibold" }),
-          ]}
-        >
-          {agent.name}
-        </SwiftText>
-        {subtitle ? (
+      <HStack
+        spacing={12}
+        alignment="center"
+        modifiers={[
+          ...FULL_ROW_HIT,
+          onTapGesture(onOpen),
+          accessibilityLabel(
+            subtitle ? `${agent.name}, ${subtitle}` : agent.name,
+          ),
+        ]}
+      >
+        <AgentListMark
+          accent={accent}
+          markShape={markShape}
+          markTalk={markTalk}
+          markBrows={markBrows}
+          markGaze={markGaze}
+        />
+        <VStack spacing={1} alignment="leading">
           <SwiftText
             modifiers={[
               lineLimit(1),
-              font({ size: 14, weight: "regular" }),
-              foregroundStyle({
-                type: "hierarchical",
-                style: "secondary",
-              }),
+              font({ size: 16, weight: "semibold" }),
             ]}
           >
-            {subtitle}
+            {agent.name}
           </SwiftText>
-        ) : null}
-      </VStack>
-      <Spacer />
-    </HStack>
+          {subtitle ? (
+            <SwiftText
+              modifiers={[
+                lineLimit(1),
+                font({ size: 14, weight: "regular" }),
+                foregroundStyle({
+                  type: "hierarchical",
+                  style: "secondary",
+                }),
+              ]}
+            >
+              {subtitle}
+            </SwiftText>
+          ) : null}
+        </VStack>
+        <Spacer />
+      </HStack>
+      <SwipeActions.Actions edge="trailing" allowsFullSwipe>
+        <Button
+          label="Delete"
+          systemImage="trash"
+          role="destructive"
+          onPress={onDelete}
+        />
+      </SwipeActions.Actions>
+    </SwipeActions>
   );
 }

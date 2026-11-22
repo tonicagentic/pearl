@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Platform, Pressable, ScrollView, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
@@ -18,6 +18,7 @@ import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
 import { Text as AppText } from "@/components/ui/text";
 import { useChats } from "@/src/chat-context";
 import {
+  deleteCustomAgentRequest,
   fetchCustomAgents,
   type CustomAgentDto,
 } from "@/src/custom-agents-client";
@@ -120,6 +121,34 @@ function HistoryListAndroid({
     onOpenChat();
   };
 
+  const deleteAgent = (agent: CustomAgentDto) => {
+    Alert.alert(
+      "Delete agent?",
+      `Remove ${agent.name}? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            setAgents((current) =>
+              (current ?? []).filter((row) => row.id !== agent.id),
+            );
+            void deleteCustomAgentRequest(agent.id).catch(() => {
+              Alert.alert(
+                "Could not delete agent",
+                "Check your connection and try again.",
+              );
+              void fetchCustomAgents()
+                .then(setAgents)
+                .catch(() => undefined);
+            });
+          },
+        },
+      ],
+    );
+  };
+
   if (tab === "pearl") {
     return (
       <SafeAreaView
@@ -185,14 +214,6 @@ function HistoryListAndroid({
           <EmptyAgentsState />
         ) : (
           <View className="mb-8">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Browse agent directory"
-              className="mb-3 self-start rounded-full border border-border bg-card px-3 py-1.5 active:opacity-80"
-              onPress={() => router.push("/agent-directory")}
-            >
-              <AppText variant="secondary">Browse directory</AppText>
-            </Pressable>
             {orderedAgents.map((agent) => {
               const subtitle = agentListSubtitle({
                 name: agent.name,
@@ -212,6 +233,7 @@ function HistoryListAndroid({
                       if (selected) onOpenChat();
                     });
                   }}
+                  onLongPress={() => deleteAgent(agent)}
                 >
                   <AgentMark
                     accent={agent.accent || DEFAULT_AGENT_MARK_ACCENT}
