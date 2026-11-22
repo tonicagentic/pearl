@@ -64,12 +64,19 @@ export function LiquidGlassSurface({
     };
   }, []);
 
+  const flat = StyleSheet.flatten(style) ?? {};
+  // Native GlassView reads cornerConfiguration from the borderRadius *prop*
+  // (style alone often leaves a rounded square).
+  const radius =
+    typeof flat.borderRadius === "number" ? flat.borderRadius : undefined;
+
   if (showGlass) {
     return (
       <GlassView
         pointerEvents="none"
         glassEffectStyle="regular"
         isInteractive={interactive}
+        borderRadius={radius}
         style={[StyleSheet.absoluteFill, style]}
       />
     );
@@ -105,11 +112,23 @@ export function LiquidGlassShell({
   readonly interactive?: boolean;
   readonly fallbackColor?: string;
 }) {
+  // GlassView ignores parent overflow clipping — radius must live on the
+  // glass layer itself or it paints as a rounded square.
+  const flat = StyleSheet.flatten(style) ?? {};
+  const surfaceRadius = {
+    borderRadius: flat.borderRadius,
+    borderTopLeftRadius: flat.borderTopLeftRadius,
+    borderTopRightRadius: flat.borderTopRightRadius,
+    borderBottomLeftRadius: flat.borderBottomLeftRadius,
+    borderBottomRightRadius: flat.borderBottomRightRadius,
+  };
+
   return (
     <View style={[{ overflow: "hidden" }, style]}>
       <LiquidGlassSurface
         interactive={interactive}
         fallbackColor={fallbackColor}
+        style={surfaceRadius}
       />
       <View style={contentStyle}>{children}</View>
     </View>

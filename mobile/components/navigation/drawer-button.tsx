@@ -5,6 +5,9 @@ import {
   usePearlForeground,
 } from "@/src/navigation-theme";
 
+/** Hit target + disc diameter — keep width === height for a true circle. */
+export const DRAWER_BUTTON_SIZE = 44;
+
 /**
  * Menu handle: two bars (top slightly longer).
  * - `disc` (default): ChatGPT-style soft circle + shadow (Android / opaque headers).
@@ -33,9 +36,11 @@ export function DrawerButton({
       onPress={onPress}
       style={[
         {
-          width: 44,
-          height: 44,
-          borderRadius: 22,
+          width: DRAWER_BUTTON_SIZE,
+          height: DRAWER_BUTTON_SIZE,
+          aspectRatio: 1,
+          // Fully round geometric circle (avoid continuous squircle).
+          borderRadius: DRAWER_BUTTON_SIZE / 2,
           alignItems: "center",
           justifyContent: "center",
           backgroundColor: bare ? "transparent" : backgroundColor,

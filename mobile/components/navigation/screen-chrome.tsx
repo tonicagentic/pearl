@@ -9,14 +9,18 @@ import { Stack } from "expo-router";
 import type { LucideIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
-import { DrawerButton } from "@/components/navigation/drawer-button";
-import { HeaderDrawerButton } from "@/components/navigation/header-drawer-button";
+import {
+  DRAWER_BUTTON_SIZE,
+  DrawerButton,
+} from "@/components/navigation/drawer-button";
 import { usePearlDrawer } from "@/components/navigation/drawer-context";
 import { Icon } from "@/components/ui/icon";
 import { StackScreen } from "@/components/ui/stack-screen";
 
-const HIT = 44;
+const HIT = DRAWER_BUTTON_SIZE;
 const IS_IOS = Platform.OS === "ios";
+/** System menu glyph — Toolbar.Button gets real liquid-glass press + circle. */
+const DRAWER_TOOLBAR_ICON = "line.3.horizontal" as const;
 
 /** SF Symbol name for Stack.Toolbar; kept loose so call sites stay ergonomic. */
 type ToolbarSymbol = ComponentProps<typeof Stack.Toolbar.Button>["icon"];
@@ -173,6 +177,7 @@ export function ScreenChrome({
   contentPaddingTop = 12,
   children,
 }: ScreenChromeProps) {
+  const { openDrawer } = usePearlDrawer();
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
@@ -180,20 +185,10 @@ export function ScreenChrome({
     | string
     | undefined;
   // Keep the leading control on the peeked scene while the drawer is open.
-  const showLeading = leading !== "none";
-  // iOS transparent headers: bare glyph inside shared liquid glass so the
-  // control morphs into the system back chevron on push (Delegate → chat).
-  const iosGlassLeading = IS_IOS && transparentHeader;
-  const leadingNode =
-    leading === "history" ? (
-      <HistoryLeadingButton variant={iosGlassLeading ? "bare" : "disc"} />
-    ) : leading === "drawer" ? (
-      iosGlassLeading ? (
-        <HistoryLeadingButton variant="bare" />
-      ) : (
-        <HeaderDrawerButton />
-      )
-    ) : null;
+  const showDrawerLeading = leading === "drawer" || leading === "history";
+  const androidLeading = showDrawerLeading ? (
+    <HistoryLeadingButton variant="disc" />
+  ) : null;
 
   const androidRight = renderAndroidActions(actions);
   const showSearch =
@@ -220,7 +215,7 @@ export function ScreenChrome({
           // headerLeft stacks under the liquid-glass chrome as extra pills.
           headerLeft: IS_IOS
             ? () => null
-            : showLeading && leadingNode
+            : showDrawerLeading && androidLeading
               ? () => (
                   <View
                     style={{
@@ -230,7 +225,7 @@ export function ScreenChrome({
                       justifyContent: "center",
                     }}
                   >
-                    {leadingNode}
+                    {androidLeading}
                   </View>
                 )
               : () => null,
@@ -242,15 +237,18 @@ export function ScreenChrome({
                 : undefined,
         }}
       />
-      {IS_IOS && showLeading && leadingNode ? (
+      {IS_IOS && showDrawerLeading ? (
         <Stack.Toolbar placement="left">
           {/*
-            Keep shared liquid glass (no hidesSharedBackground) so this
-            leading control morphs into the pushed screen’s back button.
+            Native Toolbar.Button — circular liquid glass + press interaction
+            and morph into the system back chevron on push. Custom Toolbar.View
+            glass cannot match that feel.
           */}
-          <Stack.Toolbar.View>
-            <View style={{ width: HIT, height: HIT }}>{leadingNode}</View>
-          </Stack.Toolbar.View>
+          <Stack.Toolbar.Button
+            icon={DRAWER_TOOLBAR_ICON}
+            accessibilityLabel="Open menu"
+            onPress={openDrawer}
+          />
         </Stack.Toolbar>
       ) : null}
       {IS_IOS && actions.length > 0 ? (
