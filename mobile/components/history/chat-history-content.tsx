@@ -44,6 +44,8 @@ import {
 } from "@/src/chat-presence";
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
 import {
+  usePearlDrawerBackground,
+  usePearlDrawerSelectedBackground,
   usePearlForeground,
   usePearlMutedBackground,
   usePearlScreenBackground,
@@ -100,6 +102,8 @@ export function ChatHistoryContent({
   const foregroundColor = usePearlForeground();
   const mutedColor = usePearlMutedBackground();
   const pageBackground = usePearlScreenBackground();
+  const drawerBackground = usePearlDrawerBackground();
+  const listBackground = isDrawer ? drawerBackground : pageBackground;
 
   useFocusEffect(
     useCallback(() => {
@@ -269,7 +273,7 @@ export function ChatHistoryContent({
     <View
       style={{
         flex: 1,
-        backgroundColor: pageBackground,
+        backgroundColor: listBackground,
         paddingTop: topInset,
       }}
     >
@@ -395,6 +399,8 @@ export function ChatHistoryListAndroid({
     [projects],
   );
   const pageBackground = usePearlScreenBackground();
+  const drawerBackground = usePearlDrawerBackground();
+  const listBackground = isDrawer ? drawerBackground : pageBackground;
   const borderColor = useCSSVariable("--color-border") as string | undefined;
   const mutedDot = borderColor ?? "#3A3A3C";
 
@@ -453,7 +459,7 @@ export function ChatHistoryListAndroid({
         : "Sign in to see chats";
 
   return (
-    <View style={{ flex: 1, backgroundColor: pageBackground }}>
+    <View style={{ flex: 1, backgroundColor: listBackground }}>
       <FlatList
         className="flex-1"
         contentContainerClassName={isDrawer ? "px-1 pt-0" : "px-4 pt-0"}
@@ -572,6 +578,7 @@ function HistoryChatRowAndroid({
   const presence = chatListPresence(chat);
   const when = formatChatUpdatedAt(chat.updatedAt);
   const isDrawer = chrome === "drawer";
+  const drawerSelectedBg = usePearlDrawerSelectedBackground();
   const markColor =
     presence === "waiting"
       ? CHAT_PRESENCE_AMBER
@@ -584,7 +591,10 @@ function HistoryChatRowAndroid({
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={chatPresenceAccessibilityLabel(chat.title, presence)}
-      className={`min-h-12 flex-row items-center rounded-lg px-5 ${isDrawer ? "gap-0" : "gap-2.5 px-3"} ${selected ? "bg-muted/50" : ""}`}
+      className={`min-h-12 flex-row items-center rounded-lg px-5 ${isDrawer ? "gap-0" : "gap-2.5 px-3"} ${selected && !isDrawer ? "bg-muted/50" : ""}`}
+      style={
+        selected && isDrawer ? { backgroundColor: drawerSelectedBg } : undefined
+      }
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={350}

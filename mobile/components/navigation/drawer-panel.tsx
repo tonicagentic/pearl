@@ -26,11 +26,11 @@ import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import { initials as viewerInitials } from "@/src/initials";
 import {
+  usePearlDrawerBackground,
   usePearlForeground,
   usePearlHairlineBorder,
   usePearlMutedBackground,
   usePearlPressWash,
-  usePearlScreenBackground,
 } from "@/src/navigation-theme";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 
@@ -94,7 +94,7 @@ export function DrawerPanel({
     | string
     | undefined;
   const mutedColor = usePearlMutedBackground();
-  const pageBackground = usePearlScreenBackground();
+  const drawerBackground = usePearlDrawerBackground();
   const pressWash = usePearlPressWash();
   const hairline = usePearlHairlineBorder();
   const [drawerSearchOpen, setDrawerSearchOpen] = useState(false);
@@ -164,7 +164,7 @@ export function DrawerPanel({
     <View
       style={{
         flex: 1,
-        backgroundColor: pageBackground,
+        backgroundColor: drawerBackground,
         paddingBottom: Math.max(insets.bottom, 12),
         paddingTop: Math.max(insets.top, 8),
       }}

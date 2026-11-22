@@ -1,9 +1,18 @@
 import { Platform, Pressable } from "react-native";
 import { Host, Picker, Text as SwiftText } from "@expo/ui/swift-ui";
-import { pickerStyle, tag } from "@expo/ui/swift-ui/modifiers";
+import {
+  controlSize,
+  frame,
+  glassEffect,
+  pickerStyle,
+  tag,
+} from "@expo/ui/swift-ui/modifiers";
 
 import { Text } from "@/components/ui/text";
-import { LiquidGlassShell } from "@/components/ui/liquid-glass";
+import {
+  canUseLiquidGlass,
+  LiquidGlassShell,
+} from "@/components/ui/liquid-glass";
 import {
   HOME_TAB_LABEL,
   HOME_TABS,
@@ -11,10 +20,15 @@ import {
 } from "@/components/home/home-tab";
 import { usePearlCardBackground } from "@/src/navigation-theme";
 
-const CAPSULE_RADIUS = 18;
 const CAPSULE_MIN_WIDTH = 210;
+const CAPSULE_RADIUS = 18;
 
-/** Native Chat | Delegate segmented control for the home header. */
+/**
+ * Chat | Delegate control for the home header.
+ * iOS: native segmented Picker with SwiftUI `glassEffect` (no RN glass wrap —
+ * wrapping stacked a second capsule on the system segmented fill).
+ * Android: custom liquid-glass shell + pressable segments.
+ */
 export function HomeTabSwitcher({
   tab,
   onChange,
@@ -25,36 +39,39 @@ export function HomeTabSwitcher({
   const cardColor = usePearlCardBackground();
 
   if (Platform.OS === "ios") {
+    const modifiers = [
+      pickerStyle("segmented" as const),
+      controlSize("large" as const),
+      frame({ minWidth: CAPSULE_MIN_WIDTH }),
+      ...(canUseLiquidGlass()
+        ? [
+            glassEffect({
+              glass: { variant: "regular" as const, interactive: true },
+              shape: "capsule" as const,
+            }),
+          ]
+        : []),
+    ];
+
     return (
-      <LiquidGlassShell
-        fallbackColor={cardColor}
-        style={{
-          minWidth: CAPSULE_MIN_WIDTH,
-          borderRadius: CAPSULE_RADIUS,
-          borderCurve: "continuous",
-        }}
-        contentStyle={{
-          minWidth: CAPSULE_MIN_WIDTH,
-          paddingHorizontal: 2,
-          paddingVertical: 2,
-        }}
+      <Host
+        matchContents={{ vertical: true }}
+        style={{ minWidth: CAPSULE_MIN_WIDTH }}
       >
-        <Host matchContents={{ vertical: true }} style={{ minWidth: CAPSULE_MIN_WIDTH - 4 }}>
-          <Picker
-            selection={tab}
-            onSelectionChange={(value) => {
-              if (value === "pearl" || value === "agents") onChange(value);
-            }}
-            modifiers={[pickerStyle("segmented")]}
-          >
-            {HOME_TABS.map((value) => (
-              <SwiftText key={value} modifiers={[tag(value)]}>
-                {HOME_TAB_LABEL[value]}
-              </SwiftText>
-            ))}
-          </Picker>
-        </Host>
-      </LiquidGlassShell>
+        <Picker
+          selection={tab}
+          onSelectionChange={(value) => {
+            if (value === "pearl" || value === "agents") onChange(value);
+          }}
+          modifiers={modifiers}
+        >
+          {HOME_TABS.map((value) => (
+            <SwiftText key={value} modifiers={[tag(value)]}>
+              {HOME_TAB_LABEL[value]}
+            </SwiftText>
+          ))}
+        </Picker>
+      </Host>
     );
   }
 
@@ -62,11 +79,13 @@ export function HomeTabSwitcher({
     <LiquidGlassShell
       fallbackColor={cardColor}
       style={{
+        minWidth: CAPSULE_MIN_WIDTH,
         borderRadius: CAPSULE_RADIUS,
         borderCurve: "continuous",
       }}
       contentStyle={{
         flexDirection: "row",
+        minWidth: CAPSULE_MIN_WIDTH,
         padding: 2,
       }}
     >
@@ -78,7 +97,7 @@ export function HomeTabSwitcher({
             accessibilityRole="button"
             accessibilityState={{ selected }}
             accessibilityLabel={HOME_TAB_LABEL[value]}
-            className={`min-w-[72px] items-center justify-center rounded-full px-3 py-1.5 ${selected ? "bg-background" : "bg-transparent"}`}
+            className={`min-w-[72px] flex-1 items-center justify-center rounded-full px-3 py-1.5 ${selected ? "bg-background" : "bg-transparent"}`}
             onPress={() => onChange(value)}
           >
             <Text

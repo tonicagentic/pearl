@@ -43,6 +43,8 @@ import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
 import {
   usePearlCardBackground,
+  usePearlDrawerBackground,
+  usePearlDrawerSelectedBackground,
   usePearlMutedBackground,
   usePearlScreenBackground,
 } from "@/src/navigation-theme";
@@ -91,16 +93,21 @@ export function ChatHistoryListIOS({
     selectionError,
   } = useChats();
   const rows = search.active ? (search.hits ?? []) : chats;
-  const backgroundColor = usePearlScreenBackground();
+  const pageBackground = usePearlScreenBackground();
+  const drawerBackground = usePearlDrawerBackground();
   const cardBackground = usePearlCardBackground();
+  const mutedSelectedBg = usePearlMutedBackground();
+  const drawerSelectedBg = usePearlDrawerSelectedBackground();
   const mutedForeground = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
-  const selectedRowBg = usePearlMutedBackground();
-  const mutedColor = mutedForeground ?? "#8E8E93";
   const isDrawer = chrome === "drawer";
-  /** Unselected drawer rows paint page bg so SwiftUI light press wash can't show. */
-  const unselectedRowBg = isDrawer ? backgroundColor : cardBackground;
+  const backgroundColor = isDrawer ? drawerBackground : pageBackground;
+  /** Muted matches secondary; drawer selection needs a wash to stay visible. */
+  const selectedRowBg = isDrawer ? drawerSelectedBg : mutedSelectedBg;
+  const mutedColor = mutedForeground ?? "#8E8E93";
+  /** Unselected drawer rows match the panel so SwiftUI light press wash can't show. */
+  const unselectedRowBg = isDrawer ? drawerBackground : cardBackground;
   const rowChrome = [
     listRowInsets({
       top: isDrawer ? 12 : 10,

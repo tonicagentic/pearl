@@ -179,10 +179,8 @@ export function ScreenChrome({
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
-  const { open: drawerOpen } = usePearlDrawer();
-
-  // Hide leading while the drawer is open so it doesn’t stack over the panel.
-  const showLeading = leading !== "none" && !(IS_IOS && drawerOpen);
+  // Keep the leading control on the peeked scene while the drawer is open.
+  const showLeading = leading !== "none";
   // iOS transparent headers: bare glyph inside shared liquid glass so the
   // control morphs into the system back chevron on push (Delegate → chat).
   const iosGlassLeading = IS_IOS && transparentHeader;

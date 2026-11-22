@@ -5,6 +5,7 @@ import { DrawerPanel } from "@/components/navigation/drawer-panel";
 import { PearlDrawerProvider } from "@/components/navigation/drawer-context";
 import { HeaderDrawerButton } from "@/components/navigation/header-drawer-button";
 import {
+  usePearlDrawerBackground,
   usePearlHeaderTint,
   usePearlScreenBackground,
 } from "@/src/navigation-theme";
@@ -21,6 +22,7 @@ export default function DrawerLayout() {
   const { width: windowWidth } = useWindowDimensions();
   const panelWidth = Math.min(MAX_PANEL_WIDTH, Math.round(windowWidth * 0.82));
   const pageBackground = usePearlScreenBackground();
+  const drawerBackground = usePearlDrawerBackground();
   const headerTintColor = usePearlHeaderTint();
 
   return (
@@ -45,7 +47,7 @@ export default function DrawerLayout() {
           headerLeft: () => null,
           drawerStyle: {
             width: panelWidth,
-            backgroundColor: pageBackground,
+            backgroundColor: drawerBackground,
           },
           sceneStyle: {
             backgroundColor: pageBackground,

@@ -11,6 +11,7 @@ const FALLBACKS = {
     foreground: "#111111",
     border: "#E5E5EA",
     muted: "#EFEFF0",
+    secondary: "#EFEFF0",
     primary: "#2A9D8F",
   },
   dark: {
@@ -19,6 +20,7 @@ const FALLBACKS = {
     foreground: "#F5F5F7",
     border: "#2C2C2E",
     muted: "#1C1C1E",
+    secondary: "#2C2C2E",
     primary: "#2A9D8F",
   },
 } as const;
@@ -50,6 +52,28 @@ export function usePearlMutedBackground(): string {
   const scheme = usePearlColorScheme();
   const token = useCSSVariable("--color-muted") as string | undefined;
   return token ?? FALLBACKS[scheme].muted;
+}
+
+export function usePearlSecondaryBackground(): string {
+  const scheme = usePearlColorScheme();
+  const token = useCSSVariable("--color-secondary") as string | undefined;
+  return token ?? FALLBACKS[scheme].secondary;
+}
+
+/** Drawer panel surface — secondary so it reads against the scene background. */
+export function usePearlDrawerBackground(): string {
+  return usePearlSecondaryBackground();
+}
+
+/**
+ * Selected-row wash on the drawer. Theme muted matches secondary, so a
+ * plain muted fill would vanish — use a scheme-aware overlay instead.
+ */
+export function usePearlDrawerSelectedBackground(): string {
+  const scheme = usePearlColorScheme();
+  return scheme === "dark"
+    ? "rgba(255,255,255,0.12)"
+    : "rgba(0,0,0,0.06)";
 }
 
 export function usePearlForeground(): string {
