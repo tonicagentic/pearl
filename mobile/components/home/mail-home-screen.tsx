@@ -4,9 +4,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { AppState, Platform, Pressable, View } from "react-native";
+import { Alert, AppState, Platform, Pressable, View } from "react-native";
 import { Stack, router, useFocusEffect } from "expo-router";
-import { PlusIcon, SquarePenIcon } from "lucide-react-native";
+import { MoreHorizontalIcon, PlusIcon, SquarePenIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { ChatScreen } from "@/components/chat-screen";
@@ -20,17 +20,23 @@ import {
   SIGN_IN_CARD_CLEARANCE,
   SignInForNewChatCard,
 } from "@/components/home/sign-in-for-new-chat-card";
+import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
+import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { Icon } from "@/components/ui/icon";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
+import { getChat } from "@/src/chats-client";
 import type { CustomAgentDto } from "@/src/custom-agents-client";
+import { fetchProjects } from "@/src/projects-client";
+import type { ThreadTraceEvent } from "@/src/thread-trace";
 
 const IS_IOS = Platform.OS === "ios";
 
 /**
- * Mail-style home: history sidebar button left; Chat|Delegate switcher;
- * New chat / New agent right. Profile lives in the drawer dock.
+ * Mail-style home: history sidebar button left; Chat|Delegate switcher on the
+ * empty Pearl / Agents tabs. An active Pearl chat drops the switcher and shows
+ * New chat + thread details on the right. Profile lives in the drawer dock.
  */
 export function MailHomeScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
@@ -45,7 +51,11 @@ export function MailHomeScreen() {
   const {
     activeChatId,
     activeCustomAgent,
+    activeProjectId,
+    setActiveProjectId,
+    setChatProject,
     chats,
+    deleteChat,
     newChat,
     selectChat,
     reloadChats,
@@ -53,6 +63,12 @@ export function MailHomeScreen() {
 
   const [homeTab, setHomeTab] = useState<HomeTab>("pearl");
   const [createAgentOpen, setCreateAgentOpen] = useState(false);
+  const [costOpen, setCostOpen] = useState(false);
+  const [costEvents, setCostEvents] = useState<readonly ThreadTraceEvent[]>(
+    [],
+  );
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [projectLabel, setProjectLabel] = useState<string | null>(null);
   const homeFocusedRef = useRef(false);
   const homeTabRef = useRef(homeTab);
   homeTabRef.current = homeTab;
@@ -68,10 +84,11 @@ export function MailHomeScreen() {
   // callback identity churn does not wipe mid-compose.
   const pearlComposeArmedRef = useRef(false);
   const showAgentsPlus = homeTab === "agents" && !isAnonymous;
-  // A live Pearl thread takes the trailing slot for New chat.
+  // A live Pearl thread takes the trailing slot for New chat + details.
   const pearlThreadActive =
     homeTab === "pearl" && activeChatId != null && activeCustomAgent == null;
-  const showPearlNewChat = pearlThreadActive;
+  const showPearlThreadChrome = pearlThreadActive;
+  const showTabSwitcher = !pearlThreadActive;
 
   const armPearlCompose = useCallback(() => {
     if (pearlComposeArmedRef.current) return;
@@ -152,6 +169,104 @@ export function MailHomeScreen() {
     newChat();
   }, [isAnonymous, newChat]);
 
+  useEffect(() => {
+    if (!showPearlThreadChrome || !activeProjectId) {
+      setProjectLabel(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchProjects()
+      .then((projects) => {
+        if (cancelled) return;
+        setProjectLabel(
+          projects.find((project) => project.id === activeProjectId)?.name ??
+            "Project",
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setProjectLabel("Project");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectId, showPearlThreadChrome]);
+
+  const openCost = useCallback(() => {
+    if (!activeChatId) return;
+    void getChat(activeChatId)
+      .then((full) => {
+        setCostEvents((full?.events ?? []) as readonly ThreadTraceEvent[]);
+        setCostOpen(true);
+      })
+      .catch(() => {
+        Alert.alert(
+          "Could not open cost",
+          "Check your connection and try again.",
+        );
+      });
+  }, [activeChatId]);
+
+  const openProjectPicker = useCallback(() => {
+    setProjectPickerOpen(true);
+  }, []);
+
+  const clearProject = useCallback(() => {
+    if (!activeChatId) return;
+    setActiveProjectId(null);
+    void setChatProject(activeChatId, null).catch(() => {
+      Alert.alert(
+        "Could not update project",
+        "Check your connection and try again.",
+      );
+    });
+  }, [activeChatId, setActiveProjectId, setChatProject]);
+
+  const confirmDelete = useCallback(() => {
+    if (!activeChatId) return;
+    Alert.alert("Delete thread?", "This cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          void deleteChat(activeChatId).catch(() => {
+            Alert.alert(
+              "Could not delete",
+              "Check your connection and try again.",
+            );
+          });
+        },
+      },
+    ]);
+  }, [activeChatId, deleteChat]);
+
+  const openThreadDetails = useCallback(() => {
+    Alert.alert("Thread", undefined, [
+      {
+        text: projectLabel ? "Change project" : "Add to project",
+        onPress: openProjectPicker,
+      },
+      ...(activeProjectId
+        ? [
+            {
+              text: "Remove from project",
+              onPress: clearProject,
+            },
+          ]
+        : []),
+      { text: "View cost", onPress: openCost },
+      { text: "Delete", style: "destructive" as const, onPress: confirmDelete },
+      { text: "Cancel", style: "cancel" as const },
+    ]);
+  }, [
+    activeProjectId,
+    clearProject,
+    confirmDelete,
+    openCost,
+    openProjectPicker,
+    projectLabel,
+  ]);
+
   const onAgentCreated = useCallback(
     (agent: CustomAgentDto) => {
       setCreateAgentOpen(false);
@@ -173,9 +288,10 @@ export function MailHomeScreen() {
           headerTransparent: IS_IOS,
           headerTintColor: foregroundColor,
           headerStyle: IS_IOS ? undefined : { backgroundColor },
-          headerTitle: () => (
-            <HomeTabSwitcher tab={homeTab} onChange={setHomeTab} />
-          ),
+          headerTitle: () =>
+            showTabSwitcher ? (
+              <HomeTabSwitcher tab={homeTab} onChange={setHomeTab} />
+            ) : null,
           headerLeft: IS_IOS
             ? undefined
             : () =>
@@ -186,18 +302,31 @@ export function MailHomeScreen() {
             ? undefined
             : () => (
                 <View className="flex-row items-center">
-                  {showPearlNewChat ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="New chat"
-                      className="h-10 w-10 items-center justify-center"
-                      onPress={openNewChat}
-                    >
-                      <Icon
-                        as={SquarePenIcon}
-                        className="size-5 text-foreground"
-                      />
-                    </Pressable>
+                  {showPearlThreadChrome ? (
+                    <>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="New chat"
+                        className="h-10 w-10 items-center justify-center"
+                        onPress={openNewChat}
+                      >
+                        <Icon
+                          as={SquarePenIcon}
+                          className="size-5 text-foreground"
+                        />
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Thread details"
+                        className="h-10 w-10 items-center justify-center"
+                        onPress={openThreadDetails}
+                      >
+                        <Icon
+                          as={MoreHorizontalIcon}
+                          className="size-5 text-foreground"
+                        />
+                      </Pressable>
+                    </>
                   ) : null}
                   {showAgentsPlus ? (
                     <>
@@ -235,8 +364,42 @@ export function MailHomeScreen() {
               icon="square.and.pencil"
               accessibilityLabel="New chat"
               onPress={openNewChat}
-              hidden={!showPearlNewChat}
+              hidden={!showPearlThreadChrome}
             />
+            <Stack.Toolbar.Spacer width={8} hidden={!showPearlThreadChrome} />
+            <Stack.Toolbar.Menu
+              icon="ellipsis"
+              accessibilityLabel="Thread details"
+              hidden={!showPearlThreadChrome}
+            >
+              <Stack.Toolbar.MenuAction
+                icon="folder"
+                onPress={openProjectPicker}
+              >
+                {projectLabel ? "Change project" : "Add to project"}
+              </Stack.Toolbar.MenuAction>
+              {activeProjectId ? (
+                <Stack.Toolbar.MenuAction
+                  icon="folder.badge.minus"
+                  onPress={clearProject}
+                >
+                  Remove from project
+                </Stack.Toolbar.MenuAction>
+              ) : null}
+              <Stack.Toolbar.MenuAction
+                icon="dollarsign.circle"
+                onPress={openCost}
+              >
+                View cost
+              </Stack.Toolbar.MenuAction>
+              <Stack.Toolbar.MenuAction
+                icon="trash"
+                destructive
+                onPress={confirmDelete}
+              >
+                Delete
+              </Stack.Toolbar.MenuAction>
+            </Stack.Toolbar.Menu>
             <Stack.Toolbar.Spacer width={8} hidden={!showAgentsPlus} />
             <Stack.Toolbar.Button
               icon="plus"
@@ -270,6 +433,32 @@ export function MailHomeScreen() {
         open={createAgentOpen}
         onClose={() => setCreateAgentOpen(false)}
         onCreated={onAgentCreated}
+      />
+
+      <ThreadCostDrawer
+        open={costOpen}
+        events={costEvents}
+        onClose={() => {
+          setCostOpen(false);
+          setCostEvents([]);
+        }}
+      />
+      <ProjectPickerModal
+        open={projectPickerOpen}
+        onClose={() => setProjectPickerOpen(false)}
+        onSelect={(project) => {
+          const chatId = activeChatId;
+          setProjectPickerOpen(false);
+          if (!chatId) return;
+          setActiveProjectId(project.id);
+          setProjectLabel(project.name);
+          void setChatProject(chatId, project.id).catch(() => {
+            Alert.alert(
+              "Could not update project",
+              "Check your connection and try again.",
+            );
+          });
+        }}
       />
     </View>
   );

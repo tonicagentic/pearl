@@ -8,10 +8,9 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import {
-  BotIcon,
   FolderIcon,
   InboxIcon,
-  NetworkIcon,
+  LibraryIcon,
   SearchIcon,
   SquarePenIcon,
   UserIcon,
@@ -32,24 +31,19 @@ const PINNED_LIMIT = 4;
 
 const NAV_ROWS = [
   {
-    label: "Issues",
+    label: "Tasks",
     href: "/tasks",
     Icon: InboxIcon,
+  },
+  {
+    label: "Library",
+    href: "/library",
+    Icon: LibraryIcon,
   },
   {
     label: "Workspaces",
     href: "/workspaces",
     Icon: FolderIcon,
-  },
-  {
-    label: "Agents",
-    href: "/agent-directory",
-    Icon: BotIcon,
-  },
-  {
-    label: "Areas",
-    href: "/areas",
-    Icon: NetworkIcon,
   },
 ] as const;
 

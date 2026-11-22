@@ -209,14 +209,6 @@ function AuthenticatedLayout() {
                         headerBackButtonDisplayMode: "minimal",
                       }}
                     />
-                    <Stack.Screen
-                      name="areas"
-                      options={{
-                        title: "Areas",
-                        headerShown: true,
-                        headerBackButtonDisplayMode: "minimal",
-                      }}
-                    />
                     {/* Reachable via pearl:///stream-playground; Settings gates
                         visibility to __DEV__ or unlocked internal builds. */}
                     <Stack.Screen

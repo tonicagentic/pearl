@@ -217,7 +217,7 @@ export function SettingsScreen() {
     "Projects for chats",
   );
   const showMoney = search.matches("Money", "Pearl Money");
-  const showTasks = search.matches("Tasks", "Pearl Tasks");
+  const showTasks = search.matches("Tasks", "Due soon and parked");
   const showAnswers = search.matches("Answers", "Web and connected accounts");
   const showResearch = search.matches("Research", "Deep research with citations");
   const showPlan = search.matches("Plan", "Travel and how you plan");
@@ -339,7 +339,7 @@ export function SettingsScreen() {
               <SettingsRow
                 icon={<Icon as={ListTodoIcon} className="size-5 text-teal-500" />}
                 label="Tasks"
-                detail="Pearl Tasks"
+                detail="Due soon and parked"
                 onPress={() => router.push("/tasks")}
               />
             ) : null}

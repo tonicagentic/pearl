@@ -4,14 +4,16 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 /**
- * Deletes one stored artifact after an explicit confirm, then refreshes the
- * server-rendered list. Deletion is destructive, so it never happens without
- * the confirm — mirroring the agent's approval-gated delete_asset.
+ * Deletes one stored Library item after an explicit confirm, then refreshes
+ * the list. Destructive — never runs without confirm.
  */
 export function DeleteArtifactButton({
   pathname,
+  onDeleted,
 }: {
   readonly pathname: string;
+  /** Client lists call this instead of router.refresh(). */
+  readonly onDeleted?: () => void;
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -31,7 +33,12 @@ export function DeleteArtifactButton({
       const data = (await response.json().catch(() => null)) as {
         error?: string;
       } | null;
-      setError(data?.error ?? "Failed to delete the artifact.");
+      setError(data?.error ?? "Failed to delete.");
+      return;
+    }
+
+    if (onDeleted) {
+      onDeleted();
       return;
     }
 

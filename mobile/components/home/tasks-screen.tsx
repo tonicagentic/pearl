@@ -1,10 +1,4 @@
-import {
-  forwardRef,
-  useCallback,
-  useImperativeHandle,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,16 +9,17 @@ import {
   View,
   Platform,
 } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { Stack, router, useFocusEffect } from "expo-router";
 import Animated, {
   FadeInDown,
   FadeOutUp,
   LinearTransition,
 } from "react-native-reanimated";
-import { CheckIcon, Trash2Icon } from "lucide-react-native";
+import { CheckIcon, PlusIcon, Trash2Icon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { CreateTaskModal } from "@/components/home/create-task-modal";
+import { StackScreen } from "@/components/ui/stack-screen";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import {
@@ -46,17 +41,8 @@ function animateList() {
   LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 }
 
-export type IssuesScreenHandle = {
-  readonly openComposer: () => void;
-};
-
-/** Tasks inbox for the Mail home shell (Chats / Tasks / Projects). */
-export const IssuesScreen = forwardRef<
-  IssuesScreenHandle,
-  {
-    readonly bottomInset?: number;
-  }
->(function IssuesScreen({ bottomInset = 0 }, ref) {
+/** Tasks inbox: due soon, later, parked, and recently resolved. */
+export function TasksScreen() {
   const [payload, setPayload] = useState<IssuesPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -64,17 +50,14 @@ export const IssuesScreen = forwardRef<
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
+  const foregroundColor = useCSSVariable("--color-foreground") as
+    | string
+    | undefined;
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      openComposer: () => setComposerOpen(true),
-    }),
-    [],
-  );
+  const openComposer = useCallback(() => setComposerOpen(true), []);
 
   const reload = useCallback(async () => {
     try {
@@ -226,11 +209,42 @@ export const IssuesScreen = forwardRef<
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor }}>
+    <StackScreen>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: "Tasks",
+          headerBackButtonDisplayMode: "minimal",
+          headerTintColor: foregroundColor,
+          headerRight:
+            Platform.OS === "ios"
+              ? undefined
+              : () => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="New task"
+                    className="h-10 w-10 items-center justify-center"
+                    onPress={openComposer}
+                  >
+                    <Icon as={PlusIcon} className="size-5 text-foreground" />
+                  </Pressable>
+                ),
+        }}
+      />
+      {Platform.OS === "ios" ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon="plus"
+            accessibilityLabel="New task"
+            onPress={openComposer}
+          />
+        </Stack.Toolbar>
+      ) : null}
+      <View style={{ flex: 1, backgroundColor }}>
       <ScrollView
         className="flex-1"
         contentContainerClassName="px-5 pt-0"
-        contentContainerStyle={{ paddingBottom: 24 + bottomInset }}
+        contentContainerStyle={{ paddingBottom: 24 }}
         contentInsetAdjustmentBehavior="automatic"
       >
         {error ? (
@@ -308,9 +322,10 @@ export const IssuesScreen = forwardRef<
           router.push(`/issues/${encodeURIComponent(created.id)}`);
         }}
       />
-    </View>
+      </View>
+    </StackScreen>
   );
-});
+}
 
 function TaskGroup({
   title,

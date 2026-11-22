@@ -33,7 +33,7 @@ export function NewIssueForm({
         onClick={() => setOpen(true)}
         className="flex items-center justify-center gap-2 rounded-lg border bg-card px-4 py-2 text-sm font-medium hover:bg-accent"
       >
-        + New issue
+        + New task
       </button>
     );
   }
@@ -65,7 +65,7 @@ export function NewIssueForm({
             formRef.current?.reset();
             setOpen(false);
           } catch (cause) {
-            setError(cause instanceof Error ? cause.message : "Failed to create the issue.");
+            setError(cause instanceof Error ? cause.message : "Failed to create the task.");
           }
         });
       }}
@@ -73,9 +73,9 @@ export function NewIssueForm({
       <input
         name="title"
         required
-        placeholder="What needs resolving?"
+        placeholder="What needs doing?"
         className="rounded-md border bg-background px-3 py-2 text-sm"
-        aria-label="Issue title"
+        aria-label="Task title"
       />
       <IssueFields options={options} />
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

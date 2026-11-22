@@ -5,19 +5,14 @@ import { revalidatePath } from "next/cache";
 import {
   createIssue,
   createArea,
-  deleteAreaIfSettled,
   deleteIssue,
   getIssue,
   getArea,
   findAreaByName,
-  moveArea,
-  renameArea,
   reopenIssue,
   resolveIssue,
   updateIssue,
-  updateAreaProperties,
 } from "@/lib/db/issues";
-import { validateAreaProperties } from "@/lib/area-properties";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -52,8 +47,7 @@ async function requireViewer() {
 }
 
 function revalidateIssues() {
-  revalidatePath("/issues");
-  revalidatePath("/settings/areas");
+  revalidatePath("/tasks");
 }
 
 export type IssueActionInput = {
@@ -185,88 +179,3 @@ export async function deleteIssueAction(id: string) {
   revalidateIssues();
 }
 
-export type AreaActionInput = {
-  readonly name?: string;
-  readonly parentId?: string | null;
-};
-
-export async function createAreaAction(
-  input: AreaActionInput,
-) {
-  const viewer = await requireViewer();
-
-  const name = input.name?.trim();
-
-  if (!name) {
-    throw new Error("A area needs a name.");
-  }
-
-  const parentId = input.parentId ?? null;
-
-  if (parentId) {
-    const parent = await getArea(viewer.id, parentId);
-
-    if (!parent) {
-      throw new Error("Unknown parent area.");
-    }
-  }
-
-  const row = await createArea(viewer.id, name, parentId);
-  revalidateIssues();
-
-  return row;
-}
-
-export async function renameAreaAction(
-  id: string,
-  input: { readonly name?: string },
-) {
-  const viewer = await requireViewer();
-
-  const name = input.name?.trim();
-
-  if (!name) {
-    throw new Error("A area needs a name.");
-  }
-
-  await renameArea(viewer.id, id, name);
-  revalidateIssues();
-}
-
-export async function updateAreaPropertiesAction(id: string, input: unknown) {
-  const viewer = await requireViewer();
-  const properties = validateAreaProperties(input);
-  await updateAreaProperties(viewer.id, id, properties);
-  revalidateIssues();
-}
-
-export async function deleteAreaAction(id: string) {
-  const viewer = await requireViewer();
-
-  const result = await deleteAreaIfSettled(viewer.id, id);
-
-  if (!result.deleted) {
-    throw new Error(
-      result.openIssues === 1
-        ? "This area still has 1 open issue. Resolve it or move it first."
-        : `This area still has ${result.openIssues} open issues. Resolve them or move them first.`,
-    );
-  }
-
-  revalidateIssues();
-}
-
-/** Drag-to-reparent from the areas mind map: new parent + sibling position. */
-export async function moveAreaAction(
-  id: string,
-  input: {
-    readonly parentId: string | null;
-    readonly sortIndex: number;
-  },
-) {
-  const viewer = await requireViewer();
-
-  await moveArea(viewer.id, id, input.parentId, input.sortIndex);
-
-  revalidateIssues();
-}

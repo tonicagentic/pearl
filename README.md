@@ -24,12 +24,11 @@ Pearl is a web and iOS app for thinking, research, writing, and keeping track of
 * Draft, critique, and revise writing collaboratively.
 * Create and edit Markdown files alongside the agent.
 
-### Areas tracker
+### Tasks tracker
 
-* Track unresolved areas and issues.
-* Bring areas back to your attention when appropriate.
+* Track open tasks that need attention.
+* Bring tasks back when their review date arrives.
 * Keep track of deadlines and relevant context.
-* Visualize your areas on a mind map.
 
 ## Quick Start
 

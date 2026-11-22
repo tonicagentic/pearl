@@ -93,10 +93,10 @@ export function UserMenu({
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
-            router.push("/artifacts");
+            router.push("/library");
           }}
         >
-          Artifacts
+          Library
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={(event) => {

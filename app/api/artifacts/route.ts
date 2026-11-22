@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { del, list } from "@vercel/blob";
 import { artifactsPrefix } from "@/agent/lib/artifacts";
+import { artifactKindFromBasename } from "@/lib/library/artifact-kind";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -41,12 +42,16 @@ export async function GET() {
     const { blobs } = await list({ prefix });
 
     return NextResponse.json({
-      artifacts: blobs.map((blob) => ({
-        pathname: blob.pathname,
-        basename: blob.pathname.slice(prefix.length),
-        size: blob.size,
-        uploadedAt: blob.uploadedAt.toISOString(),
-      })),
+      artifacts: blobs.map((blob) => {
+        const basename = blob.pathname.slice(prefix.length);
+        return {
+          pathname: blob.pathname,
+          basename,
+          size: blob.size,
+          uploadedAt: blob.uploadedAt.toISOString(),
+          kind: artifactKindFromBasename(basename),
+        };
+      }),
     });
   } catch (error) {
     return NextResponse.json(

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Suspense } from "react";
 
 import {
@@ -18,24 +17,24 @@ import { IssueRow } from "./issue-row";
 import { NewIssueForm } from "./new-issue-form";
 
 export const metadata: Metadata = {
-  title: "Issues",
+  title: "Tasks",
 };
 
 /**
- * The issues inbox: unresolved areas, grouped by when they need
- * attention. Lifecycle beyond open/resolved is derived from the two dates
+ * The tasks inbox: open loops grouped by when they need attention.
+ * Lifecycle beyond open/resolved is derived from the two dates
  * (docs/issues-areas-plan.md). Static shell + Suspense for
  * cacheComponents, same as the artifacts page.
  */
-export default function IssuesPage() {
+export default function TasksPage() {
   return (
     // Page frame: the shell's main is overflow-hidden (the chat scrolls
     // internally), so non-chat pages own their scroll here.
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="h-full overflow-y-auto px-4 pt-14 pb-8">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-          <Suspense fallback={<IssuesFallback />}>
-            <ResolvedIssues />
+          <Suspense fallback={<TasksFallback />}>
+            <ResolvedTasks />
           </Suspense>
         </div>
       </div>
@@ -43,29 +42,22 @@ export default function IssuesPage() {
   );
 }
 
-function IssuesFallback() {
+function TasksFallback() {
   return (
     <div className="rounded-lg border bg-card px-4 py-4 text-sm text-muted-foreground">
-      Loading issues…
+      Loading tasks…
     </div>
   );
 }
 
-async function ResolvedIssues() {
+async function ResolvedTasks() {
   const setupStatus = await getSetupStatus();
   const viewer = await getServerViewer(setupStatus);
 
   if (!viewer || setupStatus.storageMode !== "database") {
     return (
       <div className="flex flex-col gap-4">
-        <IssuesCard message="Sign in with durable storage configured to track issues." />
-        <p className="text-sm text-muted-foreground">
-          Manage your areas of area in{" "}
-          <Link href="/settings/areas" className="underline">
-            Settings → Areas
-          </Link>
-          .
-        </p>
+        <TasksCard message="Sign in with durable storage configured to track tasks." />
       </div>
     );
   }
@@ -100,20 +92,20 @@ async function ResolvedIssues() {
   return (
     <>
       <header>
-        <h1 className="text-lg font-semibold">Issues</h1>
+        <h1 className="text-lg font-semibold">Tasks</h1>
         <p className="text-sm text-muted-foreground">
-          Unresolved areas that need your attention. Dormant items
-          return on their review date — that is the contract.
+          Open loops that need your attention. Parked items return on
+          their review date — that is the contract.
         </p>
       </header>
 
-      <IssueGroup
+      <TaskGroup
         title="Due soon"
         issues={dueSoon}
         options={options}
         empty="Nothing due soon."
       />
-      <IssueGroup
+      <TaskGroup
         title="Later / no deadline"
         issues={later}
         options={options}
@@ -156,7 +148,7 @@ function byDueDate(a: IssueWithArea, b: IssueWithArea) {
   return (a.dueDate ?? "9999-12-31") < (b.dueDate ?? "9999-12-31") ? -1 : 1;
 }
 
-function IssueGroup({
+function TaskGroup({
   title,
   issues,
   options,
@@ -185,7 +177,7 @@ function IssueGroup({
   );
 }
 
-function IssuesCard({ message }: { readonly message: string }) {
+function TasksCard({ message }: { readonly message: string }) {
   return (
     <div className="rounded-lg border bg-card px-4 py-4 text-sm text-muted-foreground">
       {message}

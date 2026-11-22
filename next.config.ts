@@ -34,6 +34,20 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  async redirects() {
+    return [
+      {
+        source: "/issues",
+        destination: "/tasks",
+        permanent: true,
+      },
+      {
+        source: "/artifacts",
+        destination: "/library",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default withEve(withAui(nextConfig));

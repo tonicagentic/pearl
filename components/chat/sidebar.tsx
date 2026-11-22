@@ -6,7 +6,7 @@ import {
   EllipsisIcon,
   FolderKanbanIcon,
   InboxIcon,
-  NetworkIcon,
+  LibraryIcon,
   PanelLeftIcon,
   PlusIcon,
   Trash2Icon,
@@ -67,15 +67,14 @@ export function ChatSidebar({
   const authDisabled = !setupStatus.appReady;
   const pathname = usePathname();
   // "New chat" is only active while actually viewing an empty chat —
-  // activeChatId is also null on /issues and /settings/*, which shouldn't
+  // activeChatId is also null on /tasks and /settings/*, which shouldn't
   // light it up.
   const onChatRoute = pathname === "/" || pathname?.startsWith("/chat") || false;
   const newSessionActive = activeChatId === null && onChatRoute;
-  const issuesActive = pathname?.startsWith("/issues") ?? false;
+  const tasksActive = pathname?.startsWith("/tasks") ?? false;
+  const libraryActive = pathname?.startsWith("/library") ?? false;
   const projectsActive = pathname?.startsWith("/projects") ?? false;
   const agentsActive = pathname?.startsWith("/agents") ?? false;
-  const areasActive =
-    pathname?.startsWith("/settings/areas") ?? false;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -147,17 +146,6 @@ export function ChatSidebar({
           <PlusIcon className="size-4" />
           New chat
         </button>
-        {/* Areas mind map */}
-        <Link
-          className={cn(
-            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
-            areasActive ? activeRowClass : inactiveRowClass,
-          )}
-          href="/settings/areas"
-        >
-          <NetworkIcon className="size-4" />
-          Areas
-        </Link>
         <Link
           className={cn(
             "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
@@ -178,17 +166,27 @@ export function ChatSidebar({
           <BotIcon className="size-4" />
           Agents
         </Link>
-        {/* Issues inbox: styled like the chat rows but anchored to its own
+        {/* Tasks inbox: styled like the chat rows but anchored to its own
             route rather than the chat list. */}
         <Link
           className={cn(
             "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
-            issuesActive ? activeRowClass : inactiveRowClass,
+            tasksActive ? activeRowClass : inactiveRowClass,
           )}
-          href="/issues"
+          href="/tasks"
         >
           <InboxIcon className="size-4" />
-          Issues
+          Tasks
+        </Link>
+        <Link
+          className={cn(
+            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
+            libraryActive ? activeRowClass : inactiveRowClass,
+          )}
+          href="/library"
+        >
+          <LibraryIcon className="size-4" />
+          Library
         </Link>
       </div>
 

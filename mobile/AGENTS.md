@@ -25,7 +25,7 @@ Run lint and typecheck before declaring any task done.
 
 ## Navigation & Routing
 
-This app uses **Expo Router** with a drawer layout (`app/_layout.tsx`) whose content mirrors the web sidebar (New session, Issues, chat threads, account). Routes live in `app/` — every file there is a screen; keep non-route code in `components/` and `src/`. The custom entry (`index.ts`) imports `./global.css` (uniwind) and patches streaming fetch before `expo-router/entry`.
+This app uses **Expo Router** with a drawer layout (`app/_layout.tsx`) whose content mirrors the web sidebar (New session, Tasks, Library, chat threads, account). Routes live in `app/` — every file there is a screen; keep non-route code in `components/` and `src/`. The custom entry (`index.ts`) imports `./global.css` (uniwind) and patches streaming fetch before `expo-router/entry`.
 
 ## Building with EAS
 

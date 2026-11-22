@@ -50,7 +50,15 @@ export default function HomeLayout() {
       <Stack.Screen
         name="tasks"
         options={{
-          title: "Pearl Tasks",
+          title: "Tasks",
+          headerShown: true,
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+      <Stack.Screen
+        name="library"
+        options={{
+          title: "Library",
           headerShown: true,
           headerBackButtonDisplayMode: "minimal",
         }}

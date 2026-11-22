@@ -22,7 +22,7 @@ export default function ProjectsPage() {
             <h1 className="text-lg font-semibold">Projects</h1>
             <p className="text-sm text-muted-foreground">
               Workspaces that outlive one chat: shared instructions, plans, and
-              related conversations. Separate from Areas.
+              related conversations.
             </p>
           </header>
           <Suspense

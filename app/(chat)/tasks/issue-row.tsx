@@ -161,7 +161,7 @@ function IssueDetail({
           required
           defaultValue={issue.title}
           className="rounded-md border bg-background px-3 py-2 text-sm"
-          aria-label="Issue title"
+          aria-label="Task title"
         />
         <IssueFields
           options={options}

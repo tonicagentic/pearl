@@ -33,7 +33,8 @@
     "../lib/plugins/capabilities.ts",
     "../lib/connections/catalog.ts",
     "../lib/custom-agents/mark.ts",
-    "../lib/custom-agents/types.ts"
+    "../lib/custom-agents/types.ts",
+    "../lib/library/artifact-kind.ts"
   ],
   "exclude": [
     "**/__tests__/**",
