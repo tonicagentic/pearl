@@ -3,9 +3,7 @@ import { MAINTENANCE_OFFER, OFFER_RECORD_PROMPT } from "./fixtures/offer.ts";
 
 export default defineEval({
   description:
-    "Sales prospecting clarify: a blank prospecting ask shows empty offer " +
-    "and ICP records and asks for every blank in one turn without research; " +
-    "a filled offer with incomplete ICP asks only for the blank customer fields.",
+    "“Help me start prospecting / build a list” — agent asks what’s missing about the offer and ideal customer first.",
   tags: ["smoke"],
   timeoutMs: 240_000,
   async test(t) {

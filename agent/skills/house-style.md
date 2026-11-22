@@ -1,10 +1,9 @@
 ---
 description: >
   House style for every piece of prose this agent writes, edits, or grades —
-  its own replies about shared work included. The canonical voice rules; the
-  parent keeps only the mechanical minimums in agent/instructions.md, and the
-  editor audits against this file. Load when drafting, revising, or grading
-  prose for other readers.
+  its own replies about shared work included. The canonical voice rules;
+  agent/instructions.md only routes here. Load when drafting, revising, or
+  grading prose for other readers.
 ---
 
 # House style

@@ -14,9 +14,7 @@ const booleanGate = (name: string) =>
 
 export default defineEval({
   description:
-    "Sales prospecting shared pain: a pain-only ask clarifies the offer " +
-    "before research; after the offer is given, segment research finds other " +
-    "ICPs who share that pain — not a company lead list.",
+    "“Who else has this pain?” — find other ideal-customer segments, not company leads.",
   tags: ["costs-exa"],
   timeoutMs: 420_000,
   async test(t) {

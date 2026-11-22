@@ -3,7 +3,7 @@ import { satisfies } from "eve/evals/expect";
 import { rubric } from "./rubrics.ts";
 
 // Writing craft: a single-turn draft request must honor the style contract
-// from agent/skills/writing.md and the voice rules in agent/instructions.md.
+// from agent/skills/house-style.md (standing instructions only route there).
 // Deterministic gates: no em dashes, no hype vocabulary substituting for
 // evidence, the requested concrete numbers present, and the requested
 // magnitude honored. The judge adds a soft signal for opening quality.

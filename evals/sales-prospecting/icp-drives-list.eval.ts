@@ -16,8 +16,7 @@ const booleanGate = (name: string) =>
 
 export default defineEval({
   description:
-    "Sales prospecting handoff: clarify a blank ask first, then a filled " +
-    "offer and chosen ICP drive a short company-list query with a trigger per row.",
+    "“Build me a short company list for this ICP” — get fit-first rows with a reason to reach out on each.",
   tags: ["costs-exa"],
   timeoutMs: 420_000,
   async test(t) {

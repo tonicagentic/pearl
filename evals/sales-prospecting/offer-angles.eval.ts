@@ -3,8 +3,7 @@ import { MAINTENANCE_OFFER, OFFER_RECORD_PROMPT } from "./fixtures/offer.ts";
 
 export default defineEval({
   description:
-    "Sales prospecting angles: a general offer with no chosen ICP produces " +
-    "two or three customer options with angles, and does not start a company list.",
+    "“Who could this offer fit?” — get a few ideal-customer options with angles before any company list.",
   tags: ["smoke"],
   timeoutMs: 240_000,
   async test(t) {

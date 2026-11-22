@@ -1,5 +1,5 @@
 ---
-description: Use when the user is sales prospecting — defining an offer and ideal customer, prospecting broadly for ICP angles, "what kinds of customers could we sell X to", "which customers should we focus marketing on", qualifying an ICP, finding other ICPs who share a pain, or building a short company list after the offer and ICP were just confirmed. Triggers on "sales prospecting", "kinds of customers", "who could I sell to", "sell custom AI agents", "personal agent", "prospect broadly", "ideal customer", "qualify this ICP", "who else has this pain", "targeted list" with a filled ICP. For a classic "build a lead list of N companies in industry X with these fields" request where the user already named the sector, prefer lead-generation.
+description: Use when the user is sales prospecting — defining an offer and ideal customer, prospecting broadly for ICP angles, "who should we sell this to", "what kinds of customers could we sell X to", "customer profiles" for a value prop, qualifying an ICP, finding other ICPs who share a pain, or building a short company list after the offer and ICP were just confirmed. Triggers on "sales prospecting", "kinds of customers", "customer profiles", "who could I sell to", "who should we sell this to", "sell custom AI agents", "personal agent", "prospect broadly", "ideal customer", "qualify this ICP", "who else has this pain", "targeted list" with a filled ICP. For a classic "build a lead list of N companies in industry X with these fields" request where the user already named the sector, prefer lead-generation.
 ---
 
 # Sales prospecting
@@ -55,17 +55,19 @@ not `bash`, not a subagent). When a path below says to research, invoke the
 or unavailable — call it. If the call errors (for example a missing API key),
 report that error; do not invent a list or substitute `web_search`.
 
-**Research is forbidden** on Clarify, Angles, Customer kinds, and Qualify.
-Never call `exa_agent_run`, `web_search`, `bash`, or a subagent on those paths —
-even if the tool is available. Research is allowed only on Shared pain (after
-the offer is filled) and Company list (after offer + ICP are filled).
+**Research is forbidden** on Clarify, Angles, Identify customer profiles, and
+Qualify. Never call `exa_agent_run`, `web_search`, `bash`, or a subagent on
+those paths — even if the tool is available. Research is allowed only on
+Shared pain (after the offer is filled) and Company list (after offer + ICP
+are filled).
 
 **Pick one path:**
 
 | User signal | Path |
 |---|---|
 | Blanks remain, or "ask only for what is still blank" | **Clarify** |
-| Offer filled; wants broad options / "kinds of customers" / "prospect broadly" without asking you to only solicit blanks | **Angles** (or **Customer kinds** if they named a product and asked who to sell/market to) |
+| Offer filled; wants broad options / "kinds of customers" / "prospect broadly" without asking you to only solicit blanks, and without asking for scored profiles | **Angles** |
+| "Who should we sell this to?" / "customer profiles" / named product + who to sell or market to / asks for scored options | **Identify customer profiles** |
 | "Should this be the ICP?" / qualify | **Qualify** |
 | Pain-only "who else has this pain?" | **Shared pain** |
 | Offer + chosen ICP + build a list | **Company list** |
@@ -105,23 +107,26 @@ channel/partner hypotheses unless the user asked for partners. Do not invent
 won customers. Do not start a company list. Do not research — inventing
 options from the offer's Pain is enough; do not call tools.
 
-### Customer kinds ("who could we sell X to" / marketing focus)
+### Identify customer profiles ("who should we sell this to")
 
-When the user names a product (e.g. custom AI agents, a personal agent) and
-asks what kinds of customers to sell or market to:
+Use when the user wants a few **scored** customer profiles from a value prop
+or named product — not merely unranked angles, and not a company list.
 
-1. Show the Offer record with Name set to their product words and Kind
-   `specific product`. Leave What it does and Pain blank or "unknown" and
-   **ask for both** in the same reply.
-2. Still propose two or three customer-kind options in the Option/ICP/Angle
-   shape above (hypotheses).
-3. If they ask which to **focus** on (or "which should we focus marketing
-   on"), you **must** pick one option as the recommended focus in this same
-   reply and justify it with the five-part scorecard (pain, fit, budget,
-   reachability, economics) with every line labeled `Hypothesis:` (or Fact /
-   Unknown). Do not end only with "which option?" — recommend first, then
-   invite them to override. Do not invent a price, retention rate, or existing
-   customer. Do not start a company list. Do not research.
+**If they only named a product** (e.g. custom AI agents) and What it does /
+Pain are still blank: show the Offer record with Name set to their product
+words and Kind `specific product`. Leave What it does and Pain blank or
+"unknown" and **ask for both**. Stop there — do **not** invent a settled
+product description, and do **not** dump finished scored profiles yet. Wait
+until the user fills the offer so profiles are grounded in what they sell.
+
+**Once the offer is filled** (value prop given, or just answered): restate the
+Offer record, then propose two or three distinct profiles in the
+Option/ICP/Angle shape above. Prefer concrete role + company context over
+vague "enterprises." For **every** option, score pain, fit, budget,
+reachability, and economics with each line labeled `Hypothesis:` (or Fact /
+Unknown) so the user can compare. Prefer recommending one focus in the same
+reply, then invite them to override. Do not invent a price, retention rate,
+or existing customer. Do not start a company list. Do not research.
 
 ### Qualify (filled offer + ICP; user asks if this should be the ICP)
 

@@ -36,8 +36,9 @@ Events, conference prep, and meeting briefs or follow-ups →
 
 - Build a prospect or company list from a **confirmed** offer and ICP →
   `sales-prospecting` (then `lead-generation` mechanics)
-- Still defining who to sell to, "kinds of customers" for a named product,
-  qualify an ICP, shared-pain ICPs, prospect broadly → `sales-prospecting`
+- Still defining who to sell to, customer profiles / "kinds of customers" for
+  a value prop or named product, qualify an ICP, shared-pain ICPs, prospect
+  broadly → `sales-prospecting`
 - Capability-first discovery ("I know how to build X"), niche markets,
   interviews, market size / competition before committing → `market-discovery`
 - Deep dive on one named company or competitor → `company-research`

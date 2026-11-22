@@ -8,8 +8,7 @@ import {
 
 export default defineEval({
   description:
-    "Sales prospecting qualify: a filled offer and ICP are scored on pain, " +
-    "fit, budget, reachability, and economics without inventing numbers or research.",
+    "“Should this be my ideal customer?” — get a pain / fit / budget / reachability / economics check.",
   tags: ["smoke"],
   timeoutMs: 240_000,
   async test(t) {

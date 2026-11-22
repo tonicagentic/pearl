@@ -4,6 +4,12 @@ We develop the agent eval-first: for each user flow, write the evals that define
 "done" before building the feature or tuning the agent. A feature is done when
 its evals pass; a bug fix ships with the failing eval that caught it.
 
+**Local browser:** with `pnpm dev` / `eve dev` running, open
+[`/dev/evals`](http://localhost:3000/dev/evals). **Runs** inspects artifacts
+under `.eve/evals` (assertions, transcripts, tools). **Spec** documents every
+suite/eval/assertion from `evals/**/*.eval.ts` (plus README blurbs). Dev-only —
+404 in production.
+
 Three domains, one agent: **thinking partner**, **research**, **writing and
 editing**. Every eval below traces to a requirement in one of them.
 
@@ -73,21 +79,34 @@ editing**. Every eval below traces to a requirement in one of them.
 
 ### `sales-prospecting/` — offer, ICP angles, qualify, then a short list
 
+Sales prospecting is finding potential customers who are a good fit, then
+starting conversations about a problem you can solve.
+
+A simple process this suite is teaching the agent to follow:
+
+1. Define your ideal customer. Pick an industry, company size, buyer role, and problem you solve well. (Ask "what are you selling, and who typically buys it?" before researching.)
+
+2. Build a targeted list. Fit matters more than volume.
+
+3. Find a reason to reach out. Look for a relevant trigger (new hire, expansion, something they’ve posted).
+
+4. Send a short, relevant message / follow up / track what works — later steps; these evals stop at a short list with triggers, not outreach copy or CRM metrics.
+
 One offer can point at several ideal customers. A company list starts only after
 the user has picked one customer and the offer is known. Shared phrases live in
 `sales-prospecting/fixtures/offer.ts`.
 
-| Eval | Flow it pins | Layer |
+| Eval | User can ask… | Layer |
 | --- | --- | --- |
-| `clarify-before-research` | Blank prospecting ask → blank Offer + ICP records, every blank asked in one turn, no research; filled offer with incomplete ICP asks only for blank customer fields. | gates + judge |
-| `offer-angles` | Known general offer, no chosen ICP → two or three customer options with angles; no company list. | gates + judge |
-| `agent-customer-kinds` | "What kinds of customers could we sell custom AI agents to?" / "Which kinds of customers should we focus on marketing of a personal agent to?" → offer record, kinds with angles, optional focus + scorecard; no research. | gates + judge |
-| `qualify-icp` | Filled offer + ICP → pain / fit / budget / reachability / economics without inventing numbers or researching. | gates + judge |
-| `shared-pain-icps` | Pain-only ask clarifies the offer; then segment research finds other ICPs who share that pain (not a company lead list). | gates + judge (`costs-exa`) |
-| `icp-drives-list` | Clarify blank ask → filled offer + chosen ICP drive a short company-list query with a trigger per row. | gates + judge (`costs-exa`) |
+| `clarify-before-research` | “Help me start prospecting / build a list” — agent asks what’s missing about the offer and ideal customer first. | gates + judge |
+| `offer-angles` | “Who could this offer fit?” — get a few ideal-customer options with angles before any company list. | gates + judge |
+| `identify-customer-profiles` | “Who should we sell this to?” — scored profiles when the offer is known; thin product name clarifies what it does / pain first, then scores profiles. | gates + judge |
+| `qualify-icp` | “Should this be my ideal customer?” — get a pain / fit / budget / reachability / economics check. | gates + judge |
+| `shared-pain-icps` | “Who else has this pain?” — find other ideal-customer segments, not company leads. | gates + judge (`costs-exa`) |
+| `icp-drives-list` | “Build me a short company list for this ICP” — get fit-first rows with a reason to reach out on each. | gates + judge (`costs-exa`) |
 
 ```bash
-pnpm exec eve eval sales-prospecting/clarify-before-research sales-prospecting/offer-angles sales-prospecting/agent-customer-kinds sales-prospecting/qualify-icp
+pnpm exec eve eval sales-prospecting/clarify-before-research sales-prospecting/offer-angles sales-prospecting/identify-customer-profiles sales-prospecting/qualify-icp
 pnpm exec eve eval sales-prospecting/shared-pain-icps sales-prospecting/icp-drives-list
 ```
 
@@ -412,15 +431,15 @@ says "write the offer" or "companies to email").
 | --- | --- | --- |
 | clarify-before-research | ✓ pass | gates 6/6; blank-ask 100%; partial-offer 96% |
 | offer-angles | ✓ pass | gates 3/3; angles judge 97%; no research |
-| agent-customer-kinds | ✓ pass | gates 6/6; custom-agents 100%; personal-agent focus 100% |
+| identify-customer-profiles | — pending re-run | renamed from agent-customer-kinds; value-prop + thin-offer scored profiles |
 | qualify-icp | ✓ pass | gates 3/3; scorecard judge 96% |
 | shared-pain-icps | ✓ pass | gates 10/10; pain-only 100%; segments 89%; `exa_agent_run` with pain phrase |
 | icp-drives-list | ✓ pass | gates 10/10; clarify 100%; list quality 88%; query has offer+ICP phrases + trigger field |
 
 **Tune notes:** Prefer analysis lane over think/tools for GTM research asks.
 Clarify vs angles path split ("ask only for blanks" vs "prospect broadly").
-No-research hard rule on clarify/angles/kinds/qualify; Exa only on shared-pain
-and company-list after records are filled.
+No-research hard rule on clarify/angles/identify-customer-profiles/qualify;
+Exa only on shared-pain and company-list after records are filled.
 
 ## Market discovery suite — baseline (2026-11-21)
 
