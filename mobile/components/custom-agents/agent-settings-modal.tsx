@@ -28,6 +28,7 @@ import {
 } from "../../../lib/custom-agents/mark";
 import type { CustomAgentRef } from "@/src/chats-client";
 import { updateCustomAgentRequest } from "@/src/custom-agents-client";
+import { usePearlScreenBackground } from "@/src/navigation-theme";
 
 export function AgentSettingsModal({
   open,
@@ -59,9 +60,7 @@ export function AgentSettingsModal({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
+  const backgroundColor = usePearlScreenBackground();
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
@@ -120,15 +119,16 @@ export function AgentSettingsModal({
     <BottomSheet
       isPresented={open}
       onDismiss={onClose}
-      snapPoints={["half", "full"]}
+      snapPoints={["full"]}
       containerColor={backgroundColor}
       contentPadding={{ top: 4, left: 0, right: 0, bottom: 0 }}
     >
-      <RNHostView matchContents>
-        <ScrollView
-          className="px-5 pb-6 pt-1"
-          keyboardShouldPersistTaps="handled"
-        >
+      {/*
+        Fill the sheet (no matchContents) so the mark picker + config sections
+        can scroll inside a bounded height — same pattern as AddComposer scrollable.
+      */}
+      <RNHostView>
+        <View className="flex-1 px-5 pt-1">
           <View className="mb-3 flex-row items-center justify-between">
             <Pressable
               accessibilityRole="button"
@@ -158,47 +158,54 @@ export function AgentSettingsModal({
             </Pressable>
           </View>
 
-          <AgentMarkPicker
-            accent={accent}
-            markShape={markShape}
-            markTalk={markTalk}
-            markBrows={markBrows}
-            markGaze={markGaze}
-            onAccentChange={setAccent}
-            onMarkShapeChange={setMarkShape}
-            onMarkTalkChange={setMarkTalk}
-            onMarkBrowsChange={setMarkBrows}
-            onMarkGazeChange={setMarkGaze}
-          />
-          {error ? (
-            <Text variant="secondary" tone="destructive" className="mb-3">
-              {error}
-            </Text>
-          ) : null}
-          <TextInput
-            accessibilityLabel="Agent name"
-            className={cn(
-              "min-h-12 tracking-tight",
-              textVariants({ variant: "display" }),
-            )}
-            maxLength={80}
-            onChangeText={setName}
-            placeholder="Agent name"
-            placeholderTextColor={placeholderColor}
-            value={name}
-          />
-          <TextInput
-            accessibilityLabel="Standing instructions"
-            className={cn("mt-2 min-h-28", textVariants({ variant: "body" }))}
-            multiline
-            onChangeText={setInstructions}
-            placeholder="Standing instructions…"
-            placeholderTextColor={placeholderColor}
-            textAlignVertical="top"
-            value={instructions}
-          />
-          {agent ? <AgentConfigSections agentId={agent.id} /> : null}
-        </ScrollView>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerClassName="pb-8"
+            style={{ flex: 1 }}
+          >
+            <AgentMarkPicker
+              accent={accent}
+              markShape={markShape}
+              markTalk={markTalk}
+              markBrows={markBrows}
+              markGaze={markGaze}
+              onAccentChange={setAccent}
+              onMarkShapeChange={setMarkShape}
+              onMarkTalkChange={setMarkTalk}
+              onMarkBrowsChange={setMarkBrows}
+              onMarkGazeChange={setMarkGaze}
+            />
+            {error ? (
+              <Text variant="secondary" tone="destructive" className="mb-3">
+                {error}
+              </Text>
+            ) : null}
+            <TextInput
+              accessibilityLabel="Agent name"
+              className={cn(
+                "min-h-12 tracking-tight",
+                textVariants({ variant: "display" }),
+              )}
+              maxLength={80}
+              onChangeText={setName}
+              placeholder="Agent name"
+              placeholderTextColor={placeholderColor}
+              value={name}
+            />
+            <TextInput
+              accessibilityLabel="Standing instructions"
+              className={cn("mt-2 min-h-28", textVariants({ variant: "body" }))}
+              multiline
+              onChangeText={setInstructions}
+              placeholder="Standing instructions…"
+              placeholderTextColor={placeholderColor}
+              textAlignVertical="top"
+              value={instructions}
+            />
+            {agent ? <AgentConfigSections agentId={agent.id} /> : null}
+          </ScrollView>
+        </View>
       </RNHostView>
     </BottomSheet>
   );
