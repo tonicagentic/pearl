@@ -37,6 +37,11 @@ export function isSvgWorkspacePath(path: string): boolean {
   return previewKindForPath(path) === "svg";
 }
 
+/** True when a workspace path is Mermaid source (`.mmd`). */
+export function isMermaidWorkspacePath(path: string): boolean {
+  return previewKindForPath(path) === "mermaid";
+}
+
 /** Match a stored agent file path to a requested workspace path. */
 export function pathsMatchWorkspaceFile(
   stored: string,

@@ -9,6 +9,7 @@ import {
 import {
   chatFileUrl,
   dispositionFilename,
+  isMermaidWorkspacePath,
   isSvgWorkspacePath,
   pathsMatchWorkspaceFile,
   sanitizeWorkspaceLookupPath,
@@ -151,9 +152,11 @@ describe("chat file URLs", () => {
     );
   });
 
-  it("matches stored paths and detects SVGs", () => {
+  it("matches stored paths and detects SVGs and Mermaid", () => {
     assert.equal(isSvgWorkspacePath("/workspace/mark.svg"), true);
     assert.equal(isSvgWorkspacePath("/workspace/note.md"), false);
+    assert.equal(isMermaidWorkspacePath("/workspace/flow.mmd"), true);
+    assert.equal(isMermaidWorkspacePath("/workspace/note.md"), false);
     assert.equal(
       pathsMatchWorkspaceFile("/workspace/mark.svg", "/workspace/mark.svg"),
       true,

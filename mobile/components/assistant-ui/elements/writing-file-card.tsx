@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -21,7 +22,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
-import { isSvgWorkspacePath } from "../../../../lib/design/chat-file-url";
+import {
+  isMermaidWorkspacePath,
+  isSvgWorkspacePath,
+} from "../../../../lib/design/chat-file-url";
 import { fileBasename } from "../../../../lib/design/file-preview";
 import { prepareSvgDocument } from "../../../../lib/design/svg";
 import {
@@ -32,6 +36,7 @@ import {
   writeFileContentFromArgs,
   writeFilePathFromArgs,
 } from "@/src/write-file-args";
+import { MermaidPreview } from "./mermaid-preview";
 import { WorkspaceSvgPreview } from "./workspace-svg-preview";
 import {
   mono,
@@ -85,6 +90,7 @@ export function WritingFileCard({
   const motion = useMotion();
   const nativeMotion = motion && Platform.OS !== "web";
   const [fallbackOpen, setFallbackOpen] = useState(false);
+  const [mermaidFailed, setMermaidFailed] = useState(false);
   const cardRef = useRef<ElementRef<typeof View>>(null);
 
   const running = status.type === "running";
@@ -96,12 +102,18 @@ export function WritingFileCard({
   const title = running ? "Writing" : fileBasename(path);
   const preview = useMemo(() => previewText(content), [content]);
   const words = wordCount(content);
+  const isMermaid = isMermaidWorkspacePath(path) && Boolean(content.trim());
+  const showMermaid = isMermaid && !running && !mermaidFailed;
   const svgContent = useMemo(() => {
     if (!isSvgWorkspacePath(path) || !content) return null;
     return (
       prepareSvgDocument(content) ??
       (content.trim().startsWith("<") ? content : null)
     );
+  }, [path, content]);
+
+  useEffect(() => {
+    setMermaidFailed(false);
   }, [path, content]);
 
   const measureOrigin = useCallback((): Promise<CanvasOrigin | undefined> => {
@@ -224,7 +236,29 @@ export function WritingFileCard({
             </Pressable>
           </View>
 
-          {preview ? (
+          {showMermaid ? (
+            <View
+              className="px-2 pb-2"
+              // Keep taps on the diagram from fighting the card Pressable.
+              pointerEvents="box-none"
+            >
+              <MermaidPreview
+                code={content}
+                onError={() => setMermaidFailed(true)}
+                fallback={
+                  <View className="px-1.5 pb-1.5">
+                    <Text
+                      variant="body"
+                      className="leading-6"
+                      numberOfLines={PREVIEW_LINES}
+                    >
+                      {preview}
+                    </Text>
+                  </View>
+                }
+              />
+            </View>
+          ) : preview ? (
             <View className="px-3.5 pb-3.5">
               <Text
                 variant="body"
@@ -247,7 +281,7 @@ export function WritingFileCard({
               <Text variant="caption" tone="muted" numberOfLines={1}>
                 {path}
               </Text>
-              {words > 0 ? (
+              {!isMermaid && words > 0 ? (
                 <Text variant="caption" tone="muted" className="tabular-nums">
                   {words} words
                 </Text>

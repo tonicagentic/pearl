@@ -21,9 +21,13 @@ import {
   versionForCall,
   type CanvasDocument,
 } from "@/components/assistant-ui/elements/canvas-context";
+import { MermaidBlock } from "@/components/assistant-ui/elements/mermaid-block";
 import { WorkspaceFileLink } from "@/components/assistant-ui/elements/workspace-file-link";
 import { WorkspaceSvgPreview } from "@/components/assistant-ui/elements/workspace-svg-preview";
-import { isSvgWorkspacePath } from "@/lib/design/chat-file-url";
+import {
+  isMermaidWorkspacePath,
+  isSvgWorkspacePath,
+} from "@/lib/design/chat-file-url";
 import { prepareSvgDocument } from "@/lib/design/svg";
 import { cn } from "@/lib/utils";
 
@@ -273,11 +277,41 @@ function WriteFileRender({
       ? prepareSvgDocument(content) ??
         (content.trim().startsWith("<") ? content : null)
       : null;
+  const mermaidContent =
+    isMermaidWorkspacePath(path) && content.trim() ? content : null;
+  const showDiagramPreview =
+    !running && Boolean(svgContent || mermaidContent);
 
   return (
     <div className="flex w-full flex-col gap-1.5" data-slot="write-file-tool">
-      {svgContent && !running ? (
+      {showDiagramPreview && svgContent ? (
         <WorkspaceSvgPreview path={path} content={svgContent} label={path} />
+      ) : showDiagramPreview && mermaidContent ? (
+        <div className="flex w-full max-w-lg flex-col gap-2">
+          <div
+            role="button"
+            tabIndex={0}
+            aria-expanded={isOpen}
+            aria-label={`Open ${path}`}
+            onClick={toggleCanvas}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                toggleCanvas();
+              }
+            }}
+            className="cursor-pointer text-left"
+          >
+            <MermaidBlock code={mermaidContent} />
+          </div>
+          <button
+            type="button"
+            onClick={toggleCanvas}
+            className="text-primary text-left text-[15px] underline"
+          >
+            {path}
+          </button>
+        </div>
       ) : (
         <ArtifactCard
           title={path}
@@ -288,7 +322,7 @@ function WriteFileRender({
           onClick={toggleCanvas}
         />
       )}
-      {svgContent && running ? (
+      {(svgContent || mermaidContent) && running ? (
         <ArtifactCard
           title={path}
           meta={meta}

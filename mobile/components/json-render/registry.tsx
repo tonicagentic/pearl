@@ -1,6 +1,7 @@
 import type { ComponentRegistry } from "@json-render/react-native";
 import { useActions } from "@json-render/react-native";
 import { VideoPlayer } from "@/components/assistant-ui/elements/media-player";
+import { MermaidPreview } from "@/components/assistant-ui/elements/mermaid-preview";
 import { creativeMobileCards } from "@/components/json-render/creative-cards";
 import { devopsMobileCards } from "@/components/json-render/devops-cards";
 import { structuredMobileCards } from "@/components/json-render/structured-cards";
@@ -82,25 +83,6 @@ function loadWebView(): WebViewComponent | null {
   }
 }
 
-function MermaidWebView({ code }: { readonly code: string }) {
-  const WebView = useMemo(() => loadWebView(), []);
-  if (!WebView) {
-    return (
-      <Text variant="caption" className="opacity-70">
-        {code}
-      </Text>
-    );
-  }
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"/><script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:false,securityLevel:"strict",theme:"neutral"});try{const {svg}=await mermaid.render("m1",${JSON.stringify(code)});document.body.innerHTML=svg;}catch(e){document.body.textContent=${JSON.stringify(code)};}</script></head><body style="margin:0;padding:8px;background:transparent;color:#111"></body></html>`;
-  return (
-    <WebView
-      originWhitelist={["*"]}
-      source={{ html }}
-      style={{ width: "100%", height: 220, backgroundColor: "transparent" }}
-      scrollEnabled={false}
-    />
-  );
-}
 
 function EmbedWebView({ uri }: { readonly uri: string }) {
   const WebView = useMemo(() => loadWebView(), []);
@@ -1385,7 +1367,7 @@ export const chatRegistry: ComponentRegistry = {
       {element.props.streaming ? (
         <Text variant="caption">Rendering diagram…</Text>
       ) : (
-        <MermaidWebView code={asString(element.props.code)} />
+        <MermaidPreview code={asString(element.props.code)} />
       )}
     </View>
   ),
