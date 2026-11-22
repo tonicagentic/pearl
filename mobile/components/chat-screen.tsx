@@ -1406,6 +1406,8 @@ export function ChatScreen({
             headerShown: true,
             title: "",
             headerBackButtonDisplayMode: "minimal",
+            // System back (morphs from Delegate’s liquid-glass menu control).
+            headerBackVisible: true,
             // Thread content draws under the bar and pads itself so the first
             // message rests below the nav; scrolling can fade under it.
             headerTransparent: Platform.OS === "ios",

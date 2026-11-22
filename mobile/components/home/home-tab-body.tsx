@@ -52,7 +52,7 @@ export function HomeTabBody({
 }) {
   const openChatRoute = () => {
     if (onOpenChat) onOpenChat();
-    else router.navigate("/chat");
+    else router.push("/chat", { withAnchor: true });
   };
 
   if (Platform.OS === "ios") {

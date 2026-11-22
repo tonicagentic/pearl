@@ -80,10 +80,18 @@ type ScreenChromeProps = {
   readonly children: ReactNode;
 };
 
-function HistoryLeadingButton() {
+function HistoryLeadingButton({
+  variant = "disc",
+}: {
+  readonly variant?: "disc" | "bare";
+}) {
   const { openDrawer } = usePearlDrawer();
   return (
-    <DrawerButton onPress={openDrawer} accessibilityLabel="Open menu" />
+    <DrawerButton
+      onPress={openDrawer}
+      accessibilityLabel="Open menu"
+      variant={variant}
+    />
   );
 }
 
@@ -175,11 +183,18 @@ export function ScreenChrome({
 
   // Hide leading while the drawer is open so it doesn’t stack over the panel.
   const showLeading = leading !== "none" && !(IS_IOS && drawerOpen);
+  // iOS transparent headers: bare glyph inside shared liquid glass so the
+  // control morphs into the system back chevron on push (Delegate → chat).
+  const iosGlassLeading = IS_IOS && transparentHeader;
   const leadingNode =
     leading === "history" ? (
-      <HistoryLeadingButton />
+      <HistoryLeadingButton variant={iosGlassLeading ? "bare" : "disc"} />
     ) : leading === "drawer" ? (
-      <HeaderDrawerButton />
+      iosGlassLeading ? (
+        <HistoryLeadingButton variant="bare" />
+      ) : (
+        <HeaderDrawerButton />
+      )
     ) : null;
 
   const androidRight = renderAndroidActions(actions);
@@ -231,7 +246,11 @@ export function ScreenChrome({
       />
       {IS_IOS && showLeading && leadingNode ? (
         <Stack.Toolbar placement="left">
-          <Stack.Toolbar.View hidesSharedBackground>
+          {/*
+            Keep shared liquid glass (no hidesSharedBackground) so this
+            leading control morphs into the pushed screen’s back button.
+          */}
+          <Stack.Toolbar.View>
             <View style={{ width: HIT, height: HIT }}>{leadingNode}</View>
           </Stack.Toolbar.View>
         </Stack.Toolbar>

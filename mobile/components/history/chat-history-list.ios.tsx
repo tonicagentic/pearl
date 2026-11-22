@@ -75,6 +75,7 @@ export function ChatHistoryListIOS({
   const { signedIn } = useAuth();
   const {
     chats,
+    activeChatId,
     chatsLoading,
     chatsReady,
     chatsError,
@@ -92,7 +93,10 @@ export function ChatHistoryListIOS({
   const mutedForeground = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
+  const mutedFill = useCSSVariable("--color-muted") as string | undefined;
   const mutedColor = mutedForeground ?? "#8E8E93";
+  /** Selected-row wash (matches Android `bg-muted/50`). */
+  const selectedRowBg = mutedFill ?? "rgba(120, 120, 128, 0.18)";
   const isDrawer = chrome === "drawer";
   const clearRow = "#00000000";
   const rowChrome = [
@@ -214,6 +218,8 @@ export function ChatHistoryListIOS({
                 {({ item: chat }) => (
                   <RecentChatRow
                     chat={chat}
+                    selected={activeChatId === chat.id}
+                    selectedRowBg={selectedRowBg}
                     mutedColor={mutedColor}
                     projectName={
                       chat.projectId
@@ -258,6 +264,8 @@ export function ChatHistoryListIOS({
 
 function RecentChatRow({
   chat,
+  selected,
+  selectedRowBg,
   mutedColor,
   projectName,
   onOpen,
@@ -265,6 +273,8 @@ function RecentChatRow({
   chrome = "page",
 }: {
   readonly chat: ChatListItem;
+  readonly selected: boolean;
+  readonly selectedRowBg: string;
   readonly mutedColor: string;
   readonly projectName: string | null;
   readonly onOpen: () => void;
@@ -275,6 +285,11 @@ function RecentChatRow({
   const when = formatChatUpdatedAt(chat.updatedAt);
   const projectId = chat.projectId ?? null;
   const isDrawer = chrome === "drawer";
+  const rowBackground = selected
+    ? selectedRowBg
+    : isDrawer
+      ? "#00000000"
+      : null;
   const markTint =
     presence === "waiting"
       ? CHAT_PRESENCE_AMBER
@@ -368,12 +383,8 @@ function RecentChatRow({
           leading: isDrawer ? 20 : 16,
           trailing: isDrawer ? 20 : 16,
         }),
-        ...(isDrawer
-          ? [
-              listRowSeparator("hidden" as const),
-              listRowBackground("#00000000"),
-            ]
-          : []),
+        ...(isDrawer ? [listRowSeparator("hidden" as const)] : []),
+        ...(rowBackground != null ? [listRowBackground(rowBackground)] : []),
       ]}
     >
       <ContextMenu>

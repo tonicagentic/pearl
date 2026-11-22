@@ -78,8 +78,10 @@ export function AgentDirectoryScreen() {
   }, [templates, category, query]);
 
   const openAgentChat = (chatId: string) => {
-    selectChat(chatId);
-    router.navigate("/");
+    void selectChat(chatId).then((ok) => {
+      if (!ok) return;
+      router.push("/chat", { withAnchor: true });
+    });
   };
 
   const add = (slug: string, addedChatId: string | null) => {

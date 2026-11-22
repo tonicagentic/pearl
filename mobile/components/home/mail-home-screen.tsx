@@ -99,8 +99,8 @@ export function MailHomeScreen() {
   }, []);
 
   useEffect(() => {
-    setHomeChatHandler(() => {
-      setHomeTab("pearl");
+    setHomeChatHandler((options) => {
+      setHomeTab(options?.tab ?? "pearl");
     });
     return () => setHomeChatHandler(null);
   }, [setHomeChatHandler]);
@@ -146,7 +146,9 @@ export function MailHomeScreen() {
   }, [armPearlCompose, billingReady, homeTab]);
 
   const openChat = useCallback(() => {
-    router.push("/chat");
+    // Push on the home stack (with index anchored) so back morphs into the
+    // Delegate menu control.
+    router.push("/chat", { withAnchor: true });
   }, []);
 
   const guestHasThread = isAnonymous && chats.length > 0;
@@ -269,7 +271,7 @@ export function MailHomeScreen() {
       setCreateAgentOpen(false);
       setHomeTab("agents");
       void selectChat(agent.chatId).then((ok) => {
-        if (ok) router.push("/chat");
+        if (ok) router.push("/chat", { withAnchor: true });
       });
     },
     [selectChat],

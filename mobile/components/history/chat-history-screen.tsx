@@ -24,7 +24,7 @@ export function ChatHistoryScreen() {
     >
       <ChatHistoryContent
         onOpenChat={(_chatId) => {
-          router.push("/chat");
+          router.push("/chat", { withAnchor: true });
         }}
         search={search}
         showInlineSearch={Platform.OS !== "ios"}

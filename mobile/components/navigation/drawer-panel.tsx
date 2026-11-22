@@ -71,6 +71,15 @@ export function DrawerPanel({
     }
     closePearlDrawer();
   }, [navigation, closePearlDrawer]);
+  const openChatFromDrawer = useCallback(
+    async (chatId: string) => {
+      // Close immediately via drawerContent navigation (hook close can miss
+      // here), then select + route.
+      closeDrawer();
+      await onSelectChatFromDrawer(chatId);
+    },
+    [closeDrawer, onSelectChatFromDrawer],
+  );
   const { isAnonymous, viewerEmail, viewerName } = useAuth();
   const { newChat } = useChats();
   const foregroundColor = useCSSVariable("--color-foreground") as
@@ -209,7 +218,7 @@ export function DrawerPanel({
         <ChatHistoryContent
           chrome="drawer"
           showInlineSearch={drawerSearchOpen}
-          onOpenChat={onSelectChatFromDrawer}
+          onOpenChat={openChatFromDrawer}
           onSeeAll={openSeeAll}
           drawerHeader={
             <View style={{ paddingHorizontal: 8, paddingBottom: 8, gap: 2 }}>

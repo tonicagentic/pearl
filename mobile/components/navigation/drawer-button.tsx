@@ -2,17 +2,20 @@ import { Pressable, View, type StyleProp, type ViewStyle } from "react-native";
 import { useCSSVariable } from "uniwind";
 
 /**
- * Circular ChatGPT-style menu handle: soft white disc, shadow, two bars
- * (top slightly longer than bottom).
+ * Menu handle: two bars (top slightly longer).
+ * - `disc` (default): ChatGPT-style soft circle + shadow (Android / opaque headers).
+ * - `bare`: glyph only for iOS liquid-glass toolbar so it morphs into back.
  */
 export function DrawerButton({
   onPress,
   accessibilityLabel = "Open menu",
   style,
+  variant = "disc",
 }: {
   readonly onPress: () => void;
   readonly accessibilityLabel?: string;
   readonly style?: StyleProp<ViewStyle>;
+  readonly variant?: "disc" | "bare";
 }) {
   const foreground = useCSSVariable("--color-foreground") as
     | string
@@ -23,6 +26,7 @@ export function DrawerButton({
     | undefined;
   const lineColor = foreground ?? "#3A3A3C";
   const backgroundColor = card ?? background ?? "#F4F4F5";
+  const bare = variant === "bare";
 
   return (
     <Pressable
@@ -37,12 +41,12 @@ export function DrawerButton({
           borderRadius: 22,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor,
+          backgroundColor: bare ? "transparent" : backgroundColor,
           shadowColor: "#000",
-          shadowOpacity: 0.16,
-          shadowRadius: 10,
-          shadowOffset: { width: 0, height: 3 },
-          elevation: 4,
+          shadowOpacity: bare ? 0 : 0.16,
+          shadowRadius: bare ? 0 : 10,
+          shadowOffset: { width: 0, height: bare ? 0 : 3 },
+          elevation: bare ? 0 : 4,
         },
         style,
       ]}
