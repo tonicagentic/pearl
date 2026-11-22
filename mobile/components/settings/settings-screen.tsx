@@ -1,6 +1,6 @@
 import { useCallback, useState, useSyncExternalStore } from "react";
 import { Alert, Platform, Pressable, StyleSheet, View } from "react-native";
-import { router, Stack, useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import {
   BotIcon,
   BrainIcon,
@@ -28,6 +28,7 @@ import {
   WalletIcon,
 } from "lucide-react-native";
 
+import { ScreenChrome } from "@/components/navigation/screen-chrome";
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { Icon } from "@/components/ui/icon";
 import { Section } from "@/components/ui/section";
@@ -268,14 +269,18 @@ export function SettingsScreen() {
   const showHostingCard = showConnected || showSelfHost;
 
   return (
-    <>
-      <Stack.SearchBar
-        placeholder="Search"
-        hideWhenScrolling
-        autoCapitalize="none"
-        onChangeText={search.onChangeText}
-        onCancelButtonPress={search.onCancelButtonPress}
-      />
+    <ScreenChrome
+      title="Profile"
+      leading="drawer"
+      wrapBody={false}
+      search={{
+        placeholder: "Search",
+        hideWhenScrolling: true,
+        autoCapitalize: "none",
+        onChangeText: search.onChangeText,
+        onCancelButtonPress: search.onCancelButtonPress,
+      }}
+    >
       <SheetScaffold>
         {showAccountSection ? (
           <Section title="Account">
@@ -283,7 +288,7 @@ export function SettingsScreen() {
               <AccountRow
                 name={viewerName}
                 email={viewerEmail}
-                onPress={() => router.push("/account")}
+                onPress={() => router.push("/settings/account")}
               />
             ) : null}
             {showEmail ? (
@@ -291,7 +296,7 @@ export function SettingsScreen() {
                 icon={<Icon as={MailIcon} className="size-5 text-sky-600" />}
                 label="Email"
                 detail={emailDetail}
-                onPress={() => router.push("/email")}
+                onPress={() => router.push("/settings/email")}
                 showSeparator={showCalendar}
               />
             ) : null}
@@ -302,7 +307,7 @@ export function SettingsScreen() {
                 }
                 label="Calendar"
                 detail={calendarRowDetail}
-                onPress={() => router.push("/calendar")}
+                onPress={() => router.push("/settings/calendar")}
               />
             ) : null}
           </Section>
@@ -317,7 +322,7 @@ export function SettingsScreen() {
                 }
                 label="Workspaces"
                 detail="Projects for chats"
-                onPress={() => router.push("/workspaces")}
+                onPress={() => router.navigate("/workspaces")}
                 showSeparator={showMoney || showTasks}
               />
             ) : null}
@@ -331,7 +336,7 @@ export function SettingsScreen() {
                 }
                 label="Money"
                 detail="Pearl Money"
-                onPress={() => router.push("/money")}
+                onPress={() => router.push("/settings/money")}
                 showSeparator={showTasks}
               />
             ) : null}
@@ -340,7 +345,7 @@ export function SettingsScreen() {
                 icon={<Icon as={ListTodoIcon} className="size-5 text-teal-500" />}
                 label="Tasks"
                 detail="Due soon and parked"
-                onPress={() => router.push("/tasks")}
+                onPress={() => router.navigate("/tasks")}
               />
             ) : null}
           </SettingsCard>
@@ -358,7 +363,7 @@ export function SettingsScreen() {
                 }
                 label="Answers"
                 detail="Web and connected accounts"
-                onPress={() => router.push("/answers")}
+                onPress={() => router.push("/settings/answers")}
                 showSeparator={
                   showResearch || showPlan || showDrafting || showAnalysis
                 }
@@ -371,7 +376,7 @@ export function SettingsScreen() {
                 }
                 label="Research"
                 detail="Deep research with citations"
-                onPress={() => router.push("/research")}
+                onPress={() => router.push("/settings/research")}
                 showSeparator={showPlan || showDrafting || showAnalysis}
               />
             ) : null}
@@ -385,7 +390,7 @@ export function SettingsScreen() {
                 }
                 label="Plan"
                 detail="Travel and how you plan"
-                onPress={() => router.push("/plan")}
+                onPress={() => router.push("/settings/plan")}
                 showSeparator={showDrafting || showAnalysis}
               />
             ) : null}
@@ -396,7 +401,7 @@ export function SettingsScreen() {
                 }
                 label="Drafting"
                 detail="Writing and style"
-                onPress={() => router.push("/drafting")}
+                onPress={() => router.push("/settings/drafting")}
                 showSeparator={showAnalysis}
               />
             ) : null}
@@ -407,7 +412,7 @@ export function SettingsScreen() {
                 }
                 label="Analysis"
                 detail="PDF, images, tables, text"
-                onPress={() => router.push("/analysis")}
+                onPress={() => router.push("/settings/analysis")}
               />
             ) : null}
           </Section>
@@ -422,7 +427,7 @@ export function SettingsScreen() {
                 }
                 label="Coder"
                 detail="Build, PR, deploy"
-                onPress={() => router.push("/plugins/coder")}
+                onPress={() => router.push("/settings/plugins/coder")}
                 showSeparator={showVisualize || showDesign}
               />
             ) : null}
@@ -433,7 +438,7 @@ export function SettingsScreen() {
                 }
                 label="Visualize"
                 detail="Graphics, diagrams, images"
-                onPress={() => router.push("/visualize")}
+                onPress={() => router.push("/settings/visualize")}
                 showSeparator={showDesign}
               />
             ) : null}
@@ -447,7 +452,7 @@ export function SettingsScreen() {
                 }
                 label="Design"
                 detail="Presentations, documents, layouts"
-                onPress={() => router.push("/design")}
+                onPress={() => router.push("/settings/design")}
               />
             ) : null}
           </Section>
@@ -462,7 +467,7 @@ export function SettingsScreen() {
                 }
                 label="Models"
                 detail={selectedLabel}
-                onPress={() => router.push("/models")}
+                onPress={() => router.push("/settings/models")}
                 showSeparator={
                   showMemory ||
                   showCapabilities ||
@@ -478,7 +483,7 @@ export function SettingsScreen() {
                 }
                 label="Memory"
                 detail={memoryDetail}
-                onPress={() => router.push("/memory")}
+                onPress={() => router.push("/settings/memory")}
                 showSeparator={
                   showCapabilities || showSchemas || showSkills
                 }
@@ -491,7 +496,7 @@ export function SettingsScreen() {
                 }
                 label="Capabilities"
                 detail={capabilitiesDetail}
-                onPress={() => router.push("/capabilities")}
+                onPress={() => router.push("/settings/capabilities")}
                 showSeparator={showSchemas || showSkills}
               />
             ) : null}
@@ -502,7 +507,7 @@ export function SettingsScreen() {
                 }
                 label="Schemas"
                 detail="Precise concept definitions"
-                onPress={() => router.push("/plugins/schema-designer")}
+                onPress={() => router.push("/settings/plugins/schema-designer")}
                 showSeparator={showSkills}
               />
             ) : null}
@@ -511,7 +516,7 @@ export function SettingsScreen() {
                 icon={<Icon as={BrainIcon} className="size-5 text-amber-500" />}
                 label="Skills"
                 detail="Custom and published"
-                onPress={() => router.push("/skills")}
+                onPress={() => router.push("/settings/skills")}
               />
             ) : null}
           </Section>
@@ -524,7 +529,7 @@ export function SettingsScreen() {
                 icon={<Icon as={CoinsIcon} className="size-5 text-amber-500" />}
                 label="Usage"
                 detail={usageDetail}
-                onPress={() => router.push("/usage")}
+                onPress={() => router.push("/settings/usage")}
                 showSeparator={showStorage || search.matches("Billing")}
               />
             ) : null}
@@ -535,7 +540,7 @@ export function SettingsScreen() {
                 }
                 label="Storage"
                 detail="Chat, saved files, Drive"
-                onPress={() => router.push("/storage")}
+                onPress={() => router.push("/settings/storage")}
                 showSeparator={search.matches("Billing")}
               />
             ) : null}
@@ -552,7 +557,7 @@ export function SettingsScreen() {
                 }
                 label="Connected agents"
                 detail="Private eve deployments"
-                onPress={() => router.push("/connected-agents")}
+                onPress={() => router.push("/settings/connected-agents")}
                 showSeparator={showSelfHost}
               />
             ) : null}
@@ -566,7 +571,7 @@ export function SettingsScreen() {
                 }
                 label="Self-host"
                 detail={agentHostLabel}
-                onPress={() => router.push("/self-host")}
+                onPress={() => router.push("/settings/self-host")}
               />
             ) : null}
           </SettingsCard>
@@ -589,7 +594,7 @@ export function SettingsScreen() {
           </Text>
         )}
       </SheetScaffold>
-    </>
+    </ScreenChrome>
   );
 }
 
@@ -718,7 +723,7 @@ function BillingRow({
       icon={<Icon as={WalletIcon} className="size-5 text-foreground" />}
       label="Billing"
       detail={detail}
-      onPress={() => router.push("/billing")}
+      onPress={() => router.push("/settings/billing")}
     />
   );
 }

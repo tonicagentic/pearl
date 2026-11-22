@@ -21,12 +21,14 @@ import {
   addAgentFromTemplateRequest,
   fetchAgentTemplates,
 } from "@/src/agent-templates-client";
+import { useChats } from "@/src/chat-context";
 
 const MARK_SIZE = 36;
 const MARK_METRICS = pearlMarkMetrics(MARK_SIZE, DEFAULT_AGENT_MARK_HEIGHT_RATIO);
 
 export function AgentDirectoryScreen() {
   const router = useRouter();
+  const { selectChat } = useChats();
   const [templates, setTemplates] = useState<readonly AgentTemplateSummary[] | null>(
     null,
   );
@@ -75,16 +77,21 @@ export function AgentDirectoryScreen() {
     });
   }, [templates, category, query]);
 
+  const openAgentChat = (chatId: string) => {
+    selectChat(chatId);
+    router.navigate("/");
+  };
+
   const add = (slug: string, addedChatId: string | null) => {
     if (addedChatId) {
-      router.push(`/chat/${addedChatId}`);
+      openAgentChat(addedChatId);
       return;
     }
     setBusySlug(slug);
     setError(null);
     void addAgentFromTemplateRequest(slug)
       .then((agent) => {
-        router.push(`/chat/${agent.chatId}`);
+        openAgentChat(agent.chatId);
       })
       .catch((cause) => {
         setError(

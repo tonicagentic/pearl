@@ -1,19 +1,23 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
-import { Alert, AppState, Platform, Pressable, View } from "react-native";
-import { Stack, router, useFocusEffect } from "expo-router";
+import { Alert, AppState, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
 import { MoreHorizontalIcon, PlusIcon, SquarePenIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { ChatScreen } from "@/components/chat-screen";
-import { HistoryScreen } from "@/components/home/app-drawer";
+import { HomeTabBody } from "@/components/home/home-tab-body";
 import { CreateAgentModal } from "@/components/home/create-agent-modal";
-import { HistorySidebarButton } from "@/components/home/history-sidebar-button";
-import { useHistorySidebar } from "@/components/home/history-sidebar";
+import { useHistorySidebar } from "@/components/navigation/drawer-context";
+import {
+  ScreenChrome,
+  type ScreenChromeAction,
+} from "@/components/navigation/screen-chrome";
 import type { HomeTab } from "@/components/home/home-tab";
 import { HomeTabSwitcher } from "@/components/home/home-tab-switcher";
 import {
@@ -23,15 +27,12 @@ import {
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
-import { Icon } from "@/components/ui/icon";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import { getChat } from "@/src/chats-client";
 import type { CustomAgentDto } from "@/src/custom-agents-client";
 import { fetchProjects } from "@/src/projects-client";
 import type { ThreadTraceEvent } from "@/src/thread-trace";
-
-const IS_IOS = Platform.OS === "ios";
 
 /**
  * Mail-style home: history sidebar button left; Chat|Delegate switcher on the
@@ -42,12 +43,8 @@ export function MailHomeScreen() {
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
-  const foregroundColor = useCSSVariable("--color-foreground") as
-    | string
-    | undefined;
   const { billingReady, isAnonymous, markBillingReady } = useAuth();
-  const { open: historyOpen, openSidebar, setHomeChatHandler } =
-    useHistorySidebar();
+  const { setHomeChatHandler } = useHistorySidebar();
   const {
     activeChatId,
     activeCustomAgent,
@@ -278,188 +275,143 @@ export function MailHomeScreen() {
     [selectChat],
   );
 
+  const chromeActions = useMemo((): readonly ScreenChromeAction[] => {
+    return [
+      {
+        label: "New chat",
+        systemImage: "square.and.pencil",
+        icon: SquarePenIcon,
+        onPress: openNewChat,
+        hidden: !showPearlThreadChrome,
+      },
+      {
+        type: "spacer",
+        width: 8,
+        hidden: !showPearlThreadChrome,
+      },
+      {
+        type: "menu",
+        label: "Thread details",
+        systemImage: "ellipsis",
+        icon: MoreHorizontalIcon,
+        hidden: !showPearlThreadChrome,
+        onPress: openThreadDetails,
+        items: [
+          {
+            label: projectLabel ? "Change project" : "Add to project",
+            systemImage: "folder",
+            onPress: openProjectPicker,
+          },
+          {
+            label: "Remove from project",
+            systemImage: "folder.badge.minus",
+            onPress: clearProject,
+            hidden: !activeProjectId,
+          },
+          {
+            label: "View cost",
+            systemImage: "dollarsign.circle",
+            onPress: openCost,
+          },
+          {
+            label: "Delete",
+            systemImage: "trash",
+            destructive: true,
+            onPress: confirmDelete,
+          },
+        ],
+      },
+      {
+        type: "spacer",
+        width: 8,
+        hidden: !showAgentsPlus,
+      },
+      {
+        label: "New agent",
+        systemImage: "plus",
+        icon: PlusIcon,
+        onPress: openCreateAgent,
+        separateBackground: true,
+        hidden: !showAgentsPlus,
+      },
+    ];
+  }, [
+    activeProjectId,
+    clearProject,
+    confirmDelete,
+    openCost,
+    openCreateAgent,
+    openNewChat,
+    openProjectPicker,
+    openThreadDetails,
+    projectLabel,
+    showAgentsPlus,
+    showPearlThreadChrome,
+  ]);
+
   return (
     <View style={{ flex: 1, backgroundColor }}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: "",
-          headerShadowVisible: false,
-          headerTransparent: IS_IOS,
-          headerTintColor: foregroundColor,
-          headerStyle: IS_IOS ? undefined : { backgroundColor },
-          headerTitle: () =>
-            showTabSwitcher ? (
-              <HomeTabSwitcher tab={homeTab} onChange={setHomeTab} />
-            ) : null,
-          headerLeft: IS_IOS
-            ? undefined
-            : () =>
-                historyOpen ? null : (
-                  <HistorySidebarButton onPress={openSidebar} />
-                ),
-          headerRight: IS_IOS
-            ? undefined
-            : () => (
-                <View className="flex-row items-center">
-                  {showPearlThreadChrome ? (
-                    <>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="New chat"
-                        className="h-10 w-10 items-center justify-center"
-                        onPress={openNewChat}
-                      >
-                        <Icon
-                          as={SquarePenIcon}
-                          className="size-5 text-foreground"
-                        />
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Thread details"
-                        className="h-10 w-10 items-center justify-center"
-                        onPress={openThreadDetails}
-                      >
-                        <Icon
-                          as={MoreHorizontalIcon}
-                          className="size-5 text-foreground"
-                        />
-                      </Pressable>
-                    </>
-                  ) : null}
-                  {showAgentsPlus ? (
-                    <>
-                      <View style={{ width: 8 }} />
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="New agent"
-                        className="h-10 w-10 items-center justify-center"
-                        onPress={openCreateAgent}
-                      >
-                        <Icon
-                          as={PlusIcon}
-                          className="size-5 text-foreground"
-                        />
-                      </Pressable>
-                    </>
-                  ) : null}
-                </View>
-              ),
-        }}
-      />
-      {IS_IOS ? (
-        <>
-          <Stack.Toolbar placement="left">
-            {historyOpen ? null : (
-              <Stack.Toolbar.View hidesSharedBackground>
-                <View style={{ width: 44, height: 44 }}>
-                  <HistorySidebarButton onPress={openSidebar} />
-                </View>
-              </Stack.Toolbar.View>
-            )}
-          </Stack.Toolbar>
-          <Stack.Toolbar placement="right">
-            <Stack.Toolbar.Button
-              icon="square.and.pencil"
-              accessibilityLabel="New chat"
-              onPress={openNewChat}
-              hidden={!showPearlThreadChrome}
+      <ScreenChrome
+        wrapBody={false}
+        transparentHeader
+        leading="history"
+        titleSlot={
+          showTabSwitcher ? (
+            <HomeTabSwitcher tab={homeTab} onChange={setHomeTab} />
+          ) : null
+        }
+        actions={chromeActions}
+      >
+        <View style={{ flex: 1, zIndex: 0, overflow: "hidden" }}>
+          {!billingReady ? (
+            <BillingGateScreen onReady={markBillingReady} />
+          ) : homeTab === "pearl" ? (
+            <ChatScreen embedded />
+          ) : (
+            <HomeTabBody
+              tab="agents"
+              onOpenChat={openChat}
+              bottomInset={agentsBottomInset}
             />
-            <Stack.Toolbar.Spacer width={8} hidden={!showPearlThreadChrome} />
-            <Stack.Toolbar.Menu
-              icon="ellipsis"
-              accessibilityLabel="Thread details"
-              hidden={!showPearlThreadChrome}
-            >
-              <Stack.Toolbar.MenuAction
-                icon="folder"
-                onPress={openProjectPicker}
-              >
-                {projectLabel ? "Change project" : "Add to project"}
-              </Stack.Toolbar.MenuAction>
-              {activeProjectId ? (
-                <Stack.Toolbar.MenuAction
-                  icon="folder.badge.minus"
-                  onPress={clearProject}
-                >
-                  Remove from project
-                </Stack.Toolbar.MenuAction>
-              ) : null}
-              <Stack.Toolbar.MenuAction
-                icon="dollarsign.circle"
-                onPress={openCost}
-              >
-                View cost
-              </Stack.Toolbar.MenuAction>
-              <Stack.Toolbar.MenuAction
-                icon="trash"
-                destructive
-                onPress={confirmDelete}
-              >
-                Delete
-              </Stack.Toolbar.MenuAction>
-            </Stack.Toolbar.Menu>
-            <Stack.Toolbar.Spacer width={8} hidden={!showAgentsPlus} />
-            <Stack.Toolbar.Button
-              icon="plus"
-              accessibilityLabel="New agent"
-              onPress={openCreateAgent}
-              separateBackground
-              hidden={!showAgentsPlus}
-            />
-          </Stack.Toolbar>
-        </>
-      ) : null}
-      <View style={{ flex: 1, zIndex: 0, overflow: "hidden" }}>
-        {!billingReady ? (
-          <BillingGateScreen onReady={markBillingReady} />
-        ) : homeTab === "pearl" ? (
-          <ChatScreen embedded />
-        ) : (
-          <HistoryScreen
-            tab="agents"
-            onOpenChat={openChat}
-            bottomInset={agentsBottomInset}
-          />
-        )}
-      </View>
+          )}
+        </View>
 
-      {billingReady && homeTab === "pearl" && guestHasThread ? (
-        <SignInForNewChatCard />
-      ) : null}
+        {billingReady && homeTab === "pearl" && guestHasThread ? (
+          <SignInForNewChatCard />
+        ) : null}
 
-      <CreateAgentModal
-        open={createAgentOpen}
-        onClose={() => setCreateAgentOpen(false)}
-        onCreated={onAgentCreated}
-      />
+        <CreateAgentModal
+          open={createAgentOpen}
+          onClose={() => setCreateAgentOpen(false)}
+          onCreated={onAgentCreated}
+        />
 
-      <ThreadCostDrawer
-        open={costOpen}
-        events={costEvents}
-        onClose={() => {
-          setCostOpen(false);
-          setCostEvents([]);
-        }}
-      />
-      <ProjectPickerModal
-        open={projectPickerOpen}
-        onClose={() => setProjectPickerOpen(false)}
-        onSelect={(project) => {
-          const chatId = activeChatId;
-          setProjectPickerOpen(false);
-          if (!chatId) return;
-          setActiveProjectId(project.id);
-          setProjectLabel(project.name);
-          void setChatProject(chatId, project.id).catch(() => {
-            Alert.alert(
-              "Could not update project",
-              "Check your connection and try again.",
-            );
-          });
-        }}
-      />
+        <ThreadCostDrawer
+          open={costOpen}
+          events={costEvents}
+          onClose={() => {
+            setCostOpen(false);
+            setCostEvents([]);
+          }}
+        />
+        <ProjectPickerModal
+          open={projectPickerOpen}
+          onClose={() => setProjectPickerOpen(false)}
+          onSelect={(project) => {
+            const chatId = activeChatId;
+            setProjectPickerOpen(false);
+            if (!chatId) return;
+            setActiveProjectId(project.id);
+            setProjectLabel(project.name);
+            void setChatProject(chatId, project.id).catch(() => {
+              Alert.alert(
+                "Could not update project",
+                "Check your connection and try again.",
+              );
+            });
+          }}
+        />
+      </ScreenChrome>
     </View>
   );
 }

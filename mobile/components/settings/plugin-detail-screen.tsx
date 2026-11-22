@@ -190,7 +190,7 @@ function CalendarManagePanel() {
         <SettingsButton
           hosted
           label="Manage Calendar"
-          onPress={() => router.push("/calendar")}
+          onPress={() => router.push("/settings/calendar")}
         />
       </View>
       {googleCapabilities ? (
@@ -279,7 +279,7 @@ function GmailMailboxSummaryPanel() {
         <SettingsButton
           hosted
           label="Manage Email"
-          onPress={() => router.push("/email")}
+          onPress={() => router.push("/settings/email")}
         />
       </View>
       {capabilities ? (
@@ -338,7 +338,7 @@ function CoderSandbox() {
           accessibilityRole="button"
           accessibilityLabel="Change sandbox settings in Computer Use"
           className="active:bg-muted/80"
-          onPress={() => router.push("/computer-use")}
+          onPress={() => router.push("/settings/computer-use")}
         >
           <View className="min-h-[52px] flex-row items-center gap-3 px-4 py-3">
             <Text variant="label" className="min-w-0 flex-1">

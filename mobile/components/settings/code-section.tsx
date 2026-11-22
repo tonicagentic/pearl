@@ -111,7 +111,7 @@ function CodePluginRow({
         accessibilityRole="button"
         accessibilityLabel={plugin.label}
         className="active:bg-muted/80"
-        onPress={() => router.push(`/plugins/${plugin.id}`)}
+        onPress={() => router.push(`/settings/plugins/${plugin.id}`)}
       >
         <View className="flex-row items-center gap-3 px-4 py-3.5">
           <PluginLogo id={plugin.id as PluginMarkId} />

@@ -143,7 +143,7 @@ export function WorkbenchDetailScreen() {
       ) : tab === "database" && id ? (
         <DatabaseTab pinId={id} />
       ) : tab === "usage" && id ? (
-        <UsageTab pinId={id} onOpenPearlBilling={() => router.push("/settings")} />
+        <UsageTab pinId={id} onOpenPearlBilling={() => router.navigate("/settings")} />
       ) : null}
     </StackScreen>
   );

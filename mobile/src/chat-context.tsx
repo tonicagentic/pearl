@@ -116,6 +116,8 @@ type ChatsContextValue = {
   readonly getActiveStore: () => SessionStore;
   /** Synchronous active chat id (ref). */
   readonly getActiveChatId: () => string | null;
+  /** Synchronous active custom-agent ref (after `selectChat`). */
+  readonly getActiveCustomAgent: () => CustomAgentRef | null;
   readonly activeChatId: string | null;
   /** Project linked to the active chat (Plan mode / project chats). */
   readonly activeProjectId: string | null;
@@ -1217,11 +1219,17 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     [],
   );
 
+  const getActiveCustomAgent = useCallback(
+    () => activeCustomAgentRef.current,
+    [],
+  );
+
   const value = useMemo(
     () => ({
       store,
       getActiveStore,
       getActiveChatId,
+      getActiveCustomAgent,
       activeChatId,
       activeProjectId,
       setActiveProjectId,
@@ -1259,6 +1267,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       store,
       getActiveStore,
       getActiveChatId,
+      getActiveCustomAgent,
       activeChatId,
       activeProjectId,
       setActiveProjectId,

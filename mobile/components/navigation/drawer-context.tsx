@@ -1,0 +1,202 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { router, useNavigation } from "expo-router";
+import { useDrawerStatus } from "expo-router/drawer";
+
+import { useChats } from "@/src/chat-context";
+
+type DrawerNav = {
+  openDrawer?: () => void;
+  closeDrawer?: () => void;
+  toggleDrawer?: () => void;
+  getParent?: () => DrawerNav | undefined;
+};
+
+function resolveDrawerNav(navigation: DrawerNav): DrawerNav | null {
+  let current: DrawerNav | undefined = navigation;
+  for (let i = 0; i < 8 && current; i += 1) {
+    if (
+      typeof current.openDrawer === "function" &&
+      typeof current.closeDrawer === "function"
+    ) {
+      return current;
+    }
+    current = current.getParent?.();
+  }
+  return null;
+}
+
+type PearlDrawerContextValue = {
+  readonly open: boolean;
+  readonly setOpen: (open: boolean) => void;
+  readonly setHomeChatHandler: (handler: (() => void) | null) => void;
+  readonly notifyChatSelectedFromDrawer: () => void;
+};
+
+const PearlDrawerContext = createContext<PearlDrawerContextValue | null>(null);
+
+/**
+ * Holds drawer open flag + mail-home embed handler. Open/close resolve from
+ * the caller's navigation tree so this provider can sit above the Drawer.
+ */
+export function PearlDrawerProvider({
+  children,
+}: {
+  readonly children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const homeChatHandlerRef = useRef<(() => void) | null>(null);
+
+  const setHomeChatHandler = useCallback((handler: (() => void) | null) => {
+    homeChatHandlerRef.current = handler;
+  }, []);
+
+  const notifyChatSelectedFromDrawer = useCallback(() => {
+    homeChatHandlerRef.current?.();
+  }, []);
+
+  const value = useMemo(
+    () => ({
+      open,
+      setOpen,
+      setHomeChatHandler,
+      notifyChatSelectedFromDrawer,
+    }),
+    [open, setHomeChatHandler, notifyChatSelectedFromDrawer],
+  );
+
+  return (
+    <PearlDrawerContext.Provider value={value}>
+      {children}
+    </PearlDrawerContext.Provider>
+  );
+}
+
+/** Mount inside Drawer so useDrawerStatus is valid; syncs `open` to context. */
+export function DrawerOpenSync() {
+  const status = useDrawerStatus();
+  const ctx = useContext(PearlDrawerContext);
+  const open = status === "open";
+  useEffect(() => {
+    ctx?.setOpen(open);
+  }, [ctx, open]);
+  return null;
+}
+
+export function usePearlDrawer() {
+  const ctx = useContext(PearlDrawerContext);
+  if (!ctx) {
+    throw new Error("usePearlDrawer must be used within PearlDrawerProvider");
+  }
+  const navigation = useNavigation() as unknown as DrawerNav;
+  const { reloadChats, selectChat, getActiveCustomAgent } = useChats();
+
+  const openDrawer = useCallback(() => {
+    void reloadChats({ silent: true });
+    resolveDrawerNav(navigation)?.openDrawer?.();
+  }, [navigation, reloadChats]);
+
+  const closeDrawer = useCallback(() => {
+    resolveDrawerNav(navigation)?.closeDrawer?.();
+  }, [navigation]);
+
+  const toggleDrawer = useCallback(() => {
+    const drawer = resolveDrawerNav(navigation);
+    if (drawer?.toggleDrawer) {
+      drawer.toggleDrawer();
+      return;
+    }
+    drawer?.openDrawer?.();
+  }, [navigation]);
+
+  const onSelectChatFromDrawer = useCallback(
+    async (chatId: string) => {
+      const ok = await selectChat(chatId);
+      if (!ok) return;
+      const isAgentThread = getActiveCustomAgent() != null;
+      ctx.notifyChatSelectedFromDrawer();
+      closeDrawer();
+      // Pearl threads stay embedded on home; custom agents push /chat.
+      if (isAgentThread) {
+        router.navigate("/");
+        router.push("/chat");
+        return;
+      }
+      try {
+        router.dismissTo("/");
+      } catch {
+        router.navigate("/");
+      }
+    },
+    [closeDrawer, ctx, getActiveCustomAgent, selectChat],
+  );
+
+  return {
+    openDrawer,
+    closeDrawer,
+    toggleDrawer,
+    setHomeChatHandler: ctx.setHomeChatHandler,
+    onSelectChatFromDrawer,
+    open: ctx.open,
+    openSidebar: openDrawer,
+    closeSidebar: closeDrawer,
+    toggleSidebar: toggleDrawer,
+  };
+}
+
+export function usePearlDrawerOptional() {
+  const ctx = useContext(PearlDrawerContext);
+  const navigation = useNavigation() as unknown as DrawerNav;
+  const { reloadChats, selectChat, getActiveCustomAgent } = useChats();
+
+  const openDrawer = useCallback(() => {
+    void reloadChats({ silent: true });
+    resolveDrawerNav(navigation)?.openDrawer?.();
+  }, [navigation, reloadChats]);
+
+  const closeDrawer = useCallback(() => {
+    resolveDrawerNav(navigation)?.closeDrawer?.();
+  }, [navigation]);
+
+  if (!ctx) return null;
+
+  return {
+    openDrawer,
+    closeDrawer,
+    toggleDrawer: openDrawer,
+    setHomeChatHandler: ctx.setHomeChatHandler,
+    onSelectChatFromDrawer: async (chatId: string) => {
+      const ok = await selectChat(chatId);
+      if (!ok) return;
+      const isAgentThread = getActiveCustomAgent() != null;
+      ctx.notifyChatSelectedFromDrawer();
+      closeDrawer();
+      if (isAgentThread) {
+        router.navigate("/");
+        router.push("/chat");
+        return;
+      }
+      try {
+        router.dismissTo("/");
+      } catch {
+        router.navigate("/");
+      }
+    },
+    open: ctx.open,
+    openSidebar: openDrawer,
+    closeSidebar: closeDrawer,
+    toggleSidebar: openDrawer,
+  };
+}
+
+/** Compat aliases while call sites migrate off HistorySidebar naming. */
+export const useHistorySidebar = usePearlDrawer;
+export const useHistorySidebarOptional = usePearlDrawerOptional;

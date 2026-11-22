@@ -23,8 +23,8 @@ import { useCSSVariable } from "uniwind";
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
-import { HistorySidebarButton } from "@/components/home/history-sidebar-button";
-import { useHistorySidebarOptional } from "@/components/home/history-sidebar";
+import { HistorySidebarButton } from "@/components/navigation/drawer-button";
+import { useHistorySidebarOptional } from "@/components/navigation/drawer-context";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { SignupSheet } from "@/components/signup-sheet";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
@@ -1377,7 +1377,7 @@ export function ChatScreen({
       historySidebar.openSidebar();
       return;
     }
-    router.push("/history");
+    router.navigate("/history");
   }, [historySidebar]);
   const openAgentSettings = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

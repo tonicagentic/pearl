@@ -26,7 +26,7 @@ export function AboutScreen() {
         continueLabel="Done"
         onContinueWithHost={() => router.back()}
         onSelfHost={
-          locked ? undefined : () => router.push("/self-host")
+          locked ? undefined : () => router.push("/settings/self-host")
         }
       />
     </SafeAreaView>

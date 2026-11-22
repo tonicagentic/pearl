@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PlusIcon, XIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
-import { CreateProjectModal } from "@/components/home/create-project-modal";
+import { CreateProjectModal } from "@/components/workspaces/create-project-modal";
 import { ProjectMark } from "@/components/project-mark";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";

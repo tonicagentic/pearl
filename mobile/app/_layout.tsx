@@ -55,12 +55,12 @@ if (observeAvailable) {
   });
 }
 
-/** Prefer Mail home when the router has no deeper path to restore. */
+/** Prefer New Chat when the router has no deeper path to restore. */
 export const unstable_settings = {
-  initialRouteName: "(home)",
+  initialRouteName: "(drawer)",
 };
 
-/** Root stack: auth gates, then Mail-style home (chat/settings live inside). */
+/** Root stack: auth gates, then drawer-first app destinations. */
 export default function RootLayout() {
   return (
     <ObserveRoot
@@ -125,7 +125,7 @@ function AuthenticatedLayout() {
                   // for Protected guard swaps on iOS native-stack).
                   key={hasAccount ? "app" : "auth"}
                   screenOptions={({ route }) =>
-                    route.name === "(home)" || route.name === "sign-in"
+                    route.name === "(drawer)" || route.name === "sign-in"
                       ? {
                           animation: "none",
                           animationTypeForReplace: "pop",
@@ -182,7 +182,7 @@ function AuthenticatedLayout() {
 
                   <Stack.Protected guard={appReady} redirectTo="/sign-in">
                     <Stack.Screen
-                      name="(home)"
+                      name="(drawer)"
                       options={{
                         headerShown: false,
                         animation: "none",

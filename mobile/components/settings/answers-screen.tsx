@@ -261,9 +261,9 @@ function trailingForSource(
   return { text: "Connect", accent: true };
 }
 
-function pluginHref(id: SourceId): `/plugins/${string}` | null {
+function pluginHref(id: SourceId): `/settings/plugins/${string}` | null {
   if (id === "web" || id === "sheets" || id === "xero") return null;
-  return `/plugins/${id}`;
+  return `/settings/plugins/${id}`;
 }
 
 function SourceRow({

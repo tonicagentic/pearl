@@ -25,7 +25,13 @@ Run lint and typecheck before declaring any task done.
 
 ## Navigation & Routing
 
-This app uses **Expo Router** with a drawer layout (`app/_layout.tsx`) whose content mirrors the web sidebar (New session, Tasks, Library, chat threads, account). Routes live in `app/` — every file there is a screen; keep non-route code in `components/` and `src/`. The custom entry (`index.ts`) imports `./global.css` (uniwind) and patches streaming fetch before `expo-router/entry`.
+Root `app/_layout.tsx` is an auth-gated **Stack** (sign-in, workbench, browser modal). Signed-in destinations live under **`app/(drawer)/`**: an Expo Router `Drawer` (`drawerType: "back"`) with custom `drawerContent` (Tasks, Library, Workspaces, history list, Chat pill, Profile).
+
+- **Drawer siblings:** `index` (New Chat + Chat|Delegate switcher), `tasks`, `library`, `workspaces`, `history`, `settings`.
+- **Nested stacks only for details:** `tasks/[id]`, `workspaces/projects/...`, `settings/*` children.
+- Non-route UI lives in `components/` (`navigation/`, `home/`, `tasks/`, `library/`, `workspaces/`, `history/`, `settings/`) and `src/`.
+
+The custom entry (`index.ts`) imports `./global.css` (uniwind) and patches streaming fetch before `expo-router/entry`.
 
 ## Building with EAS
 

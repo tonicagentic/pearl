@@ -107,7 +107,7 @@ function driveStatus(
       label: "Google Drive",
       detail: "Docs, Sheets, Slides, and other Drive files you can open.",
       trailing: drive.accountLabel?.trim() || "Connected",
-      onPress: () => router.push("/plugins/drive"),
+      onPress: () => router.push("/settings/plugins/drive"),
     };
   }
   return {
@@ -115,6 +115,6 @@ function driveStatus(
     detail: "Docs, Sheets, Slides, and other Drive files you can open.",
     trailing: "Connect",
     trailingAccent: true,
-    onPress: () => router.push("/plugins/drive"),
+    onPress: () => router.push("/settings/plugins/drive"),
   };
 }
