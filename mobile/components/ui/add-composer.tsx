@@ -47,6 +47,7 @@ export function AddComposer({
   scrollable = false,
   hero,
   footer,
+  showSubmit = true,
   children,
   error,
 }: {
@@ -74,6 +75,8 @@ export function AddComposer({
   readonly hero?: ReactNode;
   /** Row above the primary CTA (template chip, toggles, etc.). */
   readonly footer?: ReactNode;
+  /** Hide the stadium CTA (template browse). */
+  readonly showSubmit?: boolean;
   readonly children?: ReactNode;
   readonly error?: string | null;
 }) {
@@ -150,22 +153,27 @@ export function AddComposer({
     </View>
   );
 
-  const bottom = (
-    <View
-      className="gap-3 pt-2"
-      style={{ paddingBottom: Math.max(insets.bottom, 12) }}
-    >
-      {footer}
-      <Button
-        accessibilityLabel={submitAccessibilityLabel ?? submitLabel}
-        label={ctaLabel}
-        loading={busy}
-        loadingLabel={`${submitLabel}…`}
-        disabled={!canSubmit}
-        onPress={onSubmit}
-      />
-    </View>
-  );
+  const bottom =
+    footer || showSubmit ? (
+      <View
+        className="gap-3 pt-2"
+        style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+      >
+        {footer}
+        {showSubmit ? (
+          <Button
+            accessibilityLabel={submitAccessibilityLabel ?? submitLabel}
+            label={ctaLabel}
+            loading={busy}
+            loadingLabel={`${submitLabel}…`}
+            disabled={!canSubmit}
+            onPress={onSubmit}
+          />
+        ) : null}
+      </View>
+    ) : (
+      <View style={{ height: Math.max(insets.bottom, 12) }} />
+    );
 
   return (
     <BottomSheet

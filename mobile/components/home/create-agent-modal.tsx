@@ -4,6 +4,11 @@ import { useRouter } from "expo-router";
 import { useCSSVariable } from "uniwind";
 
 import { AgentMarkPicker } from "@/components/custom-agents/agent-mark-picker";
+import {
+  AgentTemplateDetailBody,
+  AgentTemplateList,
+  useAgentTemplateDetail,
+} from "@/components/home/agent-template-browser";
 import { AddComposer } from "@/components/ui/add-composer";
 import { Text, textVariants } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
@@ -16,14 +21,21 @@ import {
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "../../../lib/custom-agents/mark";
+import { addAgentFromTemplateRequest } from "@/src/agent-templates-client";
+import { useChats } from "@/src/chat-context";
 import {
   createCustomAgentRequest,
   type CustomAgentDto,
 } from "@/src/custom-agents-client";
 
-type Step = 0 | 1 | 2;
+type Phase =
+  | "name"
+  | "instructions"
+  | "character"
+  | "templates"
+  | "templateDetail";
 
-/** New custom-agent wizard: Name → Instructions → Character. */
+/** New custom-agent wizard: Name → Instructions → Character, or templates in-sheet. */
 export function CreateAgentModal({
   open,
   onClose,
@@ -34,7 +46,9 @@ export function CreateAgentModal({
   readonly onCreated: (agent: CustomAgentDto) => void;
 }) {
   const router = useRouter();
-  const [step, setStep] = useState<Step>(0);
+  const { selectChat } = useChats();
+  const [phase, setPhase] = useState<Phase>("name");
+  const [templateSlug, setTemplateSlug] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [instructions, setInstructions] = useState("");
   const [accent, setAccent] = useState<string>(DEFAULT_AGENT_MARK_ACCENT);
@@ -50,16 +64,19 @@ export function CreateAgentModal({
     | string
     | undefined;
 
-  const openDirectory = () => {
-    onClose();
-    requestAnimationFrame(() => {
-      router.push("/agent-directory");
-    });
-  };
+  const {
+    template,
+    error: templateError,
+    setError: setTemplateError,
+    reload: reloadTemplate,
+  } = useAgentTemplateDetail(
+    phase === "templateDetail" ? templateSlug : null,
+  );
 
   useEffect(() => {
     if (!open) return;
-    setStep(0);
+    setPhase("name");
+    setTemplateSlug(null);
     setName("");
     setInstructions("");
     setAccent(DEFAULT_AGENT_MARK_ACCENT);
@@ -93,32 +110,92 @@ export function CreateAgentModal({
       });
   };
 
+  const openAgentChat = (chatId: string) => {
+    onClose();
+    void selectChat(chatId).then((ok) => {
+      if (!ok) return;
+      router.push("/chat", { withAnchor: true });
+    });
+  };
+
+  const addFromTemplate = () => {
+    if (!template || busy) return;
+    if (template.addedChatId) {
+      openAgentChat(template.addedChatId);
+      return;
+    }
+    setBusy(true);
+    setTemplateError(null);
+    void addAgentFromTemplateRequest(template.slug)
+      .then(onCreated)
+      .catch((cause) => {
+        setTemplateError(
+          cause instanceof Error ? cause.message : "Could not add agent.",
+        );
+        setBusy(false);
+        reloadTemplate();
+      });
+  };
+
   const goBack = () => {
-    if (step === 0) {
+    setError(null);
+    if (phase === "templateDetail") {
+      setPhase("templates");
+      setTemplateSlug(null);
+      return;
+    }
+    if (phase === "templates") {
+      setPhase("name");
+      return;
+    }
+    if (phase === "name") {
       onClose();
       return;
     }
-    setError(null);
-    setStep((current) => (current - 1) as Step);
+    if (phase === "instructions") {
+      setPhase("name");
+      return;
+    }
+    setPhase("instructions");
   };
 
   const primary = () => {
-    if (step === 0) {
+    if (phase === "name") {
       if (name.trim().length === 0) return;
       setError(null);
-      setStep(1);
+      setPhase("instructions");
       return;
     }
-    if (step === 1) {
+    if (phase === "instructions") {
       setError(null);
-      setStep(2);
+      setPhase("character");
+      return;
+    }
+    if (phase === "templateDetail") {
+      addFromTemplate();
       return;
     }
     create();
   };
 
+  const browsingTemplates =
+    phase === "templates" || phase === "templateDetail";
+  const naming = phase === "name";
+  const sheetTitle =
+    phase === "templates"
+      ? "Templates"
+      : phase === "templateDetail"
+        ? (template?.name ?? "Template")
+        : "New agent";
+
   const canSubmit =
-    step === 0 ? name.trim().length > 0 && !busy : !busy;
+    phase === "templates"
+      ? false
+      : phase === "name"
+        ? name.trim().length > 0 && !busy
+        : phase === "templateDetail"
+          ? Boolean(template) && !busy
+          : !busy;
 
   return (
     <AddComposer
@@ -126,36 +203,52 @@ export function CreateAgentModal({
       onClose={onClose}
       onSubmit={primary}
       canSubmit={canSubmit}
-      busy={busy && step === 2}
-      sheetTitle="New agent"
-      submitLabel={
-        step === 2 ? "Create agent" : step === 1 ? "Continue" : "Continue"
+      busy={
+        busy && (phase === "character" || phase === "templateDetail")
       }
-      submitAccessibilityLabel={
-        step === 2
-          ? "Create agent"
-          : step === 1
-            ? "Continue to character"
+      sheetTitle={sheetTitle}
+      submitLabel={
+        phase === "templateDetail"
+          ? template?.addedChatId
+            ? "Open agent"
+            : "Add agent"
+          : phase === "character"
+            ? "Create agent"
             : "Continue"
       }
-      leading={step === 0 ? "close" : "back"}
-      onLeadingPress={step === 0 ? onClose : goBack}
-      showTitleField={step === 0}
+      submitAccessibilityLabel={
+        phase === "templateDetail"
+          ? template?.addedChatId
+            ? "Open agent"
+            : "Add agent"
+          : phase === "character"
+            ? "Create agent"
+            : phase === "instructions"
+              ? "Continue to character"
+              : "Continue"
+      }
+      leading={naming ? "close" : "back"}
+      onLeadingPress={naming ? onClose : goBack}
+      showTitleField={naming}
       title={name}
       onChangeTitle={setName}
       titlePlaceholder="Agent name"
       titleAccessibilityLabel="Agent name"
       titleMaxLength={80}
-      titleAutoFocus={step === 0}
-      scrollable={step !== 0}
-      error={error}
+      titleAutoFocus={naming}
+      scrollable={!naming}
+      showSubmit={phase !== "templates"}
+      error={browsingTemplates ? null : error}
       footer={
-        step === 0 ? (
+        naming ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Choose from a template"
             className="self-center rounded-full border border-border bg-card px-4 py-2 active:opacity-80"
-            onPress={openDirectory}
+            onPress={() => {
+              setError(null);
+              setPhase("templates");
+            }}
           >
             <Text variant="label" weight="semibold">
               Choose from a template
@@ -164,7 +257,7 @@ export function CreateAgentModal({
         ) : undefined
       }
       hero={
-        step === 2 ? (
+        phase === "character" ? (
           <AgentMarkPicker
             accent={accent}
             markShape={markShape}
@@ -178,7 +271,21 @@ export function CreateAgentModal({
         ) : undefined
       }
     >
-      {step === 1 ? (
+      {phase === "templates" ? (
+        <AgentTemplateList
+          onSelect={(slug) => {
+            setTemplateSlug(slug);
+            setPhase("templateDetail");
+          }}
+        />
+      ) : null}
+      {phase === "templateDetail" ? (
+        <AgentTemplateDetailBody
+          template={template}
+          error={templateError}
+        />
+      ) : null}
+      {phase === "instructions" ? (
         <TextInput
           accessibilityLabel="Standing instructions"
           autoFocus
