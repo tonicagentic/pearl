@@ -3,7 +3,6 @@ import { Drawer } from "expo-router/drawer";
 
 import { DrawerPanel } from "@/components/navigation/drawer-panel";
 import { PearlDrawerProvider } from "@/components/navigation/drawer-context";
-import { HeaderDrawerButton } from "@/components/navigation/header-drawer-button";
 import {
   usePearlDrawerBackground,
   usePearlHeaderTint,
@@ -106,8 +105,8 @@ export default function DrawerLayout() {
           name="agent-directory"
           options={{
             title: "Directory",
+            headerShown: false,
             drawerItemStyle: { display: "none" },
-            headerLeft: () => <HeaderDrawerButton />,
           }}
         />
         <Drawer.Screen

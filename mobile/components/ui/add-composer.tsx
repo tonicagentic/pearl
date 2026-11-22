@@ -7,7 +7,12 @@ import {
   View,
 } from "react-native";
 import { BottomSheet, RNHostView } from "@expo/ui";
-import { ArrowUpIcon, XIcon } from "lucide-react-native";
+import {
+  ArrowUpIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  XIcon,
+} from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { Icon } from "@/components/ui/icon";
@@ -21,7 +26,8 @@ const DEFAULT_SNAP_POINTS: ComposerSnapPoint[] = ["half", "full"];
 
 /**
  * Shared create sheet for projects, tasks, and agents:
- * muted X (left) + ArrowUp submit (right), display title, optional hero/body.
+ * muted leading disc + primary trailing disc, optional display title / hero / body.
+ * Wizard steps can swap leading (close/back) and trailing (forward/submit).
  */
 export function AddComposer({
   open,
@@ -30,9 +36,13 @@ export function AddComposer({
   canSubmit,
   busy,
   submitAccessibilityLabel = "Create",
-  title,
+  leading = "close",
+  onLeadingPress,
+  trailing = "submit",
+  showTitleField = true,
+  title = "",
   onChangeTitle,
-  titlePlaceholder,
+  titlePlaceholder = "",
   titleAccessibilityLabel,
   titleMaxLength = 120,
   titleAutoFocus = true,
@@ -48,9 +58,14 @@ export function AddComposer({
   readonly canSubmit: boolean;
   readonly busy: boolean;
   readonly submitAccessibilityLabel?: string;
-  readonly title: string;
-  readonly onChangeTitle: (value: string) => void;
-  readonly titlePlaceholder: string;
+  readonly leading?: "close" | "back";
+  /** Defaults to `onClose` when leading is close. */
+  readonly onLeadingPress?: () => void;
+  readonly trailing?: "forward" | "submit";
+  readonly showTitleField?: boolean;
+  readonly title?: string;
+  readonly onChangeTitle?: (value: string) => void;
+  readonly titlePlaceholder?: string;
   readonly titleAccessibilityLabel?: string;
   readonly titleMaxLength?: number;
   readonly titleAutoFocus?: boolean;
@@ -66,17 +81,20 @@ export function AddComposer({
     | string
     | undefined;
   const sheetSnapPoints = [...snapPoints];
+  const handleLeading = onLeadingPress ?? onClose;
+  const TrailingIcon = trailing === "forward" ? ChevronRightIcon : ArrowUpIcon;
+  const LeadingIcon = leading === "back" ? ChevronLeftIcon : XIcon;
 
   const header = (
     <View className="mb-3 flex-row items-center justify-between">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Close"
+        accessibilityLabel={leading === "back" ? "Back" : "Close"}
         hitSlop={8}
         className="h-10 w-10 items-center justify-center rounded-full bg-muted/60 active:opacity-80"
-        onPress={onClose}
+        onPress={handleLeading}
       >
-        <Icon as={XIcon} className="size-5 text-foreground" />
+        <Icon as={LeadingIcon} className="size-5 text-foreground" />
       </Pressable>
       <Pressable
         accessibilityRole="button"
@@ -90,7 +108,7 @@ export function AddComposer({
           <ActivityIndicator size="small" />
         ) : (
           <Icon
-            as={ArrowUpIcon}
+            as={TrailingIcon}
             className={`size-5 ${canSubmit ? "text-background" : "text-muted-foreground"}`}
           />
         )}
@@ -106,21 +124,23 @@ export function AddComposer({
           {error}
         </Text>
       ) : null}
-      <TextInput
-        accessibilityLabel={titleAccessibilityLabel ?? titlePlaceholder}
-        autoFocus={titleAutoFocus}
-        className={cn(
-          "min-h-12 tracking-tight",
-          textVariants({ variant: "display" }),
-        )}
-        maxLength={titleMaxLength}
-        onChangeText={onChangeTitle}
-        onSubmitEditing={onSubmit}
-        placeholder={titlePlaceholder}
-        placeholderTextColor={placeholderColor}
-        returnKeyType="next"
-        value={title}
-      />
+      {showTitleField ? (
+        <TextInput
+          accessibilityLabel={titleAccessibilityLabel ?? titlePlaceholder}
+          autoFocus={titleAutoFocus}
+          className={cn(
+            "min-h-12 tracking-tight",
+            textVariants({ variant: "display" }),
+          )}
+          maxLength={titleMaxLength}
+          onChangeText={onChangeTitle}
+          onSubmitEditing={onSubmit}
+          placeholder={titlePlaceholder}
+          placeholderTextColor={placeholderColor}
+          returnKeyType="next"
+          value={title}
+        />
+      ) : null}
       {children}
     </>
   );
