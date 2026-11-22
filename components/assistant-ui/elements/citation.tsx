@@ -18,8 +18,22 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import { useOptionalCanvas } from "@/components/assistant-ui/elements/canvas-context";
 import { cn } from "@/lib/utils";
 import { stepEnter, threadMeta, threadText } from "./surfaces";
+
+function useOpenInCanvasBrowser() {
+  const canvas = useOptionalCanvas();
+  return useCallback(
+    (href: string, event?: { preventDefault: () => void }) => {
+      if (!canvas) return false;
+      event?.preventDefault();
+      canvas.openBrowserUrl(href);
+      return true;
+    },
+    [canvas],
+  );
+}
 
 export type CitationRef = {
   readonly index: string;
@@ -280,6 +294,7 @@ export function CitationPreviewCard({
 }) {
   const host = hostnameOf(href);
   const displayTitle = title?.trim() || host;
+  const openInBrowser = useOpenInCanvasBrowser();
 
   return (
     <a
@@ -291,6 +306,9 @@ export function CitationPreviewCard({
         "hover:bg-muted/40 flex gap-3 rounded-md no-underline transition-colors",
         className,
       )}
+      onClick={(event) => {
+        openInBrowser(href, event);
+      }}
     >
       <FaviconMark hostname={host} size={20} className="mt-0.5" />
       <span className="min-w-0 flex-1">
@@ -319,6 +337,7 @@ export function CitationChip({
   const label = normalizeCitationIndex(index);
   const displayTitle = title?.trim() || hostnameOf(href);
   const setActiveIndex = useSetCitationActiveIndex();
+  const openInBrowser = useOpenInCanvasBrowser();
   const [open, setOpen] = useState(false);
 
   const onOpenChange = useCallback((next: boolean) => {
@@ -348,6 +367,9 @@ export function CitationChip({
             "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground data-[state=open]:bg-muted/80 data-[state=open]:text-foreground ms-0.5 inline-flex h-4 min-w-4 translate-y-[-1px] items-center justify-center rounded px-1 align-super text-[11px] leading-none font-medium tabular-nums no-underline transition-colors",
             className,
           )}
+          onClick={(event) => {
+            openInBrowser(href, event);
+          }}
         >
           {label}
         </a>
@@ -380,6 +402,7 @@ export function MessageSources({ className }: ComponentProps<"div">) {
       .filter((text) => text.length > 0)
       .join("\n");
   });
+  const openInBrowser = useOpenInCanvasBrowser();
 
   const refs = useMemo(() => {
     if (!markdown) return EMPTY_CITATION_REFS;
@@ -417,6 +440,9 @@ export function MessageSources({ className }: ComponentProps<"div">) {
                   "hover:text-foreground min-w-0 truncate transition-colors",
                 )}
                 title={ref.title ?? ref.url}
+                onClick={(event) => {
+                  openInBrowser(ref.url, event);
+                }}
               >
                 {displayTitle}
                 <span className="text-muted-foreground/70"> · {host}</span>

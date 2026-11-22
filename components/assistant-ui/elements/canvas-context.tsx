@@ -17,6 +17,8 @@ import {
   emptyWorkspace,
   openDesktopTab,
   openFileTab,
+  openLibraryTab,
+  openOrFocusPageByUrl,
   openPageTab,
   selectTab,
   syncPageTabs,
@@ -31,9 +33,10 @@ import type {
   WorkspaceTab,
 } from "@/lib/browser/types";
 
-// Page-level workspace: file and live-browser tabs beside the thread.
-// write_file claims a file tab while it streams; the browser tool syncs page
-// tabs from the control server. Closing the last tab collapses the panel.
+// Page-level workspace: file, library, and live-browser tabs beside the thread.
+// Panel visibility is independent of tabs so the user can open the sidebar
+// anytime. write_file claims a file tab while it streams; the browser tool
+// syncs page tabs from the control server.
 
 /** @deprecated Prefer WorkspaceFileTab — kept for existing file tool callers. */
 export type CanvasDocument = {
@@ -72,22 +75,36 @@ export function pathVersion(path: string): number {
   return pathVersions.get(path) ?? 1;
 }
 
+function workspacePathForBasename(name: string): string {
+  const trimmed = name.trim() || "untitled.md";
+  const safe = trimmed.replace(/[^\w.\-]+/g, "-").replace(/^\.+/, "");
+  return `/workspace/${safe || "untitled.md"}`;
+}
+
 type CanvasContextValue = {
   readonly chatId: string | null;
   readonly workspace: WorkspaceState;
   readonly tabs: readonly WorkspaceTab[];
   readonly activeTabId: string | null;
+  /** Sidebar open; independent of whether any tab exists. */
+  readonly panelOpen: boolean;
   /** Active file tab, or null when a page is focused / nothing open. */
   readonly document: CanvasDocument | null;
   readonly controlMode: BrowserControlMode;
   readonly viewUrl: string | null;
   /** screen-relay viewer URL (token in hash). Separate from Chromium viewUrl. */
   readonly desktopViewUrl: string | null;
+  setPanelOpen: (open: boolean) => void;
+  openPanel: () => void;
+  closePanel: () => void;
   openDocument: (doc: CanvasDocument) => void;
   openPath: (path: string, content?: string) => void;
+  openLibrary: () => void;
+  openNewFile: (name?: string) => void;
+  openBrowserUrl: (url: string) => void;
   updateDocument: (
     id: string,
-    patch: Partial<Omit<CanvasDocument, "id">>,
+    patch: Partial<Omit<CanvasDocument, "id">> & { readonly dirty?: boolean },
   ) => void;
   updateDocumentByPath: (
     path: string,
@@ -96,7 +113,10 @@ type CanvasContextValue = {
   closeDocument: () => void;
   selectWorkspaceTab: (tabId: string) => void;
   closeWorkspaceTab: (tabId: string) => void;
-  syncBrowserPages: (pages: readonly BrowserTabInfo[]) => void;
+  syncBrowserPages: (
+    pages: readonly BrowserTabInfo[],
+    options?: { readonly focusActivePage?: boolean },
+  ) => void;
   openBrowserPage: (page: Omit<WorkspacePageTab, "kind" | "id">) => void;
   openDesktop: (title?: string) => void;
   setControlMode: (mode: BrowserControlMode) => void;
@@ -115,6 +135,7 @@ export function CanvasProvider({
   chatId?: string | null;
 }) {
   const [workspace, setWorkspace] = useState<WorkspaceState>(emptyWorkspace);
+  const [panelOpen, setPanelOpenState] = useState(false);
   const [controlMode, setControlMode] = useState<BrowserControlMode>("agent");
   const [viewUrl, setViewUrl] = useState<string | null>(null);
   const [desktopViewUrl, setDesktopViewUrl] = useState<string | null>(null);
@@ -134,8 +155,21 @@ export function CanvasProvider({
     } satisfies CanvasDocument;
   }, [workspace]);
 
+  const setPanelOpen = useCallback((open: boolean) => {
+    setPanelOpenState(open);
+  }, []);
+
+  const openPanel = useCallback(() => {
+    setPanelOpenState(true);
+  }, []);
+
+  const closePanel = useCallback(() => {
+    setPanelOpenState(false);
+  }, []);
+
   const openPath = useCallback(
     (path: string, content?: string) => {
+      setPanelOpenState(true);
       const current = activeFileTab(workspaceRef.current);
       if (current?.path === path) {
         setWorkspace((prev) => selectTab(prev, current.id));
@@ -188,11 +222,42 @@ export function CanvasProvider({
   );
 
   const openDocument = useCallback((doc: CanvasDocument) => {
+    setPanelOpenState(true);
     setWorkspace((prev) => openFileTab(prev, doc));
   }, []);
 
+  const openLibrary = useCallback(() => {
+    setPanelOpenState(true);
+    setWorkspace((prev) => openLibraryTab(prev));
+  }, []);
+
+  const openNewFile = useCallback((name?: string) => {
+    setPanelOpenState(true);
+    const path = workspacePathForBasename(name ?? "untitled.md");
+    setWorkspace((prev) =>
+      openFileTab(prev, {
+        id: `new:${path}:${Date.now()}`,
+        path,
+        content: "",
+        running: false,
+        note: null,
+        version: 1,
+        dirty: true,
+      }),
+    );
+  }, []);
+
+  const openBrowserUrl = useCallback((url: string) => {
+    setPanelOpenState(true);
+    const trimmed = url.trim() || "about:blank";
+    setWorkspace((prev) => openOrFocusPageByUrl(prev, trimmed));
+  }, []);
+
   const updateDocument = useCallback(
-    (id: string, patch: Partial<Omit<CanvasDocument, "id">>) => {
+    (
+      id: string,
+      patch: Partial<Omit<CanvasDocument, "id">> & { readonly dirty?: boolean },
+    ) => {
       setWorkspace((prev) => updateFileTab(prev, id, patch));
     },
     [],
@@ -232,6 +297,7 @@ export function CanvasProvider({
   }, []);
 
   const selectWorkspaceTab = useCallback((tabId: string) => {
+    setPanelOpenState(true);
     setWorkspace((prev) => selectTab(prev, tabId));
   }, []);
 
@@ -239,28 +305,38 @@ export function CanvasProvider({
     setWorkspace((prev) => closeTab(prev, tabId));
   }, []);
 
-  const syncBrowserPages = useCallback((pages: readonly BrowserTabInfo[]) => {
-    setWorkspace((prev) =>
-      syncPageTabs(
-        prev,
-        pages.map((page) => ({
-          pageId: page.id,
-          url: page.url,
-          title: page.title || page.url,
-          active: page.active,
-        })),
-      ),
-    );
-  }, []);
+  const syncBrowserPages = useCallback(
+    (
+      pages: readonly BrowserTabInfo[],
+      options?: { readonly focusActivePage?: boolean },
+    ) => {
+      if (pages.length > 0) setPanelOpenState(true);
+      setWorkspace((prev) =>
+        syncPageTabs(
+          prev,
+          pages.map((page) => ({
+            pageId: page.id,
+            url: page.url,
+            title: page.title || page.url,
+            active: page.active,
+          })),
+          options,
+        ),
+      );
+    },
+    [],
+  );
 
   const openBrowserPage = useCallback(
     (page: Omit<WorkspacePageTab, "kind" | "id">) => {
+      setPanelOpenState(true);
       setWorkspace((prev) => openPageTab(prev, page));
     },
     [],
   );
 
   const openDesktop = useCallback((title?: string) => {
+    setPanelOpenState(true);
     setWorkspace((prev) => openDesktopTab(prev, title ?? "Desktop"));
   }, []);
 
@@ -270,12 +346,19 @@ export function CanvasProvider({
       workspace,
       tabs: workspace.tabs,
       activeTabId: workspace.activeTabId,
+      panelOpen,
       document,
       controlMode,
       viewUrl,
       desktopViewUrl,
+      setPanelOpen,
+      openPanel,
+      closePanel,
       openDocument,
       openPath,
+      openLibrary,
+      openNewFile,
+      openBrowserUrl,
       updateDocument,
       updateDocumentByPath,
       closeDocument,
@@ -291,12 +374,19 @@ export function CanvasProvider({
     [
       chatId,
       workspace,
+      panelOpen,
       document,
       controlMode,
       viewUrl,
       desktopViewUrl,
+      setPanelOpen,
+      openPanel,
+      closePanel,
       openDocument,
       openPath,
+      openLibrary,
+      openNewFile,
+      openBrowserUrl,
       updateDocument,
       updateDocumentByPath,
       closeDocument,
@@ -321,4 +411,9 @@ export function useCanvas(): CanvasContextValue {
   }
 
   return ctx;
+}
+
+/** Soft optional hook for surfaces that may sit outside CanvasProvider. */
+export function useOptionalCanvas(): CanvasContextValue | null {
+  return useContext(CanvasContext);
 }

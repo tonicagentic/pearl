@@ -83,15 +83,21 @@ export function sanitizeBrowserResult(
 export async function callBrowserAction(
   handle: BrowserSessionHandle,
   action: BrowserAction,
-  fetchImpl: typeof fetch = fetch,
+  options?: {
+    readonly fromUser?: boolean;
+    readonly fetchImpl?: typeof fetch;
+  },
 ): Promise<BrowserActionResult> {
+  const fetchImpl = options?.fetchImpl ?? fetch;
   const response = await fetchImpl(`${handle.baseUrl}/action`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-browser-secret": handle.controlSecret,
     },
-    body: JSON.stringify(action),
+    body: JSON.stringify(
+      options?.fromUser ? { ...action, fromUser: true } : action,
+    ),
     signal: AbortSignal.timeout(60_000),
   });
 

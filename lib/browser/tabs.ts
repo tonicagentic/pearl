@@ -1,12 +1,14 @@
 import type {
   WorkspaceDesktopTab,
   WorkspaceFileTab,
+  WorkspaceLibraryTab,
   WorkspacePageTab,
   WorkspaceState,
   WorkspaceTab,
 } from "./types.ts";
 
 export const DESKTOP_TAB_ID = "desktop:main";
+export const LIBRARY_TAB_ID = "library:main";
 
 export function emptyWorkspace(): WorkspaceState {
   return { tabs: [], activeTabId: null };
@@ -124,16 +126,67 @@ export function openDesktopTab(
   return { tabs: [...state.tabs, tab], activeTabId: tab.id };
 }
 
-/** Replace page tabs with the live Chromium tab list; keep file + desktop tabs. */
+/** Open or focus the single library browser tab. */
+export function openLibraryTab(
+  state: WorkspaceState,
+  title = "Library",
+): WorkspaceState {
+  const existing = state.tabs.findIndex((tab) => tab.kind === "library");
+  if (existing >= 0) {
+    const prev = state.tabs[existing] as WorkspaceLibraryTab;
+    const next: WorkspaceLibraryTab = { ...prev, title };
+    const tabs = state.tabs.map((tab, i) => (i === existing ? next : tab));
+    return { tabs, activeTabId: next.id };
+  }
+  const tab: WorkspaceLibraryTab = {
+    kind: "library",
+    id: LIBRARY_TAB_ID,
+    title,
+  };
+  return { tabs: [...state.tabs, tab], activeTabId: tab.id };
+}
+
+/**
+ * Focus a page tab that already shows `url`, or open a provisional page tab
+ * until the control server assigns a real pageId.
+ */
+export function openOrFocusPageByUrl(
+  state: WorkspaceState,
+  url: string,
+  title?: string,
+): WorkspaceState {
+  const existing = state.tabs.find(
+    (tab) => tab.kind === "page" && tab.url === url,
+  );
+  if (existing) {
+    return selectTab(state, existing.id);
+  }
+  const pageId = `local:${url}`;
+  return openPageTab(state, {
+    pageId,
+    url,
+    title: title || url || "Page",
+  });
+}
+
+/**
+ * Replace page tabs with the live Chromium tab list; keep file, desktop, and
+ * library tabs. When the server marks a page active, focus it so agent
+ * navigations surface even if a file tab was selected.
+ */
 export function syncPageTabs(
   state: WorkspaceState,
   pages: readonly SyncPageInput[],
+  options?: { readonly focusActivePage?: boolean },
 ): WorkspaceState {
   const files = state.tabs.filter(
     (tab): tab is WorkspaceFileTab => tab.kind === "file",
   );
   const desktop = state.tabs.filter(
     (tab): tab is WorkspaceDesktopTab => tab.kind === "desktop",
+  );
+  const library = state.tabs.filter(
+    (tab): tab is WorkspaceLibraryTab => tab.kind === "library",
   );
   const pageTabs: WorkspacePageTab[] = pages.map((page) => ({
     kind: "page",
@@ -142,22 +195,25 @@ export function syncPageTabs(
     url: page.url,
     title: page.title,
   }));
-  const tabs: WorkspaceTab[] = [...files, ...desktop, ...pageTabs];
-  const activeStillOpen = tabs.some((tab) => tab.id === state.activeTabId);
-  // Prefer keeping the current selection; otherwise focus the active Chromium
-  // page, then the first page tab, then desktop, then the first file.
-  let activeTabId = activeStillOpen ? state.activeTabId : null;
-  if (!activeTabId) {
-    const activeFromServer = pages.find((page) => page.active);
-    if (activeFromServer) {
-      activeTabId = `page:${activeFromServer.pageId}`;
-    } else if (pageTabs[0]) {
-      activeTabId = pageTabs[0].id;
-    } else if (desktop[0]) {
-      activeTabId = desktop[0].id;
-    } else if (files[0]) {
-      activeTabId = files[0].id;
-    }
+  const tabs: WorkspaceTab[] = [...files, ...desktop, ...library, ...pageTabs];
+  const activeFromServer = pages.find((page) => page.active);
+  const focusActivePage = options?.focusActivePage !== false;
+
+  let activeTabId: string | null = null;
+  if (focusActivePage && activeFromServer) {
+    activeTabId = `page:${activeFromServer.pageId}`;
+  } else if (tabs.some((tab) => tab.id === state.activeTabId)) {
+    activeTabId = state.activeTabId;
+  } else if (activeFromServer) {
+    activeTabId = `page:${activeFromServer.pageId}`;
+  } else if (pageTabs[0]) {
+    activeTabId = pageTabs[0].id;
+  } else if (library[0]) {
+    activeTabId = library[0].id;
+  } else if (desktop[0]) {
+    activeTabId = desktop[0].id;
+  } else if (files[0]) {
+    activeTabId = files[0].id;
   }
   return { tabs, activeTabId };
 }

@@ -6,6 +6,8 @@ import {
   emptyWorkspace,
   openDesktopTab,
   openFileTab,
+  openLibraryTab,
+  openOrFocusPageByUrl,
   openPageTab,
   selectTab,
   syncPageTabs,
@@ -136,4 +138,70 @@ test("openDesktopTab and syncPageTabs keep the desktop tab", () => {
   ]);
   assert.equal(state.tabs.some((tab) => tab.kind === "desktop"), true);
   assert.equal(state.tabs.some((tab) => tab.kind === "page"), true);
+});
+
+test("openLibraryTab is singular and survives syncPageTabs", () => {
+  let state = emptyWorkspace();
+  state = openLibraryTab(state);
+  state = openLibraryTab(state, "Library");
+  assert.equal(state.tabs.filter((tab) => tab.kind === "library").length, 1);
+  assert.equal(state.activeTabId, "library:main");
+  state = syncPageTabs(state, [
+    {
+      pageId: "p1",
+      url: "https://example.com",
+      title: "Example",
+      active: true,
+    },
+  ]);
+  assert.equal(state.tabs.some((tab) => tab.kind === "library"), true);
+  assert.equal(state.activeTabId, "page:p1");
+});
+
+test("syncPageTabs focuses the active Chromium page over a selected file", () => {
+  let state = emptyWorkspace();
+  state = openFileTab(state, {
+    id: "f1",
+    path: "/workspace/a.md",
+    content: "a",
+    running: false,
+    note: null,
+    version: 1,
+  });
+  state = openPageTab(state, {
+    pageId: "p1",
+    url: "https://example.com",
+    title: "Example",
+  });
+  state = selectTab(state, "f1");
+  assert.equal(state.activeTabId, "f1");
+  state = syncPageTabs(state, [
+    {
+      pageId: "p1",
+      url: "https://example.com/next",
+      title: "Next",
+      active: true,
+    },
+  ]);
+  assert.equal(state.activeTabId, "page:p1");
+});
+
+test("openOrFocusPageByUrl reuses an existing URL tab", () => {
+  let state = emptyWorkspace();
+  state = openPageTab(state, {
+    pageId: "p1",
+    url: "https://example.com",
+    title: "Example",
+  });
+  state = openFileTab(state, {
+    id: "f1",
+    path: "/workspace/a.md",
+    content: "a",
+    running: false,
+    note: null,
+    version: 1,
+  });
+  state = openOrFocusPageByUrl(state, "https://example.com");
+  assert.equal(state.activeTabId, "page:p1");
+  assert.equal(state.tabs.filter((tab) => tab.kind === "page").length, 1);
 });

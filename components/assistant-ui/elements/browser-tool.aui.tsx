@@ -36,7 +36,7 @@ function BrowserToolRender({
 
   useEffect(() => {
     if (!parsed?.tabs?.length) return;
-    syncBrowserPages(parsed.tabs);
+    syncBrowserPages(parsed.tabs, { focusActivePage: true });
     if (parsed.controlMode) setControlMode(parsed.controlMode);
   }, [parsed, syncBrowserPages, setControlMode]);
 

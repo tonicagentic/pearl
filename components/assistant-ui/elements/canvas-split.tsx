@@ -5,18 +5,26 @@ import {
   CheckIcon,
   CopyIcon,
   FileTextIcon,
+  FolderOpenIcon,
   GlobeIcon,
   MonitorIcon,
+  PlusIcon,
   XIcon,
 } from "lucide-react";
 import { WorkspaceFileLink } from "@/components/assistant-ui/elements/workspace-file-link";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { field, ghostButton, mono, paper } from "@/lib/surfaces";
 
 export type CanvasTabItem = {
   readonly id: string;
   readonly label: string;
-  readonly kind: "file" | "page" | "desktop";
+  readonly kind: "file" | "page" | "desktop" | "library";
   readonly active: boolean;
   /** Workspace path for file tabs — enables right-click Save. */
   readonly path?: string;
@@ -167,6 +175,9 @@ export function CanvasTabStrip({
   tabs,
   onSelectTab,
   onCloseTab,
+  onAddBrowser,
+  onAddLibrary,
+  onAddFile,
   trailing,
   className,
   ...props
@@ -174,8 +185,13 @@ export function CanvasTabStrip({
   tabs: readonly CanvasTabItem[];
   onSelectTab: (id: string) => void;
   onCloseTab: (id: string) => void;
+  onAddBrowser?: () => void;
+  onAddLibrary?: () => void;
+  onAddFile?: () => void;
   trailing?: ReactNode;
 }) {
+  const canAdd = Boolean(onAddBrowser || onAddLibrary || onAddFile);
+
   return (
     <div
       data-slot="canvas-tab-strip"
@@ -192,7 +208,9 @@ export function CanvasTabStrip({
               ? GlobeIcon
               : tab.kind === "desktop"
                 ? MonitorIcon
-                : FileTextIcon;
+                : tab.kind === "library"
+                  ? FolderOpenIcon
+                  : FileTextIcon;
           return (
             <div
               key={tab.id}
@@ -233,6 +251,39 @@ export function CanvasTabStrip({
             </div>
           );
         })}
+        {canAdd ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="New tab"
+                className={cn(ghostButton, "size-7 shrink-0")}
+              >
+                <PlusIcon className="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[10rem]">
+              {onAddBrowser ? (
+                <DropdownMenuItem onSelect={onAddBrowser}>
+                  <GlobeIcon className="size-3.5" />
+                  Browser
+                </DropdownMenuItem>
+              ) : null}
+              {onAddLibrary ? (
+                <DropdownMenuItem onSelect={onAddLibrary}>
+                  <FolderOpenIcon className="size-3.5" />
+                  Library
+                </DropdownMenuItem>
+              ) : null}
+              {onAddFile ? (
+                <DropdownMenuItem onSelect={onAddFile}>
+                  <FileTextIcon className="size-3.5" />
+                  New file
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </div>
       {trailing ? <div className="flex shrink-0 items-center gap-1">{trailing}</div> : null}
     </div>

@@ -244,16 +244,24 @@ async function handleAction(body) {
     return resultBase({ note: "control set to " + controlMode });
   }
 
-  const agentOnly = ["navigate", "click", "type", "press", "scroll", "snapshot"].includes(
+  // UI-driven chrome (URL bar, tabs, back/forward) claims user control so the
+  // agent stops clicking, then proceeds even while controlMode is user.
+  const fromUser = body.fromUser === true;
+  if (fromUser && controlMode !== "user") {
+    controlMode = "user";
+    broadcast({ type: "control", mode: controlMode });
+  }
+
+  const agentOnly = ["navigate", "click", "type", "press", "scroll", "snapshot", "back", "forward", "reload"].includes(
     body.action,
   );
-  if (agentOnly && controlMode === "user") {
+  if (agentOnly && controlMode === "user" && !fromUser) {
     return resultBase({
       ok: false,
       note: "the user has control — stop and wait until they hand back",
     });
   }
-  if (body.action === "tabs" && body.op !== "list" && controlMode === "user") {
+  if (body.action === "tabs" && body.op !== "list" && controlMode === "user" && !fromUser) {
     return resultBase({
       ok: false,
       note: "the user has control — stop and wait until they hand back",
@@ -297,6 +305,24 @@ async function handleAction(body) {
 
   if (body.action === "navigate") {
     await page.goto(body.url, { waitUntil: "domcontentloaded", timeout: 30000 });
+    const snap = await buildSnapshot(page);
+    broadcast({ type: "tabs", tabs: await enrichTabs() });
+    return resultBase({ snapshot: snap });
+  }
+  if (body.action === "back") {
+    await page.goBack({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => null);
+    const snap = await buildSnapshot(page);
+    broadcast({ type: "tabs", tabs: await enrichTabs() });
+    return resultBase({ snapshot: snap });
+  }
+  if (body.action === "forward") {
+    await page.goForward({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => null);
+    const snap = await buildSnapshot(page);
+    broadcast({ type: "tabs", tabs: await enrichTabs() });
+    return resultBase({ snapshot: snap });
+  }
+  if (body.action === "reload") {
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
     const snap = await buildSnapshot(page);
     broadcast({ type: "tabs", tabs: await enrichTabs() });
     return resultBase({ snapshot: snap });

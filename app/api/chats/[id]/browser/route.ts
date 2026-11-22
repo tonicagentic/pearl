@@ -64,9 +64,36 @@ export async function GET(
   }
 }
 
+type BrowserUiBody = {
+  readonly op?: string;
+  readonly mode?: BrowserControlMode;
+  readonly tabId?: string;
+  readonly url?: string;
+};
+
+function jsonResult(result: {
+  readonly ok: boolean;
+  readonly controlMode: BrowserControlMode;
+  readonly tabs: readonly unknown[];
+  readonly url: string | null;
+  readonly title: string | null;
+  readonly note?: string;
+}) {
+  return NextResponse.json({
+    ok: result.ok,
+    controlMode: result.controlMode,
+    tabs: result.tabs,
+    url: result.url,
+    title: result.title,
+    note: result.note,
+  });
+}
+
 /**
- * Control-plane actions from the UI: takeover / hand back, select Chromium
- * tab, heartbeat. Never returns the control secret.
+ * Control-plane actions from the UI: takeover / hand back, select / create /
+ * close Chromium tabs, navigate, back / forward / reload, heartbeat.
+ * Never returns the control secret. User chrome ops set fromUser so the
+ * sandbox claims user control and allows the action.
  */
 export async function POST(
   request: Request,
@@ -76,55 +103,84 @@ export async function POST(
   const gate = await requireChatOwner(id, request.headers);
   if ("error" in gate) return gate.error;
 
-  let body: {
-    readonly op?: string;
-    readonly mode?: BrowserControlMode;
-    readonly tabId?: string;
-  };
+  let body: BrowserUiBody;
   try {
-    body = (await request.json()) as typeof body;
+    body = (await request.json()) as BrowserUiBody;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   try {
     const handle = await ensureBrowserSession(id, { userId: gate.viewerId });
+    const user = { fromUser: true as const };
 
     if (body.op === "control" && (body.mode === "agent" || body.mode === "user")) {
       const result = await callBrowserAction(handle, {
         action: "control",
         mode: body.mode,
       });
-      return NextResponse.json({
-        ok: result.ok,
-        controlMode: result.controlMode,
-        note: result.note,
-      });
+      return jsonResult(result);
     }
 
     if (body.op === "select" && typeof body.tabId === "string") {
-      const result = await callBrowserAction(handle, {
-        action: "tabs",
-        op: "select",
-        tabId: body.tabId,
-      });
-      return NextResponse.json({
-        ok: result.ok,
-        controlMode: result.controlMode,
-        tabs: result.tabs,
-        note: result.note,
-      });
+      const result = await callBrowserAction(
+        handle,
+        { action: "tabs", op: "select", tabId: body.tabId },
+        user,
+      );
+      return jsonResult(result);
+    }
+
+    if (body.op === "new") {
+      const result = await callBrowserAction(
+        handle,
+        {
+          action: "tabs",
+          op: "new",
+          ...(typeof body.url === "string" ? { url: body.url } : {}),
+        },
+        user,
+      );
+      return jsonResult(result);
+    }
+
+    if (body.op === "close" && typeof body.tabId === "string") {
+      const result = await callBrowserAction(
+        handle,
+        { action: "tabs", op: "close", tabId: body.tabId },
+        user,
+      );
+      return jsonResult(result);
+    }
+
+    if (body.op === "navigate" && typeof body.url === "string") {
+      const result = await callBrowserAction(
+        handle,
+        {
+          action: "navigate",
+          url: body.url,
+          ...(typeof body.tabId === "string" ? { tabId: body.tabId } : {}),
+        },
+        user,
+      );
+      return jsonResult(result);
+    }
+
+    if (body.op === "back" || body.op === "forward" || body.op === "reload") {
+      const result = await callBrowserAction(
+        handle,
+        {
+          action: body.op,
+          ...(typeof body.tabId === "string" ? { tabId: body.tabId } : {}),
+        },
+        user,
+      );
+      return jsonResult(result);
     }
 
     if (body.op === "heartbeat") {
       const result = await callBrowserAction(handle, { action: "heartbeat" });
-      return NextResponse.json({
-        ok: result.ok,
-        controlMode: result.controlMode,
-        tabs: result.tabs,
-        url: result.url,
-        title: result.title,
-      });
+      return jsonResult(result);
     }
 
     return NextResponse.json({ error: "Unknown op" }, { status: 400 });

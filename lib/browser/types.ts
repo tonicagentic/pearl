@@ -37,6 +37,9 @@ export type BrowserAction =
   | { readonly action: "tabs"; readonly op: "new"; readonly url?: string }
   | { readonly action: "tabs"; readonly op: "select"; readonly tabId: string }
   | { readonly action: "tabs"; readonly op: "close"; readonly tabId: string }
+  | { readonly action: "back"; readonly tabId?: string }
+  | { readonly action: "forward"; readonly tabId?: string }
+  | { readonly action: "reload"; readonly tabId?: string }
   | { readonly action: "control"; readonly mode: BrowserControlMode }
   | { readonly action: "heartbeat" };
 
@@ -79,10 +82,18 @@ export type WorkspaceDesktopTab = {
   readonly title: string;
 };
 
+/** Single library browser tab — pick or create files for the canvas. */
+export type WorkspaceLibraryTab = {
+  readonly kind: "library";
+  readonly id: string;
+  readonly title: string;
+};
+
 export type WorkspaceTab =
   | WorkspaceFileTab
   | WorkspacePageTab
-  | WorkspaceDesktopTab;
+  | WorkspaceDesktopTab
+  | WorkspaceLibraryTab;
 
 export type WorkspaceState = {
   readonly tabs: readonly WorkspaceTab[];

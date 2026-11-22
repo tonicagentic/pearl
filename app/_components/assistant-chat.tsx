@@ -78,6 +78,7 @@ import {
   CanvasProvider,
   useCanvas,
 } from "@/components/assistant-ui/elements/canvas-context";
+import { CanvasLibraryPanel } from "@/components/assistant-ui/elements/canvas-library-panel";
 import {
   CanvasSplitBody,
   CanvasSplitLine,
@@ -86,8 +87,21 @@ import {
 import { MarkdownContent } from "@/components/assistant-ui/elements/markdown-content";
 import { MermaidBlock } from "@/components/assistant-ui/elements/mermaid-block";
 import { SceneViewer } from "@/components/assistant-ui/elements/scene-viewer";
+import { isEditableCanvasPath } from "@/lib/design/file-preview";
 import { previewKindForPath } from "@/lib/design/preview-kind";
+import type { BrowserTabInfo } from "@/lib/browser/types";
 import { ghostButton, mono } from "@/lib/surfaces";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  FilePlusIcon,
+  FolderOpenIcon,
+  GlobeIcon,
+  PanelRightIcon,
+  PanelRightCloseIcon,
+  RefreshCwIcon,
+  XIcon,
+} from "lucide-react";
 import { ActiveCustomAgentProvider } from "@/components/custom-agents/active-custom-agent-context";
 import { AgentThreadChrome } from "@/components/custom-agents/agent-thread-chrome";
 import { ThreadActionsMenu } from "@/components/chat/thread-actions-menu";
@@ -872,7 +886,10 @@ function AssistantChatSurfaceInner({
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-start justify-between gap-2 px-2 py-2 md:px-3">
             <AgentThreadChrome />
-            <ThreadActionsMenu chatId={chatId} />
+            <div className="pointer-events-auto flex items-center gap-1">
+              <CanvasSidebarToggle />
+              <ThreadActionsMenu chatId={chatId} />
+            </div>
           </div>
 
           {toastError ? (
@@ -944,14 +961,130 @@ function basename(path: string): string {
   return path.split("/").pop() || path;
 }
 
+function normalizeBrowserUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "about:blank";
+  if (/^about:/i.test(trimmed)) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^[\w.-]+\.[a-z]{2,}([/:?#].*)?$/i.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
+  return `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`;
+}
+
+type BrowserApiResult = {
+  readonly ok?: boolean;
+  readonly controlMode?: "agent" | "user";
+  readonly tabs?: readonly BrowserTabInfo[];
+  readonly url?: string | null;
+  readonly title?: string | null;
+  readonly viewUrl?: string;
+  readonly error?: string;
+};
+
+async function postBrowserOp(
+  chatId: string,
+  body: Record<string, unknown>,
+): Promise<BrowserApiResult> {
+  const res = await fetch(`/api/chats/${chatId}/browser`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  try {
+    return (await res.json()) as BrowserApiResult;
+  } catch {
+    return { ok: false, error: `HTTP ${res.status}` };
+  }
+}
+
+function CanvasSidebarToggle() {
+  const { panelOpen, setPanelOpen } = useCanvas();
+  return (
+    <button
+      type="button"
+      aria-label={panelOpen ? "Hide sidebar" : "Show sidebar"}
+      aria-pressed={panelOpen}
+      className={cn(
+        ghostButton,
+        "text-foreground/60 hover:text-foreground size-8",
+      )}
+      onClick={() => setPanelOpen(!panelOpen)}
+    >
+      {panelOpen ? (
+        <PanelRightCloseIcon className="size-4" />
+      ) : (
+        <PanelRightIcon className="size-4" />
+      )}
+    </button>
+  );
+}
+
+function CanvasStartPage() {
+  const { openBrowserUrl, openLibrary, openNewFile } = useCanvas();
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6">
+      <p className="text-foreground/50 text-[13px]">Open a tab to get started</p>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <button
+          type="button"
+          className={cn(ghostButton, "h-9 gap-2 px-3 text-[13px]")}
+          onClick={() => openBrowserUrl("about:blank")}
+        >
+          <GlobeIcon className="size-4" />
+          Browser
+        </button>
+        <button
+          type="button"
+          className={cn(ghostButton, "h-9 gap-2 px-3 text-[13px]")}
+          onClick={() => openLibrary()}
+        >
+          <FolderOpenIcon className="size-4" />
+          Library
+        </button>
+        <button
+          type="button"
+          className={cn(ghostButton, "h-9 gap-2 px-3 text-[13px]")}
+          onClick={() => {
+            const name =
+              typeof window !== "undefined"
+                ? window.prompt("File name", "untitled.md")
+                : "untitled.md";
+            if (name === null) return;
+            openNewFile(name.trim() || "untitled.md");
+          }}
+        >
+          <FilePlusIcon className="size-4" />
+          New file
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function CanvasFilePreview({
   path,
   content,
+  editable,
+  onChange,
 }: {
   readonly path: string;
   readonly content: string;
+  readonly editable?: boolean;
+  readonly onChange?: (next: string) => void;
 }) {
   const kind = previewKindForPath(path);
+  if (editable && onChange && isEditableCanvasPath(path)) {
+    return (
+      <textarea
+        value={content}
+        onChange={(event) => onChange(event.target.value)}
+        spellCheck={kind === "markdown" || kind === "text"}
+        className="bg-background text-foreground min-h-0 w-full flex-1 resize-none border-0 p-4 font-mono text-[13px] leading-relaxed outline-none"
+        aria-label={`Edit ${basename(path)}`}
+      />
+    );
+  }
   switch (kind) {
     case "markdown":
       return (
@@ -983,9 +1116,9 @@ function CanvasFilePreview({
     case "pdf":
     case "image": {
       // Content may be a URL the agent wrote, or raw bytes are not expected
-      // in text tabs — prefer an http(s) or data URL when present.
+      // in text tabs — prefer an http(s), data, blob, or app-relative URL.
       const src = content.trim();
-      if (/^(https?:|data:|blob:)/i.test(src)) {
+      if (/^(https?:|data:|blob:|\/)/i.test(src)) {
         if (kind === "pdf") {
           return (
             <iframe
@@ -1025,26 +1158,114 @@ function CanvasFilePreview({
   }
 }
 
+function CanvasBrowserChrome({
+  url,
+  controlMode,
+  onNavigate,
+  onBack,
+  onForward,
+  onReload,
+  onToggleControl,
+}: {
+  readonly url: string;
+  readonly controlMode: "agent" | "user";
+  readonly onNavigate: (url: string) => void;
+  readonly onBack: () => void;
+  readonly onForward: () => void;
+  readonly onReload: () => void;
+  readonly onToggleControl: () => void;
+}) {
+  const [draft, setDraft] = useState(url);
+  useEffect(() => {
+    setDraft(url);
+  }, [url]);
+
+  return (
+    <div className="border-foreground/[0.07] flex items-center gap-1 border-b px-2 py-1.5">
+      <button
+        type="button"
+        aria-label="Back"
+        className={cn(ghostButton, "size-7 shrink-0")}
+        onClick={onBack}
+      >
+        <ArrowLeftIcon className="size-3.5" />
+      </button>
+      <button
+        type="button"
+        aria-label="Forward"
+        className={cn(ghostButton, "size-7 shrink-0")}
+        onClick={onForward}
+      >
+        <ArrowRightIcon className="size-3.5" />
+      </button>
+      <button
+        type="button"
+        aria-label="Reload"
+        className={cn(ghostButton, "size-7 shrink-0")}
+        onClick={onReload}
+      >
+        <RefreshCwIcon className="size-3.5" />
+      </button>
+      <form
+        className="min-w-0 flex-1"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onNavigate(normalizeBrowserUrl(draft));
+        }}
+      >
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          aria-label="Address"
+          placeholder="Search or enter a URL"
+          className="border-border/60 bg-foreground/[0.03] h-7 w-full rounded-md border px-2.5 text-[12px] outline-none"
+        />
+      </form>
+      <span className={cn(mono, "text-foreground/35 hidden sm:inline")}>
+        {controlMode === "user" ? "you" : "agent"}
+      </span>
+      <button
+        type="button"
+        className={cn(ghostButton, "h-7 shrink-0 px-2 text-[12px]")}
+        onClick={onToggleControl}
+      >
+        {controlMode === "user" ? "Hand back" : "Take over"}
+      </button>
+    </div>
+  );
+}
+
 function CanvasLayout() {
   const {
     chatId,
     tabs,
     activeTabId,
+    panelOpen,
     document: doc,
     controlMode,
     viewUrl,
     desktopViewUrl,
+    closePanel,
     selectWorkspaceTab,
     closeWorkspaceTab,
+    syncBrowserPages,
+    openBrowserUrl,
+    openLibrary,
+    openNewFile,
+    updateDocument,
     setControlMode,
     setViewUrl,
     setDesktopViewUrl,
   } = useCanvas();
 
-  const open = tabs.length > 0;
+  const open = panelOpen;
   const active = tabs.find((tab) => tab.id === activeTabId) ?? null;
   const hasPageTab = tabs.some((tab) => tab.kind === "page");
   const hasDesktopTab = tabs.some((tab) => tab.kind === "desktop");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const dirty =
+    active?.kind === "file" ? Boolean(active.dirty) : false;
 
   useEffect(() => {
     if (!chatId || !hasPageTab || viewUrl) return;
@@ -1082,27 +1303,128 @@ function CanvasLayout() {
     };
   }, [chatId, hasDesktopTab, desktopViewUrl, setDesktopViewUrl]);
 
+  // Ensure provisional page tabs (opened from + / links) create a real
+  // Chromium page and sync the tab strip. Attempt each local pageId once.
+  const provisionedLocalPages = useRef(new Set<string>());
+  useEffect(() => {
+    if (!chatId || !panelOpen) return;
+    const page = active?.kind === "page" ? active : null;
+    if (!page) return;
+    if (!page.pageId.startsWith("local:")) return;
+    if (provisionedLocalPages.current.has(page.pageId)) return;
+    provisionedLocalPages.current.add(page.pageId);
+    let cancelled = false;
+    void (async () => {
+      // Always open a new Chromium tab for provisional pages so links do not
+      // overwrite an existing page the user was already viewing.
+      const result = await postBrowserOp(chatId, {
+        op: "new",
+        ...(page.url ? { url: page.url } : {}),
+      });
+      if (cancelled) return;
+      if (result.controlMode) setControlMode(result.controlMode);
+      if (result.tabs?.length) {
+        syncBrowserPages(result.tabs, { focusActivePage: true });
+      } else {
+        // Allow a retry if the sandbox was not ready yet.
+        provisionedLocalPages.current.delete(page.pageId);
+      }
+      if (!viewUrl) {
+        try {
+          const res = await fetch(`/api/chats/${chatId}/browser`);
+          if (!res.ok || cancelled) return;
+          const data = (await res.json()) as { viewUrl?: string };
+          if (data.viewUrl) setViewUrl(data.viewUrl);
+        } catch {
+          // Retry on the next interaction.
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    active,
+    chatId,
+    panelOpen,
+    setControlMode,
+    setViewUrl,
+    syncBrowserPages,
+    viewUrl,
+  ]);
+
+  const applyBrowserResult = useCallback(
+    (result: BrowserApiResult) => {
+      if (result.controlMode) setControlMode(result.controlMode);
+      if (result.tabs?.length) {
+        syncBrowserPages(result.tabs, { focusActivePage: true });
+      }
+    },
+    [setControlMode, syncBrowserPages],
+  );
+
   const onSelectTab = (tabId: string) => {
     selectWorkspaceTab(tabId);
     const tab = tabs.find((t) => t.id === tabId);
-    if (tab?.kind === "page" && chatId) {
-      void fetch(`/api/chats/${chatId}/browser`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ op: "select", tabId: tab.pageId }),
-      }).catch(() => {});
+    if (tab?.kind === "page" && chatId && !tab.pageId.startsWith("local:")) {
+      void postBrowserOp(chatId, { op: "select", tabId: tab.pageId }).then(
+        applyBrowserResult,
+      );
+    }
+  };
+
+  const onCloseTab = (tabId: string) => {
+    const tab = tabs.find((t) => t.id === tabId);
+    closeWorkspaceTab(tabId);
+    if (tab?.kind === "page" && chatId && !tab.pageId.startsWith("local:")) {
+      void postBrowserOp(chatId, { op: "close", tabId: tab.pageId }).then(
+        applyBrowserResult,
+      );
     }
   };
 
   const setMode = (mode: "agent" | "user") => {
     setControlMode(mode);
     if (!chatId) return;
-    void fetch(`/api/chats/${chatId}/browser`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ op: "control", mode }),
-    }).catch(() => {});
+    void postBrowserOp(chatId, { op: "control", mode }).then(applyBrowserResult);
   };
+
+  const runPageOp = (
+    op: "navigate" | "back" | "forward" | "reload",
+    url?: string,
+  ) => {
+    if (!chatId || active?.kind !== "page") return;
+    const tabId = active.pageId.startsWith("local:") ? undefined : active.pageId;
+    void postBrowserOp(chatId, {
+      op,
+      ...(tabId ? { tabId } : {}),
+      ...(url ? { url } : {}),
+    }).then(applyBrowserResult);
+  };
+
+  const saveActiveFile = useCallback(async () => {
+    if (!chatId || !doc) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch(`/api/chats/${chatId}/files`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: doc.path, content: doc.content }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(data?.error ?? "Save failed");
+      }
+      updateDocument(doc.id, { note: "saved", dirty: false });
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }, [chatId, doc, updateDocument]);
 
   return (
     <SubagentRunsProvider>
@@ -1134,65 +1456,99 @@ function CanvasLayout() {
                     ? basename(tab.path)
                     : tab.kind === "desktop"
                       ? tab.title || "Desktop"
-                      : tab.title || tab.url || "Page",
+                      : tab.kind === "library"
+                        ? tab.title || "Library"
+                        : tab.title || tab.url || "Page",
                 ...(tab.kind === "file" ? { path: tab.path } : {}),
               }))}
               onSelectTab={onSelectTab}
-              onCloseTab={closeWorkspaceTab}
+              onCloseTab={onCloseTab}
+              onAddBrowser={() => openBrowserUrl("about:blank")}
+              onAddLibrary={() => openLibrary()}
+              onAddFile={() => {
+                const name =
+                  typeof window !== "undefined"
+                    ? window.prompt("File name", "untitled.md")
+                    : "untitled.md";
+                if (name === null) return;
+                openNewFile(name.trim() || "untitled.md");
+              }}
               trailing={
-                active?.kind === "page" ? (
-                  <>
-                    <span className={cn(mono, "text-foreground/35 hidden sm:inline")}>
-                      {controlMode === "user" ? "you" : "agent"}
-                    </span>
-                    <button
-                      type="button"
-                      className={cn(ghostButton, "h-7 px-2 text-[12px]")}
-                      onClick={() =>
-                        setMode(controlMode === "user" ? "agent" : "user")
-                      }
+                <>
+                  {active?.kind === "desktop" ? (
+                    <span
+                      className={cn(mono, "text-foreground/35 hidden sm:inline")}
                     >
-                      {controlMode === "user" ? "Hand back" : "Take over"}
-                    </button>
-                  </>
-                ) : active?.kind === "desktop" ? (
-                  <span className={cn(mono, "text-foreground/35 hidden sm:inline")}>
-                    screen-relay
-                  </span>
-                ) : doc ? (
-                  <>
-                    <span className={cn(mono, "text-foreground/30 px-1")}>
-                      v{doc.version}
+                      screen-relay
                     </span>
-                    {chatId ? (
-                      <a
-                        href={`/api/chats/${encodeURIComponent(chatId)}/files?path=${encodeURIComponent(doc.path)}&download=1`}
-                        download={basename(doc.path)}
-                        className={cn(ghostButton, "h-7 px-2 text-[12px]")}
-                      >
-                        Download
-                      </a>
-                    ) : null}
-                  </>
-                ) : null
+                  ) : null}
+                  {doc && active?.kind === "file" ? (
+                    <>
+                      <span className={cn(mono, "text-foreground/30 px-1")}>
+                        v{doc.version}
+                        {dirty ? " · editing" : ""}
+                      </span>
+                      {chatId && isEditableCanvasPath(doc.path) ? (
+                        <button
+                          type="button"
+                          className={cn(ghostButton, "h-7 px-2 text-[12px]")}
+                          disabled={saving || !dirty}
+                          onClick={() => void saveActiveFile()}
+                        >
+                          {saving ? "Saving…" : "Save"}
+                        </button>
+                      ) : null}
+                      {chatId ? (
+                        <a
+                          href={`/api/chats/${encodeURIComponent(chatId)}/files?path=${encodeURIComponent(doc.path)}&download=1`}
+                          download={basename(doc.path)}
+                          className={cn(ghostButton, "h-7 px-2 text-[12px]")}
+                        >
+                          Download
+                        </a>
+                      ) : null}
+                    </>
+                  ) : null}
+                  <button
+                    type="button"
+                    aria-label="Hide sidebar"
+                    className={cn(ghostButton, "size-7 shrink-0")}
+                    onClick={() => closePanel()}
+                  >
+                    <XIcon className="size-3.5" />
+                  </button>
+                </>
               }
             />
             {active?.kind === "page" ? (
-              <div className="bg-foreground/[0.03] relative min-h-0 flex-1">
-                {viewUrl ? (
-                  <iframe
-                    title={active.title || active.url || "Browser"}
-                    src={viewUrl}
-                    className="absolute inset-0 h-full w-full border-0"
-                    referrerPolicy="no-referrer"
-                    allow="clipboard-read; clipboard-write"
-                  />
-                ) : (
-                  <div className="text-foreground/45 flex h-full items-center justify-center text-[13px]">
-                    Starting browser…
-                  </div>
-                )}
-              </div>
+              <>
+                <CanvasBrowserChrome
+                  url={active.url === "about:blank" ? "" : active.url}
+                  controlMode={controlMode}
+                  onNavigate={(url) => runPageOp("navigate", url)}
+                  onBack={() => runPageOp("back")}
+                  onForward={() => runPageOp("forward")}
+                  onReload={() => runPageOp("reload")}
+                  onToggleControl={() =>
+                    setMode(controlMode === "user" ? "agent" : "user")
+                  }
+                />
+                <div className="bg-foreground/[0.03] relative min-h-0 flex-1">
+                  {viewUrl ? (
+                    <iframe
+                      title={active.title || active.url || "Browser"}
+                      src={viewUrl}
+                      className="absolute inset-0 h-full w-full border-0"
+                      referrerPolicy="no-referrer"
+                      allow="clipboard-read; clipboard-write"
+                    />
+                  ) : (
+                    <div className="text-foreground/45 flex h-full items-center justify-center text-[13px]">
+                      Starting browser…
+                    </div>
+                  )}
+                </div>
+              </>
             ) : active?.kind === "desktop" ? (
               <div className="bg-foreground/[0.03] relative min-h-0 flex-1">
                 {desktopViewUrl ? (
@@ -1209,13 +1565,37 @@ function CanvasLayout() {
                   </div>
                 )}
               </div>
+            ) : active?.kind === "library" ? (
+              <CanvasLibraryPanel />
             ) : doc ? (
-              <CanvasSplitBody writing={doc.running} className="min-h-0 flex-1">
-                {doc.content ? (
-                  <CanvasFilePreview path={doc.path} content={doc.content} />
+              <CanvasSplitBody
+                writing={doc.running}
+                className={cn(
+                  "min-h-0 flex-1",
+                  isEditableCanvasPath(doc.path) && "p-0",
+                )}
+              >
+                {saveError ? (
+                  <p className="text-destructive px-4 pt-2 text-[12px]">
+                    {saveError}
+                  </p>
                 ) : null}
+                <CanvasFilePreview
+                  path={doc.path}
+                  content={doc.content}
+                  editable={isEditableCanvasPath(doc.path)}
+                  onChange={(next) => {
+                    updateDocument(doc.id, {
+                      content: next,
+                      note: null,
+                      dirty: true,
+                    });
+                  }}
+                />
               </CanvasSplitBody>
-            ) : null}
+            ) : (
+              <CanvasStartPage />
+            )}
           </div>
         )}
       </div>

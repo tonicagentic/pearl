@@ -41,10 +41,40 @@ import {
   isCitationLabel,
   wrapCitationClaims,
 } from "@/components/assistant-ui/elements/citation";
+import { useOptionalCanvas } from "@/components/assistant-ui/elements/canvas-context";
 
 type MarkdownTextProps = Partial<TextMessagePartProps> & {
   components?: Parameters<typeof memoizeMarkdownComponents>[0];
 };
+
+/** http(s) links open in the canvas sidebar browser when available. */
+function CanvasHttpLink({
+  href,
+  className,
+  children,
+  ...props
+}: ComponentPropsWithoutRef<"a"> & { readonly href: string }) {
+  const canvas = useOptionalCanvas();
+  return (
+    <a
+      className={cn(
+        "aui-md-a text-primary hover:text-primary/80 underline underline-offset-2",
+        className,
+      )}
+      href={href}
+      {...props}
+      target={canvas ? undefined : "_blank"}
+      rel={canvas ? undefined : "noreferrer"}
+      onClick={(event) => {
+        if (!canvas) return;
+        event.preventDefault();
+        canvas.openBrowserUrl(href);
+      }}
+    >
+      {children}
+    </a>
+  );
+}
 
 const useShallowStable = <T extends Record<string, unknown> | undefined>(
   value: T,
@@ -245,6 +275,13 @@ const defaultComponents = memoizeMarkdownComponents({
         );
       }
       return <FilePreviewCard path={path} className={className} />;
+    }
+    if (href && /^https?:\/\//i.test(href)) {
+      return (
+        <CanvasHttpLink href={href} className={className} {...props}>
+          {children}
+        </CanvasHttpLink>
+      );
     }
     return (
       <a
