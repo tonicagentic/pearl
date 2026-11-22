@@ -15,12 +15,12 @@ const FALLBACKS = {
     primary: "#2A9D8F",
   },
   dark: {
-    background: "#000000",
-    card: "#111111",
-    foreground: "#F5F5F7",
-    border: "#2C2C2E",
-    muted: "#1C1C1E",
-    secondary: "#2C2C2E",
+    background: "#141414",
+    card: "#212020",
+    foreground: "#FFFFFF",
+    border: "#2A2A2A",
+    muted: "#212020",
+    secondary: "#212020",
     primary: "#2A9D8F",
   },
 } as const;
