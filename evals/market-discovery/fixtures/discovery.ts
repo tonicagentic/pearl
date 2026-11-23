@@ -5,6 +5,8 @@ export const CAPABILITY = {
   promptSellTo: "I know how to build AI agents, who could I sell to?",
   promptNiche:
     "What are some niche markets I could target that'd interest me and be profitable",
+  promptDesignLiving:
+    "I have a good design sense. How can I turn this into something that I do for a living?",
 } as const;
 
 /** Specific candidate segments — role + company type, not "SMBs". */

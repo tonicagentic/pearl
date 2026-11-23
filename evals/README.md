@@ -35,6 +35,7 @@ editing**. Every eval below traces to a requirement in one of them.
 | Eval | Flow it pins | Layer |
 | --- | --- | --- |
 | `unpack-not-answer` | Underdeveloped observation ("French feels weirdly orderly to me") → engaged specifically, moved forward with a distinction/mechanism/question; never a polished answer or artifact. | gates (`notCalledTool`, length) + judge |
+| `explore-open-question` | “What makes a city feel nice?” / “I want to start modeling. Where do I even start?” — explore / disambiguate; no lecture or lead list. | gates + judge |
 | `develop-idea` | Idea → pushback → "what would it contain?": conceptual moves, the objection taken seriously, a structure from the exchange. | judge per turn |
 | `branch-and-return` | Tangent pursued on its own terms; the return reconstructs the main thread's concrete prior points. | judge |
 | `synthesize-delta` | After a pivot, "what do I actually think now?" → current model + delta from the opening idea + open questions flagged. | judge |
@@ -50,6 +51,71 @@ editing**. Every eval below traces to a requirement in one of them.
 | `journal-artifact` | "Write this up as a journal entry" → `write_file` used; file content faithful to the conversation. | gate (`write_file`) + judge over tool output |
 | `screenshot-understanding` | `t.sendFile` a screenshot; agent extracts what is actually in it. | judge (factuality) |
 | `url-in-message` | Pasted URL → reads the page and answers about *its* content. | gate (`web_fetch`) + judge |
+
+### `introspection/` — sit with how I feel
+
+Personal mood and feeling shares — accompany specifically, don’t fix, diagnose,
+or research. Distinct from `thinking-partner/` (ideas and observations).
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `sit-with-feeling` | “I feel sorta down…” / “I’m worried about my interview this afternoon.” — accompany the feeling; no unsolicited fix list or clinical label. | gates + judge |
+
+```bash
+pnpm exec eve eval introspection --tag smoke
+```
+
+### `strategy/` — choose what to focus on
+
+Personal or career strategy asks — a few concrete focus options with tradeoffs,
+not a generic listicle, GTM lead list, or sourced news brief.
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `build-reputation` | “How can I build my reputation in the tech industry?” — strategy options / sequencing; no invented credentials or prospect list. | gates + judge |
+
+```bash
+pnpm exec eve eval strategy --tag smoke
+```
+
+### `finance/` — spend and money questions from real data
+
+Spend reviews need the user’s books or a connected source (e.g. Xero). Never
+invent category totals or “you’re overspending on X” as facts without data.
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `spend-review` | “Where does it seem like I’m spending too much?” — ask for data / Xero; no invented figures. | gates + judge |
+
+```bash
+pnpm exec eve eval finance --tag smoke
+```
+
+### `diagrams/` — architecture maps and overview diagrams
+
+Repo maps grounded in the codebase; personal/role overviews from what the user
+shared (ask when missing). Uses the `diagrams` skill (Mermaid / SVG).
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `repo-architecture` | “Can you map out how the app in this repo works?” — grounded architecture diagram; no invented app. | gates + judge |
+| `responsibilities-overview` | “Diagram of all my responsibilities right now” — ask for the list; don’t invent a job map. | gates + judge |
+
+```bash
+pnpm exec eve eval diagrams --tag smoke
+```
+
+### `product-planning/` — plan or design an app before building
+
+Scope surfaces and flows as proposals. Distinct from calling `coder` to ship.
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `plan-app` | “Let’s plan out an app for managing a home construction project” / “Help me design an app that separates audio stems…” — product plan; no coder jump or fake shipped product. | gates + judge |
+
+```bash
+pnpm exec eve eval product-planning --tag smoke
+```
 
 ### `research/` — reliable answers, honest about their origin
 
@@ -100,7 +166,7 @@ the user has picked one customer and the offer is known. Shared phrases live in
 | --- | --- | --- |
 | `clarify-before-research` | “Help me start prospecting / build a list” — agent asks what’s missing about the offer and ideal customer first. | gates + judge |
 | `offer-angles` | “Who could this offer fit?” — get a few ideal-customer options with angles before any company list. | gates + judge |
-| `identify-customer-profiles` | “Who should we sell this to?” — scored profiles when the offer is known; thin product name clarifies what it does / pain first, then scores profiles. | gates + judge |
+| `identify-customer-profiles` | “Who should we sell this to?” / “define our ICPs for Pearl” — scored / hypothesized profiles; thin product name clarifies first; no lead list. | gates + judge |
 | `qualify-icp` | “Should this be my ideal customer?” — get a pain / fit / budget / reachability / economics check. | gates + judge |
 | `shared-pain-icps` | “Who else has this pain?” — find other ideal-customer segments, not company leads. | gates + judge (`costs-exa`) |
 | `icp-drives-list` | “Build me a short company list for this ICP” — get fit-first rows with a reason to reach out on each. | gates + judge (`costs-exa`) |
@@ -120,7 +186,7 @@ researched with citations when asked. Distinct from `sales-prospecting/`
 
 | Eval | Flow it pins | Layer |
 | --- | --- | --- |
-| `candidate-segments` | "who could I sell to?" / niche markets → 2–3 specific role+company segments as hypotheses; ask offer blanks; no company list. | gates + judge |
+| `candidate-segments` | “Who could I sell to?” / niche markets / “turn this skill into a living” → 2–3 specific role+company (or livelihood) hypotheses; ask offer blanks; no company list. | gates + judge |
 | `interview-design` | Validate two segments → 5–10 past-behavior interviews per segment, no pitch. | gates + judge |
 | `pattern-from-notes` | Pasted interview notes → compare pain/cost/urgency/budget; no invented quotes. | gates + judge |
 | `pilot-test` | Strongest segment → small paid pilot / commitment of money, time, or access. | gates + judge |
@@ -137,13 +203,16 @@ pnpm exec eve eval market-discovery/market-size market-discovery/pricing-landsca
 Together with the suites below, Market Discovery and Sales Prospecting are
 product-facing GTM flows (not the reliability/behavior infra suites).
 
-### `positioning/` — how to talk about the offer for a chosen buyer
+### `positioning/` — clarify the value prop, then how to talk about it
 
-Draft ICP and positioning from a known offer + segment, as hypotheses — not a
-prospect list.
+Clarify a thin service or product offer before drafting ICP/positioning as
+hypotheses — not a prospect list. When the offer + segment are already known,
+draft positioning in one turn.
 
 | Eval | User can ask… | Layer |
 | --- | --- | --- |
+| `clarify-and-position` | “Help me clarify my value prop and position it” — service and product cases: ask what’s missing first, then position. | gates + judge |
+| `pitch-focus` | “What’s the most important thing to focus on when I’m pitching Pearl to someone?” — sharp focus / clarify who; no feature dump or lead list. | gates + judge |
 | `draft-positioning` | “How should we position this for that buyer?” — ICP/positioning draft marked as hypotheses; no lead list. | gates + judge |
 
 ```bash
@@ -157,7 +226,7 @@ prospecting after a filled Offer/ICP record).
 
 | Eval | User can ask… | Layer |
 | --- | --- | --- |
-| `find-companies` | “Find me N companies in this sector” — short researched company list. | gates + judge (`costs-exa`) |
+| `find-companies` | “Find me N companies in this sector” / “find all street-sign makers in the West” — short researched company list. | gates + judge (`costs-exa`) |
 
 ```bash
 pnpm exec eve eval find --tag smoke
@@ -181,7 +250,7 @@ Teach how something works without inventing citations.
 
 | Eval | User can ask… | Layer |
 | --- | --- | --- |
-| `explain-mechanism` | “Explain how X works” — concrete mechanism explanation; no fabricated sources. | gates + judge |
+| `explain-mechanism` | “Explain how X works” / Adderall–ADHD / Riemann hypothesis — concrete mechanism explanation; no fabricated sources. | gates + judge |
 
 ```bash
 pnpm exec eve eval explain --tag smoke
@@ -193,10 +262,26 @@ Current questions get search + attributable sources.
 
 | Eval | User can ask… | Layer |
 | --- | --- | --- |
-| `answer-with-sources` | “What’s going on with X this week?” — short answer with search citations. | gates + judge |
+| `answer-with-sources` | “What’s going on with X this week?” / car registration / “Why so few trees in western SF?” — short answer with search citations. | gates + judge |
 
 ```bash
 pnpm exec eve eval answer --tag smoke
+```
+
+### `design/` — branding and visual direction
+
+Clarify the brief / art direction before pixels. Distinct from
+`create-visual-assets/` (generate a specific image) and from positioning/GTM.
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `branding-help` | “Can you help me design the branding for Pearl?” — Pearl-specific direction; clarify brief blanks; no invented full brand kit. | gates + judge |
+| `logo-concepts` | “Can you help me come up with logo concepts for Pearl?” — distinct mark concepts; loads `logo-design`; no raster logo or full brand kit. | gates + judge |
+| `vibe-direction` | “I want to start a clothing brand. Can you help me figure out the vibe?” — vibe options / clarifying questions; no full kit or supplier list. | gates + judge |
+| `skill-routing` | Writing stays off design skills; explicit logo ask loads `logo-design` and writes SVG. | gates |
+
+```bash
+pnpm exec eve eval design --tag smoke
 ```
 
 ### `create-visual-assets/` — images (and honest limits on motion)

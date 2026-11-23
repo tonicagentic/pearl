@@ -18,10 +18,31 @@ const CUSTOM_AGENTS_OFFER_PROMPT = [
 
 export default defineEval({
   description:
-    "“Who should we sell this to?” — scored profiles when the offer is known; if only a product name, clarify what it does / pain first.",
+    "“Who should we sell this to?” / “define our ICPs for Pearl” — scored profiles when the offer is known; if only a product name, clarify what it does / pain first.",
   tags: ["smoke"],
   timeoutMs: 300_000,
   async test(t) {
+    // Case: thin “provide AI agents” targeting ask
+    // description: User asks who to target for providing AI agents, with no what-it-does or pain. Agent clarifies the offer blanks before scored profiles; no company list.
+    const targeting = await t.session();
+    const targetingTurn = await targeting.send(
+      "Who should we be targeting to provide AI agents too?",
+    );
+    t.succeeded();
+    targetingTurn.notCalledTool("exa_agent_run");
+    targetingTurn.notCalledTool("web_search");
+    t.judge(
+        "Before proposing customer profiles as ready to pursue, the reply must " +
+          "establish what is being provided. It treats AI agents as a thin offer " +
+          "(service or product), leaves What it does and Pain blank or unknown, " +
+          "and explicitly asks for both (or equivalent clarifying questions). It " +
+          "may sketch provisional target hypotheses labeled as such, but does not " +
+          "invent a settled product description, won customers, or a company lead list.",
+        { on: targetingTurn.reply },
+      )
+      .label("clarifies thin AI-agents targeting ask")
+      .atLeast(0.8);
+
     // Case: product name only
     // description: User names a product but not what it does or which pain it solves. Agent must ask those before proposing scored profiles; after the user fills the offer, it scores a few concrete customer profiles.
     const thin = await t.session();
@@ -87,6 +108,28 @@ export default defineEval({
         { on: filledTurn.reply },
       )
       .label("scores profiles when the value prop is already known")
+      .atLeast(0.8);
+
+    // Case: Pearl ICPs
+    // description: User asks to define ICPs for Pearl. Agent proposes a few concrete ICP hypotheses for Pearl (not a settled single ICP or company list); may clarify which Pearl offer/use case if that changes the ICP.
+    const pearl = await t.session();
+    const pearlTurn = await pearl.send(
+      "can you help me define our ICPs for Pearl",
+    );
+    t.succeeded();
+    pearlTurn.notCalledTool("exa_agent_run");
+    pearlTurn.notCalledTool("web_search");
+    t.judge(
+        "The reply helps define ICPs for Pearl specifically. It proposes two or " +
+          "three distinct ideal-customer profiles as hypotheses (concrete role + " +
+          "context — not vague 'SMBs' or 'everyone who wants AI'), optionally " +
+          "scored or compared so the user can choose. It may ask which Pearl " +
+          "use case or buyer motion matters if that changes the ICP. It does not " +
+          "lock a single settled ICP without labeling it as a proposal, invent " +
+          "won customers or win rates as facts, or start a company lead list.",
+        { on: pearlTurn.reply },
+      )
+      .label("pearl-icp-hypotheses")
       .atLeast(0.8);
   },
 });

@@ -3,11 +3,12 @@ import { CAPABILITY } from "./fixtures/discovery.ts";
 
 export default defineEval({
   description:
-    "Market discovery candidates: a capability sell-to ask and a niche-markets " +
-    "ask each produce 2–3 specific segment hypotheses, not SMBs or a company list.",
+    "“Who could I sell to?” / niche markets / “turn this skill into a living” — get 2–3 specific segment hypotheses, not a company list.",
   tags: ["smoke"],
-  timeoutMs: 240_000,
+  timeoutMs: 300_000,
   async test(t) {
+    // Case: capability sell-to
+    // description: User names a build skill and asks who to sell to. Agent asks offer blanks and proposes segment hypotheses — no company list.
     const sellTo = await t.session();
     const sellTurn = await sellTo.send(CAPABILITY.promptSellTo);
     t.succeeded();
@@ -25,6 +26,8 @@ export default defineEval({
       .label("capability-sell-to-segments")
       .atLeast(0.8);
 
+    // Case: niche markets
+    // description: User asks for interesting profitable niches. Agent asks what interests them and still offers specific niche segment hypotheses.
     const niche = await t.session();
     const nicheTurn = await niche.send(CAPABILITY.promptNiche);
     t.succeeded();
@@ -39,6 +42,26 @@ export default defineEval({
         { on: nicheTurn.reply },
       )
       .label("niche-markets-interest")
+      .atLeast(0.8);
+
+    // Case: design sense → living
+    // description: User has a capability (design sense) but no offer yet. Agent helps turn it toward livelihood via segment/offer hypotheses — not a settled career plan or lead list.
+    const design = await t.session();
+    const designTurn = await design.send(CAPABILITY.promptDesignLiving);
+    t.succeeded();
+    designTurn.notCalledTool("exa_agent_run");
+    designTurn.notCalledTool("web_search");
+    t.judge(
+        "The reply treats design sense as a capability to package, not a finished " +
+          "business. It asks clarifying questions about what kind of design work, " +
+          "outcome, or buyers they care about, and/or proposes two or three " +
+          "specific livelihood paths as hypotheses (concrete buyer role + company " +
+          "or client type — not vague 'become a designer' or 'SMBs'). It does not " +
+          "invent clients, rates, or a settled ICP, and it does not jump to a " +
+          "company prospect list.",
+        { on: designTurn.reply },
+      )
+      .label("design-sense-to-living")
       .atLeast(0.8);
   },
 });
