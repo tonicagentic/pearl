@@ -9,7 +9,11 @@ import {
   type LayoutChangeEvent,
   type TextInputInstance,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { router, Stack, useNavigation } from "expo-router";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { ChevronLeftIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
@@ -24,6 +28,12 @@ type GatePhase = "gate" | "email";
 type AuthFlow = "sign-up" | "sign-in" | "forgot";
 type AuthStep = "email" | "password";
 
+/**
+ * `full` — local phase swap (signup sheet).
+ * `gate` / `email` — stack screens; Continue with Email pushes `/sign-in/email`.
+ */
+export type SignInVariant = "full" | "gate" | "email";
+
 const INPUT_FONT = 28;
 const INPUT_LINE = 34;
 
@@ -36,6 +46,7 @@ export function SignInScreen({
   onBack,
   handOffActive = false,
   skipIntro = false,
+  variant = "full",
 }: {
   /** Latest measured CTA frame for the composer morph. */
   onCtaFrame?: (frame: AuthCtaFrame) => void;
@@ -48,6 +59,8 @@ export function SignInScreen({
    * keeps the swipeable intro above the continue buttons.
    */
   skipIntro?: boolean;
+  /** How gate ↔ email are connected — see `SignInVariant`. */
+  variant?: SignInVariant;
 }) {
   const {
     signIn,
@@ -61,6 +74,10 @@ export function SignInScreen({
   } = useAuth();
   const googleAvailable = isGoogleSignInAvailable();
   const appleAvailable = Platform.OS === "ios";
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  /** Pushed `/sign-in/email` route — native liquid-glass back + swipe-to-pop. */
+  const isStackEmail = variant === "email";
 
   const backgroundColor = useCSSVariable("--color-background") as
     | string
@@ -79,7 +96,9 @@ export function SignInScreen({
     | string
     | undefined;
 
-  const [phase, setPhase] = useState<GatePhase>("gate");
+  const [phase, setPhase] = useState<GatePhase>(
+    variant === "email" ? "email" : "gate",
+  );
   const [flow, setFlow] = useState<AuthFlow>("sign-up");
   const [step, setStep] = useState<AuthStep>("email");
   const [email, setEmail] = useState("");
@@ -97,6 +116,8 @@ export function SignInScreen({
   const error = localError ?? signInError;
   const trimmedEmail = email.trim();
   const emailOk = trimmedEmail.includes("@") && trimmedEmail.includes(".");
+  const showingGate = variant === "gate" || phase === "gate";
+  const showingEmail = variant === "email" || phase === "email";
 
   const stepCount = flow === "forgot" ? 1 : 2;
   const stepIndex = flow === "forgot" || step === "email" ? 0 : 1;
@@ -113,13 +134,62 @@ export function SignInScreen({
           password === confirmPassword);
 
   useEffect(() => {
-    if (handOffActive || phase !== "email") return;
+    if (handOffActive || !showingEmail) return;
     const id = requestAnimationFrame(() => {
       if (step === "email" || flow === "forgot") emailRef.current?.focus();
       else passwordRef.current?.focus();
     });
     return () => cancelAnimationFrame(id);
-  }, [step, flow, handOffActive, phase]);
+  }, [step, flow, handOffActive, showingEmail]);
+
+  // Swipe-back / toolbar back: step password → email first, then pop.
+  useEffect(() => {
+    if (!isStackEmail) return;
+
+    navigation.setOptions({
+      gestureEnabled: !busy && !handOffActive,
+    });
+
+    const unsub = navigation.addListener("beforeRemove", (event) => {
+      if (busy || handOffActive) {
+        event.preventDefault();
+        return;
+      }
+      if (flow === "forgot") {
+        event.preventDefault();
+        setLocalError(null);
+        setInfo(null);
+        setFlow("sign-in");
+        setStep("password");
+        return;
+      }
+      if (step === "password") {
+        event.preventDefault();
+        setLocalError(null);
+        setInfo(null);
+        setStep("email");
+        setPassword("");
+        setConfirmPassword("");
+      }
+    });
+
+    return unsub;
+  }, [busy, flow, handOffActive, isStackEmail, navigation, step]);
+
+  const progressSegments = Array.from({ length: stepCount }, (_, i) => (
+    <View
+      key={i}
+      style={[
+        styles.progressSegment,
+        {
+          backgroundColor:
+            i <= stepIndex
+              ? (foregroundColor ?? "#111")
+              : (borderColor ?? "#e5e5e5"),
+        },
+      ]}
+    />
+  ));
 
   const onCtaLayout = (event: LayoutChangeEvent) => {
     const target = event.target;
@@ -139,15 +209,6 @@ export function SignInScreen({
     setInfo(null);
   };
 
-  const goToEmail = () => {
-    clearMessages();
-    setFlow("sign-up");
-    setStep("email");
-    setPassword("");
-    setConfirmPassword("");
-    setPhase("email");
-  };
-
   const resetEmailFields = () => {
     clearMessages();
     setFlow("sign-up");
@@ -156,9 +217,35 @@ export function SignInScreen({
     setConfirmPassword("");
   };
 
+  const leaveEmailToGate = () => {
+    resetEmailFields();
+    if (variant === "email") {
+      if (router.canGoBack()) {
+        router.back();
+        return;
+      }
+      router.replace("/sign-in");
+      return;
+    }
+    setPhase("gate");
+  };
+
+  const goToEmail = () => {
+    clearMessages();
+    setFlow("sign-up");
+    setStep("email");
+    setPassword("");
+    setConfirmPassword("");
+    if (variant === "gate") {
+      router.push("/sign-in/email");
+      return;
+    }
+    setPhase("email");
+  };
+
   const onGateBack = () => {
     if (busy || handOffActive) return;
-    if (phase === "email") {
+    if (showingEmail) {
       if (flow === "forgot") {
         clearMessages();
         setFlow("sign-in");
@@ -173,8 +260,7 @@ export function SignInScreen({
         setConfirmPassword("");
         return;
       }
-      resetEmailFields();
-      setPhase("gate");
+      leaveEmailToGate();
       return;
     }
     onBack?.();
@@ -279,10 +365,9 @@ export function SignInScreen({
           ? "Send reset link"
           : "Continue";
 
-  const showBack =
-    !handOffActive && (phase === "email" || Boolean(onBack));
+  const showBack = !handOffActive;
 
-  if (phase === "gate") {
+  if (showingGate) {
     return (
       <SafeAreaView
         style={[StyleSheet.absoluteFill, { backgroundColor }]}
@@ -357,7 +442,7 @@ export function SignInScreen({
               disabled={busy || handOffActive}
               onPress={goToEmail}
             />
-            {error && phase === "gate" && !handOffActive ? (
+            {error && showingGate && !handOffActive ? (
               <Text
                 accessibilityRole="alert"
                 variant="secondary"
@@ -375,50 +460,89 @@ export function SignInScreen({
   return (
     <SafeAreaView
       style={[StyleSheet.absoluteFill, { backgroundColor }]}
+      // Stack email: top inset comes from the transparent header.
+      // Leave bottom to KeyboardAvoidingView so Continue stays above the keyboard.
+      edges={isStackEmail ? ["left", "right"] : ["top", "left", "right"]}
       pointerEvents={handOffActive ? "none" : "auto"}
     >
+      {isStackEmail ? (
+        <>
+          <Stack.Screen
+            options={{
+              headerShown: true,
+              title: "",
+              headerTransparent: Platform.OS === "ios",
+              headerShadowVisible: false,
+              headerTintColor: foregroundColor,
+              headerStyle:
+                Platform.OS === "ios" ? undefined : { backgroundColor },
+              // iOS: Stack.Toolbar.Button owns the liquid-glass chevron.
+              headerBackVisible: Platform.OS !== "ios",
+              headerBackButtonDisplayMode: "minimal",
+              headerLeft: Platform.OS === "ios" ? () => null : undefined,
+              headerTitle: () => (
+                <View style={styles.headerProgress}>{progressSegments}</View>
+              ),
+            }}
+          />
+          {Platform.OS === "ios" ? (
+            <Stack.Toolbar placement="left">
+              {/*
+                Native Toolbar.Button — circular liquid glass + press.
+                Custom GlassView on a flat black field reads as invisible.
+              */}
+              <Stack.Toolbar.Button
+                icon="chevron.left"
+                accessibilityLabel="Back"
+                hidden={busy || handOffActive}
+                onPress={onGateBack}
+              />
+            </Stack.Toolbar>
+          ) : null}
+        </>
+      ) : null}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.flex}
       >
-        <View style={[styles.column, { opacity: handOffActive ? 0 : 1 }]}>
-          <View style={styles.topBar}>
-            {showBack ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Back"
-                disabled={busy}
-                hitSlop={12}
-                onPress={onGateBack}
-                style={styles.backHit}
-              >
-                <Icon
-                  as={ChevronLeftIcon}
-                  className="size-5 text-foreground"
-                />
-                <Text variant="body" weight="medium">
-                  Back
-                </Text>
-              </Pressable>
-            ) : null}
-            <View style={styles.progressRow}>
-              {Array.from({ length: stepCount }, (_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.progressSegment,
-                    {
-                      backgroundColor:
-                        i <= stepIndex
-                          ? (foregroundColor ?? "#111")
-                          : (borderColor ?? "#e5e5e5"),
-                    },
-                  ]}
-                />
-              ))}
+        <View
+          style={[
+            styles.column,
+            { opacity: handOffActive ? 0 : 1 },
+            isStackEmail
+              ? {
+                  paddingTop:
+                    Platform.OS === "ios" ? insets.top + 52 : 8,
+                }
+              : null,
+          ]}
+        >
+          {isStackEmail ? null : (
+            <View style={styles.topBar}>
+              {showBack ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Back"
+                  disabled={busy}
+                  hitSlop={12}
+                  onPress={onGateBack}
+                  style={styles.backHit}
+                >
+                  <Icon
+                    as={ChevronLeftIcon}
+                    className="size-5 text-foreground"
+                  />
+                  <Text variant="body" weight="medium">
+                    Back
+                  </Text>
+                </Pressable>
+              ) : (
+                <View style={styles.cornerHit} />
+              )}
+              <View style={styles.progressRow}>{progressSegments}</View>
+              <View style={styles.cornerHit} />
             </View>
-            <View style={styles.cornerHit} />
-          </View>
+          )}
 
           <View style={styles.header}>
             <Text
@@ -651,6 +775,13 @@ const styles = StyleSheet.create({
   progressRow: {
     flex: 1,
     flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  headerProgress: {
+    width: 120,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   progressSegment: {
@@ -673,12 +804,13 @@ const styles = StyleSheet.create({
     minWidth: 48,
   },
   header: {
-    paddingTop: 28,
+    paddingTop: 12,
     gap: 6,
     alignItems: "center",
   },
   fieldStage: {
     flex: 1,
+    minHeight: 0,
     justifyContent: "center",
     gap: 16,
   },
