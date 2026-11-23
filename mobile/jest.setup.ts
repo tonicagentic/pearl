@@ -25,9 +25,47 @@ jest.mock("react-native-reanimated", () => {
     api.withInitialValues = () => undefined;
     return api;
   };
+  const interpolate = (
+    value: number,
+    input: number[],
+    output: number[],
+    _extrapolation?: unknown,
+  ) => {
+    if (input.length === 0) return output[0] ?? 0;
+    const lo = Math.min(...input);
+    const hi = Math.max(...input);
+    // Match Reanimated CLAMP: outside the span, snap to the nearer endpoint.
+    if (value <= lo) {
+      const index = input.indexOf(lo);
+      return output[index] ?? output[0]!;
+    }
+    if (value >= hi) {
+      const index = input.indexOf(hi);
+      return output[index] ?? output[output.length - 1]!;
+    }
+    for (let i = 0; i < input.length - 1; i++) {
+      const left = input[i]!;
+      const right = input[i + 1]!;
+      const min = Math.min(left, right);
+      const max = Math.max(left, right);
+      if (value >= min && value <= max) {
+        const t = right === left ? 0 : (value - left) / (right - left);
+        return output[i]! + t * (output[i + 1]! - output[i]!);
+      }
+    }
+    return output[output.length - 1]!;
+  };
+  const easingFn = (t: number) => t;
   return {
     __esModule: true,
     default: { View: Passthrough, createAnimatedComponent: (c: unknown) => c },
     FadeInDown: chain(),
+    Easing: {
+      linear: easingFn,
+      cubic: easingFn,
+      out: () => easingFn,
+    },
+    Extrapolation: { CLAMP: "clamp", IDENTITY: "identity", EXTEND: "extend" },
+    interpolate,
   };
 });
