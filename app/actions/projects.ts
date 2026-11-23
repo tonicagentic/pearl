@@ -17,8 +17,16 @@ import {
   setChatProject,
   updateProject,
 } from "@/lib/db/projects";
+import {
+  linkArtifactToProject,
+  listProjectArtifacts,
+  unlinkArtifactFromProject,
+} from "@/lib/db/project-artifacts";
 import { createChat } from "@/lib/db/queries";
-import { ensureUserForPrincipal } from "@/lib/db/issues";
+import {
+  ensureUserForPrincipal,
+  listProjectIssues,
+} from "@/lib/db/issues";
 import {
   createWorkbenchPin,
   linkPinToProject,
@@ -121,6 +129,17 @@ export async function attachChatToProjectAction(input: {
   return { ok: true as const, projectId: input.projectId };
 }
 
+export async function detachChatFromProjectAction(input: {
+  readonly chatId: string;
+  readonly projectId: string;
+}) {
+  const viewer = await requireDatabaseViewer();
+  const ok = await setChatProject(viewer.id, input.chatId, null);
+  if (!ok) throw new Error("Could not unlink chat from project.");
+  revalidateProjectPaths(input.projectId);
+  return { ok: true as const };
+}
+
 export async function getChatProjectIdAction(input: {
   readonly chatId: string;
 }) {
@@ -173,12 +192,14 @@ export async function loadProjectWorkspaceAction(input: {
   const viewer = await requireDatabaseViewer();
   const owned = await getProject(viewer.id, input.projectId);
   if (!owned) return null;
-  const [plans, chats, pins] = await Promise.all([
+  const [plans, chats, pins, issues, artifacts] = await Promise.all([
     listPlans(viewer.id, owned.id),
     listProjectChats(viewer.id, owned.id),
     listProjectPins(viewer.id, owned.id),
+    listProjectIssues(viewer.id, owned.id),
+    listProjectArtifacts(viewer.id, owned.id),
   ]);
-  return { project: owned, plans, chats, pins };
+  return { project: owned, plans, chats, pins, issues, artifacts };
 }
 
 export async function linkProjectPinAction(input: {
@@ -227,6 +248,36 @@ export async function unlinkProjectPinAction(input: {
     input.pinId,
   );
   if (!unlinked) throw new Error("Pin not linked to this project.");
+  revalidateProjectPaths(input.projectId);
+  return { ok: true as const };
+}
+
+export async function linkProjectArtifactAction(input: {
+  readonly projectId: string;
+  readonly pathname: string;
+}) {
+  const viewer = await requireDatabaseViewer();
+  const linked = await linkArtifactToProject(
+    viewer.id,
+    input.projectId,
+    input.pathname,
+  );
+  if (!linked) throw new Error("Unknown project.");
+  revalidateProjectPaths(input.projectId);
+  return linked;
+}
+
+export async function unlinkProjectArtifactAction(input: {
+  readonly projectId: string;
+  readonly artifactId: string;
+}) {
+  const viewer = await requireDatabaseViewer();
+  const ok = await unlinkArtifactFromProject(
+    viewer.id,
+    input.projectId,
+    input.artifactId,
+  );
+  if (!ok) throw new Error("Linked artifact not found.");
   revalidateProjectPaths(input.projectId);
   return { ok: true as const };
 }

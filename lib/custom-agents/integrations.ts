@@ -1,4 +1,4 @@
-import { CONNECTION_IDS, type ConnectionId } from "@/lib/connections/catalog";
+import { CONNECTION_IDS, type ConnectionId } from "../connections/catalog";
 
 /** Connection ids a custom agent may allowlist, plus iCloud calendar accounts. */
 export const AGENT_INTEGRATION_IDS = [...CONNECTION_IDS, "icloud"] as const;

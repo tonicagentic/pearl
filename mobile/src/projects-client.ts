@@ -49,11 +49,38 @@ export type ProjectPinDto = {
   readonly updatedAt: string;
 };
 
+export type ProjectIssueDto = {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly status: "open" | "resolved";
+  readonly dueDate: string | null;
+  readonly reviewDate: string | null;
+  readonly createdAt: string;
+  readonly resolvedAt: string | null;
+  readonly areaId: string;
+  readonly areaName: string;
+  readonly projectId: string | null;
+  readonly state: "active" | "dormant" | "resolved";
+  readonly dueSoon?: boolean;
+};
+
+export type ProjectArtifactDto = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly pathname: string;
+  readonly title: string;
+  readonly sortOrder: number;
+  readonly createdAt: string;
+};
+
 export type ProjectWorkspaceDto = {
   readonly project: ProjectDto;
   readonly plans: readonly PlanSummaryDto[];
   readonly chats: readonly ProjectChatDto[];
   readonly pins: readonly ProjectPinDto[];
+  readonly issues: readonly ProjectIssueDto[];
+  readonly artifacts: readonly ProjectArtifactDto[];
 };
 
 function authHeaders(): Record<string, string> {
@@ -128,6 +155,8 @@ export async function fetchProjectWorkspace(
   return {
     ...data,
     pins: data.pins ?? [],
+    issues: data.issues ?? [],
+    artifacts: data.artifacts ?? [],
   };
 }
 
@@ -311,6 +340,46 @@ export async function unlinkProjectPinRequest(
 ): Promise<void> {
   const response = await fetch(
     `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/pins/${encodeURIComponent(pinId)}`,
+    {
+      method: "DELETE",
+      headers: authHeaders(),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+}
+
+export async function linkProjectArtifactRequest(
+  projectId: string,
+  pathname: string,
+): Promise<ProjectArtifactDto> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/artifacts`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ pathname }),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+
+  const data = (await response.json()) as { artifact: ProjectArtifactDto };
+  return data.artifact;
+}
+
+export async function unlinkProjectArtifactRequest(
+  projectId: string,
+  artifactId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/artifacts/${encodeURIComponent(artifactId)}`,
     {
       method: "DELETE",
       headers: authHeaders(),

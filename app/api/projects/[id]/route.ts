@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { listProjectIssues } from "@/lib/db/issues";
 import {
   deleteProject,
   getProject,
@@ -7,7 +8,9 @@ import {
   listProjectChats,
   updateProject,
 } from "@/lib/db/projects";
+import { listProjectArtifacts } from "@/lib/db/project-artifacts";
 import { listProjectPins } from "@/lib/db/workbench-pins";
+import { issueState, todayIso } from "@/lib/issues";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -36,7 +39,7 @@ async function requireViewer() {
   return viewer;
 }
 
-/** Project detail: project + plans + chats + linked pins. */
+/** Project detail: project + tasks + plans + library + chats + pins. */
 export async function GET(
   _request: Request,
   context: { readonly params: Promise<{ readonly id: string }> },
@@ -55,10 +58,12 @@ export async function GET(
     return NextResponse.json({ error: "Project not found." }, { status: 404 });
   }
 
-  const [plans, chats, pins] = await Promise.all([
+  const [plans, chats, pins, issues, artifacts] = await Promise.all([
     listPlans(viewer.id, owned.id),
     listProjectChats(viewer.id, owned.id),
     listProjectPins(viewer.id, owned.id),
+    listProjectIssues(viewer.id, owned.id),
+    listProjectArtifacts(viewer.id, owned.id),
   ]);
 
   return NextResponse.json({
@@ -87,6 +92,25 @@ export async function GET(
       createdAt: pin.createdAt,
       updatedAt: pin.updatedAt,
     })),
+    issues: issues.map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      status: row.status,
+      dueDate: row.dueDate,
+      reviewDate: row.reviewDate,
+      createdAt: row.createdAt.toISOString(),
+      resolvedAt: row.resolvedAt?.toISOString() ?? null,
+      areaId: row.areaId,
+      areaName: row.areaName,
+      projectId: row.projectId,
+      state: issueState(row),
+      dueSoon:
+        row.status === "open" &&
+        row.dueDate !== null &&
+        row.dueDate <= todayIso(),
+    })),
+    artifacts,
   });
 }
 

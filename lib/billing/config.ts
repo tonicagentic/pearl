@@ -72,7 +72,7 @@ export function isMetronomeConfigured(): boolean {
 }
 
 /** Default App Store product id for the $10/month subscription. */
-export const DEFAULT_APPLE_IAP_SUBSCRIPTION_ID = "pearl_monthly_10";
+export const DEFAULT_APPLE_IAP_SUBSCRIPTION_ID = "pearl_monthly";
 
 /** Default consumable usage credit packs (product id → credit cents). */
 export const DEFAULT_APPLE_USAGE_PACKS: Readonly<Record<string, number>> = {

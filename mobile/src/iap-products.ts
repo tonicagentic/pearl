@@ -1,5 +1,5 @@
 /** Mirrors server defaults in lib/billing/config.ts — keep product ids in sync. */
-export const APPLE_IAP_SUBSCRIPTION_ID = "pearl_monthly_10";
+export const APPLE_IAP_SUBSCRIPTION_ID = "pearl_monthly";
 
 export const APPLE_USAGE_PACKS = [
   { productId: "pearl_usage_10", creditCents: 1000, label: "$10 usage credits" },

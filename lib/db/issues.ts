@@ -465,6 +465,26 @@ export async function listOpenIssues(
     );
 }
 
+/** Open tasks filed on a project (Pearl Tasks / issues). */
+export async function listProjectIssues(
+  userId: string,
+  projectId: string,
+): Promise<IssueWithArea[]> {
+  return issuesWithAreaQuery()
+    .where(
+      and(
+        eq(issue.userId, userId),
+        eq(issue.projectId, projectId),
+        eq(issue.status, "open"),
+      ),
+    )
+    .orderBy(
+      asc(sql`coalesce(${issue.reviewDate}, ${issue.dueDate})`),
+      asc(issue.dueDate),
+      asc(issue.createdAt),
+    );
+}
+
 export async function listRecentlyResolvedIssues(
   userId: string,
   sinceIso: string,

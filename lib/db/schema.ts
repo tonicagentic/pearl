@@ -1072,6 +1072,39 @@ export const projectPin = pgTable(
 export type ProjectPin = typeof projectPin.$inferSelect;
 
 /**
+ * Links principal-scoped Library artifacts (Blob pathnames) onto a project.
+ * Artifacts themselves live in Vercel Blob; this is the join only.
+ */
+export const projectArtifact = pgTable(
+  "project_artifact",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    pathname: text("pathname").notNull(),
+    title: text("title").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_project_artifact_project").on(table.projectId),
+    index("idx_project_artifact_user").on(table.userId),
+    uniqueIndex("idx_project_artifact_project_pathname").on(
+      table.projectId,
+      table.pathname,
+    ),
+  ],
+);
+
+export type ProjectArtifact = typeof projectArtifact.$inferSelect;
+
+/**
  * Gmail mailboxes linked to a Pearl user. Tokens stay in Vercel Connect;
  * this table stores the Connect subject id and a safe display label.
  * The first / legacy mailbox uses subjectId === userId so an existing

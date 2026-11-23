@@ -208,6 +208,14 @@ function AuthenticatedLayout() {
                           headerBackButtonDisplayMode: "minimal",
                         }}
                       />
+                      <Stack.Screen
+                        name="asc-iap"
+                        options={{
+                          title: "Billing",
+                          headerShown: true,
+                          headerBackButtonDisplayMode: "minimal",
+                        }}
+                      />
                     </Stack.Protected>
 
                     <Stack.Protected guard={appReady} redirectTo="/sign-in">

@@ -13,31 +13,39 @@ import { useCSSVariable } from "uniwind";
 
 import { revealChatThread } from "@/components/chat-history-push";
 import { ProjectMark } from "@/components/project-mark";
+import { CreateTaskModal } from "@/components/tasks/create-task-modal";
 import { Icon } from "@/components/ui/icon";
 import { LoadingCenter } from "@/components/ui/loading-center";
 import { StackScreen } from "@/components/ui/stack-screen";
 import { Text, textVariants } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
+import {
+  artifactContentUrl,
+  listArtifacts,
+} from "@/src/artifacts-client";
 import { useChats } from "@/src/chat-context";
-import { createChat } from "@/src/chats-client";
+import { attachChatToProject, createChat, setChatProject } from "@/src/chats-client";
 import {
   createPlanRequest,
   deleteProjectRequest,
   fetchProjectWorkspace,
+  linkProjectArtifactRequest,
   linkProjectPinRequest,
+  unlinkProjectArtifactRequest,
   unlinkProjectPinRequest,
   updateProjectRequest,
   type ProjectWorkspaceDto,
 } from "@/src/projects-client";
 import { fetchWorkbenchPins } from "@/src/workbench-client";
+import * as Linking from "expo-linking";
 
-/** Project detail: edit metadata, plans, and project chats. */
+/** Project detail: edit metadata, tasks, plans, library, chats. */
 export function ProjectDetailScreen({
   projectId,
 }: {
   readonly projectId: string;
 }) {
-  const { selectChat, setActiveProjectId } = useChats();
+  const { chats, selectChat, setActiveProjectId } = useChats();
   const [workspace, setWorkspace] = useState<ProjectWorkspaceDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -46,6 +54,9 @@ export function ProjectDetailScreen({
   const [creatingPlan, setCreatingPlan] = useState(false);
   const [creatingChat, setCreatingChat] = useState(false);
   const [linkingPin, setLinkingPin] = useState(false);
+  const [linkingArtifact, setLinkingArtifact] = useState(false);
+  const [attachingChat, setAttachingChat] = useState(false);
+  const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
@@ -288,8 +299,115 @@ export function ProjectDetailScreen({
     ]);
   }, [addRepoByName, linkExistingPin, linkingPin]);
 
+  const linkLibraryArtifact = useCallback(() => {
+    setLinkingArtifact(true);
+    setError(null);
+    void listArtifacts()
+      .then((artifacts) => {
+        const linked = new Set(
+          (workspace?.artifacts ?? []).map((row) => row.pathname),
+        );
+        const available = artifacts.filter((row) => !linked.has(row.pathname));
+        if (available.length === 0) {
+          Alert.alert(
+            "Nothing to link",
+            linked.size > 0
+              ? "All library items are already linked."
+              : "Save something to Library first.",
+          );
+          return;
+        }
+        Alert.alert(
+          "Link from Library",
+          undefined,
+          [
+            ...available.slice(0, 6).map((row) => ({
+              text: row.basename,
+              onPress: () => {
+                setLinkingArtifact(true);
+                void linkProjectArtifactRequest(projectId, row.pathname)
+                  .then(() => reload())
+                  .catch((cause) => {
+                    setError(
+                      cause instanceof Error
+                        ? cause.message
+                        : "Could not link artifact.",
+                    );
+                  })
+                  .finally(() => setLinkingArtifact(false));
+              },
+            })),
+            { text: "Cancel", style: "cancel" as const },
+          ],
+        );
+      })
+      .catch((cause) => {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Could not load library.",
+        );
+      })
+      .finally(() => setLinkingArtifact(false));
+  }, [projectId, reload, workspace?.artifacts]);
+
+  const attachExistingChat = useCallback(() => {
+    const linkedIds = new Set((workspace?.chats ?? []).map((chat) => chat.id));
+    const available = chats.filter(
+      (chat) => chat.projectId !== projectId && !linkedIds.has(chat.id),
+    );
+    if (available.length === 0) {
+      Alert.alert(
+        "No chats to attach",
+        "Start a new chat, or move one here from History.",
+      );
+      return;
+    }
+    Alert.alert(
+      "Attach chat",
+      undefined,
+      [
+        ...available.slice(0, 6).map((chat) => ({
+          text: chat.title || "Untitled",
+          onPress: () => {
+            setAttachingChat(true);
+            void attachChatToProject(chat.id, projectId)
+              .then(() => reload())
+              .catch((cause) => {
+                setError(
+                  cause instanceof Error
+                    ? cause.message
+                    : "Could not attach chat.",
+                );
+              })
+              .finally(() => setAttachingChat(false));
+          },
+        })),
+        { text: "Cancel", style: "cancel" as const },
+      ],
+    );
+  }, [chats, projectId, reload, workspace?.chats]);
+
+  const openChatsMenu = useCallback(() => {
+    Alert.alert("Chats", undefined, [
+      {
+        text: creatingChat ? "Starting…" : "New chat",
+        onPress: createProjectChat,
+      },
+      {
+        text: attachingChat ? "Attaching…" : "Attach existing",
+        onPress: attachExistingChat,
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, [attachExistingChat, attachingChat, createProjectChat, creatingChat]);
+
   const openPlusMenu = useCallback(() => {
     Alert.alert("New", undefined, [
+      {
+        text: "New task",
+        onPress: () => setCreateTaskOpen(true),
+      },
       {
         text: creatingPlan ? "Creating plan…" : "New plan",
         onPress: createPlan,
@@ -297,6 +415,10 @@ export function ProjectDetailScreen({
       {
         text: creatingChat ? "Starting chat…" : "New chat",
         onPress: createProjectChat,
+      },
+      {
+        text: "Link library item",
+        onPress: linkLibraryArtifact,
       },
       {
         text: "Link repo",
@@ -309,6 +431,7 @@ export function ProjectDetailScreen({
     createProjectChat,
     creatingChat,
     creatingPlan,
+    linkLibraryArtifact,
     openReposMenu,
   ]);
 

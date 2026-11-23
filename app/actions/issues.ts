@@ -13,6 +13,7 @@ import {
   resolveIssue,
   updateIssue,
 } from "@/lib/db/issues";
+import { getProject } from "@/lib/db/projects";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -46,8 +47,11 @@ async function requireViewer() {
   return viewer;
 }
 
-function revalidateIssues() {
+function revalidateIssues(projectId?: string | null) {
   revalidatePath("/tasks");
+  if (projectId) {
+    revalidatePath(`/projects/${projectId}`);
+  }
 }
 
 export type IssueActionInput = {
@@ -55,6 +59,7 @@ export type IssueActionInput = {
   readonly description?: string | null;
   readonly areaId?: string;
   readonly areaName?: string;
+  readonly projectId?: string | null;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;
 };
@@ -101,15 +106,23 @@ export async function createIssueAction(input: IssueActionInput) {
     throw new Error("Dates must be YYYY-MM-DD.");
   }
 
+  let projectId: string | null = null;
+  if (input.projectId !== undefined && input.projectId !== null && input.projectId !== "") {
+    const owned = await getProject(viewer.id, input.projectId);
+    if (!owned) throw new Error("Unknown project.");
+    projectId = owned.id;
+  }
+
   const issue = await createIssue(viewer.id, {
     title,
     description: input.description?.trim() || null,
     areaId,
+    projectId,
     dueDate,
     reviewDate,
   });
 
-  revalidateIssues();
+  revalidateIssues(projectId);
 
   return issue;
 }

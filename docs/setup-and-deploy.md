@@ -81,7 +81,7 @@ METRONOME_RATE_CARD_ID=
 For iOS StoreKit (App Store Connect products + In-App Purchase key):
 
 ```bash
-APPLE_IAP_SUBSCRIPTION_ID=pearl_monthly_10
+APPLE_IAP_SUBSCRIPTION_ID=pearl_monthly
 APPLE_IAP_USAGE_PRODUCT_IDS=pearl_usage_10:1000,pearl_usage_25:2500,pearl_usage_50:5000
 APPLE_IAP_ISSUER_ID=
 APPLE_IAP_KEY_ID=
