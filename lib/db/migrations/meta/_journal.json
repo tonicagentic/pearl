@@ -358,6 +358,13 @@
       "when": 1795712000000,
       "tag": "0053_capability",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1795800000000,
+      "tag": "0054_apple_iap_billing",
+      "breakpoints": true
     }
   ]
 }

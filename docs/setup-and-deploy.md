@@ -66,7 +66,7 @@ vercel env run -e production -- pnpm db:migrate
 
 ## Hosted billing
 
-The hosted production app bills new accounts by default: **$10/month** subscription via Stripe Checkout, plus metered usage (models, Exa research, sandboxes, images) invoiced through Metronome onto the same Stripe customer. New accounts start with a **$50/month usage spend cap** they can raise in Settings.
+The hosted production app bills new accounts by default: **$10/month** subscription via Stripe Checkout (web/Android) or StoreKit (iOS), plus metered usage. Stripe subscribers are invoiced through Metronome onto the same Stripe customer. Apple subscribers get a **$50/period included soft cap** plus optional StoreKit consumable credit packs; power users can enable automatic usage billing on the web (Stripe card + Metronome) without leaving Apple as the base subscription. New accounts start with a **$50/month usage spend cap** they can raise in Settings.
 
 Required production env vars (see [.env.example](../.env.example)):
 
@@ -78,7 +78,21 @@ METRONOME_API_TOKEN=
 METRONOME_RATE_CARD_ID=
 ```
 
+For iOS StoreKit (App Store Connect products + In-App Purchase key):
+
+```bash
+APPLE_IAP_SUBSCRIPTION_ID=pearl_monthly_10
+APPLE_IAP_USAGE_PRODUCT_IDS=pearl_usage_10:1000,pearl_usage_25:2500,pearl_usage_50:5000
+APPLE_IAP_ISSUER_ID=
+APPLE_IAP_KEY_ID=
+APPLE_IAP_PRIVATE_KEY=
+APPLE_APP_APPLE_ID=6834637706
+APPLE_APP_BUNDLE_IDENTIFIER=com.tonicagentic.pearl
+```
+
 Point the Stripe webhook at `https://<your-production-host>/api/billing/webhook` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.*`, `invoice.paid`, `invoice.payment_failed`, `charge.dispute.created`, `charge.refunded`, and `radar.early_fraud_warning.created`.
+
+Point App Store Server Notifications V2 at `https://<your-production-host>/api/billing/apple/notifications`.
 
 The migration that adds billing marks every existing `user` row as `billing_exempt` (a free pass: no Checkout, no invoices, no cap). New signups are billed. Spend for free-pass accounts is still written to the local ledger and never ingested to Metronome.
 

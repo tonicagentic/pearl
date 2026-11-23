@@ -16,6 +16,10 @@ export type MobileBillingStatus = {
   readonly guestMessageCount?: number;
   readonly guestMessageLimit?: number;
   readonly hasPortal: boolean;
+  readonly paymentProvider?: "stripe" | "apple" | null;
+  readonly prepaidCreditCents?: number;
+  readonly hasAppleSubscription?: boolean;
+  readonly hasExtendedUsageBilling?: boolean;
   readonly periodStart?: string | null;
   readonly periodEnd?: string | null;
   readonly bySource: readonly {

@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator } from "react-native";
+import { ActivityIndicator, Linking, Platform } from "react-native";
 import { useFocusEffect } from "expo-router";
 
 import {
@@ -17,6 +17,15 @@ import {
   updateUsageCap,
   type MobileBillingStatus,
 } from "@/src/billing-client";
+import {
+  purchaseAppleSubscription,
+  purchaseAppleUsagePack,
+  restoreApplePurchases,
+} from "@/src/iap";
+import {
+  APPLE_SUBSCRIPTIONS_MANAGE_URL,
+  APPLE_USAGE_PACKS,
+} from "@/src/iap-products";
 import { openWebUrlExternally } from "@/src/open-web-url";
 import { formatSpendCents } from "@/src/usage-client";
 
@@ -43,6 +52,7 @@ function planLabel(status: MobileBillingStatus): string {
   if (status.needsCheckout) return "Not subscribed";
   if (status.reason === "payment_failed") return "Payment failed";
   if (status.reason === "cap_reached") return "Cap reached";
+  if (status.paymentProvider === "apple") return "Subscribed (Apple)";
   return "Subscribed";
 }
 
@@ -61,21 +71,24 @@ function planSummary(status: MobileBillingStatus): string {
   if (status.trial) {
     return `Included monthly allowance. This account is not billed.${resetSentence}`;
   }
+  if (status.paymentProvider === "apple") {
+    return `Apple subscription is $10 a month, plus usage credits.${resetSentence}`;
+  }
   return `Subscription is $10 a month, plus usage.${resetSentence}`;
 }
 
 /**
  * Profile → Billing. Plan, this period's spend, the usage cap, and the
- * payment method. Stripe checkout and the card portal open outside the app.
+ * payment method. iOS uses StoreKit; Stripe checkout stays on Android/web.
  */
 export function BillingScreen() {
   const [status, setStatus] = useState<MobileBillingStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
-  const [pending, setPending] = useState<"cap" | "checkout" | "portal" | null>(
-    null,
-  );
+  const [pending, setPending] = useState<
+    "cap" | "checkout" | "portal" | "restore" | "pack" | null
+  >(null);
   const [capDollars, setCapDollars] = useState("");
 
   const refresh = useCallback(async () => {
@@ -114,21 +127,71 @@ export function BillingScreen() {
     if (pending) return;
     setPending("checkout");
     setError(null);
+    setHint(null);
     try {
-      openWebUrlExternally(await startBillingCheckout());
+      if (Platform.OS === "ios") {
+        await purchaseAppleSubscription();
+        await refresh();
+        setHint("Subscription active.");
+      } else {
+        openWebUrlExternally(await startBillingCheckout());
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not start checkout.");
     } finally {
       setPending(null);
     }
-  }, [pending]);
+  }, [pending, refresh]);
+
+  const restore = useCallback(async () => {
+    if (pending || Platform.OS !== "ios") return;
+    setPending("restore");
+    setError(null);
+    setHint(null);
+    try {
+      const count = await restoreApplePurchases();
+      await refresh();
+      setHint(count > 0 ? "Purchases restored." : "No active Apple subscription found.");
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not restore purchases.",
+      );
+    } finally {
+      setPending(null);
+    }
+  }, [pending, refresh]);
+
+  const buyPack = useCallback(
+    async (productId: string) => {
+      if (pending || Platform.OS !== "ios") return;
+      setPending("pack");
+      setError(null);
+      setHint(null);
+      try {
+        await purchaseAppleUsagePack(productId);
+        await refresh();
+        setHint("Usage credits added.");
+      } catch (cause) {
+        setError(
+          cause instanceof Error ? cause.message : "Could not buy usage credits.",
+        );
+      } finally {
+        setPending(null);
+      }
+    },
+    [pending, refresh],
+  );
 
   const managePayment = useCallback(async () => {
     if (pending) return;
     setPending("portal");
     setError(null);
     try {
-      openWebUrlExternally(await startBillingPortal());
+      if (status?.paymentProvider === "apple") {
+        await Linking.openURL(APPLE_SUBSCRIPTIONS_MANAGE_URL);
+      } else {
+        openWebUrlExternally(await startBillingPortal());
+      }
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not open billing portal.",
@@ -136,7 +199,7 @@ export function BillingScreen() {
     } finally {
       setPending(null);
     }
-  }, [pending]);
+  }, [pending, status?.paymentProvider]);
 
   const saveCap = useCallback(async () => {
     if (pending) return;
@@ -179,7 +242,20 @@ export function BillingScreen() {
   }
 
   const canManageCap =
-    status.enabled && !status.exempt && !status.trial && !status.needsCheckout;
+    status.enabled &&
+    !status.exempt &&
+    !status.trial &&
+    !status.needsCheckout &&
+    status.paymentProvider !== "apple";
+
+  const showApplePacks =
+    Platform.OS === "ios" &&
+    status.enabled &&
+    !status.exempt &&
+    (status.hasAppleSubscription || status.paymentProvider === "apple") &&
+    !status.needsCheckout;
+
+  const showSubscribe = status.enabled && status.needsCheckout;
 
   return (
     <SettingsForm>
@@ -206,6 +282,12 @@ export function BillingScreen() {
             value={formatSpendCents(status.remainingCents)}
           />
         ) : null}
+        {status.prepaidCreditCents != null && status.prepaidCreditCents > 0 ? (
+          <SettingsLabeledValue
+            label="Prepaid credits"
+            value={formatSpendCents(status.prepaidCreditCents)}
+          />
+        ) : null}
       </SettingsSection>
 
       {status.bySource.length > 0 ? (
@@ -220,19 +302,59 @@ export function BillingScreen() {
         </SettingsSection>
       ) : null}
 
-      {status.enabled && status.needsCheckout ? (
+      {showSubscribe ? (
         <SettingsSection
           footer={
             <SettingsFormText tone="secondary">
-              $10 a month, plus usage. New accounts start with a $50 usage cap.
+              {Platform.OS === "ios"
+                ? "$10 a month via the App Store, plus optional usage credit packs. New accounts start with a $50 included allowance."
+                : "$10 a month, plus usage. New accounts start with a $50 usage cap."}
             </SettingsFormText>
           }
         >
           <SettingsButton
             disabled={pending !== null}
-            label={pending === "checkout" ? "Opening Stripe…" : "Continue to Stripe"}
+            label={
+              pending === "checkout"
+                ? Platform.OS === "ios"
+                  ? "Purchasing…"
+                  : "Opening Stripe…"
+                : Platform.OS === "ios"
+                  ? "Subscribe"
+                  : "Continue to Stripe"
+            }
             onPress={() => void subscribe()}
           />
+          {Platform.OS === "ios" ? (
+            <SettingsButton
+              disabled={pending !== null}
+              label={pending === "restore" ? "Restoring…" : "Restore purchases"}
+              onPress={() => void restore()}
+            />
+          ) : null}
+        </SettingsSection>
+      ) : null}
+
+      {showApplePacks ? (
+        <SettingsSection
+          title="Usage credits"
+          footer={
+            <SettingsFormText tone="secondary">
+              Buy App Store credit packs when you hit the included allowance. For
+              automatic usage billing, set it up at pearl.diy/billing on the web.
+            </SettingsFormText>
+          }
+        >
+          {APPLE_USAGE_PACKS.map((pack) => (
+            <SettingsButton
+              key={pack.productId}
+              disabled={pending !== null}
+              label={
+                pending === "pack" ? "Purchasing…" : pack.label
+              }
+              onPress={() => void buyPack(pack.productId)}
+            />
+          ))}
         </SettingsSection>
       ) : null}
 
@@ -263,15 +385,26 @@ export function BillingScreen() {
         </SettingsSection>
       ) : null}
 
-      {status.hasPortal ? (
+      {status.hasPortal || status.paymentProvider === "apple" ? (
         <SettingsSection>
           <SettingsButton
             disabled={pending !== null}
             label={
-              pending === "portal" ? "Opening…" : "Manage payment method"
+              pending === "portal"
+                ? "Opening…"
+                : status.paymentProvider === "apple"
+                  ? "Manage subscription"
+                  : "Manage payment method"
             }
             onPress={() => void managePayment()}
           />
+          {Platform.OS === "ios" && status.paymentProvider === "apple" ? (
+            <SettingsButton
+              disabled={pending !== null}
+              label={pending === "restore" ? "Restoring…" : "Restore purchases"}
+              onPress={() => void restore()}
+            />
+          ) : null}
         </SettingsSection>
       ) : null}
 

@@ -19,6 +19,8 @@ import {
 } from "@/lib/db/schema";
 import { getSetupStatus } from "@/lib/setup";
 
+export type BillingPaymentProvider = "stripe" | "apple";
+
 export type BillingAccess = {
   readonly enabled: boolean;
   readonly exempt: boolean;
@@ -34,6 +36,10 @@ export type BillingAccess = {
   readonly periodEnd: Date | null;
   readonly stripeCustomerId: string | null;
   readonly metronomeCustomerId: string | null;
+  readonly paymentProvider: BillingPaymentProvider | null;
+  readonly prepaidCreditCents: number;
+  readonly hasAppleSubscription: boolean;
+  readonly hasExtendedUsageBilling: boolean;
   readonly spentCents: number;
   readonly reservedCents: number;
   /** Guest turns already started (anonymous users only). */
@@ -112,33 +118,45 @@ export async function getBillingAccount(userId: string) {
 
 export async function upsertBillingAccount(input: {
   readonly userId: string;
-  readonly stripeCustomerId: string;
+  readonly stripeCustomerId?: string | null;
   readonly stripeSubscriptionId?: string | null;
   readonly status: string;
   readonly periodStart?: Date | null;
   readonly periodEnd?: Date | null;
   readonly metronomeCustomerId?: string | null;
   readonly usageCapCents?: number;
+  readonly paymentProvider?: BillingPaymentProvider;
+  readonly appleOriginalTransactionId?: string | null;
+  readonly appleProductId?: string | null;
+  readonly appleEnvironment?: string | null;
+  readonly prepaidCreditCents?: number;
 }): Promise<void> {
   const now = new Date();
   await db
     .insert(billingAccount)
     .values({
       userId: input.userId,
-      stripeCustomerId: input.stripeCustomerId,
+      stripeCustomerId: input.stripeCustomerId ?? null,
       stripeSubscriptionId: input.stripeSubscriptionId ?? null,
       status: input.status,
       periodStart: input.periodStart ?? null,
       periodEnd: input.periodEnd ?? null,
       metronomeCustomerId: input.metronomeCustomerId ?? null,
       usageCapCents: input.usageCapCents ?? DEFAULT_USAGE_CAP_CENTS,
+      paymentProvider: input.paymentProvider ?? "stripe",
+      appleOriginalTransactionId: input.appleOriginalTransactionId ?? null,
+      appleProductId: input.appleProductId ?? null,
+      appleEnvironment: input.appleEnvironment ?? null,
+      prepaidCreditCents: input.prepaidCreditCents ?? 0,
       createdAt: now,
       updatedAt: now,
     })
     .onConflictDoUpdate({
       target: billingAccount.userId,
       set: {
-        stripeCustomerId: input.stripeCustomerId,
+        ...(input.stripeCustomerId !== undefined
+          ? { stripeCustomerId: input.stripeCustomerId }
+          : {}),
         ...(input.stripeSubscriptionId !== undefined
           ? { stripeSubscriptionId: input.stripeSubscriptionId }
           : {}),
@@ -154,6 +172,21 @@ export async function upsertBillingAccount(input: {
           : {}),
         ...(input.usageCapCents !== undefined
           ? { usageCapCents: input.usageCapCents }
+          : {}),
+        ...(input.paymentProvider !== undefined
+          ? { paymentProvider: input.paymentProvider }
+          : {}),
+        ...(input.appleOriginalTransactionId !== undefined
+          ? { appleOriginalTransactionId: input.appleOriginalTransactionId }
+          : {}),
+        ...(input.appleProductId !== undefined
+          ? { appleProductId: input.appleProductId }
+          : {}),
+        ...(input.appleEnvironment !== undefined
+          ? { appleEnvironment: input.appleEnvironment }
+          : {}),
+        ...(input.prepaidCreditCents !== undefined
+          ? { prepaidCreditCents: input.prepaidCreditCents }
           : {}),
         updatedAt: now,
       },
@@ -263,12 +296,24 @@ function emptyAccess(
     periodEnd: null,
     stripeCustomerId: null,
     metronomeCustomerId: null,
+    paymentProvider: null,
+    prepaidCreditCents: 0,
+    hasAppleSubscription: false,
+    hasExtendedUsageBilling: false,
     spentCents: 0,
     reservedCents: 0,
     guestMessageCount: 0,
     guestMessageLimit: GUEST_MESSAGE_LIMIT,
     ...partial,
   };
+}
+
+/** Effective spend ceiling: base cap + prepaid Apple usage credits. */
+export function effectiveUsageCapCents(account: {
+  readonly usageCapCents: number;
+  readonly prepaidCreditCents: number | null | undefined;
+}): number {
+  return account.usageCapCents + Math.max(0, account.prepaidCreditCents ?? 0);
 }
 
 async function friendTrialAccess(userId: string): Promise<BillingAccess> {
@@ -384,27 +429,47 @@ export async function getBillingAccess(
       allowed: false,
       reason,
       status: account?.status ?? null,
-      usageCapCents: account?.usageCapCents ?? DEFAULT_USAGE_CAP_CENTS,
+      usageCapCents: account
+        ? effectiveUsageCapCents(account)
+        : DEFAULT_USAGE_CAP_CENTS,
       periodStart: period.start,
       periodEnd: period.end,
       stripeCustomerId: account?.stripeCustomerId ?? null,
       metronomeCustomerId: account?.metronomeCustomerId ?? null,
+      paymentProvider:
+        account?.paymentProvider === "apple" ? "apple" : account ? "stripe" : null,
+      prepaidCreditCents: account?.prepaidCreditCents ?? 0,
+      hasAppleSubscription:
+        account?.paymentProvider === "apple" &&
+        Boolean(account.appleOriginalTransactionId),
+      hasExtendedUsageBilling: Boolean(account?.metronomeCustomerId),
       spentCents,
       reservedCents,
     });
   }
 
-  if (spentCents + reservedCents >= account!.usageCapCents) {
+  const capCents = effectiveUsageCapCents(account!);
+  const paymentProvider =
+    account!.paymentProvider === "apple" ? "apple" : "stripe";
+  const hasAppleSubscription =
+    paymentProvider === "apple" && Boolean(account!.appleOriginalTransactionId);
+  const hasExtendedUsageBilling = Boolean(account!.metronomeCustomerId);
+
+  if (spentCents + reservedCents >= capCents) {
     return emptyAccess({
       enabled: true,
       allowed: false,
       reason: "cap_reached",
       status: account!.status,
-      usageCapCents: account!.usageCapCents,
+      usageCapCents: capCents,
       periodStart: period.start,
       periodEnd: period.end,
       stripeCustomerId: account!.stripeCustomerId,
       metronomeCustomerId: account!.metronomeCustomerId,
+      paymentProvider,
+      prepaidCreditCents: account!.prepaidCreditCents,
+      hasAppleSubscription,
+      hasExtendedUsageBilling,
       spentCents,
       reservedCents,
     });
@@ -414,11 +479,15 @@ export async function getBillingAccess(
     enabled: true,
     allowed: true,
     status: account!.status,
-    usageCapCents: account!.usageCapCents,
+    usageCapCents: capCents,
     periodStart: period.start,
     periodEnd: period.end,
     stripeCustomerId: account!.stripeCustomerId,
     metronomeCustomerId: account!.metronomeCustomerId,
+    paymentProvider,
+    prepaidCreditCents: account!.prepaidCreditCents,
+    hasAppleSubscription,
+    hasExtendedUsageBilling,
     spentCents,
     reservedCents,
   });
@@ -431,6 +500,19 @@ export async function findBillingAccountByStripeCustomer(
     .select()
     .from(billingAccount)
     .where(eq(billingAccount.stripeCustomerId, stripeCustomerId))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function findBillingAccountByAppleOriginal(
+  appleOriginalTransactionId: string,
+) {
+  const [row] = await db
+    .select()
+    .from(billingAccount)
+    .where(
+      eq(billingAccount.appleOriginalTransactionId, appleOriginalTransactionId),
+    )
     .limit(1);
   return row ?? null;
 }

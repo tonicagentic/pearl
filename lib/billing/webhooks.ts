@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import {
   findBillingAccountByStripeCustomer,
   findBillingAccountBySubscription,
+  getBillingAccount,
   getUserBillingFlags,
   upsertBillingAccount,
 } from "@/lib/billing/accounts";
@@ -92,12 +93,83 @@ async function syncSubscription(
     periodEnd: period?.end ?? null,
     metronomeCustomerId,
     usageCapCents: existing?.usageCapCents ?? DEFAULT_USAGE_CAP_CENTS,
+    // Apple base sub + Stripe card for usage: keep paymentProvider apple.
+    paymentProvider:
+      existing?.paymentProvider === "apple" &&
+      existing.appleOriginalTransactionId
+        ? "apple"
+        : "stripe",
+    appleOriginalTransactionId: existing?.appleOriginalTransactionId,
+    appleProductId: existing?.appleProductId,
+    appleEnvironment: existing?.appleEnvironment,
+    prepaidCreditCents: existing?.prepaidCreditCents,
+  });
+}
+
+async function handleExtendedUsageSetup(
+  session: Stripe.Checkout.Session,
+): Promise<void> {
+  if (session.metadata?.purpose !== "extended_usage") {
+    return;
+  }
+  const userId =
+    session.client_reference_id ||
+    (typeof session.metadata?.userId === "string"
+      ? session.metadata.userId
+      : null);
+  const stripeCustomerId = customerIdOf(session.customer);
+  if (!userId || !stripeCustomerId) {
+    return;
+  }
+
+  const flags = await getUserBillingFlags(userId);
+  if (!flags || flags.exempt) {
+    return;
+  }
+
+  const existing =
+    (await findBillingAccountByStripeCustomer(stripeCustomerId)) ??
+    (await getBillingAccount(userId));
+  if (!existing) {
+    return;
+  }
+
+  let metronomeCustomerId = existing.metronomeCustomerId ?? null;
+  if (!metronomeCustomerId) {
+    metronomeCustomerId = await ensureMetronomeCustomer({
+      userId,
+      email: flags.email,
+      name: flags.name,
+      stripeCustomerId,
+      existingMetronomeCustomerId: metronomeCustomerId,
+    });
+  }
+
+  await upsertBillingAccount({
+    userId,
+    stripeCustomerId,
+    stripeSubscriptionId: existing.stripeSubscriptionId,
+    status: existing.status,
+    periodStart: existing.periodStart,
+    periodEnd: existing.periodEnd,
+    metronomeCustomerId,
+    usageCapCents: existing.usageCapCents,
+    paymentProvider: existing.paymentProvider === "apple" ? "apple" : "stripe",
+    appleOriginalTransactionId: existing.appleOriginalTransactionId,
+    appleProductId: existing.appleProductId,
+    appleEnvironment: existing.appleEnvironment,
+    prepaidCreditCents: existing.prepaidCreditCents,
   });
 }
 
 async function handleCheckoutSession(
   session: Stripe.Checkout.Session,
 ): Promise<void> {
+  if (session.mode === "setup") {
+    await handleExtendedUsageSetup(session);
+    return;
+  }
+
   if (session.mode !== "subscription") {
     return;
   }
@@ -138,6 +210,7 @@ async function handleCheckoutSession(
     stripeCustomerId,
     stripeSubscriptionId,
     status: "active",
+    paymentProvider: "stripe",
   });
 }
 

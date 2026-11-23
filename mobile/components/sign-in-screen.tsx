@@ -9,6 +9,7 @@ import {
   type LayoutChangeEvent,
   type TextInputInstance,
 } from "react-native";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { router, Stack, useNavigation } from "expo-router";
 import {
   SafeAreaView,
@@ -429,12 +430,19 @@ export function SignInScreen({
               />
             ) : null}
             {appleAvailable ? (
-              <Button
-                label="Continue with Apple"
-                variant="secondary"
-                loading={busy}
-                disabled={busy || handOffActive}
-                onPress={() => void signInWithApple()}
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={
+                  AppleAuthentication.AppleAuthenticationButtonType.CONTINUE
+                }
+                buttonStyle={
+                  AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                }
+                cornerRadius={12}
+                style={styles.appleButton}
+                onPress={() => {
+                  if (busy || handOffActive) return;
+                  void signInWithApple();
+                }}
               />
             ) : null}
             <Button
@@ -760,6 +768,10 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 24,
     paddingTop: 16,
+  },
+  appleButton: {
+    width: "100%",
+    height: 48,
   },
   column: {
     flex: 1,

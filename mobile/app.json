@@ -16,7 +16,9 @@
         "webcredentials:pearl.tonicagentic.com"
       ],
       "entitlements": {
-        "com.apple.developer.applesignin": ["Default"],
+        "com.apple.developer.applesignin": [
+          "Default"
+        ],
         "com.apple.developer.associated-domains": [
           "webcredentials:pearl.diy",
           "webcredentials:pearl.tonicagentic.com"
@@ -94,6 +96,7 @@
       ],
       "./plugins/with-live-audio-session.js",
       "expo-apple-authentication",
+      "expo-iap",
       "expo-asset",
       "expo-font",
       "expo-sharing",

@@ -71,6 +71,79 @@ export function isMetronomeConfigured(): boolean {
   return hasEnv("METRONOME_API_TOKEN");
 }
 
+/** Default App Store product id for the $10/month subscription. */
+export const DEFAULT_APPLE_IAP_SUBSCRIPTION_ID = "pearl_monthly_10";
+
+/** Default consumable usage credit packs (product id → credit cents). */
+export const DEFAULT_APPLE_USAGE_PACKS: Readonly<Record<string, number>> = {
+  pearl_usage_10: 1000,
+  pearl_usage_25: 2500,
+  pearl_usage_50: 5000,
+};
+
+/** Auto-renewable subscription product id (App Store Connect). */
+export function getAppleIapSubscriptionId(): string {
+  return (
+    process.env.APPLE_IAP_SUBSCRIPTION_ID?.trim() ||
+    DEFAULT_APPLE_IAP_SUBSCRIPTION_ID
+  );
+}
+
+/**
+ * Consumable usage packs. Override with comma-separated `id:cents` pairs, e.g.
+ * `pearl_usage_10:1000,pearl_usage_25:2500`.
+ */
+export function getAppleUsagePackCredits(): Readonly<Record<string, number>> {
+  const raw = process.env.APPLE_IAP_USAGE_PRODUCT_IDS?.trim();
+  if (!raw) {
+    return DEFAULT_APPLE_USAGE_PACKS;
+  }
+  const packs: Record<string, number> = {};
+  for (const entry of raw.split(",")) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const [idPart, centsPart] = trimmed.includes(":")
+      ? trimmed.split(":", 2)
+      : [trimmed, undefined];
+    const id = idPart?.trim();
+    if (!id) continue;
+    const fromDefault = DEFAULT_APPLE_USAGE_PACKS[id];
+    const cents = centsPart ? Number(centsPart) : fromDefault;
+    if (Number.isFinite(cents) && (cents as number) > 0) {
+      packs[id] = Math.floor(cents as number);
+    } else if (fromDefault) {
+      packs[id] = fromDefault;
+    }
+  }
+  return Object.keys(packs).length > 0 ? packs : DEFAULT_APPLE_USAGE_PACKS;
+}
+
+export function getAppleIapBundleId(): string {
+  return (
+    process.env.APPLE_APP_BUNDLE_IDENTIFIER?.trim() ||
+    process.env.APPLE_IAP_BUNDLE_ID?.trim() ||
+    "com.tonicagentic.pearl"
+  );
+}
+
+/** Numeric App Store app id (required to verify Production JWS). */
+export function getAppleAppAppleId(): number | null {
+  const raw =
+    process.env.APPLE_APP_APPLE_ID?.trim() ||
+    process.env.APPLE_IAP_APP_APPLE_ID?.trim();
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function isAppleIapConfigured(): boolean {
+  return (
+    hasEnv("APPLE_IAP_ISSUER_ID") &&
+    hasEnv("APPLE_IAP_KEY_ID") &&
+    Boolean(process.env.APPLE_IAP_PRIVATE_KEY?.trim())
+  );
+}
+
 /**
  * Paying users need Stripe. Metronome is required to activate a subscription
  * (usage invoices); without it Checkout can still collect the $10 but usage

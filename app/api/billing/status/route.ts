@@ -67,6 +67,10 @@ export async function GET() {
     guestMessageLimit: access.guestMessageLimit,
     periodStart: access.periodStart?.toISOString() ?? null,
     periodEnd: access.periodEnd?.toISOString() ?? null,
+    paymentProvider: access.paymentProvider,
+    prepaidCreditCents: access.prepaidCreditCents,
+    hasAppleSubscription: access.hasAppleSubscription,
+    hasExtendedUsageBilling: access.hasExtendedUsageBilling,
     hasPortal:
       Boolean(access.stripeCustomerId) && !access.exempt && !access.trial,
     bySource,

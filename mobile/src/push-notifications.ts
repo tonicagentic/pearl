@@ -129,23 +129,14 @@ async function ensureAndroidChannel() {
   });
 }
 
-/**
- * Ask for permission and upload the Expo push token. Safe to call repeatedly;
- * failures are swallowed so chat still works without notification access.
- */
-export async function registerForPushNotifications(): Promise<string | null> {
+async function uploadPushTokenIfGranted(): Promise<string | null> {
   installPushNotificationHandler();
 
   try {
     await ensureAndroidChannel();
 
     const existing = await Notifications.getPermissionsAsync();
-    let status = existing.status;
-    if (status !== "granted") {
-      const requested = await Notifications.requestPermissionsAsync();
-      status = requested.status;
-    }
-    if (status !== "granted") {
+    if (existing.status !== "granted") {
       return null;
     }
 
@@ -167,6 +158,53 @@ export async function registerForPushNotifications(): Promise<string | null> {
     return token;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Upload the Expo push token only when permission is already granted.
+ * Does not prompt — use `requestPushNotificationPermission` from Profile.
+ */
+export async function registerForPushNotifications(): Promise<string | null> {
+  return uploadPushTokenIfGranted();
+}
+
+/** Current OS notification permission (does not prompt). */
+export async function getPushPermissionStatus(): Promise<
+  "granted" | "denied" | "undetermined"
+> {
+  try {
+    const existing = await Notifications.getPermissionsAsync();
+    if (existing.status === "granted") return "granted";
+    if (existing.status === "denied") return "denied";
+    return "undetermined";
+  } catch {
+    return "undetermined";
+  }
+}
+
+/**
+ * Prompt once for notification permission, then upload the token when granted.
+ */
+export async function requestPushNotificationPermission(): Promise<
+  "granted" | "denied" | "undetermined"
+> {
+  installPushNotificationHandler();
+  try {
+    await ensureAndroidChannel();
+    const existing = await Notifications.getPermissionsAsync();
+    let status = existing.status;
+    if (status !== "granted") {
+      const requested = await Notifications.requestPermissionsAsync();
+      status = requested.status;
+    }
+    if (status === "granted") {
+      await uploadPushTokenIfGranted();
+      return "granted";
+    }
+    return status === "denied" ? "denied" : "undetermined";
+  } catch {
+    return "undetermined";
   }
 }
 

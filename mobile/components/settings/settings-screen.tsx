@@ -2,6 +2,7 @@ import { useCallback, useState, useSyncExternalStore } from "react";
 import { Alert, Platform, Pressable, StyleSheet, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import {
+  BellIcon,
   BotIcon,
   BrainIcon,
   CalendarIcon,
@@ -48,6 +49,14 @@ import {
   type ConnectionStatus,
 } from "@/src/connections-client";
 import { listCalendarAccounts } from "@/src/calendar-accounts-client";
+import { openWebUrlExternally } from "@/src/open-web-url";
+import {
+  getPushPermissionStatus,
+  requestPushNotificationPermission,
+} from "@/src/push-notifications";
+
+const PRIVACY_URL = "https://pearl.diy/privacy";
+const TERMS_URL = "https://pearl.diy/terms";
 import { listMailboxes } from "@/src/mailboxes-client";
 import { fetchCapabilities } from "@/src/capabilities-client";
 import { fetchMemories } from "@/src/memory-client";
@@ -91,10 +100,17 @@ export function SettingsScreen() {
     "What you can sell",
   );
   const [usageDetail, setUsageDetail] = useState("Spend by period");
+  const [pushStatus, setPushStatus] = useState<
+    "granted" | "denied" | "undetermined" | "loading"
+  >("loading");
+  const [pushPending, setPushPending] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      void getPushPermissionStatus().then((status) => {
+        if (!cancelled) setPushStatus(status);
+      });
       void fetchMemories()
         .then((snapshot) => {
           if (!cancelled) setMemoryDetail(memoryCountLabel(snapshot.entries.length));
@@ -253,8 +269,15 @@ export function SettingsScreen() {
   const showSelfHost =
     !isHostedLocked() && search.matches("Self-host", agentHostLabel);
   const showSignOut = search.matches("Sign out");
+  const showNotifications = search.matches(
+    "Notifications",
+    "Enable",
+    "push",
+    "alerts",
+  );
 
-  const showAccountSection = showAccount || showEmail || showCalendar;
+  const showAccountSection =
+    showAccount || showEmail || showCalendar || showNotifications;
   const showAppsCard = showWorkspaces || showMoney || showTasks;
   const showThink =
     showAnswers || showResearch || showPlan || showDrafting || showAnalysis;
@@ -297,7 +320,7 @@ export function SettingsScreen() {
                 label="Email"
                 detail={emailDetail}
                 onPress={() => router.push("/settings/email")}
-                showSeparator={showCalendar}
+                showSeparator={showCalendar || showNotifications}
               />
             ) : null}
             {showCalendar ? (
@@ -308,6 +331,38 @@ export function SettingsScreen() {
                 label="Calendar"
                 detail={calendarRowDetail}
                 onPress={() => router.push("/settings/calendar")}
+                showSeparator={showNotifications}
+              />
+            ) : null}
+            {showNotifications ? (
+              <SettingsRow
+                icon={
+                  <Icon as={BellIcon} className="size-5 text-muted-foreground" />
+                }
+                label="Notifications"
+                detail={
+                  pushStatus === "granted"
+                    ? "On"
+                    : pushStatus === "denied"
+                      ? "Off — enable in Settings"
+                      : pushPending
+                        ? "Enabling…"
+                        : "Enable"
+                }
+                onPress={() => {
+                  if (pushStatus === "granted" || pushPending) return;
+                  if (pushStatus === "denied") {
+                    Alert.alert(
+                      "Notifications are off",
+                      "Enable Pearl notifications in iOS Settings → Pearl.",
+                    );
+                    return;
+                  }
+                  setPushPending(true);
+                  void requestPushNotificationPermission()
+                    .then((next) => setPushStatus(next))
+                    .finally(() => setPushPending(false));
+                }}
               />
             ) : null}
           </Section>
@@ -589,9 +644,34 @@ export function SettingsScreen() {
         ) : null}
 
         {search.active ? null : (
-          <Text variant="caption" className="px-1 pb-2 text-center opacity-70">
-            Pearl {getAppVersionDetail()}
-          </Text>
+          <View className="items-center gap-2 px-1 pb-2">
+            <View className="flex-row items-center gap-3">
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel="Privacy policy"
+                onPress={() => openWebUrlExternally(PRIVACY_URL)}
+              >
+                <Text variant="caption" className="opacity-70 underline">
+                  Privacy
+                </Text>
+              </Pressable>
+              <Text variant="caption" className="opacity-40">
+                ·
+              </Text>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel="Terms of service"
+                onPress={() => openWebUrlExternally(TERMS_URL)}
+              >
+                <Text variant="caption" className="opacity-70 underline">
+                  Terms
+                </Text>
+              </Pressable>
+            </View>
+            <Text variant="caption" className="opacity-70">
+              Pearl {getAppVersionDetail()}
+            </Text>
+          </View>
         )}
       </SheetScaffold>
     </ScreenChrome>

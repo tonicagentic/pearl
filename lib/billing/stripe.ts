@@ -75,6 +75,61 @@ export async function createSubscriptionCheckoutSession(input: {
   return { url: session.url, sessionId: session.id };
 }
 
+/**
+ * Collect a card for Apple subscribers who want Metronome pay-as-you-go usage.
+ * Does not create a Stripe subscription — the base plan stays on StoreKit.
+ */
+export async function createExtendedUsageSetupSession(input: {
+  readonly userId: string;
+  readonly email: string;
+  readonly stripeCustomerId?: string | null;
+  readonly successPath?: string;
+  readonly cancelPath?: string;
+}): Promise<{
+  readonly url: string;
+  readonly sessionId: string;
+  readonly stripeCustomerId: string;
+}> {
+  const stripe = getStripe();
+  if (!stripe) {
+    throw new Error("Stripe is not configured.");
+  }
+
+  const origin = getEffectiveAppUrl().replace(/\/$/, "");
+  const successPath = input.successPath ?? "/billing/success";
+  const cancelPath = input.cancelPath ?? "/billing";
+
+  let customerId = input.stripeCustomerId ?? null;
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: input.email,
+      metadata: { userId: input.userId },
+    });
+    customerId = customer.id;
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "setup",
+    customer: customerId,
+    client_reference_id: input.userId,
+    success_url: `${origin}${successPath}?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}${cancelPath}`,
+    metadata: { userId: input.userId, purpose: "extended_usage" },
+    currency: "usd",
+    integration_identifier: `pearl_usage_${randomSuffix()}`,
+  });
+
+  if (!session.url) {
+    throw new Error("Stripe Checkout Session has no URL.");
+  }
+
+  return {
+    url: session.url,
+    sessionId: session.id,
+    stripeCustomerId: customerId,
+  };
+}
+
 export async function createCustomerPortalSession(input: {
   readonly stripeCustomerId: string;
   readonly returnPath?: string;

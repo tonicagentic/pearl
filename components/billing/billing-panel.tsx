@@ -21,6 +21,10 @@ type BillingStatus = {
   readonly remainingCents: number | null;
   readonly periodStart: string | null;
   readonly periodEnd: string | null;
+  readonly paymentProvider?: "stripe" | "apple" | null;
+  readonly prepaidCreditCents?: number;
+  readonly hasAppleSubscription?: boolean;
+  readonly hasExtendedUsageBilling?: boolean;
   readonly hasPortal: boolean;
   readonly bySource: readonly { readonly source: string; readonly costCents: number }[];
 };
@@ -97,6 +101,26 @@ export function BillingPanel() {
     }
   }
 
+  async function enableExtendedUsage() {
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/billing/extended-usage", {
+        method: "POST",
+      });
+      const body = (await response.json()) as { url?: string; error?: string };
+      if (!response.ok || !body.url) {
+        setError(body.error ?? "Could not start extended usage billing.");
+        setPending(false);
+        return;
+      }
+      window.location.assign(body.url);
+    } catch {
+      setError("Could not start extended usage billing.");
+      setPending(false);
+    }
+  }
+
   async function saveCap() {
     setPending(true);
     setError(null);
@@ -135,7 +159,11 @@ export function BillingPanel() {
             ? "This account has a free pass and is not invoiced."
             : status.trial
               ? "Friend beta — included monthly allowance (not billed to you)."
-              : "Subscription plus metered usage for this billing period."}
+              : status.paymentProvider === "apple"
+                ? status.hasExtendedUsageBilling
+                  ? "Apple subscription plus automatic usage billing on your card."
+                  : "Apple subscription with included usage. Buy credit packs in the iOS app, or enable automatic usage billing below."
+                : "Subscription plus metered usage for this billing period."}
         </p>
       </div>
 
@@ -216,6 +244,24 @@ export function BillingPanel() {
               Manage card
             </Button>
           ) : null}
+        </div>
+      ) : null}
+
+      {status.hasAppleSubscription && !status.hasExtendedUsageBilling ? (
+        <div className="space-y-2 rounded-md border border-dashed p-3">
+          <p className="text-xs text-muted-foreground">
+            Enable automatic usage billing to invoice overage to a card via
+            Stripe (Metronome). Your Apple subscription stays the base plan.
+          </p>
+          <Button
+            disabled={pending}
+            onClick={() => void enableExtendedUsage()}
+            type="button"
+            variant="outline"
+          >
+            {pending ? <Loader2Icon className="size-4 animate-spin" /> : null}
+            Enable automatic usage billing
+          </Button>
         </div>
       ) : null}
 

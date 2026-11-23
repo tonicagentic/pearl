@@ -755,13 +755,21 @@ export const billingAccount = pgTable(
     userId: text("user_id")
       .primaryKey()
       .references(() => user.id, { onDelete: "cascade" }),
-    stripeCustomerId: text("stripe_customer_id").notNull(),
+    /** Null for Apple-only subscribers until they enable web usage billing. */
+    stripeCustomerId: text("stripe_customer_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
     status: text("status").notNull().default("incomplete"),
     periodStart: timestamp("period_start"),
     periodEnd: timestamp("period_end"),
     usageCapCents: integer("usage_cap_cents").notNull().default(5000),
     metronomeCustomerId: text("metronome_customer_id"),
+    /** `stripe` | `apple` — which store owns the base subscription. */
+    paymentProvider: text("payment_provider").notNull().default("stripe"),
+    appleOriginalTransactionId: text("apple_original_transaction_id"),
+    appleProductId: text("apple_product_id"),
+    appleEnvironment: text("apple_environment"),
+    /** Prepaid usage credits from Apple consumable packs (does not reset monthly). */
+    prepaidCreditCents: integer("prepaid_credit_cents").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -772,10 +780,37 @@ export const billingAccount = pgTable(
     uniqueIndex("idx_billing_account_stripe_subscription").on(
       table.stripeSubscriptionId,
     ),
+    uniqueIndex("idx_billing_account_apple_original").on(
+      table.appleOriginalTransactionId,
+    ),
   ],
 );
 
 export type BillingAccount = typeof billingAccount.$inferSelect;
+
+/**
+ * Redeemed Apple IAP transaction ids (subscription renewals + consumables).
+ * Idempotency for verify + App Store Server Notifications.
+ */
+export const appleIapTransaction = pgTable(
+  "apple_iap_transaction",
+  {
+    transactionId: text("transaction_id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    productId: text("product_id").notNull(),
+    /** `subscription` | `consumable` */
+    kind: text("kind").notNull(),
+    creditCents: integer("credit_cents").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_apple_iap_transaction_user").on(table.userId),
+  ],
+);
+
+export type AppleIapTransaction = typeof appleIapTransaction.$inferSelect;
 
 export type UsageEventSource =
   | "model"
