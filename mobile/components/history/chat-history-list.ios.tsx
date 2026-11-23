@@ -307,6 +307,7 @@ function RecentChatRow({
       : presence === "unread"
         ? CHAT_PRESENCE_BLUE
         : null;
+  // Page: idle dots stay invisible (slot reserved). Drawer: no leading dots.
   const statusMark =
     presence === "working" ? (
       <ProgressView
@@ -371,7 +372,7 @@ function RecentChatRow({
           ) : null}
         </VStack>
         <Spacer />
-        {!isDrawer && when ? (
+        {when ? (
           <SwiftText
             modifiers={[
               foregroundStyle({ type: "hierarchical", style: "secondary" }),

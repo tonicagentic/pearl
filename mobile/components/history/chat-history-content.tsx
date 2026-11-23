@@ -70,14 +70,18 @@ export function ChatHistoryContent({
   topInset = 0,
   drawerHeader,
   onSeeAll,
+  contentBottomInset = 0,
 }: {
   readonly onOpenChat: (chatId: string) => void;
   readonly search?: ReturnType<typeof useStackSearch>;
   readonly showInlineSearch?: boolean;
   readonly chrome?: "page" | "drawer";
   readonly topInset?: number;
+  /** Scrolls with the list (drawer brand / nav / Recent chats). */
   readonly drawerHeader?: ReactNode;
   readonly onSeeAll?: () => void;
+  /** Extra list bottom padding so rows clear a sticky footer. */
+  readonly contentBottomInset?: number;
 }) {
   const { deleteChat, renameChat, setChatProject, reloadChats } = useChats();
   const inlineSearch = useStackSearch();
@@ -269,6 +273,50 @@ export function ChatHistoryContent({
     ],
   );
 
+  const searchField =
+    showInlineSearch ? (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          marginHorizontal: isDrawer ? 20 : 16,
+          marginBottom: 8,
+          paddingHorizontal: 12,
+          height: 40,
+          borderRadius: 12,
+          backgroundColor: mutedColor,
+        }}
+      >
+        <Icon as={SearchIcon} className="size-4 text-muted-foreground" />
+        <TextInput
+          accessibilityLabel="Search history"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoFocus={isDrawer}
+          clearButtonMode="while-editing"
+          onChangeText={search.setQueryText}
+          placeholder={isDrawer ? "Search" : "Search history"}
+          placeholderTextColor={mutedForeground}
+          style={{
+            flex: 1,
+            color: foregroundColor,
+            fontSize: 16,
+            paddingVertical: 0,
+          }}
+          value={search.query}
+        />
+      </View>
+    ) : null;
+
+  // Drawer: brand/nav/search scroll with the list. Page: search stays above.
+  const scrollingHeader = isDrawer ? (
+    <View>
+      {drawerHeader}
+      {searchField}
+    </View>
+  ) : null;
+
   return (
     <View
       style={{
@@ -277,42 +325,11 @@ export function ChatHistoryContent({
         paddingTop: topInset,
       }}
     >
-      {showInlineSearch ? (
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            marginHorizontal: isDrawer ? 20 : 16,
-            marginBottom: 8,
-            paddingHorizontal: 12,
-            height: 40,
-            borderRadius: 12,
-            backgroundColor: mutedColor,
-          }}
-        >
-          <Icon as={SearchIcon} className="size-4 text-muted-foreground" />
-          <TextInput
-            accessibilityLabel="Search history"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoFocus={isDrawer}
-            clearButtonMode="while-editing"
-            onChangeText={search.setQueryText}
-            placeholder={isDrawer ? "Search" : "Search history"}
-            placeholderTextColor={mutedForeground}
-            style={{
-              flex: 1,
-              color: foregroundColor,
-              fontSize: 16,
-              paddingVertical: 0,
-            }}
-            value={search.query}
-          />
-        </View>
-      ) : null}
-      {drawerHeader}
-      {Platform.OS === "ios" ? (
+      {!isDrawer ? searchField : null}
+      {!isDrawer && drawerHeader ? drawerHeader : null}
+      {/* Drawer needs an RN list header (brand/nav). SwiftUI List + RNHostView
+          collapses that row to zero height, so drawer always uses FlatList. */}
+      {Platform.OS === "ios" && !isDrawer ? (
         <ChatHistoryListIOS
           onOpenChat={onOpenChat}
           actions={chatActions}
@@ -327,6 +344,8 @@ export function ChatHistoryContent({
           search={searchFeed}
           chrome={chrome}
           onSeeAll={onSeeAll}
+          listHeader={scrollingHeader}
+          contentBottomInset={contentBottomInset}
         />
       )}
       <ThreadCostDrawer
@@ -366,12 +385,16 @@ export function ChatHistoryListAndroid({
   search,
   chrome = "page",
   onSeeAll,
+  listHeader,
+  contentBottomInset = 0,
 }: {
   readonly onOpenChat: (chatId: string) => void;
   readonly actions: HistoryChatActionHandlers;
   readonly search: ChatHistorySearchFeed;
   readonly chrome?: "page" | "drawer";
   readonly onSeeAll?: () => void;
+  readonly listHeader?: ReactNode;
+  readonly contentBottomInset?: number;
 }) {
   const isDrawer = chrome === "drawer";
   const { signedIn } = useAuth();
@@ -463,7 +486,10 @@ export function ChatHistoryListAndroid({
       <FlatList
         className="flex-1"
         contentContainerClassName={isDrawer ? "px-1 pt-0" : "px-4 pt-0"}
-        contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }}
+        contentContainerStyle={{
+          paddingBottom: 32 + contentBottomInset,
+          flexGrow: 1,
+        }}
         data={rows}
         keyboardShouldPersistTaps="handled"
         extraData={`${activeChatId}:${search.active}:${rows.map((chat) => chat.presence ?? (chat.waitingForInput ? "waiting" : "idle")).join("")}`}
@@ -475,6 +501,7 @@ export function ChatHistoryListAndroid({
         }
         ListHeaderComponent={
           <>
+            {listHeader}
             {!search.active && selectionError ? (
               <Text
                 className="px-3 py-2 text-sm text-destructive"
@@ -585,7 +612,6 @@ function HistoryChatRowAndroid({
       : presence === "unread"
         ? CHAT_PRESENCE_BLUE
         : null;
-
   return (
     <Pressable
       accessibilityRole="button"
@@ -648,7 +674,7 @@ function HistoryChatRowAndroid({
           </View>
         ) : null}
       </View>
-      {!isDrawer && when ? (
+      {when ? (
         <Text className="shrink-0 text-xs text-muted-foreground">{when}</Text>
       ) : null}
     </Pressable>

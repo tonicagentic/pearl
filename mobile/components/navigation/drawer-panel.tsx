@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -17,6 +17,7 @@ import {
   XIcon,
 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { useCSSVariable } from "uniwind";
 
 import { ChatHistoryContent } from "@/components/history/chat-history-content";
@@ -28,14 +29,14 @@ import { initials as viewerInitials } from "@/src/initials";
 import {
   usePearlDrawerBackground,
   usePearlForeground,
-  usePearlHairlineBorder,
   usePearlMutedBackground,
   usePearlPressWash,
 } from "@/src/navigation-theme";
-import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 
 const CHAT_PILL_BLUE = "#007AFF";
-const PINNED_LIMIT = 4;
+/** Space reserved under the list so rows can scroll clear of the sticky footer. */
+const FOOTER_CLEARANCE = 72;
+const FOOTER_FADE_HEIGHT = 56;
 
 const NAV_ROWS = [
   {
@@ -60,8 +61,8 @@ type DrawerPanelNav = {
 };
 
 /**
- * ChatGPT-style drawer body: brand + search, icon nav, pinned projects,
- * flat chat history, bottom Chat pill + profile.
+ * ChatGPT-style drawer body: one scrolling column (brand → nav → recent chats),
+ * sticky Chat + profile with a soft fade so list content dissolves behind them.
  */
 export function DrawerPanel({
   navigation,
@@ -96,30 +97,12 @@ export function DrawerPanel({
   const mutedColor = usePearlMutedBackground();
   const drawerBackground = usePearlDrawerBackground();
   const pressWash = usePearlPressWash();
-  const hairline = usePearlHairlineBorder();
   const [drawerSearchOpen, setDrawerSearchOpen] = useState(false);
-  const [projects, setProjects] = useState<readonly ProjectDto[]>([]);
   const profileInitials = isAnonymous
     ? null
     : viewerInitials(viewerName, viewerEmail);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchProjects()
-      .then((rows) => {
-        if (cancelled) return;
-        const sorted = [...rows].sort((a, b) =>
-          b.updatedAt.localeCompare(a.updatedAt),
-        );
-        setProjects(sorted.slice(0, PINNED_LIMIT));
-      })
-      .catch(() => {
-        if (!cancelled) setProjects([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const bottomPad = Math.max(insets.bottom, 12);
+  const listBottomInset = FOOTER_CLEARANCE + bottomPad;
 
   const go = useCallback(
     (href: string, options?: { readonly withAnchor?: boolean }) => {
@@ -160,21 +143,13 @@ export function DrawerPanel({
     go("/history");
   }, [go]);
 
-  return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: drawerBackground,
-        paddingBottom: Math.max(insets.bottom, 12),
-        paddingTop: Math.max(insets.top, 8),
-      }}
-    >
+  const scrollingHeader = (
+    <View>
       <View
         style={{
           paddingHorizontal: 20,
-          paddingTop: 4,
+          paddingTop: Math.max(insets.top, 8) + 4,
           paddingBottom: 4,
-          gap: 10,
         }}
       >
         <View
@@ -219,129 +194,145 @@ export function DrawerPanel({
         </View>
       </View>
 
+      <View style={{ paddingHorizontal: 8, paddingBottom: 8, gap: 2 }}>
+        {NAV_ROWS.map((row) => (
+          <DrawerNavRow
+            key={row.href}
+            label={row.label}
+            icon={row.Icon}
+            onPress={() => go(row.href)}
+            color={foregroundColor}
+            pressWash={pressWash}
+          />
+        ))}
+        <Text
+          style={{
+            color: mutedForeground ?? "#8E8E93",
+            fontSize: 13,
+            fontWeight: "600",
+            paddingHorizontal: 12,
+            paddingTop: 14,
+            paddingBottom: 6,
+          }}
+        >
+          Recent chats
+        </Text>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: drawerBackground }}>
       <View style={{ flex: 1 }}>
         <ChatHistoryContent
           chrome="drawer"
           showInlineSearch={drawerSearchOpen}
           onOpenChat={openChatFromDrawer}
           onSeeAll={openSeeAll}
-          drawerHeader={
-            <View style={{ paddingHorizontal: 8, paddingBottom: 8, gap: 2 }}>
-              {NAV_ROWS.map((row) => (
-                <DrawerNavRow
-                  key={row.href}
-                  label={row.label}
-                  icon={row.Icon}
-                  onPress={() => go(row.href)}
-                  color={foregroundColor}
-                  pressWash={pressWash}
-                />
-              ))}
-              {projects.length > 0 ? (
-                <View style={{ marginTop: 14, gap: 2 }}>
-                  <Text
-                    style={{
-                      color: mutedForeground ?? "#8E8E93",
-                      fontSize: 13,
-                      fontWeight: "600",
-                      paddingHorizontal: 12,
-                      paddingBottom: 6,
-                    }}
-                  >
-                    Pinned
-                  </Text>
-                  {projects.map((project) => (
-                    <DrawerNavRow
-                      key={project.id}
-                      label={project.name}
-                      icon={FolderIcon}
-                      onPress={() =>
-                        go(`/workspaces/projects/${project.id}`, {
-                          withAnchor: true,
-                        })
-                      }
-                      color={foregroundColor}
-                      pressWash={pressWash}
-                    />
-                  ))}
-                </View>
-              ) : null}
-              <View
-                style={{
-                  height: StyleSheet.hairlineWidth,
-                  backgroundColor: hairline,
-                  marginHorizontal: 12,
-                  marginTop: 12,
-                  marginBottom: 4,
-                }}
-              />
-            </View>
-          }
+          drawerHeader={scrollingHeader}
+          contentBottomInset={listBottomInset}
         />
       </View>
 
       <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: 20,
-          paddingTop: 10,
-          gap: 12,
-        }}
+        pointerEvents="box-none"
+        style={[
+          styles.footerDock,
+          {
+            paddingBottom: bottomPad,
+            backgroundColor: drawerBackground,
+          },
+        ]}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="New chat"
-          onPress={openNewChat}
+        <View pointerEvents="none" style={styles.footerFade}>
+          <Svg width="100%" height={FOOTER_FADE_HEIGHT} style={StyleSheet.absoluteFill}>
+            <Defs>
+              <LinearGradient
+                id="drawerFooterFade"
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
+              >
+                <Stop offset="0" stopColor={drawerBackground} stopOpacity="0" />
+                <Stop
+                  offset="0.55"
+                  stopColor={drawerBackground}
+                  stopOpacity="0.7"
+                />
+                <Stop offset="1" stopColor={drawerBackground} stopOpacity="1" />
+              </LinearGradient>
+            </Defs>
+            <Rect
+              width="100%"
+              height={FOOTER_FADE_HEIGHT}
+              fill="url(#drawerFooterFade)"
+            />
+          </Svg>
+        </View>
+        <View
           style={{
             flexDirection: "row",
             alignItems: "center",
-            gap: 8,
-            paddingHorizontal: 18,
-            height: 48,
-            borderRadius: 24,
-            backgroundColor: CHAT_PILL_BLUE,
+            justifyContent: "space-between",
+            paddingHorizontal: 20,
+            paddingTop: 10,
+            gap: 12,
           }}
         >
-          <Icon as={SquarePenIcon} className="size-5 text-white" />
-          <Text
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="New chat"
+            onPress={openNewChat}
             style={{
-              color: "#FFFFFF",
-              fontSize: 17,
-              fontWeight: "600",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              paddingHorizontal: 18,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: CHAT_PILL_BLUE,
             }}
           >
-            Chat
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={isAnonymous ? "Sign in" : "Profile"}
-          onPress={openProfile}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: isAnonymous ? mutedColor : "#2A9D8F",
-          }}
-        >
-          {isAnonymous ? (
-            <Icon as={UserIcon} className="size-5 text-foreground" />
-          ) : (
+            <Icon as={SquarePenIcon} className="size-5 text-white" />
             <Text
               style={{
                 color: "#FFFFFF",
-                fontSize: 14,
-                fontWeight: "700",
+                fontSize: 17,
+                fontWeight: "600",
               }}
             >
-              {profileInitials ?? "·"}
+              Chat
             </Text>
-          )}
-        </Pressable>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isAnonymous ? "Sign in" : "Profile"}
+            onPress={openProfile}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: isAnonymous ? mutedColor : "#2A9D8F",
+            }}
+          >
+            {isAnonymous ? (
+              <Icon as={UserIcon} className="size-5 text-foreground" />
+            ) : (
+              <Text
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: 14,
+                  fontWeight: "700",
+                }}
+              >
+                {profileInitials ?? "·"}
+              </Text>
+            )}
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -393,3 +384,19 @@ function DrawerNavRow({
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  footerDock: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  footerFade: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: -FOOTER_FADE_HEIGHT,
+    height: FOOTER_FADE_HEIGHT,
+  },
+});
