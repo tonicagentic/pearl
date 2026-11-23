@@ -1,4 +1,9 @@
 import './global.css';
+import * as SplashScreen from 'expo-splash-screen';
+
+// Keep the native splash up until auth restore finishes, then hand off to
+// BootReveal (logo out → app in). Call in global scope so it is not late.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // eve's SessionStore calls `crypto.randomUUID()` for optimistic submissions.
 // Hermes has no `crypto` global, and `crypto.randomUUID?.()` still throws

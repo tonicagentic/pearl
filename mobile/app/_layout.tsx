@@ -1,11 +1,13 @@
 import { Stack, ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as SplashScreen from "expo-splash-screen";
 import { Platform, View } from "react-native";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "@/src/keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { BootReveal } from "@/components/boot-fade-overlay";
 import { ObserveErrorFallback } from "@/components/observe-error-fallback";
 import { PushNotificationsBridge } from "@/components/push-notifications-bridge";
 import { applyUpdatesOnLaunch } from "@/src/apply-updates";
@@ -97,6 +99,17 @@ function AuthenticatedLayout() {
     );
     void applyUpdatesOnLaunch();
   }, []);
+
+  // Native splash stays up while restoring. Once BootReveal mounts, drop the
+  // native splash so the JS sequence (logo out → app in) takes over.
+  useEffect(() => {
+    if (restoring) return;
+    const frame = requestAnimationFrame(() => {
+      void SplashScreen.hideAsync().catch(() => {});
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [restoring]);
+
   // Dispose in-memory chat state whenever an account signs out or changes.
   const hasAccount = signedIn && !isAnonymous;
   const accountKey = hasAccount ? `account:${viewerEmail}` : "signed-out";
@@ -123,128 +136,131 @@ function AuthenticatedLayout() {
               {restoring ? (
                 // Don't mount the navigator until we know the zone — otherwise
                 // restore paints sign-in then pushes (home), and the nav chrome
-                // slides in with the default stack animation.
+                // slides in with the default stack animation. Native splash
+                // still covers this until hideAsync runs.
                 <View style={{ flex: 1, backgroundColor }} />
               ) : (
-                <ThemeProvider value={navigationTheme}>
-                <Stack
-                  // Remount per auth zone so home is the initial route, not a
-                  // push on top of sign-in (animation: "none" alone is ignored
-                  // for Protected guard swaps on iOS native-stack).
-                  key={hasAccount ? "app" : "auth"}
-                  screenOptions={({ route }) =>
-                    route.name === "(drawer)" || route.name === "sign-in"
-                      ? {
+                <BootReveal>
+                  <ThemeProvider value={navigationTheme}>
+                  <Stack
+                    // Remount per auth zone so home is the initial route, not a
+                    // push on top of sign-in (animation: "none" alone is ignored
+                    // for Protected guard swaps on iOS native-stack).
+                    key={hasAccount ? "app" : "auth"}
+                    screenOptions={({ route }) =>
+                      route.name === "(drawer)" || route.name === "sign-in"
+                        ? {
+                            animation: "none",
+                            animationTypeForReplace: "pop",
+                            contentStyle: { backgroundColor },
+                            headerStyle: { backgroundColor },
+                            headerTintColor,
+                          }
+                        : {
+                            contentStyle: { backgroundColor },
+                            headerStyle: { backgroundColor },
+                            headerTintColor,
+                          }
+                    }
+                  >
+                    <Stack.Protected
+                      guard={signedOut}
+                      redirectTo="/"
+                    >
+                      <Stack.Screen
+                        name="sign-in"
+                        options={{
+                          headerShown: false,
+                          animation: "none",
+                          gestureEnabled: true,
+                        }}
+                      />
+                    </Stack.Protected>
+                    <Stack.Protected guard={signedOut} redirectTo="/">
+                      <Stack.Screen
+                        name="reset-password"
+                        options={{
+                          title: "Reset password",
+                          headerShown: true,
+                          headerBackButtonDisplayMode: "minimal",
+                        }}
+                      />
+                    </Stack.Protected>
+
+                    <Stack.Protected guard={__DEV__}>
+                      <Stack.Screen
+                        name="json-render-smoke"
+                        options={{ title: "json-render smoke" }}
+                      />
+                      <Stack.Screen
+                        name="thread-samples"
+                        options={{
+                          title: "Thread samples",
+                          headerShown: true,
+                          headerBackButtonDisplayMode: "minimal",
+                        }}
+                      />
+                      <Stack.Screen
+                        name="thread-inspector"
+                        options={{
+                          title: "RN Thread Inspector",
+                          headerShown: true,
+                          headerBackButtonDisplayMode: "minimal",
+                        }}
+                      />
+                    </Stack.Protected>
+
+                    <Stack.Protected guard={appReady} redirectTo="/sign-in">
+                      <Stack.Screen
+                        name="(drawer)"
+                        options={{
+                          headerShown: false,
                           animation: "none",
                           animationTypeForReplace: "pop",
-                          contentStyle: { backgroundColor },
-                          headerStyle: { backgroundColor },
-                          headerTintColor,
-                        }
-                      : {
-                          contentStyle: { backgroundColor },
-                          headerStyle: { backgroundColor },
-                          headerTintColor,
-                        }
-                  }
-                >
-                  <Stack.Protected
-                    guard={signedOut}
-                    redirectTo="/"
-                  >
-                    <Stack.Screen
-                      name="sign-in"
-                      options={{
-                        headerShown: false,
-                        animation: "none",
-                        gestureEnabled: true,
-                      }}
-                    />
-                  </Stack.Protected>
-                  <Stack.Protected guard={signedOut} redirectTo="/">
-                    <Stack.Screen
-                      name="reset-password"
-                      options={{
-                        title: "Reset password",
-                        headerShown: true,
-                        headerBackButtonDisplayMode: "minimal",
-                      }}
-                    />
-                  </Stack.Protected>
-
-                  <Stack.Protected guard={__DEV__}>
-                    <Stack.Screen
-                      name="json-render-smoke"
-                      options={{ title: "json-render smoke" }}
-                    />
-                    <Stack.Screen
-                      name="thread-samples"
-                      options={{
-                        title: "Thread samples",
-                        headerShown: true,
-                        headerBackButtonDisplayMode: "minimal",
-                      }}
-                    />
-                    <Stack.Screen
-                      name="thread-inspector"
-                      options={{
-                        title: "RN Thread Inspector",
-                        headerShown: true,
-                        headerBackButtonDisplayMode: "minimal",
-                      }}
-                    />
-                  </Stack.Protected>
-
-                  <Stack.Protected guard={appReady} redirectTo="/sign-in">
-                    <Stack.Screen
-                      name="(drawer)"
-                      options={{
-                        headerShown: false,
-                        animation: "none",
-                        animationTypeForReplace: "pop",
-                      }}
-                    />
-                    <Stack.Screen
-                      name="repos"
-                      options={{ headerShown: false }}
-                    />
-                    <Stack.Screen
-                      name="workbench/index"
-                      options={{
-                        title: "Repos",
-                        headerShown: true,
-                        headerBackButtonDisplayMode: "minimal",
-                      }}
-                    />
-                    <Stack.Screen
-                      name="workbench/[id]"
-                      options={{
-                        title: "Repo",
-                        headerShown: true,
-                        headerBackButtonDisplayMode: "minimal",
-                      }}
-                    />
-                    {/* Reachable via pearl:///stream-playground; Settings gates
-                        visibility to __DEV__ or unlocked internal builds. */}
-                    <Stack.Screen
-                      name="stream-playground"
-                      options={{
-                        title: "Stream playground",
-                        headerShown: true,
-                        headerBackButtonDisplayMode: "minimal",
-                      }}
-                    />
-                    <Stack.Screen
-                      name="browser"
-                      options={{
-                        title: "Browser",
-                        headerShown: false,
-                        presentation: "modal",
-                      }}
-                    />
-                  </Stack.Protected>
-                </Stack>
-                </ThemeProvider>
+                        }}
+                      />
+                      <Stack.Screen
+                        name="repos"
+                        options={{ headerShown: false }}
+                      />
+                      <Stack.Screen
+                        name="workbench/index"
+                        options={{
+                          title: "Repos",
+                          headerShown: true,
+                          headerBackButtonDisplayMode: "minimal",
+                        }}
+                      />
+                      <Stack.Screen
+                        name="workbench/[id]"
+                        options={{
+                          title: "Repo",
+                          headerShown: true,
+                          headerBackButtonDisplayMode: "minimal",
+                        }}
+                      />
+                      {/* Reachable via pearl:///stream-playground; Settings gates
+                          visibility to __DEV__ or unlocked internal builds. */}
+                      <Stack.Screen
+                        name="stream-playground"
+                        options={{
+                          title: "Stream playground",
+                          headerShown: true,
+                          headerBackButtonDisplayMode: "minimal",
+                        }}
+                      />
+                      <Stack.Screen
+                        name="browser"
+                        options={{
+                          title: "Browser",
+                          headerShown: false,
+                          presentation: "modal",
+                        }}
+                      />
+                    </Stack.Protected>
+                  </Stack>
+                  </ThemeProvider>
+                </BootReveal>
               )}
             </KeyboardProvider>
           </SafeAreaProvider>

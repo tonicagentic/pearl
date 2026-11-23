@@ -92,7 +92,7 @@ export function PearlIntroPager({
         scrollEventThrottle={16}
         style={styles.pager}
       >
-        {PEARL_INTRO_PANELS.map((panel) => (
+        {PEARL_INTRO_PANELS.map((panel, pageIndex) => (
           <View key={panel.id} style={[styles.page, { width: pageWidth }]}>
             <View
               style={[
@@ -100,7 +100,10 @@ export function PearlIntroPager({
                 compact ? styles.graphicCompact : null,
               ]}
             >
-              <PearlIntroGraphic panelId={panel.id} />
+              <PearlIntroGraphic
+                panelId={panel.id}
+                active={pageIndex === index}
+              />
             </View>
             <View style={styles.copy}>
               <Text

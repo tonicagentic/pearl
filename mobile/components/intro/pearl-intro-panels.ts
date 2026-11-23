@@ -1,171 +1,179 @@
-export type PearlIntroPanelId =
-  | "meet"
-  | "research"
-  | "agents"
-  | "loop"
-  | "privacy";
+import type { Spec } from "@json-render/core";
 
-export type PearlIntroBubbleKind = "user" | "pearl" | "status";
+export type PearlIntroPanelId = "easier" | "handled" | "list";
 
-export type PearlIntroBubble = {
-  readonly text: string;
-  readonly kind: PearlIntroBubbleKind;
-  /** Absolute position as % of graphic area. Keep clear of the center mark. */
-  readonly top: number;
-  readonly left: number;
-  /** Degrees of rotation. */
-  readonly rotate: number;
+export type PearlIntroTask = {
+  readonly verb: string;
+  readonly rest: string;
 };
+
+export type PearlIntroCard =
+  | { readonly kind: "spec"; readonly spec: Spec }
+  | { readonly kind: "tasks"; readonly tasks: readonly PearlIntroTask[] };
+
+export type PearlIntroTurn =
+  | { readonly role: "user"; readonly text: string }
+  | {
+      readonly role: "assistant";
+      readonly text: string;
+      readonly card?: PearlIntroCard;
+    };
 
 export type PearlIntroPanel = {
   readonly id: PearlIntroPanelId;
   readonly title: string;
   readonly body: string;
-  readonly bubbles: readonly PearlIntroBubble[];
+  /** Two-beat thread: user → reply (+ card) → user → reply. */
+  readonly turns: readonly PearlIntroTurn[];
+};
+
+/** Homepage EverydayVisual — AI investments table. */
+const investmentsSpec: Spec = {
+  root: "card",
+  elements: {
+    card: {
+      type: "Card",
+      props: { title: null, description: null },
+      children: ["table"],
+    },
+    table: {
+      type: "Table",
+      props: {
+        columns: ["Company", "Round", "Lead"],
+        rows: [
+          ["OpenAI", "$40B", "SoftBank"],
+          ["Anthropic", "$13B", "Spark"],
+          ["xAI", "$10B", "Valor"],
+        ],
+      },
+      children: [],
+    },
+  },
+};
+
+/** Homepage Portfolio Ask example — trimmed timeline. */
+const portfolioSpec: Spec = {
+  root: "card",
+  elements: {
+    card: {
+      type: "Card",
+      props: { title: "Portfolio build", description: null },
+      children: ["timeline"],
+    },
+    timeline: {
+      type: "Timeline",
+      props: {
+        visibleCount: null,
+        events: [
+          {
+            id: "structure",
+            when: "past",
+            time: "Done",
+            title: "Site structure",
+            detail: "Home grid, project pages, about.",
+          },
+          {
+            id: "gallery",
+            when: "now",
+            time: "Now",
+            title: "Warm paper gallery",
+            detail: "Serif type, full-bleed selects.",
+          },
+          {
+            id: "ship",
+            when: "future",
+            time: "Ship",
+            title: "Deploy + custom domain",
+            detail: null,
+          },
+        ],
+      },
+      children: [],
+    },
+  },
 };
 
 /**
- * Shared copy + collage seeds for the signed-out intro and Settings → About.
- * Three bubbles per panel, inset from edges so rotation does not clip.
+ * Shared copy + thread previews for the signed-out intro and Settings → About.
+ * Prompts / cards mirror homepage hero and capability-band examples.
  */
 export const PEARL_INTRO_PANELS: readonly PearlIntroPanel[] = [
   {
-    id: "meet",
-    title: "Meet Pearl, your agentic assistant.",
-    body: "Pearl helps you work with agents.",
-    bubbles: [
+    id: "easier",
+    title: "Make everyday easier",
+    body: "One thread for whatever you need — research, drafts, bookings, and the small stuff that piles up.",
+    turns: [
       {
-        text: "Plan the launch checklist",
-        kind: "user",
-        top: 6,
-        left: 6,
-        rotate: -7,
+        role: "user",
+        text: "What are the biggest AI investments this year?",
       },
       {
-        text: "On it.",
-        kind: "pearl",
-        top: 14,
-        left: 56,
-        rotate: 6,
+        role: "assistant",
+        text: "Ranked by round size — here are the ones that moved the needle.",
+        card: { kind: "spec", spec: investmentsSpec },
       },
       {
-        text: "Working in the sandbox…",
-        kind: "status",
-        top: 72,
-        left: 18,
-        rotate: -4,
+        role: "user",
+        text: "Who led the Anthropic round?",
+      },
+      {
+        role: "assistant",
+        text: "Spark Capital led the $13B raise.",
       },
     ],
   },
   {
-    id: "research",
-    title: "Ask Pearl anything",
-    body: "It can find answers from the web and your connected sources, and do work with a cloud computer — open sites, edit files, and take actions on your apps.",
-    bubbles: [
+    id: "handled",
+    title: "Consider it handled",
+    body: "Delegate to specialists with a cloud computer, and connect your apps so Pearl can finish the work.",
+    turns: [
       {
-        text: "Compare these three vendors",
-        kind: "user",
-        top: 6,
-        left: 8,
-        rotate: -6,
+        role: "user",
+        text: "Help me build a calm portfolio site — warm paper, passworded client galleries.",
       },
       {
-        text: "Pulled from the web + Sheets",
-        kind: "pearl",
-        top: 16,
-        left: 52,
-        rotate: 5,
+        role: "assistant",
+        text: "Scaffolding Next.js with a home grid and shared-password galleries.",
+        card: { kind: "spec", spec: portfolioSpec },
       },
       {
-        text: "Browser · docs open",
-        kind: "status",
-        top: 72,
-        left: 22,
-        rotate: 3,
+        role: "user",
+        text: "Ship it when the gallery feels ready.",
+      },
+      {
+        role: "assistant",
+        text: "On it — specialist’s building in the sandbox, then we’ll deploy.",
       },
     ],
   },
   {
-    id: "agents",
-    title: "Specialized agents on call",
-    body: "Pearl can delegate work to specialized agents built by Tonic Agentic — focused helpers for research, coding, and more.",
-    bubbles: [
+    id: "list",
+    title: "Tap it off your list",
+    body: "Pearl suggests what to do next from what it knows about you. Tap once and it runs the action.",
+    turns: [
       {
-        text: "Hand this to the coder agent",
-        kind: "user",
-        top: 6,
-        left: 6,
-        rotate: -6,
+        role: "user",
+        text: "Find me three things you can help me with now.",
       },
       {
-        text: "Delegating to Coder…",
-        kind: "status",
-        top: 16,
-        left: 54,
-        rotate: 5,
+        role: "assistant",
+        text: "From your inbox and calendar — tap any to run it.",
+        card: {
+          kind: "tasks",
+          tasks: [
+            { verb: "Archive", rest: "61 newsletter threads in Gmail" },
+            { verb: "Draft", rest: "reply to Maya on the hiring thread" },
+            { verb: "Book", rest: "UCSF Imaging — Thu 2:40p" },
+          ],
+        },
       },
       {
-        text: "Research agent: sources ready",
-        kind: "pearl",
-        top: 72,
-        left: 16,
-        rotate: 3,
-      },
-    ],
-  },
-  {
-    id: "loop",
-    title: "Stay in the loop",
-    body: "Message or call Pearl in the app. Share updates, ask questions, or change directions. When something needs your attention, Pearl gets in touch.",
-    bubbles: [
-      {
-        text: "Need a quick decision",
-        kind: "pearl",
-        top: 8,
-        left: 8,
-        rotate: -5,
+        role: "user",
+        text: "Archive the newsletters.",
       },
       {
-        text: "Call me when you’re free",
-        kind: "user",
-        top: 16,
-        left: 52,
-        rotate: 5,
-      },
-      {
-        text: "Incoming call",
-        kind: "status",
-        top: 72,
-        left: 28,
-        rotate: 2,
-      },
-    ],
-  },
-  {
-    id: "privacy",
-    title: "Open source, yours to run",
-    body: "Pearl is open source — run it yourself to keep your data private. Hosted Pearl is $10 per month plus usage (models, research, sandboxes, and more).",
-    bubbles: [
-      {
-        text: "Self-host on your machine",
-        kind: "user",
-        top: 6,
-        left: 6,
-        rotate: -5,
-      },
-      {
-        text: "Your data stays with you",
-        kind: "pearl",
-        top: 16,
-        left: 52,
-        rotate: 5,
-      },
-      {
-        text: "$10/mo + usage",
-        kind: "status",
-        top: 72,
-        left: 28,
-        rotate: 2,
+        role: "assistant",
+        text: "Archived 61 threads in Gmail.",
       },
     ],
   },
