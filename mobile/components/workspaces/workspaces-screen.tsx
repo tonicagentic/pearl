@@ -81,7 +81,7 @@ export function WorkspacesScreen() {
 
   return (
     <ScreenChrome
-      title="Workspaces"
+      title="Projects"
       leading="drawer"
       actions={[
         {

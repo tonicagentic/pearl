@@ -50,7 +50,7 @@ const NAV_ROWS = [
     Icon: LibraryIcon,
   },
   {
-    label: "Workspaces",
+    label: "Projects",
     href: "/workspaces",
     Icon: FolderIcon,
   },

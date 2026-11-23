@@ -214,7 +214,7 @@ export function SettingsScreen() {
   const showEmail = search.matches("Email", emailDetail);
   const showCalendar = search.matches("Calendar", calendarRowDetail);
   const showWorkspaces = search.matches(
-    "Workspaces",
+    "Projects",
     "Projects for chats",
   );
   const showMoney = search.matches("Money", "Pearl Money");
@@ -320,8 +320,8 @@ export function SettingsScreen() {
                 icon={
                   <Icon as={FolderIcon} className="size-5 text-amber-600" />
                 }
-                label="Workspaces"
-                detail="Projects for chats"
+                label="Projects"
+                detail="Organize chats"
                 onPress={() => router.navigate("/workspaces")}
                 showSeparator={showMoney || showTasks}
               />

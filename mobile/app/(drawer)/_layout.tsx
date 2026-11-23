@@ -80,7 +80,7 @@ export default function DrawerLayout() {
         <Drawer.Screen
           name="workspaces"
           options={{
-            title: "Workspaces",
+            title: "Projects",
             headerShown: false,
             drawerItemStyle: { display: "none" },
           }}
