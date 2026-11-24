@@ -211,7 +211,9 @@ function withPosition(
   event: SessionStreamEvent,
   position: { readonly line: number; readonly index: number },
 ): SessionStreamEvent {
-  const meta = (event as { readonly meta?: Record<string, unknown> }).meta ?? {};
+  const meta =
+    ((event as unknown as { readonly meta?: Record<string, unknown> }).meta) ??
+    {};
   return {
     ...event,
     meta: { ...meta, position },
