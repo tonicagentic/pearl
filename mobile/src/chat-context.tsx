@@ -49,6 +49,7 @@ import {
   type CustomAgentRef,
 } from "./chats-client";
 import { mergeEventsForSnapshot } from "../../lib/chat/eve-session-recovery";
+import { repairSessionHydration } from "../../lib/chat/hydration-prefix";
 import { waitingLabelForText } from "../../lib/pearl-lane";
 import { setWaitingLabel } from "../../lib/waiting-label";
 import { useAuth } from "./auth";
@@ -336,6 +337,20 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     // Hydrate from saved events so reopening paints the transcript immediately
     // (same as web). resume() then only catches up past that prefix — without
     // initialEvents, resume replayed history live and paced word-by-word.
+    // Repair a prefix that was stored out of stream order so a later
+    // turn.paused cannot hide the transcript or skip the interaction line.
+    const repaired = repairSessionHydration(
+      chat?.events ?? [],
+      (chat?.session as ClientSessionState | null | undefined) ?? null,
+    );
+    const initialSession = chat?.session
+      ? {
+          ...(chat.session as ClientSessionState),
+          streamIndex:
+            repaired.streamIndex ??
+            (chat.session as ClientSessionState).streamIndex,
+        }
+      : undefined;
     const store = new SessionStore({
       baseUrl: AGENT_URL,
       // Follow coder / researcher / etc. child sessions so their approvals and
@@ -345,12 +360,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         const credential = getAuthCookie();
         return credential ? { authorization: `Bearer ${credential}` } : ({} as Record<string, string>);
       },
-      ...(chat?.events?.length
-        ? { initialEvents: chat.events }
-        : {}),
-      ...(chat?.session
-        ? { initialSession: chat.session as ClientSessionState }
-        : {}),
+      ...(repaired.events.length ? { initialEvents: repaired.events } : {}),
+      ...(initialSession ? { initialSession } : {}),
     });
     bindings.set(store, {
       id: chat?.id ?? null,
@@ -362,8 +373,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       sendPrepared: false,
       sendStartedAt: null,
       eventIndex: chat?.events.length ?? 0,
-      savedEventCount: chat?.events.length ?? 0,
-      archivedEvents: chat?.events ? [...chat.events] : [],
+      savedEventCount: repaired.events.length,
+      archivedEvents: [...repaired.events],
       sessionRecoveryAttempted: false,
       queue: Promise.resolve(),
       batch: [],

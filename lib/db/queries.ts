@@ -12,6 +12,7 @@ import {
   isHydratableSessionEvent,
   type ChatPresence,
 } from "@/lib/chat/events";
+import { repairSessionHydration } from "@/lib/chat/hydration-prefix";
 import type {
   ActiveChat,
   ChatListItem,
@@ -356,9 +357,16 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
     .orderBy(asc(chatEvent.eventIndex));
 
   // Presence-only mirrors lack meta.position; eve rejects them as initialEvents.
-  const eventValues = events
-    .map((eventRow) => eventRow.event)
-    .filter(isHydratableSessionEvent);
+  // Mirrors that do have a position can still be stored ahead of the transcript
+  // (event index 0). Repair into a contiguous prefix so hydrate keeps the
+  // messages and resume can still read the missing interaction line.
+  const hydrated = repairSessionHydration(
+    events
+      .map((eventRow) => eventRow.event)
+      .filter(isHydratableSessionEvent),
+    row.eveSession,
+  );
+  const eventValues = hydrated.events;
   const pendingMessageCreatedAt = row.pendingUserMessageCreatedAt;
   const hasCurrentTurnCompleted = Boolean(
     pendingMessageCreatedAt &&
@@ -398,7 +406,12 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
     projectId: row.projectId ?? null,
     remoteAgentId: row.remoteAgentId ?? null,
     customAgent: customAgentRef,
-    session: row.eveSession ?? undefined,
+    session: row.eveSession
+      ? {
+          ...row.eveSession,
+          streamIndex: hydrated.streamIndex ?? row.eveSession.streamIndex,
+        }
+      : undefined,
     spokenTurns: Array.isArray(row.spokenTurns) ? row.spokenTurns : [],
     quickTurns: Array.isArray(row.quickTurns) ? row.quickTurns : [],
     title: row.title,

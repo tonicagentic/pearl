@@ -70,10 +70,14 @@ async function mirrorPresenceEvent(
       },
     };
 
+    // position.index is the slot inside one stream line (0, 1, …), not a
+    // chat_event key. The mobile client numbers rows 0…n. Writing the mirror
+    // at index 0 upserts over the first transcript row and sorts a later
+    // turn.paused ahead of every message, which makes eve drop the thread.
     const mirrored = await appendChatEventForSession({
       sessionId: ctx.session.id,
       event: stamped as Parameters<typeof appendChatEventForSession>[0]["event"],
-      eventIndex: ctx.position.index,
+      eventIndex: -(line * 32 + ctx.position.index + 1),
       bumpUpdatedAt: true,
     });
     if (!mirrored) {
