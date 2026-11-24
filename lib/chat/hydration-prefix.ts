@@ -86,12 +86,8 @@ export function repairSessionHydration(
 
   const prefix: SessionStreamEvent[] = [];
   let covered: number | null = null;
-  let heldForGap = 0;
   for (const item of deduped) {
-    if (covered !== null && item.line > covered) {
-      heldForGap = deduped.length - prefix.length;
-      break;
-    }
+    if (covered !== null && item.line > covered) break;
     prefix.push(item.event);
     if (closesLine(item.event)) covered = cursorAfter(item.event, item.line);
   }
@@ -105,38 +101,6 @@ export function repairSessionHydration(
       : saved == null
         ? covered
         : Math.min(saved, covered);
-
-  if (hydratedEvents.length !== events.length || heldForGap > 0) {
-    // #region agent log
-    fetch("http://127.0.0.1:7904/ingest/0c65059b-c338-403a-aef8-13a3f3dbe2b2", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "5d722e",
-      },
-      body: JSON.stringify({
-        sessionId: "5d722e",
-        hypothesisId: "H1",
-        location: "lib/chat/hydration-prefix.ts:repairSessionHydration",
-        message: "repaired session hydration prefix",
-        data: {
-          input: events.length,
-          prefix: hydratedEvents.length,
-          heldForGap,
-          covered,
-          savedStreamIndex: saved ?? null,
-          streamIndex: streamIndex ?? null,
-          firstLine: positioned[0]?.line ?? null,
-          lastPrefixLine:
-            hydratedEvents.length > 0
-              ? streamPosition(hydratedEvents[hydratedEvents.length - 1]!)?.line ?? null
-              : null,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-  }
 
   return { events: hydratedEvents, streamIndex };
 }
