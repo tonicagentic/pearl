@@ -7,20 +7,23 @@ import {
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { PlusIcon } from "lucide-react-native";
+import { useQuery } from "@tanstack/react-query";
 import { useCSSVariable } from "uniwind";
 
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
 import { CreateNoteModal } from "@/components/notes/create-note-modal";
 import { Text } from "@/components/ui/text";
+import { fetchAllNotes } from "@/src/notes-client";
+import { useNetworkStatus } from "@/src/network-status";
 import {
-  fetchAllNotes,
-  type NoteSummaryDto,
-} from "@/src/notes-client";
+  queryErrorMessage,
+  queryKeys,
+  showQueryErrorBanner,
+} from "@/src/query-client";
 
 /** Notes hub: all notes by updatedAt with optional project filing. */
 export function NotesScreen() {
-  const [notes, setNotes] = useState<readonly NoteSummaryDto[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { offline } = useNetworkStatus();
   const [composerOpen, setComposerOpen] = useState(false);
   const backgroundColor = useCSSVariable("--color-background") as
     | string
@@ -29,38 +32,19 @@ export function NotesScreen() {
     | string
     | undefined;
 
-  const reload = useCallback(async () => {
-    try {
-      setError(null);
-      setNotes(await fetchAllNotes());
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Failed to load notes.");
-    }
-  }, []);
+  const notesQuery = useQuery({
+    queryKey: queryKeys.notes,
+    queryFn: fetchAllNotes,
+  });
 
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      void (async () => {
-        try {
-          const rows = await fetchAllNotes();
-          if (!cancelled) {
-            setNotes(rows);
-            setError(null);
-          }
-        } catch (cause) {
-          if (!cancelled) {
-            setError(
-              cause instanceof Error ? cause.message : "Failed to load notes.",
-            );
-          }
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, []),
+      void notesQuery.refetch();
+    }, [notesQuery.refetch]),
   );
+
+  const notes = notesQuery.data ?? null;
+  const showError = showQueryErrorBanner(offline, notesQuery.error);
 
   return (
     <ScreenChrome
@@ -82,14 +66,14 @@ export function NotesScreen() {
           contentContainerStyle={{ paddingBottom: 24 }}
           contentInsetAdjustmentBehavior="automatic"
         >
-          {error ? (
+          {showError ? (
             <Pressable
               accessibilityRole="button"
               className="mb-4 rounded-2xl bg-destructive/10 px-4 py-3"
-              onPress={() => void reload()}
+              onPress={() => void notesQuery.refetch()}
             >
               <Text variant="secondary" tone="destructive">
-                {error}
+                {queryErrorMessage(notesQuery.error, "Failed to load notes.")}
               </Text>
               <Text
                 variant="caption"
@@ -101,7 +85,7 @@ export function NotesScreen() {
             </Pressable>
           ) : null}
 
-          {notes === null && !error ? (
+          {notes === null && notesQuery.isPending ? (
             <ActivityIndicator color={placeholderColor ?? undefined} />
           ) : notes?.length === 0 ? (
             <Text variant="body" tone="muted" className="px-1 py-8">

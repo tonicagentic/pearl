@@ -94,16 +94,6 @@ export type ProjectNoteSummaryDto = {
   readonly updatedAt: string;
 };
 
-export type ProjectNoteDto = {
-  readonly id: string;
-  readonly projectId: string | null;
-  readonly projectName?: string | null;
-  readonly title: string;
-  readonly markdown: string;
-  readonly createdAt: string;
-  readonly updatedAt: string;
-};
-
 export type ProjectWorkspaceDto = {
   readonly project: ProjectDto;
   readonly plans: readonly PlanSummaryDto[];
@@ -599,83 +589,3 @@ export async function deleteProjectGoalRequest(
   }
 }
 
-export async function createProjectNoteRequest(
-  projectId: string,
-  input: { readonly title: string; readonly markdown?: string },
-): Promise<ProjectNoteDto> {
-  const response = await fetch(
-    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/notes`,
-    {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(input),
-    },
-  );
-
-  if (!response.ok) {
-    handleAuth(response);
-    throw new Error(await readError(response));
-  }
-
-  const data = (await response.json()) as { note: ProjectNoteDto };
-  return data.note;
-}
-
-export async function fetchProjectNote(
-  projectId: string,
-  noteId: string,
-): Promise<ProjectNoteDto> {
-  const response = await fetch(
-    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/notes/${encodeURIComponent(noteId)}`,
-    { headers: authHeaders() },
-  );
-
-  if (!response.ok) {
-    handleAuth(response);
-    throw new Error(await readError(response));
-  }
-
-  const data = (await response.json()) as { note: ProjectNoteDto };
-  return data.note;
-}
-
-export async function updateProjectNoteRequest(
-  projectId: string,
-  noteId: string,
-  input: { readonly title?: string; readonly markdown?: string },
-): Promise<ProjectNoteDto> {
-  const response = await fetch(
-    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/notes/${encodeURIComponent(noteId)}`,
-    {
-      method: "PATCH",
-      headers: authHeaders(),
-      body: JSON.stringify(input),
-    },
-  );
-
-  if (!response.ok) {
-    handleAuth(response);
-    throw new Error(await readError(response));
-  }
-
-  const data = (await response.json()) as { note: ProjectNoteDto };
-  return data.note;
-}
-
-export async function deleteProjectNoteRequest(
-  projectId: string,
-  noteId: string,
-): Promise<void> {
-  const response = await fetch(
-    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/notes/${encodeURIComponent(noteId)}`,
-    {
-      method: "DELETE",
-      headers: authHeaders(),
-    },
-  );
-
-  if (!response.ok) {
-    handleAuth(response);
-    throw new Error(await readError(response));
-  }
-}

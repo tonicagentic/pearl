@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import { router, Stack } from "expo-router";
 import {
   CheckIcon,
@@ -31,14 +32,14 @@ import { cn } from "@/lib/utils";
 import { listArtifacts } from "@/src/artifacts-client";
 import { useChats } from "@/src/chat-context";
 import { attachChatToProject, createChat } from "@/src/chats-client";
+import { createGoalRequest, updateGoalRequest } from "@/src/goals-client";
 import {
   deleteIssueRequest,
   setIssueResolvedRequest,
 } from "@/src/issues-client";
+import { createNoteRequest } from "@/src/notes-client";
 import {
   createProjectFileRequest,
-  createProjectGoalRequest,
-  createProjectNoteRequest,
   deleteProjectGoalRequest,
   deleteProjectRequest,
   fetchProjectWorkspace,
@@ -46,12 +47,12 @@ import {
   linkProjectPinRequest,
   unlinkProjectArtifactRequest,
   unlinkProjectPinRequest,
-  updateProjectGoalRequest,
   updateProjectRequest,
   type ProjectGoalDto,
   type ProjectIssueDto,
   type ProjectWorkspaceDto,
 } from "@/src/projects-client";
+import { queryKeys } from "@/src/query-client";
 import { fetchWorkbenchPins } from "@/src/workbench-client";
 
 /** Project hub: tasks, goals, notes, files; demoted repos/chats links. */
@@ -60,6 +61,7 @@ export function ProjectDetailScreen({
 }: {
   readonly projectId: string;
 }) {
+  const queryClient = useQueryClient();
   const { chats, selectChat, setActiveProjectId } = useChats();
   const [workspace, setWorkspace] = useState<ProjectWorkspaceDto | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,19 +78,41 @@ export function ProjectDetailScreen({
     | string
     | undefined;
 
+  const applyWorkspace = useCallback(
+    (data: ProjectWorkspaceDto) => {
+      const headerDirty =
+        workspace !== null &&
+        (name.trim() !== workspace.project.name ||
+          instructions !== workspace.project.instructions);
+      if (headerDirty && workspace) {
+        setWorkspace({ ...data, project: workspace.project });
+      } else {
+        setWorkspace(data);
+        setName(data.project.name);
+        setInstructions(data.project.instructions);
+      }
+    },
+    [instructions, name, workspace],
+  );
+
+  const invalidateProject = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.project(projectId),
+    });
+  }, [projectId, queryClient]);
+
   const reload = useCallback(async () => {
     try {
       setError(null);
       const data = await fetchProjectWorkspace(projectId);
-      setWorkspace(data);
-      setName(data.project.name);
-      setInstructions(data.project.instructions);
+      applyWorkspace(data);
+      invalidateProject();
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Failed to load project.",
       );
     }
-  }, [projectId]);
+  }, [applyWorkspace, invalidateProject, projectId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,9 +120,7 @@ export function ProjectDetailScreen({
       try {
         const data = await fetchProjectWorkspace(projectId);
         if (!cancelled) {
-          setWorkspace(data);
-          setName(data.project.name);
-          setInstructions(data.project.instructions);
+          applyWorkspace(data);
           setError(null);
         }
       } catch (cause) {
@@ -114,7 +136,7 @@ export function ProjectDetailScreen({
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [applyWorkspace, projectId]);
 
   const dirty =
     workspace !== null &&
@@ -125,22 +147,29 @@ export function ProjectDetailScreen({
     if (!workspace || !dirty || saving || !name.trim()) return;
     setSaving(true);
     setError(null);
+    const sentName = name.trim();
+    const sentInstructions = instructions;
     void updateProjectRequest(projectId, {
-      name: name.trim(),
-      instructions,
+      name: sentName,
+      instructions: sentInstructions,
     })
       .then((project) => {
         setWorkspace((current) =>
           current ? { ...current, project } : current,
         );
-        setName(project.name);
-        setInstructions(project.instructions);
+        invalidateProject();
+        const draftUnchanged =
+          name.trim() === sentName && instructions === sentInstructions;
+        if (draftUnchanged) {
+          setName(project.name);
+          setInstructions(project.instructions);
+        }
       })
       .catch((cause) => {
         setError(cause instanceof Error ? cause.message : "Could not save.");
       })
       .finally(() => setSaving(false));
-  }, [dirty, instructions, name, projectId, saving, workspace]);
+  }, [dirty, instructions, invalidateProject, name, projectId, saving, workspace]);
 
   const createProjectChat = useCallback(() => {
     setError(null);
@@ -189,8 +218,11 @@ export function ProjectDetailScreen({
     const create = (title: string) => {
       const trimmed = title.trim();
       if (!trimmed) return;
-      void createProjectGoalRequest(projectId, { title: trimmed })
-        .then(() => reload())
+      void createGoalRequest({ title: trimmed, projectId })
+        .then(() => {
+          invalidateProject();
+          void reload();
+        })
         .catch((cause) => {
           setError(
             cause instanceof Error ? cause.message : "Could not create goal.",
@@ -208,14 +240,16 @@ export function ProjectDetailScreen({
       },
       { text: "Cancel", style: "cancel" },
     ]);
-  }, [projectId, reload]);
+  }, [invalidateProject, projectId, reload]);
 
   const createNote = useCallback(() => {
-    void createProjectNoteRequest(projectId, {
+    void createNoteRequest({
       title: "Untitled note",
       markdown: "",
+      projectId,
     })
       .then((note) => {
+        invalidateProject();
         router.push(`/notes/${encodeURIComponent(note.id)}`);
       })
       .catch((cause) => {
@@ -223,7 +257,7 @@ export function ProjectDetailScreen({
           cause instanceof Error ? cause.message : "Could not create note.",
         );
       });
-  }, [projectId]);
+  }, [invalidateProject, projectId]);
 
   const createFile = useCallback(() => {
     void createProjectFileRequest(projectId, {
@@ -428,14 +462,15 @@ export function ProjectDetailScreen({
   const toggleGoal = useCallback(
     (goal: ProjectGoalDto) => {
       const next = goal.status === "done" ? "active" : "done";
-      void updateProjectGoalRequest(projectId, goal.id, { status: next })
+      void updateGoalRequest(goal.id, { status: next })
         .then((updated) => {
+          invalidateProject();
           setWorkspace((current) =>
             current
               ? {
                   ...current,
                   goals: current.goals.map((row) =>
-                    row.id === updated.id ? updated : row,
+                    row.id === updated.id ? { ...row, ...updated } : row,
                   ),
                 }
               : current,
@@ -447,7 +482,7 @@ export function ProjectDetailScreen({
           );
         });
     },
-    [projectId],
+    [invalidateProject],
   );
 
   const resolveIssue = useCallback(

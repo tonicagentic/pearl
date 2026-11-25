@@ -44,10 +44,8 @@ export function setConnectedAgentsCache(
   next: readonly ConnectedAgentSummary[],
 ): void {
   agents = next;
-  if (selectedId && !next.some((agent) => agent.id === selectedId)) {
-    selectedId = null;
-    notify();
-  }
+  // Do not clear the open chat's selection just because a catalog response
+  // omitted that id — only the user (or a null server row) may retarget Pearl.
   notifyAgents();
 }
 

@@ -38,6 +38,7 @@ import { useCSSVariable } from "uniwind";
 
 import type { ChatHistorySearchFeed } from "@/components/history/chat-history-types";
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
+import { OfflineBanner } from "@/components/offline-banner";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
@@ -48,6 +49,7 @@ import {
   usePearlMutedBackground,
   usePearlScreenBackground,
 } from "@/src/navigation-theme";
+import { useNetworkStatus } from "@/src/network-status";
 import {
   CHAT_PRESENCE_AMBER,
   CHAT_PRESENCE_BLUE,
@@ -92,6 +94,7 @@ export function ChatHistoryListIOS({
     selectChat,
     selectionError,
   } = useChats();
+  const { offline } = useNetworkStatus();
   const rows = search.active ? (search.hits ?? []) : chats;
   const pageBackground = usePearlScreenBackground();
   const drawerBackground = usePearlDrawerBackground();
@@ -171,6 +174,7 @@ export function ChatHistoryListIOS({
 
   return (
     <View style={{ flex: 1, backgroundColor, overflow: "hidden" }}>
+      <OfflineBanner compact />
       <Host style={{ flex: 1, backgroundColor }}>
         <List
           modifiers={[
@@ -180,7 +184,7 @@ export function ChatHistoryListIOS({
           ]}
         >
           <Section>
-            {!search.active && selectionError ? (
+            {!search.active && selectionError && !offline ? (
               <SwiftText
                 modifiers={[
                   foregroundStyle("#FF453A"),
@@ -191,14 +195,14 @@ export function ChatHistoryListIOS({
                 {selectionError}
               </SwiftText>
             ) : null}
-            {!search.active && chatsError && chats.length > 0 ? (
+            {!search.active && chatsError && chats.length > 0 && !offline ? (
               <Button
                 label={`${chatsError} Tap to retry.`}
                 onPress={() => void reloadChats()}
                 modifiers={[buttonStyle("plain"), ...rowChrome]}
               />
             ) : null}
-            {search.active && search.error ? (
+            {search.active && search.error && !offline ? (
               <SwiftText
                 modifiers={[
                   foregroundStyle("#FF453A"),
@@ -335,11 +339,11 @@ function RecentChatRow({
       modifiers={[buttonStyle("plain"), ...FULL_ROW_HIT]}
     >
       <HStack
-        spacing={isDrawer ? 0 : 12}
+        spacing={12}
         alignment="center"
         modifiers={[padding({ vertical: 2 })]}
       >
-        {isDrawer ? null : statusMark}
+        {statusMark}
         <VStack spacing={2} alignment="leading">
           <SwiftText
             modifiers={[

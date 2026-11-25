@@ -16,6 +16,7 @@ import Animated, {
   LinearTransition,
 } from "react-native-reanimated";
 import { CheckIcon, PlusIcon, Trash2Icon } from "lucide-react-native";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCSSVariable } from "uniwind";
 
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
@@ -29,6 +30,12 @@ import {
   type IssueDto,
   type IssuesPayload,
 } from "@/src/issues-client";
+import { useNetworkStatus } from "@/src/network-status";
+import {
+  queryErrorMessage,
+  queryKeys,
+  showQueryErrorBanner,
+} from "@/src/query-client";
 
 if (
   Platform.OS === "android" &&
@@ -43,10 +50,11 @@ function animateList() {
 
 /** Tasks inbox: due soon, later, parked, and recently resolved. */
 export function TasksScreen() {
-  const [payload, setPayload] = useState<IssuesPayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const { offline } = useNetworkStatus();
   const [composerOpen, setComposerOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -54,70 +62,59 @@ export function TasksScreen() {
     | string
     | undefined;
 
-  const openComposer = useCallback(() => setComposerOpen(true), []);
-
-  const reload = useCallback(async () => {
-    try {
-      setError(null);
-      setPayload(await fetchIssues());
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Failed to load tasks.");
-    }
-  }, []);
+  const tasksQuery = useQuery({
+    queryKey: queryKeys.tasks,
+    queryFn: fetchIssues,
+  });
 
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      void (async () => {
-        try {
-          const data = await fetchIssues();
-          if (!cancelled) {
-            setPayload(data);
-            setError(null);
-          }
-        } catch (cause) {
-          if (!cancelled) {
-            setError(
-              cause instanceof Error ? cause.message : "Failed to load tasks.",
-            );
-          }
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, []),
+      void tasksQuery.refetch();
+    }, [tasksQuery.refetch]),
   );
 
-  const patchIssue = useCallback((updated: IssueDto) => {
-    animateList();
-    setPayload((current) =>
-      current
-        ? {
-            ...current,
-            issues: current.issues.map((row) =>
-              row.id === updated.id ? { ...row, ...updated } : row,
-            ),
-          }
-        : current,
-    );
-  }, []);
+  const payload = tasksQuery.data ?? null;
+  const showLoadError = showQueryErrorBanner(offline, tasksQuery.error);
+  const showActionError = showQueryErrorBanner(offline, actionError);
 
-  const removeIssue = useCallback((id: string) => {
-    animateList();
-    setPayload((current) =>
-      current
-        ? {
-            ...current,
-            issues: current.issues.filter((row) => row.id !== id),
-          }
-        : current,
-    );
-  }, []);
+  const openComposer = useCallback(() => setComposerOpen(true), []);
+
+  const patchIssue = useCallback(
+    (updated: IssueDto) => {
+      animateList();
+      queryClient.setQueryData<IssuesPayload>(queryKeys.tasks, (current) =>
+        current
+          ? {
+              ...current,
+              issues: current.issues.map((row) =>
+                row.id === updated.id ? { ...row, ...updated } : row,
+              ),
+            }
+          : current,
+      );
+    },
+    [queryClient],
+  );
+
+  const removeIssue = useCallback(
+    (id: string) => {
+      animateList();
+      queryClient.setQueryData<IssuesPayload>(queryKeys.tasks, (current) =>
+        current
+          ? {
+              ...current,
+              issues: current.issues.filter((row) => row.id !== id),
+            }
+          : current,
+      );
+    },
+    [queryClient],
+  );
 
   const setResolved = useCallback(
     async (issue: IssueDto, resolved: boolean) => {
       setBusyId(issue.id);
+      setActionError(null);
       const optimistic: IssueDto = {
         ...issue,
         status: resolved ? "resolved" : "open",
@@ -128,16 +125,19 @@ export function TasksScreen() {
       try {
         const updated = await setIssueResolvedRequest(issue.id, resolved);
         patchIssue(updated);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
       } catch (cause) {
         patchIssue(issue);
-        setError(
-          cause instanceof Error ? cause.message : "Failed to update the task.",
-        );
+        if (showQueryErrorBanner(offline, cause)) {
+          setActionError(
+            queryErrorMessage(cause, "Failed to update the task."),
+          );
+        }
       } finally {
         setBusyId(null);
       }
     },
-    [patchIssue],
+    [offline, patchIssue, queryClient],
   );
 
   const deleteTask = useCallback(
@@ -150,16 +150,23 @@ export function TasksScreen() {
           onPress: () => {
             void (async () => {
               setBusyId(issue.id);
+              setActionError(null);
+              const snapshot = queryClient.getQueryData<IssuesPayload>(
+                queryKeys.tasks,
+              );
               removeIssue(issue.id);
               try {
                 await deleteIssueRequest(issue.id);
+                void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
               } catch (cause) {
-                patchIssue(issue);
-                setError(
-                  cause instanceof Error
-                    ? cause.message
-                    : "Failed to delete the task.",
-                );
+                if (snapshot) {
+                  queryClient.setQueryData(queryKeys.tasks, snapshot);
+                }
+                if (showQueryErrorBanner(offline, cause)) {
+                  setActionError(
+                    queryErrorMessage(cause, "Failed to delete the task."),
+                  );
+                }
               } finally {
                 setBusyId(null);
               }
@@ -168,42 +175,47 @@ export function TasksScreen() {
         },
       ]);
     },
-    [patchIssue, removeIssue],
+    [offline, queryClient, removeIssue],
   );
 
   const issues = payload?.issues ?? [];
-  const open = useMemo(
-    () => issues.filter((issue) => issue.status === "open"),
-    [issues],
-  );
   const dueSoon = useMemo(
     () =>
-      open.filter(
-        (issue) =>
-          issue.state === "active" &&
-          (issue.dueSoon ||
-            (issue.dueDate !== null &&
-              issue.dueDate <= new Date().toISOString().slice(0, 10))),
-      ),
-    [open],
+      issues
+        .filter((issue) => issue.status === "open")
+        .filter(
+          (issue) =>
+            issue.state === "active" &&
+            (issue.dueSoon ||
+              (issue.dueDate !== null &&
+                issue.dueDate <= new Date().toISOString().slice(0, 10))),
+        ),
+    [issues],
   );
-  const later = useMemo(
-    () =>
-      open.filter(
-        (issue) =>
-          issue.state === "active" &&
-          !dueSoon.some((row) => row.id === issue.id),
-      ),
-    [open, dueSoon],
-  );
+  const later = useMemo(() => {
+    const open = issues.filter((issue) => issue.status === "open");
+    return open.filter(
+      (issue) =>
+        issue.state === "active" && !dueSoon.some((row) => row.id === issue.id),
+    );
+  }, [issues, dueSoon]);
   const parked = useMemo(
-    () => open.filter((issue) => issue.state === "dormant"),
-    [open],
+    () =>
+      issues.filter(
+        (issue) => issue.status === "open" && issue.state === "dormant",
+      ),
+    [issues],
   );
   const resolved = useMemo(
     () => issues.filter((issue) => issue.status === "resolved"),
     [issues],
   );
+
+  const bannerError = showActionError
+    ? actionError
+    : showLoadError
+      ? tasksQuery.error
+      : null;
 
   return (
     <ScreenChrome
@@ -225,14 +237,19 @@ export function TasksScreen() {
         contentContainerStyle={{ paddingBottom: 24 }}
         contentInsetAdjustmentBehavior="automatic"
       >
-        {error ? (
+        {bannerError ? (
           <Pressable
             accessibilityRole="button"
             className="mb-4 rounded-2xl bg-destructive/10 px-4 py-3"
-            onPress={() => void reload()}
+            onPress={() => {
+              setActionError(null);
+              void tasksQuery.refetch();
+            }}
           >
             <Text variant="secondary" tone="destructive">
-              {error}
+              {typeof bannerError === "string"
+                ? bannerError
+                : queryErrorMessage(bannerError, "Failed to load tasks.")}
             </Text>
             <Text
               variant="caption"
@@ -244,7 +261,7 @@ export function TasksScreen() {
           </Pressable>
         ) : null}
 
-        {!payload && !error ? (
+        {!payload && tasksQuery.isPending ? (
           <ActivityIndicator color={placeholderColor ?? undefined} />
         ) : (
           <>
@@ -291,13 +308,14 @@ export function TasksScreen() {
         onClose={() => setComposerOpen(false)}
         onCreated={(created) => {
           animateList();
-          setPayload((current) =>
+          queryClient.setQueryData<IssuesPayload>(queryKeys.tasks, (current) =>
             current
               ? { ...current, issues: [created, ...current.issues] }
               : current,
           );
           setComposerOpen(false);
           router.push(`/tasks/${encodeURIComponent(created.id)}`);
+          void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
         }}
       />
       </View>

@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
 
-import { NoteEditorScreen } from "@/components/workspaces/note-editor-screen";
+import { NoteEditorScreen } from "@/components/notes/note-editor-screen";
 
 /** Project hub deep link — same editor as /notes/[id]. */
 export default function ProjectNoteRoute() {

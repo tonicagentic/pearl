@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
 
-import { NoteEditorScreen } from "@/components/workspaces/note-editor-screen";
+import { NoteEditorScreen } from "@/components/notes/note-editor-screen";
 
 /** Canonical note editor for hub and project-filed notes. */
 export default function NoteRoute() {

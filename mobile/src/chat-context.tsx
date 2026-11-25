@@ -53,37 +53,20 @@ import { repairSessionHydration } from "../../lib/chat/hydration-prefix";
 import { waitingLabelForText } from "../../lib/pearl-lane";
 import { setWaitingLabel } from "../../lib/waiting-label";
 import { useAuth } from "./auth";
+import {
+  appendChatListPage,
+  applyChatListPage,
+  applyChatMeta,
+  applyChatPresence,
+  isCurrentGeneration,
+} from "./chat-list-reducer";
+import { useNetworkStatus } from "./network-status";
+import { reconnectSession } from "./session-reconnect";
 
 /** Keep this many recently opened SessionStores warm for instant re-open. */
 const RETAINED_STORE_LIMIT = 10;
-/** Silent list backstop when nothing is working/waiting. */
-const PRESENCE_POLL_MS = 5_000;
-/** Faster backstop while any Recents row is live. */
-const PRESENCE_POLL_ACTIVE_MS = 1_500;
-
-/** Row fields the recents list actually renders. A new array with the same
- * rows still rebuilds the SwiftUI list, so unchanged polls must keep identity. */
-function sameChatRows(
-  current: readonly ChatListItem[],
-  next: readonly ChatListItem[],
-): boolean {
-  if (current.length !== next.length) return false;
-  for (let i = 0; i < current.length; i += 1) {
-    const a = current[i]!;
-    const b = next[i]!;
-    if (
-      a.id !== b.id ||
-      a.title !== b.title ||
-      a.updatedAt !== b.updatedAt ||
-      (a.projectId ?? null) !== (b.projectId ?? null) ||
-      (a.presence ?? "idle") !== (b.presence ?? "idle") ||
-      Boolean(a.waitingForInput) !== Boolean(b.waitingForInput)
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
+/** Silent presence / list backstop while the app is active. */
+const PRESENCE_POLL_MS = 1_500;
 
 /** True when newly appended events can open or close a person-wait. */
 function eventsMayChangeWait(
@@ -146,16 +129,32 @@ type ChatsContextValue = {
   readonly patchChatPresence: (
     chatId: string,
     presence: ChatPresence,
+    updatedAt?: string,
+  ) => void;
+  /** Patch title / updatedAt after a quick-path answer (no presence invent). */
+  readonly patchChatMeta: (
+    chatId: string,
+    meta: { readonly title?: string; readonly updatedAt?: string },
   ) => void;
   /**
-   * Resume an open or retained store when a foreground push names it and
-   * the stream is idle — catches a stalled thread without waiting on poll.
+   * Reattach an open or retained store (foreground, push, or reopen).
+   * Hydrates from the network when the store was evicted.
    */
   readonly resumeChatFromPush: (chatId: string) => void;
+  /** Reconnect the given (or active) store to its eve session. */
+  readonly reconnect: (source?: SessionStore) => Promise<boolean>;
   /** Open a stored chat (replays its events, attaches its session). */
   readonly selectChat: (chatId: string) => Promise<boolean>;
   readonly selectionError: string | null;
   readonly persistenceError: string | null;
+  /** Connection failure after reconnect backoff is exhausted. */
+  readonly connectionError: string | null;
+  readonly clearConnectionError: () => void;
+  /**
+   * Clear the one-shot dead-session guard after a replacement session
+   * accepts a delivery, so a later expiry can recover again.
+   */
+  readonly clearSessionRecovery: (source: SessionStore) => void;
   readonly pendingMessage: string | null;
   readonly retrySync: () => Promise<void>;
   /** Whether the durable pending marker completed before this store's send. */
@@ -229,8 +228,12 @@ const traceSend = (binding: ChatBinding, stage: string) => {
 /** A store keeps its own chat identity even while another chat is selected. */
 export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const { signedIn } = useAuth();
+  const { offline } = useNetworkStatus();
+  const wasOfflineRef = useRef(offline);
   const activeChatIdRef = useRef<string | null>(null);
   const selectionGeneration = useRef(0);
+  const listGeneration = useRef(0);
+  const loadMoreInFlight = useRef(false);
   const [bindings] = useState(() => new WeakMap<SessionStore, ChatBinding>());
   // LRU of hydrated stores (Map insertion order = oldest → newest). Reselecting
   // a retained id must not create a second writer for the same chat.
@@ -255,6 +258,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   const [chatsError, setChatsError] = useState<string | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [spokenTurns, setSpokenTurns] = useState<readonly SpokenTurn[]>([]);
   const [quickTurns, setQuickTurns] = useState<readonly SpokenTurn[]>([]);
@@ -388,33 +392,19 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
 
   const reloadChats = useCallback(async (options?: { readonly silent?: boolean }) => {
     const silent = options?.silent === true;
+    const stamp = ++listGeneration.current;
     if (!silent) setChatsLoading(true);
 
     try {
       const page = await listChats(null);
-      setChats((current) => {
-        if (!silent || current.length === 0) {
-          return sameChatRows(current, page.chats) ? current : page.chats;
-        }
-        // Merge page-1 into any already-loaded pages so a presence poll or
-        // turn-end snapshot does not drop history the user scrolled into.
-        const freshById = new Map(page.chats.map((chat) => [chat.id, chat]));
-        const seen = new Set<string>();
-        const merged: ChatListItem[] = [];
-        for (const chat of page.chats) {
-          merged.push(chat);
-          seen.add(chat.id);
-        }
-        for (const chat of current) {
-          if (seen.has(chat.id)) continue;
-          const updated = freshById.get(chat.id);
-          merged.push(updated ?? chat);
-          seen.add(chat.id);
-        }
-        // A new array rebuilds the SwiftUI list and drops taps. Keep the
-        // previous rows when titles, presence, and order did not change.
-        return sameChatRows(current, merged) ? current : merged;
-      });
+      if (!isCurrentGeneration(stamp, listGeneration.current)) return;
+      setChats((current) =>
+        applyChatListPage({
+          current,
+          page: page.chats,
+          silent,
+        }),
+      );
       // Only reset the cursor on a full replace; silent merges keep pagination.
       if (!silent) {
         setCursor(page.nextCursor);
@@ -423,31 +413,36 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       }
       setChatsError(null);
     } catch {
+      if (!isCurrentGeneration(stamp, listGeneration.current)) return;
       // Preserve the last successful list but expose the offline state.
       setChatsError("Could not load history. Check your connection and retry.");
     } finally {
-      if (!silent) setChatsLoading(false);
-      // The chats list can mount after this fetch (billing gate). A loading
-      // edge the list itself never saw must not keep the empty state hidden.
-      setChatsReady(true);
+      if (isCurrentGeneration(stamp, listGeneration.current)) {
+        if (!silent) setChatsLoading(false);
+        // The chats list can mount after this fetch (billing gate). A loading
+        // edge the list itself never saw must not keep the empty state hidden.
+        setChatsReady(true);
+      }
     }
   }, []);
 
   const loadMoreChats = useCallback(async () => {
-    if (!cursor) {
+    if (!cursor || loadMoreInFlight.current) {
       return;
     }
 
+    loadMoreInFlight.current = true;
     setChatsLoading(true);
 
     try {
       const page = await listChats(cursor);
-      setChats((current) => [...current, ...page.chats]);
+      setChats((current) => appendChatListPage(current, page.chats));
       setCursor(page.nextCursor);
       setChatsError(null);
     } catch {
       setChatsError("Could not load more chats. Tap Load more to retry.");
     } finally {
+      loadMoreInFlight.current = false;
       setChatsLoading(false);
     }
   }, [cursor]);
@@ -461,25 +456,24 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   }, [evictRetainedOverflow]);
 
   const patchChatPresence = useCallback(
-    (chatId: string, presence: ChatPresence) => {
-      setChats((current) => {
-        const index = current.findIndex((chat) => chat.id === chatId);
-        if (index < 0) return current;
-        const existing = current[index]!;
-        if (
-          existing.presence === presence &&
-          Boolean(existing.waitingForInput) === (presence === "waiting")
-        ) {
-          return current;
-        }
-        const next = [...current];
-        next[index] = {
-          ...existing,
-          presence,
-          waitingForInput: presence === "waiting",
-        };
-        return next;
-      });
+    (
+      chatId: string,
+      presence: ChatPresence,
+      updatedAt?: string,
+    ) => {
+      setChats((current) =>
+        applyChatPresence(current, chatId, presence, updatedAt),
+      );
+    },
+    [],
+  );
+
+  const patchChatMeta = useCallback(
+    (
+      chatId: string,
+      meta: { readonly title?: string; readonly updatedAt?: string },
+    ) => {
+      setChats((current) => applyChatMeta(current, chatId, meta));
     },
     [],
   );
@@ -553,7 +547,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         flush();
         if (binding.id && session) {
           const id = binding.id;
-          enqueue(() => binding.syncFailed ? Promise.resolve() : saveChatSession(id, session));
+          // Keep session cursor saves queued even after a snapshot failure so
+          // the next cold resume does not attach at a stale line.
+          enqueue(() => saveChatSession(id, session));
         }
       },
       onFinish: (snapshot) => {
@@ -615,8 +611,12 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           const remoteAgentId = getRemoteAgentSelection();
           binding.remoteAgentId = remoteAgentId;
           if (remoteAgentId) {
-            void setChatRemoteAgent(created.id, remoteAgentId).catch(() => {
-              // Selection still rides clientContext for this turn.
+            const bindRemote = () =>
+              setChatRemoteAgent(created.id, remoteAgentId);
+            void bindRemote().catch(() => {
+              void bindRemote().catch(() => {
+                // Selection still rides clientContext for this turn.
+              });
             });
           }
           if (activeStoreRef.current === store) {
@@ -745,8 +745,25 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     patchChatPresence,
   ]);
 
-  // When iOS/Android returns the process to the foreground, catch up every
-  // still-working retained store (not only the open chat).
+  const reconnect = useCallback(
+    async (source?: SessionStore): Promise<boolean> => {
+      const target = source ?? activeStoreRef.current;
+      if (!target?.snapshot.session) return true;
+      const result = await reconnectSession(target);
+      if (result.ok) {
+        if (activeStoreRef.current === target) setConnectionError(null);
+        return true;
+      }
+      if (activeStoreRef.current === target) {
+        setConnectionError(result.error);
+      }
+      return false;
+    },
+    [],
+  );
+
+  // When iOS/Android returns the process to the foreground, reattach every
+  // retained store that still has a session (not only busy ones).
   useEffect(() => {
     const onChange = (next: AppStateStatus) => {
       if (next !== "active") {
@@ -757,18 +774,14 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         ...retainedStores.values(),
       ]) {
         if (!candidate?.snapshot.session) continue;
-        const status = candidate.snapshot.status;
-        if (status !== "busy" && status !== "resuming") continue;
-        void candidate.resume().catch(() => {
-          // Already streaming, or a transient network error — leave alone.
-        });
+        void reconnect(candidate);
       }
     };
     const subscription = AppState.addEventListener("change", onChange);
     return () => {
       subscription.remove();
     };
-  }, [retainedStores]);
+  }, [retainedStores, reconnect]);
 
   const markActiveChatRead = useCallback((chatId: string) => {
     // Optimistic: opening clears unread; waiting/working stay visible.
@@ -798,18 +811,25 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           : null) ??
         retainedStores.get(chatId) ??
         null;
-      if (!candidate?.snapshot.session) {
+      if (candidate?.snapshot.session) {
+        void reconnect(candidate);
         return;
       }
-      const status = candidate.snapshot.status;
-      if (status === "busy" || status === "resuming") {
-        return;
-      }
-      void candidate.resume().catch(() => {
-        // Already streaming, or a transient network error — leave alone.
-      });
+      // Evicted store: hydrate so presence / HITL can resume without opening.
+      void getChat(chatId)
+        .then((chat) => {
+          if (!chat?.session) return;
+          if (retainedStores.has(chatId) || activeChatIdRef.current === chatId) {
+            return;
+          }
+          const next = buildStore(chat);
+          void reconnect(next);
+        })
+        .catch(() => {
+          // Presence poll / next open will catch up.
+        });
     },
-    [retainedStores],
+    [retainedStores, reconnect, buildStore],
   );
 
   const selectChat = useCallback(
@@ -817,6 +837,10 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       const generation = ++selectionGeneration.current;
       if (chatId === activeChatIdRef.current) {
         markActiveChatRead(chatId);
+        const active = activeStoreRef.current;
+        if (active?.snapshot.session) {
+          void reconnect(active);
+        }
         return true;
       }
       setSelectionError(null);
@@ -833,14 +857,20 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         activeCustomAgentRef.current = binding.customAgent;
         setActiveCustomAgentState(binding.customAgent);
         setRemoteAgentSelection(binding.remoteAgentId);
-        // Pending is only for empty "Carry out" chats. If this store already
-        // has a session/history, reopening must resume — never resend.
+        // Empty carry-out auto-sends. Pending with history is an unconfirmed
+        // send — keep it for the retry ladder; do not auto-send into history.
         const hasHistory =
           Boolean(retained.snapshot.session) ||
           retained.snapshot.events.length > 0 ||
           retained.snapshot.messages.length > 0;
-        const pending = hasHistory ? null : binding.pendingMessage;
-        if (hasHistory) binding.pendingMessage = null;
+        const hasConsumed = retained.snapshot.events.some(
+          (event) => event.type === "delivery.consumed",
+        );
+        const pending =
+          binding.pendingMessage && (!hasHistory || !hasConsumed)
+            ? binding.pendingMessage
+            : null;
+        if (!pending) binding.pendingMessage = null;
         setPendingMessage(pending);
         setSpokenTurns([]);
         setQuickTurns([]);
@@ -869,15 +899,18 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           return false;
         }
         const nextStore = buildStore(chat);
-        // The server scopes the pending marker to its turn timestamp and clears
-        // it after a settled event or snapshot. Matching text here could mistake
-        // an older identical message for confirmation of this uncertain turn.
-        // If a session or events already exist, treat pending as stale — the
-        // user is reopening history, not completing a Carry-out handoff.
+        // Empty carry-out chats auto-send. A pending marker with history is
+        // an unconfirmed send after a force-quit — keep it for the retry ladder
+        // when delivery.consumed is missing; never auto-send into history.
         const hasHistory =
           Boolean(chat.session) || chat.events.length > 0;
+        const hasConsumed = chat.events.some(
+          (event) => event.type === "delivery.consumed",
+        );
         const stillPending =
-          hasHistory ? null : chat.pendingUserMessage;
+          chat.pendingUserMessage && (!hasHistory || !hasConsumed)
+            ? chat.pendingUserMessage
+            : null;
         bindings.get(nextStore)!.pendingMessage = stillPending;
         const prior = activeStoreRef.current;
         activeStoreRef.current = nextStore;
@@ -911,6 +944,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       touchRetained,
       pruneIdleStore,
       markActiveChatRead,
+      reconnect,
     ],
   );
 
@@ -1079,6 +1113,18 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     [bindings],
   );
 
+  const clearSessionRecovery = useCallback(
+    (source: SessionStore) => {
+      const binding = bindings.get(source);
+      if (binding) binding.sessionRecoveryAttempted = false;
+    },
+    [bindings],
+  );
+
+  const clearConnectionError = useCallback(() => {
+    setConnectionError(null);
+  }, []);
+
   const retrySync = useCallback(async () => {
     const binding = bindings.get(store);
     if (!binding?.id) return;
@@ -1203,21 +1249,30 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   // Presence backstop: silent poll while the app is active. Faster when any
   // row is working/waiting so missed silent pushes still catch up quickly —
   // including while the user is inside /chat, not only on home.
-  const needsFastPresencePoll = chats.some(
-    (item) => item.presence === "working" || item.presence === "waiting",
-  );
+  // Presence backstop while the app is active — including when every row is
+  // idle — so a dropped silent push still lands within about a second.
   useEffect(() => {
-    if (!signedIn) return;
-    const intervalMs = needsFastPresencePoll
-      ? PRESENCE_POLL_ACTIVE_MS
-      : PRESENCE_POLL_MS;
+    if (!signedIn || offline) return;
     const tick = () => {
       if (AppState.currentState !== "active") return;
       void reloadChats({ silent: true });
     };
-    const timer = setInterval(tick, intervalMs);
+    const timer = setInterval(tick, PRESENCE_POLL_MS);
     return () => clearInterval(timer);
-  }, [signedIn, reloadChats, needsFastPresencePoll]);
+  }, [signedIn, reloadChats, offline]);
+
+  // Coming back online: refresh presence and reattach the open session.
+  useEffect(() => {
+    const wasOffline = wasOfflineRef.current;
+    wasOfflineRef.current = offline;
+    if (!signedIn || offline || !wasOffline) return;
+    setConnectionError(null);
+    void reloadChats({ silent: true });
+    const active = activeStoreRef.current;
+    if (active?.snapshot.session) {
+      void reconnect(active);
+    }
+  }, [offline, signedIn, reloadChats, reconnect]);
 
   const getActiveStore = useCallback(() => {
     const current = activeStoreRef.current;
@@ -1256,10 +1311,15 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       loadMoreChats,
       reloadChats,
       patchChatPresence,
+      patchChatMeta,
       resumeChatFromPush,
+      reconnect,
       selectChat,
       selectionError,
       persistenceError,
+      connectionError,
+      clearConnectionError,
+      clearSessionRecovery,
       pendingMessage,
       retrySync,
       wasSendPrepared,
@@ -1294,10 +1354,15 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       loadMoreChats,
       reloadChats,
       patchChatPresence,
+      patchChatMeta,
       resumeChatFromPush,
+      reconnect,
       selectChat,
       selectionError,
       persistenceError,
+      connectionError,
+      clearConnectionError,
+      clearSessionRecovery,
       pendingMessage,
       retrySync,
       wasSendPrepared,

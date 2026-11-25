@@ -59,16 +59,23 @@ export function NoteEditorScreen({
 
   const save = useCallback(() => {
     if (!dirty || saving) return;
+    const sentTitle = title.trim() || "Untitled note";
+    const sentMarkdown = markdown;
     setSaving(true);
     setError(null);
     void updateNoteRequest(noteId, {
-      title: title.trim() || "Untitled note",
-      markdown,
+      title: sentTitle,
+      markdown: sentMarkdown,
     })
       .then((row) => {
         setNote(row);
-        setTitle(row.title);
-        setMarkdown(row.markdown);
+        const draftUnchanged =
+          (title.trim() || "Untitled note") === sentTitle &&
+          markdown === sentMarkdown;
+        if (draftUnchanged) {
+          setTitle(row.title);
+          setMarkdown(row.markdown);
+        }
       })
       .catch((cause) => {
         setError(

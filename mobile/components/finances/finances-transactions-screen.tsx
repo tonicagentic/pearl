@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -6,6 +6,7 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useCSSVariable } from "uniwind";
 
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
@@ -14,6 +15,12 @@ import {
   fetchFinancesTransactions,
   type FinancesTransaction,
 } from "@/src/finances-client";
+import { useNetworkStatus } from "@/src/network-status";
+import {
+  queryErrorMessage,
+  queryKeys,
+  showQueryErrorBanner,
+} from "@/src/query-client";
 
 function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -44,12 +51,7 @@ export function FinancesTransactionsScreen() {
     groupId?: string;
     groupName?: string;
   }>();
-  const [items, setItems] = useState<FinancesTransaction[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [title, setTitle] = useState("Transactions");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const { offline } = useNetworkStatus();
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -82,63 +84,64 @@ export function FinancesTransactionsScreen() {
     [params],
   );
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      setError(null);
-      const payload = await fetchFinancesTransactions(buildParams());
-      setItems(payload.items);
-      setNextCursor(payload.nextCursor);
-      const groupName = firstParam(params.groupName);
-      const categoryId = firstParam(params.categoryId);
-      if (groupName) setTitle(groupName);
-      else if (categoryId) {
-        setTitle(payload.items[0]?.category?.name ?? "Category");
-      } else if (firstParam(params.groupId)) {
-        setTitle(payload.items[0]?.category?.name ?? "Group");
-      } else {
-        setTitle("Transactions");
-      }
-    } catch (cause) {
-      setItems([]);
-      setNextCursor(null);
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Failed to load transactions.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [buildParams, params.categoryId, params.groupId, params.groupName]);
+  const paramsKey = buildParams().toString();
+
+  const transactionsQuery = useInfiniteQuery({
+    queryKey: queryKeys.financesTransactions(paramsKey),
+    queryFn: ({ pageParam }) =>
+      fetchFinancesTransactions(buildParams(pageParam)),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
 
   useFocusEffect(
     useCallback(() => {
-      void reload();
-    }, [reload]),
+      void transactionsQuery.refetch();
+    }, [transactionsQuery.refetch]),
   );
 
-  const loadMore = useCallback(async () => {
-    if (!nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const payload = await fetchFinancesTransactions(buildParams(nextCursor));
-      setItems((prev) => [...prev, ...payload.items]);
-      setNextCursor(payload.nextCursor);
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Failed to load more transactions.",
-      );
-    } finally {
-      setLoadingMore(false);
+  const items = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: FinancesTransaction[] = [];
+    for (const page of transactionsQuery.data?.pages ?? []) {
+      for (const item of page.items) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        merged.push(item);
+      }
     }
-  }, [buildParams, loadingMore, nextCursor]);
+    return merged;
+  }, [transactionsQuery.data?.pages]);
+
+  const title = useMemo(() => {
+    const groupName = firstParam(params.groupName);
+    const categoryId = firstParam(params.categoryId);
+    if (groupName) return groupName;
+    if (categoryId) {
+      return items[0]?.category?.name ?? "Category";
+    }
+    if (firstParam(params.groupId)) {
+      return items[0]?.category?.name ?? "Group";
+    }
+    return "Transactions";
+  }, [items, params.groupId, params.groupName, params.categoryId]);
+
+  const nextCursor =
+    transactionsQuery.data?.pages.at(-1)?.nextCursor ?? null;
+  const loading =
+    transactionsQuery.isPending && transactionsQuery.data === undefined;
+  const showError =
+    showQueryErrorBanner(offline, transactionsQuery.error) &&
+    items.length === 0;
+
+  const loadMore = useCallback(() => {
+    if (!nextCursor || transactionsQuery.isFetchingNextPage) return;
+    void transactionsQuery.fetchNextPage();
+  }, [nextCursor, transactionsQuery]);
 
   return (
     <ScreenChrome title={title} leading="none">
-      {loading && items.length === 0 ? (
+      {loading ? (
         <View
           style={{
             flex: 1,
@@ -149,11 +152,16 @@ export function FinancesTransactionsScreen() {
         >
           <ActivityIndicator />
         </View>
-      ) : error && items.length === 0 ? (
+      ) : showError ? (
         <View style={{ padding: 16, backgroundColor }}>
-          <Text variant="secondary" style={{ color: mutedColor }}>
-            {error}
-          </Text>
+          <Pressable onPress={() => void transactionsQuery.refetch()}>
+            <Text variant="secondary" style={{ color: mutedColor }}>
+              {queryErrorMessage(
+                transactionsQuery.error,
+                "Failed to load transactions.",
+              )}
+            </Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList
@@ -171,11 +179,11 @@ export function FinancesTransactionsScreen() {
           ListFooterComponent={
             nextCursor ? (
               <Pressable
-                onPress={() => void loadMore()}
-                disabled={loadingMore}
+                onPress={loadMore}
+                disabled={transactionsQuery.isFetchingNextPage}
                 style={{ paddingVertical: 16, alignItems: "center" }}
               >
-                {loadingMore ? (
+                {transactionsQuery.isFetchingNextPage ? (
                   <ActivityIndicator />
                 ) : (
                   <Text variant="secondary" weight="medium">

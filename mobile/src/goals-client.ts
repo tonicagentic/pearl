@@ -1,5 +1,4 @@
-import { AGENT_URL, getAuthCookie } from "./eve-transport";
-import { sessionInvalid } from "./session-store";
+import { authedJson, authedVoid } from "./http";
 
 export type GoalDto = {
   readonly id: string;
@@ -13,36 +12,8 @@ export type GoalDto = {
   readonly updatedAt: string;
 };
 
-function authHeaders(): Record<string, string> {
-  const credential = getAuthCookie();
-  return {
-    "content-type": "application/json",
-    ...(credential ? { authorization: `Bearer ${credential}` } : {}),
-  };
-}
-
-async function readError(response: Response): Promise<string> {
-  const body = (await response.json().catch(() => ({}))) as {
-    error?: string;
-  };
-  return body.error ?? `Request failed (${response.status}).`;
-}
-
-function handleAuth(response: Response): void {
-  if (response.status === 401) {
-    sessionInvalid();
-  }
-}
-
 export async function fetchAllGoals(): Promise<readonly GoalDto[]> {
-  const response = await fetch(`${AGENT_URL}/api/goals`, {
-    headers: authHeaders(),
-  });
-  if (!response.ok) {
-    handleAuth(response);
-    throw new Error(await readError(response));
-  }
-  const data = (await response.json()) as { goals: GoalDto[] };
+  const data = await authedJson<{ goals: GoalDto[] }>("/api/goals");
   return data.goals;
 }
 
@@ -52,16 +23,10 @@ export async function createGoalRequest(input: {
   readonly targetDate?: string | null;
   readonly notes?: string | null;
 }): Promise<GoalDto> {
-  const response = await fetch(`${AGENT_URL}/api/goals`, {
+  const data = await authedJson<{ goal: GoalDto }>("/api/goals", {
     method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(input),
+    json: input,
   });
-  if (!response.ok) {
-    handleAuth(response);
-    throw new Error(await readError(response));
-  }
-  const data = (await response.json()) as { goal: GoalDto };
   return data.goal;
 }
 
@@ -75,32 +40,15 @@ export async function updateGoalRequest(
     readonly projectId?: string | null;
   },
 ): Promise<GoalDto> {
-  const response = await fetch(
-    `${AGENT_URL}/api/goals/${encodeURIComponent(goalId)}`,
-    {
-      method: "PATCH",
-      headers: authHeaders(),
-      body: JSON.stringify(input),
-    },
+  const data = await authedJson<{ goal: GoalDto }>(
+    `/api/goals/${encodeURIComponent(goalId)}`,
+    { method: "PATCH", json: input },
   );
-  if (!response.ok) {
-    handleAuth(response);
-    throw new Error(await readError(response));
-  }
-  const data = (await response.json()) as { goal: GoalDto };
   return data.goal;
 }
 
 export async function deleteGoalRequest(goalId: string): Promise<void> {
-  const response = await fetch(
-    `${AGENT_URL}/api/goals/${encodeURIComponent(goalId)}`,
-    {
-      method: "DELETE",
-      headers: authHeaders(),
-    },
-  );
-  if (!response.ok) {
-    handleAuth(response);
-    throw new Error(await readError(response));
-  }
+  await authedVoid(`/api/goals/${encodeURIComponent(goalId)}`, {
+    method: "DELETE",
+  });
 }

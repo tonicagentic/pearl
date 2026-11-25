@@ -34,7 +34,9 @@ import {
   usePearlNavigationTheme,
   usePearlScreenBackground,
 } from "@/src/navigation-theme";
+import { NetworkStatusProvider } from "@/src/network-status";
 import { Observe, ObserveRoot, observeAvailable } from "@/src/observe";
+import { QueryProvider } from "@/src/query-client";
 import { WorkspaceProvider } from "@/src/workspace-context";
 
 function agentHostnameForTraces(): string | null {
@@ -124,28 +126,30 @@ function AuthenticatedLayout() {
   const appReady = hasAccount;
 
   return (
-    <ChatsProvider key={accountKey}>
-      <WorkspaceProvider>
-        <PushNotificationsBridge />
-        <GestureHandlerRootView
-          className="flex-1"
-          style={{ backgroundColor }}
-        >
-          <SafeAreaProvider>
-            <KeyboardProvider
-              enabled={Platform.OS === "ios" && !Platform.isPad}
+    <NetworkStatusProvider>
+      <QueryProvider accountKey={accountKey}>
+        <ChatsProvider key={accountKey}>
+          <WorkspaceProvider>
+            <PushNotificationsBridge />
+            <GestureHandlerRootView
+              className="flex-1"
+              style={{ backgroundColor }}
             >
-              <StatusBar style="auto" />
-              {restoring ? (
-                // Don't mount the navigator until we know the zone — otherwise
-                // restore paints sign-in then pushes (home), and the nav chrome
-                // slides in with the default stack animation. Native splash
-                // still covers this until hideAsync runs.
-                <View style={{ flex: 1, backgroundColor }} />
-              ) : (
-                <BootReveal>
-                  <ThemeProvider value={navigationTheme}>
-                  <Stack
+              <SafeAreaProvider>
+                <KeyboardProvider
+                  enabled={Platform.OS === "ios" && !Platform.isPad}
+                >
+                  <StatusBar style="auto" />
+                  {restoring ? (
+                    // Don't mount the navigator until we know the zone — otherwise
+                    // restore paints sign-in then pushes (home), and the nav chrome
+                    // slides in with the default stack animation. Native splash
+                    // still covers this until hideAsync runs.
+                    <View style={{ flex: 1, backgroundColor }} />
+                  ) : (
+                    <BootReveal>
+                      <ThemeProvider value={navigationTheme}>
+                      <Stack
                     // Remount per auth zone so home is the initial route, not a
                     // push on top of sign-in (animation: "none" alone is ignored
                     // for Protected guard swaps on iOS native-stack).
@@ -276,7 +280,9 @@ function AuthenticatedLayout() {
             </KeyboardProvider>
           </SafeAreaProvider>
         </GestureHandlerRootView>
-      </WorkspaceProvider>
-    </ChatsProvider>
+          </WorkspaceProvider>
+        </ChatsProvider>
+      </QueryProvider>
+    </NetworkStatusProvider>
   );
 }

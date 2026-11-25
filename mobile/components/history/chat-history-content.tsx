@@ -29,6 +29,7 @@ import {
   MATRIX_DOT_LOADER_SIZE,
   MatrixDotLoader,
 } from "@/components/ui/matrix-dot-loader";
+import { OfflineBanner } from "@/components/offline-banner";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import {
@@ -50,6 +51,7 @@ import {
   usePearlMutedBackground,
   usePearlScreenBackground,
 } from "@/src/navigation-theme";
+import { useNetworkStatus } from "@/src/network-status";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 import type { ThreadTraceEvent } from "@/src/thread-trace";
 import { useStackSearch } from "@/src/use-stack-search";
@@ -410,6 +412,7 @@ export function ChatHistoryListAndroid({
     selectChat,
     selectionError,
   } = useChats();
+  const { offline } = useNetworkStatus();
   const rows = search.active ? (search.hits ?? []) : chats;
   const [projects, setProjects] = useState<readonly ProjectDto[] | null>(null);
   const projectNames = useMemo(
@@ -483,6 +486,7 @@ export function ChatHistoryListAndroid({
 
   return (
     <View style={{ flex: 1, backgroundColor: listBackground }}>
+      <OfflineBanner compact />
       <FlatList
         className="flex-1"
         contentContainerClassName={isDrawer ? "px-1 pt-0" : "px-4 pt-0"}
@@ -502,7 +506,7 @@ export function ChatHistoryListAndroid({
         ListHeaderComponent={
           <>
             {listHeader}
-            {!search.active && selectionError ? (
+            {!search.active && selectionError && !offline ? (
               <Text
                 className="px-3 py-2 text-sm text-destructive"
                 accessibilityRole="alert"
@@ -510,7 +514,7 @@ export function ChatHistoryListAndroid({
                 {selectionError}
               </Text>
             ) : null}
-            {!search.active && chatsError && chats.length > 0 ? (
+            {!search.active && chatsError && chats.length > 0 && !offline ? (
               <Pressable
                 accessibilityRole="button"
                 className="min-h-12 justify-center px-3"
@@ -521,7 +525,7 @@ export function ChatHistoryListAndroid({
                 </Text>
               </Pressable>
             ) : null}
-            {search.active && search.error ? (
+            {search.active && search.error && !offline ? (
               <Text
                 className="px-3 py-2 text-sm text-destructive"
                 accessibilityRole="alert"
@@ -625,7 +629,7 @@ function HistoryChatRowAndroid({
       onLongPress={onLongPress}
       delayLongPress={350}
     >
-      {isDrawer ? null : presence === "working" ? (
+      {presence === "working" ? (
         <View
           style={{
             width: MATRIX_DOT_LOADER_SIZE,

@@ -84,28 +84,43 @@ export function FileEditorScreen({
     baseline !== null &&
     (title.trim() !== baseline.title || content !== baseline.content);
 
+  const applySaveResponse = useCallback(
+    (
+      row: Awaited<ReturnType<typeof updateProjectFileRequest>>,
+      sentTitle: string,
+      sentContent: string,
+    ) => {
+      setArtifact(row.artifact);
+      setPath(row.path);
+      setBaseline({ title: row.artifact.title, content: row.content });
+      const draftUnchanged =
+        (title.trim() || "Untitled") === sentTitle && content === sentContent;
+      if (draftUnchanged) {
+        setTitle(row.artifact.title);
+        setContent(row.content);
+      }
+    },
+    [content, title],
+  );
+
   const save = useCallback(() => {
     if (!isDirty || saving) return;
+    const sentTitle = title.trim() || "Untitled";
+    const sentContent = content;
     setSaving(true);
     setError(null);
     void updateProjectFileRequest(projectId, artifactId, {
-      title: title.trim() || "Untitled",
-      content,
+      title: sentTitle,
+      content: sentContent,
     })
-      .then((row) => {
-        setArtifact(row.artifact);
-        setPath(row.path);
-        setTitle(row.artifact.title);
-        setContent(row.content);
-        setBaseline({ title: row.artifact.title, content: row.content });
-      })
+      .then((row) => applySaveResponse(row, sentTitle, sentContent))
       .catch((cause) => {
         setError(
           cause instanceof Error ? cause.message : "Could not save file.",
         );
       })
       .finally(() => setSaving(false));
-  }, [artifactId, content, isDirty, projectId, saving, title]);
+  }, [applySaveResponse, artifactId, content, isDirty, projectId, saving, title]);
 
   const confirmUnlink = useCallback(() => {
     Alert.alert("Unlink file?", title || "File", [
@@ -156,14 +171,15 @@ export function FileEditorScreen({
     };
 
     if (isDirty) {
+      const sentTitle = title.trim() || "Untitled";
+      const sentContent = content;
       setSaving(true);
       void updateProjectFileRequest(projectId, artifactId, {
-        title: title.trim() || "Untitled",
-        content,
+        title: sentTitle,
+        content: sentContent,
       })
         .then((row) => {
-          setArtifact(row.artifact);
-          setBaseline({ title: row.artifact.title, content: row.content });
+          applySaveResponse(row, sentTitle, sentContent);
           run();
         })
         .catch((cause) => {
@@ -176,6 +192,7 @@ export function FileEditorScreen({
     }
     run();
   }, [
+    applySaveResponse,
     artifactId,
     content,
     isDirty,

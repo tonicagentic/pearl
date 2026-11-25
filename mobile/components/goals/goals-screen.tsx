@@ -11,6 +11,11 @@ import {
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { CheckIcon, PlusIcon, Trash2Icon } from "lucide-react-native";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useCSSVariable } from "uniwind";
 
 import { CreateGoalModal } from "@/components/goals/create-goal-modal";
@@ -23,6 +28,12 @@ import {
   updateGoalRequest,
   type GoalDto,
 } from "@/src/goals-client";
+import { useNetworkStatus } from "@/src/network-status";
+import {
+  queryErrorMessage,
+  queryKeys,
+  showQueryErrorBanner,
+} from "@/src/query-client";
 
 if (
   Platform.OS === "android" &&
@@ -37,10 +48,11 @@ function animateList() {
 
 /** Goals hub: Active / Done with optional project filing. */
 export function GoalsScreen() {
-  const [goals, setGoals] = useState<readonly GoalDto[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const { offline } = useNetworkStatus();
   const [composerOpen, setComposerOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -48,76 +60,94 @@ export function GoalsScreen() {
     | string
     | undefined;
 
-  const reload = useCallback(async () => {
-    try {
-      setError(null);
-      setGoals(await fetchAllGoals());
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Failed to load goals.");
-    }
-  }, []);
+  const goalsQuery = useQuery({
+    queryKey: queryKeys.goals,
+    queryFn: fetchAllGoals,
+  });
 
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      void (async () => {
-        try {
-          const rows = await fetchAllGoals();
-          if (!cancelled) {
-            setGoals(rows);
-            setError(null);
-          }
-        } catch (cause) {
-          if (!cancelled) {
-            setError(
-              cause instanceof Error ? cause.message : "Failed to load goals.",
-            );
-          }
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, []),
+      void goalsQuery.refetch();
+    }, [goalsQuery.refetch]),
   );
 
-  const patchGoal = useCallback((updated: GoalDto) => {
-    animateList();
-    setGoals((current) =>
-      current
-        ? current.map((row) => (row.id === updated.id ? updated : row))
-        : current,
-    );
-  }, []);
+  const goals = goalsQuery.data ?? null;
+  const loadError = goalsQuery.error;
+  const showLoadError = showQueryErrorBanner(offline, loadError);
+  const showActionError = showQueryErrorBanner(offline, actionError);
 
-  const removeGoal = useCallback((id: string) => {
-    animateList();
-    setGoals((current) =>
-      current ? current.filter((row) => row.id !== id) : current,
-    );
-  }, []);
+  const invalidateGoalsAndProjects = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.goals });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+  }, [queryClient]);
+
+  const patchGoal = useCallback(
+    (updated: GoalDto) => {
+      animateList();
+      queryClient.setQueryData<readonly GoalDto[]>(queryKeys.goals, (current) =>
+        current
+          ? current.map((row) => (row.id === updated.id ? updated : row))
+          : current,
+      );
+    },
+    [queryClient],
+  );
+
+  const removeGoal = useCallback(
+    (id: string) => {
+      animateList();
+      queryClient.setQueryData<readonly GoalDto[]>(queryKeys.goals, (current) =>
+        current ? current.filter((row) => row.id !== id) : current,
+      );
+    },
+    [queryClient],
+  );
+
+  const updateMutation = useMutation({
+    mutationFn: ({
+      goalId,
+      input,
+    }: {
+      goalId: string;
+      input: Parameters<typeof updateGoalRequest>[1];
+    }) => updateGoalRequest(goalId, input),
+    onSuccess: (updated) => {
+      patchGoal(updated);
+      invalidateGoalsAndProjects();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteGoalRequest,
+    onSuccess: () => {
+      invalidateGoalsAndProjects();
+    },
+  });
 
   const toggleDone = useCallback(
     async (goal: GoalDto) => {
       setBusyId(goal.id);
+      setActionError(null);
       const nextStatus = goal.status === "done" ? "active" : "done";
       const optimistic: GoalDto = { ...goal, status: nextStatus };
       patchGoal(optimistic);
       try {
-        const updated = await updateGoalRequest(goal.id, {
-          status: nextStatus,
+        await updateMutation.mutateAsync({
+          goalId: goal.id,
+          input: { status: nextStatus },
         });
-        patchGoal(updated);
       } catch (cause) {
         patchGoal(goal);
-        setError(
-          cause instanceof Error ? cause.message : "Failed to update the goal.",
-        );
+        if (showQueryErrorBanner(offline, cause)) {
+          setActionError(
+            queryErrorMessage(cause, "Failed to update the goal."),
+          );
+        }
       } finally {
         setBusyId(null);
       }
     },
-    [patchGoal],
+    [offline, patchGoal, updateMutation],
   );
 
   const deleteGoal = useCallback(
@@ -130,16 +160,22 @@ export function GoalsScreen() {
           onPress: () => {
             void (async () => {
               setBusyId(goal.id);
+              setActionError(null);
+              const snapshot = queryClient.getQueryData<readonly GoalDto[]>(
+                queryKeys.goals,
+              );
               removeGoal(goal.id);
               try {
-                await deleteGoalRequest(goal.id);
+                await deleteMutation.mutateAsync(goal.id);
               } catch (cause) {
-                patchGoal(goal);
-                setError(
-                  cause instanceof Error
-                    ? cause.message
-                    : "Failed to delete the goal.",
-                );
+                if (snapshot) {
+                  queryClient.setQueryData(queryKeys.goals, snapshot);
+                }
+                if (showQueryErrorBanner(offline, cause)) {
+                  setActionError(
+                    queryErrorMessage(cause, "Failed to delete the goal."),
+                  );
+                }
               } finally {
                 setBusyId(null);
               }
@@ -148,7 +184,7 @@ export function GoalsScreen() {
         },
       ]);
     },
-    [patchGoal, removeGoal],
+    [deleteMutation, offline, queryClient, removeGoal],
   );
 
   const active = useMemo(
@@ -159,6 +195,8 @@ export function GoalsScreen() {
     () => (goals ?? []).filter((goal) => goal.status === "done"),
     [goals],
   );
+
+  const bannerError = showActionError ? actionError : showLoadError ? loadError : null;
 
   return (
     <ScreenChrome
@@ -180,14 +218,19 @@ export function GoalsScreen() {
           contentContainerStyle={{ paddingBottom: 24 }}
           contentInsetAdjustmentBehavior="automatic"
         >
-          {error ? (
+          {bannerError ? (
             <Pressable
               accessibilityRole="button"
               className="mb-4 rounded-2xl bg-destructive/10 px-4 py-3"
-              onPress={() => void reload()}
+              onPress={() => {
+                setActionError(null);
+                void goalsQuery.refetch();
+              }}
             >
               <Text variant="secondary" tone="destructive">
-                {error}
+                {typeof bannerError === "string"
+                  ? bannerError
+                  : queryErrorMessage(bannerError, "Failed to load goals.")}
               </Text>
               <Text
                 variant="caption"
@@ -199,7 +242,7 @@ export function GoalsScreen() {
             </Pressable>
           ) : null}
 
-          {goals === null && !error ? (
+          {goals === null && goalsQuery.isPending ? (
             <ActivityIndicator color={placeholderColor ?? undefined} />
           ) : (
             <>
@@ -227,11 +270,9 @@ export function GoalsScreen() {
         <CreateGoalModal
           open={composerOpen}
           onClose={() => setComposerOpen(false)}
-          onCreated={(created) => {
+          onCreated={() => {
             animateList();
-            setGoals((current) =>
-              current ? [created, ...current] : [created],
-            );
+            invalidateGoalsAndProjects();
             setComposerOpen(false);
           }}
         />

@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { FolderIcon, PlusIcon } from "lucide-react-native";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCSSVariable } from "uniwind";
 
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
@@ -15,17 +16,37 @@ import { ProjectMark } from "@/components/project-mark";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { fetchProjects, type ProjectDto } from "@/src/projects-client";
+import { useNetworkStatus } from "@/src/network-status";
+import {
+  queryErrorMessage,
+  queryKeys,
+  showQueryErrorBanner,
+} from "@/src/query-client";
 import { useStackSearch } from "@/src/use-stack-search";
 
 /** Lists workspaces (projects) and opens the new-workspace composer. */
 export function WorkspacesScreen() {
-  const [projects, setProjects] = useState<readonly ProjectDto[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const { offline } = useNetworkStatus();
   const [showForm, setShowForm] = useState(false);
   const search = useStackSearch();
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
+
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: fetchProjects,
+  });
+
+  useFocusEffect(
+    useCallback(() => {
+      void projectsQuery.refetch();
+    }, [projectsQuery.refetch]),
+  );
+
+  const projects = projectsQuery.data ?? null;
+  const showError = showQueryErrorBanner(offline, projectsQuery.error);
 
   const ordered = useMemo(
     () =>
@@ -40,42 +61,6 @@ export function WorkspacesScreen() {
       search.matches(project.name, project.instructions),
     );
   }, [ordered, search.active, search.matches]);
-
-  const reload = useCallback(async () => {
-    try {
-      setError(null);
-      setProjects(await fetchProjects());
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Failed to load workspaces.",
-      );
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-      void fetchProjects()
-        .then((rows) => {
-          if (!cancelled) {
-            setProjects(rows);
-            setError(null);
-          }
-        })
-        .catch((cause) => {
-          if (!cancelled) {
-            setError(
-              cause instanceof Error
-                ? cause.message
-                : "Failed to load workspaces.",
-            );
-          }
-        });
-      return () => {
-        cancelled = true;
-      };
-    }, []),
-  );
 
   const openComposer = useCallback(() => setShowForm(true), []);
 
@@ -100,15 +85,22 @@ export function WorkspacesScreen() {
       }}
     >
       <View style={{ flex: 1, backgroundColor }}>
-        {error ? (
-          <Pressable className="px-5 py-3" onPress={() => void reload()}>
+        {showError ? (
+          <Pressable
+            className="px-5 py-3"
+            onPress={() => void projectsQuery.refetch()}
+          >
             <Text variant="secondary" tone="destructive">
-              {error} Tap to retry.
+              {queryErrorMessage(
+                projectsQuery.error,
+                "Failed to load workspaces.",
+              )}{" "}
+              Tap to retry.
             </Text>
           </Pressable>
         ) : null}
 
-        {projects === null && !error ? (
+        {projects === null && projectsQuery.isPending ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator />
           </View>
@@ -184,11 +176,14 @@ export function WorkspacesScreen() {
         onClose={() => setShowForm(false)}
         onCreated={(project) => {
           setShowForm(false);
-          setProjects((current) =>
-            current
-              ? [project, ...current.filter((row) => row.id !== project.id)]
-              : [project],
+          queryClient.setQueryData<readonly ProjectDto[]>(
+            queryKeys.projects,
+            (current) =>
+              current
+                ? [project, ...current.filter((row) => row.id !== project.id)]
+                : [project],
           );
+          void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
           router.push(`/workspaces/projects/${encodeURIComponent(project.id)}`);
         }}
       />

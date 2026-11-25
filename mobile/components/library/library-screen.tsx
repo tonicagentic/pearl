@@ -13,6 +13,7 @@ import {
 import { useFocusEffect } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { FileIcon, ImageIcon, Trash2Icon } from "lucide-react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
@@ -29,6 +30,12 @@ import {
   usePearlMutedBackground,
   usePearlScreenBackground,
 } from "@/src/navigation-theme";
+import { useNetworkStatus } from "@/src/network-status";
+import {
+  queryErrorMessage,
+  queryKeys,
+  showQueryErrorBanner,
+} from "@/src/query-client";
 import { useStackSearch } from "@/src/use-stack-search";
 
 type KindFilter = "all" | "files" | "images";
@@ -36,11 +43,8 @@ type ProjectFilter = "all" | "unlinked" | { readonly projectId: string };
 
 /** Principal Library: durable agent files and images with search + filters. */
 export function LibraryScreen() {
-  const [items, setItems] = useState<readonly ArtifactDto[] | null>(null);
-  const [projectLinks, setProjectLinks] = useState<
-    readonly ProjectArtifactLinkDto[]
-  >([]);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const { offline } = useNetworkStatus();
   const [filter, setFilter] = useState<KindFilter>("all");
   const [projectFilter, setProjectFilter] = useState<ProjectFilter>("all");
   const [busyPath, setBusyPath] = useState<string | null>(null);
@@ -48,6 +52,28 @@ export function LibraryScreen() {
   const { width } = useWindowDimensions();
   const backgroundColor = usePearlScreenBackground();
   const mutedColor = usePearlMutedBackground();
+
+  const libraryQuery = useQuery({
+    queryKey: queryKeys.library,
+    queryFn: listArtifacts,
+  });
+
+  useFocusEffect(
+    useCallback(() => {
+      void libraryQuery.refetch();
+    }, [libraryQuery.refetch]),
+  );
+
+  const items = libraryQuery.data?.artifacts ?? null;
+  const projectLinks = libraryQuery.data?.projectLinks ?? [];
+  const showError = showQueryErrorBanner(offline, libraryQuery.error);
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteArtifact,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.library });
+    },
+  });
 
   const projectOptions = useMemo(() => {
     const byId = new Map<string, string>();
@@ -110,50 +136,6 @@ export function LibraryScreen() {
     [visible],
   );
 
-  const applyPayload = useCallback(
-    (payload: Awaited<ReturnType<typeof listArtifacts>>) => {
-      setItems(payload.artifacts);
-      setProjectLinks(payload.projectLinks);
-    },
-    [],
-  );
-
-  const reload = useCallback(async () => {
-    try {
-      setError(null);
-      applyPayload(await listArtifacts());
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Failed to load library.",
-      );
-    }
-  }, [applyPayload]);
-
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-      void listArtifacts()
-        .then((payload) => {
-          if (!cancelled) {
-            applyPayload(payload);
-            setError(null);
-          }
-        })
-        .catch((cause) => {
-          if (!cancelled) {
-            setError(
-              cause instanceof Error
-                ? cause.message
-                : "Failed to load library.",
-            );
-          }
-        });
-      return () => {
-        cancelled = true;
-      };
-    }, [applyPayload]),
-  );
-
   const openItem = useCallback(async (item: ArtifactDto) => {
     setBusyPath(item.pathname);
     try {
@@ -187,15 +169,28 @@ export function LibraryScreen() {
           onPress: () => {
             void (async () => {
               setBusyPath(item.pathname);
+              const snapshot = libraryQuery.data;
+              queryClient.setQueryData<{
+                artifacts: readonly ArtifactDto[];
+                projectLinks: readonly ProjectArtifactLinkDto[];
+              }>(queryKeys.library, (current) =>
+                current
+                  ? {
+                      artifacts: current.artifacts.filter(
+                        (row) => row.pathname !== item.pathname,
+                      ),
+                      projectLinks: current.projectLinks.filter(
+                        (row) => row.pathname !== item.pathname,
+                      ),
+                    }
+                  : current,
+              );
               try {
-                await deleteArtifact(item.pathname);
-                setItems((current) =>
-                  (current ?? []).filter((row) => row.pathname !== item.pathname),
-                );
-                setProjectLinks((current) =>
-                  current.filter((row) => row.pathname !== item.pathname),
-                );
+                await deleteMutation.mutateAsync(item.pathname);
               } catch (cause) {
+                if (snapshot) {
+                  queryClient.setQueryData(queryKeys.library, snapshot);
+                }
                 Alert.alert(
                   "Could not delete",
                   cause instanceof Error ? cause.message : "Try again.",
@@ -208,7 +203,7 @@ export function LibraryScreen() {
         },
       ]);
     },
-    [],
+    [deleteMutation, libraryQuery.data, queryClient],
   );
 
   const gap = 10;
@@ -289,15 +284,19 @@ export function LibraryScreen() {
           ))}
         </ScrollView>
 
-        {error ? (
-          <Pressable className="px-5 py-3" onPress={() => void reload()}>
+        {showError ? (
+          <Pressable
+            className="px-5 py-3"
+            onPress={() => void libraryQuery.refetch()}
+          >
             <Text variant="secondary" tone="destructive">
-              {error} Tap to retry.
+              {queryErrorMessage(libraryQuery.error, "Failed to load library.")}{" "}
+              Tap to retry.
             </Text>
           </Pressable>
         ) : null}
 
-        {items === null && !error ? (
+        {items === null && libraryQuery.isPending ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator />
           </View>
