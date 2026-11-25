@@ -8,6 +8,7 @@ import {
 import { convertEveMessages } from "@assistant-ui/eve";
 
 import { CanvasProvider } from "@/components/assistant-ui/elements/canvas-context";
+import { DeployWatchCard } from "@/components/assistant-ui/elements/deploy-watch-card";
 import { GenerateImageToolUI } from "@/components/assistant-ui/elements/generate-image-tool.aui";
 import {
   SubagentRunsProvider,
@@ -15,6 +16,7 @@ import {
 } from "@/components/assistant-ui/elements/task-card.aui";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { cn } from "@/lib/utils";
+import type { WatchSnapshot } from "@/lib/watch/deploy";
 import {
   GALLERY_MESSAGES,
   WEB_REPLAY_SCENARIOS,
@@ -23,6 +25,29 @@ import {
   webReplayScenario,
   type WebReplayScenarioId,
 } from "./fixtures";
+
+const WATCH_FIXTURES: readonly WatchSnapshot[] = [
+  {
+    provider: "vercel",
+    state: "error",
+    title: "Current production deployment",
+    target: "production",
+    url: "https://my-agent-git-main-tonicagentic.vercel.app",
+    deploymentId: "my-agent-git-main-tonicagentic.vercel.app",
+    dashboardUrl: "https://vercel.com/deployments/dpl_fixture",
+    error: "Build failed",
+    logs: ["Error: Command failed with exit code 1", "npm run build"],
+  },
+  {
+    provider: "eas",
+    state: "building",
+    title: "EAS iOS preview",
+    target: "ios / preview",
+    buildId: "2d7f5b5f-bcb0-42e3-b5f2-d163789b89c3",
+    dashboardUrl:
+      "https://expo.dev/accounts/tonic/projects/pearl/builds/2d7f5b5f-bcb0-42e3-b5f2-d163789b89c3",
+  },
+];
 
 type Mode = "gallery" | "replay";
 type WidthPreset = "mobile" | "thread" | "full";
@@ -296,6 +321,20 @@ function ThreadInspectorWorkbench() {
             widthPreset === "thread" && "max-w-[680px]",
           )}
         >
+          {mode === "gallery" ? (
+            <div className="border-border/60 flex flex-col gap-2 border-b px-3 py-3">
+              <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+                Deploy watch fixtures
+              </span>
+              {WATCH_FIXTURES.map((handle) => (
+                <DeployWatchCard
+                  key={`${handle.provider}:${handle.deploymentId ?? handle.buildId}`}
+                  handle={handle}
+                  baseUrl=""
+                />
+              ))}
+            </div>
+          ) : null}
           <AssistantRuntimeProvider key={mode} runtime={runtime}>
             <CanvasProvider chatId={null}>
               <GenerateImageToolUI />

@@ -71,7 +71,10 @@ in the delegated `message`. Continue the same task when the parent passes
   sandbox checkout. Separate from Expo build or workflow runs. When the repo
   is Pearl (`alex/my-agent`), production changes the phone API. If the Vercel
   token is missing, call `ensure_ship_access` (or point them at its
-  authorizeUrl).
+  authorizeUrl). Returns a watch handle as soon as the deployment URL
+  appears — Pearl chat shows a live status card. Do **not** poll with
+  `vercel inspect`, `list_deployments`, or `get_deployment` to wait on that
+  deploy.
 - Vercel MCP on this child: reads and runtime/build logs are free; creating or
   changing projects, env, domains, aliases, and deployments needs approval.
   Prefer `deploy_vercel` for the sandbox tree; MCP `create_deployment` is an
@@ -83,10 +86,13 @@ in the delegated `message`. Continue the same task when the parent passes
   `list_expo_projects` and pass that project's `appId` or `@owner/slug`. Start
   and stop simulators with `simulator_start` / `simulator_stop`, then
   `pin_expo_preview` with the dashboard URL. Drive the device with the
-  automation tools. Inspect and ship with `build_*` and `workflow_*`. Docs,
-  Observe, and TestFlight stay on the same connection. If Expo is not
-  authorized, point them to Profile → Coder → Expo. There is no server
-  `EXPO_TOKEN` and no Pearl default project id for other apps.
+  automation tools. Inspect and ship with `build_*` and `workflow_*`. After
+  `build_run`, Pearl chat shows a live EAS status card — do **not** poll
+  `build_info` to wait on that build (use `build_info` / `build_logs` only
+  when debugging a failure the user asked about). Docs, Observe, and
+  TestFlight stay on the same connection. If Expo is not authorized, point
+  them to Profile → Coder → Expo. There is no server `EXPO_TOKEN` and no
+  Pearl default project id for other apps.
 - Neon: use the `neon` connection on the signed-in account. List orgs/projects
   first, then pass `project_id`. Schema inspection and docs are free; `run_sql`
   and resource writes need approval. If Neon is not authorized, point them to

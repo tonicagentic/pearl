@@ -22,11 +22,14 @@ import {
   WAITING_FOR_SUBAGENT_LABEL,
 } from "@/lib/chat/subagent-row";
 import { extractCoderHandoff } from "@/lib/chat/coder-receipt";
+import { cn } from "@/lib/utils";
+import { extractWatchHandles } from "@/lib/watch/deploy";
 import {
   TaskCard,
   type TaskCardState,
 } from "@/components/assistant-ui/elements/task-card";
 import { CoderSettledReceipt } from "@/components/assistant-ui/elements/coder-receipt";
+import { DeployWatchStack } from "@/components/assistant-ui/elements/deploy-watch-card";
 import { threadMeta } from "@/components/assistant-ui/elements/surfaces";
 
 // Runtime binding for the task-card element (docs: elements/task-card).
@@ -126,18 +129,47 @@ function agentForCall(
   });
 }
 
-function settledResult(input: {
+function childMessagesFor(
+  agent: ConversationAgentSession | undefined,
+): readonly {
+  readonly parts?: readonly {
+    readonly type?: string;
+    readonly name?: string;
+    readonly input?: unknown;
+    readonly state?: string;
+    readonly output?: unknown;
+  }[];
+}[] {
+  if (!agent || agent.observation.status === "not-followed") return [];
+  return agent.observation.conversation.messages;
+}
+
+function coderWatches(agent: ConversationAgentSession | undefined) {
+  const handles = extractWatchHandles({
+    childMessages: childMessagesFor(agent),
+  });
+  return [handles.vercel, handles.eas].filter(
+    (snap): snap is NonNullable<typeof snap> => snap != null,
+  );
+}
+
+function coderResult(input: {
   readonly state: TaskCardState;
   readonly run?: SubagentRun;
+  readonly agent?: ConversationAgentSession;
   readonly isCoder: boolean;
 }): ReactNode {
-  const { state, run, isCoder } = input;
+  const { state, run, agent, isCoder } = input;
   if (state === "failed") {
     return "no result arrived — the run was likely interrupted; ask again";
   }
+  // Live watches render beside the row (not inside the result chrome).
   if (state === "working" || state === "waiting") return undefined;
   if (!isCoder) return undefined;
-  const handoff = extractCoderHandoff({ runResult: run?.result });
+  const handoff = extractCoderHandoff({
+    runResult: run?.result,
+    childMessages: childMessagesFor(agent),
+  });
   if (handoff) return <CoderSettledReceipt handoff={handoff} />;
   return undefined;
 }
@@ -177,16 +209,23 @@ export function TaskGroup({
         );
         const row = deriveSubagentRowContent({ title, child: agent });
         const live = state === "working" || state === "waiting";
+        const watches = isCoder ? coderWatches(agent) : [];
         return (
-          <TaskCard
+          <div
             key={part.toolCallId}
-            label={row.title}
-            modelLabel={row.modelLabel}
-            activity={live ? row.activity : undefined}
-            state={state}
-            className={isCoder ? "max-w-xl" : undefined}
-            result={settledResult({ state, run, isCoder })}
-          />
+            className={cn("flex flex-col gap-2", isCoder && "max-w-xl")}
+          >
+            <TaskCard
+              label={row.title}
+              modelLabel={row.modelLabel}
+              activity={live ? row.activity : undefined}
+              state={state}
+              result={coderResult({ state, run, agent, isCoder })}
+            />
+            {watches.length > 0 ? (
+              <DeployWatchStack handles={watches} />
+            ) : null}
+          </div>
         );
       })}
       {anyLive ? (

@@ -26,7 +26,9 @@ import {
   subagentRowTitle,
   WAITING_FOR_SUBAGENT_LABEL,
 } from "../../../../lib/chat/subagent-row";
+import { extractWatchHandles } from "../../../../lib/watch/deploy";
 import { CoderSettledReceipt } from "./coder-receipt";
+import { DeployWatchStack } from "./deploy-watch-card";
 import { Text } from "@/components/ui/text";
 import { TaskCard, type TaskCardState } from "./task-card";
 
@@ -180,7 +182,16 @@ function childMessagesFor(
   return agent.observation.conversation.messages;
 }
 
-function settledResult(input: {
+function coderWatches(agent: ReturnType<typeof agentForCall>) {
+  const handles = extractWatchHandles({
+    childMessages: childMessagesFor(agent),
+  });
+  return [handles.vercel, handles.eas].filter(
+    (snap): snap is NonNullable<typeof snap> => snap != null,
+  );
+}
+
+function coderResult(input: {
   readonly state: TaskCardState;
   readonly run?: SubagentRun;
   readonly agent: ReturnType<typeof agentForCall>;
@@ -240,30 +251,38 @@ export function TaskGroup({
         );
         const row = deriveSubagentRowContent({ title, child: agent });
         const live = state === "working" || state === "waiting";
+        const watches = isCoder ? coderWatches(agent) : [];
         return (
-          <TaskCard
+          <View
             key={part.toolCallId}
-            label={row.title}
-            modelLabel={row.modelLabel}
-            activity={live ? row.activity : undefined}
-            state={state}
-            className={isCoder ? "max-w-xl" : undefined}
-            onPress={() => {
-              open({
-                sessionId: agent?.sessionId ?? part.toolCallId ?? part.toolName,
-                name: run?.name ?? part.toolName,
-                callId: part.toolCallId,
+            className={isCoder ? "max-w-xl flex-col gap-2" : "flex-col gap-2"}
+          >
+            <TaskCard
+              label={row.title}
+              modelLabel={row.modelLabel}
+              activity={live ? row.activity : undefined}
+              state={state}
+              onPress={() => {
+                open({
+                  sessionId:
+                    agent?.sessionId ?? part.toolCallId ?? part.toolName,
+                  name: run?.name ?? part.toolName,
+                  callId: part.toolCallId,
+                  agent,
+                });
+              }}
+              result={coderResult({
+                state,
+                run,
                 agent,
-              });
-            }}
-            result={settledResult({
-              state,
-              run,
-              agent,
-              waitPrompt: wait?.prompt,
-              isCoder,
-            })}
-          />
+                waitPrompt: wait?.prompt,
+                isCoder,
+              })}
+            />
+            {watches.length > 0 ? (
+              <DeployWatchStack handles={watches} />
+            ) : null}
+          </View>
         );
       })}
       {anyLive ? (
