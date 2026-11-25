@@ -38,6 +38,20 @@ export function shouldShowThinking(
   );
 }
 
+function isDisplayOnlyPendingAssistant(
+  message: ThreadMessageLike | undefined,
+): boolean {
+  if (!message || message.role !== "assistant") return false;
+  const content = message.content;
+  const parts = Array.isArray(content) ? content : [];
+  if (parts.length > 0) return false;
+  const metadata = message.metadata as
+    | { readonly custom?: { readonly turnId?: string }; readonly status?: string }
+    | undefined;
+  if (metadata?.custom?.turnId || metadata?.status) return false;
+  return message.status?.type === "running";
+}
+
 // eve creates its assistant row after delivery.consumed / model.started. Until
 // then, keep a display-only row at that same position; it is never persisted.
 // `awaitingReply` covers prepare + the gap after deliveryId clears localSend
@@ -48,10 +62,19 @@ export function withPendingAssistant(
   streaming: boolean,
   awaitingReply = false,
 ): ThreadMessageLike[] {
+  let next = messages as ThreadMessageLike[];
+  const trailing = next[next.length - 1];
+  if (
+    isDisplayOnlyPendingAssistant(trailing) &&
+    !streaming &&
+    !awaitingReply
+  ) {
+    next = next.slice(0, -1);
+  }
   // Preserve identity when the overlay is a no-op so external-store can skip
   // a full thread resync on stream ticks that only grow the last assistant.
-  if (messages[messages.length - 1]?.role === "assistant") {
-    return messages as ThreadMessageLike[];
+  if (next[next.length - 1]?.role === "assistant") {
+    return next;
   }
   const lastSource = source[source.length - 1];
   const streamReady =
@@ -59,9 +82,9 @@ export function withPendingAssistant(
     && lastSource?.role === "user"
     && lastSource.metadata?.status === "complete";
   const preparingOptimistic =
-    awaitingReply && messages[messages.length - 1]?.role === "user";
+    awaitingReply && next[next.length - 1]?.role === "user";
   if (!streamReady && !preparingOptimistic) {
-    return messages as ThreadMessageLike[];
+    return next;
   }
-  return [...messages, { role: "assistant", content: [], status: { type: "running" } }];
+  return [...next, { role: "assistant", content: [], status: { type: "running" } }];
 }

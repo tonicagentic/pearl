@@ -81,6 +81,24 @@ test("sticky awaitingReply keeps Thinking after localSend clears before busy", (
   assert.deepEqual(projected[1], { role: "assistant", content: [], status: { type: "running" } });
 });
 
+test("drops the display-only assistant when the turn stops without a reply", () => {
+  const user = { role: "user", content: [{ type: "text", text: "Hello" }] };
+  const pending = {
+    role: "assistant",
+    content: [],
+    status: { type: "running" },
+  };
+  assert.deepEqual(
+    withPendingAssistant(
+      [user, pending],
+      [{ role: "user", metadata: { status: "complete" } }],
+      false,
+      false,
+    ),
+    [user],
+  );
+});
+
 test("accepted send with sticky awaitingReply keeps Thinking while user is still submitted", () => {
   // Mirrors chat-screen after deliveryId clears localSend: no preparing phase,
   // store not busy yet, eve user row not complete — sticky flag alone must hold.

@@ -45,64 +45,23 @@ function cursorAfter(event: SessionStreamEvent, line: number): number {
   return line + 1;
 }
 
-/**
- * eve hydrates `initialEvents` as a forward-only stream prefix. A presence
- * mirror that lands at event index 0 with a later line makes eve drop every
- * earlier line, and a saved line past a hole (the missing interaction.opened)
- * advances the resume cursor over that hole. Return the contiguous prefix and
- * the next line resume should read.
- */
-export function repairSessionHydration(
-  events: readonly SessionStreamEvent[],
-  session?: ClientSessionState | null,
-): {
-  readonly events: readonly SessionStreamEvent[];
-  readonly streamIndex: number | undefined;
-} {
-  const positioned: PositionedEvent[] = [];
-  for (let order = 0; order < events.length; order += 1) {
-    const event = events[order]!;
-    const position = streamPosition(event);
-    if (!position) continue;
-    positioned.push({ event, order, ...position });
-  }
+function deliveryIdOf(event: SessionStreamEvent): string | null {
+  const deliveryId = (event as { readonly data?: { readonly deliveryId?: unknown } })
+    .data?.deliveryId;
+  return typeof deliveryId === "string" ? deliveryId : null;
+}
 
-  positioned.sort(
-    (left, right) =>
-      left.line - right.line || left.index - right.index || left.order - right.order,
-  );
-
-  const deduped: PositionedEvent[] = [];
-  for (const item of positioned) {
-    const previous = deduped[deduped.length - 1];
-    if (previous && previous.line === item.line && previous.index === item.index) {
-      if (closesLine(item.event) || !closesLine(previous.event)) {
-        deduped[deduped.length - 1] = item;
-      }
-      continue;
-    }
-    deduped.push(item);
-  }
-
-  const prefix: SessionStreamEvent[] = [];
-  let covered: number | null = null;
-  for (const item of deduped) {
-    if (covered !== null && item.line > covered) break;
-    prefix.push(item.event);
-    if (closesLine(item.event)) covered = cursorAfter(item.event, item.line);
-  }
-
-  const hydratedEvents = admitMissingDeliveries(prefix);
-
-  const saved = session?.streamIndex;
-  const streamIndex =
-    covered == null
-      ? saved
-      : saved == null
-        ? covered
-        : Math.min(saved, covered);
-
-  return { events: hydratedEvents, streamIndex };
+function withPosition(
+  event: SessionStreamEvent,
+  position: { readonly line: number; readonly index: number },
+): SessionStreamEvent {
+  const meta =
+    ((event as unknown as { readonly meta?: Record<string, unknown> }).meta) ??
+    {};
+  return {
+    ...event,
+    meta: { ...meta, position },
+  } as SessionStreamEvent;
 }
 
 /**
@@ -165,21 +124,68 @@ function admitMissingDeliveries(
   return next;
 }
 
-function deliveryIdOf(event: SessionStreamEvent): string | null {
-  const deliveryId = (event as { readonly data?: { readonly deliveryId?: unknown } })
-    .data?.deliveryId;
-  return typeof deliveryId === "string" ? deliveryId : null;
-}
+/**
+ * eve hydrates `initialEvents` as a forward-only stream prefix. A presence
+ * mirror that lands at event index 0 with a later line makes eve drop every
+ * earlier line, and a saved line past a hole (the missing interaction.opened)
+ * advances the resume cursor over that hole. Return the contiguous prefix and
+ * the next line resume should read.
+ */
+export function repairSessionHydration(
+  events: readonly SessionStreamEvent[],
+  session?: ClientSessionState | null,
+): {
+  readonly events: readonly SessionStreamEvent[];
+  readonly streamIndex: number | undefined;
+} {
+  const positioned: PositionedEvent[] = [];
+  for (let order = 0; order < events.length; order += 1) {
+    const event = events[order]!;
+    const position = streamPosition(event);
+    if (!position) continue;
+    positioned.push({ event, order, ...position });
+  }
 
-function withPosition(
-  event: SessionStreamEvent,
-  position: { readonly line: number; readonly index: number },
-): SessionStreamEvent {
-  const meta =
-    ((event as unknown as { readonly meta?: Record<string, unknown> }).meta) ??
-    {};
-  return {
-    ...event,
-    meta: { ...meta, position },
-  } as SessionStreamEvent;
+  positioned.sort(
+    (left, right) =>
+      left.line - right.line || left.index - right.index || left.order - right.order,
+  );
+
+  const deduped: PositionedEvent[] = [];
+  for (const item of positioned) {
+    const previous = deduped[deduped.length - 1];
+    if (previous && previous.line === item.line && previous.index === item.index) {
+      if (closesLine(item.event) || !closesLine(previous.event)) {
+        deduped[deduped.length - 1] = item;
+      }
+      continue;
+    }
+    deduped.push(item);
+  }
+
+  const prefix: SessionStreamEvent[] = [];
+  let covered: number | null = null;
+  for (const item of deduped) {
+    // A hole ahead of the cursor: stop so resume can read the missing line.
+    if (covered !== null && item.line > covered) break;
+    // `meta.next` can jump past empty source lines. Events saved on those
+    // jumped-over lines overlap the covered range and make SessionStore throw
+    // ("Saved events overlap source lines already covered…"). Skip them;
+    // never rewind `covered` by accepting a later, lower line.
+    if (covered !== null && item.line < covered) continue;
+    prefix.push(item.event);
+    if (closesLine(item.event)) covered = cursorAfter(item.event, item.line);
+  }
+
+  const hydratedEvents = admitMissingDeliveries(prefix);
+
+  const saved = session?.streamIndex;
+  const streamIndex =
+    covered == null
+      ? saved
+      : saved == null
+        ? covered
+        : Math.min(saved, covered);
+
+  return { events: hydratedEvents, streamIndex };
 }

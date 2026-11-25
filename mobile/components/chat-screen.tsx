@@ -97,6 +97,7 @@ import {
 } from "@/src/subagent-inspect-context";
 import { SubagentRunsProvider } from "@/components/assistant-ui/elements/task-card.aui";
 import { toThreadMessages } from "@/src/eve-transport";
+import { turnEndedWithoutAssistant } from "../../lib/chat/empty-turn";
 import { isEveSessionInactive } from "../../lib/chat/eve-session-recovery";
 
 const COMPUTER_SHEET_SNAP_POINTS = ["92%"] as const;
@@ -819,6 +820,20 @@ export function ChatScreen({
 
   useEffect(() => {
     if (!expectingAssistant) return;
+    if (turnEndedWithoutAssistant(events, messages, isBusy)) {
+      setExpectingAssistantByStore((current) => {
+        if (!current.has(store)) return current;
+        const next = new Map(current);
+        next.delete(store);
+        return next;
+      });
+      setSendError({
+        store,
+        message:
+          "Pearl didn't return a reply for this turn. Start a new chat, or restart the dev server (pnpm dev) and send again.",
+      });
+      return;
+    }
     if (messages[messages.length - 1]?.role === "assistant") {
       setExpectingAssistantByStore((current) => {
         if (!current.has(store)) return current;
@@ -838,7 +853,22 @@ export function ChatScreen({
         return next;
       });
     }
-  }, [expectingAssistant, messages, store, localSend, isBusy]);
+    // Failed turn with no assistant row — release sticky expecting so the
+    // display-only placeholder can drop (do not clear on idle alone: eve may
+    // be between delivery.consumed and model.started).
+    if (
+      !isBusy &&
+      storeError &&
+      messages[messages.length - 1]?.role !== "assistant"
+    ) {
+      setExpectingAssistantByStore((current) => {
+        if (!current.has(store)) return current;
+        const next = new Map(current);
+        next.delete(store);
+        return next;
+      });
+    }
+  }, [expectingAssistant, events, isBusy, localSend, messages, store, storeError]);
 
   // Drop attachment holds once eve's user row carries a displayable image.
   useEffect(() => {
