@@ -59,6 +59,16 @@ test("grant denial copy points at Settings, not the user account", () => {
   assert.match(github, /tonicagentic/);
   assert.doesNotMatch(github, /your GitHub account lacks/i);
 
+  const withManage = githubPushDeniedMessage(
+    "tonicagentic",
+    "https://github.com/settings/connections/applications/abc",
+  );
+  assert.match(
+    withManage,
+    /https:\/\/github\.com\/settings\/connections\/applications\/abc/,
+  );
+  assert.match(withManage, /tonicagentic/);
+
   const vercel = vercelTokenUnavailableMessage("missing connector");
   assert.match(vercel, /Settings → Vercel/);
 

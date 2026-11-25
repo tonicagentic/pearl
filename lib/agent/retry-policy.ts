@@ -424,6 +424,12 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
   ),
   // Coder HITL tools (agent/subagents/coder/tools/) — referenced from
   // instructions and the UI; keep taxonomy coverage for ship actions.
+  ensure_ship_access: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Read-only Connect grant preflight; safe to retry after the user updates authorization.",
+  ),
   deploy_vercel: policy(
     false,
     [],

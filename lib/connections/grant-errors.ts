@@ -1,14 +1,17 @@
 /** User-facing copy when a coder ship step fails on a Pearl Connect grant. */
 
-export function githubPushDeniedMessage(owner?: string): string {
-  const where = owner?.trim()
-    ? ` for ${owner.trim()}`
-    : "";
+export function githubPushDeniedMessage(
+  owner?: string,
+  manageUrl?: string,
+): string {
+  const where = owner?.trim() ? ` for ${owner.trim()}` : "";
+  const grantWhere = manageUrl?.trim()
+    ? manageUrl.trim()
+    : "Settings → GitHub → Authorized OAuth Apps";
   return (
     `Pearl's GitHub connection cannot push as you${where}. ` +
-    "Open Settings → GitHub, tap Update, and grant the organization " +
-    "(Authorized OAuth Apps). This is the Connect app grant, not your " +
-    "GitHub account permissions."
+    `Open ${grantWhere}, grant the organization, then Update in Settings → GitHub. ` +
+    "This is the Connect app grant, not your GitHub account permissions."
   );
 }
 

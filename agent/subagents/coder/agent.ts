@@ -26,10 +26,10 @@ const CODER_DESCRIPTION =
   "telemetry. Delegate for any request to build, change, deploy, or compile " +
   "code. Pass the repo (or 'create one'), the goal, and constraints in " +
   "message; continue the same task with taskId. The child owns coding tools, " +
-  "git__gh, gated_git, publish_dev_server, deploy_vercel, merge_pr, " +
-  "list_expo_projects, pin_expo_preview, the expo/neon/betterstack MCP " +
-  "connections, preview_check, deployment_logs, run_with_env, and " +
-  "report_handoff.";
+  "git__gh, gated_git, ensure_ship_access, publish_dev_server, " +
+  "deploy_vercel, merge_pr, list_expo_projects, pin_expo_preview, the " +
+  "vercel/expo/neon/betterstack MCP connections, preview_check, " +
+  "deployment_logs, run_with_env, and report_handoff.";
 
 export default defineDynamic(async (ctx) => {
   if (readTurnClientIntent(await ctx.messages()).mode === "plan") {
