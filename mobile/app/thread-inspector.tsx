@@ -289,7 +289,12 @@ export default function ThreadInspectorScreen() {
           headerShown: true,
           headerBackVisible: false,
           headerTintColor: foregroundColor,
-          headerStyle: backgroundColor ? { backgroundColor } : undefined,
+          // iOS: omit headerStyle so the system glass bar paints.
+          ...(Platform.OS === "ios"
+            ? {}
+            : backgroundColor
+              ? { headerStyle: { backgroundColor } }
+              : {}),
           headerLeft: () => (
             <Pressable
               accessibilityRole="button"

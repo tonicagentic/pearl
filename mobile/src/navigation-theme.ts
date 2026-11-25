@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { Platform, useColorScheme } from "react-native";
-import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { DarkTheme, DefaultTheme, type Theme } from "expo-router";
 import { useCSSVariable } from "uniwind";
 
@@ -139,33 +138,25 @@ export function usePearlNavigationTheme(): Theme {
 }
 
 /**
- * iOS 26 draws `Stack.Toolbar.Button` platters only when the nav bar is not
- * an opaque fill. `headerStyle.backgroundColor` set to a solid color calls
- * `configureWithOpaqueBackground` and the glyphs render bare.
+ * Shared stack `screenOptions` for nested drawer stacks.
+ * On iOS omit headerStyle / headerTransparent entirely so Expo Router uses
+ * the system Liquid Glass bar (`usesSystemBackground`). Android keeps a
+ * solid fill. Page color lives on contentStyle only.
  */
-export function pearlLiquidGlassHeader(): boolean {
-  return Platform.OS === "ios" && isLiquidGlassAvailable();
-}
-
-/** Shared stack `screenOptions` for nested drawer stacks. */
 export function usePearlStackScreenOptions() {
   const backgroundColor = usePearlScreenBackground();
   const headerTintColor = usePearlHeaderTint();
-  const liquidGlass = pearlLiquidGlassHeader();
   return useMemo(
     () => ({
       contentStyle: { backgroundColor },
-      // Clear bar, not a missing one: headerTransparent stays false so iOS 26
-      // still insets content below the bar. A solid color strips glass buttons.
-      headerStyle: {
-        backgroundColor: liquidGlass ? "transparent" : backgroundColor,
-      },
-      ...(liquidGlass ? { headerTransparent: false as const } : {}),
+      ...(Platform.OS === "ios"
+        ? {}
+        : { headerStyle: { backgroundColor } }),
       headerTintColor,
       headerShadowVisible: false as const,
       headerBackButtonDisplayMode: "minimal" as const,
       headerShown: true as const,
     }),
-    [backgroundColor, headerTintColor, liquidGlass],
+    [backgroundColor, headerTintColor],
   );
 }

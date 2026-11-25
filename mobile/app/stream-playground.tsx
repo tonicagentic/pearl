@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, router } from "expo-router";
 import {
   AssistantRuntimeProvider,
@@ -178,9 +178,12 @@ export default function StreamPlaygroundScreen() {
           headerShown: true,
           headerBackVisible: false,
           headerTintColor: foregroundColor,
-          headerStyle: backgroundColor
-            ? { backgroundColor }
-            : undefined,
+          // iOS: omit headerStyle so the system glass bar paints.
+          ...(Platform.OS === "ios"
+            ? {}
+            : backgroundColor
+              ? { headerStyle: { backgroundColor } }
+              : {}),
           headerLeft: () => (
             <Pressable
               accessibilityRole="button"

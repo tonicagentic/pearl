@@ -6,7 +6,6 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { Stack } from "expo-router";
-import { isLiquidGlassAvailable } from "expo-glass-effect";
 import type { LucideIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
@@ -78,6 +77,10 @@ type ScreenChromeProps = {
   readonly leading?: "drawer" | "history" | "none";
   readonly actions?: readonly ScreenChromeAction[];
   readonly search?: ScreenChromeSearch;
+  /**
+   * Legacy home underlap flag. Ignored on iOS — setting headerTransparent
+   * opts the bar out of Liquid Glass. Kept so call sites stay stable.
+   */
   readonly transparentHeader?: boolean;
   /** When false, only header/toolbar chrome — caller owns the body shell. */
   readonly wrapBody?: boolean;
@@ -173,7 +176,7 @@ export function ScreenChrome({
   leading = "drawer",
   actions = [],
   search,
-  transparentHeader = false,
+  transparentHeader: _transparentHeader = false,
   wrapBody = true,
   contentPaddingTop = 12,
   children,
@@ -194,11 +197,6 @@ export function ScreenChrome({
   const androidRight = renderAndroidActions(actions);
   const showSearch =
     search != null && (IS_IOS || search.iosOnly !== true);
-  // Home passes transparentHeader so the thread draws under the bar. Other
-  // screens keep headerTransparent false (content stays below the bar) but
-  // must not paint an opaque headerStyle — that opts out of liquid glass.
-  const liquidGlassBar = IS_IOS && isLiquidGlassAvailable();
-  const underlapHeader = transparentHeader && IS_IOS;
 
   const header = (
     <>
@@ -209,25 +207,15 @@ export function ScreenChrome({
           headerShadowVisible: false,
           headerBackButtonDisplayMode: "minimal",
           headerTintColor: foregroundColor,
-          headerTransparent: underlapHeader
-            ? true
-            : liquidGlassBar
-              ? false
-              : undefined,
-          headerStyle: underlapHeader
-            ? undefined
-            : {
-                backgroundColor: liquidGlassBar
-                  ? "transparent"
-                  : backgroundColor,
-              },
+          // Android only — iOS system bar needs no headerStyle at all.
+          ...(IS_IOS ? {} : { headerStyle: { backgroundColor } }),
           headerTitle: titleSlot
             ? () => <>{titleSlot}</>
             : undefined,
-          // iOS: leading lives on Stack.Toolbar only. Putting DrawerButton in
-          // headerLeft stacks under the liquid-glass chrome as extra pills.
+          // iOS: omit headerLeft so the system back slot stays native.
+          // Drawer menu lives on Stack.Toolbar only.
           headerLeft: IS_IOS
-            ? () => null
+            ? undefined
             : showDrawerLeading && androidLeading
               ? () => (
                   <View

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import {
   AssistantRuntimeProvider,
@@ -102,9 +102,12 @@ export default function ThreadSamplesScreen() {
           headerShown: true,
           headerBackVisible: false,
           headerTintColor: foregroundColor,
-          headerStyle: backgroundColor
-            ? { backgroundColor }
-            : undefined,
+          // iOS: omit headerStyle so the system glass bar paints.
+          ...(Platform.OS === "ios"
+            ? {}
+            : backgroundColor
+              ? { headerStyle: { backgroundColor } }
+              : {}),
           // Always show a back control — deep links / replace leave no stack history.
           headerLeft: () => (
             <Pressable

@@ -82,17 +82,24 @@ export function WorkbenchScreen() {
           title: "Repos",
           headerTintColor: foregroundColor,
           headerBackVisible: false,
-          headerLeft: () => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              hitSlop={12}
-              className="h-10 w-10 items-center justify-center"
-              onPress={() => goHomeOrBack(router)}
-            >
-              <Icon as={ChevronLeftIcon} className="size-6 text-foreground" />
-            </Pressable>
-          ),
+          // iOS: Toolbar.Button owns back — do not set headerLeft.
+          headerLeft:
+            Platform.OS === "ios"
+              ? undefined
+              : () => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Back"
+                    hitSlop={12}
+                    className="h-10 w-10 items-center justify-center"
+                    onPress={() => goHomeOrBack(router)}
+                  >
+                    <Icon
+                      as={ChevronLeftIcon}
+                      className="size-6 text-foreground"
+                    />
+                  </Pressable>
+                ),
           headerRight:
             Platform.OS === "ios"
               ? undefined
@@ -116,13 +123,22 @@ export function WorkbenchScreen() {
         }}
       />
       {focused && Platform.OS === "ios" ? (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon="arrow.clockwise"
-            accessibilityLabel="Refresh"
-            onPress={() => void reload()}
-          />
-        </Stack.Toolbar>
+        <>
+          <Stack.Toolbar placement="left">
+            <Stack.Toolbar.Button
+              icon="chevron.left"
+              accessibilityLabel="Back"
+              onPress={() => goHomeOrBack(router)}
+            />
+          </Stack.Toolbar>
+          <Stack.Toolbar placement="right">
+            <Stack.Toolbar.Button
+              icon="arrow.clockwise"
+              accessibilityLabel="Refresh"
+              onPress={() => void reload()}
+            />
+          </Stack.Toolbar>
+        </>
       ) : null}
 
       {error ? (

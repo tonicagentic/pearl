@@ -3,11 +3,7 @@ import { Drawer } from "expo-router/drawer";
 
 import { DrawerPanel } from "@/components/navigation/drawer-panel";
 import { PearlDrawerProvider } from "@/components/navigation/drawer-context";
-import {
-  usePearlDrawerBackground,
-  usePearlHeaderTint,
-  usePearlScreenBackground,
-} from "@/src/navigation-theme";
+import { usePearlDrawerBackground } from "@/src/navigation-theme";
 import { ObserveInteractiveMarker } from "@/src/observe";
 
 const MAX_PANEL_WIDTH = 320;
@@ -16,13 +12,12 @@ const MAX_PANEL_WIDTH = 320;
  * Primary app destinations as Expo Router Drawer siblings. Custom panel
  * content + drawerType "back" keeps the ChatGPT-style reveal; nested stacks
  * under (home) / tasks / workspaces / settings own detail pushes.
+ * Drawer header stays off — nested stacks own native Liquid Glass chrome.
  */
 export default function DrawerLayout() {
   const { width: windowWidth } = useWindowDimensions();
   const panelWidth = Math.min(MAX_PANEL_WIDTH, Math.round(windowWidth * 0.82));
-  const pageBackground = usePearlScreenBackground();
   const drawerBackground = usePearlDrawerBackground();
-  const headerTintColor = usePearlHeaderTint();
 
   return (
     <PearlDrawerProvider>
@@ -35,18 +30,12 @@ export default function DrawerLayout() {
             <DrawerPanel navigation={props.navigation} />
           )}
           screenOptions={{
-            headerShown: true,
-            headerShadowVisible: false,
-            headerTintColor,
-            headerStyle: { backgroundColor: pageBackground },
+            headerShown: false,
             drawerType: "back",
             overlayColor: "transparent",
             swipeEnabled: true,
             // Full-width L→R swipe opens the drawer (not edge-only).
             swipeEdgeWidth: windowWidth,
-            // Screens own leading via ScreenChrome / nested Stack — avoid a
-            // default drawer headerLeft stacking under those controls.
-            headerLeft: () => null,
             drawerStyle: {
               width: panelWidth,
               backgroundColor: drawerBackground,

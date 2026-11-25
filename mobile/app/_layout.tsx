@@ -30,7 +30,6 @@ import {
   saveVectorModelSelection,
 } from "@/src/model-preferences";
 import {
-  pearlLiquidGlassHeader,
   usePearlHeaderTint,
   usePearlNavigationTheme,
   usePearlScreenBackground,
@@ -87,10 +86,9 @@ function AuthenticatedLayout() {
   const navigationTheme = usePearlNavigationTheme();
   const backgroundColor = usePearlScreenBackground();
   const headerTintColor = usePearlHeaderTint();
-  const liquidGlassHeader = pearlLiquidGlassHeader();
-  const headerStyle = {
-    backgroundColor: liquidGlassHeader ? "transparent" : backgroundColor,
-  } as const;
+  // iOS: omit headerStyle so the system Liquid Glass bar paints.
+  const headerStyle =
+    Platform.OS === "ios" ? undefined : { backgroundColor };
   useEffect(() => {
     configureModelSelectionPersistence(saveModelSelection);
     configureImageModelSelectionPersistence(saveImageModelSelection);
@@ -158,18 +156,12 @@ function AuthenticatedLayout() {
                             animation: "none",
                             animationTypeForReplace: "pop",
                             contentStyle: { backgroundColor },
-                            headerStyle,
-                            headerTransparent: liquidGlassHeader
-                              ? false
-                              : undefined,
+                            ...(headerStyle ? { headerStyle } : {}),
                             headerTintColor,
                           }
                         : {
                             contentStyle: { backgroundColor },
-                            headerStyle,
-                            headerTransparent: liquidGlassHeader
-                              ? false
-                              : undefined,
+                            ...(headerStyle ? { headerStyle } : {}),
                             headerTintColor,
                           }
                     }

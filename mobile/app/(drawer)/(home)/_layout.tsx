@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import { Stack } from "expo-router";
 
 import { DrawerOpenSync } from "@/components/navigation/drawer-context";
@@ -16,6 +15,7 @@ export const unstable_settings = {
 /**
  * Home stack inside the drawer: Mail (Chat|Delegate) plus pushed /chat for
  * custom-agent threads — restores native back and Stack.Toolbar chrome.
+ * Do not set headerTransparent / headerStyle on iOS — that opts out of glass.
  */
 export default function HomeStackLayout() {
   const backgroundColor = usePearlScreenBackground();
@@ -30,24 +30,11 @@ export default function HomeStackLayout() {
           headerShadowVisible: false,
           headerBackButtonDisplayMode: "minimal",
           headerTintColor,
-          // Transparent headers stay transparent; content behind must be dark.
           contentStyle: { backgroundColor },
         }}
       >
-        <Stack.Screen
-          name="index"
-          options={{
-            title: "",
-            headerTransparent: Platform.OS === "ios",
-          }}
-        />
-        <Stack.Screen
-          name="chat"
-          options={{
-            title: "Chat",
-            headerTransparent: Platform.OS === "ios",
-          }}
-        />
+        <Stack.Screen name="index" options={{ title: "" }} />
+        <Stack.Screen name="chat" options={{ title: "Chat" }} />
       </Stack>
     </DrawerScene>
   );

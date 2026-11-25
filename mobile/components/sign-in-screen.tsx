@@ -492,15 +492,15 @@ export function SignInScreen({
             options={{
               headerShown: true,
               title: "",
-              headerTransparent: Platform.OS === "ios",
               headerShadowVisible: false,
               headerTintColor: foregroundColor,
-              headerStyle:
-                Platform.OS === "ios" ? undefined : { backgroundColor },
+              // iOS: omit headerStyle / headerTransparent for system glass.
+              ...(Platform.OS === "ios"
+                ? {}
+                : { headerStyle: { backgroundColor } }),
               // iOS: Stack.Toolbar.Button owns the liquid-glass chevron.
               headerBackVisible: Platform.OS !== "ios",
               headerBackButtonDisplayMode: "minimal",
-              headerLeft: Platform.OS === "ios" ? () => null : undefined,
               headerTitle: () => (
                 <View style={styles.headerProgress}>{progressSegments}</View>
               ),

@@ -1439,10 +1439,11 @@ export function ChatScreen({
             headerBackButtonDisplayMode: "minimal",
             // System back (morphs from Delegate’s liquid-glass menu control).
             headerBackVisible: true,
-            // Thread content draws under the bar and pads itself so the first
-            // message rests below the nav; scrolling can fade under it.
-            headerTransparent: Platform.OS === "ios",
-            headerStyle: Platform.OS === "web" ? { backgroundColor } : undefined,
+            // iOS: omit headerTransparent / headerStyle so the system glass
+            // bar paints; contentStyle on the home stack still fills the scene.
+            ...(Platform.OS === "web"
+              ? { headerStyle: { backgroundColor } }
+              : {}),
             // Native needs this too — without it the system back item can flash
             // the default (light) tint for a frame on push.
             headerTintColor: foregroundColor,
