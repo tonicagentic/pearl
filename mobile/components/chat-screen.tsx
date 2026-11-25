@@ -616,7 +616,7 @@ export function ChatScreen({
         ? { ...localSend, phase: "uncertain" as const }
         : localSend;
     const projected = projectSendMessages(
-      toThreadMessages({ messages }, { isRunning, hasError }),
+      toThreadMessages({ messages }, { isRunning, hasError, events }),
       messages,
       pending,
     );
@@ -646,6 +646,7 @@ export function ChatScreen({
     );
   }, [
     messages,
+    events,
     localSend,
     attachmentHolds,
     confirmed,

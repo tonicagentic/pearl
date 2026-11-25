@@ -199,13 +199,17 @@ export default function ThreadInspectorScreen() {
       (message) =>
         message.role === "assistant" && message.metadata?.status === "streaming",
     );
-  const replayMessages = useMemo(
-    () => toThreadMessages(conversation, { isRunning: replayRunning }),
-    [conversation, replayRunning],
-  );
   const playedEvents = useMemo(
     () => rebaseEvents(scenario.events.slice(0, index), replayEpochMs),
     [index, replayEpochMs, scenario.events],
+  );
+  const replayMessages = useMemo(
+    () =>
+      toThreadMessages(conversation, {
+        isRunning: replayRunning,
+        events: playedEvents,
+      }),
+    [conversation, playedEvents, replayRunning],
   );
 
   const hitlBlocksSend = sample.waitingAction != null;

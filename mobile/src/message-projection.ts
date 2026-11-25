@@ -10,6 +10,10 @@ import {
   type SpokenTurn,
 } from "../../lib/chat/spoken-turns";
 import { buildApprovalBrief } from "../../lib/chat/approval-brief";
+import {
+  collectTurnTimestamps,
+  createTurnTimestampCache,
+} from "../../lib/chat/turn-timestamps";
 import { isAttachmentMarker } from "./attachment-content";
 
 type Part = Exclude<ThreadMessageLike["content"], string>[number];
@@ -616,6 +620,9 @@ type ProjectionCacheEntry = {
 /** Reuse settled ThreadMessageLike refs across stream ticks so assistant-ui
  *  does not reconvert the entire history on every content.delta. */
 const projectionCache = new Map<string, ProjectionCacheEntry>();
+/** Wall-clock stamps when the event log has not covered a message yet. */
+const createdAtByMessageId = new Map<string, Date>();
+const turnTimestampCache = createTurnTimestampCache();
 
 function messageFingerprint(
   message: EveMessage,
@@ -623,7 +630,13 @@ function messageFingerprint(
     last,
     isRunning,
     hasError,
-  }: { last: boolean; isRunning: boolean; hasError: boolean },
+    createdAtMs,
+  }: {
+    last: boolean;
+    isRunning: boolean;
+    hasError: boolean;
+    createdAtMs: number;
+  },
 ): string {
   let partsKey = "";
   for (const part of message.parts) {
@@ -646,8 +659,31 @@ function messageFingerprint(
     last ? "1" : "0",
     isRunning ? "1" : "0",
     hasError ? "1" : "0",
+    String(createdAtMs),
     partsKey,
   ].join("|");
+}
+
+function resolveCreatedAt(
+  message: EveMessage,
+  turnTimestamps: ReadonlyMap<
+    string,
+    { readonly user?: Date; readonly assistant?: Date }
+  >,
+): Date {
+  const turnId = message.metadata?.turnId;
+  const roleKey = message.role === "user" ? "user" : "assistant";
+  const durable =
+    turnId === undefined ? undefined : turnTimestamps.get(turnId)?.[roleKey];
+  if (durable) {
+    createdAtByMessageId.set(message.id, durable);
+    return durable;
+  }
+  const existing = createdAtByMessageId.get(message.id);
+  if (existing) return existing;
+  const createdAt = new Date();
+  createdAtByMessageId.set(message.id, createdAt);
+  return createdAt;
 }
 
 function projectAssistantMessage(
@@ -656,7 +692,13 @@ function projectAssistantMessage(
     last,
     isRunning,
     hasError,
-  }: { last: boolean; isRunning: boolean; hasError: boolean },
+    createdAt,
+  }: {
+    last: boolean;
+    isRunning: boolean;
+    hasError: boolean;
+    createdAt: Date;
+  },
 ): ThreadMessageLike {
   const pendingApproval =
     last &&
@@ -685,7 +727,9 @@ function projectAssistantMessage(
       : { type: "complete", reason: "stop" };
   const live = isLiveHistoryId(message.metadata?.historyId);
   return {
-    role: "assistant", status,
+    role: "assistant",
+    status,
+    createdAt,
     content: message.parts.map(assistantPart).filter((p): p is Part => p !== null),
     metadata: {
       ...(live ? { modality: "voice" as const } : {}),
@@ -712,7 +756,10 @@ export function showReplyInterruptedNotice(
   return hasError && isRunning && !hasLocalSend;
 }
 
-function projectUserMessage(message: EveMessage): ThreadMessageLike {
+function projectUserMessage(
+  message: EveMessage,
+  createdAt: Date,
+): ThreadMessageLike {
   const documentParts = message.parts.filter((part): part is Extract<EveMessagePart, { type: "text" }> =>
     part.type === "text" && typeof part.text === "string" &&
     (part.text.startsWith("[Attached PDF: ") || part.text.startsWith("[Attached text file: ") ||
@@ -743,6 +790,7 @@ function projectUserMessage(message: EveMessage): ThreadMessageLike {
   const live = isLiveHistoryId(message.metadata?.historyId);
   return {
     role: "user",
+    createdAt,
     content: message.parts.filter((part): part is Extract<EveMessagePart, { type: "text" }> =>
       part.type === "text" && typeof part.text === "string" &&
       !documentParts.includes(part) && !isAttachmentMarker(part.text),
@@ -785,6 +833,7 @@ export function appendSpokenTurnMessages(
   if (spoken.length === 0) return projected as ThreadMessageLike[];
   const overlay: ThreadMessageLike[] = spoken.map((turn) => ({
     role: turn.role === "assistant" ? ("assistant" as const) : ("user" as const),
+    createdAt: new Date(),
     content: [{ type: "text" as const, text: turn.text }],
     metadata: {
       modality: "voice" as const,
@@ -827,24 +876,47 @@ export function appendQuickTurnMessages(
 // this external-store runtime would otherwise retain an extra sibling branch.
 export function toThreadMessages(
   state: ConversationMessages,
-  { isRunning = false, hasError = false }: { isRunning?: boolean; hasError?: boolean } = {},
+  {
+    isRunning = false,
+    hasError = false,
+    events = [],
+  }: {
+    isRunning?: boolean;
+    hasError?: boolean;
+    events?: readonly unknown[];
+  } = {},
 ): ThreadMessageLike[] {
+  const turnTimestamps = collectTurnTimestamps(events, turnTimestampCache);
   const seen = new Set<string>();
   const projected = state.messages.map((message, index) => {
     const last = index === state.messages.length - 1;
-    const fingerprint = messageFingerprint(message, { last, isRunning, hasError });
+    const createdAt = resolveCreatedAt(message, turnTimestamps);
+    const fingerprint = messageFingerprint(message, {
+      last,
+      isRunning,
+      hasError,
+      createdAtMs: createdAt.getTime(),
+    });
     seen.add(message.id);
     const cached = projectionCache.get(message.id);
     if (cached && cached.fingerprint === fingerprint) return cached.projected;
     const next =
       message.role === "assistant"
-        ? projectAssistantMessage(message, { last, isRunning, hasError })
-        : projectUserMessage(message);
+        ? projectAssistantMessage(message, {
+            last,
+            isRunning,
+            hasError,
+            createdAt,
+          })
+        : projectUserMessage(message, createdAt);
     projectionCache.set(message.id, { fingerprint, projected: next });
     return next;
   });
   for (const id of projectionCache.keys()) {
     if (!seen.has(id)) projectionCache.delete(id);
+  }
+  for (const id of createdAtByMessageId.keys()) {
+    if (!seen.has(id)) createdAtByMessageId.delete(id);
   }
   return projected;
 }

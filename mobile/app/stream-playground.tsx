@@ -139,13 +139,13 @@ export default function StreamPlaygroundScreen() {
       (message) =>
         message.role === "assistant" && message.metadata?.status === "streaming",
     );
-  const messages = useMemo(
-    () => toThreadMessages(conversation, { isRunning }),
-    [conversation, isRunning],
-  );
   const playedEvents = useMemo(
     () => rebaseEvents(scenario.events.slice(0, index), replayEpochMs),
     [index, replayEpochMs, scenario.events],
+  );
+  const messages = useMemo(
+    () => toThreadMessages(conversation, { isRunning, events: playedEvents }),
+    [conversation, isRunning, playedEvents],
   );
 
   const adapter = useMemo(

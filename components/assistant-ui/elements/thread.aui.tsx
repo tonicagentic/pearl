@@ -37,7 +37,12 @@ import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-ic
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { messageEnter } from "@/components/assistant-ui/elements/surfaces";
+import { messageEnter, mono } from "@/components/assistant-ui/elements/surfaces";
+import {
+  formatMessageDay,
+  formatMessageTime,
+  shouldShowDaySeparator,
+} from "@/lib/chat/message-day";
 import {
   ActionBarMorePrimitive,
   ActionBarPrimitive,
@@ -84,12 +89,18 @@ import {
   useContext,
   useMemo,
   useState,
+  useSyncExternalStore,
   type ComponentType,
   type FC,
   type KeyboardEvent,
   useEffect,
   useRef,
 } from "react";
+
+const emptySubscribe = () => () => {};
+/** Day labels use the local calendar; wait for the client to avoid SSR mismatch. */
+const useHydrated = () =>
+  useSyncExternalStore(emptySubscribe, () => true, () => false);
 
 const APPROVAL_OPTION_DEFAULT_LABELS: Record<string, string> = {
   "allow-once": "Allow",
@@ -358,15 +369,96 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
   );
 };
 
+// eve delivers background-task notifications as user messages with stable
+// prefixes (tasks/steps.js formatTaskNotification). Hide them from the
+// transcript and from day-boundary walking.
+const TASK_NOTIFICATION_PATTERN =
+  /^Background task task_[a-z0-9]+( \([^)]*\))?( is completed| failed| is cancelled| needs input| update:| needs authorization)?/i;
+
+function isHiddenThreadMessage(message: {
+  readonly role: string;
+  readonly parts?: readonly { readonly type: string; readonly text?: string }[];
+  readonly content?: readonly { readonly type: string; readonly text?: string }[];
+}): boolean {
+  if (message.role !== "user") return false;
+  const parts = message.parts ?? message.content ?? [];
+  return parts.some(
+    (part) =>
+      part.type === "text" &&
+      TASK_NOTIFICATION_PATTERN.test(part.text ?? ""),
+  );
+}
+
+const MessageDayRule: FC = () => {
+  const hydrated = useHydrated();
+  const label = useAuiState((s) => {
+    if (isHiddenThreadMessage(s.message)) return null;
+    const current = s.message.createdAt;
+    let previous: Date | undefined;
+    for (let i = s.message.index - 1; i >= 0; i -= 1) {
+      const earlier = s.thread.messages[i];
+      if (!earlier || isHiddenThreadMessage(earlier)) continue;
+      previous = earlier.createdAt;
+      break;
+    }
+    if (!shouldShowDaySeparator(current, previous)) return null;
+    return formatMessageDay(current);
+  });
+  if (!hydrated || !label) return null;
+  return (
+    <div
+      data-slot="aui_message-day-rule"
+      className="flex items-center gap-2.5 py-1"
+    >
+      <span className="bg-foreground/[0.08] h-px flex-1" />
+      <span className={cn(mono, "text-muted-foreground")}>{label}</span>
+      <span className="bg-foreground/[0.08] h-px flex-1" />
+    </div>
+  );
+};
+
+const MessageTime: FC<{ className?: string }> = ({ className }) => {
+  const time = useAuiState((s) => {
+    if (isHiddenThreadMessage(s.message)) return null;
+    const at = s.message.createdAt;
+    if (!(at instanceof Date) || Number.isNaN(at.getTime())) return null;
+    return formatMessageTime(at);
+  });
+  if (!time) return null;
+  return (
+    <span
+      data-slot="aui_message-time"
+      className={cn(
+        mono,
+        "text-foreground/0 group-hover:text-foreground/30 group-focus-within:text-foreground/30 shrink-0 tabular-nums transition-colors",
+        className,
+      )}
+    >
+      {time}
+    </span>
+  );
+};
+
 const ThreadMessage: FC = () => {
   const { AssistantMessage: AssistantMessageComponent = AssistantMessage } =
     useContext(ThreadComponentsContext);
   const role = useAuiState((s) => s.message.role);
   const isEditing = useAuiState((s) => s.message.composer.isEditing);
 
-  if (isEditing) return <EditComposer />;
-  if (role === "user") return <UserMessage />;
-  return <AssistantMessageComponent />;
+  const body = isEditing ? (
+    <EditComposer />
+  ) : role === "user" ? (
+    <UserMessage />
+  ) : (
+    <AssistantMessageComponent />
+  );
+
+  return (
+    <>
+      <MessageDayRule />
+      {body}
+    </>
+  );
 };
 
 const ThreadScrollToBottom: FC = () => {
@@ -831,7 +923,10 @@ const AssistantMessage: FC = () => {
     <MessagePrimitive.Root
       data-slot="aui_assistant-message-root"
       data-role="assistant"
-      className={cn(messageEnter, "relative -mb-7.5 pb-7.5 [contain-intrinsic-size:auto_200px] [content-visibility:auto]")}
+      className={cn(
+        messageEnter,
+        "group relative -mb-7.5 pb-7.5 [contain-intrinsic-size:auto_200px] [content-visibility:auto]",
+      )}
     >
       <CitationInteractionProvider>
         <div
@@ -933,8 +1028,9 @@ const AssistantMessage: FC = () => {
 
       <div
         data-slot="aui_assistant-message-footer"
-        className={cn("ms-2 flex items-center", ACTION_BAR_HEIGHT)}
+        className={cn("ms-2 flex items-center gap-2", ACTION_BAR_HEIGHT)}
       >
+        <MessageTime />
         <BranchPicker />
         <AssistantActionBar />
       </div>
@@ -1154,26 +1250,15 @@ const UserImagePart: ImageMessagePartComponent = (part) => (
   </div>
 );
 
-// eve delivers background-task notifications as user messages with stable
-// prefixes (tasks/steps.js formatTaskNotification): completed/failed/cancelled
-// summaries, progress updates, input requests, and authorization prompts.
-const TASK_NOTIFICATION_PATTERN =
-  /^Background task task_[a-z0-9]+( \([^)]*\))?( is completed| failed| is cancelled| needs input| update:| needs authorization)?/i;
-
 const UserMessage: FC = () => {
   // Background subagent runs report back through the model-facing channel: eve
   // delivers the task notification as a user message ("Background task … is
   // completed. Result: …") so the conversation history carries the result.
   // That message is runtime plumbing, not something the human said — hide it
   // from the thread; the assistant's reply to it is the user-facing summary.
-  const isTaskNotification = useAuiState((s) => {
-    if (s.message.role !== "user") return false;
-    return s.message.parts.some(
-      (part) =>
-        part.type === "text" &&
-        TASK_NOTIFICATION_PATTERN.test(part.text ?? ""),
-    );
-  });
+  const isTaskNotification = useAuiState((s) =>
+    isHiddenThreadMessage(s.message),
+  );
   if (isTaskNotification) return null;
 
   return (
@@ -1181,10 +1266,12 @@ const UserMessage: FC = () => {
       data-slot="aui_user-message-root"
       className={cn(
         messageEnter,
-        "grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 [contain-intrinsic-size:auto_200px] [content-visibility:auto] [&:where(>*)]:col-start-2",
+        "group grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 [contain-intrinsic-size:auto_200px] [content-visibility:auto] [&:where(>*)]:col-start-2",
       )}
       data-role="user"
     >
+      <MessageTime className="!col-start-1 row-start-1 self-end justify-self-end pe-2" />
+
       <UserMessageAttachments />
 
       <UserMessageAttachments />

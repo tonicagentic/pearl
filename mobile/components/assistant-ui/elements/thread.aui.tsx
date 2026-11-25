@@ -34,6 +34,7 @@ import {
   actionBarEnter,
   inkButton,
   messageEnter,
+  monoStyle,
   useAnnounce,
   useMotion,
   webLiveRegion,
@@ -50,6 +51,11 @@ import {
   type ThreadGroupPart,
 } from "@/components/assistant-ui/elements/thread-components-context";
 import { type WaitingAction } from "@/components/assistant-ui/elements/waiting-action-card";
+import {
+  formatMessageDay,
+  formatMessageTime,
+  shouldShowDaySeparator,
+} from "../../../../lib/chat/message-day";
 import { isTaskNotification } from "@/src/message-projection";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -84,6 +90,7 @@ import {
   type ComponentType,
   createContext,
   type FC,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
@@ -674,6 +681,71 @@ const WelcomeSlot: FC = () => {
   return <Component />;
 };
 
+function isHiddenThreadMessage(message: {
+  readonly role: string;
+  readonly parts?: readonly { readonly type: string; readonly text?: string }[];
+  readonly content?: readonly { readonly type: string; readonly text?: string }[];
+}): boolean {
+  if (message.role !== "user") return false;
+  const parts = message.parts ?? message.content ?? [];
+  return parts.some(
+    (part) =>
+      part.type === "text" && isTaskNotification(part.text ?? ""),
+  );
+}
+
+const MessageDayRule: FC = () => {
+  const label = useAuiState((s) => {
+    if (isHiddenThreadMessage(s.message)) return null;
+    const current = s.message.createdAt;
+    let previous: Date | undefined;
+    for (let i = s.message.index - 1; i >= 0; i -= 1) {
+      const earlier = s.thread.messages[i];
+      if (!earlier || isHiddenThreadMessage(earlier)) continue;
+      previous = earlier.createdAt;
+      break;
+    }
+    if (!shouldShowDaySeparator(current, previous)) return null;
+    return formatMessageDay(current);
+  });
+  if (!label) return null;
+  return (
+    <View
+      accessibilityRole="header"
+      className="aui-message-day-rule my-1 flex-row items-center gap-2.5 py-1"
+    >
+      <View className="bg-foreground/10 h-px flex-1" />
+      <Text
+        variant="caption"
+        className="text-muted-foreground"
+        style={monoStyle}
+      >
+        {label}
+      </Text>
+      <View className="bg-foreground/10 h-px flex-1" />
+    </View>
+  );
+};
+
+const MessageTime: FC<{ className?: string }> = ({ className }) => {
+  const time = useAuiState((s) => {
+    if (isHiddenThreadMessage(s.message)) return null;
+    const at = s.message.createdAt;
+    if (!(at instanceof Date) || Number.isNaN(at.getTime())) return null;
+    return formatMessageTime(at);
+  });
+  if (!time) return null;
+  return (
+    <Text
+      variant="caption"
+      className={cn("text-muted-foreground/50 shrink-0 tabular-nums", className)}
+      style={monoStyle}
+    >
+      {time}
+    </Text>
+  );
+};
+
 const ThreadMessage: FC = () => {
   const role = useAuiState((s) => s.message.role);
   const isEditing = useAuiState((s) => s.message.composer.isEditing);
@@ -681,12 +753,20 @@ const ThreadMessage: FC = () => {
   const { AssistantMessage: CustomAssistantMessage } = useContext(
     ThreadComponentsContext,
   );
-
-  if (isEditing) return <EditComposer />;
-  if (isSpoken) return <SpokenMessage />;
-  if (role === "user") return <UserMessage />;
   const Assistant = CustomAssistantMessage ?? AssistantMessage;
-  return <Assistant />;
+
+  let body: ReactNode;
+  if (isEditing) body = <EditComposer />;
+  else if (isSpoken) body = <SpokenMessage />;
+  else if (role === "user") body = <UserMessage />;
+  else body = <Assistant />;
+
+  return (
+    <>
+      <MessageDayRule />
+      {body}
+    </>
+  );
 };
 
 type VoiceRunPosition = "single" | "start" | "middle" | "end";
@@ -749,7 +829,7 @@ const SpokenMessage: FC = () => {
             className="text-muted-foreground size-3.5"
           />
         </View>
-        <View className="min-w-0 flex-1 flex-row items-center">
+        <View className="min-w-0 flex-1 flex-row items-center gap-2">
           <View className="min-w-0 flex-1">
             <MessagePrimitive.Parts components={{ Text: SpokenText }} />
             {isSpeaking && (
@@ -761,6 +841,7 @@ const SpokenMessage: FC = () => {
               />
             )}
           </View>
+          <MessageTime />
           <SpokenActionBar />
         </View>
       </View>
@@ -1036,11 +1117,18 @@ const AssistantMessageFooter: FC = () => {
   const sawRunningRef = useRef(false);
   if (!settled) sawRunningRef.current = true;
   const enterFromLiveSettle = sawRunningRef.current && settled;
-  if (branchCount <= 1 && !settled) return null;
+  if (branchCount <= 1 && !settled) {
+    return (
+      <View className="aui-assistant-message-footer flex-row items-center">
+        <MessageTime />
+      </View>
+    );
+  }
   // Sources wait for settle and enter with copy/share (not mid-stream).
   if (!settled) {
     return (
-      <View className="aui-assistant-message-footer flex-row items-center">
+      <View className="aui-assistant-message-footer flex-row items-center gap-2">
+        <MessageTime />
         <BranchPicker />
       </View>
     );
@@ -1051,7 +1139,8 @@ const AssistantMessageFooter: FC = () => {
       className="aui-assistant-message-footer gap-2"
     >
       <MessageSources />
-      <View className="flex-row items-center">
+      <View className="flex-row items-center gap-2">
+        <MessageTime />
         <BranchPicker />
         <AssistantActionBar />
       </View>
@@ -1130,8 +1219,13 @@ const UserMessage: FC = () => {
         )}
       >
         <UserMessageAttachments />
-        <View className="aui-user-message-content bg-muted max-w-[85%] rounded-2xl px-4 py-2">
-          <MessagePrimitive.Parts components={{ Text: UserText, Image, File }} />
+        <View className="max-w-[85%] flex-row items-end gap-2">
+          <MessageTime className="pb-2" />
+          <View className="aui-user-message-content bg-muted min-w-0 rounded-2xl px-4 py-2">
+            <MessagePrimitive.Parts
+              components={{ Text: UserText, Image, File }}
+            />
+          </View>
         </View>
         {branchCount > 1 ? (
           <View className="aui-user-message-footer flex-row items-center justify-end gap-2">

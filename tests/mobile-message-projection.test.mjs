@@ -505,3 +505,94 @@ test("prefix identity holds across a multi-delta streaming sequence", () => {
     previous = projected;
   }
 });
+
+test("stamps createdAt from delivery.consumed and model.requested", () => {
+  const USER_AT = "2026-01-02T10:00:01.000Z";
+  const ASSISTANT_AT = "2026-01-02T10:02:00.000Z";
+  const TURN = "turn_stamp";
+  const events = [
+    {
+      type: "delivery.consumed",
+      data: {
+        deliveryId: "d1",
+        turnId: TURN,
+        parts: [{ kind: "text", text: "hi" }],
+      },
+      meta: { at: USER_AT },
+    },
+    {
+      type: "model.requested",
+      data: { runId: "r1", owner: { turnId: TURN } },
+      scope: { turnId: TURN },
+      meta: { at: ASSISTANT_AT },
+    },
+  ];
+  const projected = toThreadMessages(
+    {
+      messages: [
+        {
+          id: `${TURN}:user`,
+          role: "user",
+          metadata: { turnId: TURN },
+          parts: [{ type: "text", text: "hi" }],
+        },
+        {
+          id: `${TURN}:assistant`,
+          role: "assistant",
+          metadata: { turnId: TURN, status: "complete" },
+          parts: [{ type: "text", text: "hello", state: "done" }],
+        },
+      ],
+    },
+    { events },
+  );
+  assert.equal(projected[0].createdAt.toISOString(), USER_AT);
+  assert.equal(projected[1].createdAt.toISOString(), ASSISTANT_AT);
+});
+
+test("missing meta.at falls back to a stable wall-clock stamp", () => {
+  const TURN = "turn_fallback";
+  const before = Date.now();
+  const first = toThreadMessages(
+    {
+      messages: [
+        {
+          id: `${TURN}:user`,
+          role: "user",
+          metadata: { turnId: TURN },
+          parts: [{ type: "text", text: "hi" }],
+        },
+      ],
+    },
+    {
+      events: [
+        {
+          type: "delivery.consumed",
+          data: {
+            deliveryId: "d1",
+            turnId: TURN,
+            parts: [{ kind: "text", text: "hi" }],
+          },
+          meta: {},
+        },
+      ],
+    },
+  );
+  const stamped = first[0].createdAt;
+  assert.ok(stamped instanceof Date);
+  assert.ok(stamped.getTime() >= before);
+  const second = toThreadMessages(
+    {
+      messages: [
+        {
+          id: `${TURN}:user`,
+          role: "user",
+          metadata: { turnId: TURN },
+          parts: [{ type: "text", text: "hi" }],
+        },
+      ],
+    },
+    { events: [] },
+  );
+  assert.equal(second[0].createdAt, stamped);
+});
