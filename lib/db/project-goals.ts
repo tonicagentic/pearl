@@ -1,8 +1,9 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
 import { getProject } from "@/lib/db/projects";
 import {
+  project,
   projectGoal,
   type ProjectGoal,
   type ProjectGoalStatus,
@@ -13,7 +14,8 @@ const MAX_NOTES = 20_000;
 
 export type ProjectGoalDto = {
   readonly id: string;
-  readonly projectId: string;
+  readonly projectId: string | null;
+  readonly projectName: string | null;
   readonly title: string;
   readonly status: ProjectGoalStatus;
   readonly targetDate: string | null;
@@ -22,10 +24,14 @@ export type ProjectGoalDto = {
   readonly updatedAt: string;
 };
 
-function toDto(row: ProjectGoal): ProjectGoalDto {
+function toDto(
+  row: ProjectGoal,
+  projectName: string | null = null,
+): ProjectGoalDto {
   return {
     id: row.id,
     projectId: row.projectId,
+    projectName,
     title: row.title,
     status: row.status,
     targetDate: row.targetDate,
@@ -53,6 +59,38 @@ function normalizeTargetDate(value: string | null | undefined): string | null {
   return trimmed;
 }
 
+async function resolveOptionalProjectId(
+  userId: string,
+  projectId: string | null | undefined,
+): Promise<string | null> {
+  if (projectId === undefined || projectId === null || projectId.trim() === "") {
+    return null;
+  }
+  const owned = await getProject(userId, projectId.trim());
+  if (!owned) throw new Error("Unknown project.");
+  return owned.id;
+}
+
+export async function listAllGoals(
+  userId: string,
+): Promise<readonly ProjectGoalDto[]> {
+  const rows = await db
+    .select({
+      goal: projectGoal,
+      projectName: project.name,
+    })
+    .from(projectGoal)
+    .leftJoin(project, eq(projectGoal.projectId, project.id))
+    .where(eq(projectGoal.userId, userId))
+    .orderBy(
+      sql`case when ${projectGoal.status} = 'active' then 0 else 1 end`,
+      asc(projectGoal.targetDate),
+      desc(projectGoal.updatedAt),
+    );
+
+  return rows.map((row) => toDto(row.goal, row.projectName ?? null));
+}
+
 export async function listProjectGoals(
   userId: string,
   projectId: string,
@@ -75,7 +113,23 @@ export async function listProjectGoals(
       asc(projectGoal.updatedAt),
     );
 
-  return rows.map(toDto);
+  return rows.map((row) => toDto(row, owned.name));
+}
+
+export async function getGoal(
+  userId: string,
+  goalId: string,
+): Promise<ProjectGoalDto | null> {
+  const [row] = await db
+    .select({
+      goal: projectGoal,
+      projectName: project.name,
+    })
+    .from(projectGoal)
+    .leftJoin(project, eq(projectGoal.projectId, project.id))
+    .where(and(eq(projectGoal.id, goalId), eq(projectGoal.userId, userId)))
+    .limit(1);
+  return row ? toDto(row.goal, row.projectName ?? null) : null;
 }
 
 export async function getProjectGoal(
@@ -83,32 +137,21 @@ export async function getProjectGoal(
   projectId: string,
   goalId: string,
 ): Promise<ProjectGoalDto | null> {
-  const [row] = await db
-    .select()
-    .from(projectGoal)
-    .where(
-      and(
-        eq(projectGoal.id, goalId),
-        eq(projectGoal.projectId, projectId),
-        eq(projectGoal.userId, userId),
-      ),
-    )
-    .limit(1);
-  return row ? toDto(row) : null;
+  const goal = await getGoal(userId, goalId);
+  if (!goal || goal.projectId !== projectId) return null;
+  return goal;
 }
 
-export async function createProjectGoal(
+export async function createGoal(
   userId: string,
-  projectId: string,
   input: {
     readonly title: string;
+    readonly projectId?: string | null;
     readonly targetDate?: string | null;
     readonly notes?: string | null;
   },
-): Promise<ProjectGoalDto | null> {
-  const owned = await getProject(userId, projectId);
-  if (!owned) return null;
-
+): Promise<ProjectGoalDto> {
+  const projectId = await resolveOptionalProjectId(userId, input.projectId);
   const title = requireTitle(input.title);
   const targetDate = normalizeTargetDate(input.targetDate);
   const notes =
@@ -127,21 +170,41 @@ export async function createProjectGoal(
     })
     .returning();
   if (!row) throw new Error("Failed to create goal.");
-  return toDto(row);
+
+  let projectName: string | null = null;
+  if (projectId) {
+    const owned = await getProject(userId, projectId);
+    projectName = owned?.name ?? null;
+  }
+  return toDto(row, projectName);
 }
 
-export async function updateProjectGoal(
+export async function createProjectGoal(
   userId: string,
   projectId: string,
+  input: {
+    readonly title: string;
+    readonly targetDate?: string | null;
+    readonly notes?: string | null;
+  },
+): Promise<ProjectGoalDto | null> {
+  const owned = await getProject(userId, projectId);
+  if (!owned) return null;
+  return createGoal(userId, { ...input, projectId });
+}
+
+export async function updateGoal(
+  userId: string,
   goalId: string,
   input: {
     readonly title?: string;
     readonly status?: ProjectGoalStatus;
     readonly targetDate?: string | null;
     readonly notes?: string | null;
+    readonly projectId?: string | null;
   },
 ): Promise<ProjectGoalDto | null> {
-  const existing = await getProjectGoal(userId, projectId, goalId);
+  const existing = await getGoal(userId, goalId);
   if (!existing) return null;
 
   const title =
@@ -162,6 +225,10 @@ export async function updateProjectGoal(
         ? null
         : input.notes.slice(0, MAX_NOTES)
       : existing.notes;
+  const projectId =
+    input.projectId !== undefined
+      ? await resolveOptionalProjectId(userId, input.projectId)
+      : existing.projectId;
 
   const [row] = await db
     .update(projectGoal)
@@ -170,17 +237,46 @@ export async function updateProjectGoal(
       status,
       targetDate,
       notes,
+      projectId,
       updatedAt: new Date(),
     })
-    .where(
-      and(
-        eq(projectGoal.id, goalId),
-        eq(projectGoal.projectId, projectId),
-        eq(projectGoal.userId, userId),
-      ),
-    )
+    .where(and(eq(projectGoal.id, goalId), eq(projectGoal.userId, userId)))
     .returning();
-  return row ? toDto(row) : null;
+  if (!row) return null;
+
+  let projectName: string | null = null;
+  if (row.projectId) {
+    const owned = await getProject(userId, row.projectId);
+    projectName = owned?.name ?? null;
+  }
+  return toDto(row, projectName);
+}
+
+export async function updateProjectGoal(
+  userId: string,
+  projectId: string,
+  goalId: string,
+  input: {
+    readonly title?: string;
+    readonly status?: ProjectGoalStatus;
+    readonly targetDate?: string | null;
+    readonly notes?: string | null;
+  },
+): Promise<ProjectGoalDto | null> {
+  const existing = await getProjectGoal(userId, projectId, goalId);
+  if (!existing) return null;
+  return updateGoal(userId, goalId, input);
+}
+
+export async function deleteGoal(
+  userId: string,
+  goalId: string,
+): Promise<boolean> {
+  const deleted = await db
+    .delete(projectGoal)
+    .where(and(eq(projectGoal.id, goalId), eq(projectGoal.userId, userId)))
+    .returning({ id: projectGoal.id });
+  return deleted.length > 0;
 }
 
 export async function deleteProjectGoal(
@@ -188,15 +284,7 @@ export async function deleteProjectGoal(
   projectId: string,
   goalId: string,
 ): Promise<boolean> {
-  const deleted = await db
-    .delete(projectGoal)
-    .where(
-      and(
-        eq(projectGoal.id, goalId),
-        eq(projectGoal.projectId, projectId),
-        eq(projectGoal.userId, userId),
-      ),
-    )
-    .returning({ id: projectGoal.id });
-  return deleted.length > 0;
+  const existing = await getProjectGoal(userId, projectId, goalId);
+  if (!existing) return false;
+  return deleteGoal(userId, goalId);
 }

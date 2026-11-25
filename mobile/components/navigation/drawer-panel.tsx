@@ -11,8 +11,10 @@ import {
   FolderIcon,
   InboxIcon,
   LibraryIcon,
+  NotebookPenIcon,
   SearchIcon,
   SquarePenIcon,
+  TargetIcon,
   UserIcon,
   WalletIcon,
   XIcon,
@@ -44,6 +46,16 @@ const NAV_ROWS = [
     label: "Tasks",
     href: "/tasks",
     Icon: InboxIcon,
+  },
+  {
+    label: "Goals",
+    href: "/goals",
+    Icon: TargetIcon,
+  },
+  {
+    label: "Notes",
+    href: "/notes",
+    Icon: NotebookPenIcon,
   },
   {
     label: "Library",

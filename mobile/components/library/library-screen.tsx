@@ -23,6 +23,7 @@ import {
   downloadArtifactToCache,
   listArtifacts,
   type ArtifactDto,
+  type ProjectArtifactLinkDto,
 } from "@/src/artifacts-client";
 import {
   usePearlMutedBackground,
@@ -30,28 +31,75 @@ import {
 } from "@/src/navigation-theme";
 import { useStackSearch } from "@/src/use-stack-search";
 
-type Filter = "all" | "files" | "images";
+type KindFilter = "all" | "files" | "images";
+type ProjectFilter = "all" | "unlinked" | { readonly projectId: string };
 
 /** Principal Library: durable agent files and images with search + filters. */
 export function LibraryScreen() {
   const [items, setItems] = useState<readonly ArtifactDto[] | null>(null);
+  const [projectLinks, setProjectLinks] = useState<
+    readonly ProjectArtifactLinkDto[]
+  >([]);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<KindFilter>("all");
+  const [projectFilter, setProjectFilter] = useState<ProjectFilter>("all");
   const [busyPath, setBusyPath] = useState<string | null>(null);
   const search = useStackSearch();
   const { width } = useWindowDimensions();
   const backgroundColor = usePearlScreenBackground();
   const mutedColor = usePearlMutedBackground();
 
+  const projectOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const link of projectLinks) {
+      if (!byId.has(link.projectId)) {
+        byId.set(link.projectId, link.projectName);
+      }
+    }
+    return [...byId.entries()]
+      .map(([projectId, projectName]) => ({ projectId, projectName }))
+      .sort((a, b) => a.projectName.localeCompare(b.projectName));
+  }, [projectLinks]);
+
+  const linkedPathnames = useMemo(() => {
+    const set = new Set<string>();
+    for (const link of projectLinks) set.add(link.pathname);
+    return set;
+  }, [projectLinks]);
+
+  const pathnamesForProject = useMemo(() => {
+    if (typeof projectFilter !== "object") return null;
+    const set = new Set<string>();
+    for (const link of projectLinks) {
+      if (link.projectId === projectFilter.projectId) {
+        set.add(link.pathname);
+      }
+    }
+    return set;
+  }, [projectFilter, projectLinks]);
+
   const visible = useMemo(() => {
     const rows = items ?? [];
     return rows.filter((item) => {
       if (filter === "images" && item.kind !== "image") return false;
       if (filter === "files" && item.kind !== "file") return false;
+      if (projectFilter === "unlinked") {
+        if (linkedPathnames.has(item.pathname)) return false;
+      } else if (pathnamesForProject) {
+        if (!pathnamesForProject.has(item.pathname)) return false;
+      }
       if (!search.active) return true;
       return search.matches(item.basename);
     });
-  }, [items, filter, search.active, search.matches]);
+  }, [
+    items,
+    filter,
+    projectFilter,
+    linkedPathnames,
+    pathnamesForProject,
+    search.active,
+    search.matches,
+  ]);
 
   const images = useMemo(
     () => visible.filter((item) => item.kind === "image"),
@@ -62,24 +110,32 @@ export function LibraryScreen() {
     [visible],
   );
 
+  const applyPayload = useCallback(
+    (payload: Awaited<ReturnType<typeof listArtifacts>>) => {
+      setItems(payload.artifacts);
+      setProjectLinks(payload.projectLinks);
+    },
+    [],
+  );
+
   const reload = useCallback(async () => {
     try {
       setError(null);
-      setItems(await listArtifacts());
+      applyPayload(await listArtifacts());
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Failed to load library.",
       );
     }
-  }, []);
+  }, [applyPayload]);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       void listArtifacts()
-        .then((rows) => {
+        .then((payload) => {
           if (!cancelled) {
-            setItems(rows);
+            applyPayload(payload);
             setError(null);
           }
         })
@@ -95,7 +151,7 @@ export function LibraryScreen() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [applyPayload]),
   );
 
   const openItem = useCallback(async (item: ArtifactDto) => {
@@ -136,6 +192,9 @@ export function LibraryScreen() {
                 setItems((current) =>
                   (current ?? []).filter((row) => row.pathname !== item.pathname),
                 );
+                setProjectLinks((current) =>
+                  current.filter((row) => row.pathname !== item.pathname),
+                );
               } catch (cause) {
                 Alert.alert(
                   "Could not delete",
@@ -170,7 +229,7 @@ export function LibraryScreen() {
       }}
     >
       <View style={{ flex: 1, backgroundColor }}>
-        <View className="flex-row gap-1.5 px-5 pb-3 pt-1">
+        <View className="flex-row gap-1.5 px-5 pb-2 pt-1">
           {(
             [
               ["all", "All"],
@@ -198,6 +257,37 @@ export function LibraryScreen() {
             );
           })}
         </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="max-h-11 grow-0"
+          contentContainerClassName="gap-1.5 px-5 pb-3"
+        >
+          <FilterChip
+            label="All projects"
+            selected={projectFilter === "all"}
+            onPress={() => setProjectFilter("all")}
+          />
+          <FilterChip
+            label="Unlinked"
+            selected={projectFilter === "unlinked"}
+            onPress={() => setProjectFilter("unlinked")}
+          />
+          {projectOptions.map((project) => (
+            <FilterChip
+              key={project.projectId}
+              label={project.projectName}
+              selected={
+                typeof projectFilter === "object" &&
+                projectFilter.projectId === project.projectId
+              }
+              onPress={() =>
+                setProjectFilter({ projectId: project.projectId })
+              }
+            />
+          ))}
+        </ScrollView>
 
         {error ? (
           <Pressable className="px-5 py-3" onPress={() => void reload()}>
@@ -345,6 +435,33 @@ export function LibraryScreen() {
         )}
       </View>
     </ScreenChrome>
+  );
+}
+
+function FilterChip({
+  label,
+  selected,
+  onPress,
+}: {
+  readonly label: string;
+  readonly selected: boolean;
+  readonly onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      className={`rounded-full px-3 py-1.5 ${selected ? "bg-foreground" : "bg-muted"}`}
+    >
+      <Text
+        variant="caption"
+        weight="medium"
+        className={selected ? "text-background" : "text-foreground"}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 

@@ -76,7 +76,8 @@ export type ProjectArtifactDto = {
 
 export type ProjectGoalDto = {
   readonly id: string;
-  readonly projectId: string;
+  readonly projectId: string | null;
+  readonly projectName?: string | null;
   readonly title: string;
   readonly status: "active" | "done";
   readonly targetDate: string | null;
@@ -87,14 +88,16 @@ export type ProjectGoalDto = {
 
 export type ProjectNoteSummaryDto = {
   readonly id: string;
-  readonly projectId: string;
+  readonly projectId: string | null;
+  readonly projectName?: string | null;
   readonly title: string;
   readonly updatedAt: string;
 };
 
 export type ProjectNoteDto = {
   readonly id: string;
-  readonly projectId: string;
+  readonly projectId: string | null;
+  readonly projectName?: string | null;
   readonly title: string;
   readonly markdown: string;
   readonly createdAt: string;

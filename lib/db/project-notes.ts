@@ -2,14 +2,15 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
 import { getProject } from "@/lib/db/projects";
-import { projectNote, type ProjectNote } from "@/lib/db/schema";
+import { project, projectNote, type ProjectNote } from "@/lib/db/schema";
 
 const MAX_TITLE = 200;
 const MAX_MARKDOWN = 200_000;
 
 export type ProjectNoteDto = {
   readonly id: string;
-  readonly projectId: string;
+  readonly projectId: string | null;
+  readonly projectName: string | null;
   readonly title: string;
   readonly markdown: string;
   readonly createdAt: string;
@@ -18,15 +19,20 @@ export type ProjectNoteDto = {
 
 export type ProjectNoteSummaryDto = {
   readonly id: string;
-  readonly projectId: string;
+  readonly projectId: string | null;
+  readonly projectName: string | null;
   readonly title: string;
   readonly updatedAt: string;
 };
 
-function toDto(row: ProjectNote): ProjectNoteDto {
+function toDto(
+  row: ProjectNote,
+  projectName: string | null = null,
+): ProjectNoteDto {
   return {
     id: row.id,
     projectId: row.projectId,
+    projectName,
     title: row.title,
     markdown: row.markdown,
     createdAt: row.createdAt.toISOString(),
@@ -34,10 +40,14 @@ function toDto(row: ProjectNote): ProjectNoteDto {
   };
 }
 
-function toSummary(row: ProjectNote): ProjectNoteSummaryDto {
+function toSummary(
+  row: ProjectNote,
+  projectName: string | null = null,
+): ProjectNoteSummaryDto {
   return {
     id: row.id,
     projectId: row.projectId,
+    projectName,
     title: row.title,
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -50,6 +60,34 @@ function requireTitle(title: string): string {
     throw new Error(`Note titles must be ${MAX_TITLE} characters or fewer.`);
   }
   return trimmed;
+}
+
+async function resolveOptionalProjectId(
+  userId: string,
+  projectId: string | null | undefined,
+): Promise<string | null> {
+  if (projectId === undefined || projectId === null || projectId.trim() === "") {
+    return null;
+  }
+  const owned = await getProject(userId, projectId.trim());
+  if (!owned) throw new Error("Unknown project.");
+  return owned.id;
+}
+
+export async function listAllNotes(
+  userId: string,
+): Promise<readonly ProjectNoteSummaryDto[]> {
+  const rows = await db
+    .select({
+      note: projectNote,
+      projectName: project.name,
+    })
+    .from(projectNote)
+    .leftJoin(project, eq(projectNote.projectId, project.id))
+    .where(eq(projectNote.userId, userId))
+    .orderBy(desc(projectNote.updatedAt));
+
+  return rows.map((row) => toSummary(row.note, row.projectName ?? null));
 }
 
 export async function listProjectNotes(
@@ -70,7 +108,23 @@ export async function listProjectNotes(
     )
     .orderBy(desc(projectNote.updatedAt));
 
-  return rows.map(toSummary);
+  return rows.map((row) => toSummary(row, owned.name));
+}
+
+export async function getNote(
+  userId: string,
+  noteId: string,
+): Promise<ProjectNoteDto | null> {
+  const [row] = await db
+    .select({
+      note: projectNote,
+      projectName: project.name,
+    })
+    .from(projectNote)
+    .leftJoin(project, eq(projectNote.projectId, project.id))
+    .where(and(eq(projectNote.id, noteId), eq(projectNote.userId, userId)))
+    .limit(1);
+  return row ? toDto(row.note, row.projectName ?? null) : null;
 }
 
 export async function getProjectNote(
@@ -78,31 +132,20 @@ export async function getProjectNote(
   projectId: string,
   noteId: string,
 ): Promise<ProjectNoteDto | null> {
-  const [row] = await db
-    .select()
-    .from(projectNote)
-    .where(
-      and(
-        eq(projectNote.id, noteId),
-        eq(projectNote.projectId, projectId),
-        eq(projectNote.userId, userId),
-      ),
-    )
-    .limit(1);
-  return row ? toDto(row) : null;
+  const note = await getNote(userId, noteId);
+  if (!note || note.projectId !== projectId) return null;
+  return note;
 }
 
-export async function createProjectNote(
+export async function createNote(
   userId: string,
-  projectId: string,
   input: {
     readonly title: string;
     readonly markdown?: string;
+    readonly projectId?: string | null;
   },
-): Promise<ProjectNoteDto | null> {
-  const owned = await getProject(userId, projectId);
-  if (!owned) return null;
-
+): Promise<ProjectNoteDto> {
+  const projectId = await resolveOptionalProjectId(userId, input.projectId);
   const title = requireTitle(input.title);
   const markdown = (input.markdown ?? "").slice(0, MAX_MARKDOWN);
 
@@ -116,7 +159,69 @@ export async function createProjectNote(
     })
     .returning();
   if (!row) throw new Error("Failed to create note.");
-  return toDto(row);
+
+  let projectName: string | null = null;
+  if (projectId) {
+    const owned = await getProject(userId, projectId);
+    projectName = owned?.name ?? null;
+  }
+  return toDto(row, projectName);
+}
+
+export async function createProjectNote(
+  userId: string,
+  projectId: string,
+  input: {
+    readonly title: string;
+    readonly markdown?: string;
+  },
+): Promise<ProjectNoteDto | null> {
+  const owned = await getProject(userId, projectId);
+  if (!owned) return null;
+  return createNote(userId, { ...input, projectId });
+}
+
+export async function updateNote(
+  userId: string,
+  noteId: string,
+  input: {
+    readonly title?: string;
+    readonly markdown?: string;
+    readonly projectId?: string | null;
+  },
+): Promise<ProjectNoteDto | null> {
+  const existing = await getNote(userId, noteId);
+  if (!existing) return null;
+
+  const title =
+    input.title !== undefined ? requireTitle(input.title) : existing.title;
+  const markdown =
+    input.markdown !== undefined
+      ? input.markdown.slice(0, MAX_MARKDOWN)
+      : existing.markdown;
+  const projectId =
+    input.projectId !== undefined
+      ? await resolveOptionalProjectId(userId, input.projectId)
+      : existing.projectId;
+
+  const [row] = await db
+    .update(projectNote)
+    .set({
+      title,
+      markdown,
+      projectId,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(projectNote.id, noteId), eq(projectNote.userId, userId)))
+    .returning();
+  if (!row) return null;
+
+  let projectName: string | null = null;
+  if (row.projectId) {
+    const owned = await getProject(userId, row.projectId);
+    projectName = owned?.name ?? null;
+  }
+  return toDto(row, projectName);
 }
 
 export async function updateProjectNote(
@@ -130,30 +235,18 @@ export async function updateProjectNote(
 ): Promise<ProjectNoteDto | null> {
   const existing = await getProjectNote(userId, projectId, noteId);
   if (!existing) return null;
+  return updateNote(userId, noteId, input);
+}
 
-  const title =
-    input.title !== undefined ? requireTitle(input.title) : existing.title;
-  const markdown =
-    input.markdown !== undefined
-      ? input.markdown.slice(0, MAX_MARKDOWN)
-      : existing.markdown;
-
-  const [row] = await db
-    .update(projectNote)
-    .set({
-      title,
-      markdown,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(projectNote.id, noteId),
-        eq(projectNote.projectId, projectId),
-        eq(projectNote.userId, userId),
-      ),
-    )
-    .returning();
-  return row ? toDto(row) : null;
+export async function deleteNote(
+  userId: string,
+  noteId: string,
+): Promise<boolean> {
+  const deleted = await db
+    .delete(projectNote)
+    .where(and(eq(projectNote.id, noteId), eq(projectNote.userId, userId)))
+    .returning({ id: projectNote.id });
+  return deleted.length > 0;
 }
 
 export async function deleteProjectNote(
@@ -161,15 +254,7 @@ export async function deleteProjectNote(
   projectId: string,
   noteId: string,
 ): Promise<boolean> {
-  const deleted = await db
-    .delete(projectNote)
-    .where(
-      and(
-        eq(projectNote.id, noteId),
-        eq(projectNote.projectId, projectId),
-        eq(projectNote.userId, userId),
-      ),
-    )
-    .returning({ id: projectNote.id });
-  return deleted.length > 0;
+  const existing = await getProjectNote(userId, projectId, noteId);
+  if (!existing) return false;
+  return deleteNote(userId, noteId);
 }

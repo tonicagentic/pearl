@@ -3,7 +3,7 @@ import { and, asc, eq, max } from "drizzle-orm";
 import { artifactsPrefix } from "@/agent/lib/artifacts";
 import { db } from "@/lib/db/client";
 import { getProject } from "@/lib/db/projects";
-import { projectArtifact } from "@/lib/db/schema";
+import { project, projectArtifact } from "@/lib/db/schema";
 
 export type ProjectArtifactDto = {
   readonly id: string;
@@ -37,6 +37,37 @@ function viewerArtifactsPrefix(userId: string): string | null {
     principalId: userId,
     principalType: "user",
   });
+}
+
+export type ProjectArtifactLinkDto = {
+  readonly pathname: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly title: string;
+};
+
+/** All Library↔project links for a user (for Library project filters). */
+export async function listUserProjectArtifactLinks(
+  userId: string,
+): Promise<readonly ProjectArtifactLinkDto[]> {
+  const rows = await db
+    .select({
+      pathname: projectArtifact.pathname,
+      projectId: projectArtifact.projectId,
+      projectName: project.name,
+      title: projectArtifact.title,
+    })
+    .from(projectArtifact)
+    .innerJoin(project, eq(projectArtifact.projectId, project.id))
+    .where(eq(projectArtifact.userId, userId))
+    .orderBy(asc(project.name), asc(projectArtifact.sortOrder));
+
+  return rows.map((row) => ({
+    pathname: row.pathname,
+    projectId: row.projectId,
+    projectName: row.projectName,
+    title: row.title,
+  }));
 }
 
 export async function listProjectArtifacts(

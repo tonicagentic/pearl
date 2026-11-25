@@ -216,9 +216,7 @@ export function ProjectDetailScreen({
       markdown: "",
     })
       .then((note) => {
-        router.push(
-          `/workspaces/projects/${encodeURIComponent(projectId)}/notes/${encodeURIComponent(note.id)}`,
-        );
+        router.push(`/notes/${encodeURIComponent(note.id)}`);
       })
       .catch((cause) => {
         setError(
@@ -247,7 +245,7 @@ export function ProjectDetailScreen({
   const linkLibraryArtifact = useCallback(() => {
     setError(null);
     void listArtifacts()
-      .then((artifacts) => {
+      .then(({ artifacts }) => {
         const linked = new Set(
           (workspace?.artifacts ?? []).map((row) => row.pathname),
         );
@@ -538,30 +536,52 @@ export function ProjectDetailScreen({
     <StackScreen>
       <Stack.Screen
         options={{
+          headerShown: true,
           title: workspace?.project.name || "Project",
-          headerRight: () => (
-            <View className="flex-row items-center gap-1">
-              <Pressable
-                accessibilityLabel="Add"
-                className="h-10 w-10 items-center justify-center"
-                onPress={openPlusMenu}
-              >
-                <Icon as={PlusIcon} className="size-5 text-foreground" />
-              </Pressable>
-              <Pressable
-                accessibilityLabel="More"
-                className="h-10 w-10 items-center justify-center"
-                onPress={openOverflow}
-              >
-                <Icon
-                  as={MoreHorizontalIcon}
-                  className="size-5 text-foreground"
-                />
-              </Pressable>
-            </View>
-          ),
+          headerBackButtonDisplayMode: "minimal",
+          headerTintColor: foregroundColor,
+          headerRight:
+            Platform.OS === "ios"
+              ? undefined
+              : () => (
+                  <View className="flex-row items-center gap-1">
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Add"
+                      className="h-10 w-10 items-center justify-center"
+                      onPress={openPlusMenu}
+                    >
+                      <Icon as={PlusIcon} className="size-5 text-foreground" />
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="More"
+                      className="h-10 w-10 items-center justify-center"
+                      onPress={openOverflow}
+                    >
+                      <Icon
+                        as={MoreHorizontalIcon}
+                        className="size-5 text-foreground"
+                      />
+                    </Pressable>
+                  </View>
+                ),
         }}
       />
+      {Platform.OS === "ios" ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon="plus"
+            accessibilityLabel="Add"
+            onPress={openPlusMenu}
+          />
+          <Stack.Toolbar.Button
+            icon="ellipsis"
+            accessibilityLabel="More"
+            onPress={openOverflow}
+          />
+        </Stack.Toolbar>
+      ) : null}
       <ScrollView
         className="flex-1"
         contentContainerClassName="px-5 pb-28 gap-6"
@@ -664,7 +684,7 @@ export function ProjectDetailScreen({
                 key={note.id}
                 onPress={() =>
                   router.push(
-                    `/workspaces/projects/${encodeURIComponent(projectId)}/notes/${encodeURIComponent(note.id)}`,
+                    `/notes/${encodeURIComponent(note.id)}`,
                   )
                 }
                 subtitle={new Date(note.updatedAt).toLocaleDateString()}

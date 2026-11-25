@@ -12,6 +12,18 @@ export type ArtifactDto = {
   readonly kind: ArtifactKind;
 };
 
+export type ProjectArtifactLinkDto = {
+  readonly pathname: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly title: string;
+};
+
+export type ArtifactsPayload = {
+  readonly artifacts: readonly ArtifactDto[];
+  readonly projectLinks: readonly ProjectArtifactLinkDto[];
+};
+
 function authHeaders(): Record<string, string> {
   const credential = getAuthCookie();
   return {
@@ -36,7 +48,7 @@ export function artifactContentUrl(
   return `${AGENT_URL}/api/artifacts/content?${params.toString()}`;
 }
 
-export async function listArtifacts(): Promise<readonly ArtifactDto[]> {
+export async function listArtifacts(): Promise<ArtifactsPayload> {
   const response = await fetch(`${AGENT_URL}/api/artifacts`, {
     headers: authHeaders(),
   });
@@ -58,14 +70,18 @@ export async function listArtifacts(): Promise<readonly ArtifactDto[]> {
       uploadedAt: string;
       kind?: ArtifactKind;
     }[];
+    projectLinks?: readonly ProjectArtifactLinkDto[];
   };
-  return (data.artifacts ?? []).map((row) => ({
-    pathname: row.pathname,
-    basename: row.basename,
-    size: row.size,
-    uploadedAt: row.uploadedAt,
-    kind: row.kind ?? artifactKindFromBasename(row.basename),
-  }));
+  return {
+    artifacts: (data.artifacts ?? []).map((row) => ({
+      pathname: row.pathname,
+      basename: row.basename,
+      size: row.size,
+      uploadedAt: row.uploadedAt,
+      kind: row.kind ?? artifactKindFromBasename(row.basename),
+    })),
+    projectLinks: data.projectLinks ?? [],
+  };
 }
 
 export async function deleteArtifact(pathname: string): Promise<void> {

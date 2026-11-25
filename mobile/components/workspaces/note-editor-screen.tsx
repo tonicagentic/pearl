@@ -8,21 +8,19 @@ import { LoadingCenter } from "@/components/ui/loading-center";
 import { StackScreen } from "@/components/ui/stack-screen";
 import { Text } from "@/components/ui/text";
 import {
-  deleteProjectNoteRequest,
-  fetchProjectNote,
-  updateProjectNoteRequest,
-  type ProjectNoteDto,
-} from "@/src/projects-client";
+  deleteNoteRequest,
+  fetchNote,
+  updateNoteRequest,
+  type NoteDto,
+} from "@/src/notes-client";
 
-/** Project note editor with enriched markdown. */
+/** Canonical note editor — loads by noteId via GET /api/notes/[id]. */
 export function NoteEditorScreen({
-  projectId,
   noteId,
 }: {
-  readonly projectId: string;
   readonly noteId: string;
 }) {
-  const [note, setNote] = useState<ProjectNoteDto | null>(null);
+  const [note, setNote] = useState<NoteDto | null>(null);
   const [title, setTitle] = useState("");
   const [markdown, setMarkdown] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +33,7 @@ export function NoteEditorScreen({
     let cancelled = false;
     void (async () => {
       try {
-        const row = await fetchProjectNote(projectId, noteId);
+        const row = await fetchNote(noteId);
         if (!cancelled) {
           setNote(row);
           setTitle(row.title);
@@ -53,7 +51,7 @@ export function NoteEditorScreen({
     return () => {
       cancelled = true;
     };
-  }, [projectId, noteId]);
+  }, [noteId]);
 
   const dirty =
     note !== null &&
@@ -63,7 +61,7 @@ export function NoteEditorScreen({
     if (!dirty || saving) return;
     setSaving(true);
     setError(null);
-    void updateProjectNoteRequest(projectId, noteId, {
+    void updateNoteRequest(noteId, {
       title: title.trim() || "Untitled note",
       markdown,
     })
@@ -78,7 +76,7 @@ export function NoteEditorScreen({
         );
       })
       .finally(() => setSaving(false));
-  }, [dirty, markdown, noteId, projectId, saving, title]);
+  }, [dirty, markdown, noteId, saving, title]);
 
   const confirmDelete = useCallback(() => {
     Alert.alert("Delete note?", title || "Untitled note", [
@@ -87,13 +85,10 @@ export function NoteEditorScreen({
         text: "Delete",
         style: "destructive",
         onPress: () => {
-          void deleteProjectNoteRequest(projectId, noteId)
+          void deleteNoteRequest(noteId)
             .then(() => {
               if (router.canGoBack()) router.back();
-              else
-                router.replace(
-                  `/workspaces/projects/${encodeURIComponent(projectId)}`,
-                );
+              else router.replace("/notes");
             })
             .catch((cause) => {
               setError(
@@ -105,7 +100,7 @@ export function NoteEditorScreen({
         },
       },
     ]);
-  }, [noteId, projectId, title]);
+  }, [noteId, title]);
 
   if (!note && !error) {
     return (
@@ -126,6 +121,16 @@ export function NoteEditorScreen({
         {error ? (
           <Text className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
             {error}
+          </Text>
+        ) : null}
+
+        {note?.projectName ? (
+          <Text variant="caption" tone="muted">
+            {note.projectName}
+          </Text>
+        ) : note ? (
+          <Text variant="caption" tone="muted">
+            No project
           </Text>
         ) : null}
 

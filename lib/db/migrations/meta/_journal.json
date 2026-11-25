@@ -393,6 +393,13 @@
       "when": 1796200000000,
       "tag": "0058_drop_plan",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1796300000000,
+      "tag": "0059_goals_notes_nullable_project",
+      "breakpoints": true
     }
   ]
 }

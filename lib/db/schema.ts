@@ -1108,9 +1108,10 @@ export const projectGoal = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    projectId: text("project_id")
-      .notNull()
-      .references(() => project.id, { onDelete: "cascade" }),
+    // Null = standalone (inbox). Deleting a project unfiles the goal.
+    projectId: text("project_id").references(() => project.id, {
+      onDelete: "set null",
+    }),
     title: text("title").notNull(),
     status: text("status", { enum: ["active", "done"] })
       .notNull()
@@ -1130,7 +1131,7 @@ export const projectGoal = pgTable(
 
 export type ProjectGoal = typeof projectGoal.$inferSelect;
 
-/** Freeform markdown notes owned by a project (not Library files). */
+/** Freeform markdown notes — standalone or filed on a project. */
 export const projectNote = pgTable(
   "project_note",
   {
@@ -1140,9 +1141,10 @@ export const projectNote = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    projectId: text("project_id")
-      .notNull()
-      .references(() => project.id, { onDelete: "cascade" }),
+    // Null = standalone. Deleting a project unfiles the note.
+    projectId: text("project_id").references(() => project.id, {
+      onDelete: "set null",
+    }),
     title: text("title").notNull(),
     markdown: text("markdown").notNull().default(""),
     createdAt: timestamp("created_at").notNull().defaultNow(),

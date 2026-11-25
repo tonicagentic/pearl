@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { del, list } from "@vercel/blob";
 import { artifactsPrefix } from "@/agent/lib/artifacts";
+import { listUserProjectArtifactLinks } from "@/lib/db/project-artifacts";
 import { artifactKindFromBasename } from "@/lib/library/artifact-kind";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
@@ -39,7 +40,10 @@ export async function GET() {
   }
 
   try {
-    const { blobs } = await list({ prefix });
+    const [{ blobs }, projectLinks] = await Promise.all([
+      list({ prefix }),
+      listUserProjectArtifactLinks(viewer.id),
+    ]);
 
     return NextResponse.json({
       artifacts: blobs.map((blob) => {
@@ -52,6 +56,7 @@ export async function GET() {
           kind: artifactKindFromBasename(basename),
         };
       }),
+      projectLinks,
     });
   } catch (error) {
     return NextResponse.json(
