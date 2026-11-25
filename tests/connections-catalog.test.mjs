@@ -11,6 +11,9 @@ import {
   CONNECTION_READONLY_ALLOWLISTS,
   CONNECTION_SHEETS_ALLOWLIST,
   CONNECTION_TEMPO_ALLOWLIST,
+  CONNECTION_VERCEL_ALLOWLIST,
+  CONNECTION_VERCEL_BLOCKLIST,
+  CONNECTION_VERCEL_DIAGNOSTIC_TOOLS,
   CONNECTION_WRITE_BLOCKLISTS,
   CONNECTION_WRITE_TOOLS,
   TEMPO_ALLOWLIST,
@@ -286,6 +289,65 @@ test("Better Stack allowlist splits reads, diagnostics, and approval-gated write
   assert.deepEqual(connectionTokenParams("betterstack").scopes, [
     ...BETTERSTACK_OAUTH_SCOPES,
   ]);
+});
+
+test("Vercel allowlist splits parent reads, coder diagnostics, and approval-gated writes", () => {
+  for (const name of CONNECTION_READONLY_ALLOWLISTS.vercel) {
+    assert.equal(
+      looksLikeWriteOrLogTool(name),
+      false,
+      `vercel readonly includes write/log tool ${name}`,
+    );
+    assert.equal(CONNECTION_WRITE_TOOLS.vercel.includes(name), false, name);
+  }
+  assert.ok(
+    CONNECTION_READONLY_ALLOWLISTS.vercel.includes("search_vercel_documentation"),
+  );
+  assert.equal(
+    CONNECTION_READONLY_ALLOWLISTS.vercel.includes("search_documentation"),
+    false,
+  );
+  for (const name of CONNECTION_VERCEL_DIAGNOSTIC_TOOLS) {
+    assert.ok(CONNECTION_VERCEL_ALLOWLIST.includes(name), name);
+    assert.equal(
+      CONNECTION_READONLY_ALLOWLISTS.vercel.includes(name),
+      false,
+      name,
+    );
+  }
+  assert.ok(looksLikeWriteOrLogTool("get_runtime_logs"));
+  assert.ok(looksLikeWriteOrLogTool("get_runtime_errors"));
+  // Build/event helpers stay on the coder diagnostic list even when the
+  // name does not match the generic log heuristic.
+  assert.ok(
+    CONNECTION_VERCEL_DIAGNOSTIC_TOOLS.includes("list_deployment_events"),
+  );
+  for (const name of CONNECTION_WRITE_TOOLS.vercel) {
+    assert.ok(CONNECTION_VERCEL_ALLOWLIST.includes(name), name);
+    assert.equal(
+      CONNECTION_READONLY_ALLOWLISTS.vercel.includes(name),
+      false,
+      name,
+    );
+  }
+  assert.ok(CONNECTION_WRITE_TOOLS.vercel.includes("create_deployment"));
+  assert.ok(CONNECTION_WRITE_TOOLS.vercel.includes("pause_project"));
+  assert.ok(CONNECTION_WRITE_TOOLS.vercel.includes("create_project_env"));
+  assert.ok(CONNECTION_VERCEL_ALLOWLIST.includes("get_runtime_logs"));
+  for (const name of CONNECTION_VERCEL_BLOCKLIST) {
+    assert.equal(CONNECTION_VERCEL_ALLOWLIST.includes(name), false, name);
+    assert.equal(CONNECTION_WRITE_TOOLS.vercel.includes(name), false, name);
+    assert.equal(
+      CONNECTION_READONLY_ALLOWLISTS.vercel.includes(name),
+      false,
+      name,
+    );
+  }
+  assert.ok(CONNECTION_VERCEL_BLOCKLIST.includes("buy_domain"));
+  assert.ok(CONNECTION_VERCEL_BLOCKLIST.includes("create_ai_gateway_api_key"));
+  assert.ok(
+    CONNECTION_VERCEL_BLOCKLIST.includes("accept_project_transfer_request"),
+  );
 });
 
 test("write approval asks for writes, denies in plan mode, passes reads", () => {

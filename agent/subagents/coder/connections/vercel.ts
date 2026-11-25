@@ -1,12 +1,18 @@
 import { connect } from "@vercel/connect/eve";
 import { defineDynamic, defineMcpClientConnection } from "eve/connections";
 
-import { CONNECTION_READONLY_ALLOWLISTS } from "../../../lib/connection-allowlists.js";
+import {
+  CONNECTION_VERCEL_ALLOWLIST,
+  CONNECTION_WRITE_TOOLS,
+} from "../../../lib/connection-allowlists.js";
+import { writeToolApproval } from "../../../lib/connection-approval.js";
 import { isBetterAuthUserPrincipal } from "../../../lib/user-connection.js";
 
-// Same hosted Vercel MCP connector as the parent, mounted on coder so
-// list_teams / list_projects work inside the child. Writes stay on
-// deploy_vercel (approval every call) — this allowlist is read-only.
+// Same hosted Vercel MCP connector as the parent, mounted on coder with
+// near-full tool access. Reads and diagnostics run freely; mutating tools
+// need approval every call (same HITL path as Expo/Neon). Purchases and
+// credential minting stay omitted. Prefer deploy_vercel for sandbox
+// checkout deploys — MCP create_deployment is an approved alternative.
 export default defineDynamic(async (ctx) => {
   const connector = process.env.VERCEL_CONNECTOR?.trim();
   if (!connector || !isBetterAuthUserPrincipal(ctx.session.auth.current)) {
@@ -16,13 +22,17 @@ export default defineDynamic(async (ctx) => {
   return defineMcpClientConnection({
     url: "https://mcp.vercel.com",
     description:
-      "Read the signed-in user's Vercel teams, projects, and deployment " +
-      "metadata; no logs or changes. Call list_teams first, then " +
+      "The signed-in user's Vercel account: teams, projects, deployments, " +
+      "env, domains, logs, and ops. Call list_teams first, then " +
       "list_projects for the personal account and every returned team " +
       "(pass teamId or slug), following each page. One list_projects call " +
-      "is only one team. Deploys use deploy_vercel, not this connection.",
-    instanceKey: `coder:vercel:${connector}:readonly`,
+      "is only one team. Reads and runtime/build logs are free; creating " +
+      "or changing projects, env, domains, aliases, and deployments needs " +
+      "approval. Prefer deploy_vercel for the current sandbox checkout. " +
+      "Domain purchases and API-key minting are not available.",
+    instanceKey: `coder:vercel:${connector}`,
     auth: connect({ connector, autoProvision: false }),
-    tools: { allow: [...CONNECTION_READONLY_ALLOWLISTS.vercel] },
+    tools: { allow: [...CONNECTION_VERCEL_ALLOWLIST] },
+    approval: writeToolApproval(CONNECTION_WRITE_TOOLS.vercel),
   });
 });

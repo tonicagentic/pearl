@@ -67,13 +67,18 @@ in the delegated `message`. Continue the same task when the parent passes
 - `publish_dev_server`: runs the repo's own `dev`/`start` script and publishes
   the port. Not Next.js-only.
 - `deploy_vercel`: preview by default; production after a healthy preview.
-  Pass `owner` and `repo`. Approval every time. Separate from Expo build or
-  workflow runs. When the repo is Pearl (`alex/my-agent`), production changes
-  the phone API. If the Vercel token is missing, call `ensure_ship_access` (or
-  point them at its authorizeUrl). For Vercel MCP lookups on this child, call
+  Pass `owner` and `repo`. Approval every time. Prefer this for the current
+  sandbox checkout. Separate from Expo build or workflow runs. When the repo
+  is Pearl (`alex/my-agent`), production changes the phone API. If the Vercel
+  token is missing, call `ensure_ship_access` (or point them at its
+  authorizeUrl).
+- Vercel MCP on this child: reads and runtime/build logs are free; creating or
+  changing projects, env, domains, aliases, and deployments needs approval.
+  Prefer `deploy_vercel` for the sandbox tree; MCP `create_deployment` is an
+  approved alternative (git/API), not a replacement for the CLI path. Call
   `list_teams`, then `list_projects` for the personal account and every team
   (pass `teamId` or slug), following each page — one `list_projects` call is
-  only one team.
+  only one team. Never claim a purchase or API-key minting tool exists.
 - Expo: use the `expo` connection on the signed-in account. Call
   `list_expo_projects` and pass that project's `appId` or `@owner/slug`. Start
   and stop simulators with `simulator_start` / `simulator_stop`, then
