@@ -86,7 +86,10 @@ export default defineTool({
     let state = stateFor(sessionId);
     const decision = classifyGitCommand(input.command, state);
 
-    if (decision.reason === "default-branch-refused") {
+    if (
+      decision.reason === "default-branch-refused" &&
+      "branch" in decision
+    ) {
       return {
         status: "error",
         error:

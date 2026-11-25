@@ -21,7 +21,7 @@ export const PLAYWRIGHT_CAPTURE_NETWORK_ALLOW = [
 export function playwrightCaptureNetworkPolicy(targetUrl?: string): {
   readonly allow: string[];
 } {
-  const allow = [...PLAYWRIGHT_CAPTURE_NETWORK_ALLOW];
+  const allow: string[] = [...PLAYWRIGHT_CAPTURE_NETWORK_ALLOW];
   if (targetUrl) {
     try {
       const host = new URL(targetUrl).hostname;
