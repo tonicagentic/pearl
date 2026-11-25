@@ -178,6 +178,78 @@ test("raw production order hydrates to an empty thread past the interaction", ()
   assert.equal(store.snapshot.session?.streamIndex, 60);
 });
 
+test("meta.next jumps skip overlapping saved lines so SessionStore can hydrate", () => {
+  const closing = event(
+    "delivery.consumed",
+    0,
+    1,
+    {
+      turnId: "t0",
+      deliveryId: "d1",
+      parts: [{ kind: "text", text: "hi" }],
+    },
+    undefined,
+  );
+  const withJump: SessionStreamEvent[] = [
+    event("turn.started", 0, 0, { turnId: "t0" }, false),
+    {
+      ...closing,
+      meta: { ...closing.meta, next: 5 },
+    } as SessionStreamEvent,
+    event("content.delta", 1, 0, {
+      kind: "text",
+      delta: "skipped",
+      partId: "p1",
+    }),
+    event("content.delta", 5, 0, {
+      kind: "text",
+      delta: "kept",
+      partId: "p1",
+    }),
+  ];
+
+  assert.throws(
+    () =>
+      new SessionStore({
+        baseUrl: "https://pearl.diy",
+        initialEvents: withJump,
+      }),
+    /overlap source lines/,
+  );
+
+  const repaired = repairSessionHydration(withJump, {
+    sessionId: "s",
+    streamIndex: 6,
+  } as const);
+  assert.equal(
+    repaired.events.some(
+      (entry) =>
+        entry.type === "content.delta" &&
+        (entry as { data?: { delta?: string } }).data?.delta === "skipped",
+    ),
+    false,
+  );
+  assert.equal(
+    repaired.events.some(
+      (entry) =>
+        entry.type === "content.delta" &&
+        (entry as { data?: { delta?: string } }).data?.delta === "kept",
+    ),
+    true,
+  );
+  assert.equal(repaired.streamIndex, 6);
+
+  const store = new SessionStore({
+    baseUrl: "https://pearl.diy",
+    initialEvents: repaired.events,
+    initialSession: {
+      sessionId: "s",
+      streamIndex: repaired.streamIndex ?? 0,
+    },
+  });
+  assert.ok(store.snapshot);
+});
+
 test("repaired prefix keeps the transcript and resumes on the missing interaction line", () => {
   const repaired = repairSessionHydration(productionShapedLog(), session);
   assert.equal(repaired.streamIndex, 58);

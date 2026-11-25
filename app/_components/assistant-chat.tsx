@@ -115,6 +115,7 @@ import {
   saveClientChatSnapshot,
 } from "@/lib/chat/persistence-client";
 import { chatPresence } from "@/lib/chat/events";
+import { repairSessionHydration } from "@/lib/chat/hydration-prefix";
 import { createFallbackTitle } from "@/lib/chat/title";
 import type { ActiveChat, StorageMode } from "@/lib/chat/types";
 
@@ -735,6 +736,26 @@ function AssistantChatSurfaceInner({
     ],
   );
 
+  // Repair before hydrate: a presence mirror or meta.next jump in the saved
+  // log can leave events on already-covered lines, and SessionStore throws
+  // ("Saved events overlap source lines…") during useEveAgentRuntime.
+  const hydrationSource =
+    seedEvents.length > 0 ? seedEvents : (activeChat?.events ?? EMPTY_EVENTS);
+  const hydrationSession = freshSession ? null : (activeChat?.session ?? null);
+  const repairedHydration = repairSessionHydration(
+    hydrationSource,
+    hydrationSession,
+  );
+  const initialEvents = repairedHydration.events;
+  const initialSession =
+    freshSession || !activeChat?.session
+      ? undefined
+      : {
+          ...activeChat.session,
+          streamIndex:
+            repairedHydration.streamIndex ?? activeChat.session.streamIndex,
+        };
+
   const runtimeOptions = {
     adapters: {
       // Composer attachments: images and text via the built-in adapters, PDFs
@@ -750,9 +771,8 @@ function AssistantChatSurfaceInner({
       ]),
     },
     resume: freshSession ? false : Boolean(activeChat?.session),
-    initialEvents:
-      seedEvents.length > 0 ? seedEvents : (activeChat?.events ?? EMPTY_EVENTS),
-    initialSession: freshSession ? undefined : activeChat?.session,
+    initialEvents,
+    initialSession,
     onEvent: persistStreamEvent,
     onFinish: persistSnapshot,
     // Persist the session cursor the moment eve returns it — waiting for the

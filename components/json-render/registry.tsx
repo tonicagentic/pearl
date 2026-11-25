@@ -400,6 +400,21 @@ function CircleOfFifthsSvg({ highlightKey }: { highlightKey: string | null }) {
   );
 }
 
+/** Compact columns stay on one line; longer prose wraps at a readable width. */
+const TABLE_COMPACT_MAX_CHARS = 42;
+
+function isCompactTableColumn(
+  header: string,
+  rows: readonly (readonly string[])[],
+  columnIndex: number,
+): boolean {
+  if (header.length > TABLE_COMPACT_MAX_CHARS) return false;
+  return rows.every((row) => {
+    const cell = row[columnIndex] ?? "";
+    return cell.length <= TABLE_COMPACT_MAX_CHARS;
+  });
+}
+
 export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
   components: {
     Stack: ({ props, children }) => (
@@ -511,32 +526,53 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
         </div>
       );
     },
-    Table: ({ props }) => (
-      <div className="border-border/60 overflow-x-auto rounded-lg border">
-        <table className="w-full min-w-[16rem] border-collapse text-left text-[13.5px]">
-          <thead className="bg-muted/40 text-muted-foreground">
-            <tr>
-              {props.columns.map((column) => (
-                <th key={column} className="px-2.5 py-1.5 font-medium">
-                  {column}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {props.rows.map((row, rowIndex) => (
-              <tr key={rowIndex} className="border-border/50 border-t">
-                {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="text-foreground px-2.5 py-1.5 align-top">
-                    {cell}
-                  </td>
+    Table: ({ props }) => {
+      const compactColumns = props.columns.map((column, columnIndex) =>
+        isCompactTableColumn(column, props.rows, columnIndex),
+      );
+      return (
+        <div className="overflow-x-auto">
+          <table className="w-max min-w-full border-collapse text-left text-[13.5px] leading-5">
+            <thead>
+              <tr className="border-border/60 border-b">
+                {props.columns.map((column, columnIndex) => (
+                  <th
+                    key={column}
+                    className={cn(
+                      "text-muted-foreground px-3 py-2.5 text-[12.5px] font-medium align-top",
+                      compactColumns[columnIndex]
+                        ? "whitespace-nowrap"
+                        : "min-w-[12rem] max-w-[20rem]",
+                    )}
+                  >
+                    {column}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    ),
+            </thead>
+            <tbody>
+              {props.rows.map((row, rowIndex) => (
+                <tr key={rowIndex} className="border-border/40 border-b last:border-b-0">
+                  {row.map((cell, cellIndex) => (
+                    <td
+                      key={cellIndex}
+                      className={cn(
+                        "text-foreground px-3 py-2.5 align-top",
+                        compactColumns[cellIndex]
+                          ? "whitespace-nowrap"
+                          : "min-w-[12rem] max-w-[20rem] wrap-break-word",
+                      )}
+                    >
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    },
     Image: ({ props }) => {
       const src = httpsSrc(props.src);
       if (!src) return null;
