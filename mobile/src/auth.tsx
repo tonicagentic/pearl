@@ -196,6 +196,42 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * Probe the stored bearer. `invalid` clears the session; `unknown` (network /
+   * 5xx) keeps the local session so a flaky agent URL doesn’t trap the user on
+   * the sign-in intro.
+   */
+  const probeSession = useCallback(
+    async (
+      credential: string,
+    ): Promise<
+      | { status: "ok"; user: unknown }
+      | { status: "invalid" }
+      | { status: "unknown" }
+    > => {
+      try {
+        const response = await fetch(`${AGENT_URL}/api/auth/get-session`, {
+          method: "GET",
+          headers: {
+            authorization: `Bearer ${credential}`,
+          },
+          cache: "no-store",
+        });
+        if (response.status === 401) return { status: "invalid" };
+        if (!response.ok) return { status: "unknown" };
+        const body = (await response.json().catch(() => null)) as {
+          user?: unknown;
+        } | null;
+        const user = body?.user ?? null;
+        if (!user || isAnonymousFromUser(user)) return { status: "invalid" };
+        return { status: "ok", user };
+      } catch {
+        return { status: "unknown" };
+      }
+    },
+    [],
+  );
+
   const refreshViewerName = useCallback(
     async (credential: string) => {
       const user = await readSessionUser(credential);
@@ -207,8 +243,9 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   );
 
   // Cold-start restore: agent URL first (so API calls hit the right host),
-  // then the stored session. No silent guest — signed-out users see the
-  // intro / continue gate before chat. Leftover anonymous sessions are cleared.
+  // then the stored session. If Keychain has a credential, enter the app
+  // immediately — don’t block on the intro while get-session round-trips.
+  // Only clear the session when the server proves it’s dead (401 / anonymous).
   useEffect(() => {
     let cancelled = false;
 
@@ -220,19 +257,29 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         if (cancelled) return;
         if (session) {
           setAuthCookie(session.cookie);
-          const user = await readSessionUser(session.cookie);
-          if (cancelled) return;
-          if (isAnonymousFromUser(user)) {
-            setAuthCookie(null);
-            await clearSession();
-            return;
-          }
           setViewerEmail(session.email || null);
           setIsAnonymous(false);
-          const name = nameFromAuthUser(user);
-          if (name) setViewerName(name);
           setSignedIn(true);
+          // Leave the splash / sign-in gate before the network probe finishes.
+          if (!cancelled) setRestoring(false);
+
+          const probe = await probeSession(session.cookie);
+          if (cancelled) return;
+          if (probe.status === "invalid") {
+            setAuthCookie(null);
+            await clearSession();
+            setViewerEmail(null);
+            setViewerName(null);
+            setIsAnonymous(false);
+            setSignedIn(false);
+            return;
+          }
+          if (probe.status === "ok") {
+            const name = nameFromAuthUser(probe.user);
+            if (name) setViewerName(name);
+          }
           await refreshBillingGate();
+          return;
         }
       } catch {
         // Corrupt storage: fall through to sign-in.
@@ -246,7 +293,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [readSessionUser, refreshBillingGate]);
+  }, [probeSession, refreshBillingGate]);
 
   const commitSession = useCallback(
     async (

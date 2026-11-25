@@ -15,6 +15,8 @@ export type TransactionListFilters = {
   accountId?: string;
   entityId?: string;
   categoryId?: string;
+  /** Prefer over loading the whole month when drilling from a group. */
+  categoryIds?: string[];
   tripId?: string;
   inboxOnly?: boolean;
   q?: string;
@@ -56,7 +58,11 @@ export async function listTransactions(filters: TransactionListFilters = {}) {
 
   if (filters.accountId) where.accountId = filters.accountId;
   if (filters.entityId) where.entityId = filters.entityId;
-  if (filters.categoryId) where.categoryId = filters.categoryId;
+  if (filters.categoryIds?.length) {
+    where.categoryId = { in: filters.categoryIds };
+  } else if (filters.categoryId) {
+    where.categoryId = filters.categoryId;
+  }
   if (filters.tripId) where.tripId = filters.tripId;
   if (filters.type) where.type = filters.type;
   if (filters.q?.trim()) {

@@ -14,6 +14,7 @@ import {
   SearchIcon,
   SquarePenIcon,
   UserIcon,
+  WalletIcon,
   XIcon,
 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -53,6 +54,11 @@ const NAV_ROWS = [
     label: "Projects",
     href: "/workspaces",
     Icon: FolderIcon,
+  },
+  {
+    label: "Finances",
+    href: "/finances",
+    Icon: WalletIcon,
   },
 ] as const;
 

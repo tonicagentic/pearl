@@ -901,6 +901,7 @@ export const financeTransactions = finance.table(
   (t) => [
     unique("transactions_user_plaid_txn_unique").on(t.userId, t.plaidTxnId),
     index("transactions_user_date_idx").on(t.userId, t.date),
+    index("transactions_user_date_type_idx").on(t.userId, t.date, t.type),
     index("transactions_entity_id_idx").on(t.entityId),
     index("transactions_category_id_idx").on(t.categoryId),
     index("transactions_account_date_idx").on(t.accountId, t.date),

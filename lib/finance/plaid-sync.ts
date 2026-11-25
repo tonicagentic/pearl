@@ -1,3 +1,4 @@
+import { getUserId } from "./db";
 import { prisma } from "./prisma";
 import { decryptSecret } from "./crypto";
 import { getPlaidClient } from "./plaid";
@@ -7,6 +8,7 @@ import {
   shouldRefreshPlaidItem,
 } from "./plaid-freshness";
 import { ensurePlaidItemWebhook } from "./plaid-webhook";
+import { revalidateFinanceSpend } from "./spend-cache";
 
 /** Map Plaid API errors to a `plaid_items.status` value. */
 export function plaidItemStatusFromError(err: unknown): string {
@@ -253,6 +255,11 @@ export async function syncPlaidTransactions(plaidItemId: string) {
       status: "active",
     },
   });
+
+  if (added + modified + removed > 0) {
+    // Month tags unknown cheaply across pages; bust all user spend caches.
+    revalidateFinanceSpend(getUserId());
+  }
 
   return { added, modified, removed };
 }

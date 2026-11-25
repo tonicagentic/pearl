@@ -49,3 +49,27 @@ export function transactionsHref(opts: {
   if (opts.type) p.set("type", opts.type);
   return `/transactions?${p.toString()}`;
 }
+
+/** Pearl Finances drilldown (stays in the main app, not Pearl Money). */
+export function financesTransactionsHref(opts: {
+  from: Date;
+  to: Date;
+  year?: number;
+  month?: number;
+  categoryId?: string | null;
+  groupId?: string | null;
+  groupName?: string | null;
+  /** Defaults to web `/finances/transactions`; mobile passes the same path. */
+  basePath?: string;
+}) {
+  const p = new URLSearchParams();
+  p.set("from", opts.from.toISOString().slice(0, 10));
+  p.set("to", opts.to.toISOString().slice(0, 10));
+  if (opts.year) p.set("year", String(opts.year));
+  if (opts.month) p.set("month", String(opts.month));
+  if (opts.categoryId) p.set("categoryId", opts.categoryId);
+  if (opts.groupId) p.set("groupId", opts.groupId);
+  if (opts.groupName) p.set("groupName", opts.groupName);
+  const base = opts.basePath ?? "/finances/transactions";
+  return `${base}?${p.toString()}`;
+}

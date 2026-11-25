@@ -23,7 +23,10 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Text, TEXT_METRICS } from "@/components/ui/text";
 import { useAuth, type AuthCtaFrame } from "@/src/auth";
-import { isGoogleSignInAvailable } from "@/src/social-auth";
+import {
+  isAppleSignInAvailable,
+  isGoogleSignInAvailable,
+} from "@/src/social-auth";
 
 type GatePhase = "gate" | "email";
 type AuthFlow = "sign-up" | "sign-in" | "forgot";
@@ -74,7 +77,7 @@ export function SignInScreen({
     signInError,
   } = useAuth();
   const googleAvailable = isGoogleSignInAvailable();
-  const appleAvailable = Platform.OS === "ios";
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   /** Pushed `/sign-in/email` route — native liquid-glass back + swipe-to-pop. */
@@ -133,6 +136,16 @@ export function SignInScreen({
         : password.length >= 8 &&
           confirmPassword.length > 0 &&
           password === confirmPassword);
+
+  useEffect(() => {
+    let cancelled = false;
+    void isAppleSignInAvailable().then((ok) => {
+      if (!cancelled) setAppleAvailable(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (handOffActive || !showingEmail) return;

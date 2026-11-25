@@ -1,3 +1,4 @@
+import { getUserId } from "@/lib/finance/db";
 import { prisma } from "@/lib/finance/prisma";
 import { computeMonthLifestyle } from "@/lib/finance/lifestyle";
 import { currentYearMonth, monthBounds } from "@/lib/finance/money";
@@ -9,6 +10,7 @@ import {
   looksLikeTransferMemo,
   matchMerchantCategory,
 } from "@/lib/finance/merchant-categorize";
+import { revalidateFinanceSpend } from "@/lib/finance/spend-cache";
 
 export { fingerprintMemo } from "@/lib/finance/merchant-categorize";
 
@@ -183,6 +185,7 @@ export async function undoAgentCategorize(insightId: string) {
     where: { id: insightId },
     data: { status: "dismissed" },
   });
+  revalidateFinanceSpend(getUserId());
   return { ok: true as const, restored: previous.length };
 }
 
@@ -879,6 +882,10 @@ export async function categorizeWithConfidence(input: {
       applied: apply,
     },
   });
+
+  if (apply && appliedIds.length > 0) {
+    revalidateFinanceSpend(getUserId());
+  }
 
   return toolPayload("categorizeWithConfidence", {
     ok: true as const,

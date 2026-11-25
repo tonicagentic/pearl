@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { requireOptionalNativeModule } from "expo";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { CryptoDigestAlgorithm, digestStringAsync } from "expo-crypto";
 
@@ -58,8 +59,18 @@ export function isGoogleSignInAvailable() {
   return Boolean(googleWebClientId) && loadGoogleSignin() != null;
 }
 
-export async function isAppleSignInAvailable() {
+/**
+ * True only when the Expo Apple Auth native module is linked in this binary.
+ * `requireNativeView` still returns a Fabric stub when missing, so mounting
+ * `AppleAuthenticationButton` crashes with UnimplementedView — gate on this.
+ */
+export function isAppleSignInNativeLinked() {
   if (Platform.OS !== "ios") return false;
+  return requireOptionalNativeModule("ExpoAppleAuthentication") != null;
+}
+
+export async function isAppleSignInAvailable() {
+  if (!isAppleSignInNativeLinked()) return false;
   try {
     return await AppleAuthentication.isAvailableAsync();
   } catch {

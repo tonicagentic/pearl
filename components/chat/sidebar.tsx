@@ -10,6 +10,7 @@ import {
   PanelLeftIcon,
   PlusIcon,
   Trash2Icon,
+  WalletIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -75,6 +76,7 @@ export function ChatSidebar({
   const libraryActive = pathname?.startsWith("/library") ?? false;
   const projectsActive = pathname?.startsWith("/projects") ?? false;
   const agentsActive = pathname?.startsWith("/agents") ?? false;
+  const financesActive = pathname?.startsWith("/finances") ?? false;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -155,6 +157,16 @@ export function ChatSidebar({
         >
           <FolderKanbanIcon className="size-4" />
           Projects
+        </Link>
+        <Link
+          className={cn(
+            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
+            financesActive ? activeRowClass : inactiveRowClass,
+          )}
+          href="/finances"
+        >
+          <WalletIcon className="size-4" />
+          Finances
         </Link>
         <Link
           className={cn(

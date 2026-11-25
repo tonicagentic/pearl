@@ -86,6 +86,14 @@ export default function DrawerLayout() {
           }}
         />
         <Drawer.Screen
+          name="finances"
+          options={{
+            title: "Finances",
+            headerShown: false,
+            drawerItemStyle: { display: "none" },
+          }}
+        />
+        <Drawer.Screen
           name="history"
           options={{
             title: "History",

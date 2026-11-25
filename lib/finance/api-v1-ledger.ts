@@ -7,11 +7,13 @@ import {
   personalDocumentStatus,
   type DocumentKind,
 } from "@/lib/finance/documents";
+import { getUserId } from "@/lib/finance/db";
 import { formatMoney } from "@/lib/finance/money";
 import { computeNetWorth } from "@/lib/finance/net-worth";
 import { prisma } from "@/lib/finance/prisma";
 import { setTransactionsReconciled } from "@/lib/finance/reconcile-clear";
 import { categoryMonthActuals } from "@/lib/finance/reports";
+import { revalidateFinanceSpend } from "@/lib/finance/spend-cache";
 import {
   getRegisterFilterOptions,
   listTransactions,
@@ -38,12 +40,20 @@ export function parseTransactionListFilters(
   searchParams: URLSearchParams,
 ): TransactionListFilters {
   const limit = Number(searchParams.get("limit") ?? "40");
+  const categoryIdsRaw = searchParams.get("categoryIds")?.trim();
+  const categoryIds = categoryIdsRaw
+    ? categoryIdsRaw
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean)
+    : undefined;
   return {
     limit: Number.isFinite(limit) ? limit : 40,
     cursor: searchParams.get("cursor") ?? undefined,
     accountId: searchParams.get("accountId") ?? undefined,
     entityId: searchParams.get("entityId") ?? undefined,
     categoryId: searchParams.get("categoryId") ?? undefined,
+    categoryIds,
     tripId: searchParams.get("tripId") ?? undefined,
     type: searchParams.get("type") ?? undefined,
     q: searchParams.get("q") ?? undefined,
@@ -51,6 +61,43 @@ export function parseTransactionListFilters(
     from: parseOptionalDate(searchParams.get("from") ?? undefined),
     to: parseOptionalDate(searchParams.get("to") ?? undefined),
   };
+}
+
+/**
+ * Finances drilldown filters: resolve groupId / groupName → categoryIds once,
+ * then reuse listTransactions (never load the whole month client-side).
+ */
+export async function resolveFinancesTransactionFilters(
+  searchParams: URLSearchParams,
+): Promise<TransactionListFilters> {
+  const base = parseTransactionListFilters(searchParams);
+  const groupId = searchParams.get("groupId")?.trim() || undefined;
+  const groupName = searchParams.get("groupName")?.trim() || undefined;
+
+  if (base.categoryId || base.categoryIds?.length) {
+    return base;
+  }
+
+  if (groupId) {
+    const cats = await prisma.category.findMany({
+      where: { groupId },
+      select: { id: true },
+    });
+    return { ...base, categoryIds: cats.map((c) => c.id) };
+  }
+
+  if (groupName) {
+    if (groupName.toLowerCase() === "inbox") {
+      return { ...base, inboxOnly: true };
+    }
+    const cats = await prisma.category.findMany({
+      where: { group: { name: groupName } },
+      select: { id: true },
+    });
+    return { ...base, categoryIds: cats.map((c) => c.id) };
+  }
+
+  return base;
 }
 
 export async function buildTransactionsListPayload(filters: TransactionListFilters) {
@@ -140,6 +187,8 @@ export async function createManualTransaction(input: CreateTransactionInput) {
     data: { balance: account.balance + signed, balanceAsOf: new Date() },
   });
 
+  revalidateFinanceSpend(getUserId(), [date]);
+
   return { id: txn.id };
 }
 
@@ -168,8 +217,13 @@ export async function patchTransaction(id: string, input: PatchTransactionInput)
           ? { reconciledAt: null }
           : {}),
     },
-    select: { id: true, accountId: true },
+    select: { id: true, accountId: true, date: true },
   });
+
+  // Category / type changes affect spend rollups; reconcile-only does not.
+  if (categoryId !== undefined || Boolean(input.type?.trim())) {
+    revalidateFinanceSpend(getUserId(), [updated.date]);
+  }
 
   return updated;
 }
