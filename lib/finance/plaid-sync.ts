@@ -1,20 +1,17 @@
 import { prisma } from "./prisma";
 import { decryptSecret } from "./crypto";
 import { getPlaidClient } from "./plaid";
+import {
+  isSkippableRefreshError,
+  plaidErrorCode,
+  shouldRefreshPlaidItem,
+} from "./plaid-freshness";
+import { ensurePlaidItemWebhook } from "./plaid-webhook";
 
 /** Map Plaid API errors to a `plaid_items.status` value. */
 export function plaidItemStatusFromError(err: unknown): string {
   const msg = (err instanceof Error ? err.message : String(err)).toUpperCase();
-  const code =
-    typeof err === "object" &&
-    err !== null &&
-    "response" in err &&
-    typeof (err as { response?: { data?: { error_code?: string } } }).response
-      ?.data?.error_code === "string"
-      ? (
-          err as { response: { data: { error_code: string } } }
-        ).response.data.error_code.toUpperCase()
-      : "";
+  const code = plaidErrorCode(err);
   const haystack = `${code} ${msg}`;
   if (
     haystack.includes("ITEM_LOGIN_REQUIRED") ||
@@ -246,12 +243,88 @@ export async function syncPlaidTransactions(plaidItemId: string) {
     hasMore = page.has_more;
   }
 
+  const now = new Date();
   await prisma.plaidItem.update({
     where: { id: plaidItemId },
-    data: { cursor: cursor ?? null, updatedAt: new Date(), status: "active" },
+    data: {
+      cursor: cursor ?? null,
+      updatedAt: now,
+      lastSyncedAt: now,
+      status: "active",
+    },
   });
 
   return { added, modified, removed };
+}
+
+export type EnsurePlaidFreshOptions = {
+  /** Bypass the 18h refresh throttle. */
+  forceRefresh?: boolean;
+  /** When false, only `/transactions/sync` (daily books). Default true for view/manual. */
+  allowRefresh?: boolean;
+};
+
+/**
+ * Optionally call `/transactions/refresh` when stale, then sync balances + transactions.
+ * Refresh is async at Plaid; webhooks complete the next sync when extraction finishes.
+ */
+export async function ensurePlaidItemFresh(
+  plaidItemId: string,
+  opts?: EnsurePlaidFreshOptions,
+) {
+  const allowRefresh = opts?.allowRefresh !== false;
+  const item = await prisma.plaidItem.findUniqueOrThrow({
+    where: { id: plaidItemId },
+    select: {
+      id: true,
+      status: true,
+      accessTokenEnc: true,
+      lastRefreshedAt: true,
+    },
+  });
+
+  let refreshed = false;
+  let refreshSkipped: string | null = null;
+
+  if (
+    allowRefresh &&
+    shouldRefreshPlaidItem({
+      status: item.status,
+      lastRefreshedAt: item.lastRefreshedAt,
+      forceRefresh: opts?.forceRefresh,
+    })
+  ) {
+    try {
+      const client = getPlaidClient();
+      const accessToken = decryptSecret(item.accessTokenEnc);
+      await ensurePlaidItemWebhook(accessToken);
+      await client.transactions.refresh({ access_token: accessToken });
+      await prisma.plaidItem.update({
+        where: { id: plaidItemId },
+        data: { lastRefreshedAt: new Date() },
+      });
+      refreshed = true;
+    } catch (err) {
+      if (isSkippableRefreshError(err)) {
+        refreshSkipped = plaidErrorCode(err) || "REFRESH_SKIPPED";
+        console.warn(
+          "[plaid] transactions.refresh skipped for",
+          plaidItemId,
+          refreshSkipped,
+        );
+      } else {
+        try {
+          await markPlaidItemStatus(plaidItemId, plaidItemStatusFromError(err));
+        } catch {
+          // Ignore status update failures so the original error surfaces
+        }
+        throw err;
+      }
+    }
+  }
+
+  const sync = await syncPlaidItem(plaidItemId);
+  return { ...sync, refreshed, refreshSkipped };
 }
 
 export async function syncPlaidItem(plaidItemId: string) {

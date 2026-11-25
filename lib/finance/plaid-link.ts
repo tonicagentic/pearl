@@ -6,7 +6,8 @@ import {
   plaidConfigured,
   PLAID_COUNTRY_CODES,
 } from "@/lib/finance/plaid";
-import { syncPlaidItem } from "@/lib/finance/plaid-sync";
+import { ensurePlaidItemFresh, syncPlaidItem } from "@/lib/finance/plaid-sync";
+import { getPlaidWebhookUrl } from "@/lib/finance/plaid-webhook";
 import { prisma } from "@/lib/finance/prisma";
 
 function mapAccountType(type?: string | null) {
@@ -45,6 +46,8 @@ export async function createLinkToken(input: {
       language: "en" as const,
     };
 
+    const webhook = getPlaidWebhookUrl() ?? undefined;
+
     if (input.plaidItemId) {
       const item = await prisma.plaidItem.findUnique({
         where: { id: input.plaidItemId },
@@ -55,6 +58,7 @@ export async function createLinkToken(input: {
       const res = await client.link.createToken({
         ...base,
         access_token: decryptSecret(item.accessTokenEnc),
+        ...(webhook ? { webhook } : {}),
       });
       return { linkToken: res.link_token, env: getPlaidEnv() };
     }
@@ -62,6 +66,7 @@ export async function createLinkToken(input: {
     const res = await client.link.createToken({
       ...base,
       products: getPlaidProducts() as ["transactions"],
+      ...(webhook ? { webhook } : {}),
     });
     return { linkToken: res.link_token, env: getPlaidEnv() };
   } catch (e) {
@@ -138,8 +143,14 @@ export async function markPlaidItemReconnected(plaidItemId: string) {
   }
 }
 
-export async function syncPlaidItemById(plaidItemId: string) {
-  return syncPlaidItem(plaidItemId);
+export async function syncPlaidItemById(
+  plaidItemId: string,
+  opts?: { forceRefresh?: boolean; allowRefresh?: boolean },
+) {
+  return ensurePlaidItemFresh(plaidItemId, {
+    forceRefresh: opts?.forceRefresh,
+    allowRefresh: opts?.allowRefresh ?? true,
+  });
 }
 
 export async function removePlaidItem(id: string) {

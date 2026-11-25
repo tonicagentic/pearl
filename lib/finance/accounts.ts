@@ -32,6 +32,8 @@ export type BankFeedItem = {
   status: string;
   accountCount: number;
   updatedAt: string;
+  lastSyncedAt: string | null;
+  lastRefreshedAt: string | null;
 };
 
 function sourceLabel(source: string): AccountRegisterRow["sourceLabel"] {
@@ -144,13 +146,18 @@ export async function listAccountsForRegister(): Promise<{
         accounts.map((a) => [a.entity.id, { id: a.entity.id, name: a.entity.name }]),
       ).values(),
     ].sort((a, b) => a.name.localeCompare(b.name)),
-    feeds: plaidItems.map((p) => ({
-      id: p.id,
-      institutionName: p.institutionName ?? "Bank",
-      status: p.status,
-      accountCount: p._count.accounts,
-      updatedAt: p.updatedAt.toISOString(),
-    })),
+    feeds: plaidItems.map((p) => {
+      const synced = p.lastSyncedAt ?? p.updatedAt;
+      return {
+        id: p.id,
+        institutionName: p.institutionName ?? "Bank",
+        status: p.status,
+        accountCount: p._count.accounts,
+        updatedAt: p.updatedAt.toISOString(),
+        lastSyncedAt: synced ? synced.toISOString() : null,
+        lastRefreshedAt: p.lastRefreshedAt?.toISOString() ?? null,
+      };
+    }),
   };
 }
 

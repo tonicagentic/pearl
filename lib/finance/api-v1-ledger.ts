@@ -18,6 +18,7 @@ import {
   type TransactionListFilters,
 } from "@/lib/finance/transactions";
 import { buildTransactionsPayload } from "@/lib/finance/api-v1";
+import { buildPlaidFeedsFreshness } from "@/lib/finance/plaid-freshness";
 
 function slugify(name: string) {
   return name
@@ -53,12 +54,21 @@ export function parseTransactionListFilters(
 }
 
 export async function buildTransactionsListPayload(filters: TransactionListFilters) {
-  const [payload, filterOptions] = await Promise.all([
+  const [payload, filterOptions, plaidItems] = await Promise.all([
     buildTransactionsPayload(filters),
     getRegisterFilterOptions(),
+    prisma.plaidItem.findMany({
+      select: {
+        status: true,
+        lastSyncedAt: true,
+        lastRefreshedAt: true,
+        updatedAt: true,
+      },
+    }),
   ]);
   return {
     ...payload,
+    freshness: buildPlaidFeedsFreshness(plaidItems),
     filterOptions: {
       accounts: filterOptions.accounts.map((a) => ({
         id: a.id,

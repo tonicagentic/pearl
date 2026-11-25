@@ -1305,8 +1305,15 @@ export async function runWeeklyBudgetReview(runId?: string) {
 }
 
 /** Sync every linked Plaid item; per-item failures are collected, not thrown. */
-export async function syncAllPlaidItems() {
-  const { syncPlaidItem } = await import("@/lib/finance/plaid-sync");
+export async function syncAllPlaidItems(opts?: {
+  /** When true (default for API/manual), soft-refresh then sync. Cron passes false. */
+  allowRefresh?: boolean;
+  forceRefresh?: boolean;
+}) {
+  const { ensurePlaidItemFresh, syncPlaidItem } = await import(
+    "@/lib/finance/plaid-sync"
+  );
+  const allowRefresh = opts?.allowRefresh !== false;
   const items = await prisma.plaidItem.findMany({
     select: { id: true, institutionName: true },
     orderBy: { createdAt: "asc" },
@@ -1318,12 +1325,19 @@ export async function syncAllPlaidItems() {
     added?: number;
     modified?: number;
     removed?: number;
+    refreshed?: boolean;
+    refreshSkipped?: string | null;
     error?: string;
   }[] = [];
 
   for (const item of items) {
     try {
-      const sync = await syncPlaidItem(item.id);
+      const sync = allowRefresh
+        ? await ensurePlaidItemFresh(item.id, {
+            forceRefresh: opts?.forceRefresh,
+            allowRefresh: true,
+          })
+        : await syncPlaidItem(item.id);
       results.push({
         id: item.id,
         institutionName: item.institutionName ?? "Unknown",
@@ -1331,7 +1345,7 @@ export async function syncAllPlaidItems() {
         ...sync,
       });
     } catch (err) {
-      // syncPlaidItem already sets plaid_items.status (login_required / error)
+      // syncPlaidItem / ensure already sets plaid_items.status (login_required / error)
       results.push({
         id: item.id,
         institutionName: item.institutionName ?? "Unknown",
@@ -1506,7 +1520,10 @@ export async function runDailyBooksPass(
         results: [] as Awaited<ReturnType<typeof syncAllPlaidItems>>["results"],
         skipped: true as const,
       }
-    : { ...(await syncAllPlaidItems()), skipped: false as const };
+    : {
+        ...(await syncAllPlaidItems({ allowRefresh: false })),
+        skipped: false as const,
+      };
 
   const categorize = await runDailyCategorizePass(id, {
     limit: opts?.reconcileLimit ?? 500,

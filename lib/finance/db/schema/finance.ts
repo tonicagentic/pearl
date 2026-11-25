@@ -102,6 +102,10 @@ export const financePlaidItems = finance.table(
     institutionName: text("institution_name"),
     cursor: text("cursor"),
     status: text("status").notNull().default("active"),
+    /** Last successful `/transactions/refresh` (null if never / unsupported). */
+    lastRefreshedAt: timestamp("last_refreshed_at"),
+    /** Last successful `/transactions/sync` that finished cleanly. */
+    lastSyncedAt: timestamp("last_synced_at"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

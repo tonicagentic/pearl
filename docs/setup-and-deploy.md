@@ -328,6 +328,22 @@ pnpm db:push
 
 See the [Vercel env run docs](https://vercel.com/docs/cli/env) for more examples.
 
+### Pearl Money / Plaid freshness columns
+
+Finance schema migrations are not part of `pnpm db:migrate` (they live under
+`lib/finance/db/migrations/`). After pulling code that adds
+`plaid_items.last_refreshed_at` / `last_synced_at`, apply as the Neon **owner**
+role (not `finance_app`):
+
+```bash
+# Neon SQL editor, or:
+DATABASE_URL_UNPOOLED='postgresql://…' node scripts/apply-plaid-freshness-migration.mjs
+```
+
+Also enable the **Transactions Refresh** add-on in the Plaid Dashboard, and
+ensure `PEARL_OWNER_EMAIL` is set so `/api/v1/plaid/webhook` can sync under RLS.
+Optional: `PLAID_WEBHOOK_URL=https://<host>/api/v1/plaid/webhook`.
+
 ## Run Locally
 
 Start the app:
