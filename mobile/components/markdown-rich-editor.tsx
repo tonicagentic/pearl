@@ -3,11 +3,13 @@ import {
   Platform,
   Pressable,
   TextInput,
+  UIManager,
   View,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import {
   EnrichedMarkdownTextInput,
   type EnrichedMarkdownTextInputInstance,
@@ -39,6 +41,31 @@ type ToolbarButtonProps = {
   readonly onPress: () => void;
 };
 
+/**
+ * True when the current binary linked `react-native-enriched-markdown`.
+ * Expo Go and OTA-only installs cannot pick up new native modules — those
+ * need a fresh EAS / `expo run:ios` binary.
+ */
+function isEnrichedMarkdownNativeAvailable(): boolean {
+  if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+    return false;
+  }
+  try {
+    if (typeof UIManager.getViewManagerConfig === "function") {
+      return (
+        UIManager.getViewManagerConfig("EnrichedMarkdownTextInput") != null
+      );
+    }
+    return (
+      (UIManager as Record<string, unknown>).EnrichedMarkdownTextInput != null
+    );
+  } catch {
+    return false;
+  }
+}
+
+const ENRICHED_MARKDOWN_NATIVE = isEnrichedMarkdownNativeAvailable();
+
 function ToolbarButton({ label, active, onPress }: ToolbarButtonProps) {
   return (
     <Pressable
@@ -61,23 +88,59 @@ function ToolbarButton({ label, active, onPress }: ToolbarButtonProps) {
   );
 }
 
-/**
- * WYSIWYG markdown editor backed by react-native-enriched-markdown
- * (https://docs.expo.dev/guides/editing-richtext/). Falls back to a plain
- * multiline TextInput when `plainText` is set.
- */
-export function MarkdownRichEditor({
+function PlainMarkdownEditor({
   defaultValue = "",
   placeholder = "Write…",
   editable = true,
   autoFocus = false,
   className,
-  style,
   inputStyle,
   onChangeMarkdown,
-  hideToolbar = false,
-  plainText = false,
 }: MarkdownRichEditorProps) {
+  const muted = useCSSVariable("--color-muted-foreground");
+  const handleChange = useCallback(
+    (markdown: string) => {
+      onChangeMarkdown?.(markdown);
+    },
+    [onChangeMarkdown],
+  );
+
+  return (
+    <TextInput
+      autoFocus={autoFocus}
+      className={cn("min-h-40 p-3 text-base text-foreground", className)}
+      defaultValue={defaultValue}
+      editable={editable}
+      multiline
+      onChangeText={handleChange}
+      placeholder={placeholder}
+      placeholderTextColor={typeof muted === "string" ? muted : undefined}
+      style={[{ textAlignVertical: "top" }, inputStyle]}
+      textAlignVertical="top"
+    />
+  );
+}
+
+/**
+ * WYSIWYG markdown editor backed by react-native-enriched-markdown
+ * (https://docs.expo.dev/guides/editing-richtext/). Falls back to a plain
+ * multiline TextInput when `plainText` is set or the native module is not
+ * in the installed binary (needs a fresh EAS/dev-client build).
+ */
+export function MarkdownRichEditor(props: MarkdownRichEditorProps) {
+  const {
+    defaultValue = "",
+    placeholder = "Write…",
+    editable = true,
+    autoFocus = false,
+    className,
+    style,
+    inputStyle,
+    onChangeMarkdown,
+    hideToolbar = false,
+    plainText = false,
+  } = props;
+
   const ref = useRef<EnrichedMarkdownTextInputInstance>(null);
   const [styleState, setStyleState] = useState<StyleState | null>(null);
   const foreground = useCSSVariable("--color-foreground");
@@ -91,21 +154,8 @@ export function MarkdownRichEditor({
     [onChangeMarkdown],
   );
 
-  if (plainText) {
-    return (
-      <TextInput
-        autoFocus={autoFocus}
-        className={cn("min-h-40 p-3 text-base text-foreground", className)}
-        defaultValue={defaultValue}
-        editable={editable}
-        multiline
-        onChangeText={handleChange}
-        placeholder={placeholder}
-        placeholderTextColor={typeof muted === "string" ? muted : undefined}
-        style={[{ textAlignVertical: "top" }, inputStyle]}
-        textAlignVertical="top"
-      />
-    );
+  if (plainText || !ENRICHED_MARKDOWN_NATIVE) {
+    return <PlainMarkdownEditor {...props} />;
   }
 
   return (
@@ -123,12 +173,16 @@ export function MarkdownRichEditor({
             onPress={() => ref.current?.toggleItalic()}
           />
           <ToolbarButton
-            active={styleState?.heading.isActive && styleState.heading.level === 1}
+            active={
+              styleState?.heading.isActive && styleState.heading.level === 1
+            }
             label="H1"
             onPress={() => ref.current?.toggleHeading(1)}
           />
           <ToolbarButton
-            active={styleState?.heading.isActive && styleState.heading.level === 2}
+            active={
+              styleState?.heading.isActive && styleState.heading.level === 2
+            }
             label="H2"
             onPress={() => ref.current?.toggleHeading(2)}
           />
@@ -169,7 +223,9 @@ export function MarkdownRichEditor({
             color: typeof foreground === "string" ? foreground : undefined,
             backgroundColor:
               typeof background === "string" ? background : undefined,
-            ...(Platform.OS === "android" ? { textAlignVertical: "top" as const } : null),
+            ...(Platform.OS === "android"
+              ? { textAlignVertical: "top" as const }
+              : null),
           },
           inputStyle,
         ]}
