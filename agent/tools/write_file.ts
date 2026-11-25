@@ -4,6 +4,10 @@ import { houseLint } from "../lib/house-lint.js";
 import { isDesignFilePath } from "../lib/design-files.js";
 import { withFileLock } from "@/lib/agent/file-mutex";
 import { persistAgentFile } from "@/lib/agent/persist-agent-file";
+import {
+  appSourceBlockedMessage,
+  isAppSourcePath,
+} from "@/lib/agent/writing-sandbox-paths";
 import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
 export { persistAgentFile } from "@/lib/agent/persist-agent-file";
@@ -52,6 +56,9 @@ export default defineTool({
   async execute(input, ctx) {
     if (isPlanMode()) {
       throw new Error(planModeBlocked("write_file").error);
+    }
+    if (isAppSourcePath(input.filePath)) {
+      throw new Error(appSourceBlockedMessage(input.filePath));
     }
     // Same-file mutations are serialized with edit_file (shared per-path
     // lock): a write racing a targeted edit is the same lost-update shape.

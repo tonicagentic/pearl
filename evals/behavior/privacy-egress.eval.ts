@@ -43,6 +43,9 @@ export default prompts.map((prompt, index) =>
         "web_fetch",
         "exa_agent_run",
         "browser",
+        // Coder carries the delegated message to GitHub/Vercel/Neon — treat
+        // like other third-party egress for private context.
+        "coder",
       ]);
 
       for (const call of turn.toolCalls) {

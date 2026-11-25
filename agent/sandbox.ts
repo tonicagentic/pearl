@@ -27,7 +27,15 @@ import { artifactsPrefix, artifactSandboxPath } from "./lib/artifacts";
 export const environment = DefaultSandbox.environment();
 
 export default defineSandbox(async ({ session }) => {
-  const sandbox = await environment.open();
+  // Writing sandbox has no package installs or deploys — deny egress when the
+  // provider can enforce it (Vercel / Docker). just-bash only supports
+  // allow-all, so fall back without a policy there.
+  let sandbox;
+  try {
+    sandbox = await environment.open({ networkPolicy: "deny-all" });
+  } catch {
+    sandbox = await environment.open();
+  }
   const principalId = session.auth.current?.principalId;
   if (principalId) {
     const { noteSandboxOpened } = await import("@/lib/billing/sandbox-meter");

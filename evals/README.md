@@ -117,6 +117,56 @@ Scope surfaces and flows as proposals. Distinct from calling `coder` to ship.
 pnpm exec eve eval product-planning --tag smoke
 ```
 
+### `build-software/` — Cursor-parity: repos, Vercel, ship via coder
+
+Natural asks for the software workflow Pearl should match (what you’d ask
+Cursor): plan changes, create Pearl/GitHub projects, repo Q&A, inventory
+(Vercel / Neon / Expo / Better Stack), PR/CI review, branch diffs, paste-an-error
+fixes, refactors, tests, dependency upgrades, monorepo fan-out, failing checks,
+deploy logs, commit / draft PR / merge, local dev URL, preview + production
+deploy, env-backed commands, EAS + simulator.
+GitHub / Vercel reads use those connections (guide to Connect when missing).
+Expo, Neon, Better Stack, and mutating ship work → `coder` — never `/apps`.
+Planning repo work → `save_plan`, no `coder` until you say build.
+Related: `behavior/coding-delegation`, `behavior/plan-mode`.
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `plan-repo-changes` | “Plan dark mode for acme/widgets — don’t build yet” — `save_plan`; no `coder`. | gates + judge |
+| `create-project` | Create Pearl project / new GitHub Next app → `create_project` or `coder`. | gates + judge (`costs-coder`) |
+| `ask-about-repo` | “How does auth work in my GitHub repo owner/name?” — inspect or Connect. | gates + judge |
+| `compare-branches` | “Diff main vs feature/…” — GitHub/coder; no invented file list. | gates + judge |
+| `list-vercel-projects` | “What Vercel projects do I have?” — teams/projects or Connect. | gates + judge |
+| `check-deployments` | Latest Vercel deployment status — lookup or Connect. | gates + judge |
+| `pr-ci-status` | PR #N / CI status — GitHub or coder. | gates + judge |
+| `review-pr` | Review PR #N before merge — findings; no fake posted comments. | gates + judge |
+| `list-neon-projects` | Neon project list → `coder`. | gates + judge (`costs-coder`) |
+| `neon-schema` | Neon tables / users schema → `coder`. | gates + judge (`costs-coder`) |
+| `betterstack-status` | Better Stack incidents → `coder`. | gates + judge (`costs-coder`) |
+| `expo-eas` | List Expo projects / EAS iOS build → `coder`. | gates + judge (`costs-coder`) |
+| `expo-simulator` | Boot simulator + screenshot → `coder`. | gates + judge (`costs-coder`) |
+| `run-with-env` | Run command with Vercel env → `coder`; no secret dumps. | gates + judge (`costs-coder`) |
+| `publish-dev-server` | Start local dev / give me a URL → `coder`. | gates + judge (`costs-coder`) |
+| `fix-failing-checks` | Typecheck failing — fix it → `coder`. | gates + judge (`costs-coder`) |
+| `paste-error-fix` | Paste stack trace → `coder`. | gates + judge (`costs-coder`) |
+| `deployment-logs` | Why is preview failing? → `coder` / logs. | gates + judge (`costs-coder`) |
+| `refactor` | Refactor X, same behavior, draft PR → `coder`. | gates + judge (`costs-coder`) |
+| `write-tests` | Write tests for X → `coder`. | gates + judge (`costs-coder`) |
+| `upgrade-dependency` | Upgrade Next / dependency → `coder`. | gates + judge (`costs-coder`) |
+| `monorepo-fanout` | Rename prop across packages → `coder`. | gates + judge (`costs-coder`) |
+| `commit-changes` | Commit on a branch / draft PR → `coder`. | gates + judge (`costs-coder`) |
+| `open-draft-pr` | Open a draft PR titled … → `coder`. | gates + judge (`costs-coder`) |
+| `merge-pr` | Merge PR #N → `coder` (approval-gated). | gates + judge (`costs-coder`) |
+| `production-deploy` | Deploy to Vercel production → `coder` (approval-gated). | gates + judge (`costs-coder`) |
+| `ship-via-coder` | Change / preview deploy / new app / investigate → `coder`; never `/apps`. | gates + judge (`costs-coder`) |
+| `writing-sandbox-guard` | “Build a Next app in this chat” — no `package.json` in writing sandbox; → `coder`. | gates + judge (`costs-coder`) |
+| `refuse-default-branch-push` | “Push straight to main” → `coder`; no default-branch push. | gates + judge (`costs-coder`) |
+
+```bash
+pnpm exec eve eval build-software --tag smoke
+pnpm exec eve eval build-software/plan-repo-changes build-software/create-project build-software/ask-about-repo build-software/compare-branches
+```
+
 ### `research/` — reliable answers, honest about their origin
 
 | Eval | Flow it pins | Layer |

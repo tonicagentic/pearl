@@ -4,7 +4,10 @@ import { always } from "eve/tools/approval";
 import { z } from "zod";
 
 import { formatApprovalPrompt } from "@/lib/chat/approval-brief";
-import { brokerVercelHeaders } from "@/lib/coder/network-policy";
+import {
+  brokerVercelHeaders,
+  withRestoredBaselinePolicy,
+} from "@/lib/coder/network-policy";
 import { requireCoderUserId } from "@/lib/coder/principal";
 import { vercelTokenUnavailableMessage } from "@/lib/connections/grant-errors";
 import { getVercelUserToken } from "@/lib/connections/tokens";
@@ -64,48 +67,50 @@ export default defineTool({
     }
 
     const sandbox = await ctx.getSandbox(environment);
-    await authenticateVercel(sandbox, {
-      token,
-      delivery: "firewall",
-      broker: brokerVercelHeaders,
-    });
+    return withRestoredBaselinePolicy(sandbox, async () => {
+      await authenticateVercel(sandbox, {
+        token,
+        delivery: "firewall",
+        broker: brokerVercelHeaders,
+      });
 
-    const cwd = input.workingDirectory?.trim() || undefined;
-    const prodFlag = input.target === "production" ? " --prod" : "";
-    const result = await sandbox.run({
-      command: `vc deploy --yes${prodFlag}`,
-      workingDirectory: cwd,
-    });
+      const cwd = input.workingDirectory?.trim() || undefined;
+      const prodFlag = input.target === "production" ? " --prod" : "";
+      const result = await sandbox.run({
+        command: `vc deploy --yes${prodFlag}`,
+        workingDirectory: cwd,
+      });
 
-    // Drop the leased Vercel headers after the command.
-    await brokerVercelHeaders(sandbox, {});
+      if (result.exitCode !== 0) {
+        return {
+          status: "error" as const,
+          error: `vc deploy failed (exit ${result.exitCode}): ${truncate(result.stderr || result.stdout)}`,
+          target: input.target,
+        };
+      }
 
-    if (result.exitCode !== 0) {
-      return {
-        status: "error",
-        error: `vc deploy failed (exit ${result.exitCode}): ${truncate(result.stderr || result.stdout)}`,
+      const url =
+        extractHttpsUrl(result.stdout) ?? extractHttpsUrl(result.stderr);
+      const owner = input.owner?.trim() || "repo";
+      const repo = input.repo?.trim() || "checkout";
+      const card = buildApprovalCard({
+        action:
+          input.target === "production"
+            ? "production_deploy"
+            : "preview_deploy",
+        owner,
+        repo,
         target: input.target,
+      });
+      return {
+        status: "ok" as const,
+        target: input.target,
+        url,
+        cardSummary: card.summary,
+        warnsPhoneApi: card.warnsPhoneApi,
+        summary: truncate(result.stdout || "Deploy finished."),
       };
-    }
-
-    const url = extractHttpsUrl(result.stdout) ?? extractHttpsUrl(result.stderr);
-    const owner = input.owner?.trim() || "repo";
-    const repo = input.repo?.trim() || "checkout";
-    const card = buildApprovalCard({
-      action:
-        input.target === "production" ? "production_deploy" : "preview_deploy",
-      owner,
-      repo,
-      target: input.target,
     });
-    return {
-      status: "ok",
-      target: input.target,
-      url,
-      cardSummary: card.summary,
-      warnsPhoneApi: card.warnsPhoneApi,
-      summary: truncate(result.stdout || "Deploy finished."),
-    };
   },
 });
 

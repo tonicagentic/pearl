@@ -1,4 +1,5 @@
 import { putPrivateBlob } from "@/lib/blob/private";
+import { playwrightCaptureNetworkPolicy } from "@/lib/sandbox/playwright-network";
 import { Sandbox } from "@vercel/sandbox";
 
 export type CaptureResult =
@@ -24,13 +25,14 @@ const PLAYWRIGHT_INSTALL = [
 
 async function withPlaywrightSandbox<T>(
   run: (sandbox: Sandbox) => Promise<T>,
+  targetUrl?: string,
 ): Promise<T> {
   let sandbox: Sandbox | null = null;
   try {
     sandbox = await Sandbox.create({
       timeout: 5 * 60 * 1000,
       resources: { vcpus: 2 },
-      networkPolicy: "allow-all",
+      networkPolicy: playwrightCaptureNetworkPolicy(targetUrl),
     });
     const install = await sandbox.runCommand({
       cmd: "bash",
@@ -102,7 +104,7 @@ const { chromium } = require("playwright-core");
         { contentType: "image/png" },
       );
       return { status: "ok" as const, url: blob.url };
-    });
+    }, targetUrl);
   } catch (cause) {
     return {
       status: "error",
@@ -213,7 +215,7 @@ const fs = require("fs");
         durationMs: RECORDING_DURATION_MS,
         ...(posterUrl ? { posterUrl } : {}),
       };
-    });
+    }, targetUrl);
   } catch (cause) {
     return {
       status: "error",

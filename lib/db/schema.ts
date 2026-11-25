@@ -895,6 +895,27 @@ export const usageReservation = pgTable(
 
 export type UsageReservation = typeof usageReservation.$inferSelect;
 
+/**
+ * Active billable sandboxes. Survives process restarts / multi-instance so
+ * `noteSandboxStopped` can still charge duration when the opener was another
+ * isolate.
+ */
+export const sandboxOpen = pgTable(
+  "sandbox_open",
+  {
+    sandboxId: text("sandbox_id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    openedAt: timestamp("opened_at").notNull(),
+    vcpus: integer("vcpus").notNull().default(2),
+    label: text("label").notNull().default("sandbox"),
+  },
+  (table) => [index("idx_sandbox_open_user").on(table.userId)],
+);
+
+export type SandboxOpen = typeof sandboxOpen.$inferSelect;
+
 /** Nearby term and how this concept differs from it. */
 export type ConceptSchemaDistinction = {
   readonly term: string;

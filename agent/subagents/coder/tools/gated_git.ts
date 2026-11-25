@@ -86,6 +86,17 @@ export default defineTool({
     let state = stateFor(sessionId);
     const decision = classifyGitCommand(input.command, state);
 
+    if (decision.reason === "default-branch-refused") {
+      return {
+        status: "error",
+        error:
+          `Refused to push to default branch "${decision.branch}". ` +
+          `Push a feature branch and open a draft PR instead.`,
+        reason: decision.reason,
+        branch: decision.branch,
+      };
+    }
+
     if (!decision.needsApproval) {
       return {
         status: "ok",

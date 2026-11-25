@@ -1,4 +1,5 @@
 import { putPrivateBlob } from "@/lib/blob/private";
+import { PLAYWRIGHT_CAPTURE_NETWORK_ALLOW } from "@/lib/sandbox/playwright-network";
 import { Sandbox } from "@vercel/sandbox";
 
 /** Minimal sandbox surface used by design rendering (mockable in tests). */
@@ -25,16 +26,7 @@ export type DesignRenderSandbox = {
   stop(): Promise<void>;
 };
 
-const PREVIEW_NETWORK_ALLOW = [
-  "registry.npmjs.org",
-  "*.npmjs.org",
-  "nodejs.org",
-  "*.nodejs.org",
-  "playwright.azureedge.net",
-  "cdn.playwright.dev",
-  "*.playwright.dev",
-  "storage.googleapis.com",
-] as const;
+const PREVIEW_NETWORK_ALLOW = PLAYWRIGHT_CAPTURE_NETWORK_ALLOW;
 
 const PDF_PATH = "/workspace/.pearl-design.pdf";
 const HTML_PATH = "/workspace/.pearl-design-source.html";

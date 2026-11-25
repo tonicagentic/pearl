@@ -1,4 +1,8 @@
+import { eq } from "drizzle-orm";
+
 import { recordUsage, sandboxCostCents } from "@/lib/billing/ledger";
+import { db, isDatabaseConfigured } from "@/lib/db/client";
+import { sandboxOpen } from "@/lib/db/schema";
 
 type OpenEntry = {
   readonly userId: string;
@@ -7,6 +11,7 @@ type OpenEntry = {
   readonly label: string;
 };
 
+/** Process-local cache; durable rows live in `sandbox_open`. */
 const openByKey = new Map<string, OpenEntry>();
 
 function keyFor(sandboxId: string): string {
@@ -15,6 +20,7 @@ function keyFor(sandboxId: string): string {
 
 /**
  * Call when a billable sandbox becomes active. Idempotent per sandboxId.
+ * Dual-writes memory + Postgres so stop works across instances.
  */
 export function noteSandboxOpened(input: {
   readonly sandboxId: string;
@@ -29,12 +35,31 @@ export function noteSandboxOpened(input: {
   if (openByKey.has(key)) {
     return;
   }
-  openByKey.set(key, {
+  const entry: OpenEntry = {
     userId: input.userId,
     openedAt: Date.now(),
     vcpus: input.vcpus ?? 2,
     label: input.label ?? "sandbox",
+  };
+  openByKey.set(key, entry);
+
+  void persistOpen(key, entry).catch((error) => {
+    console.error("[billing/sandbox-meter] persist open", error);
   });
+}
+
+async function persistOpen(sandboxId: string, entry: OpenEntry): Promise<void> {
+  if (!isDatabaseConfigured()) return;
+  await db
+    .insert(sandboxOpen)
+    .values({
+      sandboxId,
+      userId: entry.userId,
+      openedAt: new Date(entry.openedAt),
+      vcpus: entry.vcpus,
+      label: entry.label,
+    })
+    .onConflictDoNothing();
 }
 
 /**
@@ -44,11 +69,18 @@ export async function noteSandboxStopped(input: {
   readonly sandboxId: string;
 }): Promise<void> {
   const key = keyFor(input.sandboxId);
-  const entry = openByKey.get(key);
+  let entry = openByKey.get(key) ?? null;
+  openByKey.delete(key);
+
+  if (!entry) {
+    entry = await loadPersistedOpen(key);
+  } else {
+    await deletePersistedOpen(key);
+  }
+
   if (!entry) {
     return;
   }
-  openByKey.delete(key);
 
   const durationMs = Math.max(0, Date.now() - entry.openedAt);
   const costCents = sandboxCostCents({
@@ -75,5 +107,37 @@ export async function noteSandboxStopped(input: {
     });
   } catch (error) {
     console.error("[billing/sandbox-meter] record", error);
+  }
+}
+
+async function loadPersistedOpen(sandboxId: string): Promise<OpenEntry | null> {
+  if (!isDatabaseConfigured()) return null;
+  try {
+    const rows = await db
+      .select()
+      .from(sandboxOpen)
+      .where(eq(sandboxOpen.sandboxId, sandboxId))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    await db.delete(sandboxOpen).where(eq(sandboxOpen.sandboxId, sandboxId));
+    return {
+      userId: row.userId,
+      openedAt: row.openedAt.getTime(),
+      vcpus: row.vcpus,
+      label: row.label,
+    };
+  } catch (error) {
+    console.error("[billing/sandbox-meter] load open", error);
+    return null;
+  }
+}
+
+async function deletePersistedOpen(sandboxId: string): Promise<void> {
+  if (!isDatabaseConfigured()) return;
+  try {
+    await db.delete(sandboxOpen).where(eq(sandboxOpen.sandboxId, sandboxId));
+  } catch (error) {
+    console.error("[billing/sandbox-meter] delete open", error);
   }
 }

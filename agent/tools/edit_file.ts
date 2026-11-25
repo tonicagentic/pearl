@@ -6,6 +6,10 @@ import { houseLint } from "../lib/house-lint.js";
 import { isDesignFilePath } from "../lib/design-files.js";
 import { withFileLock } from "@/lib/agent/file-mutex";
 import { persistAgentFile } from "@/lib/agent/persist-agent-file";
+import {
+  appSourceBlockedMessage,
+  isAppSourcePath,
+} from "@/lib/agent/writing-sandbox-paths";
 import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
 type WriteOutcome = { existed: boolean; path: string };
@@ -102,6 +106,9 @@ export default defineTool({
   async execute(input, ctx) {
     if (isPlanMode()) {
       throw new Error(planModeBlocked("edit_file").error);
+    }
+    if (isAppSourcePath(input.filePath)) {
+      throw new Error(appSourceBlockedMessage(input.filePath));
     }
     // Same-file mutations are serialized: parallel edit_file calls each read
     // the same base content and last-write-wins, silently dropping one edit.

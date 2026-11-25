@@ -473,3 +473,21 @@ test("ship gates: first push and draft PR need approval; later commits do not", 
   const draftAgain = classifyGitCommand("gh pr create --draft", state);
   assert.equal(draftAgain.needsApproval, false);
 });
+
+test("ship gates: refuse pushes to main/master and --all", () => {
+  const state = emptyShipGateState();
+  const main = classifyGitCommand("git push origin main", state);
+  assert.equal(main.reason, "default-branch-refused");
+  if (main.reason === "default-branch-refused") {
+    assert.equal(main.branch, "main");
+  }
+
+  const master = classifyGitCommand("git push -u origin master", state);
+  assert.equal(master.reason, "default-branch-refused");
+
+  const headMain = classifyGitCommand("git push origin HEAD:main", state);
+  assert.equal(headMain.reason, "default-branch-refused");
+
+  const all = classifyGitCommand("git push --all origin", state);
+  assert.equal(all.reason, "default-branch-refused");
+});

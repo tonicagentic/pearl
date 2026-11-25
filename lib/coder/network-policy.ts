@@ -67,6 +67,14 @@ function hasMutableNetworkPolicy(
   );
 }
 
+async function restoreBaselinePolicy(sandbox: PolicySandbox): Promise<void> {
+  await sandbox.setNetworkPolicy(
+    CODER_BASELINE_NETWORK_POLICY as unknown as {
+      readonly allow: NetworkAllow;
+    },
+  );
+}
+
 /**
  * Install GitHub credential transforms for one `gh` call, then restore the
  * baseline public HTTPS policy when the lease ends (`rules === null`).
@@ -81,11 +89,7 @@ export async function brokerGitHubLease(
     );
   }
   if (rules === null) {
-    await sandbox.setNetworkPolicy(
-      CODER_BASELINE_NETWORK_POLICY as unknown as {
-        readonly allow: NetworkAllow;
-      },
-    );
+    await restoreBaselinePolicy(sandbox);
     return;
   }
   await sandbox.setNetworkPolicy({ allow: rulesToAllow(rules) });
@@ -94,6 +98,7 @@ export async function brokerGitHubLease(
 /**
  * Merge Vercel credential header maps into the live policy for one deploy
  * command, keeping the baseline hosts. Used with authenticateVercel({ broker }).
+ * Pass `{}` to restore the baseline (drop leased headers).
  */
 export async function brokerVercelHeaders(
   sandbox: SandboxSession,
@@ -104,6 +109,10 @@ export async function brokerVercelHeaders(
       "Coder Vercel credential delivery requires setNetworkPolicy (Vercel Sandbox).",
     );
   }
+  if (Object.keys(rules).length === 0) {
+    await restoreBaselinePolicy(sandbox);
+    return;
+  }
   const allow: NetworkAllow = {
     ...(CODER_BASELINE_NETWORK_POLICY.allow as unknown as NetworkAllow),
   };
@@ -111,4 +120,25 @@ export async function brokerVercelHeaders(
     allow[host] = [{ transform: [{ headers }] }];
   }
   await sandbox.setNetworkPolicy({ allow });
+}
+
+/**
+ * Run work under a temporary network policy and always restore the coder
+ * baseline afterward (even if `run` throws).
+ */
+export async function withRestoredBaselinePolicy<T>(
+  sandbox: SandboxSession,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } finally {
+    try {
+      if (hasMutableNetworkPolicy(sandbox)) {
+        await restoreBaselinePolicy(sandbox);
+      }
+    } catch (error) {
+      console.error("[coder/network-policy] restore baseline failed", error);
+    }
+  }
 }

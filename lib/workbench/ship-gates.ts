@@ -1,7 +1,10 @@
 /**
  * Decide whether a git__gh-style command needs a first-push / draft-PR gate.
  * Later commits on the same branch in the same task stay ungated.
+ * Pushes to default branches (main/master) are refused outright.
  */
+
+export const DEFAULT_BRANCH_NAMES = new Set(["main", "master"]);
 
 export type ShipGateDecision =
   | { readonly needsApproval: false; readonly reason: "not-applicable" }
@@ -10,7 +13,12 @@ export type ShipGateDecision =
       readonly action: "push" | "draft_pr";
       readonly reason: string;
     }
-  | { readonly needsApproval: false; readonly reason: "already-approved-branch" };
+  | { readonly needsApproval: false; readonly reason: "already-approved-branch" }
+  | {
+      readonly needsApproval: false;
+      readonly reason: "default-branch-refused";
+      readonly branch: string;
+    };
 
 export type ShipGateState = {
   /** Branches that already got a first-push approval in this task. */
@@ -55,13 +63,29 @@ function classifyGit(
   if (args[0] !== "push") {
     return { needsApproval: false, reason: "not-applicable" };
   }
-  // git push [-u] <remote> <branch>
+  // git push [-u] <remote> <branch>  |  git push <remote> HEAD:<branch>
   let i = 1;
   while (i < args.length && args[i]!.startsWith("-")) {
+    // --all / --mirror would touch every branch including default — refuse.
+    if (args[i] === "--all" || args[i] === "--mirror") {
+      return {
+        needsApproval: false,
+        reason: "default-branch-refused",
+        branch: "all",
+      };
+    }
     i += 1;
   }
   const remote = args[i] ?? "origin";
-  const branch = args[i + 1] ?? "";
+  const refspec = args[i + 1] ?? "";
+  const branch = pushTargetBranch(refspec);
+  if (branch && DEFAULT_BRANCH_NAMES.has(branch.toLowerCase())) {
+    return {
+      needsApproval: false,
+      reason: "default-branch-refused",
+      branch,
+    };
+  }
   const key = `${remote}/${branch || "HEAD"}`;
   if (state.approvedPushBranches.has(key) || state.approvedPushBranches.has(branch)) {
     return { needsApproval: false, reason: "already-approved-branch" };
@@ -71,6 +95,14 @@ function classifyGit(
     action: "push",
     reason: `First push of ${branch || "HEAD"} needs approval.`,
   };
+}
+
+/** Resolve `feature`, `HEAD:main`, `refs/heads/main` → branch name. */
+export function pushTargetBranch(refspec: string): string {
+  const raw = refspec.trim();
+  if (!raw) return "";
+  const afterColon = raw.includes(":") ? (raw.split(":").pop() ?? raw) : raw;
+  return afterColon.replace(/^refs\/heads\//, "");
 }
 
 function classifyGh(

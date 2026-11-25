@@ -365,6 +365,20 @@
       "when": 1795800000000,
       "tag": "0054_apple_iap_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1795900000000,
+      "tag": "0055_project_artifacts",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1796000000000,
+      "tag": "0056_sandbox_open",
+      "breakpoints": true
     }
   ]
 }
