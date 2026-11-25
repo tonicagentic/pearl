@@ -8,8 +8,8 @@ import {
   fetchWatchSnapshot,
   isTerminalWatchState,
   WATCH_POLL_MS,
-} from "@/lib/watch/client";
-import type { WatchSnapshot, WatchState } from "@/lib/watch/deploy";
+} from "../../../../lib/watch/client";
+import type { WatchSnapshot, WatchState } from "../../../../lib/watch/deploy";
 import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
 
 function statusLabel(state: WatchState): string {
