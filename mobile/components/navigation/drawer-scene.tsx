@@ -16,6 +16,8 @@ const DRAWER_SCALE_FROM = 0.96;
 /**
  * Progress-driven scene chrome for Expo Router Drawer (`drawerType: "back"`):
  * rounded peek card + light scale as the panel is revealed behind.
+ * The root stays transparent so the scale margin and corner cutouts show
+ * the drawer surface. The dim covers only the sheet.
  * Wrap each drawer destination (or its nested stack layout).
  */
 export function DrawerScene({ children }: { readonly children: ReactNode }) {
@@ -76,7 +78,7 @@ export function DrawerScene({ children }: { readonly children: ReactNode }) {
   }));
 
   return (
-    <View style={[styles.root, { backgroundColor: sheetFill }]}>
+    <View style={styles.root}>
       <Animated.View
         style={[
           styles.sheet,
@@ -107,6 +109,7 @@ export function DrawerScene({ children }: { readonly children: ReactNode }) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: "transparent",
   },
   sheet: {
     flex: 1,
