@@ -143,11 +143,9 @@ export function usePearlDrawer() {
         return;
       }
       ctx.notifyChatSelectedFromDrawer({ tab: "pearl" });
-      try {
-        router.dismissTo("/");
-      } catch {
-        router.navigate("/");
-      }
+      // navigate (not dismissTo): dismissTo emits POP_TO, which Drawer
+      // routers ignore — from Projects/Tasks/etc. the action is a no-op.
+      router.navigate("/");
     },
     [closeDrawer, ctx, getActiveCustomAgent, selectChat],
   );
@@ -197,11 +195,9 @@ export function usePearlDrawerOptional() {
         return;
       }
       ctx.notifyChatSelectedFromDrawer({ tab: "pearl" });
-      try {
-        router.dismissTo("/");
-      } catch {
-        router.navigate("/");
-      }
+      // navigate (not dismissTo): dismissTo emits POP_TO, which Drawer
+      // routers ignore — from Projects/Tasks/etc. the action is a no-op.
+      router.navigate("/");
     },
     open: ctx.open,
     openSidebar: openDrawer,
