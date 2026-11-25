@@ -30,6 +30,7 @@ import {
   saveVectorModelSelection,
 } from "@/src/model-preferences";
 import {
+  pearlLiquidGlassHeader,
   usePearlHeaderTint,
   usePearlNavigationTheme,
   usePearlScreenBackground,
@@ -86,6 +87,10 @@ function AuthenticatedLayout() {
   const navigationTheme = usePearlNavigationTheme();
   const backgroundColor = usePearlScreenBackground();
   const headerTintColor = usePearlHeaderTint();
+  const liquidGlassHeader = pearlLiquidGlassHeader();
+  const headerStyle = {
+    backgroundColor: liquidGlassHeader ? "transparent" : backgroundColor,
+  } as const;
   useEffect(() => {
     configureModelSelectionPersistence(saveModelSelection);
     configureImageModelSelectionPersistence(saveImageModelSelection);
@@ -153,12 +158,18 @@ function AuthenticatedLayout() {
                             animation: "none",
                             animationTypeForReplace: "pop",
                             contentStyle: { backgroundColor },
-                            headerStyle: { backgroundColor },
+                            headerStyle,
+                            headerTransparent: liquidGlassHeader
+                              ? false
+                              : undefined,
                             headerTintColor,
                           }
                         : {
                             contentStyle: { backgroundColor },
-                            headerStyle: { backgroundColor },
+                            headerStyle,
+                            headerTransparent: liquidGlassHeader
+                              ? false
+                              : undefined,
                             headerTintColor,
                           }
                     }

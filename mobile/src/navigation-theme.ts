@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { useColorScheme } from "react-native";
+import { Platform, useColorScheme } from "react-native";
+import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { DarkTheme, DefaultTheme, type Theme } from "expo-router";
 import { useCSSVariable } from "uniwind";
 
@@ -137,19 +138,34 @@ export function usePearlNavigationTheme(): Theme {
   );
 }
 
-/** Shared stack `screenOptions` for nested drawer stacks (opaque headers). */
+/**
+ * iOS 26 draws `Stack.Toolbar.Button` platters only when the nav bar is not
+ * an opaque fill. `headerStyle.backgroundColor` set to a solid color calls
+ * `configureWithOpaqueBackground` and the glyphs render bare.
+ */
+export function pearlLiquidGlassHeader(): boolean {
+  return Platform.OS === "ios" && isLiquidGlassAvailable();
+}
+
+/** Shared stack `screenOptions` for nested drawer stacks. */
 export function usePearlStackScreenOptions() {
   const backgroundColor = usePearlScreenBackground();
   const headerTintColor = usePearlHeaderTint();
+  const liquidGlass = pearlLiquidGlassHeader();
   return useMemo(
     () => ({
       contentStyle: { backgroundColor },
-      headerStyle: { backgroundColor },
+      // Clear bar, not a missing one: headerTransparent stays false so iOS 26
+      // still insets content below the bar. A solid color strips glass buttons.
+      headerStyle: {
+        backgroundColor: liquidGlass ? "transparent" : backgroundColor,
+      },
+      ...(liquidGlass ? { headerTransparent: false as const } : {}),
       headerTintColor,
       headerShadowVisible: false as const,
       headerBackButtonDisplayMode: "minimal" as const,
       headerShown: true as const,
     }),
-    [backgroundColor, headerTintColor],
+    [backgroundColor, headerTintColor, liquidGlass],
   );
 }

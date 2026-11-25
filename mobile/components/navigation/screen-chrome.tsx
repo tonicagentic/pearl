@@ -6,6 +6,7 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { Stack } from "expo-router";
+import { isLiquidGlassAvailable } from "expo-glass-effect";
 import type { LucideIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
@@ -193,6 +194,11 @@ export function ScreenChrome({
   const androidRight = renderAndroidActions(actions);
   const showSearch =
     search != null && (IS_IOS || search.iosOnly !== true);
+  // Home passes transparentHeader so the thread draws under the bar. Other
+  // screens keep headerTransparent false (content stays below the bar) but
+  // must not paint an opaque headerStyle — that opts out of liquid glass.
+  const liquidGlassBar = IS_IOS && isLiquidGlassAvailable();
+  const underlapHeader = transparentHeader && IS_IOS;
 
   const header = (
     <>
@@ -203,11 +209,18 @@ export function ScreenChrome({
           headerShadowVisible: false,
           headerBackButtonDisplayMode: "minimal",
           headerTintColor: foregroundColor,
-          headerTransparent: transparentHeader && IS_IOS,
-          headerStyle:
-            transparentHeader && IS_IOS
-              ? undefined
-              : { backgroundColor },
+          headerTransparent: underlapHeader
+            ? true
+            : liquidGlassBar
+              ? false
+              : undefined,
+          headerStyle: underlapHeader
+            ? undefined
+            : {
+                backgroundColor: liquidGlassBar
+                  ? "transparent"
+                  : backgroundColor,
+              },
           headerTitle: titleSlot
             ? () => <>{titleSlot}</>
             : undefined,
@@ -280,6 +293,7 @@ export function ScreenChrome({
                   icon={action.systemImage ?? "circle"}
                   accessibilityLabel={action.label}
                   onPress={action.onPress}
+                  separateBackground={action.separateBackground}
                   hidden
                 />
               );
