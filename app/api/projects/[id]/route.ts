@@ -4,13 +4,15 @@ import { listProjectIssues } from "@/lib/db/issues";
 import {
   deleteProject,
   getProject,
-  listPlans,
   listProjectChats,
   updateProject,
 } from "@/lib/db/projects";
 import { listProjectArtifacts } from "@/lib/db/project-artifacts";
+import { listProjectGoals } from "@/lib/db/project-goals";
+import { listProjectNotes } from "@/lib/db/project-notes";
 import { listProjectPins } from "@/lib/db/workbench-pins";
 import { issueState, todayIso } from "@/lib/issues";
+import { backfillPlansToProjectFiles } from "@/lib/project-files";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -39,7 +41,7 @@ async function requireViewer() {
   return viewer;
 }
 
-/** Project detail: project + tasks + plans + library + chats + pins. */
+/** Project detail: project + tasks + goals + notes + files + chats + pins. */
 export async function GET(
   _request: Request,
   context: { readonly params: Promise<{ readonly id: string }> },
@@ -58,22 +60,22 @@ export async function GET(
     return NextResponse.json({ error: "Project not found." }, { status: 404 });
   }
 
-  const [plans, chats, pins, issues, artifacts] = await Promise.all([
-    listPlans(viewer.id, owned.id),
+  // Best-effort migration while `plan` table still exists pre-0058.
+  await backfillPlansToProjectFiles(viewer.id, owned.id).catch(() => 0);
+
+  const [chats, pins, issues, artifacts, goals, notes] = await Promise.all([
     listProjectChats(viewer.id, owned.id),
     listProjectPins(viewer.id, owned.id),
     listProjectIssues(viewer.id, owned.id),
     listProjectArtifacts(viewer.id, owned.id),
+    listProjectGoals(viewer.id, owned.id),
+    listProjectNotes(viewer.id, owned.id),
   ]);
 
   return NextResponse.json({
     project: serializeProject(owned),
-    plans: plans.map((row) => ({
-      id: row.id,
-      title: row.title,
-      slug: row.slug,
-      updatedAt: row.updatedAt.toISOString(),
-    })),
+    // plans removed: project files live in artifacts (Blob + project_artifact).
+    plans: [],
     chats: chats.map((row) => ({
       id: row.id,
       title: row.title,
@@ -111,6 +113,8 @@ export async function GET(
         row.dueDate <= todayIso(),
     })),
     artifacts,
+    goals,
+    notes,
   });
 }
 

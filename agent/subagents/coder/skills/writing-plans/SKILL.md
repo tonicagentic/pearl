@@ -13,13 +13,13 @@ Write implementation plans for an engineer who has not seen this codebase or thi
 
 **Context:** If working in an isolated worktree, it should have been created via the `superpowers:using-git-worktrees` skill at execution time.
 
-**Save plans to (Pearl default):** Persist with the parent agent's `save_plan`
-tool — project DB is source of truth, mirrored to
-`/workspace/docs/plans/<projectId>/<slug>.md`. Do **not** use
-`docs/superpowers/plans/` unless the user explicitly asks for a
-superpowers-style file-only plan. If you are the coder and lack `save_plan`,
-return the full plan markdown in your final message so the parent can call
-`save_plan` (include a suggested title and slug).
+**Save plans to (Pearl default):** Persist with the parent agent's
+`write_project_file` tool (or `save_plan` alias) — markdown under
+`/workspace/docs/plans/<projectId>/<slug>.md` linked on the project. Do
+**not** use `docs/superpowers/plans/` unless the user explicitly asks for a
+superpowers-style file-only plan. If you are the coder and lack
+`write_project_file`, return the full plan markdown in your final message so
+the parent can save it (include a suggested title and slug).
 
 ## Scope Check
 
@@ -191,7 +191,7 @@ them to review the plan and choose an execution method before implementation.
 
 **When no execution method has already been supplied:**
 
-**"Plan complete and saved via `save_plan` (mirror: `/workspace/docs/plans/<projectId>/<slug>.md`). Please review the plan. Which execution approach would you prefer?**
+**"Plan complete and saved via `write_project_file` (path: `/workspace/docs/plans/<projectId>/<slug>.md`). Please review the plan. Which execution approach would you prefer?**
 
 - **Subagent-driven** - A fresh subagent implements each task and a fresh reviewer checks it before the next one starts, then a whole-branch review at the end. Most thorough; costs a fresh context per task and per review.
 - **Native** - I implement every task myself in this session, the way this harness runs work, then one fresh reviewer on the most capable model checks the whole branch. Cheapest and fastest; no independent review until the end. Runs well with a mid-tier session model, since the plan carries the design.
@@ -200,7 +200,7 @@ them to review the plan and choose an execution method before implementation.
 
 **When an execution method has already been supplied:**
 
-**"Plan complete and saved via `save_plan` (mirror: `/workspace/docs/plans/<projectId>/<slug>.md`). Please review the plan. Does it capture what you want?"**
+**"Plan complete and saved via `write_project_file` (path: `/workspace/docs/plans/<projectId>/<slug>.md`). Please review the plan. Does it capture what you want?"**
 
 **If Subagent-driven chosen:**
 - **REQUIRED SUB-SKILL:** Use superpowers:subagent-driven-development

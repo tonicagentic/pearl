@@ -501,8 +501,8 @@ export const userProfile = pgTable("user_profile", {
 export type UserProfile = typeof userProfile.$inferSelect;
 
 // Projects are workspaces for a body of work that outlives one chat:
-// shared instructions, related chats, and plan documents. Separate from
-// Areas (the life tree Issues attach to). See docs plan for Projects.
+// shared instructions, related chats, goals, notes, and files. Separate from
+// Areas (the life tree Issues attach to).
 export const project = pgTable(
   "project",
   {
@@ -632,35 +632,6 @@ export const taskListItem = pgTable(
 );
 
 export type TaskListItem = typeof taskListItem.$inferSelect;
-
-// Markdown plan documents that live inside a project. Plan mode writes
-// these; Agent mode reads them before carrying the work out.
-export const plan = pgTable(
-  "plan",
-  {
-    id: text("id")
-      .primaryKey()
-      .$defaultFn(() => randomUUID()),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    projectId: text("project_id")
-      .notNull()
-      .references(() => project.id, { onDelete: "cascade" }),
-    title: text("title").notNull(),
-    slug: text("slug").notNull(),
-    markdown: text("markdown").notNull().default(""),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-    updatedAt: timestamp("updated_at").notNull().defaultNow(),
-  },
-  (table) => [
-    index("idx_plan_user").on(table.userId),
-    index("idx_plan_project").on(table.projectId),
-    uniqueIndex("idx_plan_project_slug").on(table.projectId, table.slug),
-  ],
-);
-
-export type Plan = typeof plan.$inferSelect;
 
 /** Expo push tokens registered by the mobile app for reply / HITL alerts. */
 export const devicePushToken = pgTable(
@@ -1124,6 +1095,66 @@ export const projectArtifact = pgTable(
 );
 
 export type ProjectArtifact = typeof projectArtifact.$inferSelect;
+
+export type ProjectGoalStatus = "active" | "done";
+
+/** Trackable outcomes for a project workspace (distinct from Tasks/Issues). */
+export const projectGoal = pgTable(
+  "project_goal",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    status: text("status", { enum: ["active", "done"] })
+      .notNull()
+      .default("active")
+      .$type<ProjectGoalStatus>(),
+    targetDate: date("target_date"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_project_goal_project").on(table.projectId),
+    index("idx_project_goal_user").on(table.userId),
+    index("idx_project_goal_project_status").on(table.projectId, table.status),
+  ],
+);
+
+export type ProjectGoal = typeof projectGoal.$inferSelect;
+
+/** Freeform markdown notes owned by a project (not Library files). */
+export const projectNote = pgTable(
+  "project_note",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    markdown: text("markdown").notNull().default(""),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_project_note_project").on(table.projectId),
+    index("idx_project_note_user").on(table.userId),
+  ],
+);
+
+export type ProjectNote = typeof projectNote.$inferSelect;
 
 /**
  * Gmail mailboxes linked to a Pearl user. Tokens stay in Vercel Connect;

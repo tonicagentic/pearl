@@ -61,5 +61,5 @@ no draft or send tool, put the message in a workspace file and say so.
 
 Strategy docs, offers, one-pagers, and proposals are workspace files, not chat
 replies: a one-line note plus a `file://` link. Plans for larger programs go to
-the project with `save_plan`. In plan mode, research and write the plan only;
+the project with `write_project_file` (or `save_plan`). In plan mode, research and write the plan only;
 do not write to Tempo, Sheets, or Gmail.

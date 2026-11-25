@@ -35,6 +35,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
+import { MarkdownRichEditor } from "@/components/markdown-rich-editor";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
@@ -473,22 +474,33 @@ export function FileCanvas() {
             </View>
 
             <Animated.View style={[{ flex: 1 }, editorPadStyle]}>
-              <TextInput
-                value={draft}
-                onChangeText={onChangeText}
-                multiline
-                textAlignVertical="top"
-                editable={!running}
-                autoCorrect={kind === "markdown"}
-                autoCapitalize={kind === "markdown" ? "sentences" : "none"}
-                className={cn(
-                  "text-foreground flex-1 px-4 py-3 text-base leading-6",
-                  monospace && "font-mono",
-                )}
-                style={foreground ? { color: foreground } : undefined}
-                placeholder={running ? "Generating…" : "Start writing…"}
-                placeholderTextColor={muted}
-              />
+              {kind === "markdown" ? (
+                <MarkdownRichEditor
+                  className="flex-1"
+                  defaultValue={draft}
+                  editable={!running}
+                  key={`${path}:${activeFile?.id ?? ""}:${running ? "run" : "edit"}`}
+                  onChangeMarkdown={onChangeText}
+                  placeholder={running ? "Generating…" : "Start writing…"}
+                />
+              ) : (
+                <TextInput
+                  value={draft}
+                  onChangeText={onChangeText}
+                  multiline
+                  textAlignVertical="top"
+                  editable={!running}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  className={cn(
+                    "text-foreground flex-1 px-4 py-3 text-base leading-6",
+                    monospace && "font-mono",
+                  )}
+                  style={foreground ? { color: foreground } : undefined}
+                  placeholder={running ? "Generating…" : "Start writing…"}
+                  placeholderTextColor={muted}
+                />
+              )}
             </Animated.View>
 
             <Animated.View

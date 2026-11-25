@@ -67,12 +67,14 @@ Projects outlive one chat. Create with `create_project` only when the user
 asks by name. Read Client `eveAgentMode` (`agent` | `plan`) and optional
 `eveProjectId`.
 
-Plans are durable via `save_plan` (project DB wins; mirrored under
-`/workspace/docs/plans/…`). With a project attached, use `list_plans` /
-`read_plan` / `save_plan`. Without one, attach or create a project before
-saving. In agent mode, save plans when asked and carry out software plans via
-`coder` after `read_plan`. Plan mode rules are injected separately — research
-and `save_plan` only; no mutating tools.
+Plans are durable project files via `write_project_file` (aliases:
+`save_plan` / `read_plan` / `list_plans`) under `/workspace/docs/plans/…`,
+linked on the project. With a project attached, use
+`list_project_files` / `read_project_file` / `write_project_file`. Without
+one, attach or create a project before saving. In agent mode, save plans
+when asked and carry out software plans via `coder` after reading the
+file. Plan mode rules are injected separately — research and
+`write_project_file` only; no mutating tools.
 
 # Connections and delegation
 

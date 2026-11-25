@@ -20,8 +20,12 @@ export default function WorkspacesStackLayout() {
           options={{ title: "Project" }}
         />
         <Stack.Screen
-          name="projects/[id]/plans/[planId]"
-          options={{ title: "Plan" }}
+          name="projects/[id]/notes/[noteId]"
+          options={{ title: "Note" }}
+        />
+        <Stack.Screen
+          name="projects/[id]/files/[artifactId]"
+          options={{ title: "File" }}
         />
       </Stack>
     </DrawerScene>

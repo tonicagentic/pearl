@@ -15,8 +15,10 @@ import {
   mailAccount,
   mailRule,
   miniApp,
-  plan,
   project,
+  projectArtifact,
+  projectGoal,
+  projectNote,
   usageEvent,
   usageReservation,
   userProfile,
@@ -72,9 +74,17 @@ export async function reassignAnonymousUserData(input: {
       .set({ userId: toUserId })
       .where(eq(project.userId, fromUserId)),
     database
-      .update(plan)
+      .update(projectGoal)
       .set({ userId: toUserId })
-      .where(eq(plan.userId, fromUserId)),
+      .where(eq(projectGoal.userId, fromUserId)),
+    database
+      .update(projectNote)
+      .set({ userId: toUserId })
+      .where(eq(projectNote.userId, fromUserId)),
+    database
+      .update(projectArtifact)
+      .set({ userId: toUserId })
+      .where(eq(projectArtifact.userId, fromUserId)),
     database
       .update(devicePushToken)
       .set({ userId: toUserId })

@@ -4,11 +4,8 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { ensureUserForPrincipal } from "@/lib/db/issues";
-import {
-  getProject,
-  listPlans,
-  listProjectChats,
-} from "@/lib/db/projects";
+import { getProject, listProjectChats } from "@/lib/db/projects";
+import { listProjectArtifacts } from "@/lib/db/project-artifacts";
 import { listProjectPins } from "@/lib/db/workbench-pins";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
@@ -66,8 +63,8 @@ async function ResolvedProject({
   const owned = await getProject(viewer.id, projectId);
   if (!owned) notFound();
 
-  const [plans, chats, pins] = await Promise.all([
-    listPlans(viewer.id, owned.id),
+  const [artifacts, chats, pins] = await Promise.all([
+    listProjectArtifacts(viewer.id, owned.id),
     listProjectChats(viewer.id, owned.id),
     listProjectPins(viewer.id, owned.id),
   ]);
@@ -87,16 +84,16 @@ async function ResolvedProject({
           title: row.title,
           updatedAt: row.updatedAt.toISOString(),
         }))}
+        files={artifacts.map((row) => ({
+          id: row.id,
+          title: row.title,
+          pathname: row.pathname,
+          updatedAt: row.createdAt,
+        }))}
         pins={pins.map((pin) => ({
           id: pin.id,
           fullName: pin.fullName,
           vercelProjectId: pin.vercelProjectId ?? null,
-        }))}
-        plans={plans.map((row) => ({
-          id: row.id,
-          title: row.title,
-          slug: row.slug,
-          updatedAt: row.updatedAt.toISOString(),
         }))}
         project={{
           id: owned.id,

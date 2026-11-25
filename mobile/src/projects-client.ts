@@ -74,6 +74,33 @@ export type ProjectArtifactDto = {
   readonly createdAt: string;
 };
 
+export type ProjectGoalDto = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly status: "active" | "done";
+  readonly targetDate: string | null;
+  readonly notes: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+};
+
+export type ProjectNoteSummaryDto = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly updatedAt: string;
+};
+
+export type ProjectNoteDto = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly markdown: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+};
+
 export type ProjectWorkspaceDto = {
   readonly project: ProjectDto;
   readonly plans: readonly PlanSummaryDto[];
@@ -81,6 +108,8 @@ export type ProjectWorkspaceDto = {
   readonly pins: readonly ProjectPinDto[];
   readonly issues: readonly ProjectIssueDto[];
   readonly artifacts: readonly ProjectArtifactDto[];
+  readonly goals: readonly ProjectGoalDto[];
+  readonly notes: readonly ProjectNoteSummaryDto[];
 };
 
 function authHeaders(): Record<string, string> {
@@ -157,6 +186,8 @@ export async function fetchProjectWorkspace(
     pins: data.pins ?? [],
     issues: data.issues ?? [],
     artifacts: data.artifacts ?? [],
+    goals: data.goals ?? [],
+    notes: data.notes ?? [],
   };
 }
 
@@ -380,6 +411,260 @@ export async function unlinkProjectArtifactRequest(
 ): Promise<void> {
   const response = await fetch(
     `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/artifacts/${encodeURIComponent(artifactId)}`,
+    {
+      method: "DELETE",
+      headers: authHeaders(),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+}
+
+export async function createProjectFileRequest(
+  projectId: string,
+  input: { readonly title: string; readonly markdown?: string; readonly slug?: string },
+): Promise<ProjectArtifactDto> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/files`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(input),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+
+  const data = (await response.json()) as { artifact: ProjectArtifactDto };
+  return data.artifact;
+}
+
+export async function fetchProjectFileContent(
+  projectId: string,
+  artifactId: string,
+): Promise<{
+  readonly artifact: ProjectArtifactDto;
+  readonly content: string;
+  readonly path: string;
+}> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(artifactId)}`,
+    { headers: authHeaders() },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+
+  return (await response.json()) as {
+    artifact: ProjectArtifactDto;
+    content: string;
+    path: string;
+  };
+}
+
+export async function updateProjectFileRequest(
+  projectId: string,
+  artifactId: string,
+  input: { readonly title?: string; readonly content?: string },
+): Promise<{
+  readonly artifact: ProjectArtifactDto;
+  readonly content: string;
+  readonly path: string;
+}> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(artifactId)}`,
+    {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(input),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+
+  return (await response.json()) as {
+    artifact: ProjectArtifactDto;
+    content: string;
+    path: string;
+  };
+}
+
+export async function carryOutProjectFileRequest(
+  projectId: string,
+  artifactId: string,
+): Promise<{ readonly chatId: string; readonly projectId: string }> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(artifactId)}`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ op: "carryOut" }),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+
+  return (await response.json()) as {
+    chatId: string;
+    projectId: string;
+  };
+}
+
+export async function createProjectGoalRequest(
+  projectId: string,
+  input: {
+    readonly title: string;
+    readonly targetDate?: string | null;
+    readonly notes?: string | null;
+  },
+): Promise<ProjectGoalDto> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/goals`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(input),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+
+  const data = (await response.json()) as { goal: ProjectGoalDto };
+  return data.goal;
+}
+
+export async function updateProjectGoalRequest(
+  projectId: string,
+  goalId: string,
+  input: {
+    readonly title?: string;
+    readonly status?: "active" | "done";
+    readonly targetDate?: string | null;
+    readonly notes?: string | null;
+  },
+): Promise<ProjectGoalDto> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/goals/${encodeURIComponent(goalId)}`,
+    {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(input),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+
+  const data = (await response.json()) as { goal: ProjectGoalDto };
+  return data.goal;
+}
+
+export async function deleteProjectGoalRequest(
+  projectId: string,
+  goalId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/goals/${encodeURIComponent(goalId)}`,
+    {
+      method: "DELETE",
+      headers: authHeaders(),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+}
+
+export async function createProjectNoteRequest(
+  projectId: string,
+  input: { readonly title: string; readonly markdown?: string },
+): Promise<ProjectNoteDto> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/notes`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(input),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+
+  const data = (await response.json()) as { note: ProjectNoteDto };
+  return data.note;
+}
+
+export async function fetchProjectNote(
+  projectId: string,
+  noteId: string,
+): Promise<ProjectNoteDto> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/notes/${encodeURIComponent(noteId)}`,
+    { headers: authHeaders() },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+
+  const data = (await response.json()) as { note: ProjectNoteDto };
+  return data.note;
+}
+
+export async function updateProjectNoteRequest(
+  projectId: string,
+  noteId: string,
+  input: { readonly title?: string; readonly markdown?: string },
+): Promise<ProjectNoteDto> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/notes/${encodeURIComponent(noteId)}`,
+    {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(input),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+
+  const data = (await response.json()) as { note: ProjectNoteDto };
+  return data.note;
+}
+
+export async function deleteProjectNoteRequest(
+  projectId: string,
+  noteId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/notes/${encodeURIComponent(noteId)}`,
     {
       method: "DELETE",
       headers: authHeaders(),

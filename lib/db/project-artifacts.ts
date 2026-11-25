@@ -60,10 +60,30 @@ export async function listProjectArtifacts(
   return rows.map(toDto);
 }
 
+export async function getProjectArtifact(
+  userId: string,
+  projectId: string,
+  artifactId: string,
+): Promise<ProjectArtifactDto | null> {
+  const [row] = await db
+    .select()
+    .from(projectArtifact)
+    .where(
+      and(
+        eq(projectArtifact.id, artifactId),
+        eq(projectArtifact.projectId, projectId),
+        eq(projectArtifact.userId, userId),
+      ),
+    )
+    .limit(1);
+  return row ? toDto(row) : null;
+}
+
 export async function linkArtifactToProject(
   userId: string,
   projectId: string,
   pathname: string,
+  title?: string,
 ): Promise<ProjectArtifactDto | null> {
   const owned = await getProject(userId, projectId);
   if (!owned) return null;
@@ -72,6 +92,9 @@ export async function linkArtifactToProject(
   if (!prefix || !pathname.startsWith(prefix)) {
     throw new Error("pathname must be one of your library artifacts.");
   }
+
+  const resolvedTitle =
+    title?.trim() || titleFromPathname(pathname, prefix);
 
   const [existing] = await db
     .select()
@@ -83,7 +106,17 @@ export async function linkArtifactToProject(
       ),
     )
     .limit(1);
-  if (existing) return toDto(existing);
+  if (existing) {
+    if (title?.trim() && existing.title !== resolvedTitle) {
+      const [updated] = await db
+        .update(projectArtifact)
+        .set({ title: resolvedTitle })
+        .where(eq(projectArtifact.id, existing.id))
+        .returning();
+      return updated ? toDto(updated) : toDto(existing);
+    }
+    return toDto(existing);
+  }
 
   const [agg] = await db
     .select({ maxOrder: max(projectArtifact.sortOrder) })
@@ -97,12 +130,35 @@ export async function linkArtifactToProject(
       projectId,
       userId,
       pathname,
-      title: titleFromPathname(pathname, prefix),
+      title: resolvedTitle,
       sortOrder: nextOrder,
     })
     .returning();
   if (!row) throw new Error("Failed to link artifact.");
   return toDto(row);
+}
+
+export async function updateProjectArtifactTitle(
+  userId: string,
+  projectId: string,
+  artifactId: string,
+  title: string,
+): Promise<ProjectArtifactDto | null> {
+  const trimmed = title.trim();
+  if (!trimmed) throw new Error("A file needs a title.");
+
+  const [row] = await db
+    .update(projectArtifact)
+    .set({ title: trimmed })
+    .where(
+      and(
+        eq(projectArtifact.id, artifactId),
+        eq(projectArtifact.projectId, projectId),
+        eq(projectArtifact.userId, userId),
+      ),
+    )
+    .returning();
+  return row ? toDto(row) : null;
 }
 
 export async function unlinkArtifactFromProject(

@@ -2,18 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 
-import { planMirrorPath } from "@/agent/lib/plan-mirror";
 import {
   createProject,
-  deletePlan,
   deleteProject,
   getChatProjectId,
-  getPlan,
   getProject,
-  listPlans,
   listProjectChats,
   listProjects,
-  savePlan,
   setChatProject,
   updateProject,
 } from "@/lib/db/projects";
@@ -33,6 +28,10 @@ import {
   listProjectPins,
   unlinkPinFromProject,
 } from "@/lib/db/workbench-pins";
+import {
+  putProjectMarkdownFile,
+  readProjectFileByArtifactId,
+} from "@/lib/project-files";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -49,13 +48,10 @@ async function requireDatabaseViewer() {
   return viewer;
 }
 
-function revalidateProjectPaths(projectId?: string, planId?: string) {
+function revalidateProjectPaths(projectId?: string) {
   revalidatePath("/projects");
   if (projectId) {
     revalidatePath(`/projects/${projectId}`);
-    if (planId) {
-      revalidatePath(`/projects/${projectId}/plans/${planId}`);
-    }
   }
 }
 
@@ -96,6 +92,26 @@ export async function deleteProjectAction(input: {
   return { ok: true as const };
 }
 
+/** Create a markdown project file (replaces savePlanAction). */
+export async function saveProjectFileAction(input: {
+  readonly projectId: string;
+  readonly title: string;
+  readonly markdown?: string;
+  readonly slug?: string;
+}) {
+  const viewer = await requireDatabaseViewer();
+  const written = await putProjectMarkdownFile({
+    userId: viewer.id,
+    projectId: input.projectId,
+    title: input.title,
+    markdown: input.markdown,
+    slug: input.slug,
+  });
+  revalidateProjectPaths(input.projectId);
+  return written.artifact;
+}
+
+/** @deprecated Use saveProjectFileAction. */
 export async function savePlanAction(input: {
   readonly projectId: string;
   readonly title: string;
@@ -103,19 +119,7 @@ export async function savePlanAction(input: {
   readonly slug?: string;
   readonly planId?: string;
 }) {
-  const viewer = await requireDatabaseViewer();
-  const row = await savePlan(viewer.id, input);
-  revalidateProjectPaths(row.projectId, row.id);
-  return row;
-}
-
-export async function deletePlanAction(input: { readonly planId: string }) {
-  const viewer = await requireDatabaseViewer();
-  const existing = await getPlan(viewer.id, input.planId);
-  if (!existing) throw new Error("Unknown plan.");
-  await deletePlan(viewer.id, input.planId);
-  revalidateProjectPaths(existing.projectId);
-  return { ok: true as const };
+  return saveProjectFileAction(input);
 }
 
 export async function attachChatToProjectAction(input: {
@@ -147,30 +151,30 @@ export async function getChatProjectIdAction(input: {
   return getChatProjectId(viewer.id, input.chatId);
 }
 
-/** Start an Agent-mode chat that asks Pearl to carry out a plan. */
-export async function carryOutPlanAction(input: {
-  readonly planId: string;
+/** Start an Agent-mode chat that asks Pearl to carry out a project file. */
+export async function carryOutProjectFileAction(input: {
+  readonly projectId: string;
+  readonly artifactId: string;
 }) {
   const viewer = await requireDatabaseViewer();
-  const existing = await getPlan(viewer.id, input.planId);
-  if (!existing) throw new Error("Unknown plan.");
+  const file = await readProjectFileByArtifactId({
+    userId: viewer.id,
+    projectId: input.projectId,
+    artifactId: input.artifactId,
+  });
+  if (!file) throw new Error("Unknown project file.");
 
-  const owned = await getProject(viewer.id, existing.projectId);
-  if (!owned) throw new Error("Unknown project.");
-
-  const mirrorPath = planMirrorPath(existing.projectId, existing.slug);
   const message =
-    `Carry out the plan "${existing.title}" (id: ${existing.id}, ` +
-    `path: ${mirrorPath}). Call read_plan first (DB is source of truth), ` +
-    `then do what it says. The markdown mirror is at ${mirrorPath}.`;
+    `Carry out the plan "${file.title}" at ${file.path}. ` +
+    `Call read_project_file (or read_file) on that path first, then do what it says.`;
 
   const created = await createChat(viewer.id, {
     pendingUserMessage: message,
-    projectId: existing.projectId,
+    projectId: input.projectId,
   });
 
-  revalidateProjectPaths(existing.projectId, existing.id);
-  return { chatId: created.id, projectId: existing.projectId };
+  revalidateProjectPaths(input.projectId);
+  return { chatId: created.id, projectId: input.projectId };
 }
 
 export async function createProjectChatAction(input: {
@@ -192,14 +196,13 @@ export async function loadProjectWorkspaceAction(input: {
   const viewer = await requireDatabaseViewer();
   const owned = await getProject(viewer.id, input.projectId);
   if (!owned) return null;
-  const [plans, chats, pins, issues, artifacts] = await Promise.all([
-    listPlans(viewer.id, owned.id),
+  const [chats, pins, issues, artifacts] = await Promise.all([
     listProjectChats(viewer.id, owned.id),
     listProjectPins(viewer.id, owned.id),
     listProjectIssues(viewer.id, owned.id),
     listProjectArtifacts(viewer.id, owned.id),
   ]);
-  return { project: owned, plans, chats, pins, issues, artifacts };
+  return { project: owned, plans: [], chats, pins, issues, artifacts };
 }
 
 export async function linkProjectPinAction(input: {

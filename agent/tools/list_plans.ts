@@ -1,18 +1,19 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { getProject, listPlans } from "@/lib/db/projects";
+import { getProject } from "@/lib/db/projects";
+import { listProjectFiles } from "@/lib/project-files";
 
 import { requirePrincipalUser } from "#lib/principal.js";
 import { turnClientIntent } from "#lib/turn-context.js";
 
 /**
- * List plan documents in a project the signed-in user owns.
+ * @deprecated Prefer list_project_files. Alias for plan-mode evals/skills.
  */
 export default defineTool({
   description:
-    "List the plans in a project (title, slug, id, updatedAt). Defaults to the " +
-    "active project from this turn's context when projectId is omitted.",
+    "List plan markdown files in a project. Alias of list_project_files " +
+    "filtered to docs/plans/<projectId>/ when possible.",
   async execute(input, ctx) {
     const auth = await requirePrincipalUser(ctx.session.auth.current);
     if ("error" in auth) {
@@ -34,16 +35,38 @@ export default defineTool({
       return { error: "Unknown project id." };
     }
 
-    const plans = await listPlans(userId, projectId);
+    const files = await listProjectFiles(userId, projectId);
+    const plans = files
+      .filter((row) => row.pathname.includes(`docs/plans/${projectId}/`))
+      .map((row) => {
+        const base = row.pathname.split("/").pop() ?? row.title;
+        const slug = base.replace(/\.md$/i, "");
+        return {
+          id: row.id,
+          title: row.title,
+          slug,
+          updatedAt: row.createdAt,
+        };
+      });
+
+    // If nothing under docs/plans yet, surface all project files as plans.
+    const listed =
+      plans.length > 0
+        ? plans
+        : files.map((row) => ({
+            id: row.id,
+            title: row.title,
+            slug: (row.pathname.split("/").pop() ?? row.title).replace(
+              /\.md$/i,
+              "",
+            ),
+            updatedAt: row.createdAt,
+          }));
+
     return {
       projectId,
       projectName: owned.name,
-      plans: plans.map((row) => ({
-        id: row.id,
-        title: row.title,
-        slug: row.slug,
-        updatedAt: row.updatedAt.toISOString(),
-      })),
+      plans: listed,
     };
   },
   inputSchema: z.object({

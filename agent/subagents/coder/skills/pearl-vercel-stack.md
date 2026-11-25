@@ -81,12 +81,13 @@ specific rule.
 
 ### Planning
 
-Pearl default: durable **project plans** via parent `save_plan` (DB source of
-truth) plus markdown mirrors at `/workspace/docs/plans/<projectId>/<slug>.md`.
-Use `read_plan` / `list_plans` to find prior work; DB wins if the mirror
-diverges. The obra/superpowers skills below are for implementer task
-breakdown — still persist through `save_plan`, not `docs/superpowers/plans/`,
-unless the user asks for a superpowers-style file-only ledger.
+Pearl default: durable **project plan files** via parent `write_project_file`
+(or `save_plan`) at `/workspace/docs/plans/<projectId>/<slug>.md`, linked on
+the project. Use `list_project_files` / `read_project_file` (or
+`list_plans` / `read_plan`) to find prior work. The obra/superpowers skills
+below are for implementer task breakdown — still persist through
+`write_project_file`, not `docs/superpowers/plans/`, unless the user asks for
+a superpowers-style file-only ledger.
 
 | Topic | Load |
 | --- | --- |

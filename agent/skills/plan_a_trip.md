@@ -10,5 +10,5 @@ When planning a trip:
 4. Keep the plan concise — a few bullet points per day, not an essay.
 
 When Client context has `eveAgentMode` set to `plan` and an `eveProjectId`, the
-deliverable is a project plan document: write it with `save_plan` instead of
-pasting a long itinerary into chat.
+deliverable is a project plan file: write it with `write_project_file` (or
+`save_plan`) instead of pasting a long itinerary into chat.

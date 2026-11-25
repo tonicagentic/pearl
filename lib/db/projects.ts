@@ -1,12 +1,10 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { chat, plan, project, type Plan, type Project } from "@/lib/db/schema";
+import { chat, project, type Project } from "@/lib/db/schema";
 
 const MAX_NAME = 120;
 const MAX_INSTRUCTIONS = 20_000;
-const MAX_TITLE = 200;
-const MAX_MARKDOWN = 200_000;
 const MAX_SLUG = 80;
 
 function slugify(input: string): string {
@@ -117,134 +115,6 @@ export async function deleteProject(
     .delete(project)
     .where(and(eq(project.userId, userId), eq(project.id, projectId)))
     .returning({ id: project.id });
-  return deleted.length > 0;
-}
-
-export type PlanSummary = {
-  readonly id: string;
-  readonly title: string;
-  readonly slug: string;
-  readonly updatedAt: Date;
-};
-
-export async function listPlans(
-  userId: string,
-  projectId: string,
-): Promise<readonly PlanSummary[]> {
-  return db
-    .select({
-      id: plan.id,
-      title: plan.title,
-      slug: plan.slug,
-      updatedAt: plan.updatedAt,
-    })
-    .from(plan)
-    .where(and(eq(plan.userId, userId), eq(plan.projectId, projectId)))
-    .orderBy(desc(plan.updatedAt));
-}
-
-export async function getPlan(
-  userId: string,
-  planId: string,
-): Promise<Plan | null> {
-  const [row] = await db
-    .select()
-    .from(plan)
-    .where(and(eq(plan.userId, userId), eq(plan.id, planId)))
-    .limit(1);
-  return row ?? null;
-}
-
-export async function getPlanBySlug(
-  userId: string,
-  projectId: string,
-  slug: string,
-): Promise<Plan | null> {
-  const [row] = await db
-    .select()
-    .from(plan)
-    .where(
-      and(
-        eq(plan.userId, userId),
-        eq(plan.projectId, projectId),
-        eq(plan.slug, slug.trim()),
-      ),
-    )
-    .limit(1);
-  return row ?? null;
-}
-
-export async function savePlan(
-  userId: string,
-  input: {
-    readonly projectId: string;
-    readonly title: string;
-    readonly slug?: string;
-    readonly markdown: string;
-    readonly planId?: string;
-  },
-): Promise<Plan> {
-  const owned = await getProject(userId, input.projectId);
-  if (!owned) {
-    throw new Error("Unknown project.");
-  }
-
-  const title = input.title.trim();
-  if (!title) throw new Error("A plan needs a title.");
-  if (title.length > MAX_TITLE) {
-    throw new Error(`Plan titles must be ${MAX_TITLE} characters or fewer.`);
-  }
-
-  const markdown = input.markdown.slice(0, MAX_MARKDOWN);
-  const slug = slugify(input.slug?.trim() || title);
-
-  if (input.planId) {
-    const existing = await getPlan(userId, input.planId);
-    if (!existing || existing.projectId !== input.projectId) {
-      throw new Error("Unknown plan.");
-    }
-    const [row] = await db
-      .update(plan)
-      .set({ title, slug, markdown, updatedAt: new Date() })
-      .where(and(eq(plan.userId, userId), eq(plan.id, input.planId)))
-      .returning();
-    if (!row) throw new Error("Failed to update plan.");
-    return row;
-  }
-
-  const bySlug = await getPlanBySlug(userId, input.projectId, slug);
-  if (bySlug) {
-    const [row] = await db
-      .update(plan)
-      .set({ title, markdown, updatedAt: new Date() })
-      .where(and(eq(plan.userId, userId), eq(plan.id, bySlug.id)))
-      .returning();
-    if (!row) throw new Error("Failed to update plan.");
-    return row;
-  }
-
-  const [row] = await db
-    .insert(plan)
-    .values({
-      userId,
-      projectId: input.projectId,
-      title,
-      slug,
-      markdown,
-    })
-    .returning();
-  if (!row) throw new Error("Failed to create plan.");
-  return row;
-}
-
-export async function deletePlan(
-  userId: string,
-  planId: string,
-): Promise<boolean> {
-  const deleted = await db
-    .delete(plan)
-    .where(and(eq(plan.userId, userId), eq(plan.id, planId)))
-    .returning({ id: plan.id });
   return deleted.length > 0;
 }
 

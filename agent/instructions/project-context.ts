@@ -1,15 +1,16 @@
 import { defineDynamic, defineInstructions } from "eve/instructions";
 
 import { planMirrorPath } from "@/agent/lib/plan-mirror";
-import { getProject, listPlans } from "@/lib/db/projects";
+import { getProject } from "@/lib/db/projects";
+import { listProjectFiles } from "@/lib/project-files";
 import { listProjectPins } from "@/lib/db/workbench-pins";
 
 import { requirePrincipalUser } from "../lib/principal.ts";
 import { syncTurnClientIntent } from "../lib/turn-context.ts";
 
 // When the turn is attached to a verified project, inject its name,
-// instructions, plan index, and linked repos. Bodies stay out of the
-// prompt — use read_plan when a specific document is needed.
+// instructions, file index, and linked repos. Bodies stay out of the
+// prompt — use read_project_file when a specific document is needed.
 
 export default defineDynamic(async (ctx) => {
   const intent = syncTurnClientIntent(await ctx.messages());
@@ -21,16 +22,26 @@ export default defineDynamic(async (ctx) => {
   const owned = await getProject(userId, intent.projectId);
   if (!owned) return null;
 
-  const [plans, pins] = await Promise.all([
-    listPlans(userId, owned.id),
+  const [files, pins] = await Promise.all([
+    listProjectFiles(userId, owned.id),
     listProjectPins(userId, owned.id),
   ]);
-  const planLines =
-    plans.length === 0
-      ? ["(no plans yet)"]
-      : plans.map((row) => {
-          const path = planMirrorPath(owned.id, row.slug);
-          return `- ${row.title} (slug: ${row.slug}, id: ${row.id}, path: ${path})`;
+
+  const planFiles = files.filter((row) =>
+    row.pathname.includes(`docs/plans/${owned.id}/`),
+  );
+  const listed = planFiles.length > 0 ? planFiles : files;
+
+  const fileLines =
+    listed.length === 0
+      ? ["(no project files yet)"]
+      : listed.map((row) => {
+          const base = row.pathname.split("/").pop() ?? row.title;
+          const slug = base.replace(/\.md$/i, "");
+          const path = row.pathname.includes(`docs/plans/${owned.id}/`)
+            ? planMirrorPath(owned.id, slug)
+            : `(library) ${row.pathname}`;
+          return `- ${row.title} (id: ${row.id}, path: ${path})`;
         });
 
   const repoLines =
@@ -57,14 +68,13 @@ export default defineDynamic(async (ctx) => {
       ? ["## Project instructions", "", instructions].join("\n")
       : "## Project instructions\n\n(none set)",
     "",
-    "## Plans in this project",
+    "## Files in this project",
     "",
-    ...planLines,
+    ...fileLines,
     "",
-    "Call read_plan with a plan id or slug when you need a plan body (DB is",
-    "source of truth). Mirror paths under /workspace/docs/plans/ are for",
-    "sandbox/coder visibility; if they diverge, trust read_plan. Do not",
-    "invent plans that are not listed.",
+    "Call read_project_file (or read_file on the path) when you need a file",
+    "body. Project files under /workspace/docs/plans/ are the source of",
+    "truth. Do not invent files that are not listed.",
     "",
     "## Repos in this project",
     "",

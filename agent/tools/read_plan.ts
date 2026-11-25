@@ -1,19 +1,21 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { getPlan, getPlanBySlug, getProject } from "@/lib/db/projects";
+import {
+  readProjectFileByArtifactId,
+  readProjectFileBySlug,
+} from "@/lib/project-files";
 
 import { requirePrincipalUser } from "#lib/principal.js";
 import { turnClientIntent } from "#lib/turn-context.js";
 
 /**
- * Read one plan document by id or by project + slug.
+ * @deprecated Prefer read_project_file. Alias for plan-mode evals/skills.
  */
 export default defineTool({
   description:
-    "Read a plan's markdown by plan id, or by slug within a project. Defaults to " +
-    "the active project when only slug is given. Call this before replacing a " +
-    "plan body so user edits are not overwritten.",
+    "Read a project plan markdown file by artifact id (planId) or slug. " +
+    "Alias of read_project_file — prefer that name. File is source of truth.",
   async execute(input, ctx) {
     const auth = await requirePrincipalUser(ctx.session.auth.current);
     if ("error" in auth) {
@@ -22,14 +24,26 @@ export default defineTool({
     const { userId } = auth;
 
     if (input.planId) {
-      const row = await getPlan(userId, input.planId);
-      if (!row) return { error: "Unknown plan id." };
+      const projectId =
+        input.projectId?.trim() || turnClientIntent.get().projectId;
+      if (!projectId) {
+        return {
+          error:
+            "Pass projectId (or attach a project) with planId/artifact id.",
+        };
+      }
+      const file = await readProjectFileByArtifactId({
+        userId,
+        projectId,
+        artifactId: input.planId,
+      });
+      if (!file) return { error: "Unknown plan id." };
       return {
-        id: row.id,
-        projectId: row.projectId,
-        title: row.title,
-        slug: row.slug,
-        markdown: row.markdown,
+        id: file.artifact.id,
+        projectId,
+        title: file.title,
+        slug: file.slug,
+        markdown: file.markdown,
       };
     }
 
@@ -42,18 +56,15 @@ export default defineTool({
       };
     }
 
-    const owned = await getProject(userId, projectId);
-    if (!owned) return { error: "Unknown project id." };
-
-    const row = await getPlanBySlug(userId, projectId, slug);
-    if (!row) return { error: "No plan with that slug in this project." };
+    const file = await readProjectFileBySlug({ userId, projectId, slug });
+    if (!file) return { error: "No plan with that slug in this project." };
 
     return {
-      id: row.id,
-      projectId: row.projectId,
-      title: row.title,
-      slug: row.slug,
-      markdown: row.markdown,
+      id: file.artifact.id,
+      projectId,
+      title: file.title,
+      slug: file.slug,
+      markdown: file.markdown,
     };
   },
   inputSchema: z.object({

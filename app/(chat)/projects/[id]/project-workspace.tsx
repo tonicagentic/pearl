@@ -8,7 +8,7 @@ import {
   createProjectChatAction,
   deleteProjectAction,
   linkProjectPinAction,
-  savePlanAction,
+  saveProjectFileAction,
   unlinkProjectPinAction,
   updateProjectAction,
 } from "@/app/actions/projects";
@@ -22,10 +22,10 @@ type ProjectProps = {
   readonly instructions: string;
 };
 
-type PlanProps = {
+type FileProps = {
   readonly id: string;
   readonly title: string;
-  readonly slug: string;
+  readonly pathname: string;
   readonly updatedAt: string;
 };
 
@@ -43,19 +43,19 @@ type PinProps = {
 
 export function ProjectWorkspace({
   project,
-  plans,
+  files,
   chats,
   pins,
 }: {
   readonly project: ProjectProps;
-  readonly plans: readonly PlanProps[];
+  readonly files: readonly FileProps[];
   readonly chats: readonly ChatProps[];
   readonly pins: readonly PinProps[];
 }) {
   const router = useRouter();
   const [name, setName] = useState(project.name);
   const [instructions, setInstructions] = useState(project.instructions);
-  const [planTitle, setPlanTitle] = useState("");
+  const [fileTitle, setFileTitle] = useState("");
   const [repoFullName, setRepoFullName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -268,7 +268,7 @@ export function ProjectWorkspace({
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-medium">Plans</h2>
+          <h2 className="text-sm font-medium">Files</h2>
         </div>
         <form
           className="flex flex-wrap items-center gap-2"
@@ -277,19 +277,18 @@ export function ProjectWorkspace({
             setError(null);
             startTransition(async () => {
               try {
-                const row = await savePlanAction({
+                await saveProjectFileAction({
                   projectId: project.id,
-                  title: planTitle,
-                  markdown: `# ${planTitle.trim()}\n\n`,
+                  title: fileTitle,
+                  markdown: `# ${fileTitle.trim()}\n\n`,
                 });
-                setPlanTitle("");
-                router.push(`/projects/${project.id}/plans/${row.id}`);
+                setFileTitle("");
                 router.refresh();
               } catch (cause) {
                 setError(
                   cause instanceof Error
                     ? cause.message
-                    : "Could not create the plan.",
+                    : "Could not create the file.",
                 );
               }
             });
@@ -298,37 +297,33 @@ export function ProjectWorkspace({
           <Input
             className="max-w-xs"
             maxLength={200}
-            onChange={(event) => setPlanTitle(event.target.value)}
-            placeholder="New plan title"
+            onChange={(event) => setFileTitle(event.target.value)}
+            placeholder="New file title"
             required
-            value={planTitle}
+            value={fileTitle}
           />
-          <Button disabled={pending || !planTitle.trim()} size="sm" type="submit">
-            New plan
+          <Button disabled={pending || !fileTitle.trim()} size="sm" type="submit">
+            New file
           </Button>
         </form>
-        {plans.length === 0 ? (
+        {files.length === 0 ? (
           <p className="rounded-lg border bg-card px-3 py-4 text-sm text-muted-foreground">
-            No plans yet. Create one here, or ask Pearl in Plan mode.
+            No files yet. Create one here, link from the Library, or ask Pearl
+            in Plan mode.
           </p>
         ) : (
           <ul className="divide-y rounded-lg border bg-card">
-            {plans.map((row) => (
-              <li key={row.id}>
-                <Link
-                  className="flex items-center justify-between gap-3 px-3 py-3 hover:bg-muted/40"
-                  href={`/projects/${project.id}/plans/${row.id}`}
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">
-                      {row.title}
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {row.slug}
-                    </div>
+            {files.map((row) => (
+              <li
+                className="flex items-center justify-between gap-3 px-3 py-3"
+                key={row.id}
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{row.title}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {row.pathname.split("/").pop()}
                   </div>
-                  <span className="text-xs text-muted-foreground">Open</span>
-                </Link>
+                </div>
               </li>
             ))}
           </ul>

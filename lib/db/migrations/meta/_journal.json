@@ -379,6 +379,20 @@
       "when": 1796000000000,
       "tag": "0056_sandbox_open",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1796100000000,
+      "tag": "0057_project_goals_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1796200000000,
+      "tag": "0058_drop_plan",
+      "breakpoints": true
     }
   ]
 }

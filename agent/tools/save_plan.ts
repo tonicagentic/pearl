@@ -1,24 +1,20 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { mirrorPlanMarkdown } from "@/agent/lib/plan-mirror";
-import { savePlan } from "@/lib/db/projects";
+import { putProjectMarkdownFile } from "@/lib/project-files";
 
 import { requirePrincipalUser } from "#lib/principal.js";
 import { turnClientIntent } from "#lib/turn-context.js";
 
 /**
- * Create or replace a plan document in a project. The one write allowed in
- * Plan mode; the project page editor is the review surface (no approval card).
- * Also mirrors markdown to `/workspace/docs/plans/<projectId>/<slug>.md`.
+ * @deprecated Prefer write_project_file. Kept as an alias so existing
+ * instructions/evals that call save_plan keep working during cutover.
  */
 export default defineTool({
   description:
-    "Create or replace a markdown plan in a project. Pass title and markdown; " +
-    "optional slug (derived from the title when omitted) and planId to update " +
-    "an existing row. Defaults to the active project. Persists to the project " +
-    "and mirrors a durable file under /workspace/docs/plans/. Read the plan " +
-    "first when updating so you keep the user's edits.",
+    "Create or replace a markdown plan file in a project. Alias of " +
+    "write_project_file — prefer that name. Writes under " +
+    "/workspace/docs/plans/<projectId>/<slug>.md and links it on the project.",
   async execute(input, ctx) {
     const auth = await requirePrincipalUser(ctx.session.auth.current);
     if ("error" in auth) {
@@ -36,21 +32,12 @@ export default defineTool({
     }
 
     try {
-      const row = await savePlan(userId, {
+      const written = await putProjectMarkdownFile({
+        userId,
         projectId,
         title: input.title,
         slug: input.slug,
         markdown: input.markdown,
-        planId: input.planId,
-      });
-
-      const mirror = await mirrorPlanMarkdown({
-        userId,
-        projectId: row.projectId,
-        planId: row.id,
-        title: row.title,
-        slug: row.slug,
-        markdown: row.markdown,
         session: {
           id: ctx.session.id,
           getSandbox: () => ctx.getSandbox(),
@@ -58,13 +45,13 @@ export default defineTool({
       });
 
       return {
-        id: row.id,
-        projectId: row.projectId,
-        title: row.title,
-        slug: row.slug,
-        path: mirror.path,
-        mirrored: mirror.mirrored,
-        note: mirror.note,
+        id: written.artifact.id,
+        projectId,
+        title: written.title,
+        slug: written.slug,
+        path: written.path,
+        mirrored: written.mirrored,
+        note: written.note,
       };
     } catch (error) {
       return {
@@ -78,6 +65,7 @@ export default defineTool({
     markdown: z.string().max(200_000),
     slug: z.string().max(80).optional(),
     projectId: z.string().optional(),
+    /** Ignored — plans are file-backed now. */
     planId: z.string().optional(),
   }),
   outputSchema: z.object({

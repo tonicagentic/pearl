@@ -45,9 +45,10 @@ those, stop and ask.
 ## When to Use
 
 - On Pearl, start from the project plan: parent should have called
-  `read_plan` (DB) or pointed at `/workspace/docs/plans/<projectId>/<slug>.md`.
-  Prefer that over a `.superpowers/sdd/` ledger unless the user asked for
-  superpowers-style progress tracking.
+  `read_project_file` / `read_plan` or pointed at
+  `/workspace/docs/plans/<projectId>/<slug>.md`. Prefer that over a
+  `.superpowers/sdd/` ledger unless the user asked for superpowers-style
+  progress tracking.
 - You have a plan from superpowers:writing-plans and your human partner
   chose inline execution at the handoff.
 - Your harness has no subagent tool (see the per-platform references in
