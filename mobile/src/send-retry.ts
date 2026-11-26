@@ -1,6 +1,5 @@
 import type { SessionStore } from "eve/client";
 import { isEveSessionInactive } from "../../lib/chat/eve-session-recovery";
-import { agentDebugLog, errorSummary } from "./agent-debug-log";
 import { reconnectSession } from "./session-reconnect";
 import { shouldRestoreUnsentDraft } from "./send-feedback";
 

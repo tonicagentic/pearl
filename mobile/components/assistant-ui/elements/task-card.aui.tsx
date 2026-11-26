@@ -328,10 +328,6 @@ export function TaskGroup({
           ? (row.activity ?? SUBAGENT_WORKING_ACTIVITY)
           : undefined;
         const watches = isCoder ? coderWatches(agent) : [];
-        // #region agent log
-        // Settled-row logging removed from render path — was contributing to
-        // JS-thread peg when TaskGroup remounted during followAgents churn.
-        // #endregion
         return (
           <View
             key={part.toolCallId}

@@ -24,20 +24,22 @@ const APP_IN_MS = 520;
 const EASE = Easing.out(Easing.cubic);
 
 /**
- * Holds the native-splash look, fades Pearl out, then fades the app in —
- * sequential so the handoff reads as one beat after another.
+ * Holds the native-splash look, fades Pearl out, then clears the splash field.
+ *
+ * Critical: the app tree stays at opacity 1 the whole time. Fading an ancestor
+ * of `GlassView` / system liquid-glass chrome through ~0 permanently skips the
+ * UIKit glass effect (Apple + expo-glass-effect guidance) — that left composer
+ * and toolbar glass blank after boot, with only native menus flashing glass.
  */
 export function BootReveal({ children }: { readonly children: ReactNode }) {
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const splashBg = SPLASH_BG[scheme];
   const logoOpacity = useSharedValue(1);
   const splashOpacity = useSharedValue(1);
-  const appOpacity = useSharedValue(0);
   const [splashGone, setSplashGone] = useState(false);
 
   const logoStyle = useAnimatedStyle(() => ({ opacity: logoOpacity.value }));
   const splashStyle = useAnimatedStyle(() => ({ opacity: splashOpacity.value }));
-  const appStyle = useAnimatedStyle(() => ({ opacity: appOpacity.value }));
 
   useEffect(() => {
     // 1) Pearl fades out on the splash field.
@@ -46,25 +48,21 @@ export function BootReveal({ children }: { readonly children: ReactNode }) {
       { duration: LOGO_OUT_MS, easing: EASE },
       (logoDone) => {
         if (!logoDone) return;
-        // 2) Then the splash field clears and the app fades in together.
-        splashOpacity.value = withTiming(0, {
-          duration: APP_IN_MS,
-          easing: EASE,
-        });
-        appOpacity.value = withTiming(
-          1,
+        // 2) Splash clears — app underneath was always opaque.
+        splashOpacity.value = withTiming(
+          0,
           { duration: APP_IN_MS, easing: EASE },
-          (appDone) => {
-            if (appDone) runOnJS(setSplashGone)(true);
+          (done) => {
+            if (done) runOnJS(setSplashGone)(true);
           },
         );
       },
     );
-  }, [appOpacity, logoOpacity, splashOpacity]);
+  }, [logoOpacity, splashOpacity]);
 
   return (
     <View style={[styles.root, { backgroundColor: splashBg }]}>
-      <Animated.View style={[styles.fill, appStyle]}>{children}</Animated.View>
+      <View style={styles.fill}>{children}</View>
       {splashGone ? null : (
         <Animated.View
           pointerEvents="none"

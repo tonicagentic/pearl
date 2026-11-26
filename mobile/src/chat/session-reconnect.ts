@@ -1,5 +1,5 @@
 import type { SessionStore } from "eve/client";
-import { agentDebugLog, errorSummary } from "../agent-debug-log";
+import { errorSummary } from "../agent-debug-log";
 
 const DEFAULT_BACKOFF_MS = [250, 750, 1_500] as const;
 
@@ -40,50 +40,16 @@ export async function reconnectSession(
       await sleep(wait);
     }
 
-    const status = store.snapshot.status;
     try {
       await store.resume();
-      // #region agent log
-      const snap = store.snapshot;
-      const events = snap.events ?? [];
-      const messages = snap.messages ?? [];
-      const tail = events.slice(-6).map((event) => event.type);
-      agentDebugLog("session-reconnect.ts:resume", "resumed without cancel", "F", {
-        statusBefore: status,
-        statusAfter: snap.status,
-        attempt,
-        eventCount: events.length,
-        lastEventTypes: tail,
-        lastMsgStatus:
-          messages.at(-1)?.role === "assistant"
-            ? (messages.at(-1)?.metadata?.status ?? null)
-            : null,
-        runId: "stuck-busy",
-      });
-      // #endregion
       return { ok: true };
     } catch (cause) {
       const message = errorSummary(cause) ?? "Could not reconnect.";
       // A send is already in flight. Cancelling it is what silenced long turns.
       if (message.includes("pending submissions")) {
-        // #region agent log
-        agentDebugLog("session-reconnect.ts:resume", "left live turn alone", "F", {
-          status,
-          attempt,
-          runId: "post-fix",
-        });
-        // #endregion
         return { ok: true };
       }
       lastError = message;
-      // #region agent log
-      agentDebugLog("session-reconnect.ts:resume", "resume failed", "F", {
-        status,
-        attempt,
-        error: message,
-        runId: "post-fix",
-      });
-      // #endregion
     }
   }
 

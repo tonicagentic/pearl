@@ -43,7 +43,6 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import { agentDebugLog } from "@/src/agent-debug-log";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -86,17 +85,6 @@ const BLOCK_GAP = 8;
 const LIST_BULLET = "\u25CF";
 
 const markdownLayoutSeen = new Set<string>();
-
-function logMarkdownBox(
-  _path: string,
-  _width: number,
-  _height: number,
-  _textLen: number,
-): void {
-  // #region agent log
-  // Layout logging disabled — onLayout storms during freeze debugging.
-  // #endregion
-}
 
 /** View hosts (lists, file cards) cannot nest inside the selectable Text tree. */
 function isViewHost(node: ReactNode): node is ReactElement {
@@ -684,21 +672,9 @@ const StreamingMarkdownText: FC<
     readonly animateFade: boolean;
   }
 > = ({ text, variant, reveal, animateFade }) => {
-  const paintBucket = useRef("");
   useEffect(() => {
     traceStream("paint", text.length);
-    // #region agent log
-    const bucket = `${reveal.writing}:${Math.floor(text.length / 80)}:${Math.floor(reveal.revealed / 80)}`;
-    if (paintBucket.current === bucket) return;
-    paintBucket.current = bucket;
-    agentDebugLog("markdown-text.tsx:stream", "streaming paint", "C", {
-      textLen: text.length,
-      revealed: reveal.revealed,
-      writing: reveal.writing,
-      lag: text.length - reveal.revealed,
-    });
-    // #endregion
-  }, [text.length, reveal.revealed, reveal.writing]);
+  }, [text.length]);
   const { typeStyle } = useMarkdownTypeStyle(variant);
   const motion = useMotion();
   const baseOptions = useMarkdownOptions(variant);
@@ -739,10 +715,6 @@ const StreamingMarkdownText: FC<
       className="aui-md-root"
       style={{ gap: BLOCK_GAP }}
       accessibilityState={{ busy: writing }}
-      onLayout={(event) => {
-        const { width, height } = event.nativeEvent.layout;
-        logMarkdownBox("streaming", width, height, text.length);
-      }}
     >
       {displayText
         ? elements.map((element, index) => {
@@ -785,14 +757,7 @@ const SettledMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
   // iOS Text.selectable is UILabel (whole-block Copy only). Multiline
   // TextInput uses UITextView so partial selection matches native Notes.
   return (
-    <View
-      className="aui-md-root"
-      style={{ gap: BLOCK_GAP }}
-      onLayout={(event) => {
-        const { width, height } = event.nativeEvent.layout;
-        logMarkdownBox("settled", width, height, text.length);
-      }}
-    >
+    <View className="aui-md-root" style={{ gap: BLOCK_GAP }}>
       {elements.map((element, index) => {
         if (isViewHost(element)) {
           return <Fragment key={`md-v-${index}`}>{element}</Fragment>;
@@ -808,10 +773,6 @@ const SettledMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
               selectionColor={SELECTION_COLOR}
               style={typeStyle}
               className={fallbackClass}
-              onLayout={(event) => {
-                const { width, height } = event.nativeEvent.layout;
-                logMarkdownBox("settled-input", width, height, text.length);
-              }}
             >
               {element}
             </TextInput>
@@ -863,13 +824,7 @@ class MarkdownRenderBoundary extends Component<
 > {
   state = { failed: false };
 
-  componentDidCatch(error: Error): void {
-    // #region agent log
-    agentDebugLog("markdown-text.tsx:boundary", "markdown render threw", "C", {
-      error: error.message.slice(0, 240),
-      textLen: this.props.text.length,
-    });
-    // #endregion
+  componentDidCatch(): void {
     this.setState({ failed: true });
   }
 

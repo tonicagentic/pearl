@@ -565,27 +565,29 @@ export const Thread: FC<ThreadProps> = ({
           ) : null}
         </View>
       </AuiIf>
-      <View
-        pointerEvents={
-          !chromeRevealed ? "none" : floatsComposer ? "box-none" : undefined
-        }
-        className={floatsComposer ? "absolute inset-x-0 bottom-0" : undefined}
-        onLayout={floatsComposer ? measureComposerOverlay : undefined}
-        style={{
-          opacity: chromeRevealed ? 1 : 0,
-          overflow: "visible",
-        }}
-      >
-        <ThreadFollowupSuggestions />
-        <ThreadSuggestedPrompts />
-        <ComposerDock
-          floats={floatsComposer}
-          waitingAction={waitingAction}
-          autoFocus={autoFocus && chromeRevealed && !signupBlocked}
-          focusNewChatKey={chromeRevealed ? focusNewChatKey : -1}
-          conversationId={conversationId}
-        />
-      </View>
+      {/*
+        Never opacity-hide this subtree. GlassView / liquid glass ancestors that
+        hit ~0 alpha skip the UIKit effect forever (expo-glass-effect docs).
+        During auth handoff, keep the dock unmounted instead of alpha=0.
+      */}
+      {chromeRevealed ? (
+        <View
+          pointerEvents={floatsComposer ? "box-none" : undefined}
+          className={floatsComposer ? "absolute inset-x-0 bottom-0" : undefined}
+          onLayout={floatsComposer ? measureComposerOverlay : undefined}
+          style={{ overflow: "visible" }}
+        >
+          <ThreadFollowupSuggestions />
+          <ThreadSuggestedPrompts />
+          <ComposerDock
+            floats={floatsComposer}
+            waitingAction={waitingAction}
+            autoFocus={autoFocus && !signupBlocked}
+            focusNewChatKey={focusNewChatKey}
+            conversationId={conversationId}
+          />
+        </View>
+      ) : null}
       {Rail && (
         <View
           pointerEvents="box-none"

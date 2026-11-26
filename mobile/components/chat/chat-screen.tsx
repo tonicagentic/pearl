@@ -70,10 +70,9 @@ import { canUseQuickPath } from "../../../lib/pearl-lane";
 import { DEFAULT_MODEL_KEY, getModelSelection } from "@/src/model-selection";
 import { getRemoteAgentSelection } from "@/src/remote-agent-selection";
 import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
-import { agentDebugLog, errorSummary, lastTextLength } from "@/src/agent-debug-log";
 import { formatEveClientError } from "@/src/chat/eve-error";
 import { resolveTurnPolicy } from "@/src/chat/prepare-send";
-import { deriveTurnRunning, isZombieBusy } from "@/src/chat/turn-running";
+import { deriveTurnRunning } from "@/src/chat/turn-running";
 import { activeTurn } from "eve/events";
 import type { WaitingAction } from "@/components/assistant-ui/elements/waiting-action-card";
 import { SubagentTranscriptSheet } from "@/components/assistant-ui/elements/subagent-transcript-sheet";
@@ -685,30 +684,6 @@ export function ChatScreen({
     liveReplyVersion,
   ]);
 
-  // Orphan busy: status busy with no activeTurn. Never cancel() to clear it.
-  // #region agent log
-  const orphanBusyLogRef = useRef(false);
-  useEffect(() => {
-    const zombie = isZombieBusy({
-      status,
-      messages,
-      view: snapshot.view,
-    });
-    if (!zombie) {
-      orphanBusyLogRef.current = false;
-      return;
-    }
-    if (orphanBusyLogRef.current) return;
-    orphanBusyLogRef.current = true;
-    agentDebugLog("chat-screen.tsx:zombie", "orphan busy (no cancel)", "H", {
-      status,
-      messages: messages.length,
-      hasActiveTurn: turnOpen,
-      runId: "post-fix",
-    });
-  }, [status, messages, snapshot.view, turnOpen]);
-  // #endregion
-
   useEffect(() => {
     if (!expectingAssistant) return;
     if (turnEndedWithoutAssistant(events, messages, isBusy)) {
@@ -851,20 +826,6 @@ export function ChatScreen({
       onNew: async (message: AppendMessage) => {
         const ctx = sendCtxRef.current;
         const { store: activeStore } = ctx;
-        // #region agent log
-        agentDebugLog("chat-screen.tsx:send", "onNew entered", "H", {
-          status: activeStore.snapshot.status,
-          zombie: isZombieBusy({
-            status: activeStore.snapshot.status,
-            messages: activeStore.snapshot.messages,
-          }),
-          composerBlocked: ctx.composerBlocked,
-          unresolvedSend: ctx.unresolvedSend,
-          textLen:
-            typeof message.content === "string" ? message.content.length : 0,
-          runId: "post-fix",
-        });
-        // #endregion
         setSendError(null);
         if (needsSignup) {
           setSignupOpen(true);
@@ -949,13 +910,6 @@ export function ChatScreen({
                   ctx.setQuickStreamingText((current) => current + delta);
                 },
               });
-              // #region agent log
-              agentDebugLog("chat-screen.tsx:quick", "quick path finished", "A", {
-                http: response.status,
-                outcome: result.outcome,
-                error: result.outcome === "error" ? result.message : null,
-              });
-              // #endregion
               if (result.outcome === "answered") {
                 ctx.setQuickTurns([...result.turns]);
                 ctx.setQuickStreaming(false);
@@ -971,12 +925,7 @@ export function ChatScreen({
                 return;
               }
             }
-          } catch (cause) {
-            // #region agent log
-            agentDebugLog("chat-screen.tsx:quick", "quick path threw", "A", {
-              error: errorSummary(cause),
-            });
-            // #endregion
+          } catch {
             // Fall through to eve.
           }
           ctx.setQuickTurns(priorQuick);
@@ -1035,15 +984,6 @@ export function ChatScreen({
           sendPayload,
           { eventBaseline: preview.eventBaseline },
         );
-        // #region agent log
-        agentDebugLog("chat-screen.tsx:send", "send finished", "A", {
-          outcome: result.outcome,
-          uncertain: result.outcome === "failed" ? result.uncertain : false,
-          error: result.outcome === "failed" ? result.message : null,
-          status: activeStore.snapshot.status,
-          textLen: lastTextLength(activeStore.snapshot.messages),
-        });
-        // #endregion
         if (result.outcome === "accepted") {
           setLocalSends((current) => {
             if (current.get(activeStore)?.preview !== preview.preview) return current;

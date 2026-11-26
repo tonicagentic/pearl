@@ -22,7 +22,6 @@ import {
 } from "./remote-agent-selection";
 import { setChatRemoteAgent } from "./connected-agents-client";
 import { beginStreamTrace, traceStream } from "./stream-trace";
-import { agentDebugLog, errorSummary, lastTextLength } from "./agent-debug-log";
 import {
   clearLiveReplyText,
   pushLiveReplyDelta,
@@ -651,22 +650,6 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       },
       onFinish: (snapshot) => {
         syncObs();
-        // #region agent log
-        agentDebugLog("chat-context.tsx:onFinish", "stream finished", "B", {
-          status: snapshot.status,
-          events: snapshot.events.length,
-          messages: snapshot.messages.length,
-          lastRole: snapshot.messages.at(-1)?.role ?? null,
-          lastEventTypes: snapshot.events.slice(-8).map((e) => e.type),
-          lastMsgStatus:
-            snapshot.messages.at(-1)?.role === "assistant"
-              ? (snapshot.messages.at(-1)?.metadata?.status ?? null)
-              : null,
-          textLen: lastTextLength(snapshot.messages),
-          error: errorSummary(snapshot.error),
-          pending: Boolean(binding.pendingMessage),
-        });
-        // #endregion
         flush();
         if (binding.pendingMessage && activeStoreRef.current === store) {
           setPendingMessage(binding.pendingMessage);
@@ -702,15 +685,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           evictRetainedOverflow();
         });
       },
-      onError: (error) => {
-        // #region agent log
-        agentDebugLog("chat-context.tsx:onError", "stream error", "A", {
-          error: errorSummary(error),
-          status: store.snapshot.status,
-          pending: Boolean(binding.pendingMessage),
-          textLen: lastTextLength(store.snapshot.messages),
-        });
-        // #endregion
+      onError: (_error) => {
         if (activeStoreRef.current === store && binding.pendingMessage) {
           setPendingMessage(binding.pendingMessage);
         }
@@ -729,25 +704,12 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         if (store.snapshot.status === "resuming") return;
         void store.resume().then(
           () => {
-            // #region agent log
-            agentDebugLog("chat-context.tsx:onError", "stream reattached", "A", {
-              status: store.snapshot.status,
-              runId: "post-fix",
-            });
-            // #endregion
             if (activeStoreRef.current === store) {
               applyCatchUpFlush(store, binding);
               setConnectionError(null);
             }
           },
-          (cause: unknown) => {
-            // #region agent log
-            agentDebugLog("chat-context.tsx:onError", "stream reattach failed", "A", {
-              error: errorSummary(cause),
-              status: store.snapshot.status,
-              runId: "post-fix",
-            });
-            // #endregion
+          (_cause: unknown) => {
             if (activeStoreRef.current === store) {
               setConnectionError("Lost the connection to Pearl.");
             }
