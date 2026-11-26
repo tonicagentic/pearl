@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -11,7 +12,16 @@ import { BookmarkIcon, CheckIcon, Loader2Icon } from "lucide-react";
 import { useAuiState } from "@assistant-ui/react";
 
 import { useCanvas } from "@/components/assistant-ui/elements/canvas-context";
-import { MAX_QUOTE_LENGTH } from "@/lib/library/quote-text";
+import {
+  collectRenderedText,
+  rangeFromRenderedSpan,
+  useChatQuotes,
+} from "@/components/assistant-ui/elements/chat-quotes-context";
+import {
+  findQuoteSpan,
+  MAX_QUOTE_LENGTH,
+} from "@/lib/library/quote-text";
+import type { LibraryQuoteDto } from "@/lib/db/library-quotes";
 import { cn } from "@/lib/utils";
 
 type SelectionAnchor = {
@@ -22,7 +32,8 @@ type SelectionAnchor = {
 
 /**
  * Wraps a settled assistant message body. When the user selects text inside
- * it, shows a floating Save quote control at the selection.
+ * it, shows a floating Save quote control at the selection. Also paints
+ * Library quote highlights for this message via CSS Custom Highlight.
  */
 export function SaveQuoteSelection({
   children,
@@ -33,6 +44,8 @@ export function SaveQuoteSelection({
   const { chatId } = useCanvas();
   const messageId = useAuiState((s) => s.message.id);
   const running = useAuiState((s) => s.message.status?.type === "running");
+  const chatQuotes = useChatQuotes();
+  const messageQuotes = chatQuotes?.quotesByMessageId.get(messageId) ?? null;
 
   const [anchor, setAnchor] = useState<SelectionAnchor | null>(null);
   const [saving, setSaving] = useState(false);
@@ -135,6 +148,42 @@ export function SaveQuoteSelection({
     };
   }, [clearAnchor]);
 
+  // Paint saved-quote highlights after the markdown DOM settles.
+  useLayoutEffect(() => {
+    if (!chatQuotes) return;
+
+    if (running || !messageQuotes || messageQuotes.length === 0) {
+      chatQuotes.setMessageRanges(messageId, []);
+      return;
+    }
+
+    const root = rootRef.current;
+    if (!root) {
+      chatQuotes.setMessageRanges(messageId, []);
+      return;
+    }
+
+    const { text, points } = collectRenderedText(root);
+    const ranges: Range[] = [];
+    const used = new Set<string>();
+
+    for (const quote of messageQuotes) {
+      const span = findQuoteSpan(text, quote.text);
+      if (!span) continue;
+      const key = `${span.start}:${span.end}`;
+      if (used.has(key)) continue;
+      used.add(key);
+      const range = rangeFromRenderedSpan(points, span.start, span.end);
+      if (range) ranges.push(range);
+    }
+
+    chatQuotes.setMessageRanges(messageId, ranges);
+
+    return () => {
+      chatQuotes.setMessageRanges(messageId, []);
+    };
+  }, [chatQuotes, messageId, messageQuotes, running]);
+
   const saveQuote = useCallback(async () => {
     if (!anchor || saving || saved) return;
 
@@ -161,6 +210,11 @@ export function SaveQuoteSelection({
         return;
       }
 
+      const data = (await response.json()) as { quote?: LibraryQuoteDto };
+      if (data.quote) {
+        chatQuotes?.addQuote(data.quote);
+      }
+
       setSaving(false);
       setSaved(true);
       if (savedTimerRef.current !== null) {
@@ -174,7 +228,7 @@ export function SaveQuoteSelection({
       setSaving(false);
       setError("Failed to save quote.");
     }
-  }, [anchor, chatId, clearAnchor, messageId, saved, saving]);
+  }, [anchor, chatId, chatQuotes, clearAnchor, messageId, saved, saving]);
 
   return (
     <div
@@ -188,6 +242,7 @@ export function SaveQuoteSelection({
       {children}
       {anchor ? (
         <div
+          data-slot="aui_quote-save-control"
           className="absolute z-40 -translate-x-1/2"
           style={{ top: anchor.top, left: anchor.left }}
         >

@@ -76,6 +76,7 @@ export const queryKeys = {
   tasks: ["tasks"] as const,
   library: ["library"] as const,
   quotes: ["quotes"] as const,
+  quotesForChat: (chatId: string) => ["quotes", "chat", chatId] as const,
   projects: ["projects"] as const,
   project: (id: string) => ["projects", id] as const,
   financesMonth: (year: number, month: number) =>

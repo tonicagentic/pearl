@@ -72,6 +72,8 @@ import {
 } from "../../../../lib/chat/message-day";
 import { isTaskNotification } from "@/src/message-projection";
 import type { ThreadFooterNotice } from "@/src/chat/thread-notice";
+import { useActiveChat } from "@/src/chat-context";
+import { takePendingQuoteScroll } from "@/src/pending-quote-scroll";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import {
@@ -288,6 +290,49 @@ export const useThreadViewport = (): ThreadViewport => {
 
 const copyToClipboard = async (text: string) => {
   await Clipboard.setStringAsync(text);
+};
+
+/**
+ * Library "Open chat" sets a pending message id; scroll once the transcript
+ * for that chat is mounted.
+ */
+const QuoteScrollBridge: FC = () => {
+  const { activeChatId } = useActiveChat();
+  const { scrollToMessage } = useThreadViewport();
+  const aui = useAui();
+  const attemptedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!activeChatId) return;
+    const messageId = takePendingQuoteScroll(activeChatId);
+    if (!messageId) return;
+    if (attemptedRef.current === messageId) return;
+    attemptedRef.current = messageId;
+
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const tryScroll = () => {
+      const index = aui.thread
+        .getState()
+        .messages.findIndex((message) => message.id === messageId);
+      if (index !== -1) {
+        scrollToMessage(messageId);
+        return;
+      }
+      attempts += 1;
+      if (attempts < 40) {
+        timer = setTimeout(tryScroll, 100);
+      }
+    };
+
+    timer = setTimeout(tryScroll, 50);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeChatId, aui, scrollToMessage]);
+
+  return null;
 };
 
 /**
@@ -721,6 +766,7 @@ export const Thread: FC<ThreadProps> = ({
       <ComposerOwnsHitlContext.Provider value={waitingAction != null}>
         <ThreadViewportContext.Provider value={viewport}>
           <SelectionBookmarkBridge />
+          <QuoteScrollBridge />
           <ThreadPrimitive.Root className="aui-root aui-thread-root bg-background flex-1">
             {followsKeyboard ? (
               <IosKeyboardLayout seedAtZero={conversationId == null}>

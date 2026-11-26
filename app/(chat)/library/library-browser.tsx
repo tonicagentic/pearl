@@ -187,7 +187,11 @@ export function LibraryBrowser({
                   {quote.chatId ? (
                     <a
                       className="rounded-md border px-2.5 py-1 hover:bg-accent"
-                      href={`/chat/${quote.chatId}`}
+                      href={
+                        quote.messageId
+                          ? `/chat/${quote.chatId}#quote-${quote.messageId}`
+                          : `/chat/${quote.chatId}`
+                      }
                     >
                       Open chat
                     </a>

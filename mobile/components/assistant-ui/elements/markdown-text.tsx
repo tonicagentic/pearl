@@ -45,7 +45,17 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useQuoteSelection } from "@/components/assistant-ui/elements/quote-selection";
+import { useActiveChat } from "@/src/chat-context";
 import { plainTextFromReactNode } from "@/src/plain-text-from-node";
+import { queryKeys } from "@/src/query-client";
+import { listQuotes } from "@/src/quotes-client";
+import {
+  QuoteHighlightText,
+  wrapTextRanges,
+} from "@/src/wrap-text-ranges";
+import { findQuoteSpan } from "../../../../lib/library/quote-text";
+import { useAuiState } from "@assistant-ui/react-native";
+import { useQuery } from "@tanstack/react-query";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -63,6 +73,10 @@ import {
 import { useCSSVariable, useUniwind } from "uniwind";
 
 import { TEXT_METRICS, Text, textVariants } from "@/components/ui/text";
+
+/** Soft warm wash — mirrors web `--quote-highlight`. */
+const QUOTE_HIGHLIGHT_LIGHT = "rgba(234, 198, 80, 0.45)";
+const QUOTE_HIGHLIGHT_DARK = "rgba(160, 120, 40, 0.45)";
 
 const MONOSPACE = Platform.select({
   ios: "Menlo",
@@ -740,7 +754,44 @@ const StreamingMarkdownText: FC<
   );
 };
 
-const SettledMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
+function useMessageQuoteTexts(): readonly string[] {
+  const messageId = useAuiState((s) => s.message.id);
+  const { activeChatId } = useActiveChat();
+  const quotesQuery = useQuery({
+    queryKey: queryKeys.quotesForChat(activeChatId ?? ""),
+    queryFn: () => listQuotes(activeChatId),
+    enabled: Boolean(activeChatId),
+    staleTime: 30_000,
+  });
+
+  return useMemo(() => {
+    const rows = quotesQuery.data ?? [];
+    return rows
+      .filter((quote) => quote.messageId === messageId)
+      .map((quote) => quote.text);
+  }, [messageId, quotesQuery.data]);
+}
+
+const SettledMarkdownText: FC<MarkdownTextProps> = (props) => {
+  // QuoteSelectionProvider only wraps assistant replies — keep AUI/query
+  // hooks out of workspace previews and user bubbles.
+  const quoteSelection = useQuoteSelection();
+  if (quoteSelection) {
+    return (
+      <SettledQuotedMarkdownText {...props} quoteSelection={quoteSelection} />
+    );
+  }
+  return <SettledPlainMarkdownText {...props} />;
+};
+
+const SettledPlainMarkdownText: FC<
+  MarkdownTextProps & {
+    readonly quoteSelection?: {
+      readonly reportSelection: (text: string | null) => void;
+    };
+    readonly messageQuoteTexts?: readonly string[];
+  }
+> = ({ text, variant, quoteSelection, messageQuoteTexts = [] }) => {
   const { fallbackClass, typeStyle } = useMarkdownTypeStyle(variant);
   const baseOptions = useMarkdownOptions(variant);
   const renderer = useMemo(() => new MarkdownRenderer(text), [text]);
@@ -749,7 +800,9 @@ const SettledMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
     [baseOptions, renderer],
   );
   const elements = useMarkdown(text || " ", options);
-  const quoteSelection = useQuoteSelection();
+  const { theme } = useUniwind();
+  const quoteHighlight =
+    theme === "dark" ? QUOTE_HIGHLIGHT_DARK : QUOTE_HIGHLIGHT_LIGHT;
 
   if (!text) {
     return <View className="aui-md-root" />;
@@ -767,6 +820,19 @@ const SettledMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
           return <Fragment key={`md-v-${index}`}>{element}</Fragment>;
         }
         const blockText = plainTextFromReactNode(element);
+        const highlightRanges = messageQuoteTexts
+          .map((needle) => findQuoteSpan(blockText, needle))
+          .filter((span): span is NonNullable<typeof span> => span != null);
+        const painted =
+          highlightRanges.length > 0
+            ? wrapTextRanges(element, highlightRanges, (slice, key) => (
+                <QuoteHighlightText
+                  key={key}
+                  text={slice}
+                  backgroundColor={quoteHighlight}
+                />
+              ))
+            : element;
         const onSelectionChange = quoteSelection
           ? (event: TextInputSelectionChangeEvent) => {
               const { start, end } = event.nativeEvent.selection;
@@ -790,11 +856,28 @@ const SettledMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
             className={fallbackClass}
             onSelectionChange={onSelectionChange}
           >
-            {element}
+            {painted}
           </TextInput>
         );
       })}
     </View>
+  );
+};
+
+const SettledQuotedMarkdownText: FC<
+  MarkdownTextProps & {
+    readonly quoteSelection: {
+      readonly reportSelection: (text: string | null) => void;
+    };
+  }
+> = ({ quoteSelection, ...props }) => {
+  const messageQuoteTexts = useMessageQuoteTexts();
+  return (
+    <SettledPlainMarkdownText
+      {...props}
+      quoteSelection={quoteSelection}
+      messageQuoteTexts={messageQuoteTexts}
+    />
   );
 };
 

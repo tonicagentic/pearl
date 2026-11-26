@@ -72,6 +72,8 @@
   --input: oklch(0.9523 0.0028 84.6);
   --ring: oklch(0.708 0 0);
   --radius: 0.5rem;
+  /* Soft warm wash for saved Library quotes in chat threads. */
+  --quote-highlight: oklch(0.93 0.06 95 / 0.7);
 }
 
 .dark {
@@ -94,6 +96,12 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  --quote-highlight: oklch(0.45 0.08 95 / 0.45);
+}
+
+/* CSS Custom Highlight API — saved quote excerpts in chat threads. */
+::highlight(pearl-quote) {
+  background-color: var(--quote-highlight);
 }
 
 * {

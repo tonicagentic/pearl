@@ -18,8 +18,14 @@ function authHeaders(): Record<string, string> {
   };
 }
 
-export async function listQuotes(): Promise<readonly QuoteDto[]> {
-  const response = await fetch(`${AGENT_URL}/api/quotes`, {
+export async function listQuotes(
+  chatId?: string | null,
+): Promise<readonly QuoteDto[]> {
+  const url =
+    typeof chatId === "string" && chatId.trim() !== ""
+      ? `${AGENT_URL}/api/quotes?chatId=${encodeURIComponent(chatId.trim())}`
+      : `${AGENT_URL}/api/quotes`;
+  const response = await fetch(url, {
     headers: authHeaders(),
   });
   if (response.status === 401) {

@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { BookmarkIcon, CheckIcon } from "lucide-react-native";
 import { useAuiState } from "@assistant-ui/react-native";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { useCSSVariable } from "uniwind";
 
@@ -26,8 +27,9 @@ import {
   getActiveQuoteSelection,
   setActiveQuoteSelection,
 } from "@/src/active-quote-selection";
+import { queryKeys } from "@/src/query-client";
 import { MAX_QUOTE_LENGTH } from "../../../../lib/library/quote-text";
-import { createQuote } from "@/src/quotes-client";
+import { createQuote, type QuoteDto } from "@/src/quotes-client";
 import { subscribeSelectionBookmark } from "@/modules/text-selection-menu";
 
 type QuoteSelectionContextValue = {
@@ -39,26 +41,46 @@ const QuoteSelectionContext = createContext<QuoteSelectionContextValue | null>(
   null,
 );
 
-async function saveQuoteText(input: {
-  readonly text: string;
-  readonly chatId: string | null;
-  readonly messageId: string | null;
-}): Promise<void> {
-  await createQuote({
+function rememberChatQuote(queryClient: QueryClient, quote: QuoteDto): void {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.quotes });
+  const chatId = quote.chatId?.trim();
+  if (!chatId) return;
+  queryClient.setQueryData<readonly QuoteDto[]>(
+    queryKeys.quotesForChat(chatId),
+    (current) => {
+      if (!current) return [quote];
+      if (current.some((row) => row.id === quote.id)) return current;
+      return [quote, ...current];
+    },
+  );
+}
+
+async function saveQuoteText(
+  queryClient: QueryClient,
+  input: {
+    readonly text: string;
+    readonly chatId: string | null;
+    readonly messageId: string | null;
+  },
+): Promise<QuoteDto> {
+  const quote = await createQuote({
     text: input.text,
     chatId: input.chatId,
     messageId: input.messageId,
   });
+  rememberChatQuote(queryClient, quote);
+  return quote;
 }
 
 /** App-wide: native Bookmark menu → Library quote. Mount once near chat root. */
 export function SelectionBookmarkBridge() {
+  const queryClient = useQueryClient();
   useEffect(() => {
     const sub = subscribeSelectionBookmark((text) => {
       const active = getActiveQuoteSelection();
       const quoteText = (active?.text || text).trim();
       if (!quoteText) return;
-      void saveQuoteText({
+      void saveQuoteText(queryClient, {
         text: quoteText,
         chatId: active?.chatId ?? null,
         messageId: active?.messageId ?? null,
@@ -76,7 +98,7 @@ export function SelectionBookmarkBridge() {
         });
     });
     return () => sub.remove();
-  }, []);
+  }, [queryClient]);
   return null;
 }
 
@@ -158,6 +180,7 @@ export function SaveQuoteAction({
   const selection = useQuoteSelection();
   const { activeChatId } = useActiveChat();
   const messageId = useAuiState((s) => s.message.id);
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -182,7 +205,7 @@ export function SaveQuoteAction({
     const text = selection?.selectedText?.trim();
     if (!text || saving || saved) return;
     setSaving(true);
-    void saveQuoteText({
+    void saveQuoteText(queryClient, {
       text,
       chatId: activeChatId,
       messageId,
@@ -202,7 +225,7 @@ export function SaveQuoteAction({
           Haptics.NotificationFeedbackType.Error,
         ).catch(() => {});
       });
-  }, [activeChatId, messageId, saved, saving, selection]);
+  }, [activeChatId, messageId, queryClient, saved, saving, selection]);
 
   if (!markdown.trim() && !hasSelection) return null;
 
@@ -272,7 +295,7 @@ export function SaveQuoteAction({
                 if (!text || saving) return;
                 setSaving(true);
                 setError(null);
-                void saveQuoteText({
+                void saveQuoteText(queryClient, {
                   text,
                   chatId: activeChatId,
                   messageId,

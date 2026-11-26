@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   createLibraryQuote,
   listLibraryQuotes,
+  listLibraryQuotesForChat,
 } from "@/lib/db/library-quotes";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
@@ -16,7 +17,7 @@ async function requireViewer() {
   return viewer;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const viewer = await requireViewer();
   if (!viewer) {
     return NextResponse.json(
@@ -25,7 +26,10 @@ export async function GET() {
     );
   }
 
-  const quotes = await listLibraryQuotes(viewer.id);
+  const chatId = new URL(request.url).searchParams.get("chatId")?.trim();
+  const quotes = chatId
+    ? await listLibraryQuotesForChat(viewer.id, chatId)
+    : await listLibraryQuotes(viewer.id);
   return NextResponse.json({ quotes });
 }
 

@@ -58,6 +58,7 @@ import {
   listQuotes,
   type QuoteDto,
 } from "@/src/quotes-client";
+import { setPendingQuoteScroll } from "@/src/pending-quote-scroll";
 import { useStackSearch } from "@/src/use-stack-search";
 
 type KindFilter = "all" | "files" | "images" | "quotes";
@@ -87,7 +88,7 @@ export function LibraryScreen() {
 
   const quotesQuery = useQuery({
     queryKey: queryKeys.quotes,
-    queryFn: listQuotes,
+    queryFn: () => listQuotes(),
   });
 
   useFocusEffect(
@@ -316,8 +317,15 @@ export function LibraryScreen() {
   );
 
   const openQuoteChat = useCallback(
-    (chatId: string) => {
-      void onSelectChatFromDrawer(chatId);
+    (quote: QuoteDto) => {
+      if (!quote.chatId) return;
+      if (quote.messageId) {
+        setPendingQuoteScroll({
+          chatId: quote.chatId,
+          messageId: quote.messageId,
+        });
+      }
+      void onSelectChatFromDrawer(quote.chatId);
     },
     [onSelectChatFromDrawer],
   );
@@ -487,7 +495,7 @@ export function LibraryScreen() {
                               accessibilityRole="button"
                               accessibilityLabel="Open chat"
                               hitSlop={8}
-                              onPress={() => openQuoteChat(quote.chatId!)}
+                              onPress={() => openQuoteChat(quote)}
                               className="rounded-md border border-border px-2 py-1"
                             >
                               <Text variant="caption" weight="medium">

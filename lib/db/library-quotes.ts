@@ -44,6 +44,26 @@ export async function listLibraryQuotes(
   return rows.map((row) => toDto(row.quote, row.chatTitle ?? null));
 }
 
+/** Newest-first quotes saved from a single chat (for thread highlighting). */
+export async function listLibraryQuotesForChat(
+  userId: string,
+  chatId: string,
+): Promise<readonly LibraryQuoteDto[]> {
+  const rows = await db
+    .select({
+      quote: libraryQuote,
+      chatTitle: chat.title,
+    })
+    .from(libraryQuote)
+    .leftJoin(chat, eq(libraryQuote.chatId, chat.id))
+    .where(
+      and(eq(libraryQuote.userId, userId), eq(libraryQuote.chatId, chatId)),
+    )
+    .orderBy(desc(libraryQuote.createdAt));
+
+  return rows.map((row) => toDto(row.quote, row.chatTitle ?? null));
+}
+
 /**
  * Persist a quote. When chatId is set, it must belong to the user; otherwise
  * the chat link is dropped and the quote is still saved.

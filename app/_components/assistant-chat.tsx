@@ -80,6 +80,7 @@ import {
   CanvasProvider,
   useCanvas,
 } from "@/components/assistant-ui/elements/canvas-context";
+import { ChatQuotesProvider } from "@/components/assistant-ui/elements/chat-quotes-context";
 import { CanvasLibraryPanel } from "@/components/assistant-ui/elements/canvas-library-panel";
 import {
   CanvasSplitBody,
@@ -1034,6 +1035,7 @@ function AssistantChatSurfaceInner({
         getSendContext={getQuickSendContext}
       >
       <CanvasProvider chatId={chatId}>
+      <ChatQuotesProvider chatId={chatId}>
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-start justify-between gap-2 px-2 py-2 md:px-3">
             <AgentThreadChrome />
@@ -1100,6 +1102,7 @@ function AssistantChatSurfaceInner({
 
         <WebAttentionHeartbeat chatId={chatId} />
         <EveErrorToast />
+      </ChatQuotesProvider>
       </CanvasProvider>
       </QuickPathProvider>
       </ActiveCustomAgentProvider>
