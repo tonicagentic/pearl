@@ -19,7 +19,7 @@ export function AboutScreen() {
   return (
     <SafeAreaView
       style={[styles.root, { backgroundColor }]}
-      edges={["top", "left", "right", "bottom"]}
+      edges={["left", "right", "bottom"]}
     >
       <PearlIntroPager
         compact

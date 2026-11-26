@@ -86,6 +86,7 @@ export function FinancesScreen() {
       <ScrollView
         style={{ flex: 1, backgroundColor }}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
+        contentInsetAdjustmentBehavior="automatic"
       >
         <View
           style={{

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Alert, Platform, Pressable, View } from "react-native";
-import { Stack, router, useNavigation } from "expo-router";
+import { Alert, Platform, View } from "react-native";
+import { router, useNavigation } from "expo-router";
 import * as Haptics from "expo-haptics";
 import {
   BottomSheetModal,
@@ -15,16 +15,19 @@ import {
   type ThreadMessageLike,
 } from "@assistant-ui/react-native";
 import {
+  AlignJustifyIcon,
   MonitorIcon,
   SquarePenIcon,
 } from "lucide-react-native";
-import { useCSSVariable } from "uniwind";
 
 import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { EveAuthorization } from "@/components/assistant-ui/elements/authorization";
-import { HistorySidebarButton } from "@/components/navigation/drawer-button";
 import { useHistorySidebarOptional } from "@/components/navigation/drawer-context";
+import {
+  ScreenChrome,
+  type ScreenChromeAction,
+} from "@/components/navigation/screen-chrome";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { SignupSheet } from "@/components/signup-sheet";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
@@ -38,7 +41,6 @@ import {
   ThreadIdentityMenu,
   type ThreadIdentityAgentOption,
 } from "@/components/thread-identity-menu";
-import { Icon } from "@/components/ui/icon";
 import { StackScreen } from "@/components/ui/stack-screen";
 import { useAuth } from "@/src/auth";
 import { getAgentMode } from "@/src/agent-mode";
@@ -123,13 +125,6 @@ export function ChatScreen({
   /** Home Pearl tab: skip stack header/toolbar; autofocus without waiting for push. */
   embedded?: boolean;
 } = {}) {
-  // The safe-area container is a native codegen view, so uniwind's className
-  // binding cannot reach it; paint the theme background through style instead
-  // so the color extends under the status bar.
-  const backgroundColor = useCSSVariable("--color-background") as
-    | string
-    | undefined;
-  const foregroundColor = useCSSVariable("--color-foreground") as string | undefined;
   const {
     billingReady,
     markBillingReady,
@@ -1358,171 +1353,95 @@ export function ChatScreen({
     },
     [activeCustomAgent?.id, selectChat],
   );
-  return (
-    <StackScreen>
-      {embedded ? null : (
-        <Stack.Screen
-          options={{
-            headerShown: true,
-            title: "",
-            headerBackButtonDisplayMode: "minimal",
-            // System back (morphs from Delegate’s liquid-glass menu control).
-            headerBackVisible: true,
-            // iOS: omit headerTransparent / headerStyle so the system glass
-            // bar paints; contentStyle on the home stack still fills the scene.
-            ...(Platform.OS === "web"
-              ? { headerStyle: { backgroundColor } }
-              : {}),
-            // Native needs this too — without it the system back item can flash
-            // the default (light) tint for a frame on push.
-            headerTintColor: foregroundColor,
-            headerTitleStyle:
-              Platform.OS === "web" ? { color: foregroundColor } : undefined,
-            headerTitle: () => (
-              <ThreadIdentityMenu
-                name={activeCustomAgent?.name ?? "Pearl"}
-                accent={activeCustomAgent?.accent ?? PEARL_IDENTITY_ACCENT}
-                markShape={activeCustomAgent?.markShape}
-                markTalk={activeCustomAgent?.markTalk}
-                markBrows={activeCustomAgent?.markBrows}
-                markGaze={activeCustomAgent?.markGaze}
-                heightRatio={
-                  activeCustomAgent ? undefined : PEARL_MARK_HEIGHT_RATIO
-                }
-                projectLabel={projectLabel}
-                hasProject={Boolean(activeProjectId)}
-                canManageThread={Boolean(activeChatId)}
-                showAgentSettings={Boolean(activeCustomAgent)}
-                onAgentSettings={
-                  activeCustomAgent ? openAgentSettings : undefined
-                }
-                onAddOrChangeProject={openProjectPicker}
-                onRemoveProject={clearProject}
-                onViewCost={openCost}
-                onDelete={confirmDelete}
-                allowAgentSwitch={allowAgentSwitch}
-                agents={switchableAgents}
-                currentAgentId={activeCustomAgent?.id ?? null}
-                onSelectPearl={selectPearlAgent}
-                onSelectAgent={selectCustomAgent}
-              />
-            ),
-            headerRight:
-              Platform.OS === "web"
-                ? () => (
-                    <View className="flex-row items-center gap-2">
-                      {historyOpen || activeCustomAgent ? null : (
-                        <HistorySidebarButton onPress={openHistory} />
-                      )}
-                      {activeChatId && !activeCustomAgent ? (
-                        <>
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="New chat"
-                            className="h-10 w-10 items-center justify-center"
-                            onPress={openCompose}
-                          >
-                            <Icon
-                              as={SquarePenIcon}
-                              className="size-5 text-foreground"
-                            />
-                          </Pressable>
-                          <View className="w-2" />
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Computer"
-                            accessibilityState={{ selected: computerOpen }}
-                            className="h-10 w-10 items-center justify-center"
-                            onPress={toggleComputer}
-                          >
-                            <Icon
-                              as={MonitorIcon}
-                              className={
-                                computerOpen
-                                  ? "size-5 text-foreground"
-                                  : "size-5 text-muted-foreground"
-                              }
-                            />
-                          </Pressable>
-                        </>
-                      ) : null}
-                    </View>
-                  )
-                : Platform.OS === "android"
-                  ? () => (
-                      <View className="flex-row items-center gap-2">
-                        {historyOpen || activeCustomAgent ? null : (
-                          <HistorySidebarButton onPress={openHistory} />
-                        )}
-                        {activeChatId && !activeCustomAgent ? (
-                          <>
-                            <Pressable
-                              accessibilityRole="button"
-                              accessibilityLabel="New chat"
-                              className="h-10 w-10 items-center justify-center"
-                              onPress={openCompose}
-                            >
-                              <Icon
-                                as={SquarePenIcon}
-                                className="size-5 text-foreground"
-                              />
-                            </Pressable>
-                            <View className="w-2" />
-                            <Pressable
-                              accessibilityRole="button"
-                              accessibilityLabel="Computer"
-                              accessibilityState={{ selected: computerOpen }}
-                              className="h-10 w-10 items-center justify-center"
-                              onPress={toggleComputer}
-                            >
-                              <Icon
-                                as={MonitorIcon}
-                                className={
-                                  computerOpen
-                                    ? "size-5 text-foreground"
-                                    : "size-5 text-muted-foreground"
-                                }
-                              />
-                            </Pressable>
-                          </>
-                        ) : null}
-                      </View>
-                    )
-                  : undefined,
-          }}
-        />
-      )}
-      {!embedded && Platform.OS === "ios" ? (
-        <Stack.Toolbar placement="right">
-          {historyOpen || activeCustomAgent ? null : (
-            <Stack.Toolbar.View hidesSharedBackground>
-              <View style={{ width: 44, height: 44 }}>
-                <HistorySidebarButton onPress={openHistory} />
-              </View>
-            </Stack.Toolbar.View>
-          )}
-          <Stack.Toolbar.Button
-            icon="square.and.pencil"
-            accessibilityLabel="New chat"
-            onPress={openCompose}
-            tintColor={foregroundColor}
-            separateBackground
-            hidden={!activeChatId || Boolean(activeCustomAgent)}
-          />
-          <Stack.Toolbar.Spacer
-            width={8}
-            hidden={!activeChatId || Boolean(activeCustomAgent)}
-          />
-          <Stack.Toolbar.Button
-            icon="desktopcomputer"
-            accessibilityLabel="Computer"
-            selected={computerOpen}
-            onPress={toggleComputer}
-            tintColor={foregroundColor}
-            hidden={!activeChatId || Boolean(activeCustomAgent)}
-          />
-        </Stack.Toolbar>
-      ) : null}
+  const titleSlot = useMemo(
+    () => (
+      <ThreadIdentityMenu
+        name={activeCustomAgent?.name ?? "Pearl"}
+        accent={activeCustomAgent?.accent ?? PEARL_IDENTITY_ACCENT}
+        markShape={activeCustomAgent?.markShape}
+        markTalk={activeCustomAgent?.markTalk}
+        markBrows={activeCustomAgent?.markBrows}
+        markGaze={activeCustomAgent?.markGaze}
+        heightRatio={
+          activeCustomAgent ? undefined : PEARL_MARK_HEIGHT_RATIO
+        }
+        projectLabel={projectLabel}
+        hasProject={Boolean(activeProjectId)}
+        canManageThread={Boolean(activeChatId)}
+        showAgentSettings={Boolean(activeCustomAgent)}
+        onAgentSettings={
+          activeCustomAgent ? openAgentSettings : undefined
+        }
+        onAddOrChangeProject={openProjectPicker}
+        onRemoveProject={clearProject}
+        onViewCost={openCost}
+        onDelete={confirmDelete}
+        allowAgentSwitch={allowAgentSwitch}
+        agents={switchableAgents}
+        currentAgentId={activeCustomAgent?.id ?? null}
+        onSelectPearl={selectPearlAgent}
+        onSelectAgent={selectCustomAgent}
+      />
+    ),
+    [
+      activeChatId,
+      activeCustomAgent,
+      activeProjectId,
+      allowAgentSwitch,
+      clearProject,
+      confirmDelete,
+      openAgentSettings,
+      openCost,
+      openProjectPicker,
+      projectLabel,
+      selectCustomAgent,
+      selectPearlAgent,
+      switchableAgents,
+    ],
+  );
+  const chromeActions = useMemo((): readonly ScreenChromeAction[] => {
+    const hideThreadActions = !activeChatId || Boolean(activeCustomAgent);
+    return [
+      {
+        label: "Open history",
+        systemImage: "line.3.horizontal",
+        icon: AlignJustifyIcon,
+        onPress: openHistory,
+        hidden: historyOpen || Boolean(activeCustomAgent),
+      },
+      {
+        label: "New chat",
+        systemImage: "square.and.pencil",
+        icon: SquarePenIcon,
+        onPress: openCompose,
+        separateBackground: true,
+        hidden: hideThreadActions,
+      },
+      {
+        type: "spacer",
+        width: 8,
+        hidden: hideThreadActions,
+      },
+      {
+        label: "Computer",
+        systemImage: "desktopcomputer",
+        icon: MonitorIcon,
+        onPress: toggleComputer,
+        selected: computerOpen,
+        hidden: hideThreadActions,
+      },
+    ];
+  }, [
+    activeChatId,
+    activeCustomAgent,
+    computerOpen,
+    historyOpen,
+    openCompose,
+    openHistory,
+    toggleComputer,
+  ]);
+
+  const body = (
       <View style={{ flex: 1 }}>
         {!billingReady ? (
           <BillingGateScreen onReady={markBillingReady} />
@@ -1608,7 +1527,21 @@ export function ChatScreen({
           </EveEventsProvider>
         )}
       </View>
-    </StackScreen>
+  );
+
+  if (embedded) {
+    return <StackScreen>{body}</StackScreen>;
+  }
+
+  return (
+    <ScreenChrome
+      leading="back"
+      contentPaddingTop={0}
+      titleSlot={titleSlot}
+      actions={chromeActions}
+    >
+      {body}
+    </ScreenChrome>
   );
 }
 

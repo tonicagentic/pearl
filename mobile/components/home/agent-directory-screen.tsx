@@ -13,6 +13,7 @@ export function AgentDirectoryScreen() {
       <ScrollView
         className="flex-1 bg-background"
         contentContainerClassName="px-4 pb-10 pt-2"
+        contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
       >
         <AgentTemplateList

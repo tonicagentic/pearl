@@ -4,8 +4,8 @@ import { router } from "expo-router";
 import { useCSSVariable } from "uniwind";
 
 import { MarkdownRichEditor } from "@/components/markdown-rich-editor";
+import { ScreenChrome } from "@/components/navigation/screen-chrome";
 import { LoadingCenter } from "@/components/ui/loading-center";
-import { StackScreen } from "@/components/ui/stack-screen";
 import { Text } from "@/components/ui/text";
 import {
   deleteNoteRequest,
@@ -109,20 +109,23 @@ export function NoteEditorScreen({
     ]);
   }, [noteId, title]);
 
+  const headerTitle = title.trim() || note?.title || "Note";
+
   if (!note && !error) {
     return (
-      <StackScreen>
+      <ScreenChrome title="Note" leading="back" contentPaddingTop={0}>
         <LoadingCenter />
-      </StackScreen>
+      </ScreenChrome>
     );
   }
 
   return (
-    <StackScreen>
+    <ScreenChrome title={headerTitle} leading="back" contentPaddingTop={0}>
       <ScrollView
         className="flex-1 px-5"
         contentContainerClassName="pb-28 gap-4"
         contentContainerStyle={{ paddingTop: 16 }}
+        contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
       >
         {error ? (
@@ -173,6 +176,6 @@ export function NoteEditorScreen({
           </Pressable>
         </View>
       </ScrollView>
-    </StackScreen>
+    </ScreenChrome>
   );
 }

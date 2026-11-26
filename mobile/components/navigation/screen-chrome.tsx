@@ -6,7 +6,9 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { Stack } from "expo-router";
+import { useHeaderHeight } from "expo-router/react-navigation";
 import type { LucideIcon } from "lucide-react-native";
+import { ChevronLeftIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import {
@@ -17,7 +19,9 @@ import { usePearlDrawer } from "@/components/navigation/drawer-context";
 import { Icon } from "@/components/ui/icon";
 import { StackScreen } from "@/components/ui/stack-screen";
 
-const HIT = DRAWER_BUTTON_SIZE;
+/** Shared header control hit target (drawer, Android actions, custom back). */
+export const HEADER_CONTROL_SIZE = DRAWER_BUTTON_SIZE;
+const HIT = HEADER_CONTROL_SIZE;
 const IS_IOS = Platform.OS === "ios";
 /** System menu glyph — Toolbar.Button gets real liquid-glass press + circle. */
 const DRAWER_TOOLBAR_ICON = "line.3.horizontal" as const;
@@ -42,6 +46,8 @@ export type ScreenChromeAction =
       readonly onPress: () => void;
       readonly hidden?: boolean;
       readonly separateBackground?: boolean;
+      readonly selected?: boolean;
+      readonly disabled?: boolean;
     }
   | {
       readonly type: "menu";
@@ -74,14 +80,16 @@ export type ScreenChromeSearch = {
 type ScreenChromeProps = {
   readonly title?: string;
   readonly titleSlot?: ReactNode;
-  readonly leading?: "drawer" | "history" | "none";
+  /**
+   * - `drawer` / `history`: menu control that opens the Expo drawer
+   * - `back`: system back (or `onBack` when the screen is not stack-backed)
+   * - `none`: no leading control (system back still available on pushed screens)
+   */
+  readonly leading?: "drawer" | "history" | "back" | "none";
+  /** Custom back handler (e.g. workbench). Only used with `leading="back"`. */
+  readonly onBack?: () => void;
   readonly actions?: readonly ScreenChromeAction[];
   readonly search?: ScreenChromeSearch;
-  /**
-   * Legacy home underlap flag. Ignored on iOS — setting headerTransparent
-   * opts the bar out of Liquid Glass. Kept so call sites stay stable.
-   */
-  readonly transparentHeader?: boolean;
   /** When false, only header/toolbar chrome — caller owns the body shell. */
   readonly wrapBody?: boolean;
   readonly contentPaddingTop?: number;
@@ -103,30 +111,52 @@ function HistoryLeadingButton({
   );
 }
 
-function AndroidActionButton({
+function AndroidHeaderControl({
   label,
-  icon,
   onPress,
+  children,
+  disabled,
 }: {
   readonly label: string;
-  readonly icon?: LucideIcon;
   readonly onPress: () => void;
+  readonly children: ReactNode;
+  readonly disabled?: boolean;
 }) {
-  if (!icon) return null;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      disabled={disabled}
       onPress={onPress}
       style={{
         width: HIT,
         height: HIT,
         alignItems: "center",
         justifyContent: "center",
+        opacity: disabled ? 0.4 : 1,
       }}
     >
-      <Icon as={icon} className="size-5 text-foreground" />
+      {children}
     </Pressable>
+  );
+}
+
+function AndroidActionButton({
+  label,
+  icon,
+  onPress,
+  disabled,
+}: {
+  readonly label: string;
+  readonly icon?: LucideIcon;
+  readonly onPress: () => void;
+  readonly disabled?: boolean;
+}) {
+  if (!icon) return null;
+  return (
+    <AndroidHeaderControl label={label} onPress={onPress} disabled={disabled}>
+      <Icon as={icon} className="size-5 text-foreground" />
+    </AndroidHeaderControl>
   );
 }
 
@@ -137,7 +167,9 @@ function renderAndroidActions(actions: readonly ScreenChromeAction[]) {
     <View style={{ flexDirection: "row", alignItems: "center" }}>
       {visible.map((action, index) => {
         if (action.type === "spacer") {
-          return <View key={`spacer-${index}`} style={{ width: action.width ?? 8 }} />;
+          return (
+            <View key={`spacer-${index}`} style={{ width: action.width ?? 8 }} />
+          );
         }
         if (action.type === "menu") {
           const press =
@@ -159,6 +191,7 @@ function renderAndroidActions(actions: readonly ScreenChromeAction[]) {
             label={action.label}
             icon={action.icon}
             onPress={action.onPress}
+            disabled={action.disabled}
           />
         );
       })}
@@ -169,14 +202,20 @@ function renderAndroidActions(actions: readonly ScreenChromeAction[]) {
 /**
  * Shared drawer-destination chrome: Stack header options, 44×44 leading,
  * platform trailing actions, optional SearchBar, StackScreen body.
+ *
+ * Body rule: with the native header shown, wrap content in StackScreen /
+ * SheetScaffold (no SafeArea `top` edge). On iOS, Liquid Glass makes the
+ * header layout-transparent — pad the body by `useHeaderHeight()` so chips
+ * and titles are not drawn under the status bar. Hub scrollers should set
+ * `contentInsetAdjustmentBehavior="automatic"`.
  */
 export function ScreenChrome({
   title = "",
   titleSlot,
   leading = "drawer",
+  onBack,
   actions = [],
   search,
-  transparentHeader: _transparentHeader = false,
   wrapBody = true,
   contentPaddingTop = 12,
   children,
@@ -188,10 +227,20 @@ export function ScreenChrome({
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
-  // Keep the leading control on the peeked scene while the drawer is open.
+  // Liquid Glass forces a transparent header for layout; body starts at y=0
+  // unless we pad by the measured nav+status height.
+  const headerHeight = useHeaderHeight();
+  const bodyPadTop =
+    (IS_IOS ? headerHeight : 0) + contentPaddingTop;
   const showDrawerLeading = leading === "drawer" || leading === "history";
+  const showCustomBack = leading === "back" && Boolean(onBack);
+
   const androidLeading = showDrawerLeading ? (
     <HistoryLeadingButton variant="disc" />
+  ) : showCustomBack ? (
+    <AndroidHeaderControl label="Back" onPress={onBack!}>
+      <Icon as={ChevronLeftIcon} className="size-6 text-foreground" />
+    </AndroidHeaderControl>
   ) : null;
 
   const androidRight = renderAndroidActions(actions);
@@ -213,10 +262,10 @@ export function ScreenChrome({
             ? () => <>{titleSlot}</>
             : undefined,
           // iOS: omit headerLeft so the system back slot stays native.
-          // Drawer menu lives on Stack.Toolbar only.
+          // Drawer / custom-back live on Stack.Toolbar (iOS) or headerLeft (Android).
           headerLeft: IS_IOS
             ? undefined
-            : showDrawerLeading && androidLeading
+            : androidLeading
               ? () => (
                   <View
                     style={{
@@ -229,7 +278,8 @@ export function ScreenChrome({
                     {androidLeading}
                   </View>
                 )
-              : () => null,
+              : undefined,
+          headerBackVisible: showCustomBack ? false : undefined,
           headerRight:
             IS_IOS
               ? undefined
@@ -249,6 +299,15 @@ export function ScreenChrome({
             icon={DRAWER_TOOLBAR_ICON}
             accessibilityLabel="Open menu"
             onPress={openDrawer}
+          />
+        </Stack.Toolbar>
+      ) : null}
+      {IS_IOS && showCustomBack ? (
+        <Stack.Toolbar placement="left">
+          <Stack.Toolbar.Button
+            icon="chevron.left"
+            accessibilityLabel="Back"
+            onPress={onBack}
           />
         </Stack.Toolbar>
       ) : null}
@@ -282,6 +341,8 @@ export function ScreenChrome({
                   accessibilityLabel={action.label}
                   onPress={action.onPress}
                   separateBackground={action.separateBackground}
+                  selected={action.selected}
+                  disabled={action.disabled}
                   hidden
                 />
               );
@@ -323,6 +384,8 @@ export function ScreenChrome({
                 accessibilityLabel={action.label}
                 onPress={action.onPress}
                 separateBackground={action.separateBackground}
+                selected={action.selected}
+                disabled={action.disabled}
               />
             );
           })}
@@ -352,7 +415,7 @@ export function ScreenChrome({
   return (
     <StackScreen>
       {header}
-      <View style={{ flex: 1, paddingTop: contentPaddingTop }}>{children}</View>
+      <View style={{ flex: 1, paddingTop: bodyPadTop }}>{children}</View>
     </StackScreen>
   );
 }

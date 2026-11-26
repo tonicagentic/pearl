@@ -9,64 +9,18 @@ import { useDrawerProgress } from "expo-router/drawer";
 
 import { usePearlScreenBackground } from "@/src/navigation-theme";
 
-/** Rounded peek card (ChatGPT-style). */
-const SHEET_RADIUS = 38;
-const DRAWER_SCALE_FROM = 0.96;
-
 /**
- * Progress-driven scene chrome for Expo Router Drawer (`drawerType: "back"`):
- * rounded peek card + light scale as the panel is revealed behind.
- * The root stays transparent so the scale margin and corner cutouts show
- * the drawer surface. The dim covers only the sheet.
- * Wrap each drawer destination (or its nested stack layout).
+ * Scene shell for Expo Router Drawer (`drawerType: "back"`).
+ *
+ * Children stay in a plain `View` — never under a Reanimated transform /
+ * margin host. UIKit measures UINavigationBar safe area through ancestor
+ * transforms; wrapping the nested stack broke Liquid Glass headers so they
+ * sat under the Dynamic Island. The drawer still reveals this scene behind
+ * the panel; we only dim while open.
  */
 export function DrawerScene({ children }: { readonly children: ReactNode }) {
   const progress = useDrawerProgress();
   const sheetFill = usePearlScreenBackground();
-
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        scale: interpolate(
-          progress.value,
-          [0, 1],
-          [1, DRAWER_SCALE_FROM],
-          Extrapolation.CLAMP,
-        ),
-      },
-    ],
-    borderTopLeftRadius: interpolate(
-      progress.value,
-      [0, 1],
-      [0, SHEET_RADIUS],
-      Extrapolation.CLAMP,
-    ),
-    borderBottomLeftRadius: interpolate(
-      progress.value,
-      [0, 1],
-      [0, SHEET_RADIUS],
-      Extrapolation.CLAMP,
-    ),
-    borderTopRightRadius: interpolate(
-      progress.value,
-      [0, 1],
-      [0, SHEET_RADIUS],
-      Extrapolation.CLAMP,
-    ),
-    borderBottomRightRadius: interpolate(
-      progress.value,
-      [0, 1],
-      [0, SHEET_RADIUS],
-      Extrapolation.CLAMP,
-    ),
-    overflow: "hidden" as const,
-    shadowOpacity: interpolate(
-      progress.value,
-      [0, 1],
-      [0, 0.12],
-      Extrapolation.CLAMP,
-    ),
-  }));
 
   const dimStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
@@ -79,19 +33,7 @@ export function DrawerScene({ children }: { readonly children: ReactNode }) {
 
   return (
     <View style={styles.root}>
-      <Animated.View
-        style={[
-          styles.sheet,
-          {
-            backgroundColor: sheetFill,
-            shadowColor: "#000",
-            shadowRadius: 20,
-            shadowOffset: { width: -4, height: 0 },
-            elevation: 6,
-          },
-          sheetStyle,
-        ]}
-      >
+      <View style={[styles.sheet, { backgroundColor: sheetFill }]}>
         <View style={styles.content}>{children}</View>
         <Animated.View
           pointerEvents="none"
@@ -101,7 +43,7 @@ export function DrawerScene({ children }: { readonly children: ReactNode }) {
             { backgroundColor: "#000" },
           ]}
         />
-      </Animated.View>
+      </View>
     </View>
   );
 }

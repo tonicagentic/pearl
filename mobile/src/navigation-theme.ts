@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Platform, useColorScheme } from "react-native";
 import { DarkTheme, DefaultTheme, type Theme } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 /** Dark-safe fallbacks when CSS vars are briefly undefined (never light hex in dark). */
@@ -142,10 +143,14 @@ export function usePearlNavigationTheme(): Theme {
  * On iOS omit headerStyle / headerTransparent entirely so Expo Router uses
  * the system Liquid Glass bar (`usesSystemBackground`). Android keeps a
  * solid fill. Page color lives on contentStyle only.
+ *
+ * `statusBarTranslucent: true` forces `headerTopInsetEnabled` in Expo Router's
+ * native stack even when a drawer scene briefly reports a 0 top inset.
  */
 export function usePearlStackScreenOptions() {
   const backgroundColor = usePearlScreenBackground();
   const headerTintColor = usePearlHeaderTint();
+  const insets = useSafeAreaInsets();
   return useMemo(
     () => ({
       contentStyle: { backgroundColor },
@@ -156,7 +161,24 @@ export function usePearlStackScreenOptions() {
       headerShadowVisible: false as const,
       headerBackButtonDisplayMode: "minimal" as const,
       headerShown: true as const,
+      // Keep the native header below the status bar / Dynamic Island when the
+      // drawer scene has temporarily confused UIKit safe-area measurement.
+      statusBarTranslucent: true as const,
+      // Hint for any path that still reads RN insets for header padding.
+      safeAreaInsets: {
+        top: insets.top,
+        bottom: insets.bottom,
+        left: insets.left,
+        right: insets.right,
+      },
     }),
-    [backgroundColor, headerTintColor],
+    [
+      backgroundColor,
+      headerTintColor,
+      insets.bottom,
+      insets.left,
+      insets.right,
+      insets.top,
+    ],
   );
 }

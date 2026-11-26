@@ -1,17 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   ScrollView,
   TextInput,
   View,
 } from "react-native";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useCSSVariable } from "uniwind";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { RefreshCwIcon } from "lucide-react-native";
 
+import {
+  ScreenChrome,
+  type ScreenChromeAction,
+} from "@/components/navigation/screen-chrome";
 import { LoadingCenter } from "@/components/ui/loading-center";
-import { StackScreen } from "@/components/ui/stack-screen";
 import { Text } from "@/components/ui/text";
 import { openWebUrlExternally } from "@/src/open-web-url";
 import {
@@ -36,9 +38,6 @@ export function WorkbenchDetailScreen() {
   const [status, setStatus] = useState<PinStatusDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const foregroundColor = useCSSVariable("--color-foreground") as
-    | string
-    | undefined;
 
   const reload = useCallback(async () => {
     if (!id) return;
@@ -59,46 +58,25 @@ export function WorkbenchDetailScreen() {
     void reload();
   }, [reload]);
 
-  return (
-    <StackScreen>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: pin?.fullName ?? "Repo",
-          headerTintColor: foregroundColor,
-          headerBackButtonDisplayMode: "minimal",
-          headerRight:
-            Platform.OS === "ios"
-              ? undefined
-              : () => (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Refresh"
-                    className="min-h-11 justify-center px-2"
-                    onPress={() => void reload()}
-                  >
-                    <Text
-                      variant="label"
-                      style={
-                        foregroundColor ? { color: foregroundColor } : undefined
-                      }
-                    >
-                      Refresh
-                    </Text>
-                  </Pressable>
-                ),
-        }}
-      />
-      {Platform.OS === "ios" ? (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon="arrow.clockwise"
-            accessibilityLabel="Refresh"
-            onPress={() => void reload()}
-          />
-        </Stack.Toolbar>
-      ) : null}
+  const chromeActions = useMemo(
+    (): readonly ScreenChromeAction[] => [
+      {
+        label: "Refresh",
+        systemImage: "arrow.clockwise",
+        icon: RefreshCwIcon,
+        onPress: () => void reload(),
+      },
+    ],
+    [reload],
+  );
 
+  return (
+    <ScreenChrome
+      title={pin?.fullName ?? "Repo"}
+      leading="back"
+      contentPaddingTop={0}
+      actions={chromeActions}
+    >
       <View className="mb-2 flex-row gap-2 px-4 pt-2">
         {(
           [
@@ -145,7 +123,7 @@ export function WorkbenchDetailScreen() {
       ) : tab === "usage" && id ? (
         <UsageTab pinId={id} onOpenPearlBilling={() => router.navigate("/settings")} />
       ) : null}
-    </StackScreen>
+    </ScreenChrome>
   );
 }
 

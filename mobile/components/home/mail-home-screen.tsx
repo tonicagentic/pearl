@@ -355,7 +355,6 @@ export function MailHomeScreen() {
     <View style={{ flex: 1, backgroundColor }}>
       <ScreenChrome
         wrapBody={false}
-        transparentHeader
         leading="history"
         titleSlot={
           showTabSwitcher ? (

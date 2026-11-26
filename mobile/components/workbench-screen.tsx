@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Platform,
   Pressable,
   View,
 } from "react-native";
-import { Stack, useIsFocused, useRouter } from "expo-router";
-import { ChevronLeftIcon } from "lucide-react-native";
-import { useCSSVariable } from "uniwind";
+import { useIsFocused, useRouter } from "expo-router";
+import { RefreshCwIcon } from "lucide-react-native";
 
-import { Icon } from "@/components/ui/icon";
-import { StackScreen } from "@/components/ui/stack-screen";
+import {
+  ScreenChrome,
+  type ScreenChromeAction,
+} from "@/components/navigation/screen-chrome";
 import { Text } from "@/components/ui/text";
 import {
   createWorkbenchPin,
@@ -36,9 +36,6 @@ export function WorkbenchScreen() {
   const [suggested, setSuggested] = useState<SuggestedPinDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const foregroundColor = useCSSVariable("--color-foreground") as
-    | string
-    | undefined;
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -74,73 +71,26 @@ export function WorkbenchScreen() {
     }
   }, [reload, suggested]);
 
-  return (
-    <StackScreen>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: "Repos",
-          headerTintColor: foregroundColor,
-          headerBackVisible: false,
-          // iOS: Toolbar.Button owns back — do not set headerLeft.
-          headerLeft:
-            Platform.OS === "ios"
-              ? undefined
-              : () => (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Back"
-                    hitSlop={12}
-                    className="h-10 w-10 items-center justify-center"
-                    onPress={() => goHomeOrBack(router)}
-                  >
-                    <Icon
-                      as={ChevronLeftIcon}
-                      className="size-6 text-foreground"
-                    />
-                  </Pressable>
-                ),
-          headerRight:
-            Platform.OS === "ios"
-              ? undefined
-              : () => (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Refresh"
-                    className="min-h-11 justify-center px-2"
-                    onPress={() => void reload()}
-                  >
-                    <Text
-                      variant="label"
-                      style={
-                        foregroundColor ? { color: foregroundColor } : undefined
-                      }
-                    >
-                      Refresh
-                    </Text>
-                  </Pressable>
-                ),
-        }}
-      />
-      {focused && Platform.OS === "ios" ? (
-        <>
-          <Stack.Toolbar placement="left">
-            <Stack.Toolbar.Button
-              icon="chevron.left"
-              accessibilityLabel="Back"
-              onPress={() => goHomeOrBack(router)}
-            />
-          </Stack.Toolbar>
-          <Stack.Toolbar placement="right">
-            <Stack.Toolbar.Button
-              icon="arrow.clockwise"
-              accessibilityLabel="Refresh"
-              onPress={() => void reload()}
-            />
-          </Stack.Toolbar>
-        </>
-      ) : null}
+  const chromeActions = useMemo((): readonly ScreenChromeAction[] => {
+    if (!focused) return [];
+    return [
+      {
+        label: "Refresh",
+        systemImage: "arrow.clockwise",
+        icon: RefreshCwIcon,
+        onPress: () => void reload(),
+      },
+    ];
+  }, [focused, reload]);
 
+  return (
+    <ScreenChrome
+      title="Repos"
+      leading="back"
+      onBack={() => goHomeOrBack(router)}
+      contentPaddingTop={0}
+      actions={chromeActions}
+    >
       {error ? (
         <Pressable className="px-4 py-3" onPress={() => void reload()}>
           <Text className="text-sm text-destructive">{error} Tap to retry.</Text>
@@ -210,6 +160,6 @@ export function WorkbenchScreen() {
           </Pressable>
         )}
       />
-    </StackScreen>
+    </ScreenChrome>
   );
 }

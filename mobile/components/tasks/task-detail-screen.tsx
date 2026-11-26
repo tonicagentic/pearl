@@ -1,20 +1,21 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  Platform,
   Pressable,
   ScrollView,
   TextInput,
   View,
 } from "react-native";
-import { router, Stack } from "expo-router";
+import { router } from "expo-router";
 import { CheckIcon, MoreHorizontalIcon, RotateCcwIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
+import {
+  ScreenChrome,
+  type ScreenChromeAction,
+} from "@/components/navigation/screen-chrome";
 import { TaskDateField } from "@/components/tasks/task-date-field";
-import { Icon } from "@/components/ui/icon";
 import { LoadingCenter } from "@/components/ui/loading-center";
-import { StackScreen } from "@/components/ui/stack-screen";
 import { Text, textVariants } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import {
@@ -39,9 +40,6 @@ export function TaskDetailScreen({
   const [reviewDate, setReviewDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
-  const foregroundColor = useCSSVariable("--color-foreground") as
-    | string
-    | undefined;
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
@@ -204,65 +202,32 @@ export function TaskDetailScreen({
 
   const resolved = issue?.status === "resolved";
   const headerTitle = issue?.title || "Task";
+  const chromeActions = useMemo((): readonly ScreenChromeAction[] => {
+    if (issue === null && !error) return [];
+    return [
+      {
+        label: resolved ? "Reopen task" : "Complete task",
+        systemImage: resolved ? "arrow.uturn.backward" : "checkmark",
+        icon: resolved ? RotateCcwIcon : CheckIcon,
+        onPress: toggleResolved,
+        disabled: !issue || busy,
+      },
+      {
+        label: "More actions",
+        systemImage: "ellipsis",
+        icon: MoreHorizontalIcon,
+        onPress: openOverflow,
+      },
+    ];
+  }, [busy, error, issue, openOverflow, resolved, toggleResolved]);
 
   return (
-    <StackScreen>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: headerTitle,
-          headerBackButtonDisplayMode: "minimal",
-          headerTintColor: foregroundColor,
-          headerRight:
-            Platform.OS === "ios"
-              ? undefined
-              : () => (
-                  <View className="flex-row items-center">
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        resolved ? "Reopen task" : "Complete task"
-                      }
-                      className="h-10 w-10 items-center justify-center"
-                      disabled={!issue || busy}
-                      onPress={toggleResolved}
-                    >
-                      <Icon
-                        as={resolved ? RotateCcwIcon : CheckIcon}
-                        className="size-5 text-foreground"
-                      />
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="More actions"
-                      className="h-10 w-10 items-center justify-center"
-                      onPress={openOverflow}
-                    >
-                      <Icon
-                        as={MoreHorizontalIcon}
-                        className="size-5 text-foreground"
-                      />
-                    </Pressable>
-                  </View>
-                ),
-        }}
-      />
-      {Platform.OS === "ios" ? (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon={resolved ? "arrow.uturn.backward" : "checkmark"}
-            accessibilityLabel={resolved ? "Reopen task" : "Complete task"}
-            disabled={!issue || busy}
-            onPress={toggleResolved}
-          />
-          <Stack.Toolbar.Button
-            icon="ellipsis"
-            accessibilityLabel="More actions"
-            onPress={openOverflow}
-          />
-        </Stack.Toolbar>
-      ) : null}
-
+    <ScreenChrome
+      title={headerTitle}
+      leading="back"
+      contentPaddingTop={0}
+      actions={chromeActions}
+    >
       {issue === null && !error ? (
         <LoadingCenter />
       ) : (
@@ -318,6 +283,6 @@ export function TaskDetailScreen({
           </View>
         </ScrollView>
       )}
-    </StackScreen>
+    </ScreenChrome>
   );
 }

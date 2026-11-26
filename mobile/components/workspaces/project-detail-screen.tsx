@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
@@ -13,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
-import { router, Stack } from "expo-router";
+import { router } from "expo-router";
 import {
   CheckIcon,
   MoreHorizontalIcon,
@@ -22,11 +23,14 @@ import {
 import { useCSSVariable } from "uniwind";
 
 import { revealChatThread } from "@/components/chat-history-push";
+import {
+  ScreenChrome,
+  type ScreenChromeAction,
+} from "@/components/navigation/screen-chrome";
 import { ProjectMark } from "@/components/project-mark";
 import { CreateTaskModal } from "@/components/tasks/create-task-modal";
 import { Icon } from "@/components/ui/icon";
 import { LoadingCenter } from "@/components/ui/loading-center";
-import { StackScreen } from "@/components/ui/stack-screen";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { listArtifacts } from "@/src/artifacts-client";
@@ -550,12 +554,29 @@ export function ProjectDetailScreen({
     ]);
   }, []);
 
+  const chromeActions = useMemo((): readonly ScreenChromeAction[] => {
+    if (!workspace && !error) return [];
+    return [
+      {
+        label: "Add",
+        systemImage: "plus",
+        icon: PlusIcon,
+        onPress: openPlusMenu,
+      },
+      {
+        label: "More",
+        systemImage: "ellipsis",
+        icon: MoreHorizontalIcon,
+        onPress: openOverflow,
+      },
+    ];
+  }, [error, openOverflow, openPlusMenu, workspace]);
+
   if (!workspace && !error) {
     return (
-      <StackScreen>
-        <Stack.Screen options={{ title: "Project" }} />
+      <ScreenChrome title="Project" leading="back" contentPaddingTop={0}>
         <LoadingCenter />
-      </StackScreen>
+      </ScreenChrome>
     );
   }
 
@@ -568,59 +589,17 @@ export function ProjectDetailScreen({
   const projectChats = workspace?.chats ?? [];
 
   return (
-    <StackScreen>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: workspace?.project.name || "Project",
-          headerBackButtonDisplayMode: "minimal",
-          headerTintColor: foregroundColor,
-          headerRight:
-            Platform.OS === "ios"
-              ? undefined
-              : () => (
-                  <View className="flex-row items-center gap-1">
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Add"
-                      className="h-10 w-10 items-center justify-center"
-                      onPress={openPlusMenu}
-                    >
-                      <Icon as={PlusIcon} className="size-5 text-foreground" />
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="More"
-                      className="h-10 w-10 items-center justify-center"
-                      onPress={openOverflow}
-                    >
-                      <Icon
-                        as={MoreHorizontalIcon}
-                        className="size-5 text-foreground"
-                      />
-                    </Pressable>
-                  </View>
-                ),
-        }}
-      />
-      {Platform.OS === "ios" ? (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon="plus"
-            accessibilityLabel="Add"
-            onPress={openPlusMenu}
-          />
-          <Stack.Toolbar.Button
-            icon="ellipsis"
-            accessibilityLabel="More"
-            onPress={openOverflow}
-          />
-        </Stack.Toolbar>
-      ) : null}
+    <ScreenChrome
+      title={workspace?.project.name || "Project"}
+      leading="back"
+      contentPaddingTop={0}
+      actions={chromeActions}
+    >
       <ScrollView
         className="flex-1"
         contentContainerClassName="px-5 pb-28 gap-6"
         contentContainerStyle={{ paddingTop: 12 }}
+        contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
       >
         {error ? (
@@ -878,7 +857,7 @@ export function ProjectDetailScreen({
         open={createTaskOpen}
         projectId={projectId}
       />
-    </StackScreen>
+    </ScreenChrome>
   );
 }
 
