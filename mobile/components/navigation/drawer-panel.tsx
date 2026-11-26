@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { router, usePathname } from "expo-router";
 import {
+  BotIcon,
   FolderIcon,
   InboxIcon,
   LibraryIcon,
@@ -48,7 +49,8 @@ const FOOTER_FADE_OVERHANG = 56;
 /** Search row inside the dock (paddingTop 8 + 40px control). */
 const FOOTER_SEARCH_ROW = 48;
 
-const NAV_ROWS = [
+/** Rows under the Track section label (not Library / Delegate). */
+const TRACK_ROWS = [
   {
     label: "Tasks",
     href: "/tasks",
@@ -63,11 +65,6 @@ const NAV_ROWS = [
     label: "Notes",
     href: "/notes",
     Icon: NotebookPenIcon,
-  },
-  {
-    label: "Library",
-    href: "/library",
-    Icon: LibraryIcon,
   },
   {
     label: "Projects",
@@ -95,8 +92,11 @@ export function DrawerPanel({
   readonly navigation?: DrawerPanelNav;
 } = {}) {
   const insets = useSafeAreaInsets();
-  const { closeDrawer: closePearlDrawer, onSelectChatFromDrawer } =
-    usePearlDrawer();
+  const {
+    closeDrawer: closePearlDrawer,
+    onSelectChatFromDrawer,
+    notifyChatSelectedFromDrawer,
+  } = usePearlDrawer();
   const closeDrawer = useCallback(() => {
     if (navigation?.closeDrawer) {
       navigation.closeDrawer();
@@ -156,11 +156,13 @@ export function DrawerPanel({
       });
       return;
     }
+    // Force the Chat tab (Track is only via the home switcher).
+    notifyChatSelectedFromDrawer({ tab: "pearl" });
     newChat();
     requestAnimationFrame(() => {
       router.navigate("/");
     });
-  }, [closeDrawer, isAnonymous, newChat]);
+  }, [closeDrawer, isAnonymous, newChat, notifyChatSelectedFromDrawer]);
 
   const openProfile = useCallback(() => {
     closeDrawer();
@@ -242,7 +244,14 @@ export function DrawerPanel({
           onPress={openNewChat}
           selected={newChatSelected}
         />
-        {NAV_ROWS.map((row) => (
+        <DrawerLinkRow
+          label="Library"
+          icon={LibraryIcon}
+          onPress={() => go("/library")}
+          selected={isDrawerHrefActive(pathname, "/library")}
+        />
+        <DrawerSectionLabel>Track</DrawerSectionLabel>
+        {TRACK_ROWS.map((row) => (
           <DrawerLinkRow
             key={row.href}
             label={row.label}
@@ -251,6 +260,12 @@ export function DrawerPanel({
             selected={isDrawerHrefActive(pathname, row.href)}
           />
         ))}
+        <DrawerLinkRow
+          label="Delegate"
+          icon={BotIcon}
+          onPress={() => go("/agents")}
+          selected={isDrawerHrefActive(pathname, "/agents")}
+        />
         <DrawerSectionLabel>Recent chats</DrawerSectionLabel>
       </View>
     </View>

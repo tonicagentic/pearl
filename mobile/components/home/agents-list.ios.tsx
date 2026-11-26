@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import {
   Button,
@@ -30,16 +30,13 @@ import {
   scrollEdgeEffectStyle,
   shapes,
 } from "@expo/ui/swift-ui/modifiers";
+
 import {
   AgentMark,
   agentListSubtitle,
   pearlMarkMetrics,
 } from "@/components/custom-agents/agent-mark";
 import { EmptyAgentsState } from "@/components/home/empty-agents-state";
-import type { HistoryChatActionHandlers } from "@/components/home/history-list";
-import type { HomeTab } from "@/components/home/home-tab";
-import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
-import { Text as AppText } from "@/components/ui/text";
 import { useActiveChat } from "@/src/chat-context";
 import {
   deleteCustomAgentRequest,
@@ -54,36 +51,24 @@ import {
   DEFAULT_AGENT_MARK_HEIGHT_RATIO,
   DEFAULT_AGENT_MARK_SHAPE,
   DEFAULT_AGENT_MARK_TALK,
-  PEARL_MARK_HEIGHT_RATIO,
   type AgentMarkBrows,
   type AgentMarkGaze,
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "../../../lib/custom-agents/mark";
 
-/** Circular eye-mark size for Agents list rows (Grok bots). */
 const AGENT_MARK_SIZE = 40;
-/** Pearl tab hero mark. */
-const PEARL_HERO_SIZE = 88;
-/** Shared horizontal inset for agent/nav rows. */
 const ROW_LEADING = 20;
 
-export type { HistoryChatActionHandlers } from "@/components/home/history-list";
-
-/**
- * iOS home body: Pearl compose surface, or Agents list.
- */
-export function HistoryListIOS({
-  tab,
+/** iOS Delegate list (SwiftUI List + swipe delete). */
+export function AgentsListIOS({
   onOpenChat,
   bottomInset = 0,
 }: {
-  readonly tab: HomeTab;
   readonly onOpenChat: () => void;
-  readonly actions?: HistoryChatActionHandlers;
   readonly bottomInset?: number;
 }) {
-  const { newChat, selectChat } = useActiveChat();
+  const { selectChat } = useActiveChat();
   const backgroundColor = usePearlScreenBackground();
   const clearRow = backgroundColor;
 
@@ -119,11 +104,6 @@ export function HistoryListIOS({
     [onOpenChat, selectChat],
   );
 
-  const openPearl = useCallback(() => {
-    newChat();
-    onOpenChat();
-  }, [newChat, onOpenChat]);
-
   const deleteAgent = useCallback((agent: CustomAgentDto) => {
     Alert.alert(
       "Delete agent?",
@@ -151,43 +131,6 @@ export function HistoryListIOS({
       ],
     );
   }, []);
-
-  if (tab === "pearl") {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor,
-          alignItems: "center",
-          justifyContent: "center",
-          paddingBottom: bottomInset,
-        }}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Pearl"
-          className="items-center active:opacity-80"
-          style={{ gap: 10 }}
-          onPress={openPearl}
-        >
-          <AgentMark
-            accent={PEARL_IDENTITY_ACCENT}
-            size={PEARL_HERO_SIZE}
-            markShape="oval"
-            markTalk="hinge"
-            markBrows={DEFAULT_AGENT_MARK_BROWS}
-            markGaze={DEFAULT_AGENT_MARK_GAZE}
-            heightRatio={PEARL_MARK_HEIGHT_RATIO}
-            motion="idle"
-            eyeMotion="idle"
-          />
-          <AppText variant="label" weight="semibold">
-            Pearl
-          </AppText>
-        </Pressable>
-      </View>
-    );
-  }
 
   const agentsEmpty = agents !== null && orderedAgents.length === 0;
 
@@ -269,7 +212,6 @@ export function HistoryListIOS({
   );
 }
 
-/** Full-row hit target: plain Buttons only hit visible labels unless shaped. */
 const FULL_ROW_HIT = [
   contentShape(shapes.rectangle()),
   frame({ maxWidth: 9999, alignment: "leading" as const }),
@@ -295,7 +237,6 @@ function AgentListMark({
   const metrics = pearlMarkMetrics(size, heightRatio);
   return (
     <RNHostView matchContents>
-      {/* Let the SwiftUI row own taps — burst Pressable would steal them. */}
       <View
         pointerEvents="none"
         style={{ width: metrics.width, height: metrics.layoutHeight }}

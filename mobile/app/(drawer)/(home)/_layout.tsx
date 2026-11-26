@@ -4,14 +4,14 @@ import { DrawerOpenSync } from "@/components/navigation/drawer-context";
 import { DrawerScene } from "@/components/navigation/drawer-scene";
 import { usePearlStackScreenOptions } from "@/src/navigation-theme";
 
-/** Keep Mail/Delegate under /chat pushes so native back morphs to the menu. */
+/** Keep home under /chat pushes so native back morphs to the menu. */
 export const unstable_settings = {
   anchor: "index",
 };
 
 /**
- * Home stack inside the drawer: Mail (Chat|Delegate) plus pushed /chat for
- * custom-agent threads — restores native back and Stack.Toolbar chrome.
+ * Home stack inside the drawer: Chat|Track plus pushed /chat for guest /
+ * history Pearl threads. Agent threads live under /agents/chat.
  * Do not set headerTransparent / headerStyle on iOS — that opts out of glass.
  */
 export default function HomeStackLayout() {

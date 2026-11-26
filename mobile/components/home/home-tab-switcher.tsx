@@ -24,7 +24,7 @@ const CAPSULE_MIN_WIDTH = 210;
 const CAPSULE_RADIUS = 18;
 
 /**
- * Chat | Delegate control for the home header.
+ * Chat | Track control for the home header.
  * iOS: native segmented Picker with SwiftUI `glassEffect` (no RN glass wrap —
  * wrapping stacked a second capsule on the system segmented fill).
  * Android: custom liquid-glass shell + pressable segments.
@@ -61,7 +61,7 @@ export function HomeTabSwitcher({
         <Picker
           selection={tab}
           onSelectionChange={(value) => {
-            if (value === "pearl" || value === "agents") onChange(value);
+            if (value === "pearl" || value === "track") onChange(value);
           }}
           modifiers={modifiers}
         >

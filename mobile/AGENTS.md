@@ -25,10 +25,10 @@ Run lint and typecheck before declaring any task done.
 
 ## Navigation & Routing
 
-Root `app/_layout.tsx` is an auth-gated **Stack** (sign-in, workbench, browser modal). Signed-in destinations live under **`app/(drawer)/`**: an Expo Router `Drawer` (`drawerType: "back"`) with custom `drawerContent` (Tasks, Library, Workspaces, history list, Chat pill, Profile).
+Root `app/_layout.tsx` is an auth-gated **Stack** (sign-in, workbench, browser modal). Signed-in destinations live under **`app/(drawer)/`**: an Expo Router `Drawer` (`drawerType: "back"`) with custom `drawerContent` (New Chat, Library, Track section, Delegate, recent chats, Profile).
 
-- **Drawer siblings:** `index` (New Chat + Chat|Delegate switcher), `tasks`, `library`, `workspaces`, `history`, `settings`.
-- **Nested stacks only for details:** `tasks/[id]`, `workspaces/projects/...`, `settings/*` children.
+- **Drawer siblings:** `(home)` (New Chat + Chat|Track switcher), `agents` (Delegate), `tasks`, `goals`, `notes`, `library`, `workspaces`, `finances`, `history`, `settings`.
+- **Nested stacks only for details:** `tasks/[id]`, `workspaces/projects/...`, `agents/chat`, `settings/*` children.
 - Non-route UI lives in `components/` (`navigation/`, `home/`, `tasks/`, `library/`, `workspaces/`, `history/`, `settings/`) and `src/`.
 
 The custom entry (`index.ts`) imports `./global.css` (uniwind) and patches streaming fetch before `expo-router/entry`.

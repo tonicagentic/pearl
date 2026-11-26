@@ -35,8 +35,8 @@ function resolveDrawerNav(navigation: DrawerNav): DrawerNav | null {
 }
 
 export type HomeChatSelectOptions = {
-  /** Which Mail home tab to show under a pushed /chat (Delegate for agents). */
-  readonly tab?: "pearl" | "agents";
+  /** Which New Chat home tab to show (Chat | Track). */
+  readonly tab?: "pearl" | "track";
 };
 
 type HomeChatHandler = (options?: HomeChatSelectOptions) => void;
@@ -146,11 +146,10 @@ export function usePearlDrawer() {
       if (!ok) return;
       const isAgentThread = getActiveCustomAgent() != null;
       closeDrawer();
-      // Pearl threads stay embedded on home; custom agents push /chat over
-      // Delegate so native back morphs into the menu control.
+      // Pearl threads stay embedded on home; custom agents open under
+      // Delegate so native back returns to the agents list.
       if (isAgentThread) {
-        ctx.notifyChatSelectedFromDrawer({ tab: "agents" });
-        router.push("/chat", { withAnchor: true });
+        router.push("/agents/chat", { withAnchor: true });
         return;
       }
       ctx.notifyChatSelectedFromDrawer({ tab: "pearl" });
@@ -166,6 +165,7 @@ export function usePearlDrawer() {
     closeDrawer,
     toggleDrawer,
     setHomeChatHandler: ctx.setHomeChatHandler,
+    notifyChatSelectedFromDrawer: ctx.notifyChatSelectedFromDrawer,
     onSelectChatFromDrawer,
     open: ctx.open,
     swipeEnabled: ctx.swipeEnabled,
@@ -203,8 +203,7 @@ export function usePearlDrawerOptional() {
       const isAgentThread = getActiveCustomAgent() != null;
       closeDrawer();
       if (isAgentThread) {
-        ctx.notifyChatSelectedFromDrawer({ tab: "agents" });
-        router.push("/chat", { withAnchor: true });
+        router.push("/agents/chat", { withAnchor: true });
         return;
       }
       ctx.notifyChatSelectedFromDrawer({ tab: "pearl" });

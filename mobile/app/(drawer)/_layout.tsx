@@ -52,6 +52,14 @@ function PearlDrawerNavigator() {
         }}
       />
       <Drawer.Screen
+        name="agents"
+        options={{
+          title: "Delegate",
+          headerShown: false,
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
         name="tasks"
         options={{
           title: "Tasks",

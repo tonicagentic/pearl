@@ -4,15 +4,14 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { Alert, AppState, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
-import { MoreHorizontalIcon, PlusIcon, SquarePenIcon } from "lucide-react-native";
+import { MoreHorizontalIcon, SquarePenIcon } from "lucide-react-native";
 import { useCSSVariable } from "uniwind";
 
 import { ChatScreen } from "@/components/chat-screen";
-import { HomeTabBody } from "@/components/home/home-tab-body";
-import { CreateAgentModal } from "@/components/home/create-agent-modal";
 import { useHistorySidebar } from "@/components/navigation/drawer-context";
 import {
   ScreenChrome,
@@ -20,23 +19,26 @@ import {
 } from "@/components/navigation/screen-chrome";
 import type { HomeTab } from "@/components/home/home-tab";
 import { HomeTabSwitcher } from "@/components/home/home-tab-switcher";
-import {
-  SIGN_IN_CARD_CLEARANCE,
-  SignInForNewChatCard,
-} from "@/components/home/sign-in-for-new-chat-card";
+import { SignInForNewChatCard } from "@/components/home/sign-in-for-new-chat-card";
+import { TrackScreen } from "@/components/home/track-screen";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import { getChat } from "@/src/chats-client";
-import type { CustomAgentDto } from "@/src/custom-agents-client";
 import { fetchProjects } from "@/src/projects-client";
 import type { ThreadTraceEvent } from "@/src/thread-trace";
+import {
+  getTrackShowFinance,
+  loadTrackShowFinance,
+  setTrackShowFinance,
+  subscribeTrackShowFinance,
+} from "@/src/track-finance-pref";
 
 /**
- * Mail-style home: history sidebar button left; Chat|Delegate switcher on the
- * empty Pearl / Agents tabs. An active Pearl chat drops the switcher and shows
+ * Mail-style home: history sidebar button left; Chat|Track switcher on the
+ * empty Pearl / Track tabs. An active Pearl chat drops the switcher and shows
  * New chat + thread details on the right. Profile lives in the drawer dock.
  */
 export function MailHomeScreen() {
@@ -54,12 +56,10 @@ export function MailHomeScreen() {
     chats,
     deleteChat,
     newChat,
-    selectChat,
     reloadChats,
   } = useChats();
 
   const [homeTab, setHomeTab] = useState<HomeTab>("pearl");
-  const [createAgentOpen, setCreateAgentOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
   const [costEvents, setCostEvents] = useState<readonly ThreadTraceEvent[]>(
     [],
@@ -80,12 +80,23 @@ export function MailHomeScreen() {
   // Pearl tab = fresh compose + keyboard. Armed while the draft is live so
   // callback identity churn does not wipe mid-compose.
   const pearlComposeArmedRef = useRef(false);
-  const showAgentsPlus = homeTab === "agents" && !isAnonymous;
+
+  const showFinance = useSyncExternalStore(
+    subscribeTrackShowFinance,
+    getTrackShowFinance,
+    getTrackShowFinance,
+  );
+
+  useEffect(() => {
+    void loadTrackShowFinance();
+  }, []);
+
   // A live Pearl thread takes the trailing slot for New chat + details.
   const pearlThreadActive =
     homeTab === "pearl" && activeChatId != null && activeCustomAgent == null;
   const showPearlThreadChrome = pearlThreadActive;
   const showTabSwitcher = !pearlThreadActive;
+  const showTrackMenu = homeTab === "track" && !isAnonymous;
 
   const armPearlCompose = useCallback(() => {
     if (pearlComposeArmedRef.current) return;
@@ -135,7 +146,7 @@ export function MailHomeScreen() {
     return () => subscription.remove();
   }, []);
 
-  // Agents → Pearl while home stays focused (focus effect does not re-fire).
+  // Track → Pearl while home stays focused (focus effect does not re-fire).
   useEffect(() => {
     if (homeTab !== "pearl" || !billingReady) {
       pearlComposeArmedRef.current = false;
@@ -145,19 +156,7 @@ export function MailHomeScreen() {
     armPearlCompose();
   }, [armPearlCompose, billingReady, homeTab]);
 
-  const openChat = useCallback(() => {
-    // Push on the home stack (with index anchored) so back morphs into the
-    // Delegate menu control.
-    router.push("/chat", { withAnchor: true });
-  }, []);
-
   const guestHasThread = isAnonymous && chats.length > 0;
-  const agentsBottomInset = guestHasThread ? SIGN_IN_CARD_CLEARANCE : 24;
-
-  const openCreateAgent = useCallback(() => {
-    if (!billingReady || isAnonymous) return;
-    setCreateAgentOpen(true);
-  }, [billingReady, isAnonymous]);
 
   const openNewChat = useCallback(() => {
     // Guests keep one saved thread; another chat starts after sign-in.
@@ -266,16 +265,9 @@ export function MailHomeScreen() {
     projectLabel,
   ]);
 
-  const onAgentCreated = useCallback(
-    (agent: CustomAgentDto) => {
-      setCreateAgentOpen(false);
-      setHomeTab("agents");
-      void selectChat(agent.chatId).then((ok) => {
-        if (ok) router.push("/chat", { withAnchor: true });
-      });
-    },
-    [selectChat],
-  );
+  const toggleFinance = useCallback(() => {
+    void setTrackShowFinance(!showFinance);
+  }, [showFinance]);
 
   const chromeActions = useMemo((): readonly ScreenChromeAction[] => {
     return [
@@ -324,17 +316,19 @@ export function MailHomeScreen() {
         ],
       },
       {
-        type: "spacer",
-        width: 8,
-        hidden: !showAgentsPlus,
-      },
-      {
-        label: "New agent",
-        systemImage: "plus",
-        icon: PlusIcon,
-        onPress: openCreateAgent,
-        separateBackground: true,
-        hidden: !showAgentsPlus,
+        type: "menu",
+        label: "Track options",
+        systemImage: "ellipsis",
+        icon: MoreHorizontalIcon,
+        hidden: !showTrackMenu,
+        onPress: toggleFinance,
+        items: [
+          {
+            label: showFinance ? "Hide Finance" : "Show Finance",
+            systemImage: showFinance ? "eye.slash" : "eye",
+            onPress: toggleFinance,
+          },
+        ],
       },
     ];
   }, [
@@ -342,13 +336,14 @@ export function MailHomeScreen() {
     clearProject,
     confirmDelete,
     openCost,
-    openCreateAgent,
     openNewChat,
     openProjectPicker,
     openThreadDetails,
     projectLabel,
-    showAgentsPlus,
+    showFinance,
     showPearlThreadChrome,
+    showTrackMenu,
+    toggleFinance,
   ]);
 
   return (
@@ -369,23 +364,13 @@ export function MailHomeScreen() {
           ) : homeTab === "pearl" ? (
             <ChatScreen embedded />
           ) : (
-            <HomeTabBody
-              tab="agents"
-              onOpenChat={openChat}
-              bottomInset={agentsBottomInset}
-            />
+            <TrackScreen />
           )}
         </View>
 
         {billingReady && homeTab === "pearl" && guestHasThread ? (
           <SignInForNewChatCard />
         ) : null}
-
-        <CreateAgentModal
-          open={createAgentOpen}
-          onClose={() => setCreateAgentOpen(false)}
-          onCreated={onAgentCreated}
-        />
 
         <ThreadCostDrawer
           open={costOpen}
