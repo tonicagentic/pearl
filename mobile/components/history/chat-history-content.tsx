@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/matrix-dot-loader";
 import { OfflineBanner } from "@/components/offline-banner";
 import { useAuth } from "@/src/auth";
-import { useChats } from "@/src/chat-context";
+import { useActiveChat, useChatList } from "@/src/chat-context";
 import {
   getChat,
   searchChats,
@@ -89,7 +89,7 @@ export function ChatHistoryContent({
   /** Extra list bottom padding so rows clear a sticky footer. */
   readonly contentBottomInset?: number;
 }) {
-  const { deleteChat, renameChat, setChatProject, reloadChats } = useChats();
+  const { deleteChat, renameChat, setChatProject, reloadChats } = useChatList();
   const inlineSearch = useStackSearch();
   const search = externalSearch ?? inlineSearch;
   const isDrawer = chrome === "drawer";
@@ -406,16 +406,14 @@ export function ChatHistoryListAndroid({
   const { signedIn } = useAuth();
   const {
     chats,
-    activeChatId,
     chatsLoading,
     chatsReady,
     chatsError,
     hasMoreChats,
     loadMoreChats,
     reloadChats,
-    selectChat,
-    selectionError,
-  } = useChats();
+  } = useChatList();
+  const { activeChatId, selectChat, selectionError } = useActiveChat();
   const { offline } = useNetworkStatus();
   const rows = search.active ? (search.hits ?? []) : chats;
   const [projects, setProjects] = useState<readonly ProjectDto[] | null>(null);

@@ -9,7 +9,7 @@ import {
   type AssistantMessagePart,
 } from "@/components/assistant-ui/elements/session-timeline";
 import { useChatConversation } from "@/src/conversation-context";
-import { useChats, useEveEvents } from "@/src/chat-context";
+import { useActiveChat, useEveEvents } from "@/src/chat-context";
 import { pendingWaitLabel } from "@/src/message-projection";
 import {
   getWaitingLabel,
@@ -32,7 +32,7 @@ const ASKING_QUESTIONS_LABEL = "Asking questions";
  */
 export function AssistantThinking() {
   const { waitKind, conversation } = useChatConversation();
-  const { store } = useChats();
+  const { store } = useActiveChat();
   const events = useEveEvents();
   const agents = conversation.agents;
   const waitingLabel = useSyncExternalStore(

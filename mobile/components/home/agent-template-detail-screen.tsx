@@ -9,14 +9,14 @@ import {
 } from "@/components/home/agent-template-browser";
 import { Button } from "@/components/ui/button";
 import { addAgentFromTemplateRequest } from "@/src/agent-templates-client";
-import { useChats } from "@/src/chat-context";
+import { useActiveChat } from "@/src/chat-context";
 import { usePearlScreenBackground } from "@/src/navigation-theme";
 
 /** Template detail — review standing instructions / kit, then add or open. */
 export function AgentTemplateDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { selectChat } = useChats();
+  const { selectChat } = useActiveChat();
   const backgroundColor = usePearlScreenBackground();
   const params = useLocalSearchParams<{ readonly slug?: string }>();
   const slug = typeof params.slug === "string" ? params.slug : "";

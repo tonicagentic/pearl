@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { composerControlHitSlop } from "@/components/assistant-ui/elements/icon-button";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
-import { useChats } from "@/src/chat-context";
+import { useActiveChat } from "@/src/chat-context";
 import {
   listConnectedAgents,
   setChatRemoteAgent,
@@ -41,7 +41,7 @@ export function ComposerRemoteAgentPicker({
   const sheetRef = useRef<BottomSheetModalRef>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const insets = useSafeAreaInsets();
-  const { activeChatId, activeCustomAgent } = useChats();
+  const { activeChatId, activeCustomAgent } = useActiveChat();
   const selectedId = useSyncExternalStore(
     subscribeRemoteAgentSelection,
     getRemoteAgentSelection,

@@ -1,8 +1,11 @@
-import { eq } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 
 import { recordUsage, sandboxCostCents } from "@/lib/billing/ledger";
 import { db, isDatabaseConfigured } from "@/lib/db/client";
 import { sandboxOpen } from "@/lib/db/schema";
+
+/** Close and bill sandboxes whose stop hook never fired. */
+const SANDBOX_OPEN_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 type OpenEntry = {
   readonly userId: string;
@@ -140,4 +143,35 @@ async function deletePersistedOpen(sandboxId: string): Promise<void> {
   } catch (error) {
     console.error("[billing/sandbox-meter] delete open", error);
   }
+}
+
+/**
+ * Bill and clear `sandbox_open` rows older than maxAgeMs (default 6h).
+ * Covers stop hooks that never ran across instances / crashes.
+ */
+export async function reconcileAgedOpenSandboxes(
+  maxAgeMs: number = SANDBOX_OPEN_MAX_AGE_MS,
+): Promise<{ readonly closed: number }> {
+  if (!isDatabaseConfigured()) return { closed: 0 };
+
+  const cutoff = new Date(Date.now() - maxAgeMs);
+  const aged = await db
+    .select({ sandboxId: sandboxOpen.sandboxId })
+    .from(sandboxOpen)
+    .where(lt(sandboxOpen.openedAt, cutoff));
+
+  let closed = 0;
+  for (const row of aged) {
+    try {
+      await noteSandboxStopped({ sandboxId: row.sandboxId });
+      closed += 1;
+    } catch (error) {
+      console.error(
+        "[billing/sandbox-meter] reconcile aged",
+        row.sandboxId,
+        error,
+      );
+    }
+  }
+  return { closed };
 }

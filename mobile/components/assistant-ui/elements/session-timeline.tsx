@@ -16,7 +16,7 @@ import {
   isTimelineToolCall,
   type AssistantMessagePart,
 } from "@/src/assistant-blocks";
-import { useChats, useEveEvents } from "@/src/chat-context";
+import { useActiveChat, useEveEvents } from "@/src/chat-context";
 import { useWorkspaceOptional } from "@/src/workspace-context";
 import { formatDurationMs, turnEventSpan } from "@/src/turn-duration";
 import {
@@ -150,7 +150,7 @@ export const SessionTimelineSegment: FC<{
   const liveEvents = useEveEvents();
   const events = overrideEvents ?? liveEvents;
   const { conversation } = useChatConversation();
-  const { store } = useChats();
+  const { store } = useActiveChat();
   const catchingUp = useSyncExternalStore(
     (listener) => store.subscribe(listener),
     () => store.snapshot.status === "resuming",

@@ -47,6 +47,10 @@ import type { CustomAgentRef } from "@/lib/custom-agents/types";
 
 const CHAT_HISTORY_PAGE_SIZE = 20;
 const CHAT_SEARCH_LIMIT = 40;
+/** Tail window for session hydrate — long threads load recent events only. */
+const CHAT_HYDRATE_EVENT_LIMIT = 2_000;
+/** Presence-driving events kept per chat (newest first, then reordered). */
+const PRESENCE_EVENTS_PER_CHAT = 64;
 
 function escapeIlikePattern(input: string): string {
   return input.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
@@ -176,29 +180,47 @@ async function presenceByChatIds(
     chats.map((item) => [item.id, item.lastReadAt] as const),
   );
 
-  const rows = await db
-    .select({
-      chatId: chatEvent.chatId,
-      event: chatEvent.event,
-      eventIndex: chatEvent.eventIndex,
-      createdAt: chatEvent.createdAt,
-    })
-    .from(chatEvent)
-    .where(
-      and(
-        inArray(chatEvent.chatId, [...chatIds]),
-        sql`${chatEvent.event} ->> 'type' in (
-          'interaction.opened',
-          'interaction.settled',
-          'turn.started',
-          'turn.paused',
-          'turn.settled',
-          'delivery.consumed',
-          'session.ended'
-        )`,
+  // Last N presence-driving events per chat — avoids scanning full transcripts.
+  const ranked = db.$with("ranked").as(
+    db
+      .select({
+        chatId: chatEvent.chatId,
+        event: chatEvent.event,
+        eventIndex: chatEvent.eventIndex,
+        createdAt: chatEvent.createdAt,
+        rn: sql<number>`row_number() over (
+          partition by ${chatEvent.chatId}
+          order by ${chatEvent.eventIndex} desc
+        )`.as("rn"),
+      })
+      .from(chatEvent)
+      .where(
+        and(
+          inArray(chatEvent.chatId, [...chatIds]),
+          sql`${chatEvent.event} ->> 'type' in (
+            'interaction.opened',
+            'interaction.settled',
+            'turn.started',
+            'turn.paused',
+            'turn.settled',
+            'delivery.consumed',
+            'session.ended'
+          )`,
+        ),
       ),
-    )
-    .orderBy(asc(chatEvent.chatId), asc(chatEvent.eventIndex));
+  );
+
+  const rows = await db
+    .with(ranked)
+    .select({
+      chatId: ranked.chatId,
+      event: ranked.event,
+      eventIndex: ranked.eventIndex,
+      createdAt: ranked.createdAt,
+    })
+    .from(ranked)
+    .where(sql`${ranked.rn} <= ${PRESENCE_EVENTS_PER_CHAT}`)
+    .orderBy(asc(ranked.chatId), asc(ranked.eventIndex));
 
   const eventsByChat = new Map<string, SessionStreamEvent[]>();
   const timesByChat = new Map<string, Date[]>();
@@ -347,13 +369,29 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
     return null;
   }
 
+  const [tail] = await db
+    .select({ eventIndex: chatEvent.eventIndex })
+    .from(chatEvent)
+    .where(eq(chatEvent.chatId, chatId))
+    .orderBy(desc(chatEvent.eventIndex))
+    .limit(1);
+  const minEventIndex = Math.max(
+    0,
+    (tail?.eventIndex ?? 0) - CHAT_HYDRATE_EVENT_LIMIT + 1,
+  );
+
   const events = await db
     .select({
       createdAt: chatEvent.createdAt,
       event: chatEvent.event,
     })
     .from(chatEvent)
-    .where(eq(chatEvent.chatId, chatId))
+    .where(
+      and(
+        eq(chatEvent.chatId, chatId),
+        gte(chatEvent.eventIndex, minEventIndex),
+      ),
+    )
     .orderBy(asc(chatEvent.eventIndex));
 
   // Presence-only mirrors lack meta.position; eve rejects them as initialEvents.
@@ -979,7 +1017,11 @@ export async function deleteChatForUser(
     .where(and(eq(chat.id, chatId), eq(chat.userId, userId)))
     .limit(1);
 
-  const sessionId = row?.eveSession?.sessionId;
+  if (!row) {
+    return;
+  }
+
+  const sessionId = row.eveSession?.sessionId;
   if (sessionId) {
     const { bestEffortEndEveSession } = await import("@/lib/eve/end-session");
     await bestEffortEndEveSession({
@@ -989,9 +1031,17 @@ export async function deleteChatForUser(
     });
   }
 
-  // Custom-agent threads own the agent: deleting the chat removes the agent
-  // (and cascade removes the chat). Normal chats delete the row only.
-  if (row?.customAgentId) {
+  // Collect Blob pathnames before cascade deletes the rows.
+  const fileBlobs = await db
+    .select({ blobPathname: agentFile.blobPathname })
+    .from(agentFile)
+    .where(eq(agentFile.chatId, chatId));
+  const pathnames = fileBlobs
+    .map((file) => file.blobPathname)
+    .filter((pathname): pathname is string => Boolean(pathname));
+
+  // Custom-agent threads own the agent: deleting the agent cascades the chat.
+  if (row.customAgentId) {
     await db
       .delete(customAgent)
       .where(
@@ -1000,10 +1050,16 @@ export async function deleteChatForUser(
           eq(customAgent.userId, userId),
         ),
       );
-    return;
+  } else {
+    await db
+      .delete(chat)
+      .where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
   }
 
-  await db.delete(chat).where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
+  if (pathnames.length > 0) {
+    const { deletePrivateBlobs } = await import("@/lib/blob/private");
+    await deletePrivateBlobs(pathnames);
+  }
 }
 
 /**
@@ -1696,6 +1752,7 @@ export async function getUserUsageRows(
         and(
           eq(chat.userId, userId),
           sql`${chatEvent.event} ->> 'type' = 'model.started'`,
+          ...createdAtWindow,
         ),
       ),
     db
@@ -1710,6 +1767,7 @@ export async function getUserUsageRows(
         and(
           eq(chat.userId, userId),
           sql`${chatEvent.event} ->> 'type' = 'step.started'`,
+          ...createdAtWindow,
         ),
       ),
   ]);

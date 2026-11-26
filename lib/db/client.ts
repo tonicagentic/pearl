@@ -9,6 +9,14 @@ const fullSchema = { ...schema, ...bodySchema };
 
 let database: NeonHttpDatabase<typeof fullSchema> | null = null;
 
+/**
+ * Production uses neon-http, which does **not** support SQL transactions
+ * (`BEGIN`/`COMMIT`). Multi-step writes (chat merge, file revisions, billing)
+ * must stay idempotent via unique keys / upserts — do not assume atomic
+ * rollback across statements. Localhost URLs use node-postgres (transactions
+ * work there) so local tests can still exercise transactional paths.
+ */
+
 export function isDatabaseConfigured() {
   return Boolean(process.env.DATABASE_URL?.trim());
 }

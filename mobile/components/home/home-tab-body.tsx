@@ -16,7 +16,7 @@ import {
 import type { HomeTab } from "@/components/home/home-tab";
 import { PEARL_IDENTITY_ACCENT } from "@/components/thread-identity-menu";
 import { Text as AppText } from "@/components/ui/text";
-import { useChats } from "@/src/chat-context";
+import { useActiveChat } from "@/src/chat-context";
 import {
   deleteCustomAgentRequest,
   fetchCustomAgents,
@@ -89,7 +89,7 @@ function HistoryListAndroid({
   readonly onOpenChat: () => void;
   readonly bottomInset?: number;
 }) {
-  const { newChat, selectChat } = useChats();
+  const { newChat, selectChat } = useActiveChat();
   const [agents, setAgents] = useState<readonly CustomAgentDto[] | null>(null);
   const orderedAgents = useMemo(
     () =>

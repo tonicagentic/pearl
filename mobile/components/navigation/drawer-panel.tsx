@@ -33,7 +33,7 @@ import {
 import { PearlIcon } from "@/components/pearl-icon";
 import { Icon } from "@/components/ui/icon";
 import { useAuth } from "@/src/auth";
-import { useChats } from "@/src/chat-context";
+import { useActiveChat } from "@/src/chat-context";
 import { initials as viewerInitials } from "@/src/initials";
 import {
   usePearlDrawerBackground,
@@ -114,7 +114,7 @@ export function DrawerPanel({
     [closeDrawer, onSelectChatFromDrawer],
   );
   const { isAnonymous, viewerEmail, viewerName } = useAuth();
-  const { newChat, activeChatId } = useChats();
+  const { newChat, activeChatId } = useActiveChat();
   const pathname = usePathname();
   const onChatRoute = isDrawerHrefActive(pathname, "/");
   // New Chat lights only on an empty home/chat session — not while a thread

@@ -1,6 +1,6 @@
 import { gateway } from "@ai-sdk/gateway";
 import { generateText, Output } from "ai";
-import { cacheLife } from "next/cache";
+import { cacheLife, cacheTag } from "next/cache";
 import { z } from "zod";
 
 import {
@@ -74,6 +74,10 @@ ${formatSuggestedPromptContextPack(pack)}`,
   }
 }
 
+export function suggestedPromptsUserTag(userId: string) {
+  return `suggested-prompts:${userId}`;
+}
+
 async function cachedSuggestedPrompts(
   userId: string,
   fingerprint: string,
@@ -81,8 +85,8 @@ async function cachedSuggestedPrompts(
 ): Promise<SuggestedPrompt[]> {
   "use cache: remote";
   cacheLife("hours");
+  cacheTag(suggestedPromptsUserTag(userId));
   // userId + fingerprint key the remote cache entry; pack supplies the model input.
-  void userId;
   void fingerprint;
   return generateSuggestedPromptsWithLlm(pack);
 }

@@ -15,7 +15,7 @@ import {
   deriveSubagentRuns,
   type SubagentRun,
 } from "@/src/subagent-runs";
-import { useChats, useEveEvents } from "@/src/chat-context";
+import { useActiveChat, useEveEvents } from "@/src/chat-context";
 import {
   agentForCall,
   useChatConversation,
@@ -283,7 +283,7 @@ export function TaskGroup({
 }) {
   const runs = useSubagentRuns();
   const { conversation } = useChatConversation();
-  const { store } = useChats();
+  const { store } = useActiveChat();
   const { open } = useSubagentInspect();
   const parts = useAuiState((s) => s.message.parts) as readonly unknown[];
   const catchingUp = useSyncExternalStore(

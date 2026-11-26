@@ -1,4 +1,4 @@
-import { get, issueSignedToken, put, presignUrl } from "@vercel/blob";
+import { del, get, issueSignedToken, put, presignUrl } from "@vercel/blob";
 
 /**
  * Default signed GET lifetime for private image URLs embedded in chat.
@@ -92,4 +92,19 @@ export async function readPrivateBlobBytes(
     return null;
   }
   return new Uint8Array(await new Response(result.stream).arrayBuffer());
+}
+
+/** Best-effort delete of private Blob pathnames (chat/user GC). */
+export async function deletePrivateBlobs(
+  pathnames: readonly string[],
+): Promise<void> {
+  const unique = [
+    ...new Set(pathnames.filter((p) => typeof p === "string" && p.length > 0)),
+  ];
+  if (unique.length === 0) return;
+  try {
+    await del(unique);
+  } catch (error) {
+    console.error("[blob/private] delete", unique.length, error);
+  }
 }

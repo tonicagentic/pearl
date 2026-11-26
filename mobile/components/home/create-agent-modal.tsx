@@ -22,7 +22,7 @@ import {
   type AgentMarkTalk,
 } from "../../../lib/custom-agents/mark";
 import { addAgentFromTemplateRequest } from "@/src/agent-templates-client";
-import { useChats } from "@/src/chat-context";
+import { useActiveChat } from "@/src/chat-context";
 import {
   createCustomAgentRequest,
   type CustomAgentDto,
@@ -46,7 +46,7 @@ export function CreateAgentModal({
   readonly onCreated: (agent: CustomAgentDto) => void;
 }) {
   const router = useRouter();
-  const { selectChat } = useChats();
+  const { selectChat } = useActiveChat();
   const [phase, setPhase] = useState<Phase>("name");
   const [templateSlug, setTemplateSlug] = useState<string | null>(null);
   const [name, setName] = useState("");

@@ -9,7 +9,7 @@ import { LoadingCenter } from "@/components/ui/loading-center";
 import { StackScreen } from "@/components/ui/stack-screen";
 import { Text } from "@/components/ui/text";
 import { setAgentMode } from "@/src/agent-mode";
-import { useChats } from "@/src/chat-context";
+import { useActiveChat } from "@/src/chat-context";
 import {
   carryOutProjectFileRequest,
   fetchProjectFileContent,
@@ -26,7 +26,7 @@ export function FileEditorScreen({
   readonly projectId: string;
   readonly artifactId: string;
 }) {
-  const { selectChat, setActiveProjectId } = useChats();
+  const { selectChat, setActiveProjectId } = useActiveChat();
   const [artifact, setArtifact] = useState<ProjectArtifactDto | null>(null);
   const [path, setPath] = useState("");
   const [title, setTitle] = useState("");

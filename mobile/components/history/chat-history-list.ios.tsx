@@ -40,7 +40,7 @@ import type { ChatHistorySearchFeed } from "@/components/history/chat-history-ty
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
 import { OfflineBanner } from "@/components/offline-banner";
 import { useAuth } from "@/src/auth";
-import { useChats } from "@/src/chat-context";
+import { useActiveChat, useChatList } from "@/src/chat-context";
 import type { ChatListItem } from "@/src/chats-client";
 import {
   usePearlCardBackground,
@@ -84,16 +84,14 @@ export function ChatHistoryListIOS({
   const { signedIn } = useAuth();
   const {
     chats,
-    activeChatId,
     chatsLoading,
     chatsReady,
     chatsError,
     hasMoreChats,
     loadMoreChats,
     reloadChats,
-    selectChat,
-    selectionError,
-  } = useChats();
+  } = useChatList();
+  const { activeChatId, selectChat, selectionError } = useActiveChat();
   const { offline } = useNetworkStatus();
   const rows = search.active ? (search.hits ?? []) : chats;
   const pageBackground = usePearlScreenBackground();

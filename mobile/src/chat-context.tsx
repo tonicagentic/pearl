@@ -59,6 +59,7 @@ import { enrichPrepareSendPayload } from "./chat/prepare-send";
 import { mobileSessionStoreOptions } from "./chat/session-store-options";
 import { mergeEventsForSnapshot } from "../../lib/chat/eve-session-recovery";
 import { repairSessionHydration } from "../../lib/chat/hydration-prefix";
+import { chatListNeedsPresencePoll } from "../../lib/chat/presence-poll";
 import { snapStreamingReveal } from "../../lib/streaming-text-reveal";
 import { waitingLabelForText } from "../../lib/pearl-lane";
 import { setWaitingLabel } from "../../lib/waiting-label";
@@ -84,8 +85,10 @@ import {
 
 /** Keep this many recently opened SessionStores warm for instant re-open. */
 const RETAINED_STORE_LIMIT = 10;
-/** Silent presence / list backstop while the app is active. */
+/** Silent presence / list backstop while any row is working/waiting/unread. */
 const PRESENCE_POLL_MS = 1_500;
+/** Slow backstop when every Recents row is idle (push + foreground cover the rest). */
+const IDLE_POLL_MS = 30_000;
 
 /** True when newly appended events can open or close a person-wait. */
 function eventsMayChangeWait(
@@ -109,28 +112,7 @@ function eventsMayChangeWait(
   return false;
 }
 
-type ChatsContextValue = {
-  /** The active eve store (one React-mounted store; others may be LRU-retained). */
-  readonly store: SessionStore;
-  /**
-   * Synchronous active store (ref). Use after `selectChat` / `createChat` when
-   * React state may not have flushed yet — e.g. live voice tool handlers.
-   */
-  readonly getActiveStore: () => SessionStore;
-  /** Synchronous active chat id (ref). */
-  readonly getActiveChatId: () => string | null;
-  /** Synchronous active custom-agent ref (after `selectChat`). */
-  readonly getActiveCustomAgent: () => CustomAgentRef | null;
-  readonly activeChatId: string | null;
-  /** Project linked to the active chat (Plan mode / project chats). */
-  readonly activeProjectId: string | null;
-  readonly setActiveProjectId: (projectId: string | null) => void;
-  /** User-defined agent for the active durable thread, if any. */
-  readonly activeCustomAgent: CustomAgentRef | null;
-  readonly setActiveCustomAgent: (agent: CustomAgentRef | null) => void;
-  /** Advances only when the user enters a fresh chat, never during a send. */
-  readonly newChatEntry: number;
-  readonly activeTitle: string;
+type ChatListContextValue = {
   readonly chats: readonly ChatListItem[];
   readonly chatsLoading: boolean;
   /** True after the first history fetch settles, even if the list mounts later. */
@@ -155,6 +137,39 @@ type ChatsContextValue = {
     chatId: string,
     meta: { readonly title?: string; readonly updatedAt?: string },
   ) => void;
+  /** Delete a stored chat; opens a new chat when the deleted id is active. */
+  readonly deleteChat: (chatId: string) => Promise<void>;
+  /** Rename a stored chat and refresh local list / active title. */
+  readonly renameChat: (chatId: string, title: string) => Promise<void>;
+  /** Attach or detach a chat from a project; updates list + active binding. */
+  readonly setChatProject: (
+    chatId: string,
+    projectId: string | null,
+  ) => Promise<void>;
+};
+
+type ActiveChatContextValue = {
+  /** The active eve store (one React-mounted store; others may be LRU-retained). */
+  readonly store: SessionStore;
+  /**
+   * Synchronous active store (ref). Use after `selectChat` / `createChat` when
+   * React state may not have flushed yet — e.g. live voice tool handlers.
+   */
+  readonly getActiveStore: () => SessionStore;
+  /** Synchronous active chat id (ref). */
+  readonly getActiveChatId: () => string | null;
+  /** Synchronous active custom-agent ref (after `selectChat`). */
+  readonly getActiveCustomAgent: () => CustomAgentRef | null;
+  readonly activeChatId: string | null;
+  /** Project linked to the active chat (Plan mode / project chats). */
+  readonly activeProjectId: string | null;
+  readonly setActiveProjectId: (projectId: string | null) => void;
+  /** User-defined agent for the active durable thread, if any. */
+  readonly activeCustomAgent: CustomAgentRef | null;
+  readonly setActiveCustomAgent: (agent: CustomAgentRef | null) => void;
+  /** Advances only when the user enters a fresh chat, never during a send. */
+  readonly newChatEntry: number;
+  readonly activeTitle: string;
   /**
    * Reattach an open or retained store (foreground, push, or reopen).
    * Hydrates from the network when the store was evicted.
@@ -191,15 +206,6 @@ type ChatsContextValue = {
   readonly recoverDeadSession: (source: SessionStore) => boolean;
   /** Drop the active chat and start fresh (the row is created on first send). */
   readonly newChat: () => void;
-  /** Delete a stored chat; opens a new chat when the deleted id is active. */
-  readonly deleteChat: (chatId: string) => Promise<void>;
-  /** Rename a stored chat and refresh local list / active title. */
-  readonly renameChat: (chatId: string, title: string) => Promise<void>;
-  /** Attach or detach a chat from a project; updates list + active binding. */
-  readonly setChatProject: (
-    chatId: string,
-    projectId: string | null,
-  ) => Promise<void>;
   /** Live voice lines shown until eve imports them on the next real send. */
   readonly spokenTurns: readonly SpokenTurn[];
   /** Persist a live call without starting a Pearl turn. */
@@ -209,7 +215,10 @@ type ChatsContextValue = {
   readonly setQuickTurns: (turns: readonly SpokenTurn[]) => void;
 };
 
-const ChatsContext = createContext<ChatsContextValue | null>(null);
+type ChatsContextValue = ChatListContextValue & ActiveChatContextValue;
+
+const ChatListContext = createContext<ChatListContextValue | null>(null);
+const ActiveChatContext = createContext<ActiveChatContextValue | null>(null);
 
 type ChatBinding = {
   id: string | null;
@@ -1464,20 +1473,30 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     };
   }, [signedIn, reloadChats, detachAllStores]);
 
-  // Presence backstop: silent poll while the app is active. Faster when any
-  // row is working/waiting so missed silent pushes still catch up quickly —
-  // including while the user is inside /chat, not only on home.
-  // Presence backstop while the app is active — including when every row is
-  // idle — so a dropped silent push still lands within about a second.
+  // Presence backstop while the app is active. Fast when any row is
+  // working/waiting/unread; idle lists back off and rely on push + foreground.
+  const needsFastPresencePoll = chatListNeedsPresencePoll(chats);
   useEffect(() => {
     if (!signedIn || offline) return;
+    const intervalMs = needsFastPresencePoll ? PRESENCE_POLL_MS : IDLE_POLL_MS;
     const tick = () => {
       if (AppState.currentState !== "active") return;
       void reloadChats({ silent: true });
     };
-    const timer = setInterval(tick, PRESENCE_POLL_MS);
+    const timer = setInterval(tick, intervalMs);
     return () => clearInterval(timer);
-  }, [signedIn, reloadChats, offline]);
+  }, [signedIn, reloadChats, offline, needsFastPresencePoll]);
+
+  // Foreground refresh so idle backoff does not miss updates while backgrounded.
+  useEffect(() => {
+    if (!signedIn || offline) return;
+    const onChange = (state: AppStateStatus) => {
+      if (state !== "active") return;
+      void reloadChats({ silent: true });
+    };
+    const sub = AppState.addEventListener("change", onChange);
+    return () => sub.remove();
+  }, [signedIn, offline, reloadChats]);
 
   // Coming back online: refresh presence and reattach the open session.
   useEffect(() => {
@@ -1508,8 +1527,39 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     [],
   );
 
-  const value = useMemo(
-    () => ({
+  const listValue = useMemo(
+    (): ChatListContextValue => ({
+      chats,
+      chatsLoading,
+      chatsReady,
+      chatsError,
+      hasMoreChats: cursor !== null,
+      loadMoreChats,
+      reloadChats,
+      patchChatPresence,
+      patchChatMeta,
+      deleteChat,
+      renameChat,
+      setChatProject,
+    }),
+    [
+      chats,
+      chatsLoading,
+      chatsReady,
+      chatsError,
+      cursor,
+      loadMoreChats,
+      reloadChats,
+      patchChatPresence,
+      patchChatMeta,
+      deleteChat,
+      renameChat,
+      setChatProject,
+    ],
+  );
+
+  const activeValue = useMemo(
+    (): ActiveChatContextValue => ({
       store,
       getActiveStore,
       getActiveChatId,
@@ -1521,15 +1571,6 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       setActiveCustomAgent,
       newChatEntry,
       activeTitle,
-      chats,
-      chatsLoading,
-      chatsReady,
-      chatsError,
-      hasMoreChats: cursor !== null,
-      loadMoreChats,
-      reloadChats,
-      patchChatPresence,
-      patchChatMeta,
       resumeChatFromPush,
       reconnect,
       selectChat,
@@ -1544,9 +1585,6 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       clearPendingMessage,
       recoverDeadSession,
       newChat,
-      deleteChat,
-      renameChat,
-      setChatProject,
       spokenTurns,
       saveSpokenTurns,
       quickTurns,
@@ -1564,15 +1602,6 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       setActiveCustomAgent,
       newChatEntry,
       activeTitle,
-      chats,
-      chatsLoading,
-      chatsReady,
-      chatsError,
-      cursor,
-      loadMoreChats,
-      reloadChats,
-      patchChatPresence,
-      patchChatMeta,
       resumeChatFromPush,
       reconnect,
       selectChat,
@@ -1587,9 +1616,6 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       clearPendingMessage,
       recoverDeadSession,
       newChat,
-      deleteChat,
-      renameChat,
-      setChatProject,
       spokenTurns,
       saveSpokenTurns,
       quickTurns,
@@ -1597,17 +1623,36 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     ],
   );
 
-  return <ChatsContext.Provider value={value}>{children}</ChatsContext.Provider>;
+  return (
+    <ChatListContext.Provider value={listValue}>
+      <ActiveChatContext.Provider value={activeValue}>
+        {children}
+      </ActiveChatContext.Provider>
+    </ChatListContext.Provider>
+  );
 }
 
-export function useChats(): ChatsContextValue {
-  const context = useContext(ChatsContext);
-
+/** Recents list + list mutations — does not re-render on active-store churn. */
+export function useChatList(): ChatListContextValue {
+  const context = useContext(ChatListContext);
   if (!context) {
-    throw new Error("useChats must be used within ChatsProvider.");
+    throw new Error("useChatList must be used within ChatsProvider.");
   }
-
   return context;
+}
+
+/** Active session store / turns — does not re-render on list-only updates. */
+export function useActiveChat(): ActiveChatContextValue {
+  const context = useContext(ActiveChatContext);
+  if (!context) {
+    throw new Error("useActiveChat must be used within ChatsProvider.");
+  }
+  return context;
+}
+
+/** Combined list + active chat (re-renders on either). Prefer narrow hooks. */
+export function useChats(): ChatsContextValue {
+  return { ...useChatList(), ...useActiveChat() };
 }
 
 /**
@@ -1639,7 +1684,7 @@ export function EveEventsProvider({
  */
 export function useEveEvents(): readonly unknown[] {
   const fromProvider = useContext(EveEventsContext);
-  const { store } = useChats();
+  const { store } = useActiveChat();
   const fromStore = useSyncExternalStore(
     (cb) => (fromProvider != null ? () => {} : store.subscribe(cb)),
     () => (fromProvider != null ? fromProvider : store.snapshot.events),

@@ -109,7 +109,9 @@ import { EveAuthorization } from "@/components/eve-authorization";
 import {
   appendClientChatEvents,
   checkClientSendLimit,
+  clearClientChatPendingMessage,
   createClientChat,
+  markClientChatPendingMessage,
   markClientChatRead,
   saveClientChatSession,
   saveClientChatSnapshot,
@@ -577,6 +579,7 @@ function AssistantChatSurfaceInner({
             presence: presence === "unread" ? "idle" : presence,
           });
           void markClientChatRead(storageMode, id).catch(() => {});
+          void clearClientChatPendingMessage(storageMode, id).catch(() => {});
           onActiveChatUpdated?.({
             id,
             events,
@@ -658,16 +661,26 @@ function AssistantChatSurfaceInner({
             // Selection still rides clientContext for this turn.
           });
         }
-      } else if (
-        projectIdRef.current &&
-        storageMode === "database" &&
-        !activeChat?.projectId
-      ) {
-        // Project attach must not hold the first token.
-        void attachChatToProjectAction({
-          chatId: activeChatIdRef.current,
-          projectId: projectIdRef.current,
-        });
+      } else {
+        // Existing chat: durable pending mark so a reload can restore the
+        // in-flight turn (parity with mobile).
+        if (messageText) {
+          void markClientChatPendingMessage(storageMode, {
+            chatId: activeChatIdRef.current,
+            message: messageText,
+          }).catch(() => {});
+        }
+        if (
+          projectIdRef.current &&
+          storageMode === "database" &&
+          !activeChat?.projectId
+        ) {
+          // Project attach must not hold the first token.
+          void attachChatToProjectAction({
+            chatId: activeChatIdRef.current,
+            projectId: projectIdRef.current,
+          });
+        }
       }
 
       if (messageText) {
@@ -974,7 +987,6 @@ function AssistantChatSurfaceInner({
           />
         </div>
 
-        <SessionCursorPersistence chatId={chatId} storageMode={storageMode} />
         <WebAttentionHeartbeat chatId={chatId} />
         <EveErrorToast />
       </CanvasProvider>
@@ -1652,28 +1664,6 @@ function EveErrorToast() {
   return (
     <ErrorToast message={message} onDismiss={() => setDismissed(message)} />
   );
-}
-
-function SessionCursorPersistence({
-  chatId,
-  storageMode,
-}: {
-  readonly chatId: string | null;
-  readonly storageMode: StorageMode;
-}) {
-  const session = useEveSession();
-
-  useEffect(() => {
-    if (!chatId || !session?.sessionId) {
-      return;
-    }
-
-    void saveClientChatSession(storageMode, { chatId, session }).catch(
-      () => {},
-    );
-  }, [chatId, session, storageMode]);
-
-  return null;
 }
 
 const WEB_ATTENTION_HEARTBEAT_MS = 10_000;
