@@ -41,9 +41,12 @@ import {
   usePearlMutedBackground,
 } from "@/src/navigation-theme";
 
-/** Space reserved under the list so rows clear the profile footer. */
+/** Space reserved under the list so rows can clear the floating search. */
 const FOOTER_CLEARANCE = 56;
-const FOOTER_FADE_HEIGHT = 40;
+/** Soft dissolve above the search control before the fade reaches the display edge. */
+const FOOTER_FADE_OVERHANG = 56;
+/** Search row inside the dock (paddingTop 8 + 40px control). */
+const FOOTER_SEARCH_ROW = 48;
 
 const NAV_ROWS = [
   {
@@ -84,7 +87,7 @@ type DrawerPanelNav = {
 
 /**
  * ChatGPT-style drawer body: one scrolling column (brand → nav → recent chats),
- * sticky profile with a soft fade so list content dissolves behind it.
+ * sticky search with a soft fade so list content dissolves behind it.
  */
 export function DrawerPanel({
   navigation,
@@ -126,6 +129,10 @@ export function DrawerPanel({
     : viewerInitials(viewerName, viewerEmail);
   const bottomPad = Math.max(insets.bottom, 12);
   const listBottomInset = FOOTER_CLEARANCE + bottomPad;
+  // Fade spans the overhang + search row + home-indicator pad so threads
+  // dissolve into the display edge instead of a solid footer band.
+  const footerFadeHeight =
+    FOOTER_FADE_OVERHANG + FOOTER_SEARCH_ROW + bottomPad;
 
   const go = useCallback(
     (href: string, options?: { readonly withAnchor?: boolean }) => {
@@ -193,24 +200,31 @@ export function DrawerPanel({
           </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={
-              drawerSearchOpen ? "Close search" : "Search history"
-            }
+            accessibilityLabel={isAnonymous ? "Sign in" : "Profile"}
             hitSlop={8}
-            onPress={() => setDrawerSearchOpen((v) => !v)}
+            onPress={openProfile}
             style={{
               width: 36,
               height: 36,
               borderRadius: 18,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: mutedColor,
+              backgroundColor: isAnonymous ? mutedColor : "#2A9D8F",
             }}
           >
-            <Icon
-              as={drawerSearchOpen ? XIcon : SearchIcon}
-              className="size-4 text-foreground"
-            />
+            {isAnonymous ? (
+              <Icon as={UserIcon} className="size-4 text-foreground" />
+            ) : (
+              <Text
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: "700",
+                }}
+              >
+                {profileInitials ?? "·"}
+              </Text>
+            )}
           </Pressable>
         </View>
       </View>
@@ -257,16 +271,23 @@ export function DrawerPanel({
 
       <View
         pointerEvents="box-none"
-        style={[
-          styles.footerDock,
-          {
-            paddingBottom: bottomPad,
-            backgroundColor: drawerBackground,
-          },
-        ]}
+        style={[styles.footerDock, { paddingBottom: bottomPad }]}
       >
-        <View pointerEvents="none" style={styles.footerFade}>
-          <Svg width="100%" height={FOOTER_FADE_HEIGHT} style={StyleSheet.absoluteFill}>
+        <View
+          pointerEvents="none"
+          style={[
+            styles.footerFade,
+            {
+              top: -FOOTER_FADE_OVERHANG,
+              height: footerFadeHeight,
+            },
+          ]}
+        >
+          <Svg
+            width="100%"
+            height={footerFadeHeight}
+            style={StyleSheet.absoluteFill}
+          >
             <Defs>
               <LinearGradient
                 id="drawerFooterFade"
@@ -277,16 +298,21 @@ export function DrawerPanel({
               >
                 <Stop offset="0" stopColor={drawerBackground} stopOpacity="0" />
                 <Stop
-                  offset="0.55"
+                  offset="0.4"
                   stopColor={drawerBackground}
-                  stopOpacity="0.7"
+                  stopOpacity="0.55"
+                />
+                <Stop
+                  offset="0.75"
+                  stopColor={drawerBackground}
+                  stopOpacity="0.9"
                 />
                 <Stop offset="1" stopColor={drawerBackground} stopOpacity="1" />
               </LinearGradient>
             </Defs>
             <Rect
               width="100%"
-              height={FOOTER_FADE_HEIGHT}
+              height={footerFadeHeight}
               fill="url(#drawerFooterFade)"
             />
           </Svg>
@@ -301,30 +327,24 @@ export function DrawerPanel({
         >
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={isAnonymous ? "Sign in" : "Profile"}
-            onPress={openProfile}
+            accessibilityLabel={
+              drawerSearchOpen ? "Close search" : "Search history"
+            }
+            hitSlop={8}
+            onPress={() => setDrawerSearchOpen((v) => !v)}
             style={{
               width: 40,
               height: 40,
               borderRadius: 20,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: isAnonymous ? mutedColor : "#2A9D8F",
+              backgroundColor: mutedColor,
             }}
           >
-            {isAnonymous ? (
-              <Icon as={UserIcon} className="size-5 text-foreground" />
-            ) : (
-              <Text
-                style={{
-                  color: "#FFFFFF",
-                  fontSize: 13,
-                  fontWeight: "700",
-                }}
-              >
-                {profileInitials ?? "·"}
-              </Text>
-            )}
+            <Icon
+              as={drawerSearchOpen ? XIcon : SearchIcon}
+              className="size-5 text-foreground"
+            />
           </Pressable>
         </View>
       </View>
@@ -346,7 +366,5 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    top: -FOOTER_FADE_HEIGHT,
-    height: FOOTER_FADE_HEIGHT,
   },
 });
