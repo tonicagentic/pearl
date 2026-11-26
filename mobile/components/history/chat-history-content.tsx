@@ -22,6 +22,11 @@ import { useCSSVariable } from "uniwind";
 import { ChatHistoryListIOS } from "@/components/history/chat-history-list";
 import type { ChatHistorySearchFeed } from "@/components/history/chat-history-types";
 import type { HistoryChatActionHandlers } from "@/components/home/history-list";
+import {
+  DRAWER_EDGE,
+  DRAWER_ROW_PAD_X,
+  DrawerChatRow,
+} from "@/components/navigation/drawer-rows";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
 import { Icon } from "@/components/ui/icon";
@@ -46,7 +51,6 @@ import {
 import { formatChatUpdatedAt } from "@/src/format-chat-updated-at";
 import {
   usePearlDrawerBackground,
-  usePearlDrawerSelectedBackground,
   usePearlForeground,
   usePearlMutedBackground,
   usePearlScreenBackground,
@@ -489,10 +493,11 @@ export function ChatHistoryListAndroid({
       <OfflineBanner compact />
       <FlatList
         className="flex-1"
-        contentContainerClassName={isDrawer ? "px-1 pt-0" : "px-4 pt-0"}
+        contentContainerClassName={isDrawer ? "pt-0" : "px-4 pt-0"}
         contentContainerStyle={{
           paddingBottom: 32 + contentBottomInset,
           flexGrow: 1,
+          ...(isDrawer ? { paddingHorizontal: DRAWER_EDGE } : null),
         }}
         data={rows}
         keyboardShouldPersistTaps="handled"
@@ -557,7 +562,8 @@ export function ChatHistoryListAndroid({
             {isDrawer && onSeeAll && rows.length > 0 ? (
               <Pressable
                 accessibilityRole="button"
-                className="min-h-12 justify-center px-5"
+                className="min-h-11 justify-center"
+                style={{ paddingHorizontal: DRAWER_ROW_PAD_X }}
                 onPress={onSeeAll}
               >
                 <Text className="text-sm text-muted-foreground">See all…</Text>
@@ -565,25 +571,38 @@ export function ChatHistoryListAndroid({
             ) : null}
           </>
         }
-        renderItem={({ item: chat }) => (
-          <HistoryChatRowAndroid
-            chat={chat}
-            selected={activeChatId === chat.id}
-            mutedDot={mutedDot}
-            chrome={chrome}
-            projectName={
-              chat.projectId
-                ? (projectNames.get(chat.projectId) ?? "Project")
-                : null
-            }
-            onPress={() => {
-              void selectChat(chat.id).then((selected) => {
-                if (selected) onOpenChat(chat.id);
-              });
-            }}
-            onLongPress={() => openChatActions(chat)}
-          />
-        )}
+        renderItem={({ item: chat }) => {
+          const open = () => {
+            void selectChat(chat.id).then((selected) => {
+              if (selected) onOpenChat(chat.id);
+            });
+          };
+          if (isDrawer) {
+            return (
+              <DrawerChatRow
+                chat={chat}
+                selected={activeChatId === chat.id}
+                mutedDot={mutedDot}
+                onPress={open}
+                onLongPress={() => openChatActions(chat)}
+              />
+            );
+          }
+          return (
+            <HistoryChatRowAndroid
+              chat={chat}
+              selected={activeChatId === chat.id}
+              mutedDot={mutedDot}
+              projectName={
+                chat.projectId
+                  ? (projectNames.get(chat.projectId) ?? "Project")
+                  : null
+              }
+              onPress={open}
+              onLongPress={() => openChatActions(chat)}
+            />
+          );
+        }}
       />
     </View>
   );
@@ -596,7 +615,6 @@ function HistoryChatRowAndroid({
   projectName,
   onPress,
   onLongPress,
-  chrome = "page",
 }: {
   readonly chat: ChatListItem;
   readonly selected: boolean;
@@ -604,12 +622,9 @@ function HistoryChatRowAndroid({
   readonly projectName: string | null;
   readonly onPress: () => void;
   readonly onLongPress?: () => void;
-  readonly chrome?: "page" | "drawer";
 }) {
   const presence = chatListPresence(chat);
   const when = formatChatUpdatedAt(chat.updatedAt);
-  const isDrawer = chrome === "drawer";
-  const drawerSelectedBg = usePearlDrawerSelectedBackground();
   const markColor =
     presence === "waiting"
       ? CHAT_PRESENCE_AMBER
@@ -621,10 +636,7 @@ function HistoryChatRowAndroid({
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={chatPresenceAccessibilityLabel(chat.title, presence)}
-      className={`min-h-12 flex-row items-center rounded-lg px-5 ${isDrawer ? "gap-0" : "gap-2.5 px-3"} ${selected && !isDrawer ? "bg-muted/50" : ""}`}
-      style={
-        selected && isDrawer ? { backgroundColor: drawerSelectedBg } : undefined
-      }
+      className={`min-h-12 flex-row items-center gap-2.5 rounded-lg px-3 ${selected ? "bg-muted/50" : ""}`}
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={350}
@@ -665,7 +677,7 @@ function HistoryChatRowAndroid({
         <Text className="text-base text-foreground" numberOfLines={1}>
           {chat.title}
         </Text>
-        {!isDrawer && projectName ? (
+        {projectName ? (
           <View className="mt-0.5 min-w-0 flex-row items-center gap-1">
             <Icon
               as={FolderIcon}

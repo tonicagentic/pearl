@@ -4,9 +4,8 @@ import {
   StyleSheet,
   Text,
   View,
-  type GestureResponderEvent,
 } from "react-native";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import {
   FolderIcon,
   InboxIcon,
@@ -21,11 +20,18 @@ import {
 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
-import { useCSSVariable } from "uniwind";
 
 import { ChatHistoryContent } from "@/components/history/chat-history-content";
-import { Icon } from "@/components/ui/icon";
 import { usePearlDrawer } from "@/components/navigation/drawer-context";
+import {
+  DRAWER_EDGE,
+  DRAWER_ROW_PAD_X,
+  DrawerLinkRow,
+  DrawerSectionLabel,
+  isDrawerHrefActive,
+} from "@/components/navigation/drawer-rows";
+import { PearlIcon } from "@/components/pearl-icon";
+import { Icon } from "@/components/ui/icon";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import { initials as viewerInitials } from "@/src/initials";
@@ -33,13 +39,11 @@ import {
   usePearlDrawerBackground,
   usePearlForeground,
   usePearlMutedBackground,
-  usePearlPressWash,
 } from "@/src/navigation-theme";
 
-const CHAT_PILL_BLUE = "#007AFF";
-/** Space reserved under the list so rows can scroll clear of the sticky footer. */
-const FOOTER_CLEARANCE = 72;
-const FOOTER_FADE_HEIGHT = 56;
+/** Space reserved under the list so rows clear the profile footer. */
+const FOOTER_CLEARANCE = 56;
+const FOOTER_FADE_HEIGHT = 40;
 
 const NAV_ROWS = [
   {
@@ -80,7 +84,7 @@ type DrawerPanelNav = {
 
 /**
  * ChatGPT-style drawer body: one scrolling column (brand → nav → recent chats),
- * sticky Chat + profile with a soft fade so list content dissolves behind them.
+ * sticky profile with a soft fade so list content dissolves behind it.
  */
 export function DrawerPanel({
   navigation,
@@ -107,14 +111,15 @@ export function DrawerPanel({
     [closeDrawer, onSelectChatFromDrawer],
   );
   const { isAnonymous, viewerEmail, viewerName } = useAuth();
-  const { newChat } = useChats();
+  const { newChat, activeChatId } = useChats();
+  const pathname = usePathname();
+  const onChatRoute = isDrawerHrefActive(pathname, "/");
+  // New Chat lights only on an empty home/chat session — not while a thread
+  // is open, and not on Tasks/Goals/… destinations.
+  const newChatSelected = onChatRoute && activeChatId == null;
   const foregroundColor = usePearlForeground();
-  const mutedForeground = useCSSVariable("--color-muted-foreground") as
-    | string
-    | undefined;
   const mutedColor = usePearlMutedBackground();
   const drawerBackground = usePearlDrawerBackground();
-  const pressWash = usePearlPressWash();
   const [drawerSearchOpen, setDrawerSearchOpen] = useState(false);
   const profileInitials = isAnonymous
     ? null
@@ -178,16 +183,14 @@ export function DrawerPanel({
             minHeight: 40,
           }}
         >
-          <Text
-            style={{
-              color: foregroundColor,
-              fontSize: 28,
-              fontWeight: "700",
-              letterSpacing: -0.4,
-            }}
+          <View
+            accessible
+            accessibilityRole="header"
+            accessibilityLabel="Pearl"
+            style={{ justifyContent: "center", minHeight: 32 }}
           >
-            Pearl
-          </Text>
+            <PearlIcon size={28} color={foregroundColor} />
+          </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
@@ -212,29 +215,29 @@ export function DrawerPanel({
         </View>
       </View>
 
-      <View style={{ paddingHorizontal: 8, paddingBottom: 8, gap: 2 }}>
+      <View
+        style={{
+          paddingHorizontal: DRAWER_EDGE,
+          paddingBottom: 4,
+          gap: 1,
+        }}
+      >
+        <DrawerLinkRow
+          label="New Chat"
+          icon={SquarePenIcon}
+          onPress={openNewChat}
+          selected={newChatSelected}
+        />
         {NAV_ROWS.map((row) => (
-          <DrawerNavRow
+          <DrawerLinkRow
             key={row.href}
             label={row.label}
             icon={row.Icon}
             onPress={() => go(row.href)}
-            color={foregroundColor}
-            pressWash={pressWash}
+            selected={isDrawerHrefActive(pathname, row.href)}
           />
         ))}
-        <Text
-          style={{
-            color: mutedForeground ?? "#8E8E93",
-            fontSize: 13,
-            fontWeight: "600",
-            paddingHorizontal: 12,
-            paddingTop: 14,
-            paddingBottom: 6,
-          }}
-        >
-          Recent chats
-        </Text>
+        <DrawerSectionLabel>Recent chats</DrawerSectionLabel>
       </View>
     </View>
   );
@@ -292,45 +295,18 @@ export function DrawerPanel({
           style={{
             flexDirection: "row",
             alignItems: "center",
-            justifyContent: "space-between",
-            paddingHorizontal: 20,
-            paddingTop: 10,
-            gap: 12,
+            paddingHorizontal: DRAWER_EDGE + DRAWER_ROW_PAD_X,
+            paddingTop: 8,
           }}
         >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="New chat"
-            onPress={openNewChat}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              paddingHorizontal: 18,
-              height: 48,
-              borderRadius: 24,
-              backgroundColor: CHAT_PILL_BLUE,
-            }}
-          >
-            <Icon as={SquarePenIcon} className="size-5 text-white" />
-            <Text
-              style={{
-                color: "#FFFFFF",
-                fontSize: 17,
-                fontWeight: "600",
-              }}
-            >
-              Chat
-            </Text>
-          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={isAnonymous ? "Sign in" : "Profile"}
             onPress={openProfile}
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
+              width: 40,
+              height: 40,
+              borderRadius: 20,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: isAnonymous ? mutedColor : "#2A9D8F",
@@ -342,7 +318,7 @@ export function DrawerPanel({
               <Text
                 style={{
                   color: "#FFFFFF",
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: "700",
                 }}
               >
@@ -358,50 +334,6 @@ export function DrawerPanel({
 
 /** @deprecated Prefer DrawerPanel */
 export const HistoryDrawerPanel = DrawerPanel;
-
-function DrawerNavRow({
-  label,
-  icon: RowIcon,
-  onPress,
-  color,
-  pressWash,
-}: {
-  readonly label: string;
-  readonly icon: typeof InboxIcon;
-  readonly onPress: (event: GestureResponderEvent) => void;
-  readonly color?: string;
-  readonly pressWash: string;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 14,
-        paddingHorizontal: 12,
-        paddingVertical: 12,
-        borderRadius: 12,
-        backgroundColor: pressed ? pressWash : "transparent",
-      })}
-    >
-      <Icon as={RowIcon} className="size-5 text-foreground" />
-      <Text
-        style={{
-          color: color,
-          fontSize: 17,
-          fontWeight: "500",
-          flexShrink: 1,
-        }}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
 
 const styles = StyleSheet.create({
   footerDock: {
