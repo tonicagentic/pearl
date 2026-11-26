@@ -1,4 +1,5 @@
 import type { SessionStore } from "eve/client";
+import { agentDebugLog, errorSummary } from "../agent-debug-log";
 
 const DEFAULT_BACKOFF_MS = [250, 750, 1_500] as const;
 
@@ -8,7 +9,9 @@ export type ReconnectResult =
 
 /**
  * Reattach an eve SessionStore to its remote session.
- * Cancels a stuck busy stream once, then resumes with backoff.
+ * Resumes with backoff. Never cancels: cancel aborts the live turn, and
+ * when no turn is active yet it waits and aborts the next one. Production
+ * threads then settle as cancelled and later messages are ignored.
  * Does not call newSession — that is recoverDeadSession's job.
  */
 export async function reconnectSession(
@@ -35,20 +38,38 @@ export async function reconnectSession(
     }
 
     const status = store.snapshot.status;
-    if (status === "busy" || status === "resuming") {
-      try {
-        await store.cancel();
-      } catch {
-        // Cancel may reject when the stream is already gone.
-      }
-    }
-
     try {
       await store.resume();
+      // #region agent log
+      agentDebugLog("session-reconnect.ts:resume", "resumed without cancel", "F", {
+        status,
+        attempt,
+        runId: "post-fix",
+      });
+      // #endregion
       return { ok: true };
     } catch (cause) {
-      lastError =
-        cause instanceof Error ? cause.message : "Could not reconnect.";
+      const message = errorSummary(cause) ?? "Could not reconnect.";
+      // A send is already in flight. Cancelling it is what silenced long turns.
+      if (message.includes("pending submissions")) {
+        // #region agent log
+        agentDebugLog("session-reconnect.ts:resume", "left live turn alone", "F", {
+          status,
+          attempt,
+          runId: "post-fix",
+        });
+        // #endregion
+        return { ok: true };
+      }
+      lastError = message;
+      // #region agent log
+      agentDebugLog("session-reconnect.ts:resume", "resume failed", "F", {
+        status,
+        attempt,
+        error: message,
+        runId: "post-fix",
+      });
+      // #endregion
     }
   }
 

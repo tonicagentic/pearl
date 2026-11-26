@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type FC,
 } from "react";
 import { Platform } from "react-native";
@@ -15,7 +16,7 @@ import {
   isTimelineToolCall,
   type AssistantMessagePart,
 } from "@/src/assistant-blocks";
-import { useEveEvents } from "@/src/chat-context";
+import { useChats, useEveEvents } from "@/src/chat-context";
 import { useWorkspaceOptional } from "@/src/workspace-context";
 import { formatDurationMs, turnEventSpan } from "@/src/turn-duration";
 import {
@@ -149,10 +150,18 @@ export const SessionTimelineSegment: FC<{
   const liveEvents = useEveEvents();
   const events = overrideEvents ?? liveEvents;
   const { conversation } = useChatConversation();
+  const { store } = useChats();
+  const catchingUp = useSyncExternalStore(
+    (listener) => store.subscribe(listener),
+    () => store.snapshot.status === "resuming",
+    () => false,
+  );
   // Questions own the status line ("Asking questions"); fold the timeline.
   // Approvals / sign-in keep the live shimmer until the user answers.
   const showLive =
-    live && (streaming || (awaitingInput && !askingQuestions));
+    live &&
+    !catchingUp &&
+    (streaming || (awaitingInput && !askingQuestions));
   // Event-log span once the turn settles; while the answer is still printing
   // we reuse the frozen live clock from TurnElapsedProvider instead.
   const settledDuration = useMemo(() => {
@@ -196,9 +205,11 @@ export const SessionTimelineSegment: FC<{
       >[0]["agents"],
       statusType: streaming ? "running" : statusType,
       waitingLabel: header.text || "Thinking",
+      catchingUp,
     });
     return liveState.label ?? header.text;
   }, [
+    catchingUp,
     conversation.agents,
     events,
     header.text,

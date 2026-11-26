@@ -4,6 +4,7 @@ import {
   getLiveReplyParts,
   pushLiveReplyDelta,
   reconcileLiveReplyWithSnapshot,
+  seedLiveReplyParts,
 } from "../src/live-reply-text";
 import { applyLiveReplyOverlay } from "../src/apply-live-reply";
 
@@ -30,6 +31,29 @@ describe("pushLiveReplyDelta", () => {
     pushLiveReplyDelta({ partId: "p1", kind: "text", delta: "Hel" });
     pushLiveReplyDelta({ partId: "p1", delta: "lo" });
     expect(getLiveReplyParts()).toEqual([{ id: "p1", text: "Hello" }]);
+  });
+});
+
+describe("seedLiveReplyParts", () => {
+  it("seeds a held catch-up reply in one shot", () => {
+    seedLiveReplyParts({
+      turnId: "t1",
+      parts: [{ id: "p1", text: "Hello world" }],
+    });
+    expect(getLiveReplyParts()).toEqual([{ id: "p1", text: "Hello world" }]);
+  });
+
+  it("replaces any prior buffer so catch-up does not append twice", () => {
+    pushLiveReplyDelta({ partId: "p1", delta: "stale" });
+    seedLiveReplyParts({
+      parts: [{ id: "p1", text: "fresh reply" }],
+    });
+    expect(getLiveReplyParts()).toEqual([{ id: "p1", text: "fresh reply" }]);
+  });
+
+  it("does not seed empty parts", () => {
+    seedLiveReplyParts({ parts: [] });
+    expect(getLiveReplyParts()).toEqual([]);
   });
 });
 

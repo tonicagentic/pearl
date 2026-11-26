@@ -9,7 +9,7 @@ import {
   type AssistantMessagePart,
 } from "@/components/assistant-ui/elements/session-timeline";
 import { useChatConversation } from "@/src/conversation-context";
-import { useEveEvents } from "@/src/chat-context";
+import { useChats, useEveEvents } from "@/src/chat-context";
 import { pendingWaitLabel } from "@/src/message-projection";
 import {
   getWaitingLabel,
@@ -32,12 +32,18 @@ const ASKING_QUESTIONS_LABEL = "Asking questions";
  */
 export function AssistantThinking() {
   const { waitKind, conversation } = useChatConversation();
+  const { store } = useChats();
   const events = useEveEvents();
   const agents = conversation.agents;
   const waitingLabel = useSyncExternalStore(
     subscribeWaitingLabel,
     getWaitingLabel,
     getWaitingLabel,
+  );
+  const catchingUp = useSyncExternalStore(
+    (listener) => store.subscribe(listener),
+    () => store.snapshot.status === "resuming",
+    () => false,
   );
 
   const statusType = useAuiState((s) => s.message.status?.type);
@@ -83,11 +89,13 @@ export function AssistantThinking() {
           ? ASKING_QUESTIONS_LABEL
           : personWaitLabel,
         answerPhase: answerOwnsChrome,
+        catchingUp,
       }),
     [
       agents,
       answerOwnsChrome,
       askingQuestions,
+      catchingUp,
       events,
       parts,
       personWaitLabel,

@@ -75,6 +75,31 @@ export function pushLiveReplyDelta(event: {
   });
 }
 
+/**
+ * Seed the live overlay with already-generated text from a catch-up hold.
+ * Replaces any existing buffer so the backlog paints in one shot.
+ */
+export function seedLiveReplyParts(input: {
+  readonly turnId?: string | null;
+  readonly parts: readonly { readonly id: string; readonly text: string }[];
+}): void {
+  if (input.parts.length === 0) return;
+  const parts = new Map<string, LivePart>();
+  const order: string[] = [];
+  for (const part of input.parts) {
+    if (!part.id || part.text.length === 0) continue;
+    parts.set(part.id, { kind: "text", text: part.text });
+    order.push(part.id);
+  }
+  if (order.length === 0) return;
+  emit({
+    turnId: input.turnId ?? null,
+    parts,
+    order,
+    version: state.version + 1,
+  });
+}
+
 /** Drop live overlay (turn settled or snapshot caught up). */
 export function clearLiveReplyText(): void {
   if (state.parts.size === 0 && state.version === 0) return;

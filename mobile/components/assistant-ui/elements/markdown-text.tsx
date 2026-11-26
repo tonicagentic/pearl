@@ -22,6 +22,7 @@ import {
 } from "../../../../lib/streaming-text-reveal";
 import type { TextMessagePartProps } from "@assistant-ui/react-native";
 import {
+  Component,
   type FC,
   Fragment,
   isValidElement,
@@ -33,6 +34,7 @@ import {
   useRef,
 } from "react";
 import {
+  Dimensions,
   Platform,
   Pressable,
   Text as RNText,
@@ -41,6 +43,7 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
+import { agentDebugLog } from "@/src/agent-debug-log";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -81,6 +84,29 @@ const LIST_ITEM_GAP = 4;
 const BLOCK_GAP = 8;
 /** U+25CF BLACK CIRCLE — fuller than U+2022 • at the same point size. */
 const LIST_BULLET = "\u25CF";
+
+const markdownLayoutSeen = new Set<string>();
+
+function logMarkdownBox(
+  path: string,
+  width: number,
+  height: number,
+  textLen: number,
+): void {
+  // #region agent log
+  const key = `${path}:${Math.round(width)}:${Math.floor(textLen / 120)}`;
+  if (markdownLayoutSeen.has(key)) return;
+  markdownLayoutSeen.add(key);
+  agentDebugLog("markdown-text.tsx:layout", "markdown box", "D", {
+    path,
+    width: Math.round(width),
+    height: Math.round(height),
+    windowWidth: Math.round(Dimensions.get("window").width),
+    textLen,
+    clipped: width + 24 < Dimensions.get("window").width,
+  });
+  // #endregion
+}
 
 /** View hosts (lists, file cards) cannot nest inside the selectable Text tree. */
 function isViewHost(node: ReactNode): node is ReactElement {
@@ -668,9 +694,21 @@ const StreamingMarkdownText: FC<
     readonly animateFade: boolean;
   }
 > = ({ text, variant, reveal, animateFade }) => {
+  const paintBucket = useRef("");
   useEffect(() => {
     traceStream("paint", text.length);
-  }, [text.length]);
+    // #region agent log
+    const bucket = `${reveal.writing}:${Math.floor(text.length / 80)}:${Math.floor(reveal.revealed / 80)}`;
+    if (paintBucket.current === bucket) return;
+    paintBucket.current = bucket;
+    agentDebugLog("markdown-text.tsx:stream", "streaming paint", "C", {
+      textLen: text.length,
+      revealed: reveal.revealed,
+      writing: reveal.writing,
+      lag: text.length - reveal.revealed,
+    });
+    // #endregion
+  }, [text.length, reveal.revealed, reveal.writing]);
   const { typeStyle } = useMarkdownTypeStyle(variant);
   const motion = useMotion();
   const baseOptions = useMarkdownOptions(variant);
@@ -711,6 +749,10 @@ const StreamingMarkdownText: FC<
       className="aui-md-root"
       style={{ gap: BLOCK_GAP }}
       accessibilityState={{ busy: writing }}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        logMarkdownBox("streaming", width, height, text.length);
+      }}
     >
       {displayText
         ? elements.map((element, index) => {
@@ -753,7 +795,14 @@ const SettledMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
   // iOS Text.selectable is UILabel (whole-block Copy only). Multiline
   // TextInput uses UITextView so partial selection matches native Notes.
   return (
-    <View className="aui-md-root" style={{ gap: BLOCK_GAP }}>
+    <View
+      className="aui-md-root"
+      style={{ gap: BLOCK_GAP }}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        logMarkdownBox("settled", width, height, text.length);
+      }}
+    >
       {elements.map((element, index) => {
         if (isViewHost(element)) {
           return <Fragment key={`md-v-${index}`}>{element}</Fragment>;
@@ -769,6 +818,10 @@ const SettledMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
               selectionColor={SELECTION_COLOR}
               style={typeStyle}
               className={fallbackClass}
+              onLayout={(event) => {
+                const { width, height } = event.nativeEvent.layout;
+                logMarkdownBox("settled-input", width, height, text.length);
+              }}
             >
               {element}
             </TextInput>
@@ -814,4 +867,32 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = (props) => {
   return <SettledMarkdownText {...props} />;
 };
 
-export const MarkdownText = memo(MarkdownTextImpl);
+class MarkdownRenderBoundary extends Component<
+  { readonly text: string; readonly children: ReactNode },
+  { readonly failed: boolean }
+> {
+  state = { failed: false };
+
+  componentDidCatch(error: Error): void {
+    // #region agent log
+    agentDebugLog("markdown-text.tsx:boundary", "markdown render threw", "C", {
+      error: error.message.slice(0, 240),
+      textLen: this.props.text.length,
+    });
+    // #endregion
+    this.setState({ failed: true });
+  }
+
+  render() {
+    if (this.state.failed) return null;
+    return this.props.children;
+  }
+}
+
+export const MarkdownText = memo(function MarkdownText(props: MarkdownTextProps) {
+  return (
+    <MarkdownRenderBoundary text={props.text}>
+      <MarkdownTextImpl {...props} />
+    </MarkdownRenderBoundary>
+  );
+});

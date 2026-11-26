@@ -64,6 +64,18 @@ function resetTurn(): void {
   turnFadeFromChar = 0;
 }
 
+/**
+ * Force the next streaming paint to show whatever is already buffered with
+ * no fade. Used after catch-up seeds the live overlay so held text snaps in
+ * and only tokens that arrive afterward are paced.
+ */
+export function snapStreamingReveal(): void {
+  turnTickAt = 0;
+  turnShown = 0;
+  turnFadeFromWord = 0;
+  turnFadeFromChar = 0;
+}
+
 function applyCatchUpFloor(ready: number, rate: number, tokens: readonly Token[]): void {
   const floor = ready > rate ? ready - rate : 0;
   turnShown = Math.max(turnShown, floor);
@@ -71,6 +83,48 @@ function applyCatchUpFloor(ready: number, rate: number, tokens: readonly Token[]
     turnFadeFromWord = floor;
     turnFadeFromChar = tokens[floor]?.start ?? 0;
   }
+}
+
+/**
+ * Advance module-level reveal progress for a streaming turn.
+ * Exported for catch-up tests — the hook calls this on each render/rAF tick.
+ */
+export function advanceStreamingReveal(
+  tokens: readonly Token[],
+  wordsPerSecond: number = DEFAULT_WORDS_PER_SECOND,
+  now: number = nowMs(),
+): {
+  readonly shown: number;
+  readonly fadeFromWord: number;
+  readonly fadeFromChar: number;
+} {
+  const ready = tokens.length;
+  const rate = Math.max(wordsPerSecond, 1);
+  if (turnTickAt === 0) {
+    turnShown = ready;
+    turnFadeFromWord = ready;
+    turnFadeFromChar = ready > 0 ? (tokens[ready - 1]?.end ?? 0) : 0;
+    turnTickAt = now;
+  } else {
+    const dt = Math.min(0.1, (now - turnTickAt) / 1000);
+    turnTickAt = now;
+    const before = Math.floor(turnShown);
+    applyCatchUpFloor(ready, rate, tokens);
+    const afterFloor = Math.floor(turnShown);
+    if (ready > before && afterFloor <= before) {
+      turnFadeFromWord = before;
+      turnFadeFromChar =
+        before > 0 ? (tokens[before - 1]?.end ?? turnFadeFromChar) : 0;
+    }
+    if (turnShown < ready) {
+      turnShown = Math.min(ready, turnShown + dt * rate);
+    }
+  }
+  return {
+    shown: Math.min(ready, Math.floor(turnShown)),
+    fadeFromWord: turnFadeFromWord,
+    fadeFromChar: turnFadeFromChar,
+  };
 }
 
 /**
@@ -93,34 +147,7 @@ export function useStreamingReveal(
   const rate = Math.max(wordsPerSecond, 1);
 
   if (streaming) {
-    const t = nowMs();
-    if (turnTickAt === 0) {
-      // First paint: show whatever is already buffered with no fade replay.
-      // Opening a previous thread (or hydrating a full snapshot) must not
-      // pace/fade through the stored reply. Live growth after this starts
-      // the smoother below.
-      turnShown = ready;
-      turnFadeFromWord = ready;
-      turnFadeFromChar = ready > 0 ? (tokens[ready - 1]?.end ?? 0) : 0;
-      turnTickAt = t;
-    } else {
-      const dt = Math.min(0.1, (t - turnTickAt) / 1000);
-      turnTickAt = t;
-      const before = Math.floor(turnShown);
-      applyCatchUpFloor(ready, rate, tokens);
-      const afterFloor = Math.floor(turnShown);
-      if (ready > before && afterFloor <= before) {
-        // Slow drip — fade only words that were not yet painted.
-        turnFadeFromWord = before;
-        turnFadeFromChar =
-          before > 0 ? (tokens[before - 1]?.end ?? turnFadeFromChar) : 0;
-      }
-      // Large catch-up: applyCatchUpFloor already set fadeFromWord to the
-      // paced tail so the skipped bulk does not fade on remount.
-      if (turnShown < ready) {
-        turnShown = Math.min(ready, turnShown + dt * rate);
-      }
-    }
+    advanceStreamingReveal(tokens, rate);
   }
 
   const shownTarget = streaming ? Math.min(ready, Math.floor(turnShown)) : ready;

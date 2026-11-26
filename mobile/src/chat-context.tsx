@@ -23,9 +23,12 @@ import {
 } from "./remote-agent-selection";
 import { setChatRemoteAgent } from "./connected-agents-client";
 import { beginStreamTrace, traceStream } from "./stream-trace";
+import { agentDebugLog, errorSummary, lastTextLength } from "./agent-debug-log";
 import {
+  clearLiveReplyText,
   pushLiveReplyDelta,
   reconcileLiveReplyWithSnapshot,
+  seedLiveReplyParts,
 } from "./live-reply-text";
 import { pendingMessageLabel, hasPendingAction } from "./message-projection";
 import type { LiveSpokenDraft, SpokenTurn } from "../../lib/chat/spoken-turns";
@@ -50,6 +53,7 @@ import {
 } from "./chats-client";
 import { mergeEventsForSnapshot } from "../../lib/chat/eve-session-recovery";
 import { repairSessionHydration } from "../../lib/chat/hydration-prefix";
+import { snapStreamingReveal } from "../../lib/streaming-text-reveal";
 import { waitingLabelForText } from "../../lib/pearl-lane";
 import { setWaitingLabel } from "../../lib/waiting-label";
 import { useAuth } from "./auth";
@@ -62,6 +66,15 @@ import {
 } from "./chat-list-reducer";
 import { useNetworkStatus } from "./network-status";
 import { reconnectSession } from "./session-reconnect";
+import {
+  collapseHeldDeltas,
+  flushCatchUpHold,
+  routeCatchUpDelta,
+  shouldClearCatchUpOnEvent,
+  shouldKeepBackgroundSubscription,
+  shouldKeepPendingDraft,
+  type HeldDelta,
+} from "./chat/catch-up";
 
 /** Keep this many recently opened SessionStores warm for instant re-open. */
 const RETAINED_STORE_LIMIT = 10;
@@ -211,6 +224,13 @@ type ChatBinding = {
   archivedEvents: SessionStreamEvent[];
   /** Guards a single seamless dead-session recovery per send attempt. */
   sessionRecoveryAttempted: boolean;
+  /** Last time a stream error tried to reattach, so a dead socket cannot loop. */
+  streamResumeAt: number;
+  /**
+   * Text content.deltas held while status is `resuming`. Flushed when resume
+   * settles — seeded into the live overlay if the turn is still busy, else dropped.
+   */
+  catchUpHold: HeldDelta[];
   queue: Promise<void>;
   batch: { event: SessionStreamEvent; eventIndex: number }[];
   timer: ReturnType<typeof setTimeout> | null;
@@ -218,6 +238,19 @@ type ChatBinding = {
   /** Release SessionStore observation when the store is no longer mounted. */
   stopObserving: (() => void) | null;
 };
+
+/** Apply the catch-up flush for a store that just finished resume(). */
+function applyCatchUpFlush(store: SessionStore, binding: ChatBinding): void {
+  const action = flushCatchUpHold({
+    status: store.snapshot.status,
+    held: binding.catchUpHold,
+  });
+  binding.catchUpHold = [];
+  if (action.kind !== "seed") return;
+  const collapsed = collapseHeldDeltas(action.held);
+  seedLiveReplyParts(collapsed);
+  snapStreamingReveal();
+}
 
 const traceSend = (binding: ChatBinding, stage: string) => {
   if (__DEV__ && binding.sendStartedAt !== null) {
@@ -380,6 +413,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       savedEventCount: repaired.events.length,
       archivedEvents: [...repaired.events],
       sessionRecoveryAttempted: false,
+      streamResumeAt: 0,
+      catchUpHold: [],
       queue: Promise.resolve(),
       batch: [],
       timer: null,
@@ -478,6 +513,28 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     [],
   );
 
+  const markActiveChatRead = useCallback((chatId: string) => {
+    // Optimistic: opening clears unread; waiting/working stay visible.
+    // Callers with a live session wait until resume() settles so the unseen
+    // message has painted before the row loses its unread mark.
+    setChats((current) => {
+      const index = current.findIndex((chat) => chat.id === chatId);
+      if (index < 0) return current;
+      const existing = current[index]!;
+      if (existing.presence !== "unread") return current;
+      const next = [...current];
+      next[index] = {
+        ...existing,
+        presence: "idle",
+        waitingForInput: false,
+      };
+      return next;
+    });
+    void markChatRead(chatId).catch(() => {
+      // List will reconcile on the next reload.
+    });
+  }, []);
+
   // Each callback closes over its own binding. A stream finishing after a chat
   // switch must NEVER write its events into the newly selected chat.
   useEffect(() => {
@@ -504,6 +561,19 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     binding.stopObserving = store.observe();
     store.setCallbacks({
       onEvent: (event) => {
+        // #region agent log
+        if (event.type !== "content.delta" || binding.eventIndex % 40 === 0) {
+          agentDebugLog("chat-context.tsx:onEvent", event.type, "A", {
+            status: store.snapshot.status,
+            eventIndex: binding.eventIndex,
+            deltaChars:
+              event.type === "content.delta" &&
+              typeof (event.data as { delta?: unknown }).delta === "string"
+                ? (event.data as { delta: string }).delta.length
+                : undefined,
+          });
+        }
+        // #endregion
         if (event.type === "content.delta") {
           const data = event.data as {
             readonly delta?: unknown;
@@ -514,24 +584,50 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           if (typeof delta === "string") {
             traceStream("delta", delta.length);
             if (typeof data.partId === "string") {
-              pushLiveReplyDelta({
-                turnId:
-                  typeof event.scope?.turnId === "string"
-                    ? event.scope.turnId
-                    : undefined,
-                partId: data.partId,
-                kind: typeof data.kind === "string" ? data.kind : undefined,
-                delta,
+              const kind =
+                typeof data.kind === "string" ? data.kind : undefined;
+              const turnId =
+                typeof event.scope?.turnId === "string"
+                  ? event.scope.turnId
+                  : undefined;
+              const route = routeCatchUpDelta({
+                status: store.snapshot.status,
+                kind,
               });
+              if (route.kind === "hold") {
+                binding.catchUpHold.push({
+                  turnId,
+                  partId: data.partId,
+                  kind,
+                  delta,
+                });
+              } else if (route.kind === "push") {
+                pushLiveReplyDelta({
+                  turnId,
+                  partId: data.partId,
+                  kind,
+                  delta,
+                });
+              }
             }
           }
         } else if (event.type === "turn.settled") {
-          // Do not clear the live overlay here — the snapshot may still lag
-          // endOfLine commits. Clearing blanks the bubble and brings
-          // "Planning next moves" back while status is still running.
-          // reconcileLiveReplyWithSnapshot drops the overlay once messages
-          // catch up (and on the next idle tick after settle).
+          // Do not clear the live overlay on a completed settle — the snapshot
+          // may still lag endOfLine commits. Failed / cancelled settles and
+          // session.ended drop the catch-up hold and live buffer so a dead
+          // turn does not keep pacing.
+          const outcome =
+            typeof (event.data as { outcome?: unknown }).outcome === "string"
+              ? (event.data as { outcome: string }).outcome
+              : undefined;
+          if (shouldClearCatchUpOnEvent({ type: event.type, outcome })) {
+            binding.catchUpHold = [];
+            clearLiveReplyText();
+          }
           traceStream("settled");
+        } else if (event.type === "session.ended") {
+          binding.catchUpHold = [];
+          clearLiveReplyText();
         }
         if (!binding.id) return;
         binding.batch.push({ event, eventIndex: binding.eventIndex++ });
@@ -553,6 +649,17 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         }
       },
       onFinish: (snapshot) => {
+        // #region agent log
+        agentDebugLog("chat-context.tsx:onFinish", "stream finished", "B", {
+          status: snapshot.status,
+          events: snapshot.events.length,
+          messages: snapshot.messages.length,
+          lastRole: snapshot.messages.at(-1)?.role ?? null,
+          textLen: lastTextLength(snapshot.messages),
+          error: errorSummary(snapshot.error),
+          pending: Boolean(binding.pendingMessage),
+        });
+        // #endregion
         flush();
         if (binding.pendingMessage && activeStoreRef.current === store) {
           setPendingMessage(binding.pendingMessage);
@@ -588,10 +695,57 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           evictRetainedOverflow();
         });
       },
-      onError: () => {
+      onError: (error) => {
+        // #region agent log
+        agentDebugLog("chat-context.tsx:onError", "stream error", "A", {
+          error: errorSummary(error),
+          status: store.snapshot.status,
+          pending: Boolean(binding.pendingMessage),
+          textLen: lastTextLength(store.snapshot.messages),
+        });
+        // #endregion
         if (activeStoreRef.current === store && binding.pendingMessage) {
           setPendingMessage(binding.pendingMessage);
         }
+        // The follow loop already retried transport drops. Landing here means
+        // it stopped. Foreground resume is the only other reattach, so a drop
+        // while the app stays open leaves the thread quiet. Resume without
+        // cancel so a live server turn is not aborted.
+        const now = Date.now();
+        if (now - binding.streamResumeAt < 5_000) {
+          if (activeStoreRef.current === store) {
+            setConnectionError("Lost the connection to Pearl.");
+          }
+          return;
+        }
+        binding.streamResumeAt = now;
+        if (store.snapshot.status === "resuming") return;
+        void store.resume().then(
+          () => {
+            // #region agent log
+            agentDebugLog("chat-context.tsx:onError", "stream reattached", "A", {
+              status: store.snapshot.status,
+              runId: "post-fix",
+            });
+            // #endregion
+            if (activeStoreRef.current === store) {
+              applyCatchUpFlush(store, binding);
+              setConnectionError(null);
+            }
+          },
+          (cause: unknown) => {
+            // #region agent log
+            agentDebugLog("chat-context.tsx:onError", "stream reattach failed", "A", {
+              error: errorSummary(cause),
+              status: store.snapshot.status,
+              runId: "post-fix",
+            });
+            // #endregion
+            if (activeStoreRef.current === store) {
+              setConnectionError("Lost the connection to Pearl.");
+            }
+          },
+        );
       },
       prepareSend: async (input) => {
         binding.sendPrepared = false;
@@ -682,11 +836,35 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       backgroundPresenceUnsubs.current.delete(store);
     }
 
-    if (store.snapshot.session) void store.resume();
+    if (store.snapshot.session) {
+      void store.resume().then(
+        () => {
+          if (activeStoreRef.current !== store) return;
+          applyCatchUpFlush(store, binding);
+          if (binding.id && activeChatIdRef.current === binding.id) {
+            markActiveChatRead(binding.id);
+          }
+        },
+        () => {
+          // Resume failed — still clear unread so the row is not stuck.
+          if (
+            activeStoreRef.current === store &&
+            binding.id &&
+            activeChatIdRef.current === binding.id
+          ) {
+            markActiveChatRead(binding.id);
+          }
+        },
+      );
+    } else if (binding.id && activeChatIdRef.current === binding.id) {
+      markActiveChatRead(binding.id);
+    }
     return () => {
       flush();
-      const stillWorking =
-        store.snapshot.status === "busy" || Boolean(binding.pendingMessage);
+      const stillWorking = shouldKeepBackgroundSubscription({
+        status: store.snapshot.status,
+        pendingMessage: Boolean(binding.pendingMessage),
+      });
       if (stillWorking) {
         // Warm path: keep observe()+callbacks so the transcript keeps syncing
         // while the user is in another chat. Presence also comes from the
@@ -743,6 +921,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     touchRetained,
     evictRetainedOverflow,
     patchChatPresence,
+    markActiveChatRead,
   ]);
 
   const reconnect = useCallback(
@@ -751,7 +930,11 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       if (!target?.snapshot.session) return true;
       const result = await reconnectSession(target);
       if (result.ok) {
-        if (activeStoreRef.current === target) setConnectionError(null);
+        if (activeStoreRef.current === target) {
+          const binding = bindings.get(target);
+          if (binding) applyCatchUpFlush(target, binding);
+          setConnectionError(null);
+        }
         return true;
       }
       if (activeStoreRef.current === target) {
@@ -759,7 +942,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       }
       return false;
     },
-    [],
+    [bindings],
   );
 
   // When iOS/Android returns the process to the foreground, reattach every
@@ -782,26 +965,6 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       subscription.remove();
     };
   }, [retainedStores, reconnect]);
-
-  const markActiveChatRead = useCallback((chatId: string) => {
-    // Optimistic: opening clears unread; waiting/working stay visible.
-    setChats((current) => {
-      const index = current.findIndex((chat) => chat.id === chatId);
-      if (index < 0) return current;
-      const existing = current[index]!;
-      if (existing.presence !== "unread") return current;
-      const next = [...current];
-      next[index] = {
-        ...existing,
-        presence: "idle",
-        waitingForInput: false,
-      };
-      return next;
-    });
-    void markChatRead(chatId).catch(() => {
-      // List will reconcile on the next reload.
-    });
-  }, []);
 
   const resumeChatFromPush = useCallback(
     (chatId: string) => {
@@ -836,10 +999,16 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     async (chatId: string): Promise<boolean> => {
       const generation = ++selectionGeneration.current;
       if (chatId === activeChatIdRef.current) {
-        markActiveChatRead(chatId);
         const active = activeStoreRef.current;
         if (active?.snapshot.session) {
-          void reconnect(active);
+          // Reconnect flushes catch-up; mark read after the gap has painted.
+          void reconnect(active).then((ok) => {
+            if (ok && activeChatIdRef.current === chatId) {
+              markActiveChatRead(chatId);
+            }
+          });
+        } else {
+          markActiveChatRead(chatId);
         }
         return true;
       }
@@ -866,10 +1035,11 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         const hasConsumed = retained.snapshot.events.some(
           (event) => event.type === "delivery.consumed",
         );
-        const pending =
-          binding.pendingMessage && (!hasHistory || !hasConsumed)
-            ? binding.pendingMessage
-            : null;
+        const pending = shouldKeepPendingDraft({
+          pendingMessage: binding.pendingMessage,
+          hasHistory,
+          hasConsumed,
+        });
         if (!pending) binding.pendingMessage = null;
         setPendingMessage(pending);
         setSpokenTurns([]);
@@ -878,7 +1048,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         touchRetained(chatId, retained);
         setStore(retained);
         pruneIdleStore(prior);
-        markActiveChatRead(chatId);
+        // Sessioned stores mark read after resume in the observe effect.
+        if (!retained.snapshot.session) markActiveChatRead(chatId);
         // Retained stores skip a network round-trip; refresh spoken / quick turns.
         void getChat(chatId).then((fresh) => {
           if (activeChatIdRef.current === chatId && fresh) {
@@ -907,10 +1078,11 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         const hasConsumed = chat.events.some(
           (event) => event.type === "delivery.consumed",
         );
-        const stillPending =
-          chat.pendingUserMessage && (!hasHistory || !hasConsumed)
-            ? chat.pendingUserMessage
-            : null;
+        const stillPending = shouldKeepPendingDraft({
+          pendingMessage: chat.pendingUserMessage,
+          hasHistory,
+          hasConsumed,
+        });
         bindings.get(nextStore)!.pendingMessage = stillPending;
         const prior = activeStoreRef.current;
         activeStoreRef.current = nextStore;
@@ -928,7 +1100,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         setPersistenceError(null);
         setStore(nextStore);
         pruneIdleStore(prior);
-        markActiveChatRead(chat.id);
+        // Sessioned stores mark read after resume in the observe effect.
+        if (!chat.session) markActiveChatRead(chat.id);
         return true;
       } catch {
         if (generation === selectionGeneration.current) {

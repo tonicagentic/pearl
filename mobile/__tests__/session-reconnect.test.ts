@@ -35,12 +35,21 @@ describe("reconnectSession", () => {
     expect(store.resume).not.toHaveBeenCalled();
   });
 
-  it("cancels a busy stream then resumes", async () => {
+  it("resumes a busy stream without cancelling the live turn", async () => {
     const store = fakeStore("busy", true);
     await expect(reconnectSession(store as never, { backoffMs: [] })).resolves.toEqual({
       ok: true,
     });
-    expect(store.cancel).toHaveBeenCalled();
+    expect(store.cancel).not.toHaveBeenCalled();
     expect(store.resume).toHaveBeenCalled();
+  });
+
+  it("leaves a turn alone when resume reports pending submissions", async () => {
+    const store = fakeStore("busy", true);
+    store.resume.mockRejectedValueOnce(new Error("eve session has pending submissions."));
+    await expect(reconnectSession(store as never, { backoffMs: [] })).resolves.toEqual({
+      ok: true,
+    });
+    expect(store.cancel).not.toHaveBeenCalled();
   });
 });

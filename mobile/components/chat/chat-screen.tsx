@@ -70,6 +70,7 @@ import { canUseQuickPath } from "../../../lib/pearl-lane";
 import { DEFAULT_MODEL_KEY, getModelSelection } from "@/src/model-selection";
 import { getRemoteAgentSelection } from "@/src/remote-agent-selection";
 import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
+import { agentDebugLog, errorSummary, lastTextLength } from "@/src/agent-debug-log";
 import type { WaitingAction } from "@/components/assistant-ui/elements/waiting-action-card";
 import { SubagentTranscriptSheet } from "@/components/assistant-ui/elements/subagent-transcript-sheet";
 import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
@@ -667,6 +668,28 @@ export function ChatScreen({
     liveReplyVersion,
   ]);
 
+  const textLen = lastTextLength(messages);
+  // #region agent log
+  const turnDebugKey = `${status}|${isRunning}|${hasError}|${composerBlocked}|${unresolvedSend}|${expectingAssistant}|${localSend?.phase ?? "-"}|${messages.length}|${Math.floor(textLen / 200)}|${errorSummary(storeError) ?? ""}`;
+  const turnDebugKeyRef = useRef("");
+  if (turnDebugKey !== turnDebugKeyRef.current) {
+    turnDebugKeyRef.current = turnDebugKey;
+    agentDebugLog("chat-screen.tsx:turn", "turn state", "E", {
+      status,
+      isRunning,
+      hasError,
+      error: errorSummary(storeError),
+      composerBlocked,
+      unresolvedSend,
+      expectingAssistant,
+      localPhase: localSend?.phase ?? null,
+      messages: messages.length,
+      textLen,
+      lastRole: messages[messages.length - 1]?.role ?? null,
+    });
+  }
+  // #endregion
+
   const hitlDebugKey = useRef("");
   useEffect(() => {
     const last = messages[messages.length - 1];
@@ -1050,6 +1073,13 @@ export function ChatScreen({
                   ctx.setQuickStreamingText((current) => current + delta);
                 },
               });
+              // #region agent log
+              agentDebugLog("chat-screen.tsx:quick", "quick path finished", "A", {
+                http: response.status,
+                outcome: result.outcome,
+                error: result.outcome === "error" ? result.message : null,
+              });
+              // #endregion
               if (result.outcome === "answered") {
                 ctx.setQuickTurns([...result.turns]);
                 ctx.setQuickStreaming(false);
@@ -1065,7 +1095,12 @@ export function ChatScreen({
                 return;
               }
             }
-          } catch {
+          } catch (cause) {
+            // #region agent log
+            agentDebugLog("chat-screen.tsx:quick", "quick path threw", "A", {
+              error: errorSummary(cause),
+            });
+            // #endregion
             // Fall through to eve.
           }
           ctx.setQuickTurns(priorQuick);
@@ -1115,6 +1150,15 @@ export function ChatScreen({
           sendPayload,
           { eventBaseline: preview.eventBaseline },
         );
+        // #region agent log
+        agentDebugLog("chat-screen.tsx:send", "send finished", "A", {
+          outcome: result.outcome,
+          uncertain: result.outcome === "failed" ? result.uncertain : false,
+          error: result.outcome === "failed" ? result.message : null,
+          status: activeStore.snapshot.status,
+          textLen: lastTextLength(activeStore.snapshot.messages),
+        });
+        // #endregion
         if (result.outcome === "accepted") {
           setLocalSends((current) => {
             if (current.get(activeStore)?.preview !== preview.preview) return current;

@@ -83,6 +83,12 @@ export type DeriveLiveThinkingStateInput = {
   readonly personWaitLabel?: string | null;
   /** When true, reply prose is already the trailing content — yield. */
   readonly answerPhase?: boolean;
+  /**
+   * When true, the store is still catching up (`status === "resuming"`).
+   * Suppress tool / progress / planning chrome so historical call.input and
+   * call.progress do not flash during a return to a long thread.
+   */
+  readonly catchingUp?: boolean;
 };
 
 export type LiveThinkingState = {
@@ -396,6 +402,7 @@ export function deriveLiveThinkingState(
     waitingLabel = PLANNING_NEXT_MOVES_LABEL,
     personWaitLabel,
     answerPhase = false,
+    catchingUp = false,
   } = input;
 
   if (statusType === "requires-action") {
@@ -410,6 +417,11 @@ export function deriveLiveThinkingState(
   }
 
   if (answerPhase) {
+    return { phase: "idle", label: undefined };
+  }
+
+  // Catch-up replays historical progress. Keep chrome quiet until live.
+  if (catchingUp) {
     return { phase: "idle", label: undefined };
   }
 
