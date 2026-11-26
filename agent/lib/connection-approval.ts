@@ -59,7 +59,7 @@ export function writeToolApproval(
         return {
           type: "denied",
           reason:
-            `Plan mode cannot call ${bare}. Write or update a plan with write_project_file (or save_plan), ` +
+            `Plan mode cannot call ${bare}. Write or update a plan with write_project_file, ` +
             "or switch to Agent mode to carry the work out.",
         };
       }

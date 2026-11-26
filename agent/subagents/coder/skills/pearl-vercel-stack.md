@@ -82,12 +82,11 @@ specific rule.
 ### Planning
 
 Pearl default: durable **project plan files** via parent `write_project_file`
-(or `save_plan`) at `/workspace/docs/plans/<projectId>/<slug>.md`, linked on
-the project. Use `list_project_files` / `read_project_file` (or
-`list_plans` / `read_plan`) to find prior work. The obra/superpowers skills
-below are for implementer task breakdown — still persist through
-`write_project_file`, not `docs/superpowers/plans/`, unless the user asks for
-a superpowers-style file-only ledger.
+at `/workspace/docs/plans/<projectId>/<slug>.md`, linked on the project. Use
+`list_project_files` / `read_project_file` to find prior work. The
+obra/superpowers skills below are for implementer task breakdown — still
+persist through `write_project_file`, not `docs/superpowers/plans/`, unless
+the user asks for a superpowers-style file-only ledger.
 
 | Topic | Load |
 | --- | --- |

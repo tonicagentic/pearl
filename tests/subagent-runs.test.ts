@@ -167,3 +167,26 @@ test("v27 task.ended settles the run", () => {
   assert.equal(runs[0].state, "ready");
   assert.equal((runs[0].result as { outcome: string }).outcome, "completed");
 });
+
+test("v27 task.ended with cancelled outcome marks the run cancelled", () => {
+  const started = {
+    type: "task.started",
+    meta: { at: "2026-09-20T19:59:57.551Z" },
+    data: {
+      kind: "background",
+      name: "coder",
+      taskId: "task_c",
+      startedBy: { callId: "call_coder" },
+    },
+  };
+  const ended = {
+    type: "task.ended",
+    meta: { at: "2026-09-20T20:01:00.000Z" },
+    data: { taskId: "task_c", outcome: "cancelled" },
+  };
+  const runs = deriveSubagentRuns(
+    [started, ended],
+    Date.parse(ended.meta.at) + 1_000,
+  );
+  assert.equal(runs[0].state, "cancelled");
+});

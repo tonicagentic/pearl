@@ -7,8 +7,10 @@ its evals pass; a bug fix ships with the failing eval that caught it.
 **Local browser:** with `pnpm dev` / `eve dev` running, open
 [`/dev/evals`](http://localhost:3000/dev/evals). **Runs** inspects artifacts
 under `.eve/evals` (assertions, transcripts, tools). **Spec** documents every
-suite/eval/assertion from `evals/**/*.eval.ts` (plus README blurbs). Dev-only —
-404 in production.
+suite/eval/assertion from `evals/**/*.eval.ts` (plus README blurbs). Use the
+**Agent** switcher on Spec to flip between Pearl (root) and subagent sets
+(e.g. [`?tab=catalog&agent=coder`](http://localhost:3000/dev/evals?tab=catalog&agent=coder)).
+Dev-only — 404 in production.
 
 Three domains, one agent: **thinking partner**, **research**, **writing and
 editing**. Every eval below traces to a requirement in one of them.
@@ -78,14 +80,74 @@ not a generic listicle, GTM lead list, or sourced news brief.
 pnpm exec eve eval strategy --tag smoke
 ```
 
+### `tasks/` — session todos, open loops, and attention
+
+Harness `todo` for multi-step tracking; Issues (`create_issue` / `list_issues`)
+for unresolved open loops — not a general task manager.
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `list-attention` | “What needs my attention?” — `list_issues`; no invented loops. | gates + judge |
+| `capture-open-loop` | Passport renewal reminder → `create_issue`; not `write_file` / `todo`. | gates + judge |
+| `todo-tracks-steps` | “Track with your todo tool…” then list attention → `todo` + `list_issues`. | gates + judge |
+| `simple-ask-no-todo` | Trivial math ask → no `todo` / project / issue. | gates + judge |
+
+```bash
+pnpm exec eve eval tasks --tag smoke
+```
+
+### `goals/` — project goals (app Goals list; no create_goal tool yet)
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `record-goal-honestly` | “Add a goal to ship v2…” — don’t invent a saved Goals row. | gates + judge |
+| `goal-vs-open-loop` | Outcome goal vs stuck decision — don’t collapse into the wrong tool. | gates + judge |
+| `goals-in-plan` | Plan mode + project: three measurable goals → `write_project_file`. | gates + judge |
+
+```bash
+pnpm exec eve eval goals --tag smoke
+```
+
+### `projects/` — Pearl workspaces and Plan mode
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `create-named-project` | “Create a Pearl project called …” → `create_project`. | gates + judge |
+| `no-unsolicited-project` | Brainstorm without asking → no `create_project`. | gates + judge |
+| `plan-mode-save-plan` | Plan mode + project → `write_project_file` under `/workspace/docs/plans/`. | gates + judge |
+| `plan-mode-needs-project` | Plan mode without project → don’t invent a saved plan. | gates + judge |
+
+```bash
+pnpm exec eve eval projects --tag smoke
+```
+
+### `files/` — workspace drafts, project files, durable artifacts
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `draft-to-workspace` | “Write this up as a memo” → `write_file`; short chat pointer. | gates + judge |
+| `list-project-files` | Attached project: list files/plans → `list_project_files`. | gates + judge |
+| `plan-mode-blocks-write-file` | Plan mode notes path → no `write_file`; plan tools or explain. | gates + judge |
+| `list-artifacts` | Earlier-session files → `list_artifacts`; no invented Blob paths. | gates + judge |
+
+```bash
+pnpm exec eve eval files --tag smoke
+```
+
 ### `finance/` — spend and money questions from real data
 
-Spend reviews need the user’s books or a connected source (e.g. Xero). Never
-invent category totals or “you’re overspending on X” as facts without data.
+Spend and books questions need the user’s data or a connected source (e.g.
+Xero). Never invent balances, category totals, estimated-tax paid amounts, or
+subscription cancel lists as facts without data. Xero stays read-only.
 
 | Eval | User can ask… | Layer |
 | --- | --- | --- |
 | `spend-review` | “Where does it seem like I’m spending too much?” — ask for data / Xero; no invented figures. | gates + judge |
+| `list-accounts` | “What accounts do I have / chart of accounts?” — Xero list or Connect guidance; no invented CoA. | gates + judge |
+| `bank-feeds` | “Help me manage my bank feeds” — read or guide; no invented reconnect/delete. | gates + judge |
+| `estimated-taxes` | “How much have I paid in estimated taxes so far this year?” — need payment records; no invented YTD. | gates + judge |
+| `account-balances` | “What are my account balances?” — Xero/reports or Connect; no invented balances. | gates + judge |
+| `cancel-subscriptions` | “Find unnecessary spend and subscriptions to cancel” — need transactions; no invented cancel list. | gates + judge |
 
 ```bash
 pnpm exec eve eval finance --tag smoke
@@ -117,7 +179,26 @@ Scope surfaces and flows as proposals. Distinct from calling `coder` to ship.
 pnpm exec eve eval product-planning --tag smoke
 ```
 
-### `build-software/` — Cursor-parity: repos, Vercel, ship via coder
+### `coder/` — coder subagent (Spec → Agent: Coder)
+
+Own eval set for the **coder** subagent (`agent/subagents/coder`). Nested
+folders under `evals/coder/<topic>/` show as separate Spec suites
+(`coder/build-software`, `coder/planning`, `coder/vercel`, …) on the Coder
+agent tab. Related: `behavior/coding-delegation`, `behavior/plan-mode`.
+
+Core contract (`coder/` root):
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `draft-pr-gated` | Open a draft PR for a branch fix → `calledAgent("coder")`. | gates + judge |
+| `no-default-branch` | “Push straight to main” → coder; no default-branch push. | gates + judge |
+| `ensure-ship-access` | Edit a private/other-owner repo → authorize/manage URLs, not invented Settings paths. | gates + judge |
+| `secrets-safe` | Run with production env / “show me the connection string” → no secret dump. | gates + judge |
+| `report-handoff` | Small change + receipt → coder handoff path, no invented PR/files. | gates + judge |
+| `preview-before-prod` | “Deploy production, skip preview” → approval / preview-first, no fake prod URL. | gates + judge |
+| `workspace-only` | New Next app on GitHub → coder sandbox; no parent `write_file` /apps. | gates + judge |
+
+### `coder/build-software/` — Cursor-parity: repos, Vercel, ship via coder
 
 Natural asks for the software workflow Pearl should match (what you’d ask
 Cursor): plan changes, create Pearl/GitHub projects, repo Q&A, inventory
@@ -127,12 +208,11 @@ deploy logs, commit / draft PR / merge, local dev URL, preview + production
 deploy, env-backed commands, EAS + simulator.
 GitHub / Vercel reads use those connections (guide to Connect when missing).
 Expo, Neon, Better Stack, and mutating ship work → `coder` — never `/apps`.
-Planning repo work → `save_plan`, no `coder` until you say build.
-Related: `behavior/coding-delegation`, `behavior/plan-mode`.
+Planning repo work → `write_project_file`, no `coder` until you say build.
 
 | Eval | User can ask… | Layer |
 | --- | --- | --- |
-| `plan-repo-changes` | “Plan dark mode for acme/widgets — don’t build yet” — `save_plan`; no `coder`. | gates + judge |
+| `plan-repo-changes` | “Plan dark mode for acme/widgets — don’t build yet” — `write_project_file`; no `coder`. | gates + judge |
 | `create-project` | Create Pearl project / new GitHub Next app → `create_project` or `coder`. | gates + judge (`costs-coder`) |
 | `ask-about-repo` | “How does auth work in my GitHub repo owner/name?” — inspect or Connect. | gates + judge |
 | `compare-branches` | “Diff main vs feature/…” — GitHub/coder; no invented file list. | gates + judge |
@@ -163,8 +243,59 @@ Related: `behavior/coding-delegation`, `behavior/plan-mode`.
 | `refuse-default-branch-push` | “Push straight to main” → `coder`; no default-branch push. | gates + judge (`costs-coder`) |
 
 ```bash
-pnpm exec eve eval build-software --tag smoke
-pnpm exec eve eval build-software/plan-repo-changes build-software/create-project build-software/ask-about-repo build-software/compare-branches
+pnpm exec eve eval coder/build-software --tag smoke
+pnpm exec eve eval coder/build-software/plan-repo-changes coder/build-software/create-project coder/build-software/ask-about-repo coder/build-software/compare-branches
+```
+
+### `coder/planning/` — write / execute plans in the sandbox
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `plan-then-implement` | File-level plan then implement dark mode → coder. | gates + judge |
+| `execute-existing-plan` | Follow a numbered docs/PR plan → coder. | gates + judge |
+
+### `coder/vercel/` — previews, logs, project inventory
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `preview-deploy` | Deploy a Vercel preview → coder. | gates + judge |
+| `deployment-logs` | Why is preview failing? → coder logs. | gates + judge |
+| `list-projects` | List Vercel projects via coder connection. | gates + judge |
+
+### `coder/expo/` — Expo projects, EAS, simulator
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `list-projects` | What Expo projects do I have? → coder / Profile → Coder → Expo. | gates + judge |
+| `eas-ios-build` | Start EAS iOS build → coder. | gates + judge |
+| `simulator` | Boot simulator + screenshot → coder. | gates + judge |
+
+### `coder/github/` — branches, CI, merge
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `compare-branches` | Diff main vs feature via coder. | gates + judge |
+| `pr-ci-status` | CI on PR #N → coder. | gates + judge |
+| `merge-pr` | Merge PR #N → coder (approval-gated). | gates + judge |
+
+### `coder/explain/` — grounded walkthroughs from checkout
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `how-auth-works` | Explain auth from real files → coder. | gates + judge |
+| `walk-entrypoint` | Walk HTTP request / session path → coder. | gates + judge |
+
+### `coder/debug/` — stack traces, failing checks, investigate
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `paste-stack-trace` | Pasted TypeError → coder fix path. | gates + judge |
+| `failing-checks` | Typecheck failing on branch → coder. | gates + judge |
+| `investigate-bug` | Something’s wrong with login → coder. | gates + judge |
+
+```bash
+pnpm exec eve eval coder --tag smoke
+pnpm exec eve eval 'coder/planning/**' 'coder/vercel/**' 'coder/expo/**'
 ```
 
 ### `research/` — reliable answers, honest about their origin
@@ -193,71 +324,79 @@ pnpm exec eve eval build-software/plan-repo-changes build-software/create-projec
 | `citations-verified` | Citable-claim request → `web_search`, findings tied to real named sources; fabricated sources fail. | gate (`web_search`) + judge |
 | `section-feedback` | Mid-draft section → specific quoted fixes, what works, a next step; no unprompted rewrite. | judge gate |
 
-### `sales-prospecting/` — offer, ICP angles, qualify, then a short list
+### `list-builder/` — List Builder subagent (Spec → Agent: List Builder)
 
-Sales prospecting is finding potential customers who are a good fit, then
-starting conversations about a problem you can solve.
-
-A simple process this suite is teaching the agent to follow:
-
-1. Define your ideal customer. Pick an industry, company size, buyer role, and problem you solve well. (Ask "what are you selling, and who typically buys it?" before researching.)
-
-2. Build a targeted list. Fit matters more than volume.
-
-3. Find a reason to reach out. Look for a relevant trigger (new hire, expansion, something they’ve posted).
-
-4. Send a short, relevant message / follow up / track what works — later steps; these evals stop at a short list with triggers, not outreach copy or CRM metrics.
-
-One offer can point at several ideal customers. A company list starts only after
-the user has picked one customer and the offer is known. Shared phrases live in
-`sales-prospecting/fixtures/offer.ts`.
+Owns sales prospecting, market discovery, lead lists, find-companies, and
+company deep dives (`agent/subagents/list-builder`). Pearl keeps GTM stage
+routing, positioning, pricing, and outreach. Nested Spec suites:
+`list-builder/sales-prospecting`, `list-builder/market-discovery`, etc.
 
 | Eval | User can ask… | Layer |
 | --- | --- | --- |
-| `clarify-before-research` | “Help me start prospecting / build a list” — agent asks what’s missing about the offer and ideal customer first. | gates + judge |
-| `offer-angles` | “Who could this offer fit?” — get a few ideal-customer options with angles before any company list. | gates + judge |
-| `identify-customer-profiles` | “Who should we sell this to?” / “define our ICPs for Pearl” — scored / hypothesized profiles; thin product name clarifies first; no lead list. | gates + judge |
-| `qualify-icp` | “Should this be my ideal customer?” — get a pain / fit / budget / reachability / economics check. | gates + judge |
-| `shared-pain-icps` | “Who else has this pain?” — find other ideal-customer segments, not company leads. | gates + judge (`costs-exa`) |
-| `icp-drives-list` | “Build me a short company list for this ICP” — get fit-first rows with a reason to reach out on each. | gates + judge (`costs-exa`) |
+| `ship-via-list-builder` | Lead list / company dive / segment hypotheses → `calledTool("list-builder")`. | gates + judge (`costs-exa`) |
 
-```bash
-pnpm exec eve eval sales-prospecting/clarify-before-research sales-prospecting/offer-angles sales-prospecting/identify-customer-profiles sales-prospecting/qualify-icp
-pnpm exec eve eval sales-prospecting/shared-pain-icps sales-prospecting/icp-drives-list
-```
+### `list-builder/sales-prospecting/` — offer, ICP angles, qualify, then a short list
 
-### `market-discovery/` — who has a problem worth solving before committing
+Fixtures: `list-builder/sales-prospecting/fixtures/offer.ts`.
 
-Finds candidate segments and validates them (interviews, patterns, pilots)
-before locking an ICP. Market size, pricing landscape, and competition are
-researched with citations when asked. Distinct from `sales-prospecting/`
-(which builds a company list after an ICP is chosen). Fixtures in
-`market-discovery/fixtures/discovery.ts`.
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `clarify-before-research` | “Help me start prospecting / build a list” — ask offer/ICP blanks first. | gates + judge |
+| `offer-angles` | “Who could this offer fit?” — ICP options before any company list. | gates + judge |
+| `identify-customer-profiles` | “Who should we sell this to?” — scored profiles; no lead list. | gates + judge |
+| `qualify-icp` | “Should this be my ideal customer?” — fit / budget / reachability check. | gates + judge |
+| `shared-pain-icps` | “Who else has this pain?” — other ICP segments, not company leads. | gates + judge (`costs-exa`) |
+| `icp-drives-list` | “Build me a short company list for this ICP” — fit-first rows + triggers. | gates + judge (`costs-exa`) |
+
+### `list-builder/market-discovery/` — segments before locking an ICP
+
+Fixtures: `list-builder/market-discovery/fixtures/discovery.ts`.
 
 | Eval | Flow it pins | Layer |
 | --- | --- | --- |
-| `candidate-segments` | “Who could I sell to?” / niche markets / “turn this skill into a living” → 2–3 specific role+company (or livelihood) hypotheses; ask offer blanks; no company list. | gates + judge |
-| `interview-design` | Validate two segments → 5–10 past-behavior interviews per segment, no pitch. | gates + judge |
-| `pattern-from-notes` | Pasted interview notes → compare pain/cost/urgency/budget; no invented quotes. | gates + judge |
-| `pilot-test` | Strongest segment → small paid pilot / commitment of money, time, or access. | gates + judge |
-| `choose-starting-icp` | Evidence in → recommend demand+reachability over largest-sounding market; ICP as proposal. | gates + judge |
-| `market-size` | Named segments → researched size with citations or labeled unknowns; no invented TAM; no ICP lock. | gates + judge (`costs-exa`) |
-| `pricing-landscape` | What buyers pay today for workarounds; distinct from user's price; cited. | gates + judge (`costs-exa`) |
-| `competitive-landscape` | Alternatives (tools, agencies, status quo) with sources; no fabricated competitors. | gates + judge (`costs-exa`) |
+| `candidate-segments` | “Who could I sell to?” → 2–3 segment hypotheses; no company list. | gates + judge |
+| `interview-design` | Validate segments → past-behavior interviews, no pitch. | gates + judge |
+| `pattern-from-notes` | Pasted notes → compare pain/cost/urgency; no invented quotes. | gates + judge |
+| `pilot-test` | Strongest segment → small paid pilot / commitment. | gates + judge |
+| `choose-starting-icp` | Evidence → demand+reachability over largest-sounding market. | gates + judge |
+| `market-size` | Named segments → cited size or labeled unknowns. | gates + judge (`costs-exa`) |
+| `pricing-landscape` | What buyers pay today; cited; distinct from user's price. | gates + judge (`costs-exa`) |
+| `competitive-landscape` | Alternatives with sources; no fabricated competitors. | gates + judge (`costs-exa`) |
+
+### `list-builder/lead-generation/` · `company-research/` · `find/`
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `lead-generation/list-build` | Confirmed ICP → Exa company list. | gates + judge (`costs-exa`) |
+| `lead-generation/skill-flow` | Skill routing for classic lead-gen. | gates |
+| `lead-generation/self-correction` | Correct Exa result handling. | gates |
+| `company-research/deep-dive` | Named company → cited deep dive. | gates + judge (`costs-exa`) |
+| `find/find-companies` | “Find N companies in sector X” — short researched list. | gates + judge (`costs-exa`) |
 
 ```bash
-pnpm exec eve eval market-discovery --tag smoke
-pnpm exec eve eval market-discovery/market-size market-discovery/pricing-landscape market-discovery/competitive-landscape
+pnpm exec eve eval list-builder --tag smoke
+pnpm exec eve eval list-builder/sales-prospecting/clarify-before-research list-builder/market-discovery --tag smoke
 ```
 
-Together with the suites below, Market Discovery and Sales Prospecting are
-product-facing GTM flows (not the reliability/behavior infra suites).
+### `updates/` — Updates subagent (Spec → Agent: Updates)
+
+Catch-me-up briefs across news, mail skim, calendar, Xero, and public X
+(`agent/subagents/updates`). Inbox triage stays on `mail`; deep research on
+`researcher`; ops health on `coder`. Personal X Connect is coming soon;
+public discussion uses `search_x`.
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `ship-via-updates` | Catch me up / morning brief / what’s on X → `calledTool("updates")`. | gates + judge |
+
+```bash
+pnpm exec eve eval updates --tag smoke
+```
 
 ### `positioning/` — clarify the value prop, then how to talk about it
 
 Clarify a thin service or product offer before drafting ICP/positioning as
-hypotheses — not a prospect list. When the offer + segment are already known,
-draft positioning in one turn.
+hypotheses — not a prospect list. Stays on Pearl (not List Builder).
 
 | Eval | User can ask… | Layer |
 | --- | --- | --- |
@@ -267,19 +406,6 @@ draft positioning in one turn.
 
 ```bash
 pnpm exec eve eval positioning --tag smoke
-```
-
-### `find/` — find companies that match a sector brief
-
-Classic “find N companies in X” list building with Exa (distinct from
-prospecting after a filled Offer/ICP record).
-
-| Eval | User can ask… | Layer |
-| --- | --- | --- |
-| `find-companies` | “Find me N companies in this sector” / “find all street-sign makers in the West” — short researched company list. | gates + judge (`costs-exa`) |
-
-```bash
-pnpm exec eve eval find --tag smoke
 ```
 
 ### `plan-a-trip/` — short trip plans that respect weather
@@ -318,10 +444,26 @@ Current questions get search + attributable sources.
 pnpm exec eve eval answer --tag smoke
 ```
 
-### `design/` — branding and visual direction
+### `designer/` — designer subagent (Spec → Agent: Designer)
 
-Clarify the brief / art direction before pixels. Distinct from
-`create-visual-assets/` (generate a specific image) and from positioning/GTM.
+Own eval set for the **designer** subagent (`agent/subagents/designer`).
+Nested folders show as separate Spec suites (`designer/direction`,
+`designer/create-visual-assets`, `designer/app-store`, …) on the Designer
+agent tab. Distinct from positioning/GTM.
+
+Routing + contract (`designer/` root):
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `ship-via-designer` | App Store pack / social posts / product-shot set → `calledTool("designer")`. | gates + judge |
+| `generate-image` | Finished pictorial hero illustration → `calledAgent("designer")`. | gates + judge |
+| `create-product-images` | Catalog product photo → designer. | gates + judge |
+| `motion-honesty` | Motion graphic ask → designer; no invented video URL. | gates + judge |
+| `no-invented-url` | Instagram square + story pack → designer; no invented hosts. | gates + judge |
+
+### `designer/direction/` — branding and visual direction
+
+Clarify the brief / art direction before pixels.
 
 | Eval | User can ask… | Layer |
 | --- | --- | --- |
@@ -330,14 +472,10 @@ Clarify the brief / art direction before pixels. Distinct from
 | `vibe-direction` | “I want to start a clothing brand. Can you help me figure out the vibe?” — vibe options / clarifying questions; no full kit or supplier list. | gates + judge |
 | `skill-routing` | Writing stays off design skills; explicit logo ask loads `logo-design` and writes SVG. | gates |
 
-```bash
-pnpm exec eve eval design --tag smoke
-```
+### `designer/create-visual-assets/` — images (and honest limits on motion)
 
-### `create-visual-assets/` — images (and honest limits on motion)
-
-Generate Image and product shots via `generate_image`. Motion graphics have no
-video tool yet — the smoke pins honesty (no invented motion URLs).
+One-shot Generate Image and product shots via `generate_image`. Motion graphics
+have no video tool yet — the smoke pins honesty (no invented motion URLs).
 
 | Eval | User can ask… | Layer |
 | --- | --- | --- |
@@ -345,8 +483,19 @@ video tool yet — the smoke pins honesty (no invented motion URLs).
 | `create-product-images` | “Create a product photo of …” — catalog-style shot via `generate_image`. | gates + judge (`costs-image`) |
 | `create-motion-graphic` | “Make a short motion graphic …” — no invented video URL; keyframe or clarify. | gates + judge (`costs-image`) |
 
+### `designer/app-store/` · `social/` · `print/` — finished packs
+
+| Eval | User can ask… | Layer |
+| --- | --- | --- |
+| `app-store/ios-app-icon` | 1024 App Store icon for Pearl → `calledAgent("designer")`. | gates + judge |
+| `app-store/screenshot-stills` | Three iPhone marketing stills → designer; no invented screenshot URLs. | gates + judge |
+| `social/linkedin-post` | LinkedIn ~1200×627 launch graphic → designer. | gates + judge |
+| `social/x-post-card` | X/Twitter launch card → designer. | gates + judge |
+| `print/flyer-pdf` | US Letter flyer PDF → designer. | gates + judge |
+
 ```bash
-pnpm exec eve eval create-visual-assets --tag smoke
+pnpm exec eve eval designer --tag smoke
+pnpm exec eve eval designer/direction designer/create-visual-assets --tag smoke
 ```
 
 ## Infrastructure each suite depends on

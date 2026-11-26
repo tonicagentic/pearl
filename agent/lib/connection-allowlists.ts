@@ -19,8 +19,8 @@ export const VERCEL_PARENT_READONLY_TOOLS = [
   "list_team_members",
 ] as const;
 
-/** Full Vercel MCP reads for the coder allowlist. */
-export const VERCEL_CODER_READ_TOOLS = [
+/** Full Vercel MCP reads (archived). Ship-core uses VERCEL_CODER_READ_TOOLS. */
+export const VERCEL_CODER_READ_TOOLS_FULL = [
   "aggregate_events",
   "aggregate_pageviews",
   "artifact_query",
@@ -194,8 +194,8 @@ export const CONNECTION_VERCEL_DIAGNOSTIC_TOOLS = [
   "ui_get_build_log_excerpt",
 ] as const;
 
-/** Vercel MCP writes — approval every call on coder; omitted from parent. */
-export const VERCEL_CODER_WRITE_TOOLS = [
+/** Full Vercel MCP writes (archived). Ship-core uses VERCEL_CODER_WRITE_TOOLS. */
+export const VERCEL_CODER_WRITE_TOOLS_FULL = [
   "activate_kms_signing_key",
   "add_project_domain",
   "add_route",
@@ -308,6 +308,37 @@ export const VERCEL_CODER_WRITE_TOOLS = [
   "upsert_connector_project_connection",
   "verify_project_domain",
   "write_session_files",
+] as const;
+
+/**
+ * Coder Vercel ship-core reads: parent curated set plus env inspection.
+ * Full MCP catalog remains in VERCEL_CODER_READ_TOOLS_FULL for restore.
+ */
+export const VERCEL_CODER_READ_TOOLS = [
+  ...VERCEL_PARENT_READONLY_TOOLS,
+  "filter_project_envs",
+  "get_project_env",
+] as const;
+
+/**
+ * Coder Vercel ship-core writes (approval every call). Excludes board,
+ * toolbar, KMS, flags, AI gateway admin, marketplace, drains, firewall,
+ * microfrontends, rolling-release, and sandbox-desktop MCP. Full catalog:
+ * VERCEL_CODER_WRITE_TOOLS_FULL.
+ */
+export const VERCEL_CODER_WRITE_TOOLS = [
+  "add_project_domain",
+  "assign_alias",
+  "cancel_deployment",
+  "create_deployment",
+  "create_project",
+  "create_project_env",
+  "edit_project_env",
+  "get_access_to_vercel_url",
+  "request_promote",
+  "request_rollback",
+  "rerequest_check",
+  "update_project",
 ] as const;
 
 /** Never expose on Pearl (purchases, credential minting, ownership transfer). */
@@ -764,7 +795,7 @@ export const CONNECTION_BETTERSTACK_ALLOWLIST = [
   ...CONNECTION_WRITE_TOOLS.betterstack,
 ] as const;
 
-/** Vercel allowlist for the coder connection: full reads, diagnostics, writes. */
+/** Vercel allowlist for the coder connection: ship-core reads, diagnostics, writes. */
 export const CONNECTION_VERCEL_ALLOWLIST = [
   ...VERCEL_CODER_READ_TOOLS,
   ...CONNECTION_VERCEL_DIAGNOSTIC_TOOLS,

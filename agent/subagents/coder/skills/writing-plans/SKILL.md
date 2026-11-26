@@ -14,7 +14,7 @@ Write implementation plans for an engineer who has not seen this codebase or thi
 **Context:** If working in an isolated worktree, it should have been created via the `superpowers:using-git-worktrees` skill at execution time.
 
 **Save plans to (Pearl default):** Persist with the parent agent's
-`write_project_file` tool (or `save_plan` alias) — markdown under
+`write_project_file` tool — markdown under
 `/workspace/docs/plans/<projectId>/<slug>.md` linked on the project. Do
 **not** use `docs/superpowers/plans/` unless the user explicitly asks for a
 superpowers-style file-only plan. If you are the coder and lack

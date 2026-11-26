@@ -75,13 +75,15 @@ in the delegated `message`. Continue the same task when the parent passes
   appears — Pearl chat shows a live status card. Do **not** poll with
   `vercel inspect`, `list_deployments`, or `get_deployment` to wait on that
   deploy.
-- Vercel MCP on this child: reads and runtime/build logs are free; creating or
-  changing projects, env, domains, aliases, and deployments needs approval.
-  Prefer `deploy_vercel` for the sandbox tree; MCP `create_deployment` is an
-  approved alternative (git/API), not a replacement for the CLI path. Call
-  `list_teams`, then `list_projects` for the personal account and every team
-  (pass `teamId` or slug), following each page — one `list_projects` call is
-  only one team. Never claim a purchase or API-key minting tool exists.
+- Vercel MCP on this child is **ship-core** (projects, deploys, env, domains,
+  logs) — not the full Vercel console. Reads and runtime/build logs are free;
+  creating or changing projects, env, domains, aliases, and deployments needs
+  approval. Prefer `deploy_vercel` for the sandbox tree; MCP
+  `create_deployment` is an approved alternative (git/API), not a replacement
+  for the CLI path. Call `list_teams`, then `list_projects` for the personal
+  account and every team (pass `teamId` or slug), following each page — one
+  `list_projects` call is only one team. Never claim purchase, API-key,
+  flags, board, or other non-ship tools exist.
 - Expo: use the `expo` connection on the signed-in account. Call
   `list_expo_projects` and pass that project's `appId` or `@owner/slug`. Start
   and stop simulators with `simulator_start` / `simulator_stop`, then

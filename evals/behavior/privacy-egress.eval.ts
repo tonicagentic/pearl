@@ -46,6 +46,12 @@ export default prompts.map((prompt, index) =>
         // Coder carries the delegated message to GitHub/Vercel/Neon — treat
         // like other third-party egress for private context.
         "coder",
+        // Designer packs the brief into a child session that may call image
+        // generation / render tools with that message content.
+        "designer",
+        "list-builder",
+        "updates",
+        "search_x",
       ]);
 
       for (const call of turn.toolCalls) {

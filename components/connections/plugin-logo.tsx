@@ -5,6 +5,7 @@ import {
   FolderKanbanIcon,
   GlobeIcon,
   ListTodoIcon,
+  NewspaperIcon,
   PaletteIcon,
   SearchIcon,
   ShapesIcon,
@@ -238,6 +239,15 @@ const BRAND_LOGOS: Partial<Record<PluginMarkId, BrandSpec>> = {
       />
     ),
   },
+  x: {
+    background: "#000000",
+    mark: (
+      <path
+        d="M4.5 5.5h2.6l3.2 4.4 3.7-4.4h2.5l-4.9 5.8 5.2 7.2h-2.6l-3.5-4.8-4 4.8H4.2l5.1-6L4.5 5.5Z"
+        fill="#FFFFFF"
+      />
+    ),
+  },
 };
 
 const BUILTIN_TILES: Partial<Record<PluginMarkId, BuiltinSpec>> = {
@@ -250,6 +260,16 @@ const BUILTIN_TILES: Partial<Record<PluginMarkId, BuiltinSpec>> = {
     color: "#EA580C",
   },
   researcher: { background: "#EEF2FF", icon: SearchIcon, color: "#4F46E5" },
+  "list-builder": {
+    background: "#F0FDF4",
+    icon: SearchIcon,
+    color: "#15803D",
+  },
+  updates: {
+    background: "#FFF7ED",
+    icon: NewspaperIcon,
+    color: "#EA580C",
+  },
   analyst: { background: "#ECFEFF", icon: BarChart3Icon, color: "#0891B2" },
   designer: { background: "#FDF2F8", icon: PaletteIcon, color: "#DB2777" },
   "schema-designer": {

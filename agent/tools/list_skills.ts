@@ -6,8 +6,7 @@ import { listSkillsForPrincipal } from "#lib/user-skills.js";
  * List the signed-in user's custom and installed skills.
  *
  * @remarks
- * Read-only. Scoped to `ctx.session.auth.current`. Use before proposing
- * create/update/delete so the model knows what already exists.
+ * Read-only. Scoped to `ctx.session.auth.current`.
  */
 export default defineTool({
   description:

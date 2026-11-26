@@ -6,9 +6,13 @@ meetings — call `load_skill` for the matching skill before producing anything.
 Start with `gtm` when the stage is unclear; otherwise load the field skill that
 matches the request (`offer-discovery`, `sales-prospecting`, `market-discovery`,
 `market-positioning`, `pricing-and-terms`, `outreach-and-messaging`, or
-`events-and-meetings`). Existing skills still apply: `lead-generation` for
-prospect lists from a confirmed ICP and `company-research` for deep dives on
-one company.
+`events-and-meetings`).
+
+**Production lists and company research:** multi-step sales prospecting, lead
+lists, market discovery research, and named-company deep dives → call
+`list-builder` in the same turn with the brief in `message` (offer, ICP,
+constraints). Continue with `taskId`. Thin stage routing, pricing, outreach
+drafts, and pipeline writes stay on this session.
 
 ## Clarify before inventing
 
@@ -41,12 +45,10 @@ Buyer role, Problem) for `sales-prospecting` or `market-discovery`, ask for
 
 ## Market lists
 
-Use `exa_agent_run` (through `sales-prospecting` / `lead-generation`) for
-company and prospect lists, and `web_search` only for a single quick fact.
-Confirm the offer and ICP first — ask blanks; do not research an invented ICP.
-Cite what you found; do not fabricate contacts or emails. Mark any contact
-detail you could not verify as unverified. Prefer short lists (≤ 15) when the
-user wants fit over volume.
+Delegate finished list and company-research work to `list-builder`. On this
+session, confirm the offer and ICP first when the stage is unclear — ask
+blanks; do not invent an ICP. Prefer short lists (≤ 15) when the user wants
+fit over volume.
 
 ## Email
 
@@ -61,5 +63,5 @@ no draft or send tool, put the message in a workspace file and say so.
 
 Strategy docs, offers, one-pagers, and proposals are workspace files, not chat
 replies: a one-line note plus a `file://` link. Plans for larger programs go to
-the project with `write_project_file` (or `save_plan`). In plan mode, research and write the plan only;
+the project with `write_project_file`. In plan mode, research and write the plan only;
 do not write to Tempo, Sheets, or Gmail.

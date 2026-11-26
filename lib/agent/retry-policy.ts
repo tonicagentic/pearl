@@ -171,18 +171,6 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     2,
     "Principal-scoped write is last-write-wins; an identical retry stores identical content.",
   ),
-  clear_writer_preferences: policy(
-    false,
-    [],
-    1,
-    "Destructive (approval-gated): a retried clear must do a status check that the preferences are already gone, never blind-delete again.",
-  ),
-  upload_asset: policy(
-    false,
-    [],
-    1,
-    "Blob upload with a random suffix: a blind retry would double the object; retry only after checking whether the first upload landed.",
-  ),
   generate_image: policy(
     false,
     [],
@@ -212,24 +200,6 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     [],
     1,
     "Creating twice would duplicate the project; a retry must re-read the project list first instead of blind-inserting.",
-  ),
-  list_plans: policy(
-    true,
-    ["network", "timeout"],
-    2,
-    "Read of project plan files (alias of list_project_files), no side effect.",
-  ),
-  read_plan: policy(
-    true,
-    ["network", "timeout"],
-    2,
-    "Read of one project plan file (alias of read_project_file), no side effect.",
-  ),
-  save_plan: policy(
-    true,
-    ["network", "timeout"],
-    2,
-    "Plan file upsert is last-write-wins by slug; an identical retry stores identical content.",
   ),
   list_project_files: policy(
     true,
@@ -291,12 +261,6 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     2,
     "Blob content read (URL-restricted), no side effect.",
   ),
-  delete_asset: policy(
-    false,
-    [],
-    1,
-    "Deletion is approval-gated: a retried delete must status check existence first; deleting twice would also hit the second asset if ids shifted.",
-  ),
   // Issues (docs/issues-areas-plan.md).
   list_issues: policy(
     true,
@@ -341,24 +305,6 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     ["network", "timeout"],
     2,
     "DB read of one skill row, no side effect.",
-  ),
-  create_skill: policy(
-    false,
-    [],
-    1,
-    "Creating twice would duplicate the skill slug; a retry must re-read the skill list first (status check) instead of blind-inserting.",
-  ),
-  update_skill: policy(
-    false,
-    [],
-    1,
-    "Skill writes change agent behavior afterward; a retried update must re-read the current row first — never blind-overwrite again.",
-  ),
-  delete_skill: policy(
-    false,
-    [],
-    1,
-    "Deletion is approval-gated: a retried delete must status check existence first; deleting twice would also hit the wrong row if ids shifted.",
   ),
   // Structured identity profile (Settings → Identity).
   get_profile: policy(
@@ -421,6 +367,30 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     [],
     1,
     "Subagent delegation spawns a durable child run; a replay would double the run and the research spend — resume via status check instead.",
+  ),
+  designer: policy(
+    false,
+    [],
+    1,
+    "Designer delegation spawns a durable child run; a replay would double the design pass — continue with taskId instead.",
+  ),
+  "list-builder": policy(
+    false,
+    [],
+    1,
+    "List Builder delegation spawns a durable child run; a replay would double Exa spend — continue with taskId instead.",
+  ),
+  updates: policy(
+    false,
+    [],
+    1,
+    "Updates delegation spawns a durable briefing run; a replay would double search and connection reads — continue with taskId instead.",
+  ),
+  search_x: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "Exa-backed public X search; no mutating side effect.",
   ),
   // Coder HITL tools (agent/subagents/coder/tools/) — referenced from
   // instructions and the UI; keep taxonomy coverage for ship actions.

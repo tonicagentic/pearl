@@ -11,10 +11,12 @@ import {
   type EvalRunSummary,
   type EvalVerdict,
 } from "@/lib/dev/eval-types";
+import { suiteFromEvalRelPath } from "@/lib/dev/eval-agents";
 import { CatalogView } from "./catalog-view";
+import { ToolsView } from "./tools-view";
 
 type RunsResponse = { runs: EvalRunSummary[] };
-type BrowserTab = "runs" | "catalog";
+type BrowserTab = "runs" | "catalog" | "tools";
 
 async function readApiError(res: Response): Promise<string> {
   const text = await res.text();
@@ -54,8 +56,7 @@ function formatWhen(iso?: string): string {
 }
 
 function suiteOf(evalId: string): string {
-  const slash = evalId.indexOf("/");
-  return slash === -1 ? evalId : evalId.slice(0, slash);
+  return suiteFromEvalRelPath(`${evalId}.eval.ts`).suite;
 }
 
 function scoreLabel(assertion: EvalAssertion): string {
@@ -88,6 +89,8 @@ export function EvalsBrowser() {
   const [runId, setRunId] = useState<string | null>(null);
   const [evalId, setEvalId] = useState<string | null>(null);
   const [catalogId, setCatalogId] = useState<string | null>(null);
+  const [toolId, setToolId] = useState<string | null>(null);
+  const [agentId, setAgentId] = useState("pearl");
   const [detail, setDetail] = useState<EvalDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [suiteFilter, setSuiteFilter] = useState<string>("all");
@@ -98,18 +101,32 @@ export function EvalsBrowser() {
     const params = new URLSearchParams(window.location.search);
     const view = params.get("tab");
     if (view === "catalog" || view === "spec") setTab("catalog");
+    else if (view === "tools") setTab("tools");
     const run = params.get("run");
     const id = params.get("id");
+    const tool = params.get("tool");
+    const agent = params.get("agent");
+    if (agent) setAgentId(agent);
     if (run) setRunId(run);
-    if (id && (view === "catalog" || view === "spec")) setCatalogId(id);
-    else if (id) setEvalId(id);
+    if (view === "tools") {
+      if (tool) setToolId(tool);
+    } else if (id && (view === "catalog" || view === "spec")) {
+      setCatalogId(id);
+    } else if (id) {
+      setEvalId(id);
+    }
   }, []);
 
   useEffect(() => {
     const params = new URLSearchParams();
     if (tab === "catalog") {
       params.set("tab", "catalog");
+      if (agentId && agentId !== "pearl") params.set("agent", agentId);
       if (catalogId) params.set("id", catalogId);
+    } else if (tab === "tools") {
+      params.set("tab", "tools");
+      if (agentId && agentId !== "pearl") params.set("agent", agentId);
+      if (toolId) params.set("tool", toolId);
     } else if (runId) {
       params.set("run", runId);
       if (evalId) params.set("id", evalId);
@@ -119,7 +136,7 @@ export function EvalsBrowser() {
     if (`${window.location.pathname}${window.location.search}` !== href) {
       window.history.replaceState(null, "", href);
     }
-  }, [tab, runId, evalId, catalogId]);
+  }, [tab, runId, evalId, catalogId, toolId, agentId]);
 
   const refreshRuns = useCallback(async () => {
     setLoadingRuns(true);
@@ -232,14 +249,30 @@ export function EvalsBrowser() {
               >
                 Spec
               </button>
+              <button
+                type="button"
+                onClick={() => setTab("tools")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  tab === "tools"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Tools
+              </button>
             </div>
           </div>
           <p className="text-muted-foreground mt-1 text-xs">
             {tab === "catalog"
               ? "Documentation of suites, evals, and assertions from source"
-              : "Local run artifacts from"}{" "}
+              : tab === "tools"
+                ? "Tool surface per agent and which Specs gate on each tool"
+                : "Local run artifacts from"}{" "}
             {tab === "runs" ? (
               <code className="text-[11px]">.eve/evals</code>
+            ) : tab === "tools" ? (
+              <code className="text-[11px]">agent/**/tools · connections · evals</code>
             ) : (
               <code className="text-[11px]">evals/**/*.eval.ts</code>
             )}
@@ -263,7 +296,19 @@ export function EvalsBrowser() {
       ) : null}
 
       {tab === "catalog" ? (
-        <CatalogView selectedId={catalogId} onSelect={setCatalogId} />
+        <CatalogView
+          selectedId={catalogId}
+          onSelect={setCatalogId}
+          agentId={agentId}
+          onAgentChange={setAgentId}
+        />
+      ) : tab === "tools" ? (
+        <ToolsView
+          agentId={agentId}
+          onAgentChange={setAgentId}
+          selectedTool={toolId}
+          onSelectTool={setToolId}
+        />
       ) : (
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[220px_300px_minmax(0,1fr)]">
         {/* Runs */}

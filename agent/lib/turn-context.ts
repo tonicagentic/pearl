@@ -137,6 +137,6 @@ export function planModeBlocked(toolName: string): {
   return {
     error:
       `Plan mode cannot call ${toolName}. Write or update a plan with ` +
-      "write_project_file (or save_plan), or switch to Agent mode to carry the work out.",
+      "write_project_file, or switch to Agent mode to carry the work out.",
   };
 }

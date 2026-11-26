@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { suiteFromEvalRelPath } from "@/lib/dev/eval-agents";
 import { cn } from "@/lib/utils";
 import type {
+  CatalogAgent,
   CatalogAssertion,
   CatalogCase,
   CatalogEval,
@@ -12,12 +14,12 @@ import type {
   CatalogTurn,
 } from "@/lib/dev/eval-catalog-types";
 
-type CatalogResponse = { suites: CatalogSuite[] };
+type CatalogResponse = { agents?: CatalogAgent[]; suites: CatalogSuite[] };
 
 async function readApiError(res: Response): Promise<string> {
   const text = await res.text();
   if (text.trimStart().startsWith("<!DOCTYPE") || text.includes("<html")) {
-    return `API ${res.status}: Next.js returned an HTML error page. Hard-refresh or restart \`pnpm dev\`.`;
+    return `API ${res.status}: Next.js returned an HTML error page. Hard-refresh or restart pnpm dev.`;
   }
   try {
     const json = JSON.parse(text) as { error?: string };
@@ -40,14 +42,35 @@ function assertionTitle(assertion: CatalogAssertion): string {
   return "t.check";
 }
 
+function agentsFromResponse(data: CatalogResponse): CatalogAgent[] {
+  if (data.agents && data.agents.length > 0) return data.agents;
+  const byAgent = new Map<string, CatalogSuite[]>();
+  for (const suite of data.suites ?? []) {
+    const agent = suite.agent || "pearl";
+    const list = byAgent.get(agent) ?? [];
+    list.push(suite);
+    byAgent.set(agent, list);
+  }
+  return [...byAgent.entries()].map(([id, suites]) => ({
+    id,
+    label: id === "pearl" ? "Pearl" : id[0]!.toUpperCase() + id.slice(1),
+    description: "",
+    suites,
+  }));
+}
+
 export function CatalogView({
   selectedId,
   onSelect,
+  agentId,
+  onAgentChange,
 }: {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  agentId: string;
+  onAgentChange: (id: string) => void;
 }) {
-  const [suites, setSuites] = useState<CatalogSuite[]>([]);
+  const [agents, setAgents] = useState<CatalogAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [suiteId, setSuiteId] = useState<string | null>(null);
@@ -64,8 +87,11 @@ export function CatalogView({
         if (!res.ok) throw new Error(await readApiError(res));
         const data = (await res.json()) as CatalogResponse;
         if (cancelled) return;
-        setSuites(data.suites ?? []);
-        setSuiteId((current) => current ?? data.suites?.[0]?.id ?? null);
+        const nextAgents = agentsFromResponse(data);
+        setAgents(nextAgents);
+        if (!nextAgents.some((agent) => agent.id === agentId)) {
+          onAgentChange(nextAgents[0]?.id ?? "pearl");
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load catalog");
@@ -77,14 +103,40 @@ export function CatalogView({
     return () => {
       cancelled = true;
     };
+    // Load once; agentId sync handled below / by parent URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const activeAgent = useMemo(
+    () => agents.find((agent) => agent.id === agentId) ?? agents[0] ?? null,
+    [agents, agentId],
+  );
+
+  const suites = activeAgent?.suites ?? [];
+
   useEffect(() => {
-    if (!selectedId || suites.length === 0) return;
-    const slash = selectedId.indexOf("/");
-    const suite = slash === -1 ? selectedId : selectedId.slice(0, slash);
-    if (suites.some((item) => item.id === suite)) setSuiteId(suite);
-  }, [selectedId, suites]);
+    if (suites.length === 0) {
+      setSuiteId(null);
+      return;
+    }
+    setSuiteId((current) =>
+      current && suites.some((suite) => suite.id === current)
+        ? current
+        : (suites[0]?.id ?? null),
+    );
+  }, [suites]);
+
+  useEffect(() => {
+    if (!selectedId || agents.length === 0) return;
+    const suite = suiteFromEvalRelPath(`${selectedId}.eval.ts`).suite;
+    for (const agent of agents) {
+      if (agent.suites.some((item) => item.id === suite)) {
+        if (agent.id !== agentId) onAgentChange(agent.id);
+        setSuiteId(suite);
+        break;
+      }
+    }
+  }, [selectedId, agents, agentId, onAgentChange]);
 
   const selectedSuite = useMemo(
     () => suites.find((suite) => suite.id === suiteId) ?? null,
@@ -124,8 +176,15 @@ export function CatalogView({
       const found = suite.evals.find((item) => item.id === selectedId);
       if (found) return found;
     }
+    // Selected id may belong to another agent until switch completes.
+    for (const agent of agents) {
+      for (const suite of agent.suites) {
+        const found = suite.evals.find((item) => item.id === selectedId);
+        if (found) return found;
+      }
+    }
     return null;
-  }, [suites, selectedId]);
+  }, [suites, selectedId, agents]);
 
   if (loading) {
     return <div className="text-muted-foreground p-6 text-sm">Loading catalog…</div>;
@@ -140,7 +199,55 @@ export function CatalogView({
   }
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[200px_280px_minmax(0,1fr)]">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="border-border border-b px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+            Agent
+          </span>
+          <div className="border-border bg-muted/40 inline-flex flex-wrap rounded-lg border p-0.5">
+            {agents.map((agent) => {
+              const active = agent.id === (activeAgent?.id ?? agentId);
+              const count = agent.suites.reduce(
+                (sum, suite) => sum + suite.evals.length,
+                0,
+              );
+              return (
+                <button
+                  key={agent.id}
+                  type="button"
+                  onClick={() => {
+                    if (agent.id === agentId) return;
+                    onAgentChange(agent.id);
+                    onSelect(null);
+                    setQuery("");
+                    setTagFilter("all");
+                  }}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    active
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  title={agent.description || undefined}
+                >
+                  {agent.label}
+                  <span className="text-muted-foreground ml-1.5 tabular-nums">
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {activeAgent?.description ? (
+          <p className="text-muted-foreground mt-2 max-w-3xl text-xs leading-5">
+            {activeAgent.description}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[200px_280px_minmax(0,1fr)]">
       <aside className="border-border min-h-0 overflow-y-auto border-r">
         <div className="text-muted-foreground px-3 py-2 text-[11px] font-medium tracking-wide uppercase">
           Suites ({suites.length})
@@ -169,6 +276,11 @@ export function CatalogView({
               </li>
             );
           })}
+          {suites.length === 0 ? (
+            <li className="text-muted-foreground px-3 py-6 text-xs">
+              No suites for this agent yet.
+            </li>
+          ) : null}
         </ul>
       </aside>
 
@@ -244,9 +356,11 @@ export function CatalogView({
           </div>
         )}
       </main>
+      </div>
     </div>
   );
 }
+
 
 function SuiteOverview({
   suite,

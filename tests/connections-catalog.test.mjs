@@ -19,6 +19,7 @@ import {
   TEMPO_ALLOWLIST,
   TEMPO_READ_TOOLS,
   TEMPO_WRITE_TOOLS,
+  VERCEL_CODER_WRITE_TOOLS_FULL,
   looksLikeWriteOrLogTool,
 } from "../agent/lib/connection-allowlists.ts";
 import {
@@ -331,9 +332,24 @@ test("Vercel allowlist splits parent reads, coder diagnostics, and approval-gate
     );
   }
   assert.ok(CONNECTION_WRITE_TOOLS.vercel.includes("create_deployment"));
-  assert.ok(CONNECTION_WRITE_TOOLS.vercel.includes("pause_project"));
   assert.ok(CONNECTION_WRITE_TOOLS.vercel.includes("create_project_env"));
+  assert.ok(CONNECTION_WRITE_TOOLS.vercel.includes("edit_project_env"));
+  assert.equal(
+    CONNECTION_WRITE_TOOLS.vercel.includes("pause_project"),
+    false,
+    "pause_project stays off ship-core (see VERCEL_CODER_WRITE_TOOLS_FULL)",
+  );
+  assert.ok(
+    VERCEL_CODER_WRITE_TOOLS_FULL.includes("pause_project"),
+    "full archive still lists pause_project for restore",
+  );
   assert.ok(CONNECTION_VERCEL_ALLOWLIST.includes("get_runtime_logs"));
+  assert.ok(CONNECTION_VERCEL_ALLOWLIST.includes("filter_project_envs"));
+  assert.equal(
+    CONNECTION_VERCEL_ALLOWLIST.includes("list_ai_gateway_models"),
+    false,
+    "AI gateway admin stays off ship-core",
+  );
   for (const name of CONNECTION_VERCEL_BLOCKLIST) {
     assert.equal(CONNECTION_VERCEL_ALLOWLIST.includes(name), false, name);
     assert.equal(CONNECTION_WRITE_TOOLS.vercel.includes(name), false, name);

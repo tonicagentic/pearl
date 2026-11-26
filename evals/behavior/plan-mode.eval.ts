@@ -3,9 +3,9 @@ import { defineEval } from "eve/evals";
 
 import { MODE_MARKER, PROJECT_ID_MARKER } from "../../lib/agent-mode-context.ts";
 
-// Plan mode: clientContext sets mode=plan; the agent writes via save_plan and
+// Plan mode: clientContext sets mode=plan; the agent writes via write_project_file and
 // does not call create_issue or a mutating tool. Seeds a project for the local-dev
-// principal (eve eval / eve dev) so save_plan can succeed.
+// principal (eve eval / eve dev) so write_project_file can succeed.
 
 async function seedPlanModeProject(): Promise<string> {
   const { ensureUserForPrincipal } = await import("../../lib/db/issues.ts");
@@ -27,7 +27,7 @@ async function seedPlanModeProject(): Promise<string> {
 export default defineEval({
   description:
     "Plan mode: with eveAgentMode=plan and a projectId, the agent saves a plan " +
-    "via save_plan and does not call create_issue or a mutating tool.",
+    "via write_project_file and does not call create_issue or a mutating tool.",
   tags: ["reliability", "nightly"],
   timeoutMs: 240_000,
   async test(t) {
@@ -35,7 +35,7 @@ export default defineEval({
 
     const turn = await t.send(
       "You are in Plan mode for an existing project. Do not ask clarifying " +
-        "questions and do not load any skills. Immediately call save_plan with " +
+        "questions and do not load any skills. Immediately call write_project_file with " +
         "title 'Sidebar nav cleanup', slug 'sidebar-nav-cleanup', and a short " +
         "markdown body with two bullet steps. Do not create an issue, do not " +
         "build an app, and do not call any other mutating tool.",
@@ -48,14 +48,14 @@ export default defineEval({
     );
 
     t.succeeded();
-    t.calledTool("save_plan");
+    t.calledTool("write_project_file");
     t.notCalledTool("create_issue");
     t.notCalledTool("coder");
     t.noFailedCalls();
 
-    const saveCalls = turn.toolCalls.filter((call) => call.name === "save_plan");
+    const saveCalls = turn.toolCalls.filter((call) => call.name === "write_project_file");
     if (saveCalls.length === 0) {
-      throw new Error("Expected at least one save_plan call.");
+      throw new Error("Expected at least one write_project_file call.");
     }
 
     const lastSave = saveCalls[saveCalls.length - 1];
@@ -63,14 +63,14 @@ export default defineEval({
       | { readonly path?: string; readonly error?: string }
       | undefined;
     if (output?.error) {
-      throw new Error(`save_plan returned an error: ${output.error}`);
+      throw new Error(`write_project_file returned an error: ${output.error}`);
     }
     if (
       typeof output?.path !== "string" ||
       !output.path.startsWith("/workspace/docs/plans/")
     ) {
       throw new Error(
-        `Expected save_plan to return a /workspace/docs/plans/ path, got ${JSON.stringify(output)}`,
+        `Expected write_project_file to return a /workspace/docs/plans/ path, got ${JSON.stringify(output)}`,
       );
     }
   },

@@ -23,6 +23,8 @@ export type BuiltinPluginId =
   | "coder"
   | "projects"
   | "researcher"
+  | "list-builder"
+  | "updates"
   | "analyst"
   | "designer"
   | "schema-designer"
@@ -37,7 +39,8 @@ export type ComingSoonPluginId =
   | "postgres"
   | "shopify"
   | "stripe"
-  | "brex";
+  | "brex"
+  | "x";
 
 export type MarketplacePluginId =
   | AccountPluginId
@@ -231,6 +234,22 @@ export const BUILTIN_PLUGINS: readonly BuiltinPluginEntry[] = [
       "A research specialist that runs refined web searches and returns cited findings with confidence levels. Pearl uses it when a draft needs fresh facts beyond what’s already on hand.",
   },
   {
+    id: "list-builder",
+    kind: "builtin",
+    label: "List Builder",
+    detail: "Prospecting, markets, and company research",
+    description:
+      "Sales prospecting, market discovery, lead lists, and cited company deep dives via the List Builder specialist (Exa). Pricing, outreach drafts, and CRM updates stay with Pearl; finished list and company-research packs delegate here.",
+  },
+  {
+    id: "updates",
+    kind: "builtin",
+    label: "Updates",
+    detail: "News, mail, calendar, finance, and X briefs",
+    description:
+      "A briefing specialist that summarizes news, important mail, calendar, Xero finance snapshots, and public X discussion. Pearl delegates catch-me-up and daily-brief asks here. Personal X timeline Connect is listed separately as coming soon. Ops health stays with Coder / Better Stack.",
+  },
+  {
     id: "analyst",
     kind: "builtin",
     label: "Data Analyst",
@@ -242,9 +261,9 @@ export const BUILTIN_PLUGINS: readonly BuiltinPluginEntry[] = [
     id: "designer",
     kind: "builtin",
     label: "Designer",
-    detail: "Layouts, visuals, and design critique",
+    detail: "App Store, social, and visual assets",
     description:
-      "Support for layout ideas, visual direction, and design critique. Pearl can help refine UI copy, structure screens, and generate images when that capability is available.",
+      "Finished visual deliverables via the Designer specialist — App Store icons and marketing stills, social posts at named sizes, product shots, vector marks, and print PDFs. Art direction and branding questions stay with Pearl; production asset packs delegate to Designer.",
   },
   {
     id: "schema-designer",
@@ -333,6 +352,14 @@ export const COMING_SOON_PLUGINS: readonly ComingSoonPluginEntry[] = [
     description:
       "Brex cards and spend data will connect here later for small-business finance context. Connect is not available yet.",
   },
+  {
+    id: "x",
+    kind: "coming_soon",
+    label: "X",
+    detail: "Your timeline, posts, and mentions on X",
+    description:
+      "Connect your X (Twitter) account here later for your timeline, mentions, and posts. Until then, Pearl’s Updates specialist can search public X discussion via search_x — not your personal feed.",
+  },
 ] as const;
 
 /**
@@ -376,10 +403,14 @@ export const PLUGIN_SECTIONS: readonly PluginSection[] = [
       "search",
       "projects",
       "researcher",
+      "list-builder",
+      "updates",
       "analyst",
+      "designer",
       "schema-designer",
       "plan",
       "tax",
+      "x",
     ],
   },
 ] as const;

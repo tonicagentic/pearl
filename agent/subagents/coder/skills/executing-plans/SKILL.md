@@ -45,7 +45,7 @@ those, stop and ask.
 ## When to Use
 
 - On Pearl, start from the project plan: parent should have called
-  `read_project_file` / `read_plan` or pointed at
+  `read_project_file` / `read_project_file` or pointed at
   `/workspace/docs/plans/<projectId>/<slug>.md`. Prefer that over a
   `.superpowers/sdd/` ledger unless the user asked for superpowers-style
   progress tracking.

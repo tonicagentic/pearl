@@ -64,7 +64,17 @@ export type CatalogSuite = {
   id: string;
   title: string;
   blurb: string;
+  /** Agent this suite belongs to (`pearl` root, or a subagent like `coder`). */
+  agent: string;
   /** Shared suite fixtures under `evals/<suite>/fixtures/`. */
   fixtures: CatalogFixture[];
   evals: CatalogEval[];
+};
+
+/** One agent’s eval set in Spec (Pearl root or a named subagent). */
+export type CatalogAgent = {
+  id: string;
+  label: string;
+  description: string;
+  suites: CatalogSuite[];
 };

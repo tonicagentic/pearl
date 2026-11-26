@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import type {
+  CatalogAgent,
   CatalogAssertion,
   CatalogCase,
   CatalogEval,
@@ -9,8 +10,13 @@ import type {
   CatalogSuite,
   CatalogTurn,
 } from "@/lib/dev/eval-catalog-types";
+import {
+  agentIdForSuite,
+  suiteFromEvalRelPath,
+} from "@/lib/dev/eval-agents";
 
 export type {
+  CatalogAgent,
   CatalogAssertion,
   CatalogCase,
   CatalogEval,
@@ -19,7 +25,77 @@ export type {
   CatalogTurn,
 } from "@/lib/dev/eval-catalog-types";
 
+export {
+  agentIdForSuite,
+  suiteFromEvalRelPath,
+} from "@/lib/dev/eval-agents";
+
 const EVALS_DIR = path.join(process.cwd(), "evals");
+
+/**
+ * Labels for Spec agent switcher. Ids must match `agentIdForSuite`
+ * / `agent/subagents/<id>/`.
+ */
+const SUBAGENT_META: Record<string, { label: string; description: string }> = {
+  coder: {
+    label: "Coder",
+    description:
+      "Subagent that implements and ships code in a Vercel Sandbox — gated git, draft PRs, deploys, handoff.",
+  },
+  designer: {
+    label: "Designer",
+    description:
+      "Subagent that produces finished visual assets — App Store, social, product shots, print PDFs.",
+  },
+  "list-builder": {
+    label: "List Builder",
+    description:
+      "Subagent for sales prospecting, market discovery, lead lists, and company research via Exa.",
+  },
+  updates: {
+    label: "Updates",
+    description:
+      "Subagent for catch-me-up briefs — news, mail skim, calendar, finance, public X.",
+  },
+  mail: {
+    label: "Mail",
+    description: "Subagent for email triage and replies.",
+  },
+  researcher: {
+    label: "Researcher",
+    description: "Subagent for deep research and sourced briefs.",
+  },
+  reviewer: {
+    label: "Reviewer",
+    description: "Subagent for code and document review.",
+  },
+  editor: {
+    label: "Editor",
+    description: "Subagent for writing and editing long-form prose.",
+  },
+};
+
+const PEARL_AGENT = {
+  id: "pearl",
+  label: "Pearl",
+  description:
+    "Root agent — thinking, research, writing, product asks, and routing into specialists.",
+} as const;
+
+export function agentMeta(agentId: string): {
+  id: string;
+  label: string;
+  description: string;
+} {
+  if (agentId === PEARL_AGENT.id) return PEARL_AGENT;
+  const sub = SUBAGENT_META[agentId];
+  if (sub) return { id: agentId, label: sub.label, description: sub.description };
+  return {
+    id: agentId,
+    label: agentId,
+    description: `Eval set for the ${agentId} agent.`,
+  };
+}
 
 function assertDev(): void {
   if (process.env.NODE_ENV === "production") {
@@ -718,10 +794,7 @@ function parseEvalFile(relPath: string): CatalogEval | null {
   const source = readFileSync(full, "utf8");
   if (!source.includes("defineEval")) return null;
 
-  const id = relPath.replace(/\.eval\.ts$/, "");
-  const slash = id.indexOf("/");
-  const suite = slash === -1 ? id : id.slice(0, slash);
-  const name = slash === -1 ? id : id.slice(slash + 1);
+  const { id, suite, name } = suiteFromEvalRelPath(relPath);
   const cases = collectCases(source, relPath);
   const turns = cases.flatMap((item) => item.turns);
   const fixtureMap = loadFixtureStrings(relPath, source);
@@ -801,8 +874,37 @@ export function loadEvalCatalog(): CatalogSuite[] {
         id,
         title: info?.title || id,
         blurb: info?.blurb || "",
+        agent: agentIdForSuite(id),
         fixtures: collectSuiteFixtures(id),
         evals: suiteEvals.sort((a, b) => a.name.localeCompare(b.name)),
       };
     });
+}
+
+/** Group suites by agent for the Spec switcher (Pearl vs subagents). */
+export function loadEvalCatalogAgents(): CatalogAgent[] {
+  const suites = loadEvalCatalog();
+  const byAgent = new Map<string, CatalogSuite[]>();
+  for (const suite of suites) {
+    const list = byAgent.get(suite.agent) ?? [];
+    list.push(suite);
+    byAgent.set(suite.agent, list);
+  }
+
+  // Always surface Pearl first, then subagents that have suites (alpha).
+  const ids = [...byAgent.keys()].sort((a, b) => {
+    if (a === PEARL_AGENT.id) return -1;
+    if (b === PEARL_AGENT.id) return 1;
+    return a.localeCompare(b);
+  });
+
+  return ids.map((id) => {
+    const meta = agentMeta(id);
+    return {
+      id: meta.id,
+      label: meta.label,
+      description: meta.description,
+      suites: byAgent.get(id) ?? [],
+    };
+  });
 }

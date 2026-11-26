@@ -140,6 +140,15 @@ const CREDENTIAL_CAPABILITIES: Record<
 const BUILTIN_CAPABILITIES: Partial<
   Record<BuiltinPluginId, PluginCapabilities>
 > = {
+  designer: {
+    canDo: [
+      "Produce App Store icons and marketing stills",
+      "Create social post graphics at named sizes",
+      "Generate product/hero images and vector marks",
+      "Render print-ready flyer and poster PDFs",
+    ],
+    needsApproval: [],
+  },
   "schema-designer": {
     canDo: [
       "Search your saved concept schemas when a term must be unambiguous",

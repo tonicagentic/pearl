@@ -13,6 +13,10 @@ const EGRESS_CAPABILITIES = new Set([
   "exa_agent_run",
   "browser",
   "coder",
+  "designer",
+  "list-builder",
+  "updates",
+  "search_x",
 ]);
 
 export default defineHook({

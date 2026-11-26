@@ -7,12 +7,12 @@ import { getSkillForPrincipal } from "#lib/user-skills.js";
  *
  * @remarks
  * Read-only. Returns the markdown body and sibling file paths so the model can
- * edit carefully after approval-gated create/update tools.
+ * inspect before loading or citing a custom skill.
  */
 export default defineTool({
   description:
     "Get one of this user's skills by slug, including the full markdown body " +
-    "and sibling file paths. Use before update_skill.",
+    "and sibling file paths.",
   async execute({ slug }, ctx) {
     try {
       const row = await getSkillForPrincipal(ctx.session.auth.current, slug);

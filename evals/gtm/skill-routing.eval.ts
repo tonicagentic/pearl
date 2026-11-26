@@ -15,8 +15,9 @@ export default defineEval({
   description:
     "GTM routing: a writing request loads no gtm skill; a vague go-to-market " +
     "request loads the gtm director and clarifies instead of inventing an ICP " +
-    "or price; a prospecting ask loads sales-prospecting without research; a " +
-    "cold-email request loads outreach-and-messaging, drafts without sending.",
+    "or price; a prospecting/list ask delegates to list-builder without Exa on " +
+    "the parent; a cold-email request loads outreach-and-messaging, drafts " +
+    "without sending.",
   tags: ["smoke", "reliability"],
   timeoutMs: 360_000,
   async test(t) {
@@ -28,6 +29,7 @@ export default defineEval({
     for (const skill of GTM_SKILLS) {
       writing.calledSkill(skill, { count: 0 });
     }
+    writing.notCalledTool("list-builder");
 
     const vague = await t.send(
       "I want to start selling my consulting work but I'm not sure what my " +
@@ -51,11 +53,12 @@ export default defineEval({
         "Don't research yet.",
     );
     t.succeeded();
-    prospectTurn.calledSkill("sales-prospecting", { count: 1 });
+    prospectTurn.calledTool("list-builder");
     prospectTurn.notCalledTool("exa_agent_run");
     t.judge(
-      "The reply shows blank Offer and/or ICP fields and asks for missing offer " +
-        "or customer details without inventing a settled ICP or running research.",
+      "The thread starts prospecting via list-builder (delegates / says the " +
+        "list builder is starting) without inventing a settled ICP or running " +
+        "Exa research on the parent turn.",
       { on: prospectTurn.reply },
     );
 
