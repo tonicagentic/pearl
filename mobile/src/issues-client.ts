@@ -101,6 +101,32 @@ export async function fetchIssueRequest(id: string): Promise<IssueDto> {
   return json.issue;
 }
 
+function normalizeIssueDto(issue: IssueDto): IssueDto {
+  const toIso = (value: string | null | undefined): string | null => {
+    if (value == null) return null;
+    if (typeof value === "string") return value;
+    try {
+      return new Date(value as unknown as string).toISOString();
+    } catch {
+      return null;
+    }
+  };
+
+  return {
+    ...issue,
+    createdAt: toIso(issue.createdAt) ?? new Date().toISOString(),
+    resolvedAt: toIso(issue.resolvedAt),
+    state:
+      issue.state ??
+      (issue.status === "resolved"
+        ? "resolved"
+        : issue.reviewDate &&
+            issue.reviewDate > new Date().toISOString().slice(0, 10)
+          ? "dormant"
+          : "active"),
+  };
+}
+
 export async function createIssueRequest(input: CreateIssueInput): Promise<IssueDto> {
   const { response, json } = await postIssueOp({
     op: 'create',
@@ -112,7 +138,7 @@ export async function createIssueRequest(input: CreateIssueInput): Promise<Issue
     throw new Error(json.error ?? `Failed to create the task (${response.status}).`);
   }
 
-  return json.issue;
+  return normalizeIssueDto(json.issue);
 }
 
 export async function setIssueResolvedRequest(id: string, resolved: boolean): Promise<IssueDto> {

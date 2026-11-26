@@ -15,6 +15,7 @@ export default function TasksStackLayout() {
     <DrawerScene>
       <Stack screenOptions={screenOptions}>
         <Stack.Screen name="index" options={{ title: "Tasks" }} />
+        <Stack.Screen name="list/[bucket]" options={{ title: "List" }} />
         <Stack.Screen name="[id]" options={{ title: "Task" }} />
       </Stack>
     </DrawerScene>
