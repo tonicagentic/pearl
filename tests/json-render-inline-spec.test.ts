@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 
 import { comparisonBarShares } from "../lib/json-render/comparison-bar.ts";
 import {
+  isCompactTableColumn,
+  isNumericTableColumn,
+} from "../lib/json-render/table.ts";
+import {
   parseInlineSpec,
   proseFromMessageText,
 } from "../lib/json-render/inline-spec.ts";
@@ -143,6 +147,30 @@ describe("comparisonBarShares", () => {
       left: (2 / 3) * 100,
       right: (1 / 3) * 100,
     });
+  });
+});
+
+describe("table column helpers", () => {
+  const columns = ["Metro area", "Unaffiliated"] as const;
+  const rows = [
+    ["Seattle", "44%"],
+    ["Portland, OR", "44%"],
+    ["San Francisco", "42%"],
+  ] as const;
+
+  it("marks percent columns numeric and label columns not", () => {
+    assert.equal(isNumericTableColumn(rows, 0), false);
+    assert.equal(isNumericTableColumn(rows, 1), true);
+  });
+
+  it("treats short metro rows as compact", () => {
+    assert.equal(isCompactTableColumn(columns[0], rows, 0), true);
+    assert.equal(isCompactTableColumn(columns[1], rows, 1), true);
+  });
+
+  it("accepts money and plain numbers as numeric", () => {
+    assert.equal(isNumericTableColumn([["$12"], ["1,240"], ["3.2"]], 0), true);
+    assert.equal(isNumericTableColumn([["n/a"], ["12"]], 0), false);
   });
 });
 

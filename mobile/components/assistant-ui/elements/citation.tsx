@@ -14,13 +14,15 @@ import {
 } from "react-native";
 import { useAuiState } from "@assistant-ui/react-native";
 import * as Haptics from "expo-haptics";
+import { ChevronDownIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
+import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { openWebUrl } from "@/src/open-web-url";
-import { threadMeta } from "./surfaces";
+import { CollapsePanel, textButtonHitSlop, threadMeta } from "./surfaces";
 
 /** Portal to document.body on Expo web only — avoid pulling react-dom into native. */
 function portalToBody(node: ReactNode): ReactNode {
@@ -346,8 +348,8 @@ export function CitationChip({
 const EMPTY_CITATION_REFS: readonly CitationRef[] = [];
 
 /**
- * Compact sources row under an assistant message when the reply contains
- * numbered citations. Hidden when nothing was cited.
+ * Compact sources disclosure under an assistant message when the reply
+ * contains numbered citations. Closed by default; hidden when nothing was cited.
  */
 export function MessageSources({ className }: ComponentProps<typeof View>) {
   // Select a primitive snapshot (string). Returning a fresh array from
@@ -364,59 +366,90 @@ export function MessageSources({ className }: ComponentProps<typeof View>) {
     (s) =>
       !(s.message.role === "assistant" && s.message.status?.type === "running"),
   );
+  const [open, setOpen] = useState(false);
 
   const refs = useMemo(() => {
     if (!markdown) return EMPTY_CITATION_REFS;
     return extractCitationRefs(markdown);
   }, [markdown]);
 
+  const toggle = useCallback(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setOpen((prev) => !prev);
+  }, []);
+
   if (!settled || refs.length === 0) return null;
+
+  const label = `Sources (${refs.length})`;
 
   return (
     <View
       data-slot="message-sources"
-      className={cn("flex-col gap-1.5 pt-1", className)}
+      className={cn("flex-col pt-1", className)}
     >
-      <Text variant="body" weight="medium" className={threadMeta}>
-        Sources
-      </Text>
-      <View className="flex-col gap-1.5">
-        {refs.map((ref) => {
-          const host = hostnameOf(ref.url);
-          const displayTitle = ref.title?.trim() || host;
-          return (
-            <View
-              key={ref.index}
-              className="min-w-0 flex-row items-center gap-2"
-            >
-              <View className="bg-muted h-4 min-w-4 shrink-0 items-center justify-center rounded px-1">
-                <Text
-                  variant="caption"
-                  weight="medium"
-                  className="leading-none tabular-nums"
-                >
-                  {ref.index}
-                </Text>
-              </View>
-              <FaviconMark hostname={host} size={14} />
-              <Pressable
-                accessibilityRole="link"
-                accessibilityLabel={ref.title ?? ref.url}
-                onPress={() => openWebUrl(ref.url)}
-                className="min-w-0 flex-1 active:opacity-70"
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ expanded: open }}
+        hitSlop={textButtonHitSlop}
+        onPress={toggle}
+        className="min-h-7 flex-row items-center gap-1.5 py-1 active:opacity-70"
+      >
+        <Text variant="body" weight="medium" className={threadMeta}>
+          Sources
+        </Text>
+        <Text variant="body" tone="muted" className="tabular-nums opacity-70">
+          {refs.length}
+        </Text>
+        <View
+          className="size-3.5 items-center justify-center"
+          style={{ transform: [{ rotate: open ? "0deg" : "-90deg" }] }}
+        >
+          <Icon
+            as={ChevronDownIcon}
+            className="size-3.5 text-muted-foreground/55"
+          />
+        </View>
+      </Pressable>
+      <CollapsePanel open={open}>
+        <View className="flex-col gap-1.5 pb-0.5 pt-0.5">
+          {refs.map((ref) => {
+            const host = hostnameOf(ref.url);
+            const displayTitle = ref.title?.trim() || host;
+            return (
+              <View
+                key={ref.index}
+                className="min-w-0 flex-row items-center gap-2"
               >
-                <Text variant="body" className={threadMeta} numberOfLines={1}>
-                  {displayTitle}
-                  <Text variant="body" tone="muted" className="opacity-70">
-                    {" "}
-                    · {host}
+                <View className="bg-muted h-4 min-w-4 shrink-0 items-center justify-center rounded px-1">
+                  <Text
+                    variant="caption"
+                    weight="medium"
+                    className="leading-none tabular-nums"
+                  >
+                    {ref.index}
                   </Text>
-                </Text>
-              </Pressable>
-            </View>
-          );
-        })}
-      </View>
+                </View>
+                <FaviconMark hostname={host} size={14} />
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityLabel={ref.title ?? ref.url}
+                  onPress={() => openWebUrl(ref.url)}
+                  className="min-w-0 flex-1 active:opacity-70"
+                >
+                  <Text variant="body" className={threadMeta} numberOfLines={1}>
+                    {displayTitle}
+                    <Text variant="body" tone="muted" className="opacity-70">
+                      {" "}
+                      · {host}
+                    </Text>
+                  </Text>
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
+      </CollapsePanel>
     </View>
   );
 }

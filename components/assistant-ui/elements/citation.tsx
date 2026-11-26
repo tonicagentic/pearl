@@ -18,9 +18,15 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useOptionalCanvas } from "@/components/assistant-ui/elements/canvas-context";
 import { cn } from "@/lib/utils";
-import { stepEnter, threadMeta, threadText } from "./surfaces";
+import { ChevronDownIcon } from "lucide-react";
+import { collapsePanel, stepEnter, threadMeta, threadText } from "./surfaces";
 
 function useOpenInCanvasBrowser() {
   const canvas = useOptionalCanvas();
@@ -389,8 +395,8 @@ CitationChip.displayName = "CitationChip";
 const EMPTY_CITATION_REFS: readonly CitationRef[] = [];
 
 /**
- * Renders a compact sources row under an assistant message when the reply
- * contains numbered citations. Hidden when nothing was cited.
+ * Compact sources disclosure under an assistant message when the reply
+ * contains numbered citations. Closed by default; hidden when nothing was cited.
  */
 export function MessageSources({ className }: ComponentProps<"div">) {
   // Select a primitive snapshot (string). Returning a fresh array from
@@ -403,6 +409,7 @@ export function MessageSources({ className }: ComponentProps<"div">) {
       .join("\n");
   });
   const openInBrowser = useOpenInCanvasBrowser();
+  const [open, setOpen] = useState(false);
 
   const refs = useMemo(() => {
     if (!markdown) return EMPTY_CITATION_REFS;
@@ -412,46 +419,70 @@ export function MessageSources({ className }: ComponentProps<"div">) {
   if (refs.length === 0) return null;
 
   return (
-    <div
+    <Collapsible
       data-slot="message-sources"
-      className={cn(stepEnter, "flex flex-col gap-1.5 pt-1", className)}
+      open={open}
+      onOpenChange={setOpen}
+      className={cn(stepEnter, "flex flex-col pt-1", className)}
     >
-      <p className={cn(threadMeta, "font-medium")}>Sources</p>
-      <ol className="flex flex-col gap-1.5">
-        {refs.map((ref) => {
-          const host = hostnameOf(ref.url);
-          const displayTitle = ref.title?.trim() || host;
-          return (
-            <li key={ref.index} className="flex min-w-0 items-center gap-2">
-              <span
-                className={cn(
-                  "bg-muted text-muted-foreground inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded px-1 text-[11px] leading-none font-medium tabular-nums",
-                )}
-              >
-                {ref.index}
-              </span>
-              <FaviconMark hostname={host} size={14} />
-              <a
-                href={ref.url}
-                target="_blank"
-                rel="noreferrer"
-                className={cn(
-                  threadMeta,
-                  "hover:text-foreground min-w-0 truncate transition-colors",
-                )}
-                title={ref.title ?? ref.url}
-                onClick={(event) => {
-                  openInBrowser(ref.url, event);
-                }}
-              >
-                {displayTitle}
-                <span className="text-muted-foreground/70"> · {host}</span>
-              </a>
-            </li>
-          );
-        })}
-      </ol>
-    </div>
+      <CollapsibleTrigger
+        aria-expanded={open}
+        className={cn(
+          "group/trigger hover:text-foreground/70 flex w-fit items-center gap-1.5 py-1 transition-colors outline-none",
+          threadMeta,
+          "font-medium",
+        )}
+      >
+        Sources
+        <span className="text-muted-foreground/70 font-normal tabular-nums">
+          {refs.length}
+        </span>
+        <ChevronDownIcon
+          aria-hidden
+          strokeWidth={2.25}
+          className={cn(
+            "size-3.5 shrink-0 opacity-55 transition-transform duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
+            open ? "rotate-0" : "-rotate-90",
+          )}
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent className={cn(collapsePanel, "outline-none")}>
+        <ol className="flex flex-col gap-1.5 pt-0.5 pb-0.5">
+          {refs.map((ref) => {
+            const host = hostnameOf(ref.url);
+            const displayTitle = ref.title?.trim() || host;
+            return (
+              <li key={ref.index} className="flex min-w-0 items-center gap-2">
+                <span
+                  className={cn(
+                    "bg-muted text-muted-foreground inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded px-1 text-[11px] leading-none font-medium tabular-nums",
+                  )}
+                >
+                  {ref.index}
+                </span>
+                <FaviconMark hostname={host} size={14} />
+                <a
+                  href={ref.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={cn(
+                    threadMeta,
+                    "hover:text-foreground min-w-0 truncate transition-colors",
+                  )}
+                  title={ref.title ?? ref.url}
+                  onClick={(event) => {
+                    openInBrowser(ref.url, event);
+                  }}
+                >
+                  {displayTitle}
+                  <span className="text-muted-foreground/70"> · {host}</span>
+                </a>
+              </li>
+            );
+          })}
+        </ol>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

@@ -13,6 +13,10 @@ import {
 } from "../../../lib/json-render/chart";
 import { comparisonBarShares } from "../../../lib/json-render/comparison-bar";
 import {
+  isCompactTableColumn,
+  isNumericTableColumn,
+} from "../../../lib/json-render/table";
+import {
   CHORD_LIBRARY,
   findChordByName,
   initialLibraryIndex,
@@ -709,20 +713,54 @@ export const chatRegistry: ComponentRegistry = {
     const rows = Array.isArray(element.props.rows)
       ? (element.props.rows as unknown[]).map((row) => asStringArray(row))
       : [];
+    const compactColumns = columns.map((column, columnIndex) =>
+      isCompactTableColumn(column, rows, columnIndex),
+    );
+    const numericColumns = columns.map((_, columnIndex) =>
+      isNumericTableColumn(rows, columnIndex),
+    );
+    // Flex rows need a shared width per column or cells drift between rows.
+    const columnWidths = columns.map((column, columnIndex) => {
+      if (!compactColumns[columnIndex] && !numericColumns[columnIndex]) {
+        return undefined;
+      }
+      let maxLen = column.length;
+      for (const row of rows) {
+        maxLen = Math.max(maxLen, (row[columnIndex] ?? "").length);
+      }
+      const pad = columnIndex === 0 ? 12 : 20;
+      return Math.ceil(maxLen * 8.2) + pad;
+    });
+    const cellClass = (columnIndex: number) =>
+      cn(
+        "py-1.5",
+        columnIndex === 0 ? "pr-3 pl-0" : "px-2.5",
+        numericColumns[columnIndex]
+          ? "shrink-0 text-right tabular-nums"
+          : compactColumns[columnIndex]
+            ? "shrink-0"
+            : "min-w-[8rem] flex-1",
+      );
+    const cellStyle = (columnIndex: number) => {
+      const width = columnWidths[columnIndex];
+      return {
+        ...(width != null ? { width, maxWidth: width } : null),
+        ...(numericColumns[columnIndex]
+          ? { textAlign: "right" as const, fontVariant: ["tabular-nums" as const] }
+          : null),
+      };
+    };
     return (
-      <ScrollView
-        horizontal
-        className="border-border/60 rounded-lg border"
-        contentContainerClassName="min-w-full"
-      >
+      <ScrollView horizontal contentContainerClassName="min-w-full">
         <View className="flex-col">
-          <View className="bg-muted/40 flex-row">
-            {columns.map((column) => (
+          <View className="border-border/50 flex-row border-b">
+            {columns.map((column, columnIndex) => (
               <Text
                 key={column}
-                variant="secondary"
+                variant="caption"
                 weight="medium"
-                className="min-w-[5.5rem] flex-1 px-2.5 py-1.5"
+                className={cellClass(columnIndex)}
+                style={cellStyle(columnIndex)}
               >
                 {column}
               </Text>
@@ -731,14 +769,18 @@ export const chatRegistry: ComponentRegistry = {
           {rows.map((row, rowIndex) => (
             <View
               key={rowIndex}
-              className="border-border/50 flex-row border-t"
+              className={cn(
+                "border-border/40 flex-row",
+                rowIndex < rows.length - 1 && "border-b",
+              )}
             >
               {row.map((cell, cellIndex) => (
                 <Text
                   key={cellIndex}
                   variant="secondary"
                   tone="default"
-                  className="min-w-[5.5rem] flex-1 px-2.5 py-1.5"
+                  className={cellClass(cellIndex)}
+                  style={cellStyle(cellIndex)}
                 >
                   {cell}
                 </Text>

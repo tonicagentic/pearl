@@ -11,6 +11,10 @@ import {
 } from "@/lib/json-render/chart";
 import { comparisonBarShares } from "@/lib/json-render/comparison-bar";
 import {
+  isCompactTableColumn,
+  isNumericTableColumn,
+} from "@/lib/json-render/table";
+import {
   CHORD_LIBRARY,
   findChordByName,
   initialLibraryIndex,
@@ -400,21 +404,6 @@ function CircleOfFifthsSvg({ highlightKey }: { highlightKey: string | null }) {
   );
 }
 
-/** Compact columns stay on one line; longer prose wraps at a readable width. */
-const TABLE_COMPACT_MAX_CHARS = 42;
-
-function isCompactTableColumn(
-  header: string,
-  rows: readonly (readonly string[])[],
-  columnIndex: number,
-): boolean {
-  if (header.length > TABLE_COMPACT_MAX_CHARS) return false;
-  return rows.every((row) => {
-    const cell = row[columnIndex] ?? "";
-    return cell.length <= TABLE_COMPACT_MAX_CHARS;
-  });
-}
-
 export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
   components: {
     Stack: ({ props, children }) => (
@@ -530,19 +519,25 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
       const compactColumns = props.columns.map((column, columnIndex) =>
         isCompactTableColumn(column, props.rows, columnIndex),
       );
+      const numericColumns = props.columns.map((_, columnIndex) =>
+        isNumericTableColumn(props.rows, columnIndex),
+      );
       return (
         <div className="overflow-x-auto">
           <table className="w-max min-w-full border-collapse text-left text-[13.5px] leading-5">
             <thead>
-              <tr className="border-border/60 border-b">
+              <tr className="border-border/50 border-b">
                 {props.columns.map((column, columnIndex) => (
                   <th
                     key={column}
                     className={cn(
-                      "text-muted-foreground px-3 py-2.5 text-[12.5px] font-medium align-top",
-                      compactColumns[columnIndex]
-                        ? "whitespace-nowrap"
-                        : "min-w-[12rem] max-w-[20rem]",
+                      "text-muted-foreground py-1.5 text-[12.5px] font-medium align-bottom",
+                      columnIndex === 0 ? "pr-3 pl-0" : "px-3",
+                      numericColumns[columnIndex]
+                        ? "whitespace-nowrap text-right tabular-nums"
+                        : compactColumns[columnIndex]
+                          ? "whitespace-nowrap"
+                          : "min-w-[12rem] max-w-[20rem]",
                     )}
                   >
                     {column}
@@ -552,15 +547,21 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
             </thead>
             <tbody>
               {props.rows.map((row, rowIndex) => (
-                <tr key={rowIndex} className="border-border/40 border-b last:border-b-0">
+                <tr
+                  key={rowIndex}
+                  className="border-border/40 border-b last:border-b-0"
+                >
                   {row.map((cell, cellIndex) => (
                     <td
                       key={cellIndex}
                       className={cn(
-                        "text-foreground px-3 py-2.5 align-top",
-                        compactColumns[cellIndex]
-                          ? "whitespace-nowrap"
-                          : "min-w-[12rem] max-w-[20rem] wrap-break-word",
+                        "text-foreground py-1.5 align-top",
+                        cellIndex === 0 ? "pr-3 pl-0" : "px-3",
+                        numericColumns[cellIndex]
+                          ? "whitespace-nowrap text-right tabular-nums"
+                          : compactColumns[cellIndex]
+                            ? "whitespace-nowrap"
+                            : "min-w-[12rem] max-w-[20rem] wrap-break-word",
                       )}
                     >
                       {cell}
