@@ -48,9 +48,10 @@ async function ResolvedBilling() {
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Subscribe to Pearl</h1>
         <p className="text-sm text-muted-foreground">
-          $10 per month, plus usage for models, research, sandboxes, and
-          images. New accounts start with a $50 monthly usage cap you can
-          raise anytime.
+          $29.99 per month includes $10 of usage for models, research,
+          sandboxes, and images. Add a card for automatic overage billing with
+          a $100 monthly spend cap you can raise anytime — or buy prepaid packs
+          on iOS.
         </p>
       </header>
       <BillingCheckoutClient reason={access.reason} />

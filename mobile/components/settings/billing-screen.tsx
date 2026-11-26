@@ -69,12 +69,14 @@ function planSummary(status: MobileBillingStatus): string {
   const reset = formatReset(status.periodEnd);
   const resetSentence = reset ? ` Resets ${reset}.` : "";
   if (status.trial) {
-    return `Included monthly allowance. This account is not billed.${resetSentence}`;
+    return `Friend beta — $20/mo included allowance (not billed). Upgrade to Pearl Monthly for more.${resetSentence}`;
   }
   if (status.paymentProvider === "apple") {
-    return `Apple subscription is $10 a month, plus usage credits.${resetSentence}`;
+    return status.hasExtendedUsageBilling
+      ? `Apple subscription ($29.99/mo) plus automatic usage billing.${resetSentence}`
+      : `Apple subscription is $29.99/mo with $10 included. Buy packs or enable auto-billing for more.${resetSentence}`;
   }
-  return `Subscription is $10 a month, plus usage.${resetSentence}`;
+  return `Subscription is $29.99/mo with $10 included; overage up to your spend cap.${resetSentence}`;
 }
 
 /**
@@ -242,11 +244,14 @@ export function BillingScreen() {
   }
 
   const canManageCap =
-    status.enabled &&
-    !status.exempt &&
-    !status.trial &&
-    !status.needsCheckout &&
-    status.paymentProvider !== "apple";
+    status.canManageCap === true ||
+    (status.canManageCap !== false &&
+      status.enabled &&
+      !status.exempt &&
+      !status.trial &&
+      !status.needsCheckout &&
+      Boolean(status.hasExtendedUsageBilling) &&
+      status.paymentProvider !== "apple");
 
   const showApplePacks =
     Platform.OS === "ios" &&
@@ -255,7 +260,10 @@ export function BillingScreen() {
     (status.hasAppleSubscription || status.paymentProvider === "apple") &&
     !status.needsCheckout;
 
-  const showSubscribe = status.enabled && status.needsCheckout;
+  const showSubscribe =
+    status.enabled &&
+    !status.exempt &&
+    (status.needsCheckout || status.trial);
 
   return (
     <SettingsForm>
@@ -302,13 +310,29 @@ export function BillingScreen() {
         </SettingsSection>
       ) : null}
 
+      {status.trial ? (
+        <SettingsSection
+          title="Plans"
+          footer={
+            <SettingsFormText tone="secondary">
+              Friend trial: $20/mo soft cap, not billed. Pearl Monthly: $29.99
+              with $10 included — then prepaid packs (iOS) or a card with a
+              $100 default spend cap.
+            </SettingsFormText>
+          }
+        >
+          <SettingsLabeledValue label="Current" value="Friend trial" />
+          <SettingsLabeledValue label="Upgrade" value="Pearl Monthly · $29.99" />
+        </SettingsSection>
+      ) : null}
+
       {showSubscribe ? (
         <SettingsSection
           footer={
             <SettingsFormText tone="secondary">
               {Platform.OS === "ios"
-                ? "$10 a month via the App Store, plus optional usage credit packs. New accounts start with a $50 included allowance."
-                : "$10 a month, plus usage. New accounts start with a $50 usage cap."}
+                ? "$29.99/mo via the App Store includes $10 of usage. Buy credit packs when you need more, or enable automatic billing on the web."
+                : "$29.99/mo includes $10 of usage. Overage bills to your card up to a $100 spend cap you can raise in Settings."}
             </SettingsFormText>
           }
         >
@@ -319,9 +343,13 @@ export function BillingScreen() {
                 ? Platform.OS === "ios"
                   ? "Purchasing…"
                   : "Opening Stripe…"
-                : Platform.OS === "ios"
-                  ? "Subscribe"
-                  : "Continue to Stripe"
+                : status.trial
+                  ? Platform.OS === "ios"
+                    ? "Upgrade"
+                    : "Upgrade with Stripe"
+                  : Platform.OS === "ios"
+                    ? "Subscribe"
+                    : "Continue to Stripe"
             }
             onPress={() => void subscribe()}
           />
@@ -374,7 +402,7 @@ export function BillingScreen() {
               setHint(null);
               setError(null);
             }}
-            placeholder="50.00"
+            placeholder="100.00"
             value={capDollars}
           />
           <SettingsButton

@@ -446,7 +446,7 @@ test("usage: Vercel usage payload is distinct from Pearl billing status", async 
   const pearlBilling = {
     subscribed: true,
     spentCents: 120,
-    usageCapCents: 5000,
+    usageCapCents: 10_000,
   };
 
   assert.equal("spentCents" in usage, false);

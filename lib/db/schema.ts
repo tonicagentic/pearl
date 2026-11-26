@@ -732,7 +732,7 @@ export const billingAccount = pgTable(
     status: text("status").notNull().default("incomplete"),
     periodStart: timestamp("period_start"),
     periodEnd: timestamp("period_end"),
-    usageCapCents: integer("usage_cap_cents").notNull().default(5000),
+    usageCapCents: integer("usage_cap_cents").notNull().default(10_000),
     metronomeCustomerId: text("metronome_customer_id"),
     /** `stripe` | `apple` — which store owns the base subscription. */
     paymentProvider: text("payment_provider").notNull().default("stripe"),

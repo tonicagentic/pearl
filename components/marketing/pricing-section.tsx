@@ -3,6 +3,7 @@
 import { FolderGit2Icon } from "lucide-react";
 import {
   GITHUB_URL,
+  HOSTED_INCLUDED_USAGE_LABEL,
   HOSTED_PRICE_LABEL,
   HOSTED_USAGE_CAP_LABEL,
 } from "@/components/marketing/constants";
@@ -84,14 +85,18 @@ export function PricingSection({
                   {HOSTED_PRICE_LABEL}
                 </p>
                 <CardDescription className="text-sm leading-relaxed">
-                  Hosted Pearl with models and tools metered.{" "}
-                  {HOSTED_USAGE_CAP_LABEL} usage cap — raise it in Settings.
+                  Hosted Pearl with {HOSTED_INCLUDED_USAGE_LABEL} included.
+                  Overage bills up to a {HOSTED_USAGE_CAP_LABEL} spend cap —
+                  raise it in Settings.
                 </CardDescription>
               </CardHeader>
               <CardContent className="text-sm leading-relaxed text-muted-foreground">
                 <ul className="list-disc space-y-2 pl-5 text-left">
                   <li>Web and iOS against the hosted service</li>
-                  <li>Models, research, sandboxes, and images metered</li>
+                  <li>
+                    {HOSTED_INCLUDED_USAGE_LABEL} included; prepaid packs or
+                    card overage
+                  </li>
                   <li>Subscribe after sign-in — billing stays in-app</li>
                   <li>Start here; move to self-hosted when you’re ready</li>
                 </ul>

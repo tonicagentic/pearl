@@ -125,18 +125,22 @@ export function BillingGateScreen({
           <Text variant="title">Monthly allowance used</Text>
           <Text variant="body" tone="muted" className="leading-[22px]">
             {status?.message ??
-              "You used the included $20 of usage for this month. Access opens again next month."}
+              "You used the included $20 of friend-trial usage for this month. Subscribe to Pearl ($29.99/mo) for more, or wait until next month."}
+          </Text>
+          <Text variant="secondary" tone="muted" className="leading-[20px]">
+            Pearl Monthly: $29.99 · $10 included · prepaid packs or card overage
+            with a $100 spend cap.
           </Text>
           {Platform.OS === "ios" ? (
             <Button
-              label="Subscribe"
+              label="Upgrade"
               loading={pending}
               loadingLabel="Purchasing…"
               onPress={() => void subscribe()}
             />
           ) : (
             <Button
-              label="Continue to Stripe"
+              label="Upgrade with Stripe"
               loading={pending}
               loadingLabel="Opening Stripe…"
               onPress={() => void subscribe()}
@@ -148,7 +152,7 @@ export function BillingGateScreen({
           <Text variant="title">Usage allowance used</Text>
           <Text variant="body" tone="muted" className="leading-[22px]">
             Buy usage credits in Profile → Billing, or enable automatic usage
-            billing at pearl.diy/billing on the web.
+            billing at pearl.diy/billing on the web ($100 default spend cap).
           </Text>
         </>
       ) : (
@@ -156,8 +160,8 @@ export function BillingGateScreen({
           <Text variant="title">Subscribe to Pearl</Text>
           <Text variant="body" tone="muted" className="leading-[22px]">
             {Platform.OS === "ios"
-              ? "$10 per month via the App Store, plus optional usage credits. New accounts start with a $50 included allowance."
-              : "$10 per month, plus usage. New accounts start with a $50 usage cap you can raise in Settings."}
+              ? "$29.99/mo via the App Store includes $10 of usage. Buy credit packs when you need more, or enable automatic billing on the web."
+              : "$29.99/mo includes $10 of usage. Overage bills to your card up to a $100 spend cap you can raise in Settings."}
           </Text>
           <Button
             label={Platform.OS === "ios" ? "Subscribe" : "Continue to Stripe"}

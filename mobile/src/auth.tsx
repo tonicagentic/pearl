@@ -166,7 +166,9 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       }
       setIsAnonymous(false);
       setNeedsSignup(false);
-      setBillingReady(Boolean(status.exempt || status.allowed || status.trial));
+      // Friend trial under the soft cap is ready; trial_cap_reached / any
+      // !allowed state must surface BillingGateScreen.
+      setBillingReady(Boolean(status.exempt || status.allowed));
     } catch {
       // If status cannot be loaded, let the server turn gate decide.
       setBillingReady(true);

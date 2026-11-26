@@ -12,7 +12,7 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 
 import {
-  DEFAULT_USAGE_CAP_CENTS,
+  INCLUDED_USAGE_CENTS,
   getAppleAppAppleId,
   getAppleIapBundleId,
   getAppleIapSubscriptionId,
@@ -208,7 +208,7 @@ export async function applyAppleSubscription(input: {
     periodStart: msToDate(transaction.purchaseDate) ?? existing?.periodStart,
     periodEnd: expires ?? existing?.periodEnd,
     metronomeCustomerId: existing?.metronomeCustomerId ?? null,
-    usageCapCents: existing?.usageCapCents ?? DEFAULT_USAGE_CAP_CENTS,
+    usageCapCents: existing?.usageCapCents ?? INCLUDED_USAGE_CENTS,
     paymentProvider: "apple",
     appleOriginalTransactionId: originalTransactionId,
     appleProductId: productId,

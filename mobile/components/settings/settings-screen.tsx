@@ -789,10 +789,16 @@ function BillingRow({
     if (!status || !status.enabled) return "Off";
     if (status.exempt) return "Free pass";
     if (status.trial) {
-      if (status.reason === "trial_cap_reached") return "Allowance used";
+      if (status.reason === "trial_cap_reached") return "Allowance used — upgrade";
+      if (status.remainingCents != null) {
+        return `${formatCents(status.remainingCents)} left · trial`;
+      }
       return `${formatCents(status.spentCents)} of ${formatCents(status.usageCapCents)} trial`;
     }
     if (status.needsCheckout) return "Subscribe";
+    if (status.remainingCents != null) {
+      return `${formatCents(status.remainingCents)} left`;
+    }
     return `${formatCents(status.spentCents)} of ${formatCents(status.usageCapCents)}`;
   })();
 

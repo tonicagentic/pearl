@@ -66,7 +66,7 @@ vercel env run -e production -- pnpm db:migrate
 
 ## Hosted billing
 
-The hosted production app bills new accounts by default: **$10/month** subscription via Stripe Checkout (web/Android) or StoreKit (iOS), plus metered usage. Stripe subscribers are invoiced through Metronome onto the same Stripe customer. Apple subscribers get a **$50/period included soft cap** plus optional StoreKit consumable credit packs; power users can enable automatic usage billing on the web (Stripe card + Metronome) without leaving Apple as the base subscription. New accounts start with a **$50/month usage spend cap** they can raise in Settings.
+The hosted production app bills new accounts by default: **$29.99/month** subscription via Stripe Checkout (web/Android) or StoreKit (iOS), including **$10 of usage** per period. Stripe subscribers are invoiced through Metronome onto the same Stripe customer and start with a **$100/month usage spend cap** they can raise in Settings. Apple subscribers hard-stop at the **$10 included** allowance plus optional StoreKit consumable credit packs; power users can enable automatic usage billing on the web (Stripe card + Metronome) without leaving Apple as the base subscription. Signed-in users without a subscription stay on a **friend trial** (~$20/month soft cap) with an upgrade path.
 
 Required production env vars (see [.env.example](../.env.example)):
 
@@ -524,11 +524,12 @@ set `EVE_CALLBACK_TRUSTED_ORIGINS` to this Pearl origin.
 Gmail does **not** use Google's MCP server. Pearl calls `gmail.googleapis.com`
 with Connect-issued user tokens:
 
-- Read/search: `search_gmail_threads`, `get_gmail_thread`, `get_gmail_message`,
-  `list_gmail_labels`, `list_gmail_drafts`
-- Draft: `create_gmail_draft` (approval every call)
-- Send: `send_gmail_message` (approval + execution ledger)
-- Bulk archive / mark-read / label: `apply_mail_batch` (approval)
+- Pearl root lookup: `search_gmail_threads`, `get_gmail_thread`,
+  `get_gmail_message`, `list_mail_accounts`
+- Pearl compose (EmailDraft cards): `create_gmail_draft` (approval every
+  call), `send_gmail_message` (approval + execution ledger)
+- Mail subagent: labels/drafts list, triage batches (`list_gmail_labels`,
+  `list_gmail_drafts`, `apply_mail_batch`, …)
 
 Google Cloud setup:
 

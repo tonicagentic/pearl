@@ -14,7 +14,12 @@ import { Section } from "@/components/ui/section";
 import { SettingsCard } from "@/components/ui/settings-card";
 import { Text } from "@/components/ui/text";
 import {
+  fetchBillingStatus,
+  type MobileBillingStatus,
+} from "@/src/billing-client";
+import {
   fetchUsageSummary,
+  formatSpendCents,
   formatSpendUsd,
   formatTokens,
   formatUsd,
@@ -44,6 +49,7 @@ type FilterChip = {
  */
 export function UsageScreen() {
   const [summary, setSummary] = useState<MobileUsageSummary | null>(null);
+  const [billing, setBilling] = useState<MobileBillingStatus | null>(null);
   const [query, setQuery] = useState<UsageSummaryQuery>({ preset: "cycle" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,10 +58,11 @@ export function UsageScreen() {
     useCallback(() => {
       let cancelled = false;
       setLoading(true);
-      void fetchUsageSummary(query)
-        .then((next) => {
+      void Promise.all([fetchUsageSummary(query), fetchBillingStatus()])
+        .then(([next, nextBilling]) => {
           if (cancelled) return;
           setSummary(next);
+          setBilling(nextBilling);
           setError(next ? null : "Could not load usage.");
         })
         .catch((cause) => {
@@ -154,6 +161,27 @@ export function UsageScreen() {
           );
         })}
       </View>
+
+      {billing?.enabled &&
+      !billing.exempt &&
+      billing.remainingCents != null &&
+      billing.usageCapCents != null ? (
+        <SettingsCard>
+          <View className="flex-row items-center justify-between gap-3 px-4 py-3">
+            <View className="min-w-0 flex-1 gap-0.5">
+              <Text variant="secondary">Remaining this period</Text>
+              <Text variant="title" className="tabular-nums">
+                {formatSpendCents(billing.remainingCents)}
+              </Text>
+              <Text variant="caption" tone="muted">
+                {formatSpendCents(billing.spentCents)} of{" "}
+                {formatSpendCents(billing.usageCapCents)}
+                {billing.trial ? " · friend trial" : ""}
+              </Text>
+            </View>
+          </View>
+        </SettingsCard>
+      ) : null}
 
       <SettingsCard>
         <View className="gap-3 px-4 py-4">

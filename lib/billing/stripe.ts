@@ -33,7 +33,7 @@ function randomSuffix(length = 8): string {
 }
 
 /**
- * Create a Checkout Session for the $10/month subscription. The caller must
+ * Create a Checkout Session for the $29.99/month subscription. The caller must
  * already be a signed-in, non-exempt user. Access unlocks only from webhooks.
  */
 export async function createSubscriptionCheckoutSession(input: {

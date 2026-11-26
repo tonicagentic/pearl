@@ -7,11 +7,20 @@
  * (default $20/month of operator AI cost). PEARL_TRIAL_ALLOWLIST remains for
  * docs / review accounts. Exempt accounts (operator free pass) are uncapped.
  * Anonymous guests get a short free message allowance before sign-up.
+ *
+ * Paying: $29.99/mo. Apple-only (no Stripe/Metronome) hard-stops at
+ * INCLUDED_USAGE_CENTS (+ prepaid packs). Stripe Checkout or Apple extended
+ * usage unlocks an adjustable spend cap defaulting to DEFAULT_USAGE_CAP_CENTS.
  */
 
-export const DEFAULT_USAGE_CAP_CENTS = 5000;
+/** Spend cap when Stripe overage billing is on (Metronome → card). */
+export const DEFAULT_USAGE_CAP_CENTS = 10_000;
+/** Soft monthly allowance for friend-trial (non-paying) accounts. */
 export const DEFAULT_TRIAL_CAP_CENTS = 2000;
-export const SUBSCRIPTION_PRICE_CENTS = 1000;
+/** Apple-only included usage before packs or extended Stripe billing. */
+export const INCLUDED_USAGE_CENTS = 1000;
+/** Hosted subscription list price (Stripe + App Store). */
+export const SUBSCRIPTION_PRICE_CENTS = 2999;
 /** Guest (anonymous) users may send this many turns before signup. */
 export const GUEST_MESSAGE_LIMIT = 3;
 
@@ -71,7 +80,7 @@ export function isMetronomeConfigured(): boolean {
   return hasEnv("METRONOME_API_TOKEN");
 }
 
-/** Default App Store product id for the $10/month subscription. */
+/** Default App Store product id for the $29.99/month subscription. */
 export const DEFAULT_APPLE_IAP_SUBSCRIPTION_ID = "pearl_monthly";
 
 /** Default consumable usage credit packs (product id → credit cents). */
@@ -145,9 +154,9 @@ export function isAppleIapConfigured(): boolean {
 }
 
 /**
- * Paying users need Stripe. Metronome is required to activate a subscription
- * (usage invoices); without it Checkout can still collect the $10 but usage
- * ingest is skipped until the token is present.
+ * Paying users need Stripe. Metronome is required to invoice usage onto the
+ * Stripe customer; without it Checkout can still collect the subscription but
+ * usage ingest is skipped until the token is present.
  */
 export function isBillingProvidersConfigured(): boolean {
   return isStripeConfigured();
@@ -213,13 +222,13 @@ export function getTrialCapCents(): number {
 export function blockMessage(reason: BillingBlockReason): string {
   switch (reason) {
     case "unpaid":
-      return "Subscribe to Pearl to keep chatting. $10/month plus usage.";
+      return "Subscribe to Pearl to keep chatting. $29.99/month includes $10 of usage.";
     case "payment_failed":
       return "Your last payment failed. Update your card to keep chatting.";
     case "cap_reached":
-      return "You reached your usage spend cap for this period. Raise the cap in Settings to continue.";
+      return "You reached your usage spend cap for this period. Buy a credit pack, enable automatic usage billing, or raise the cap in Settings to continue.";
     case "trial_cap_reached":
-      return "You used the included $20 of usage for this month. Access opens again next month.";
+      return "You used the included $20 of friend-trial usage for this month. Subscribe to Pearl ($29.99/mo) for more, or wait until next month.";
     case "guest_limit_reached":
       return "Sign up to continue chatting. Your conversation will stay with your account.";
     case "billing_misconfigured":

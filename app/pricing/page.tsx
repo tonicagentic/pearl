@@ -7,7 +7,7 @@ import { getInitialSetupStatus } from "@/lib/setup";
 export const metadata: Metadata = {
   title: "Pricing — Pearl",
   description:
-    "Self-host Pearl for free, or use hosted Pearl at $10/mo plus metered usage.",
+    "Self-host Pearl for free, or use hosted Pearl at $29.99/mo with $10 included usage.",
 };
 
 export default function Page() {

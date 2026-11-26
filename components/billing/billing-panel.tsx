@@ -5,6 +5,11 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  HOSTED_INCLUDED_USAGE_LABEL,
+  HOSTED_PRICE_LABEL,
+  HOSTED_USAGE_CAP_LABEL,
+} from "@/lib/marketing";
 import { formatUsd } from "@/lib/usage/usage";
 
 type BillingStatus = {
@@ -19,6 +24,10 @@ type BillingStatus = {
   readonly usageCapCents: number | null;
   readonly spentCents: number;
   readonly remainingCents: number | null;
+  readonly includedUsageCents?: number;
+  readonly subscriptionPriceCents?: number;
+  readonly defaultSpendCapCents?: number;
+  readonly trialCapCents?: number;
   readonly periodStart: string | null;
   readonly periodEnd: string | null;
   readonly paymentProvider?: "stripe" | "apple" | null;
@@ -26,11 +35,12 @@ type BillingStatus = {
   readonly hasAppleSubscription?: boolean;
   readonly hasExtendedUsageBilling?: boolean;
   readonly hasPortal: boolean;
+  readonly canManageCap?: boolean;
   readonly bySource: readonly { readonly source: string; readonly costCents: number }[];
 };
 
-function centsToUsd(cents: number | null): string {
-  if (cents === null) return "—";
+function centsToUsd(cents: number | null | undefined): string {
+  if (cents == null) return "—";
   return formatUsd(cents / 100);
 }
 
@@ -150,6 +160,11 @@ export function BillingPanel() {
     }
   }
 
+  const showSubscribe =
+    !status.exempt && (status.trial || status.needsCheckout);
+  const canManageCap = Boolean(status.canManageCap);
+  const trialCapLabel = centsToUsd(status.trialCapCents ?? 2000);
+
   return (
     <section className="space-y-3 rounded-lg border bg-card p-4">
       <div>
@@ -158,12 +173,12 @@ export function BillingPanel() {
           {status.exempt
             ? "This account has a free pass and is not invoiced."
             : status.trial
-              ? "Friend beta — included monthly allowance (not billed to you)."
+              ? `Friend beta — ${trialCapLabel}/mo included allowance (not billed). Upgrade anytime for more usage.`
               : status.paymentProvider === "apple"
                 ? status.hasExtendedUsageBilling
                   ? "Apple subscription plus automatic usage billing on your card."
-                  : "Apple subscription with included usage. Buy credit packs in the iOS app, or enable automatic usage billing below."
-                : "Subscription plus metered usage for this billing period."}
+                  : `Apple subscription with ${HOSTED_INCLUDED_USAGE_LABEL} included. Buy credit packs in the iOS app, or enable automatic usage billing below.`
+                : `Subscription (${HOSTED_PRICE_LABEL}) includes ${HOSTED_INCLUDED_USAGE_LABEL} of usage; overage bills to your card up to your spend cap.`}
         </p>
       </div>
 
@@ -192,6 +207,33 @@ export function BillingPanel() {
         ) : null}
       </div>
 
+      {status.prepaidCreditCents != null && status.prepaidCreditCents > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Prepaid credits:{" "}
+          <span className="font-medium tabular-nums text-foreground">
+            {centsToUsd(status.prepaidCreditCents)}
+          </span>
+        </p>
+      ) : null}
+
+      {status.trial ? (
+        <div className="grid gap-2 rounded-md border border-dashed p-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <div className="text-xs font-medium">Friend trial</div>
+            <p className="text-xs text-muted-foreground">
+              Free · {trialCapLabel}/mo soft cap · current plan
+            </p>
+          </div>
+          <div className="space-y-1">
+            <div className="text-xs font-medium">Pearl Monthly</div>
+            <p className="text-xs text-muted-foreground">
+              {HOSTED_PRICE_LABEL} · {HOSTED_INCLUDED_USAGE_LABEL} included ·
+              packs or {HOSTED_USAGE_CAP_LABEL} spend cap with a card
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {status.bySource.length > 0 ? (
         <ul className="space-y-1 text-sm">
           {status.bySource.map((row) => (
@@ -208,14 +250,16 @@ export function BillingPanel() {
         <p className="text-sm text-muted-foreground">No metered usage yet this period.</p>
       )}
 
-      {!status.exempt && !status.trial && status.needsCheckout ? (
+      {showSubscribe ? (
         <Button disabled={pending} onClick={() => void openCheckout()} type="button">
           {pending ? <Loader2Icon className="size-4 animate-spin" /> : null}
-          Subscribe — $10/month + usage
+          {status.trial
+            ? `Upgrade — ${HOSTED_PRICE_LABEL}`
+            : `Subscribe — ${HOSTED_PRICE_LABEL}`}
         </Button>
       ) : null}
 
-      {!status.exempt && !status.trial && !status.needsCheckout ? (
+      {canManageCap ? (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <label className="flex flex-1 flex-col gap-1 text-xs text-muted-foreground">
             Usage spend cap (USD)
@@ -223,6 +267,7 @@ export function BillingPanel() {
               disabled={pending}
               inputMode="decimal"
               onChange={(event) => setCapDollars(event.target.value)}
+              placeholder="100.00"
               value={capDollars}
             />
           </label>
@@ -247,11 +292,23 @@ export function BillingPanel() {
         </div>
       ) : null}
 
+      {!canManageCap && status.hasPortal ? (
+        <Button
+          disabled={pending}
+          onClick={() => void openPortal()}
+          type="button"
+          variant="outline"
+        >
+          Manage card
+        </Button>
+      ) : null}
+
       {status.hasAppleSubscription && !status.hasExtendedUsageBilling ? (
         <div className="space-y-2 rounded-md border border-dashed p-3">
           <p className="text-xs text-muted-foreground">
             Enable automatic usage billing to invoice overage to a card via
-            Stripe (Metronome). Your Apple subscription stays the base plan.
+            Stripe (Metronome). Default spend cap is {HOSTED_USAGE_CAP_LABEL}.
+            Your Apple subscription stays the base plan.
           </p>
           <Button
             disabled={pending}

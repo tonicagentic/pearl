@@ -407,6 +407,13 @@
       "when": 1796400000000,
       "tag": "0060_library_quotes",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1796500000000,
+      "tag": "0061_billing_pricing_defaults",
+      "breakpoints": true
     }
   ]
 }

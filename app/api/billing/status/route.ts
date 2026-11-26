@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { getBillingAccess, isBillingActive } from "@/lib/billing/accounts";
-import { blockMessage } from "@/lib/billing/config";
+import {
+  DEFAULT_USAGE_CAP_CENTS,
+  INCLUDED_USAGE_CENTS,
+  SUBSCRIPTION_PRICE_CENTS,
+  blockMessage,
+  getTrialCapCents,
+} from "@/lib/billing/config";
 import { usageBreakdownBySource } from "@/lib/billing/ledger";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
@@ -34,6 +40,14 @@ export async function GET() {
       ? await usageBreakdownBySource(viewer.id, access.periodStart)
       : [];
 
+  const remainingCents =
+    access.usageCapCents == null
+      ? null
+      : Math.max(
+          0,
+          access.usageCapCents - access.spentCents - access.reservedCents,
+        );
+
   return NextResponse.json({
     enabled: true,
     allowed: access.allowed,
@@ -56,13 +70,11 @@ export async function GET() {
     usageCapCents: access.usageCapCents,
     spentCents: access.spentCents,
     reservedCents: access.reservedCents,
-    remainingCents:
-      access.usageCapCents == null
-        ? null
-        : Math.max(
-            0,
-            access.usageCapCents - access.spentCents - access.reservedCents,
-          ),
+    remainingCents,
+    includedUsageCents: INCLUDED_USAGE_CENTS,
+    subscriptionPriceCents: SUBSCRIPTION_PRICE_CENTS,
+    defaultSpendCapCents: DEFAULT_USAGE_CAP_CENTS,
+    trialCapCents: getTrialCapCents(),
     guestMessageCount: access.guestMessageCount,
     guestMessageLimit: access.guestMessageLimit,
     periodStart: access.periodStart?.toISOString() ?? null,
@@ -72,6 +84,8 @@ export async function GET() {
     hasAppleSubscription: access.hasAppleSubscription,
     hasExtendedUsageBilling: access.hasExtendedUsageBilling,
     hasPortal:
+      Boolean(access.stripeCustomerId) && !access.exempt && !access.trial,
+    canManageCap:
       Boolean(access.stripeCustomerId) && !access.exempt && !access.trial,
     bySource,
   });

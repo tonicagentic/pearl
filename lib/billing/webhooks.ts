@@ -7,7 +7,10 @@ import {
   getUserBillingFlags,
   upsertBillingAccount,
 } from "@/lib/billing/accounts";
-import { DEFAULT_USAGE_CAP_CENTS } from "@/lib/billing/config";
+import {
+  DEFAULT_USAGE_CAP_CENTS,
+  INCLUDED_USAGE_CENTS,
+} from "@/lib/billing/config";
 import { ensureMetronomeCustomer } from "@/lib/billing/metronome";
 import { getStripe, subscriptionPeriod } from "@/lib/billing/stripe";
 
@@ -145,6 +148,13 @@ async function handleExtendedUsageSetup(
     });
   }
 
+  // Bump included-only Apple caps to the Stripe overage default; keep higher
+  // user-set caps.
+  const usageCapCents =
+    existing.usageCapCents <= INCLUDED_USAGE_CENTS
+      ? DEFAULT_USAGE_CAP_CENTS
+      : existing.usageCapCents;
+
   await upsertBillingAccount({
     userId,
     stripeCustomerId,
@@ -153,7 +163,7 @@ async function handleExtendedUsageSetup(
     periodStart: existing.periodStart,
     periodEnd: existing.periodEnd,
     metronomeCustomerId,
-    usageCapCents: existing.usageCapCents,
+    usageCapCents,
     paymentProvider: existing.paymentProvider === "apple" ? "apple" : "stripe",
     appleOriginalTransactionId: existing.appleOriginalTransactionId,
     appleProductId: existing.appleProductId,

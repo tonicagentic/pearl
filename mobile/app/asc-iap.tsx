@@ -23,8 +23,8 @@ export default function AscIapPreviewScreen() {
     >
       <Text variant="title">Subscribe to Pearl</Text>
       <Text variant="body" tone="muted" style={styles.body}>
-        $10 per month via the App Store, plus optional usage credits. New
-        accounts start with a $50 included allowance.
+        $29.99 per month via the App Store includes $10 of usage. Buy credit
+        packs when you need more, or enable automatic billing on the web.
       </Text>
       <Button label="Subscribe" onPress={() => {}} />
       <Button
