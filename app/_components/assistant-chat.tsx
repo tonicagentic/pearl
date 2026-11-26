@@ -9,6 +9,8 @@ import {
   isEveSessionInactive,
   mergeEventsForSnapshot,
 } from "@/lib/chat/eve-session-recovery";
+import { planTurnPersist } from "@/lib/chat/persist-turn";
+import { persistWithRetry } from "@/lib/chat/persistence-retry";
 import { cn } from "@/lib/utils";
 import {
   CompositeAttachmentAdapter,
@@ -115,6 +117,7 @@ import {
   markClientChatRead,
   saveClientChatSession,
   saveClientChatSnapshot,
+  upgradeClientChatTitle,
 } from "@/lib/chat/persistence-client";
 import { chatPresence } from "@/lib/chat/events";
 import { repairSessionHydration } from "@/lib/chat/hydration-prefix";
@@ -418,9 +421,12 @@ function AssistantChatSurfaceInner({
   const customAgentIdRef = useRef<string | null>(
     activeChat?.customAgent?.id ?? null,
   );
-  const eventIndexRef = useRef(
-    Math.max(seedEvents.length, activeChat?.events.length ?? 0),
-  );
+  const nextEventIndex =
+    activeChat?.nextEventIndex ??
+    Math.max(seedEvents.length, activeChat?.events.length ?? 0);
+  const hydratedFromIndexRef = useRef(activeChat?.hydratedFromIndex ?? 0);
+  const confirmedNextIndexRef = useRef(nextEventIndex);
+  const eventIndexRef = useRef(nextEventIndex);
   const savedEventCountRef = useRef(
     Math.max(seedEvents.length, activeChat?.events.length ?? 0),
   );
@@ -481,24 +487,32 @@ function AssistantChatSurfaceInner({
       eventIndexRef.current += 1;
 
       if (storageMode === "browser") {
-        void appendClientChatEvents(storageMode, {
-          chatId: id,
-          events: [{ event, eventIndex }],
-        }).catch((error) => {
-          setClientError(
-            error instanceof Error
-              ? error.message
-              : "Failed to save stream progress.",
-          );
-        });
+        void persistWithRetry(() =>
+          appendClientChatEvents(storageMode, {
+            chatId: id,
+            events: [{ event, eventIndex }],
+          }),
+        )
+          .then(() => {
+            confirmedNextIndexRef.current = Math.max(
+              confirmedNextIndexRef.current,
+              eventIndex + 1,
+            );
+          })
+          .catch((error) => {
+            setClientError(
+              error instanceof Error
+                ? error.message
+                : "Failed to save stream progress.",
+            );
+          });
         return;
       }
 
       // Database mode: buffer events and flush on a timer — one server action
       // per streamed event produced ~6 invocations/second in production logs
-      // (docs: checkpoint-optimization-plan.md). A crash between flushes loses
-      // at most the buffer; persistSnapshot still saves the full event set at
-      // turn end.
+      // (docs: checkpoint-optimization-plan.md). Ordinary turn end appends
+      // only the unsaved tail; a full snapshot is reserved for prefix changes.
       eventBufferRef.current.push({ event, eventIndex });
 
       if (eventFlushTimerRef.current !== null) {
@@ -514,16 +528,28 @@ function AssistantChatSurfaceInner({
           return;
         }
 
-        void appendClientChatEvents(storageMode, {
-          chatId: id,
-          events: batch,
-        }).catch((error) => {
-          setClientError(
-            error instanceof Error
-              ? error.message
-              : "Failed to save stream progress.",
-          );
-        });
+        void persistWithRetry(() =>
+          appendClientChatEvents(storageMode, {
+            chatId: id,
+            events: batch,
+          }),
+        )
+          .then(() => {
+            const last = batch[batch.length - 1]!.eventIndex;
+            confirmedNextIndexRef.current = Math.max(
+              confirmedNextIndexRef.current,
+              last + 1,
+            );
+          })
+          .catch((error) => {
+            // Requeue so the next flush / turn-end plan can resend.
+            eventBufferRef.current = [...batch, ...eventBufferRef.current];
+            setClientError(
+              error instanceof Error
+                ? error.message
+                : "Failed to save stream progress.",
+            );
+          });
       }, EVENT_FLUSH_INTERVAL_MS);
     },
     [storageMode],
@@ -539,36 +565,105 @@ function AssistantChatSurfaceInner({
 
       void (async () => {
         try {
-          const events = mergeEventsForSnapshot(
-            archivedEventsRef.current,
-            snapshot.events,
-          );
-          const session = snapshot.session;
+          // Flush any buffered stream events before planning the turn end.
+          if (eventFlushTimerRef.current !== null) {
+            clearTimeout(eventFlushTimerRef.current);
+            eventFlushTimerRef.current = null;
+          }
+          const buffered = eventBufferRef.current.splice(0);
+          if (buffered.length > 0) {
+            await persistWithRetry(() =>
+              appendClientChatEvents(storageMode, {
+                chatId: id,
+                events: buffered,
+              }),
+            );
+            const last = buffered[buffered.length - 1]!.eventIndex;
+            confirmedNextIndexRef.current = Math.max(
+              confirmedNextIndexRef.current,
+              last + 1,
+            );
+          }
 
-          // eve fires onFinish even when a mount/resume found nothing new.
-          // Only treat the snapshot as an update when the event stream
-          // actually changed, so idle opens do not reorder the sidebar.
-          // Skip empty post-newSession finishes that would truncate history.
-          if (
-            snapshot.events.length === 0 ||
-            events.length === savedEventCountRef.current
-          ) {
+          const plan = planTurnPersist({
+            archived: archivedEventsRef.current,
+            live: snapshot.events,
+            hydratedFromIndex: hydratedFromIndexRef.current,
+            confirmedNextIndex: confirmedNextIndexRef.current,
+            savedEventCount: savedEventCountRef.current,
+            session: snapshot.session,
+          });
+
+          if (plan.kind === "noop") {
             onPendingUserMessageSettled?.();
             return;
           }
 
-          const saved = await saveClientChatSnapshot(storageMode, {
-            chatId: id,
-            events,
-            session,
-          });
-          if (saved.title) {
-            currentTitleRef.current = saved.title;
+          let title: string | undefined;
+          let eventsForPresence: readonly SessionStreamEvent[];
+
+          if (plan.kind === "append") {
+            if (plan.events.length > 0) {
+              await persistWithRetry(() =>
+                appendClientChatEvents(storageMode, {
+                  chatId: id,
+                  events: plan.events,
+                }),
+              );
+              confirmedNextIndexRef.current = Math.max(
+                confirmedNextIndexRef.current,
+                plan.confirmedNextIndex,
+              );
+              eventIndexRef.current = Math.max(
+                eventIndexRef.current,
+                plan.confirmedNextIndex,
+              );
+            }
+            if (plan.session) {
+              await persistWithRetry(() =>
+                saveClientChatSession(storageMode, {
+                  chatId: id,
+                  session: plan.session!,
+                }),
+              );
+            }
+            if (plan.firstUserText) {
+              const upgraded = await upgradeClientChatTitle(storageMode, {
+                chatId: id,
+                firstUserText: plan.firstUserText,
+              });
+              title = upgraded.title;
+            }
+            eventsForPresence = mergeEventsForSnapshot(
+              archivedEventsRef.current,
+              snapshot.events,
+            );
+            archivedEventsRef.current = eventsForPresence;
+            savedEventCountRef.current = plan.savedEventCount;
+          } else {
+            const saved = await persistWithRetry(() =>
+              saveClientChatSnapshot(storageMode, {
+                chatId: id,
+                events: plan.events,
+                session: plan.session,
+              }),
+            );
+            title = saved.title;
+            eventsForPresence = plan.events;
+            archivedEventsRef.current = plan.events;
+            savedEventCountRef.current = plan.savedEventCount;
+            confirmedNextIndexRef.current = plan.confirmedNextIndex;
+            eventIndexRef.current = Math.max(
+              eventIndexRef.current,
+              plan.confirmedNextIndex,
+            );
+            hydratedFromIndexRef.current = 0;
           }
-          archivedEventsRef.current = events;
-          eventIndexRef.current = events.length;
-          savedEventCountRef.current = events.length;
-          const presence = chatPresence(events, {
+
+          if (title) {
+            currentTitleRef.current = title;
+          }
+          const presence = chatPresence(eventsForPresence, {
             lastReadAt: new Date().toISOString(),
           });
           touchChat({
@@ -582,12 +677,14 @@ function AssistantChatSurfaceInner({
           void clearClientChatPendingMessage(storageMode, id).catch(() => {});
           onActiveChatUpdated?.({
             id,
-            events,
+            events: eventsForPresence,
             pendingUserMessage: null,
             projectId: projectIdRef.current,
             remoteAgentId: getRemoteAgentSelection(),
             customAgent: activeChat?.customAgent ?? null,
-            session,
+            session: plan.session,
+            nextEventIndex: confirmedNextIndexRef.current,
+            hydratedFromIndex: hydratedFromIndexRef.current,
             // onMessage imports and clears spoken / quick turns for a real send.
             spokenTurns: lastOutgoingMessageRef.current
               ? []
@@ -605,7 +702,15 @@ function AssistantChatSurfaceInner({
         }
       })();
     },
-    [onActiveChatUpdated, onPendingUserMessageSettled, storageMode, touchChat],
+    [
+      activeChat?.customAgent,
+      activeChat?.quickTurns,
+      activeChat?.spokenTurns,
+      onActiveChatUpdated,
+      onPendingUserMessageSettled,
+      storageMode,
+      touchChat,
+    ],
   );
 
   const prepareSend = useCallback(
@@ -893,6 +998,12 @@ function AssistantChatSurfaceInner({
           spokenTurns: activeChat?.spokenTurns ?? [],
           quickTurns: turns,
           title: currentTitleRef.current,
+          nextEventIndex:
+            activeChat?.nextEventIndex ??
+            confirmedNextIndexRef.current,
+          hydratedFromIndex:
+            activeChat?.hydratedFromIndex ??
+            hydratedFromIndexRef.current,
         });
         touchChat({
           id,

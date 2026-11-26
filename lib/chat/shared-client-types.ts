@@ -57,4 +57,14 @@ export type ActiveChat = {
   readonly spokenTurns: readonly SpokenTurn[];
   readonly quickTurns: readonly QuickTurn[];
   readonly title: string;
+  /**
+   * Absolute durable index for the next append (max stored index + 1).
+   * Prefer this over `events.length` — hydrate may return only a tail window.
+   */
+  readonly nextEventIndex: number;
+  /**
+   * Absolute index of the first hydrated event. Non-zero means this device
+   * must not rewrite the full log (older rows were never loaded).
+   */
+  readonly hydratedFromIndex: number;
 };

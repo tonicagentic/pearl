@@ -375,15 +375,17 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
     .where(eq(chatEvent.chatId, chatId))
     .orderBy(desc(chatEvent.eventIndex))
     .limit(1);
+  const nextEventIndex = (tail?.eventIndex ?? -1) + 1;
   const minEventIndex = Math.max(
     0,
-    (tail?.eventIndex ?? 0) - CHAT_HYDRATE_EVENT_LIMIT + 1,
+    nextEventIndex - CHAT_HYDRATE_EVENT_LIMIT,
   );
 
   const events = await db
     .select({
       createdAt: chatEvent.createdAt,
       event: chatEvent.event,
+      eventIndex: chatEvent.eventIndex,
     })
     .from(chatEvent)
     .where(
@@ -393,6 +395,8 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
       ),
     )
     .orderBy(asc(chatEvent.eventIndex));
+  const hydratedFromIndex =
+    events.length > 0 ? events[0]!.eventIndex : nextEventIndex;
 
   // Presence-only mirrors lack meta.position; eve rejects them as initialEvents.
   // Mirrors that do have a position can still be stored ahead of the transcript
@@ -453,6 +457,8 @@ export async function getChatForUser(chatId: string, userId: string): Promise<Ac
     spokenTurns: Array.isArray(row.spokenTurns) ? row.spokenTurns : [],
     quickTurns: Array.isArray(row.quickTurns) ? row.quickTurns : [],
     title: row.title,
+    nextEventIndex,
+    hydratedFromIndex,
   };
 }
 

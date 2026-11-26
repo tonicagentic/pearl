@@ -138,11 +138,14 @@ export async function getChat(id: string): Promise<ActiveChat | null> {
 
   const data = (await response.json()) as { chat: ActiveChat | null };
   if (!data.chat) return null;
+  const events = data.chat.events ?? [];
   return {
     ...data.chat,
     customAgent: data.chat.customAgent ?? null,
     spokenTurns: data.chat.spokenTurns ?? [],
     quickTurns: data.chat.quickTurns ?? [],
+    nextEventIndex: data.chat.nextEventIndex ?? events.length,
+    hydratedFromIndex: data.chat.hydratedFromIndex ?? 0,
   };
 }
 
@@ -304,20 +307,53 @@ export async function renameChat(
   };
 }
 
+export class ChatPersistError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ChatPersistError";
+    this.status = status;
+  }
+}
+
 export async function appendChatEvents(
   chatId: string,
   events: readonly { readonly event: SessionStreamEvent; readonly eventIndex: number }[],
-): Promise<void> {
-  if (events.length === 0) return;
+  options?: {
+    readonly session?: ClientSessionState;
+    readonly upgradeTitleFrom?: string;
+  },
+): Promise<{ readonly ok: true; readonly title?: string }> {
+  if (events.length === 0 && !options?.session && !options?.upgradeTitleFrom) {
+    return { ok: true };
+  }
   const response = await fetch(`${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/sync`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ append: events }),
+    body: JSON.stringify({
+      ...(events.length > 0 ? { append: events } : {}),
+      ...(options?.session ? { session: options.session } : {}),
+      ...(options?.upgradeTitleFrom
+        ? { upgradeTitleFrom: options.upgradeTitleFrom }
+        : {}),
+    }),
   });
   if (!response.ok) {
     if (response.status === 401) sessionInvalid();
-    throw new Error(`Failed to save chat events (${response.status}).`);
+    throw new ChatPersistError(
+      `Failed to save chat events (${response.status}).`,
+      response.status,
+    );
   }
+  const data = (await response.json().catch(() => ({ ok: true }))) as {
+    readonly ok?: boolean;
+    readonly title?: unknown;
+  };
+  return {
+    ok: true,
+    ...(typeof data.title === "string" ? { title: data.title } : {}),
+  };
 }
 
 export async function markPendingChatMessage(chatId: string, message: string): Promise<void> {
@@ -366,7 +402,10 @@ export async function saveChatSnapshot(
     if (response.status === 401) {
       sessionInvalid();
     }
-    throw new Error(`Failed to save the chat (${response.status}).`);
+    throw new ChatPersistError(
+      `Failed to save the chat (${response.status}).`,
+      response.status,
+    );
   }
 
   const data = (await response.json().catch(() => ({ ok: true }))) as {
@@ -382,13 +421,19 @@ export async function saveChatSnapshot(
 export async function saveChatSession(
   chatId: string,
   session: ClientSessionState,
-): Promise<void> {
+  options?: { readonly upgradeTitleFrom?: string },
+): Promise<{ readonly ok: true; readonly title?: string }> {
   const response = await fetch(
     `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/sync`,
     {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ session }),
+      body: JSON.stringify({
+        session,
+        ...(options?.upgradeTitleFrom
+          ? { upgradeTitleFrom: options.upgradeTitleFrom }
+          : {}),
+      }),
     },
   );
 
@@ -396,8 +441,20 @@ export async function saveChatSession(
     if (response.status === 401) {
       sessionInvalid();
     }
-    throw new Error(`Failed to save the chat session (${response.status}).`);
+    throw new ChatPersistError(
+      `Failed to save the chat session (${response.status}).`,
+      response.status,
+    );
   }
+
+  const data = (await response.json().catch(() => ({ ok: true }))) as {
+    readonly ok?: boolean;
+    readonly title?: unknown;
+  };
+  return {
+    ok: true,
+    ...(typeof data.title === "string" ? { title: data.title } : {}),
+  };
 }
 
 export async function deleteChat(chatId: string): Promise<void> {

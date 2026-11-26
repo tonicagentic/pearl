@@ -59,6 +59,8 @@ import { enrichPrepareSendPayload } from "./chat/prepare-send";
 import { mobileSessionStoreOptions } from "./chat/session-store-options";
 import { mergeEventsForSnapshot } from "../../lib/chat/eve-session-recovery";
 import { repairSessionHydration } from "../../lib/chat/hydration-prefix";
+import { planTurnPersist } from "../../lib/chat/persist-turn";
+import { persistWithRetry } from "../../lib/chat/persistence-retry";
 import { chatListNeedsPresencePoll } from "../../lib/chat/presence-poll";
 import { snapStreamingReveal } from "../../lib/streaming-text-reveal";
 import { waitingLabelForText } from "../../lib/pearl-lane";
@@ -229,8 +231,16 @@ type ChatBinding = {
   pendingMessage: string | null;
   sendPrepared: boolean;
   sendStartedAt: number | null;
+  /** Absolute durable index for the next append. */
   eventIndex: number;
-  /** Last event count written by a full snapshot; used to skip idle open/resume saves. */
+  /** Absolute index after the last confirmed durable write. */
+  confirmedNextIndex: number;
+  /**
+   * Absolute index of the first event this device loaded. Non-zero means a
+   * full snapshot would delete unseen prefix rows.
+   */
+  hydratedFromIndex: number;
+  /** Local merged event count after the last confirmed persist; skips idle saves. */
   savedEventCount: number;
   /**
    * Pearl UI events retained across `newSession()` so snapshots cannot wipe
@@ -416,6 +426,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         ...(initialSession ? { initialSession } : {}),
       }),
     );
+    const nextEventIndex =
+      chat?.nextEventIndex ?? repaired.events.length;
+    const hydratedFromIndex = chat?.hydratedFromIndex ?? 0;
     bindings.set(store, {
       id: chat?.id ?? null,
       title: chat?.title ?? "New chat",
@@ -425,7 +438,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       pendingMessage: chat?.pendingUserMessage ?? null,
       sendPrepared: false,
       sendStartedAt: null,
-      eventIndex: chat?.events.length ?? 0,
+      eventIndex: nextEventIndex,
+      confirmedNextIndex: nextEventIndex,
+      hydratedFromIndex,
       savedEventCount: repaired.events.length,
       archivedEvents: [...repaired.events],
       sessionRecoveryAttempted: false,
@@ -564,12 +579,33 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   useEffect(() => {
     const binding = bindings.get(store)!;
     activeStoreRef.current = store;
-    const reportFailure = () => {
+    const markSaveFailed = () => {
       binding.syncFailed = true;
       if (activeStoreRef.current === store) setPersistenceError("Save failed");
     };
+    const clearSaveFailed = () => {
+      binding.syncFailed = false;
+      if (activeStoreRef.current === store) setPersistenceError(null);
+    };
+    const applyTitle = (
+      id: string,
+      title: string | undefined,
+    ) => {
+      if (!title) return;
+      binding.title = title;
+      if (activeChatIdRef.current === id) {
+        setActiveTitle(title);
+      }
+      setChats((current) =>
+        applyChatMeta(current, id, {
+          title,
+          updatedAt: new Date().toISOString(),
+        }),
+      );
+    };
     const enqueue = (work: () => Promise<void>) => {
-      binding.queue = binding.queue.then(work).catch(reportFailure);
+      // Keep the queue alive after a failure so later saves still run.
+      binding.queue = binding.queue.then(work).catch(() => undefined);
     };
     const flush = () => {
       if (binding.timer) clearTimeout(binding.timer);
@@ -577,7 +613,22 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       const batch = binding.batch.splice(0);
       if (binding.id && batch.length > 0) {
         const id = binding.id;
-        enqueue(() => appendChatEvents(id, batch));
+        enqueue(async () => {
+          try {
+            await persistWithRetry(() => appendChatEvents(id, batch));
+            const last = batch[batch.length - 1]!.eventIndex;
+            binding.confirmedNextIndex = Math.max(
+              binding.confirmedNextIndex,
+              last + 1,
+            );
+            clearSaveFailed();
+          } catch (cause) {
+            // Put the batch back so Retry save / the next flush can resend it.
+            binding.batch = [...batch, ...binding.batch];
+            markSaveFailed();
+            throw cause;
+          }
+        });
       }
     };
 
@@ -662,7 +713,13 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           const id = binding.id;
           // Keep session cursor saves queued even after a snapshot failure so
           // the next cold resume does not attach at a stale line.
-          enqueue(() => saveChatSession(id, session));
+          enqueue(async () => {
+            // Cursor-only: retry quietly; do not raise the save banner when
+            // the event tail is already confirmed.
+            await persistWithRetry(async () => {
+              await saveChatSession(id, session);
+            });
+          });
         }
       },
       onFinish: (snapshot) => {
@@ -673,45 +730,77 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         }
         if (!binding.id || binding.pendingMessage) return;
         const id = binding.id;
-        const events = mergeEventsForSnapshot(
-          binding.archivedEvents,
-          snapshot.events,
-        );
+        const plan = planTurnPersist({
+          archived: binding.archivedEvents,
+          live: snapshot.events,
+          hydratedFromIndex: binding.hydratedFromIndex,
+          confirmedNextIndex: binding.confirmedNextIndex,
+          savedEventCount: binding.savedEventCount,
+          session: snapshot.session,
+        });
         // eve fires onFinish on mount/resume even when nothing new arrived.
-        // Skip the snapshot so idle opens do not bump Recents order.
-        // Also skip empty post-newSession finishes that would truncate history.
-        if (
-          snapshot.events.length === 0 ||
-          events.length === binding.savedEventCount
-        ) {
-          // Idle finish may unblock LRU eviction of this (or older) stores.
+        if (plan.kind === "noop") {
           evictRetainedOverflow();
           return;
         }
         enqueue(async () => {
-          const saved = await saveChatSnapshot(id, events, snapshot.session);
-          binding.archivedEvents = [...events];
-          binding.savedEventCount = events.length;
-          binding.eventIndex = Math.max(binding.eventIndex, events.length);
-          if (saved.title) {
-            binding.title = saved.title;
-            if (activeChatIdRef.current === id) {
-              setActiveTitle(saved.title);
+          try {
+            if (plan.kind === "append") {
+              const saved = await persistWithRetry(() =>
+                appendChatEvents(id, plan.events, {
+                  session: plan.session,
+                  ...(plan.firstUserText
+                    ? { upgradeTitleFrom: plan.firstUserText }
+                    : {}),
+                }),
+              );
+              if (plan.events.length > 0) {
+                binding.confirmedNextIndex = Math.max(
+                  binding.confirmedNextIndex,
+                  plan.confirmedNextIndex,
+                );
+                binding.eventIndex = Math.max(
+                  binding.eventIndex,
+                  plan.confirmedNextIndex,
+                );
+              }
+              binding.archivedEvents = [
+                ...mergeEventsForSnapshot(
+                  binding.archivedEvents,
+                  snapshot.events,
+                ),
+              ];
+              binding.savedEventCount = plan.savedEventCount;
+              applyTitle(id, saved.title);
+              traceSend(binding, "append saved");
+            } else {
+              const saved = await persistWithRetry(() =>
+                saveChatSnapshot(id, plan.events, plan.session),
+              );
+              binding.archivedEvents = [...plan.events];
+              binding.savedEventCount = plan.savedEventCount;
+              binding.confirmedNextIndex = plan.confirmedNextIndex;
+              binding.eventIndex = Math.max(
+                binding.eventIndex,
+                plan.confirmedNextIndex,
+              );
+              binding.hydratedFromIndex = 0;
+              applyTitle(id, saved.title);
+              traceSend(binding, "snapshot saved");
             }
-            setChats((current) =>
-              applyChatMeta(current, id, {
-                title: saved.title,
-                updatedAt: new Date().toISOString(),
-              }),
-            );
+            clearSaveFailed();
+            void reloadChats({ silent: true });
+            evictRetainedOverflow();
+          } catch (cause) {
+            if (
+              plan.kind === "append" &&
+              plan.events.length > 0
+            ) {
+              binding.batch = [...plan.events, ...binding.batch];
+            }
+            markSaveFailed();
+            throw cause;
           }
-          traceSend(binding, "snapshot saved");
-          binding.syncFailed = false;
-          if (activeStoreRef.current === store) setPersistenceError(null);
-          // The next turn waits on this queue; history GET must not hold its durable mark.
-          void reloadChats({ silent: true });
-          // Snapshot settled — retry overflow eviction now that this writer is idle.
-          evictRetainedOverflow();
         });
       },
       onError: (_error) => {
@@ -909,7 +998,23 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           const batch = binding.batch.splice(0);
           if (binding.id && batch.length > 0) {
             const id = binding.id;
-            enqueue(() => appendChatEvents(id, batch));
+            enqueue(async () => {
+              try {
+                await persistWithRetry(async () => {
+                  await appendChatEvents(id, batch);
+                });
+                const last = batch[batch.length - 1]!.eventIndex;
+                binding.confirmedNextIndex = Math.max(
+                  binding.confirmedNextIndex,
+                  last + 1,
+                );
+                clearSaveFailed();
+              } catch (cause) {
+                binding.batch = [...batch, ...binding.batch];
+                markSaveFailed();
+                throw cause;
+              }
+            });
           }
           binding.stopObserving?.();
           binding.stopObserving = null;
@@ -1309,9 +1414,10 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           source.snapshot.events,
         ),
       ];
+      // Keep absolute next index — archived length is only a local window.
       binding.eventIndex = Math.max(
         binding.eventIndex,
-        binding.archivedEvents.length,
+        binding.confirmedNextIndex,
       );
       source.newSession();
       return true;
@@ -1335,33 +1441,89 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     const binding = bindings.get(store);
     if (!binding?.id) return;
     const id = binding.id;
-    // Retry belongs to the same queue as onFinish and prepareSend. Otherwise a
-    // follow-up could mark itself pending while an older retry clears the mark.
-    // Always merge + snapshot — remapping live events to 0…n-1 overwrote
-    // durable indices when a pending marker was still set.
+    // Retry belongs to the same queue as onFinish and prepareSend. Prefer
+    // append-only so a truncated hydrate cannot rewrite the unseen prefix.
     const attempt = binding.queue.then(async () => {
       const snapshot = store.snapshot;
-      const events = mergeEventsForSnapshot(
-        binding.archivedEvents,
-        snapshot.events,
-      );
-      const saved = await saveChatSnapshot(id, events, snapshot.session);
-      binding.archivedEvents = [...events];
-      binding.savedEventCount = events.length;
-      binding.eventIndex = Math.max(binding.eventIndex, events.length);
-      if (saved.title) {
-        binding.title = saved.title;
-        if (activeChatIdRef.current === id) {
-          setActiveTitle(saved.title);
-        }
-        setChats((current) =>
-          applyChatMeta(current, id, {
-            title: saved.title,
-            updatedAt: new Date().toISOString(),
-          }),
+      const pendingBatch = binding.batch.splice(0);
+      const plan = planTurnPersist({
+        archived: binding.archivedEvents,
+        live: snapshot.events,
+        hydratedFromIndex: binding.hydratedFromIndex,
+        confirmedNextIndex: binding.confirmedNextIndex,
+        savedEventCount: binding.savedEventCount,
+        session: snapshot.session,
+      });
+
+      if (pendingBatch.length > 0) {
+        await persistWithRetry(() => appendChatEvents(id, pendingBatch));
+        const last = pendingBatch[pendingBatch.length - 1]!.eventIndex;
+        binding.confirmedNextIndex = Math.max(
+          binding.confirmedNextIndex,
+          last + 1,
         );
       }
-      if (snapshot.session) await saveChatSession(id, snapshot.session);
+
+      if (plan.kind === "append") {
+        const saved = await persistWithRetry(() =>
+          appendChatEvents(id, plan.events, {
+            session: plan.session,
+            ...(plan.firstUserText
+              ? { upgradeTitleFrom: plan.firstUserText }
+              : {}),
+          }),
+        );
+        if (plan.events.length > 0) {
+          binding.confirmedNextIndex = Math.max(
+            binding.confirmedNextIndex,
+            plan.confirmedNextIndex,
+          );
+          binding.eventIndex = Math.max(
+            binding.eventIndex,
+            plan.confirmedNextIndex,
+          );
+        }
+        binding.archivedEvents = [
+          ...mergeEventsForSnapshot(binding.archivedEvents, snapshot.events),
+        ];
+        binding.savedEventCount = plan.savedEventCount;
+        if (saved.title) {
+          binding.title = saved.title;
+          if (activeChatIdRef.current === id) setActiveTitle(saved.title);
+          setChats((current) =>
+            applyChatMeta(current, id, {
+              title: saved.title,
+              updatedAt: new Date().toISOString(),
+            }),
+          );
+        }
+      } else if (plan.kind === "snapshot") {
+        const saved = await persistWithRetry(() =>
+          saveChatSnapshot(id, plan.events, plan.session),
+        );
+        binding.archivedEvents = [...plan.events];
+        binding.savedEventCount = plan.savedEventCount;
+        binding.confirmedNextIndex = plan.confirmedNextIndex;
+        binding.eventIndex = Math.max(
+          binding.eventIndex,
+          plan.confirmedNextIndex,
+        );
+        binding.hydratedFromIndex = 0;
+        if (saved.title) {
+          binding.title = saved.title;
+          if (activeChatIdRef.current === id) setActiveTitle(saved.title);
+          setChats((current) =>
+            applyChatMeta(current, id, {
+              title: saved.title,
+              updatedAt: new Date().toISOString(),
+            }),
+          );
+        }
+      } else if (snapshot.session) {
+        await persistWithRetry(async () => {
+          await saveChatSession(id, snapshot.session!);
+        });
+      }
     });
     binding.queue = attempt.catch(() => {
       binding.syncFailed = true;
@@ -1376,6 +1538,18 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       // The queued handler keeps the failure visible and lets later retries run.
     }
   }, [store, reloadChats, bindings]);
+
+  // Foreground: retry a stuck save the same way Resume reattaches the stream.
+  useEffect(() => {
+    const onChange = (next: AppStateStatus) => {
+      if (next !== "active") return;
+      const active = activeStoreRef.current;
+      const binding = active ? bindings.get(active) : null;
+      if (binding?.syncFailed) void retrySync();
+    };
+    const subscription = AppState.addEventListener("change", onChange);
+    return () => subscription.remove();
+  }, [bindings, retrySync]);
 
   // Keep the Recents presence mark in sync with the open chat's live store.
   // Only rescan pending person-waits when status flips or an interaction-shaped

@@ -5,6 +5,7 @@ import {
   markChatReadAction,
   saveChatSessionStateAction,
   saveChatSnapshotAction,
+  upgradeChatTitleAction,
 } from "@/app/actions/chat";
 
 /**
@@ -23,6 +24,7 @@ export async function POST(
     readonly pendingUserMessage?: string;
     readonly session?: unknown;
     readonly markRead?: boolean;
+    readonly upgradeTitleFrom?: string;
   };
 
   const { id: chatId } = await params;
@@ -44,6 +46,22 @@ export async function POST(
         chatId,
         events: body.append as Parameters<typeof appendChatEventsAction>[0]["events"],
       });
+      if (body.session !== undefined && body.session !== null) {
+        await saveChatSessionStateAction({
+          chatId,
+          session: body.session as Parameters<typeof saveChatSessionStateAction>[0]["session"],
+        });
+      }
+      if (
+        typeof body.upgradeTitleFrom === "string" &&
+        body.upgradeTitleFrom.trim()
+      ) {
+        const titled = await upgradeChatTitleAction({
+          chatId,
+          firstUserText: body.upgradeTitleFrom,
+        });
+        return NextResponse.json(titled);
+      }
       return NextResponse.json({ ok: true });
     }
 
@@ -77,7 +95,29 @@ export async function POST(
         session: body.session as Parameters<typeof saveChatSessionStateAction>[0]["session"],
       });
 
+      if (
+        typeof body.upgradeTitleFrom === "string" &&
+        body.upgradeTitleFrom.trim()
+      ) {
+        const titled = await upgradeChatTitleAction({
+          chatId,
+          firstUserText: body.upgradeTitleFrom,
+        });
+        return NextResponse.json(titled);
+      }
+
       return NextResponse.json({ ok: true });
+    }
+
+    if (
+      typeof body.upgradeTitleFrom === "string" &&
+      body.upgradeTitleFrom.trim()
+    ) {
+      const titled = await upgradeChatTitleAction({
+        chatId,
+        firstUserText: body.upgradeTitleFrom,
+      });
+      return NextResponse.json(titled);
     }
 
     return NextResponse.json({ error: "Nothing to sync." }, { status: 400 });

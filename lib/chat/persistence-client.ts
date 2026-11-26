@@ -13,6 +13,7 @@ import {
   saveChatSessionStateAction,
   saveChatSnapshotAction,
   skipChatAuthorizationAction,
+  upgradeChatTitleAction,
 } from "@/app/actions/chat";
 import {
   appendLocalChatEvent,
@@ -168,6 +169,16 @@ export async function saveClientChatSnapshot(
   }
 
   return saveChatSnapshotAction(input);
+}
+
+export async function upgradeClientChatTitle(
+  storageMode: StorageMode,
+  input: { readonly chatId: string; readonly firstUserText: string },
+): Promise<{ readonly ok: true; readonly title?: string }> {
+  if (storageMode === "browser") {
+    return { ok: true };
+  }
+  return upgradeChatTitleAction(input);
 }
 
 export async function skipClientChatAuthorization(

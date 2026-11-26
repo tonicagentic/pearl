@@ -43,6 +43,8 @@ export function createLocalChat(pendingUserMessage?: string) {
     spokenTurns: [],
     quickTurns: [],
     title: pendingMessage ? createFallbackTitle(pendingMessage) : DEFAULT_CHAT_TITLE,
+    nextEventIndex: 0,
+    hydratedFromIndex: 0,
     updatedAt: now,
     lastReadAt: now,
   };
@@ -118,7 +120,11 @@ export function appendLocalChatEvent({
       events[eventIndex] = event;
     }
 
-    return { ...chat, events };
+    return {
+      ...chat,
+      events,
+      nextEventIndex: Math.max(chat.nextEventIndex ?? events.length, eventIndex + 1),
+    };
   });
 }
 
@@ -142,6 +148,8 @@ export function saveLocalChatSnapshot({
       events,
       pendingUserMessage: null,
       session,
+      nextEventIndex: events.length,
+      hydratedFromIndex: 0,
       // Keep Recents ordered by last message, not by idle open/resume saves.
       ...(streamChanged ? { updatedAt: new Date().toISOString() } : {}),
     };
@@ -241,8 +249,9 @@ function isStoredChat(value: unknown): value is StoredChat {
 }
 
 function toActiveChat(chat: StoredChat): ActiveChat {
+  const events = chat.events;
   return {
-    events: chat.events,
+    events,
     id: chat.id,
     pendingUserMessage: chat.pendingUserMessage ?? null,
     projectId: chat.projectId ?? null,
@@ -252,6 +261,8 @@ function toActiveChat(chat: StoredChat): ActiveChat {
     spokenTurns: chat.spokenTurns ?? [],
     quickTurns: chat.quickTurns ?? [],
     title: chat.title,
+    nextEventIndex: chat.nextEventIndex ?? events.length,
+    hydratedFromIndex: chat.hydratedFromIndex ?? 0,
   };
 }
 

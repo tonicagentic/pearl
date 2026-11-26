@@ -63,12 +63,15 @@ import {
   type ThreadGroupPart,
 } from "@/components/assistant-ui/elements/thread-components-context";
 import { type WaitingAction } from "@/components/assistant-ui/elements/waiting-action-card";
+import { ConnectionState } from "@/components/assistant-ui/elements/connection-state";
+import { ErrorState } from "@/components/assistant-ui/elements/error-state";
 import {
   formatMessageDay,
   formatMessageTime,
   shouldShowDaySeparator,
 } from "../../../../lib/chat/message-day";
 import { isTaskNotification } from "@/src/message-projection";
+import type { ThreadFooterNotice } from "@/src/chat/thread-notice";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import {
@@ -183,7 +186,7 @@ export type ThreadProps = {
   /** A windowed thread: the list asks for older messages when it reaches its start and shows the loading edge above them. */
   history?: ThreadHistory | undefined;
   /** Recovery belongs in the transcript, never in a bar that shifts the viewport. */
-  notice?: { text: string; actionLabel?: string; onAction?: () => void } | null;
+  notice?: ThreadFooterNotice | null;
   /**
    * HITL pause that morphs the composer shell into the response surface:
    * authorization banner, approval buttons, choice options, or free-text.
@@ -1365,25 +1368,37 @@ const UserMessage: FC = () => {
   );
 };
 
-const ThreadNotice: FC<NonNullable<ThreadProps["notice"]>> = ({ text, actionLabel, onAction }) => (
-  <View className="border-border/60 bg-muted/40 mx-4 my-3 rounded-xl border p-3">
-    <Text variant="secondary" accessibilityRole="alert">
-      {text}
-    </Text>
-    {actionLabel && onAction ? (
-      <Pressable
-        onPress={onAction}
-        accessibilityRole="button"
-        accessibilityLabel={actionLabel}
-        className="mt-1 min-h-11 self-start justify-center"
-      >
-        <Text variant="secondary" weight="medium">
-          {actionLabel}
-        </Text>
-      </Pressable>
-    ) : null}
-  </View>
-);
+const ThreadNotice: FC<NonNullable<ThreadProps["notice"]>> = (notice) => {
+  if (notice.kind === "connection") {
+    return (
+      <ConnectionState
+        phase={notice.phase}
+        attempt={notice.attempt}
+        message={notice.message}
+        onRetry={notice.onRetry}
+        onResumedClear={notice.onResumedClear}
+      />
+    );
+  }
+  if (notice.kind === "error") {
+    return (
+      <ErrorState
+        title={notice.title}
+        detail={notice.detail}
+        retrying={Boolean(notice.retrying)}
+        actionLabel={notice.actionLabel}
+        onRetry={notice.onRetry}
+      />
+    );
+  }
+  return (
+    <View className="border-border/60 bg-muted/40 mx-4 my-3 rounded-xl border p-3">
+      <Text variant="secondary" accessibilityRole="alert">
+        {notice.text}
+      </Text>
+    </View>
+  );
+};
 
 const DefaultEditComposerInput: FC = () => (
   <ComposerPrimitive.Input

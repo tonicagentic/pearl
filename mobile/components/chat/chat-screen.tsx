@@ -73,6 +73,7 @@ import { DEFAULT_MODEL_KEY, getModelSelection } from "@/src/model-selection";
 import { getRemoteAgentSelection } from "@/src/remote-agent-selection";
 import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
 import { formatEveClientError } from "@/src/chat/eve-error";
+import { classifyThreadNotice } from "@/src/chat/thread-notice";
 import { resolveTurnPolicy } from "@/src/chat/prepare-send";
 import { deriveTurnRunning } from "@/src/chat/turn-running";
 import { activeTurn } from "eve/events";
@@ -414,6 +415,7 @@ export function ChatScreen({
   }, [activeChatId, setActiveProjectId, setChatProject]);
 
   const [sendError, setSendError] = useState<{ store: object; message: string } | null>(null);
+  const [saveRetrying, setSaveRetrying] = useState(false);
   const [localSends, setLocalSends] = useState<Map<object, LocalSend>>(() => new Map());
   // Composer image chips kept after deliveryId clears localSend until eve's
   // user row carries a displayable file url (avoids `[file: name]` flash).
@@ -690,8 +692,7 @@ export function ChatScreen({
       });
       setSendError({
         store,
-        message:
-          "Pearl didn't return a reply for this turn. Start a new chat, or restart the dev server (pnpm dev) and send again.",
+        message: "Pearl didn't return a reply for this turn.",
       });
       return;
     }
@@ -1272,48 +1273,33 @@ export function ChatScreen({
     sendError: sendError?.store === store ? sendError.message : null,
     persistenceError,
   });
-  const notice = offline
-    ? null
-    : connectionError
-    ? {
-        text: connectionError,
-        actionLabel: "Reconnect",
-        onAction: () => {
-          clearConnectionError();
-          void reconnect(store);
-        },
-      }
-    : persistenceError
-    ? {
-        text: "Could not save this chat.",
-        actionLabel: "Retry save",
-        onAction: () => void retrySync(),
-      }
-    : canResend
-      ? {
-          text:
-            sendError?.store === store
-              ? sendError.message
-              : "Couldn't confirm delivery. Your message is still here.",
-          actionLabel: "Resend",
-          onAction: () => void resendStoredMessage(),
-        }
-      : sendPreparing
-        ? { text: "Still sending your last message…" }
-        : sendError?.store === store
-          ? { text: sendError.message }
-          : unifiedEveError && !pendingMessage
-            ? { text: unifiedEveError }
-          : pendingMessage && !localSend && !hasLoadedHistory
-            ? {
-                text: "Couldn't confirm delivery. Open this chat again when you're online.",
-              }
-            : // Match liveFailure in message-projection: settled reopen errors stay quiet.
-              showReplyInterruptedNotice(hasError, isRunning, Boolean(localSend))
-              ? {
-                  text: "Connection lost while Pearl was replying. Your last message was saved — send a follow-up when you're ready.",
-                }
-              : null;
+  const notice = classifyThreadNotice({
+    offline,
+    connectionError,
+    persistenceError,
+    sendError: sendError?.store === store ? sendError.message : null,
+    canResend,
+    sendPreparing,
+    pendingMessage,
+    hasLocalSend: Boolean(localSend),
+    hasLoadedHistory,
+    showReplyInterrupted: showReplyInterruptedNotice(
+      hasError,
+      isRunning,
+      Boolean(localSend),
+    ),
+    unifiedEveError,
+    saveRetrying,
+    onReconnect: () => {
+      clearConnectionError();
+      void reconnect(store);
+    },
+    onRetrySave: () => {
+      setSaveRetrying(true);
+      void retrySync().finally(() => setSaveRetrying(false));
+    },
+    onResend: () => void resendStoredMessage(),
+  });
 
   const toggleComputer = useCallback(() => {
     if (computerOpen) dismissComputer();

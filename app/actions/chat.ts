@@ -97,12 +97,23 @@ export async function saveChatSnapshotAction(input: {
     return { ok: true };
   }
 
+  return upgradeChatTitleAction({
+    chatId: input.chatId,
+    firstUserText,
+  });
+}
+
+/** Upgrade an auto title after an append-only turn finish (no full snapshot). */
+export async function upgradeChatTitleAction(input: {
+  readonly chatId: string;
+  readonly firstUserText: string;
+}): Promise<{ readonly ok: true; readonly title?: string }> {
+  const viewer = await requireViewer();
   const title = await maybeUpgradeChatTitle({
     chatId: input.chatId,
     userId: viewer.id,
-    firstUserText,
+    firstUserText: input.firstUserText,
   });
-
   return title ? { ok: true, title } : { ok: true };
 }
 
