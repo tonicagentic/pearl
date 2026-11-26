@@ -1159,6 +1159,38 @@ export const projectNote = pgTable(
 export type ProjectNote = typeof projectNote.$inferSelect;
 
 /**
+ * User-saved excerpts from chat replies. Shown in the Library Quotes
+ * section. chatId stays nullable so the quote survives chat deletion.
+ */
+export const libraryQuote = pgTable(
+  "library_quote",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    chatId: text("chat_id").references(() => chat.id, {
+      onDelete: "set null",
+    }),
+    // Eve / assistant-ui message id — messages are not a Postgres table.
+    messageId: text("message_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_library_quote_user").on(table.userId),
+    index("idx_library_quote_user_created").on(
+      table.userId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export type LibraryQuote = typeof libraryQuote.$inferSelect;
+
+/**
  * Gmail mailboxes linked to a Pearl user. Tokens stay in Vercel Connect;
  * this table stores the Connect subject id and a safe display label.
  * The first / legacy mailbox uses subjectId === userId so an existing

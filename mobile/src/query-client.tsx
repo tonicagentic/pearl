@@ -75,6 +75,7 @@ export const queryKeys = {
   note: (id: string) => ["notes", id] as const,
   tasks: ["tasks"] as const,
   library: ["library"] as const,
+  quotes: ["quotes"] as const,
   projects: ["projects"] as const,
   project: (id: string) => ["projects", id] as const,
   financesMonth: (year: number, month: number) =>

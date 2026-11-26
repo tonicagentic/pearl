@@ -4,12 +4,14 @@ import { list } from "@vercel/blob";
 import { Loader2Icon } from "lucide-react";
 
 import { artifactsPrefix } from "@/agent/lib/artifacts";
+import { listLibraryQuotes } from "@/lib/db/library-quotes";
 import { artifactKindFromBasename } from "@/lib/library/artifact-kind";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 import {
   LibraryBrowser,
   type LibraryItem,
+  type LibraryQuoteItem,
 } from "./library-browser";
 
 export const metadata: Metadata = {
@@ -17,8 +19,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * Library: durable, principal-scoped files and images the agent synced from
- * its workspace (docs: artifact-persistence-plan.md).
+ * Library: durable files/images plus Quotes saved from chat selections.
  */
 export default function LibraryPage() {
   return (
@@ -51,38 +52,52 @@ async function ResolvedLibrary() {
     );
   }
 
-  let blobs: Awaited<ReturnType<typeof list>>["blobs"];
+  let items: LibraryItem[] = [];
+  let artifactsError: string | null = null;
 
   try {
-    ({ blobs } = await list({ prefix }));
+    const { blobs } = await list({ prefix });
+    items = blobs.map((blob) => {
+      const basename = blob.pathname.slice(prefix.length);
+      return {
+        pathname: blob.pathname,
+        basename,
+        size: blob.size,
+        uploadedAt: blob.uploadedAt.toISOString(),
+        kind: artifactKindFromBasename(basename),
+      };
+    });
   } catch {
-    return (
-      <LibraryCard message="The library store could not be reached. Try again later." />
-    );
+    artifactsError =
+      "Files and images could not be loaded. Quotes below may still be available.";
   }
 
-  const items: LibraryItem[] = blobs.map((blob) => {
-    const basename = blob.pathname.slice(prefix.length);
-    return {
-      pathname: blob.pathname,
-      basename,
-      size: blob.size,
-      uploadedAt: blob.uploadedAt.toISOString(),
-      kind: artifactKindFromBasename(basename),
-    };
-  });
+  let quotes: LibraryQuoteItem[] = [];
+  let quotesError: string | null = null;
+
+  try {
+    quotes = [...(await listLibraryQuotes(viewer.id))];
+  } catch {
+    quotesError =
+      "Quotes could not be loaded. Files and images above may still be available.";
+  }
 
   return (
     <>
       <header>
         <h1 className="text-lg font-semibold">Library</h1>
         <p className="text-sm text-muted-foreground">
-          Files and images Pearl saved to durable storage. Search, preview, or
-          delete them here.
+          Files and images Pearl saved to durable storage, plus quotes you
+          highlight from chat replies.
         </p>
       </header>
 
-      <LibraryBrowser initialItems={items} />
+      <LibraryBrowser
+        initialItems={items}
+        initialQuotes={quotes}
+        artifactsError={artifactsError}
+        quotesError={quotesError}
+      />
     </>
   );
 }

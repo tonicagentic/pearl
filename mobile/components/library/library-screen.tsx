@@ -12,8 +12,14 @@ import {
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { FileIcon, ImageIcon, Trash2Icon } from "lucide-react-native";
+import {
+  BookmarkIcon,
+  FileIcon,
+  ImageIcon,
+  Trash2Icon,
+} from "lucide-react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePearlDrawer } from "@/components/navigation/drawer-context";
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
@@ -36,18 +42,25 @@ import {
   queryKeys,
   showQueryErrorBanner,
 } from "@/src/query-client";
+import {
+  deleteQuote,
+  listQuotes,
+  type QuoteDto,
+} from "@/src/quotes-client";
 import { useStackSearch } from "@/src/use-stack-search";
 
-type KindFilter = "all" | "files" | "images";
+type KindFilter = "all" | "files" | "images" | "quotes";
 type ProjectFilter = "all" | "unlinked" | { readonly projectId: string };
 
-/** Principal Library: durable agent files and images with search + filters. */
+/** Principal Library: durable agent files, images, and Quotes. */
 export function LibraryScreen() {
   const queryClient = useQueryClient();
+  const { onSelectChatFromDrawer } = usePearlDrawer();
   const { offline } = useNetworkStatus();
   const [filter, setFilter] = useState<KindFilter>("all");
   const [projectFilter, setProjectFilter] = useState<ProjectFilter>("all");
   const [busyPath, setBusyPath] = useState<string | null>(null);
+  const [busyQuoteId, setBusyQuoteId] = useState<string | null>(null);
   const search = useStackSearch();
   const { width } = useWindowDimensions();
   const backgroundColor = usePearlScreenBackground();
@@ -58,20 +71,37 @@ export function LibraryScreen() {
     queryFn: listArtifacts,
   });
 
+  const quotesQuery = useQuery({
+    queryKey: queryKeys.quotes,
+    queryFn: listQuotes,
+  });
+
   useFocusEffect(
     useCallback(() => {
       void libraryQuery.refetch();
-    }, [libraryQuery.refetch]),
+      void quotesQuery.refetch();
+    }, [libraryQuery.refetch, quotesQuery.refetch]),
   );
 
   const items = libraryQuery.data?.artifacts ?? null;
+  const quotes = quotesQuery.data ?? null;
   const projectLinks = libraryQuery.data?.projectLinks ?? [];
-  const showError = showQueryErrorBanner(offline, libraryQuery.error);
+  const showError = showQueryErrorBanner(
+    offline,
+    libraryQuery.error ?? quotesQuery.error,
+  );
 
   const deleteMutation = useMutation({
     mutationFn: deleteArtifact,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.library });
+    },
+  });
+
+  const deleteQuoteMutation = useMutation({
+    mutationFn: deleteQuote,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.quotes });
     },
   });
 
@@ -105,6 +135,7 @@ export function LibraryScreen() {
   }, [projectFilter, projectLinks]);
 
   const visible = useMemo(() => {
+    if (filter === "quotes") return [];
     const rows = items ?? [];
     return rows.filter((item) => {
       if (filter === "images" && item.kind !== "image") return false;
@@ -126,6 +157,14 @@ export function LibraryScreen() {
     search.active,
     search.matches,
   ]);
+
+  const visibleQuotes = useMemo(() => {
+    if (filter === "files" || filter === "images") return [];
+    const rows = quotes ?? [];
+    return rows.filter((quote) =>
+      search.matches(quote.text, quote.chatTitle),
+    );
+  }, [quotes, filter, search.matches]);
 
   const images = useMemo(
     () => visible.filter((item) => item.kind === "image"),
@@ -206,6 +245,52 @@ export function LibraryScreen() {
     [deleteMutation, libraryQuery.data, queryClient],
   );
 
+  const confirmDeleteQuote = useCallback(
+    (quote: QuoteDto) => {
+      Alert.alert("Delete quote?", undefined, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setBusyQuoteId(quote.id);
+              const snapshot = quotesQuery.data;
+              queryClient.setQueryData<readonly QuoteDto[]>(
+                queryKeys.quotes,
+                (current) =>
+                  current
+                    ? current.filter((row) => row.id !== quote.id)
+                    : current,
+              );
+              try {
+                await deleteQuoteMutation.mutateAsync(quote.id);
+              } catch (cause) {
+                if (snapshot) {
+                  queryClient.setQueryData(queryKeys.quotes, snapshot);
+                }
+                Alert.alert(
+                  "Could not delete",
+                  cause instanceof Error ? cause.message : "Try again.",
+                );
+              } finally {
+                setBusyQuoteId(null);
+              }
+            })();
+          },
+        },
+      ]);
+    },
+    [deleteQuoteMutation, queryClient, quotesQuery.data],
+  );
+
+  const openQuoteChat = useCallback(
+    (chatId: string) => {
+      void onSelectChatFromDrawer(chatId);
+    },
+    [onSelectChatFromDrawer],
+  );
+
   const gap = 10;
   const pad = 20;
   const cols = width >= 700 ? 3 : 2;
@@ -224,12 +309,13 @@ export function LibraryScreen() {
       }}
     >
       <View style={{ flex: 1, backgroundColor }}>
-        <View className="flex-row gap-1.5 px-5 pb-2 pt-1">
+        <View className="flex-row flex-wrap gap-1.5 px-5 pb-2 pt-1">
           {(
             [
               ["all", "All"],
               ["files", "Files"],
               ["images", "Images"],
+              ["quotes", "Quotes"],
             ] as const
           ).map(([value, label]) => {
             const selected = filter === value;
@@ -253,50 +339,60 @@ export function LibraryScreen() {
           })}
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="max-h-11 grow-0"
-          contentContainerClassName="gap-1.5 px-5 pb-3"
-        >
-          <FilterChip
-            label="All projects"
-            selected={projectFilter === "all"}
-            onPress={() => setProjectFilter("all")}
-          />
-          <FilterChip
-            label="Unlinked"
-            selected={projectFilter === "unlinked"}
-            onPress={() => setProjectFilter("unlinked")}
-          />
-          {projectOptions.map((project) => (
+        {filter !== "quotes" ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="max-h-11 grow-0"
+            contentContainerClassName="gap-1.5 px-5 pb-3"
+          >
             <FilterChip
-              key={project.projectId}
-              label={project.projectName}
-              selected={
-                typeof projectFilter === "object" &&
-                projectFilter.projectId === project.projectId
-              }
-              onPress={() =>
-                setProjectFilter({ projectId: project.projectId })
-              }
+              label="All projects"
+              selected={projectFilter === "all"}
+              onPress={() => setProjectFilter("all")}
             />
-          ))}
-        </ScrollView>
+            <FilterChip
+              label="Unlinked"
+              selected={projectFilter === "unlinked"}
+              onPress={() => setProjectFilter("unlinked")}
+            />
+            {projectOptions.map((project) => (
+              <FilterChip
+                key={project.projectId}
+                label={project.projectName}
+                selected={
+                  typeof projectFilter === "object" &&
+                  projectFilter.projectId === project.projectId
+                }
+                onPress={() =>
+                  setProjectFilter({ projectId: project.projectId })
+                }
+              />
+            ))}
+          </ScrollView>
+        ) : null}
 
         {showError ? (
           <Pressable
             className="px-5 py-3"
-            onPress={() => void libraryQuery.refetch()}
+            onPress={() => {
+              void libraryQuery.refetch();
+              void quotesQuery.refetch();
+            }}
           >
             <Text variant="secondary" tone="destructive">
-              {queryErrorMessage(libraryQuery.error, "Failed to load library.")}{" "}
+              {queryErrorMessage(
+                libraryQuery.error ?? quotesQuery.error,
+                "Failed to load library.",
+              )}{" "}
               Tap to retry.
             </Text>
           </Pressable>
         ) : null}
 
-        {items === null && libraryQuery.isPending ? (
+        {items === null &&
+        quotes === null &&
+        (libraryQuery.isPending || quotesQuery.isPending) ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator />
           </View>
@@ -307,15 +403,92 @@ export function LibraryScreen() {
             contentContainerStyle={{ paddingBottom: 24 }}
             contentInsetAdjustmentBehavior="automatic"
           >
-            {visible.length === 0 ? (
+            {visible.length === 0 && visibleQuotes.length === 0 ? (
               <Text variant="body" tone="muted" className="py-8 text-center">
-                {items?.length
+                {(items?.length ?? 0) > 0 || (quotes?.length ?? 0) > 0
                   ? "No matches."
-                  : "Nothing in your library yet. When Pearl saves a file or generates an image, it shows up here."}
+                  : "Nothing in your library yet. When Pearl saves a file or generates an image, it shows up here. You can also highlight text in a chat reply and save it as a quote."}
               </Text>
             ) : null}
 
-            {images.length > 0 && filter !== "files" ? (
+            {visibleQuotes.length > 0 &&
+            filter !== "files" &&
+            filter !== "images" ? (
+              <View className="mb-6">
+                {filter === "all" ? (
+                  <Text
+                    variant="secondary"
+                    weight="medium"
+                    className="mb-2.5 uppercase tracking-wide"
+                  >
+                    Quotes · {visibleQuotes.length}
+                  </Text>
+                ) : null}
+                <View className="gap-2">
+                  {visibleQuotes.map((quote) => (
+                    <View
+                      key={quote.id}
+                      className="overflow-hidden rounded-2xl bg-muted/35 px-4 py-3"
+                    >
+                      <View className="mb-2 flex-row items-start gap-2">
+                        <View className="mt-0.5 size-7 items-center justify-center rounded-lg bg-muted">
+                          <Icon
+                            as={BookmarkIcon}
+                            className="size-3.5 text-muted-foreground"
+                          />
+                        </View>
+                        <Text
+                          variant="label"
+                          className="min-w-0 flex-1"
+                          style={{ lineHeight: 22 }}
+                        >
+                          {quote.text}
+                        </Text>
+                      </View>
+                      <View className="flex-row items-center justify-between gap-2">
+                        <Text variant="caption" tone="muted" className="flex-1">
+                          {formatSynced(quote.createdAt)}
+                          {quote.chatTitle ? ` · ${quote.chatTitle}` : ""}
+                        </Text>
+                        <View className="flex-row items-center gap-2">
+                          {quote.chatId ? (
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Open chat"
+                              hitSlop={8}
+                              onPress={() => openQuoteChat(quote.chatId!)}
+                              className="rounded-md border border-border px-2 py-1"
+                            >
+                              <Text variant="caption" weight="medium">
+                                Open chat
+                              </Text>
+                            </Pressable>
+                          ) : null}
+                          {busyQuoteId === quote.id ? (
+                            <ActivityIndicator />
+                          ) : (
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Delete quote"
+                              hitSlop={8}
+                              onPress={() => confirmDeleteQuote(quote)}
+                              className="p-1"
+                            >
+                              <Icon
+                                as={Trash2Icon}
+                                className="size-4 text-muted-foreground"
+                              />
+                            </Pressable>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            {images.length > 0 && filter !== "files" && filter !== "quotes" ? (
               <View className="mb-6">
                 {filter === "all" ? (
                   <Text
@@ -371,7 +544,7 @@ export function LibraryScreen() {
               </View>
             ) : null}
 
-            {files.length > 0 && filter !== "images" ? (
+            {files.length > 0 && filter !== "images" && filter !== "quotes" ? (
               <View className="mb-4">
                 {filter === "all" ? (
                   <Text

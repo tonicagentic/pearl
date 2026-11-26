@@ -30,6 +30,11 @@ import { AssistantThinking } from "@/components/assistant-ui/elements/assistant-
 import { TurnElapsedProvider } from "@/components/assistant-ui/elements/turn-elapsed";
 import { MessageSources } from "@/components/assistant-ui/elements/citation";
 import {
+  QuoteSelectionProvider,
+  SaveQuoteAction,
+  SelectionBookmarkBridge,
+} from "@/components/assistant-ui/elements/quote-selection";
+import {
   ShimmerLabel,
   actionBarEnter,
   inkButton,
@@ -603,6 +608,7 @@ export const Thread: FC<ThreadProps> = ({
     <ThreadComponentsContext.Provider value={components}>
       <ComposerOwnsHitlContext.Provider value={waitingAction != null}>
         <ThreadViewportContext.Provider value={viewport}>
+          <SelectionBookmarkBridge />
           <ThreadPrimitive.Root className="aui-root aui-thread-root bg-background flex-1">
             {followsKeyboard ? (
               <IosKeyboardLayout seedAtZero={conversationId == null}>
@@ -1062,48 +1068,50 @@ const AssistantMessage: FC = () => {
 
   return (
     <MessagePrimitive.Root className="aui-assistant-message-root gap-2">
-      <MessageFileToolClaims />
-      {/* 8px stack: timeline meta → answer; sources join the footer with actions. */}
-      <View className="aui-assistant-message-content gap-2">
-        <TurnElapsedProvider>
-          {/* Todos sit above interleaved content so the checklist stays
-              visible while the agent works (parity with web placement). */}
-          <SessionTodoList />
-          {blocks.map((block, blockIndex) => {
-            if (block.kind === "timeline") {
-              return (
-                <SessionTimelineSegment
-                  key={`timeline-${block.indices[0] ?? blockIndex}`}
-                  indices={block.indices}
-                  isLast={blockIndex === lastTimeline}
-                  live={
-                    blockIndex === lastTimeline &&
-                    (lastTimeline === blocks.length - 1 || !answerHasPaintedWord)
-                  }
-                />
-              );
-            }
-            return (
-              // No cluster enter here — messageEnter FadeInDown was painting the
-              // whole answer as one rising block and masking streaming-text.
-              <View
-                key={`content-${block.indices[0] ?? blockIndex}`}
-                className="gap-2"
-              >
-                {block.indices.map((index) => (
-                  <MessagePrimitive.PartByIndex
-                    key={index}
-                    index={index}
-                    components={componentsByIndex.get(index)}
+      <QuoteSelectionProvider>
+        <MessageFileToolClaims />
+        {/* 8px stack: timeline meta → answer; sources join the footer with actions. */}
+        <View className="aui-assistant-message-content gap-2">
+          <TurnElapsedProvider>
+            {/* Todos sit above interleaved content so the checklist stays
+                visible while the agent works (parity with web placement). */}
+            <SessionTodoList />
+            {blocks.map((block, blockIndex) => {
+              if (block.kind === "timeline") {
+                return (
+                  <SessionTimelineSegment
+                    key={`timeline-${block.indices[0] ?? blockIndex}`}
+                    indices={block.indices}
+                    isLast={blockIndex === lastTimeline}
+                    live={
+                      blockIndex === lastTimeline &&
+                      (lastTimeline === blocks.length - 1 || !answerHasPaintedWord)
+                    }
                   />
-                ))}
-              </View>
-            );
-          })}
-          <AssistantThinking />
-        </TurnElapsedProvider>
-      </View>
-      <AssistantMessageFooter />
+                );
+              }
+              return (
+                // No cluster enter here — messageEnter FadeInDown was painting the
+                // whole answer as one rising block and masking streaming-text.
+                <View
+                  key={`content-${block.indices[0] ?? blockIndex}`}
+                  className="gap-2"
+                >
+                  {block.indices.map((index) => (
+                    <MessagePrimitive.PartByIndex
+                      key={index}
+                      index={index}
+                      components={componentsByIndex.get(index)}
+                    />
+                  ))}
+                </View>
+              );
+            })}
+            <AssistantThinking />
+          </TurnElapsedProvider>
+        </View>
+        <AssistantMessageFooter />
+      </QuoteSelectionProvider>
     </MessagePrimitive.Root>
   );
 };
@@ -1179,24 +1187,35 @@ const ShareMarkdown: FC = () => {
   );
 };
 
-const AssistantActionBar: FC = () => (
-  <View className="aui-assistant-action-bar-root flex-row gap-1">
-    <ActionBarPrimitive.Copy
-      copyToClipboard={copyToClipboard}
-      className={assistantActionButtonClassName}
-      hitSlop={assistantActionHitSlop}
-      accessibilityLabel="Copy"
-    >
-      {({ isCopied }) => (
-        <Icon
-          as={isCopied ? CheckIcon : CopyIcon}
-          className="text-muted-foreground size-4"
-        />
-      )}
-    </ActionBarPrimitive.Copy>
-    <ShareMarkdown />
-  </View>
-);
+const AssistantActionBar: FC = () => {
+  const markdown = useAuiState((s) =>
+    proseFromMessageText(
+      s.message.parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("\n\n"),
+    ),
+  );
+  return (
+    <View className="aui-assistant-action-bar-root flex-row gap-1">
+      <ActionBarPrimitive.Copy
+        copyToClipboard={copyToClipboard}
+        className={assistantActionButtonClassName}
+        hitSlop={assistantActionHitSlop}
+        accessibilityLabel="Copy"
+      >
+        {({ isCopied }) => (
+          <Icon
+            as={isCopied ? CheckIcon : CopyIcon}
+            className="text-muted-foreground size-4"
+          />
+        )}
+      </ActionBarPrimitive.Copy>
+      <SaveQuoteAction markdown={markdown} />
+      <ShareMarkdown />
+    </View>
+  );
+};
 
 const UserMessage: FC = () => {
   const motion = useMotion();

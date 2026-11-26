@@ -1,0 +1,10 @@
+{
+  "name": "text-selection-menu",
+  "version": "1.0.0",
+  "description": "Adds Bookmark to the iOS text selection menu for Library Quotes.",
+  "license": "UNLICENSED",
+  "author": "Pearl",
+  "homepage": "https://github.com/tonicagentic/pearl",
+  "main": "index.ts",
+  "private": true
+}

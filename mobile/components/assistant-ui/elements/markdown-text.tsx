@@ -39,10 +39,13 @@ import {
   Pressable,
   Text as RNText,
   TextInput,
+  type TextInputSelectionChangeEvent,
   type TextStyle,
   View,
   type ViewStyle,
 } from "react-native";
+import { useQuoteSelection } from "@/components/assistant-ui/elements/quote-selection";
+import { plainTextFromReactNode } from "@/src/plain-text-from-node";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -746,6 +749,7 @@ const SettledMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
     [baseOptions, renderer],
   );
   const elements = useMarkdown(text || " ", options);
+  const quoteSelection = useQuoteSelection();
 
   if (!text) {
     return <View className="aui-md-root" />;
@@ -754,40 +758,40 @@ const SettledMarkdownText: FC<MarkdownTextProps> = ({ text, variant }) => {
   // Each block is its own row with BLOCK_GAP — tighter than joining
   // paragraphs with `\n\n` (a full blank line). List Views stay outside
   // TextInput so hanging indents keep working.
-  // iOS Text.selectable is UILabel (whole-block Copy only). Multiline
-  // TextInput uses UITextView so partial selection matches native Notes.
+  // Multiline TextInput uses UITextView / Android editable surface so
+  // partial selection works; offsets map onto flattened Text children.
   return (
     <View className="aui-md-root" style={{ gap: BLOCK_GAP }}>
       {elements.map((element, index) => {
         if (isViewHost(element)) {
           return <Fragment key={`md-v-${index}`}>{element}</Fragment>;
         }
-        if (Platform.OS === "ios") {
-          return (
-            <TextInput
-              key={`md-t-${index}`}
-              multiline
-              editable={false}
-              readOnly
-              scrollEnabled={false}
-              selectionColor={SELECTION_COLOR}
-              style={typeStyle}
-              className={fallbackClass}
-            >
-              {element}
-            </TextInput>
-          );
-        }
+        const blockText = plainTextFromReactNode(element);
+        const onSelectionChange = quoteSelection
+          ? (event: TextInputSelectionChangeEvent) => {
+              const { start, end } = event.nativeEvent.selection;
+              if (end <= start) {
+                quoteSelection.reportSelection(null);
+                return;
+              }
+              quoteSelection.reportSelection(blockText.slice(start, end));
+            }
+          : undefined;
+
         return (
-          <Text
+          <TextInput
             key={`md-t-${index}`}
-            selectable
+            multiline
+            editable={false}
+            readOnly
+            scrollEnabled={false}
             selectionColor={SELECTION_COLOR}
-            variant={variant === "muted" ? "body" : "label"}
-            tone={variant === "muted" ? "muted" : "default"}
+            style={typeStyle}
+            className={fallbackClass}
+            onSelectionChange={onSelectionChange}
           >
             {element}
-          </Text>
+          </TextInput>
         );
       })}
     </View>
