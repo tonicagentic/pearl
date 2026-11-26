@@ -106,7 +106,7 @@ import { OfflineBanner } from "@/components/offline-banner";
 import { toThreadMessages } from "@/src/eve-transport";
 import { useNetworkStatus } from "@/src/network-status";
 import { sendWithRetry } from "@/src/send-retry";
-import { turnEndedWithoutAssistant } from "../../../lib/chat/empty-turn";
+import { useExpectedReplies } from "@/src/chat/use-expected-replies";
 
 const COMPUTER_SHEET_SNAP_POINTS = ["92%"] as const;
 
@@ -422,20 +422,21 @@ export function ChatScreen({
   const [attachmentHoldsByStore, setAttachmentHoldsByStore] = useState(
     () => new Map<object, AttachmentHold[]>(),
   );
-  // Sticky until eve publishes an assistant row — survives clearing localSend
-  // on deliveryId so Thinking does not blank mid-send.
-  const [expectingAssistantByStore, setExpectingAssistantByStore] = useState(
-    () => new Map<object, boolean>(),
-  );
   const localSend = localSends.get(store) ?? null;
   const attachmentHolds = attachmentHoldsByStore.get(store) ?? [];
-  const expectingAssistant = expectingAssistantByStore.get(store) ?? false;
   // One subscription for the active store — five separate hooks each paid a
   // full snapshot read on every line boundary.
   const snapshot = useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.snapshot,
   );
+  const {
+    begin: beginExpectedReply,
+    accept: acceptExpectedReply,
+    forget: forgetExpectedReply,
+    expectingAssistant,
+    emptyReplyError,
+  } = useExpectedReplies(store, snapshot);
   const messages = snapshot.messages;
   const status = snapshot.status;
   const storeError = snapshot.error;
@@ -457,7 +458,6 @@ export function ChatScreen({
     () => pendingWaitKind(conversation),
     [conversation],
   );
-  const isBusy = status === "busy";
   // Keep projection "running" if the store briefly idles while the last
   // assistant is still marked streaming — otherwise SettledMarkdown dumps
   // the reply and skips word reveal on Expo Go.
@@ -681,57 +681,6 @@ export function ChatScreen({
     liveReplyVersion,
   ]);
 
-  useEffect(() => {
-    if (!expectingAssistant) return;
-    if (turnEndedWithoutAssistant(events, messages, isBusy)) {
-      setExpectingAssistantByStore((current) => {
-        if (!current.has(store)) return current;
-        const next = new Map(current);
-        next.delete(store);
-        return next;
-      });
-      setSendError({
-        store,
-        message: "Pearl didn't return a reply for this turn.",
-      });
-      return;
-    }
-    if (messages[messages.length - 1]?.role === "assistant") {
-      setExpectingAssistantByStore((current) => {
-        if (!current.has(store)) return current;
-        const next = new Map(current);
-        next.delete(store);
-        return next;
-      });
-      return;
-    }
-    // Uncertain delivery with an idle store: stop expecting so Thinking
-    // does not stick forever after a failed send.
-    if (localSend?.phase === "uncertain" && !isBusy) {
-      setExpectingAssistantByStore((current) => {
-        if (!current.has(store)) return current;
-        const next = new Map(current);
-        next.delete(store);
-        return next;
-      });
-    }
-    // Failed turn with no assistant row — release sticky expecting so the
-    // display-only placeholder can drop (do not clear on idle alone: eve may
-    // be between delivery.consumed and model.started).
-    if (
-      !isBusy &&
-      storeError &&
-      messages[messages.length - 1]?.role !== "assistant"
-    ) {
-      setExpectingAssistantByStore((current) => {
-        if (!current.has(store)) return current;
-        const next = new Map(current);
-        next.delete(store);
-        return next;
-      });
-    }
-  }, [expectingAssistant, events, isBusy, localSend, messages, store, storeError]);
-
   // Drop attachment holds once eve's user row carries a displayable image.
   useEffect(() => {
     if (attachmentHolds.length === 0) return;
@@ -953,7 +902,7 @@ export function ChatScreen({
             return new Map(current).set(activeStore, [...existing, hold]);
           });
         }
-        setExpectingAssistantByStore((current) => new Map(current).set(activeStore, true));
+        beginExpectedReply(activeStore, preview.preview);
         // Light tick as the bubble appears; skip validation failures above.
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         const turnPolicy = resolveTurnPolicy({
@@ -979,9 +928,13 @@ export function ChatScreen({
             offline: ctx.offline,
           },
           sendPayload,
-          { eventBaseline: preview.eventBaseline },
+          {
+            eventBaseline: preview.eventBaseline,
+            onAccepted: (receipt) => acceptExpectedReply(activeStore, preview.preview, receipt),
+          },
         );
         if (result.outcome === "accepted") {
+          if (!result.deliveryId) forgetExpectedReply(activeStore, preview.preview);
           setLocalSends((current) => {
             if (current.get(activeStore)?.preview !== preview.preview) return current;
             const next = new Map(current);
@@ -997,6 +950,7 @@ export function ChatScreen({
           );
           return;
         }
+        forgetExpectedReply(activeStore, preview.preview);
         if (!result.uncertain) {
           setLocalSends((current) => {
             if (current.get(activeStore)?.preview !== preview.preview) return current;
@@ -1014,12 +968,6 @@ export function ChatScreen({
             const next = new Map(current);
             if (nextHolds.length === 0) next.delete(activeStore);
             else next.set(activeStore, nextHolds);
-            return next;
-          });
-          setExpectingAssistantByStore((current) => {
-            if (!current.has(activeStore)) return current;
-            const next = new Map(current);
-            next.delete(activeStore);
             return next;
           });
           setSendError({ store: activeStore, message: result.message });
@@ -1080,6 +1028,9 @@ export function ChatScreen({
       needsSignup,
       isAnonymous,
       refreshGuestGate,
+      beginExpectedReply,
+      acceptExpectedReply,
+      forgetExpectedReply,
     ],
   );
 
@@ -1209,7 +1160,7 @@ export function ChatScreen({
         return new Map(current).set(store, [...existing, resentHold]);
       });
     }
-    setExpectingAssistantByStore((current) => new Map(current).set(store, true));
+    beginExpectedReply(store, pending.preview);
     const result = await sendWithRetry(
       {
         store,
@@ -1227,9 +1178,13 @@ export function ChatScreen({
           activeCustomAgent?.id,
         ),
       },
-      { eventBaseline: pending.eventBaseline },
+      {
+        eventBaseline: pending.eventBaseline,
+        onAccepted: (receipt) => acceptExpectedReply(store, pending.preview, receipt),
+      },
     );
     if (result.outcome === "accepted") {
+      if (!result.deliveryId) forgetExpectedReply(store, pending.preview);
       setLocalSends((current) => {
         if (!current.has(store)) return current;
         const next = new Map(current);
@@ -1239,6 +1194,7 @@ export function ChatScreen({
       setSendError(null);
       return;
     }
+    forgetExpectedReply(store, pending.preview);
     setLocalSends((current) => {
       const row = current.get(store);
       if (!row) return current;
@@ -1256,6 +1212,9 @@ export function ChatScreen({
     clearSessionRecovery,
     clearPendingMessage,
     offline,
+    beginExpectedReply,
+    acceptExpectedReply,
+    forgetExpectedReply,
   ]);
 
   const runtime = useExternalStoreRuntime(adapter);
@@ -1277,7 +1236,7 @@ export function ChatScreen({
     offline,
     connectionError,
     persistenceError,
-    sendError: sendError?.store === store ? sendError.message : null,
+    sendError: (sendError?.store === store ? sendError.message : null) ?? emptyReplyError,
     canResend,
     sendPreparing,
     pendingMessage,

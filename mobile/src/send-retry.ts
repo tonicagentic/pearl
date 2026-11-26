@@ -2,6 +2,7 @@ import type { SessionStore } from "eve/client";
 import { isEveSessionInactive } from "../../lib/chat/eve-session-recovery";
 import { reconnectSession } from "./session-reconnect";
 import { shouldRestoreUnsentDraft } from "./send-feedback";
+import type { ExpectedReply } from "../../lib/chat/empty-turn";
 
 const SEND_BACKOFF_MS = [300, 800, 1_600] as const;
 const WAIT_CONSUMED_MS = 8_000;
@@ -46,18 +47,21 @@ async function waitForDeliveryConsumed(
   store: SessionStore,
   eventBaseline: number,
   timeoutMs: number,
+  deliveryId?: string,
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const accepted = store.snapshot.events
       .slice(eventBaseline)
-      .some((event) => event.type === "delivery.consumed");
+      .some((event) => event.type === "delivery.consumed" &&
+        (deliveryId === undefined || event.data.deliveryId === deliveryId));
     if (accepted) return true;
     await sleep(WAIT_POLL_MS);
   }
   return store.snapshot.events
     .slice(eventBaseline)
-    .some((event) => event.type === "delivery.consumed");
+    .some((event) => event.type === "delivery.consumed" &&
+      (deliveryId === undefined || event.data.deliveryId === deliveryId));
 }
 
 /**
@@ -67,7 +71,11 @@ async function waitForDeliveryConsumed(
 export async function sendWithRetry(
   ctx: SendRetryContext,
   payload: Parameters<SessionStore["send"]>[0],
-  options: { readonly eventBaseline: number } = { eventBaseline: 0 },
+  options: {
+    readonly eventBaseline: number;
+    /** Capture identity before waiting for consumption (queued sends may wait). */
+    readonly onAccepted?: (receipt: ExpectedReply) => void;
+  } = { eventBaseline: 0 },
 ): Promise<SendRetryResult> {
   const { store } = ctx;
   let attempt = 0;
@@ -113,11 +121,19 @@ export async function sendWithRetry(
           : undefined;
 
       if (deliveryId) {
+        options.onAccepted?.({ sessionId: delivery.sessionId, deliveryId });
         ctx.clearPendingMessage(store);
+        // A queued receipt is accepted but deliberately not consumed until
+        // the preceding turn ends. Do not time it out or reconnect/resend it.
+        if (payload.turnPolicy === "queue") {
+          ctx.clearSessionRecovery(store);
+          return { outcome: "accepted", deliveryId };
+        }
         const consumed = await waitForDeliveryConsumed(
           store,
           options.eventBaseline,
           WAIT_CONSUMED_MS,
+          deliveryId,
         );
         if (!consumed) {
           await reconnectSession(store, { offline: ctx.offline });
@@ -125,6 +141,7 @@ export async function sendWithRetry(
             store,
             options.eventBaseline,
             WAIT_CONSUMED_MS,
+            deliveryId,
           );
           if (!afterResume) {
             return {
