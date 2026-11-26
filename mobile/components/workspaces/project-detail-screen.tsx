@@ -59,6 +59,24 @@ import {
 import { queryKeys } from "@/src/query-client";
 import { fetchWorkbenchPins } from "@/src/workbench-client";
 
+type ProjectTab =
+  | "overview"
+  | "tasks"
+  | "goals"
+  | "notes"
+  | "files"
+  | "links";
+
+const PROJECT_TABS: readonly { readonly key: ProjectTab; readonly label: string }[] =
+  [
+    { key: "overview", label: "Overview" },
+    { key: "tasks", label: "Tasks" },
+    { key: "goals", label: "Goals" },
+    { key: "notes", label: "Notes" },
+    { key: "files", label: "Files" },
+    { key: "links", label: "Links" },
+  ];
+
 /** Project hub: tasks, goals, notes, files; demoted repos/chats links. */
 export function ProjectDetailScreen({
   projectId,
@@ -74,7 +92,7 @@ export function ProjectDetailScreen({
   const [saving, setSaving] = useState(false);
   const [busyIssueId, setBusyIssueId] = useState<string | null>(null);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
-  const [linksExpanded, setLinksExpanded] = useState(false);
+  const [tab, setTab] = useState<ProjectTab>("overview");
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
@@ -572,6 +590,14 @@ export function ProjectDetailScreen({
     ];
   }, [error, openOverflow, openPlusMenu, workspace]);
 
+  const openFilesMenu = useCallback(() => {
+    Alert.alert("Files", undefined, [
+      { text: "New markdown file", onPress: createFile },
+      { text: "Link from Library", onPress: linkLibraryArtifact },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, [createFile, linkLibraryArtifact]);
+
   if (!workspace && !error) {
     return (
       <ScreenChrome title="Project" leading="back" contentPaddingTop={0}>
@@ -595,34 +621,73 @@ export function ProjectDetailScreen({
       contentPaddingTop={0}
       actions={chromeActions}
     >
-      <ScrollView
-        className="flex-1"
-        contentContainerClassName="px-5 pb-28 gap-6"
-        contentContainerStyle={{ paddingTop: 12 }}
-        contentInsetAdjustmentBehavior="automatic"
-        keyboardShouldPersistTaps="handled"
-      >
-        {error ? (
-          <Pressable onPress={() => void reload()}>
-            <Text className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {error} · Tap to retry
-            </Text>
-          </Pressable>
-        ) : null}
+      <View className="flex-1">
+        <View className="gap-3 px-5 pt-3">
+          {error ? (
+            <Pressable onPress={() => void reload()}>
+              <Text className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {error} · Tap to retry
+              </Text>
+            </Pressable>
+          ) : null}
 
-        <View className="flex-row items-start gap-3">
-          <ProjectMark name={name || "P"} size="lg" />
-          <View className="min-w-0 flex-1 gap-2">
+          <View className="flex-row items-center gap-3">
+            <ProjectMark name={name || "P"} size="lg" />
             <TextInput
-              className="text-xl font-semibold text-foreground"
+              className="min-w-0 flex-1 text-xl font-semibold text-foreground"
               onBlur={saveIfDirty}
               onChangeText={setName}
               placeholder="Project name"
               placeholderTextColor={placeholderColor}
               value={name}
             />
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="max-h-10 grow-0"
+            contentContainerClassName="gap-1.5 pb-1"
+          >
+            {PROJECT_TABS.map(({ key, label }) => {
+              const selected = tab === key;
+              return (
+                <Pressable
+                  key={key}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  className={cn(
+                    "rounded-full px-3 py-1.5",
+                    selected
+                      ? "border border-border/50 bg-muted"
+                      : "border border-transparent",
+                  )}
+                  onPress={() => setTab(key)}
+                >
+                  <Text
+                    className={cn(
+                      "text-sm font-medium",
+                      selected ? "text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="px-5 pb-28 gap-3"
+          contentContainerStyle={{ paddingTop: 12 }}
+          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
+        >
+          {tab === "overview" ? (
             <TextInput
-              className="min-h-16 text-sm text-foreground"
+              className="min-h-28 text-sm text-foreground"
               multiline
               onBlur={saveIfDirty}
               onChangeText={setInstructions}
@@ -632,146 +697,123 @@ export function ProjectDetailScreen({
               textAlignVertical="top"
               value={instructions}
             />
-          </View>
-        </View>
+          ) : null}
 
-        <Section
-          actionLabel="Add"
-          onAction={() => setCreateTaskOpen(true)}
-          title="Tasks"
-        >
-          {openIssues.length === 0 ? (
-            <EmptyRow text="No open tasks." />
-          ) : (
-            openIssues.map((issue) => (
-              <IssueRow
-                busy={busyIssueId === issue.id}
-                issue={issue}
-                key={issue.id}
-                onDelete={() => deleteIssue(issue)}
-                onResolve={(resolved) => void resolveIssue(issue, resolved)}
-              />
-            ))
-          )}
-        </Section>
+          {tab === "tasks" ? (
+            <ListPanel onAdd={() => setCreateTaskOpen(true)}>
+              {openIssues.length === 0 ? (
+                <EmptyRow text="No open tasks." />
+              ) : (
+                openIssues.map((issue) => (
+                  <IssueRow
+                    busy={busyIssueId === issue.id}
+                    issue={issue}
+                    key={issue.id}
+                    onDelete={() => deleteIssue(issue)}
+                    onResolve={(resolved) => void resolveIssue(issue, resolved)}
+                  />
+                ))
+              )}
+            </ListPanel>
+          ) : null}
 
-        <Section actionLabel="Add" onAction={promptNewGoal} title="Goals">
-          {goals.length === 0 ? (
-            <EmptyRow text="No goals yet." />
-          ) : (
-            goals.map((goal) => (
-              <GoalRow
-                goal={goal}
-                key={goal.id}
-                onDelete={() => {
-                  Alert.alert("Delete goal?", goal.title, [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Delete",
-                      style: "destructive",
-                      onPress: () => {
-                        void deleteProjectGoalRequest(projectId, goal.id)
-                          .then(() => reload())
-                          .catch((cause) => {
-                            setError(
-                              cause instanceof Error
-                                ? cause.message
-                                : "Could not delete goal.",
-                            );
-                          });
-                      },
-                    },
-                  ]);
-                }}
-                onToggle={() => toggleGoal(goal)}
-              />
-            ))
-          )}
-        </Section>
+          {tab === "goals" ? (
+            <ListPanel onAdd={promptNewGoal}>
+              {goals.length === 0 ? (
+                <EmptyRow text="No goals yet." />
+              ) : (
+                goals.map((goal) => (
+                  <GoalRow
+                    goal={goal}
+                    key={goal.id}
+                    onDelete={() => {
+                      Alert.alert("Delete goal?", goal.title, [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Delete",
+                          style: "destructive",
+                          onPress: () => {
+                            void deleteProjectGoalRequest(projectId, goal.id)
+                              .then(() => reload())
+                              .catch((cause) => {
+                                setError(
+                                  cause instanceof Error
+                                    ? cause.message
+                                    : "Could not delete goal.",
+                                );
+                              });
+                          },
+                        },
+                      ]);
+                    }}
+                    onToggle={() => toggleGoal(goal)}
+                  />
+                ))
+              )}
+            </ListPanel>
+          ) : null}
 
-        <Section actionLabel="Add" onAction={createNote} title="Notes">
-          {notes.length === 0 ? (
-            <EmptyRow text="No notes yet." />
-          ) : (
-            notes.map((note) => (
-              <LinkRow
-                key={note.id}
-                onPress={() =>
-                  router.push(
-                    `/notes/${encodeURIComponent(note.id)}`,
-                  )
-                }
-                subtitle={new Date(note.updatedAt).toLocaleDateString()}
-                title={note.title}
-              />
-            ))
-          )}
-        </Section>
+          {tab === "notes" ? (
+            <ListPanel onAdd={createNote}>
+              {notes.length === 0 ? (
+                <EmptyRow text="No notes yet." />
+              ) : (
+                notes.map((note) => (
+                  <LinkRow
+                    key={note.id}
+                    onPress={() =>
+                      router.push(`/notes/${encodeURIComponent(note.id)}`)
+                    }
+                    subtitle={new Date(note.updatedAt).toLocaleDateString()}
+                    title={note.title}
+                  />
+                ))
+              )}
+            </ListPanel>
+          ) : null}
 
-        <Section
-          actionLabel="Add"
-          onAction={() => {
-            Alert.alert("Files", undefined, [
-              { text: "New markdown file", onPress: createFile },
-              { text: "Link from Library", onPress: linkLibraryArtifact },
-              { text: "Cancel", style: "cancel" },
-            ]);
-          }}
-          title="Files"
-        >
-          {files.length === 0 ? (
-            <EmptyRow text="No files yet." />
-          ) : (
-            files.map((file) => (
-              <LinkRow
-                key={file.id}
-                onLongPress={() => {
-                  Alert.alert("Unlink file?", file.title, [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Unlink",
-                      style: "destructive",
-                      onPress: () => {
-                        void unlinkProjectArtifactRequest(projectId, file.id)
-                          .then(() => reload())
-                          .catch((cause) => {
-                            setError(
-                              cause instanceof Error
-                                ? cause.message
-                                : "Could not unlink.",
-                            );
-                          });
-                      },
-                    },
-                  ]);
-                }}
-                onPress={() =>
-                  router.push(
-                    `/workspaces/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(file.id)}`,
-                  )
-                }
-                subtitle={file.pathname.split("/").pop() ?? file.pathname}
-                title={file.title}
-              />
-            ))
-          )}
-        </Section>
+          {tab === "files" ? (
+            <ListPanel onAdd={openFilesMenu}>
+              {files.length === 0 ? (
+                <EmptyRow text="No files yet." />
+              ) : (
+                files.map((file) => (
+                  <LinkRow
+                    key={file.id}
+                    onLongPress={() => {
+                      Alert.alert("Unlink file?", file.title, [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Unlink",
+                          style: "destructive",
+                          onPress: () => {
+                            void unlinkProjectArtifactRequest(projectId, file.id)
+                              .then(() => reload())
+                              .catch((cause) => {
+                                setError(
+                                  cause instanceof Error
+                                    ? cause.message
+                                    : "Could not unlink.",
+                                );
+                              });
+                          },
+                        },
+                      ]);
+                    }}
+                    onPress={() =>
+                      router.push(
+                        `/workspaces/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(file.id)}`,
+                      )
+                    }
+                    subtitle={file.pathname.split("/").pop() ?? file.pathname}
+                    title={file.title}
+                  />
+                ))
+              )}
+            </ListPanel>
+          ) : null}
 
-        <View className="gap-2">
-          <Pressable
-            accessibilityRole="button"
-            className="flex-row items-center justify-between py-1"
-            onPress={() => setLinksExpanded((value) => !value)}
-            onLongPress={openLinksMenu}
-          >
-            <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Links · {pins.length} repos · {projectChats.length} chats
-            </Text>
-            <Text className="text-xs text-muted-foreground">
-              {linksExpanded ? "Hide" : "Show"}
-            </Text>
-          </Pressable>
-          {linksExpanded ? (
+          {tab === "links" ? (
             <View className="gap-3">
               <View>
                 <View className="mb-1 flex-row items-center justify-between">
@@ -782,41 +824,43 @@ export function ProjectDetailScreen({
                     <Text className="text-sm text-muted-foreground">Manage</Text>
                   </Pressable>
                 </View>
-                {pins.length === 0 ? (
-                  <EmptyRow text="No repos linked." />
-                ) : (
-                  pins.map((pin) => (
-                    <LinkRow
-                      key={pin.id}
-                      onLongPress={() => {
-                        Alert.alert("Unlink repo?", pin.fullName, [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Unlink",
-                            style: "destructive",
-                            onPress: () => {
-                              void unlinkProjectPinRequest(projectId, pin.id)
-                                .then(() => reload())
-                                .catch((cause) => {
-                                  setError(
-                                    cause instanceof Error
-                                      ? cause.message
-                                      : "Could not unlink.",
-                                  );
-                                });
+                <View className="overflow-hidden rounded-xl border border-border/40">
+                  {pins.length === 0 ? (
+                    <EmptyRow text="No repos linked." />
+                  ) : (
+                    pins.map((pin) => (
+                      <LinkRow
+                        key={pin.id}
+                        onLongPress={() => {
+                          Alert.alert("Unlink repo?", pin.fullName, [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Unlink",
+                              style: "destructive",
+                              onPress: () => {
+                                void unlinkProjectPinRequest(projectId, pin.id)
+                                  .then(() => reload())
+                                  .catch((cause) => {
+                                    setError(
+                                      cause instanceof Error
+                                        ? cause.message
+                                        : "Could not unlink.",
+                                    );
+                                  });
+                              },
                             },
-                          },
-                        ]);
-                      }}
-                      onPress={() =>
-                        router.push(
-                          `/workbench/${encodeURIComponent(pin.id)}`,
-                        )
-                      }
-                      title={pin.fullName}
-                    />
-                  ))
-                )}
+                          ]);
+                        }}
+                        onPress={() =>
+                          router.push(
+                            `/workbench/${encodeURIComponent(pin.id)}`,
+                          )
+                        }
+                        title={pin.fullName}
+                      />
+                    ))
+                  )}
+                </View>
               </View>
               <View>
                 <View className="mb-1 flex-row items-center justify-between">
@@ -827,26 +871,28 @@ export function ProjectDetailScreen({
                     <Text className="text-sm text-muted-foreground">New</Text>
                   </Pressable>
                 </View>
-                {projectChats.length === 0 ? (
-                  <EmptyRow text="No chats yet." />
-                ) : (
-                  projectChats.map((chat) => (
-                    <LinkRow
-                      key={chat.id}
-                      onPress={() => {
-                        setActiveProjectId(projectId);
-                        revealChatThread();
-                        void selectChat(chat.id);
-                      }}
-                      title={chat.title || "Untitled"}
-                    />
-                  ))
-                )}
+                <View className="overflow-hidden rounded-xl border border-border/40">
+                  {projectChats.length === 0 ? (
+                    <EmptyRow text="No chats yet." />
+                  ) : (
+                    projectChats.map((chat) => (
+                      <LinkRow
+                        key={chat.id}
+                        onPress={() => {
+                          setActiveProjectId(projectId);
+                          revealChatThread();
+                          void selectChat(chat.id);
+                        }}
+                        title={chat.title || "Untitled"}
+                      />
+                    ))
+                  )}
+                </View>
               </View>
             </View>
           ) : null}
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
 
       <CreateTaskModal
         onClose={() => setCreateTaskOpen(false)}
@@ -861,25 +907,18 @@ export function ProjectDetailScreen({
   );
 }
 
-function Section({
-  title,
-  actionLabel,
-  onAction,
+function ListPanel({
+  onAdd,
   children,
 }: {
-  readonly title: string;
-  readonly actionLabel: string;
-  readonly onAction: () => void;
+  readonly onAdd: () => void;
   readonly children: ReactNode;
 }) {
   return (
     <View className="gap-1">
-      <View className="mb-1 flex-row items-center justify-between">
-        <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {title}
-        </Text>
-        <Pressable onPress={onAction}>
-          <Text className="text-sm text-muted-foreground">{actionLabel}</Text>
+      <View className="mb-1 flex-row items-center justify-end">
+        <Pressable onPress={onAdd}>
+          <Text className="text-sm text-muted-foreground">Add</Text>
         </Pressable>
       </View>
       <View className="overflow-hidden rounded-xl border border-border/40">
