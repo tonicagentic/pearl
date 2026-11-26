@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { defineEval } from "eve/evals";
 
-import { MODE_MARKER, PROJECT_ID_MARKER } from "../../lib/agent-mode-context.ts";
+import { MODE_MARKER, PROJECT_ID_MARKER } from "../../../lib/agent-mode-context.ts";
 
 async function seedProject(): Promise<string> {
-  const { ensureUserForPrincipal } = await import("../../lib/db/issues.ts");
-  const { createProject } = await import("../../lib/db/projects.ts");
+  const { ensureUserForPrincipal } = await import("../../../lib/db/issues.ts");
+  const { createProject } = await import("../../../lib/db/projects.ts");
 
   const principalId = "local-dev";
   await ensureUserForPrincipal({
