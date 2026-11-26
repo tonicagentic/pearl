@@ -7,6 +7,7 @@ export type QuickPathStreamEvent =
       readonly type: "done";
       readonly turns: readonly QuickTurn[];
       readonly chatId: string;
+      readonly title?: string;
     }
   | { readonly type: "error"; readonly message: string };
 
@@ -39,11 +40,17 @@ export async function readQuickPathStream(
     readonly onDone?: (payload: {
       readonly turns: readonly QuickTurn[];
       readonly chatId: string;
+      readonly title?: string;
     }) => void;
     readonly onError?: (message: string) => void;
   } = {},
 ): Promise<
-  | { readonly outcome: "answered"; readonly turns: readonly QuickTurn[]; readonly chatId: string }
+  | {
+      readonly outcome: "answered";
+      readonly turns: readonly QuickTurn[];
+      readonly chatId: string;
+      readonly title?: string;
+    }
   | { readonly outcome: "escalate" }
   | { readonly outcome: "error"; readonly message: string }
 > {
@@ -58,7 +65,11 @@ export async function readQuickPathStream(
   let buffer = "";
   let escalated = false;
   let donePayload:
-    | { readonly turns: readonly QuickTurn[]; readonly chatId: string }
+    | {
+        readonly turns: readonly QuickTurn[];
+        readonly chatId: string;
+        readonly title?: string;
+      }
     | null = null;
   let errorMessage: string | null = null;
 
@@ -77,7 +88,11 @@ export async function readQuickPathStream(
         escalated = true;
         handlers.onEscalate?.();
       } else if (event.type === "done") {
-        donePayload = { turns: event.turns, chatId: event.chatId };
+        donePayload = {
+          turns: event.turns,
+          chatId: event.chatId,
+          ...(typeof event.title === "string" ? { title: event.title } : {}),
+        };
         handlers.onDone?.(donePayload);
       } else if (event.type === "error") {
         errorMessage = event.message;
@@ -94,7 +109,11 @@ export async function readQuickPathStream(
       handlers.onEscalate?.();
     }
     if (event?.type === "done") {
-      donePayload = { turns: event.turns, chatId: event.chatId };
+      donePayload = {
+        turns: event.turns,
+        chatId: event.chatId,
+        ...(typeof event.title === "string" ? { title: event.title } : {}),
+      };
       handlers.onDone?.(donePayload);
     }
     if (event?.type === "error") {
@@ -110,6 +129,7 @@ export async function readQuickPathStream(
       outcome: "answered",
       turns: donePayload.turns,
       chatId: donePayload.chatId,
+      ...(donePayload.title ? { title: donePayload.title } : {}),
     };
   }
   return { outcome: "error", message: "Quick path ended without a reply." };

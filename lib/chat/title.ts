@@ -10,9 +10,12 @@ export function createFallbackTitle(input: string) {
     return DEFAULT_CHAT_TITLE;
   }
 
-  return truncateTitle(text);
+  return sanitizeChatTitle(text);
 }
 
-function truncateTitle(title: string) {
-  return title.length > 72 ? `${title.slice(0, 69).trimEnd()}...` : title;
+/** Cap and normalize a title before persistence (manual rename / LLM). */
+export function sanitizeChatTitle(title: string) {
+  const next = title.replace(/\s+/g, " ").trim();
+  if (!next) return DEFAULT_CHAT_TITLE;
+  return next.length > 72 ? `${next.slice(0, 69).trimEnd()}...` : next;
 }

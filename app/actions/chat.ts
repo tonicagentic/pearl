@@ -14,6 +14,10 @@ import {
   saveChatSessionState,
   skipChatAuthorization,
 } from "@/lib/db/queries";
+import {
+  firstUserTextFromEvents,
+  maybeUpgradeChatTitle,
+} from "@/lib/chat/generate-title";
 import { assertChatMessageLength } from "@/lib/chat/limits";
 import { RateLimitError, enforceRateLimit } from "@/lib/rate-limit";
 import { getServerViewer } from "@/lib/session";
@@ -78,7 +82,7 @@ export async function saveChatSnapshotAction(input: {
   readonly chatId: string;
   readonly events: readonly SessionStreamEvent[];
   readonly session: ClientSessionState | undefined;
-}) {
+}): Promise<{ readonly ok: true; readonly title?: string }> {
   const viewer = await requireViewer();
 
   await saveChatSnapshot({
@@ -88,7 +92,18 @@ export async function saveChatSnapshotAction(input: {
     userId: viewer.id,
   });
 
-  return { ok: true };
+  const firstUserText = firstUserTextFromEvents(input.events);
+  if (!firstUserText) {
+    return { ok: true };
+  }
+
+  const title = await maybeUpgradeChatTitle({
+    chatId: input.chatId,
+    userId: viewer.id,
+    firstUserText,
+  });
+
+  return title ? { ok: true, title } : { ok: true };
 }
 
 export async function markChatPendingMessageAction(input: {

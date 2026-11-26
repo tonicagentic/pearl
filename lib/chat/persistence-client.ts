@@ -161,13 +161,13 @@ export async function saveClientChatSnapshot(
     readonly events: readonly SessionStreamEvent[];
     readonly session: ClientSessionState | undefined;
   },
-) {
+): Promise<{ readonly ok: true; readonly title?: string }> {
   if (storageMode === "browser") {
     saveLocalChatSnapshot(input);
-    return;
+    return { ok: true };
   }
 
-  await saveChatSnapshotAction(input);
+  return saveChatSnapshotAction(input);
 }
 
 export async function skipClientChatAuthorization(

@@ -390,7 +390,7 @@ export async function saveChatSnapshot(
   chatId: string,
   events: readonly SessionStreamEvent[],
   session: ClientSessionState | undefined,
-): Promise<void> {
+): Promise<{ readonly ok: true; readonly title?: string }> {
   const response = await fetch(
     `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}/sync`,
     {
@@ -406,6 +406,15 @@ export async function saveChatSnapshot(
     }
     throw new Error(`Failed to save the chat (${response.status}).`);
   }
+
+  const data = (await response.json().catch(() => ({ ok: true }))) as {
+    readonly ok?: boolean;
+    readonly title?: unknown;
+  };
+  return {
+    ok: true,
+    ...(typeof data.title === "string" ? { title: data.title } : {}),
+  };
 }
 
 export async function saveChatSession(

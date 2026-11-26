@@ -27,7 +27,7 @@ export type QuickPathSendContext = {
   readonly customAgentId: string | null;
   readonly hasEveSession: boolean;
   readonly onChatId: (chatId: string) => void;
-  readonly onTurns: (turns: readonly QuickTurn[]) => void;
+  readonly onTurns: (turns: readonly QuickTurn[], title?: string) => void;
 };
 
 type QuickPathContextValue = {
@@ -152,7 +152,7 @@ export function QuickPathProvider({
           send.onChatId(result.chatId);
         }
         setTurnsState(result.turns);
-        send.onTurns(result.turns);
+        send.onTurns(result.turns, result.title);
         setStreamingText("");
         return "answered";
       } catch {

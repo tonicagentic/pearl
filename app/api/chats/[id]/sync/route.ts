@@ -60,7 +60,7 @@ export async function POST(
         return NextResponse.json({ error: "events must be an array." }, { status: 400 });
       }
 
-      await saveChatSnapshotAction({
+      const result = await saveChatSnapshotAction({
         chatId,
         events: body.events as Parameters<typeof saveChatSnapshotAction>[0]["events"],
         session: (body.session ?? undefined) as Parameters<
@@ -68,7 +68,7 @@ export async function POST(
         >[0]["session"],
       });
 
-      return NextResponse.json({ ok: true });
+      return NextResponse.json(result);
     }
 
     if (body.session !== undefined && body.session !== null) {

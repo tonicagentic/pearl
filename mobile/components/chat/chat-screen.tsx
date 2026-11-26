@@ -917,6 +917,7 @@ export function ChatScreen({
                 if (result.chatId) {
                   ctx.patchChatMeta(result.chatId, {
                     updatedAt: new Date().toISOString(),
+                    ...(result.title ? { title: result.title } : {}),
                   });
                   if (result.chatId !== ctx.activeChatId) {
                     await ctx.selectChat(result.chatId);

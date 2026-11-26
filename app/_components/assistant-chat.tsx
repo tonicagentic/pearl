@@ -555,11 +555,14 @@ function AssistantChatSurfaceInner({
             return;
           }
 
-          await saveClientChatSnapshot(storageMode, {
+          const saved = await saveClientChatSnapshot(storageMode, {
             chatId: id,
             events,
             session,
           });
+          if (saved.title) {
+            currentTitleRef.current = saved.title;
+          }
           archivedEventsRef.current = events;
           eventIndexRef.current = events.length;
           savedEventCountRef.current = events.length;
@@ -855,12 +858,16 @@ function AssistantChatSurfaceInner({
         });
         onChatCreated?.(id);
       },
-      onTurns: (turns: readonly QuickTurn[]) => {
+      onTurns: (turns: readonly QuickTurn[], title?: string) => {
         const id = activeChatIdRef.current;
         if (!id) return;
-        const firstUser = turns.find((turn) => turn.role === "user")?.text;
-        if (firstUser && currentTitleRef.current === "New chat") {
-          currentTitleRef.current = createFallbackTitle(firstUser);
+        if (title) {
+          currentTitleRef.current = title;
+        } else {
+          const firstUser = turns.find((turn) => turn.role === "user")?.text;
+          if (firstUser && currentTitleRef.current === "New chat") {
+            currentTitleRef.current = createFallbackTitle(firstUser);
+          }
         }
         onActiveChatUpdated?.({
           id,

@@ -515,9 +515,17 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       chatId: string,
       meta: { readonly title?: string; readonly updatedAt?: string },
     ) => {
+      if (meta.title && activeChatIdRef.current === chatId) {
+        setActiveTitle(meta.title);
+      }
+      const retained = retainedStores.get(chatId);
+      if (retained && meta.title) {
+        const binding = bindings.get(retained);
+        if (binding) binding.title = meta.title;
+      }
       setChats((current) => applyChatMeta(current, chatId, meta));
     },
-    [],
+    [bindings, retainedStores],
   );
 
   const markActiveChatRead = useCallback((chatId: string) => {
@@ -672,10 +680,22 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
           return;
         }
         enqueue(async () => {
-          await saveChatSnapshot(id, events, snapshot.session);
+          const saved = await saveChatSnapshot(id, events, snapshot.session);
           binding.archivedEvents = [...events];
           binding.savedEventCount = events.length;
           binding.eventIndex = Math.max(binding.eventIndex, events.length);
+          if (saved.title) {
+            binding.title = saved.title;
+            if (activeChatIdRef.current === id) {
+              setActiveTitle(saved.title);
+            }
+            setChats((current) =>
+              applyChatMeta(current, id, {
+                title: saved.title,
+                updatedAt: new Date().toISOString(),
+              }),
+            );
+          }
           traceSend(binding, "snapshot saved");
           binding.syncFailed = false;
           if (activeStoreRef.current === store) setPersistenceError(null);
@@ -1316,10 +1336,22 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         binding.archivedEvents,
         snapshot.events,
       );
-      await saveChatSnapshot(id, events, snapshot.session);
+      const saved = await saveChatSnapshot(id, events, snapshot.session);
       binding.archivedEvents = [...events];
       binding.savedEventCount = events.length;
       binding.eventIndex = Math.max(binding.eventIndex, events.length);
+      if (saved.title) {
+        binding.title = saved.title;
+        if (activeChatIdRef.current === id) {
+          setActiveTitle(saved.title);
+        }
+        setChats((current) =>
+          applyChatMeta(current, id, {
+            title: saved.title,
+            updatedAt: new Date().toISOString(),
+          }),
+        );
+      }
       if (snapshot.session) await saveChatSession(id, snapshot.session);
     });
     binding.queue = attempt.catch(() => {

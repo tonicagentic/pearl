@@ -16,6 +16,7 @@ import {
   QUICK_PATH_ESCALATE_DESCRIPTION,
   QUICK_PATH_SYSTEM_PROMPT,
 } from "@/lib/chat/quick-path-prompt";
+import { maybeUpgradeChatTitle } from "@/lib/chat/generate-title";
 import { toQuickTurns, type QuickTurn } from "@/lib/chat/quick-turns";
 import {
   assertCanSpend,
@@ -218,6 +219,14 @@ export async function POST(request: Request) {
           turns: nextTurns,
         });
 
+        const firstUserText =
+          nextTurns.find((turn) => turn.role === "user")?.text ?? message;
+        const upgradedTitle = await maybeUpgradeChatTitle({
+          chatId,
+          userId: viewer.id,
+          firstUserText,
+        });
+
         const usage = await result.usage;
         const usageRecord = usage as unknown as {
           readonly costUsd?: number;
@@ -247,6 +256,7 @@ export async function POST(request: Request) {
             type: "done",
             turns: nextTurns,
             chatId,
+            ...(upgradedTitle ? { title: upgradedTitle } : {}),
           }),
         );
         controller.close();
