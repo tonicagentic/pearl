@@ -1,11 +1,18 @@
 import { UserMessageAttachments } from "@/components/assistant-ui/elements/attachment.aui";
 import { ComposerChromeContext } from "@/components/assistant-ui/elements/composer-chrome";
-import { COMPOSER_EDGE } from "@/components/assistant-ui/elements/composer-morph";
+import {
+  COMPOSER_EDGE,
+  LIQUID_GLASS_SHADOW_DARK,
+  LIQUID_GLASS_SHADOW_LIGHT,
+} from "@/components/assistant-ui/elements/composer-morph";
 import { ComposerOwnsHitlContext } from "@/components/assistant-ui/elements/composer-owns-hitl";
 import {
   groupedIconButtonHitSlop,
   iconButtonClassName,
 } from "@/components/assistant-ui/elements/icon-button";
+import { LiquidGlassShell } from "@/components/ui/liquid-glass";
+import { usePearlCardBackground } from "@/src/navigation-theme";
+import { useCSSVariable } from "uniwind";
 import { File } from "@/components/assistant-ui/elements/file";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
 import { ThreadSuggestedPrompts } from "@/components/assistant-ui/elements/suggested-prompts.aui";
@@ -81,6 +88,7 @@ import {
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import {
+  ArrowDownIcon,
   AudioLinesIcon,
   CheckIcon,
   ChevronLeftIcon,
@@ -115,6 +123,7 @@ import {
   Platform,
   Pressable,
   Share,
+  useColorScheme,
   View,
   type ViewProps,
 } from "react-native";
@@ -184,6 +193,11 @@ export type ThreadProps = {
   signupBlocked?: boolean | undefined;
 };
 
+/** Distance from the end that counts as “pinned” for follow + the FAB. */
+const NEAR_BOTTOM_PX = 32;
+/** Visual size of the scroll-to-bottom glass control. */
+const SCROLL_TO_BOTTOM_SIZE = 34;
+
 export type ThreadViewportSnapshot = {
   /** The ids of the messages on screen, in list order. */
   readonly visibleMessageIds: readonly string[];
@@ -193,6 +207,8 @@ export type ThreadViewportSnapshot = {
    * viewport can still reach the final turns.
    */
   readonly descent: number;
+  /** True when the list is within NEAR_BOTTOM_PX of its end. */
+  readonly nearBottom: boolean;
   /** The message list's height. */
   readonly height: number;
   /** The message list's offset from the top of the thread viewport, which grows while the history edge shows. */
@@ -202,18 +218,22 @@ export type ThreadViewportSnapshot = {
 export type ThreadViewport = ThreadViewportSnapshot & {
   /** Scrolls the message list until the message starts at the top of the viewport. */
   readonly scrollToMessage: (id: string) => void;
+  /** Scrolls to the latest messages and re-pins follow-while-streaming. */
+  readonly scrollToBottom: () => void;
 };
 
 type ThreadViewportStore = {
   readonly subscribe: (listener: () => void) => () => void;
   readonly getSnapshot: () => ThreadViewportSnapshot;
   readonly scrollToMessage: (id: string) => void;
+  readonly scrollToBottom: () => void;
 };
 
 const EMPTY_IDS: readonly string[] = [];
 const IDLE_VIEWPORT: ThreadViewportSnapshot = {
   visibleMessageIds: EMPTY_IDS,
   descent: 0,
+  nearBottom: true,
   height: 0,
   top: 0,
 };
@@ -229,6 +249,7 @@ const ThreadViewportContext = createContext<ThreadViewportStore>({
   subscribe: () => () => {},
   getSnapshot: () => IDLE_VIEWPORT,
   scrollToMessage: () => {},
+  scrollToBottom: () => {},
 });
 
 const createViewportStore = () => {
@@ -252,18 +273,83 @@ const createViewportStore = () => {
 
 /** What the thread's message list shows right now, for an element that overlays it. */
 export const useThreadViewport = (): ThreadViewport => {
-  const { subscribe, getSnapshot, scrollToMessage } = useContext(
+  const { subscribe, getSnapshot, scrollToMessage, scrollToBottom } = useContext(
     ThreadViewportContext,
   );
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return useMemo(
-    () => ({ ...snapshot, scrollToMessage }),
-    [snapshot, scrollToMessage],
+    () => ({ ...snapshot, scrollToMessage, scrollToBottom }),
+    [snapshot, scrollToBottom, scrollToMessage],
   );
 };
 
 const copyToClipboard = async (text: string) => {
   await Clipboard.setStringAsync(text);
+};
+
+/**
+ * Small liquid-glass jump control above the composer. Absolute so it does not
+ * change overlay height; unmounts when near the bottom (never opacity-hide glass).
+ */
+const ThreadScrollToBottom: FC = () => {
+  const { nearBottom, scrollToBottom } = useThreadViewport();
+  const cardColor = usePearlCardBackground();
+  const foreground = useCSSVariable("--color-foreground") as string | undefined;
+  const scheme = useColorScheme();
+  const glassShadow =
+    scheme === "dark" ? LIQUID_GLASS_SHADOW_DARK : LIQUID_GLASS_SHADOW_LIGHT;
+
+  if (nearBottom) return null;
+
+  return (
+    <View
+      pointerEvents="box-none"
+      className="absolute inset-x-0 z-10 items-center"
+      style={{ top: -(SCROLL_TO_BOTTOM_SIZE + 10) }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Scroll to bottom"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        onPress={() => {
+          scrollToBottom();
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+            () => {},
+          );
+        }}
+        style={[
+          glassShadow,
+          {
+            width: SCROLL_TO_BOTTOM_SIZE,
+            height: SCROLL_TO_BOTTOM_SIZE,
+            borderRadius: SCROLL_TO_BOTTOM_SIZE / 2,
+          },
+        ]}
+      >
+        <LiquidGlassShell
+          interactive
+          fallbackColor={cardColor}
+          style={{
+            width: SCROLL_TO_BOTTOM_SIZE,
+            height: SCROLL_TO_BOTTOM_SIZE,
+            borderRadius: SCROLL_TO_BOTTOM_SIZE / 2,
+          }}
+          contentStyle={{
+            width: SCROLL_TO_BOTTOM_SIZE,
+            height: SCROLL_TO_BOTTOM_SIZE,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Icon
+            as={ArrowDownIcon}
+            size={16}
+            color={foreground ?? "#0d0d0d"}
+          />
+        </LiquidGlassShell>
+      </Pressable>
+    </View>
+  );
 };
 
 export { WaitingActionCard } from "@/components/assistant-ui/elements/waiting-action-card";
@@ -321,7 +407,8 @@ export const Thread: FC<ThreadProps> = ({
     metricsRef.current = { ...metricsRef.current, contentHeight: 0, scrollY: 0 };
     if (followFrameRef.current !== null) cancelAnimationFrame(followFrameRef.current);
     followFrameRef.current = null;
-  }, [conversationId]);
+    store.publish({ nearBottom: true, descent: 1 });
+  }, [conversationId, store]);
 
   const jumpTo = useCallback(
     (id: string) => {
@@ -346,6 +433,16 @@ export const Thread: FC<ThreadProps> = ({
     },
     [jumpTo],
   );
+
+  const scrollToBottom = useCallback(() => {
+    const { contentHeight, viewportHeight } = metricsRef.current;
+    followsEndRef.current = true;
+    listRef.current?.scrollToOffset({
+      offset: Math.max(0, contentHeight - viewportHeight),
+      animated: true,
+    });
+    store.publish({ nearBottom: true, descent: 1 });
+  }, [store]);
 
   // The list cannot scroll to a row it has not laid out yet: an instant jump
   // to the estimated offset gets it rendering near the row, and one retry,
@@ -374,6 +471,10 @@ export const Thread: FC<ThreadProps> = ({
   const publishDescent = useCallback(() => {
     const { contentHeight, viewportHeight, scrollY } = metricsRef.current;
     const remaining = contentHeight - viewportHeight - scrollY;
+    const nearBottom =
+      viewportHeight <= 0 || contentHeight <= viewportHeight
+        ? true
+        : remaining <= NEAR_BOTTOM_PX;
     const descent =
       viewportHeight > 0
         ? Math.round(
@@ -383,7 +484,10 @@ export const Thread: FC<ThreadProps> = ({
             ) * 100,
           ) / 100
         : 0;
-    if (descent !== store.getSnapshot().descent) store.publish({ descent });
+    const snapshot = store.getSnapshot();
+    if (descent !== snapshot.descent || nearBottom !== snapshot.nearBottom) {
+      store.publish({ descent, nearBottom });
+    }
   }, [store]);
 
   const onViewableItemsChanged = useCallback(
@@ -439,8 +543,10 @@ export const Thread: FC<ThreadProps> = ({
   }, []);
   const onManualScrollEnd = useCallback(() => {
     const { contentHeight, viewportHeight, scrollY } = metricsRef.current;
-    followsEndRef.current = contentHeight - viewportHeight - scrollY <= 32;
-  }, []);
+    followsEndRef.current =
+      contentHeight - viewportHeight - scrollY <= NEAR_BOTTOM_PX;
+    publishDescent();
+  }, [publishDescent]);
 
   const onListLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -470,8 +576,9 @@ export const Thread: FC<ThreadProps> = ({
       subscribe: store.subscribe,
       getSnapshot: store.getSnapshot,
       scrollToMessage,
+      scrollToBottom,
     }),
-    [store, scrollToMessage],
+    [store, scrollToBottom, scrollToMessage],
   );
 
   useEffect(() => {
@@ -548,11 +655,10 @@ export const Thread: FC<ThreadProps> = ({
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
             ListFooterComponent={notice ? <ThreadNotice {...notice} /> : undefined}
-            {...(Rail || followsKeyboard ? {
-              onContentSizeChange: onListContentSizeChange,
-              onLayout: onListLayout,
-              onScroll: onListScroll,
-            } : {})}
+            onContentSizeChange={onListContentSizeChange}
+            onLayout={onListLayout}
+            onScroll={onListScroll}
+            scrollEventThrottle={16}
             {...(Rail ? {
               onScrollToIndexFailed,
               onViewableItemsChanged,
@@ -584,13 +690,16 @@ export const Thread: FC<ThreadProps> = ({
         >
           <ThreadFollowupSuggestions />
           <ThreadSuggestedPrompts />
-          <ComposerDock
-            floats={floatsComposer}
-            waitingAction={waitingAction}
-            autoFocus={autoFocus && !signupBlocked}
-            focusNewChatKey={focusNewChatKey}
-            conversationId={conversationId}
-          />
+          <View className="relative" pointerEvents="box-none">
+            <ThreadScrollToBottom />
+            <ComposerDock
+              floats={floatsComposer}
+              waitingAction={waitingAction}
+              autoFocus={autoFocus && !signupBlocked}
+              focusNewChatKey={focusNewChatKey}
+              conversationId={conversationId}
+            />
+          </View>
         </View>
       ) : null}
       {Rail && (
