@@ -16,6 +16,7 @@ import {
   DrawerButton,
 } from "@/components/navigation/drawer-button";
 import { usePearlDrawer } from "@/components/navigation/drawer-context";
+import { useLockDrawerSwipeOnStackBack } from "@/components/navigation/drawer-swipe-sync";
 import { Icon } from "@/components/ui/icon";
 import { StackScreen } from "@/components/ui/stack-screen";
 
@@ -227,13 +228,15 @@ export function ScreenChrome({
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
+  const showDrawerLeading = leading === "drawer" || leading === "history";
+  const showCustomBack = leading === "back" && Boolean(onBack);
+  // Prefer stack back gesture over full-width drawer swipe when pushed.
+  useLockDrawerSwipeOnStackBack(leading === "back");
   // Liquid Glass forces a transparent header for layout; body starts at y=0
   // unless we pad by the measured nav+status height.
   const headerHeight = useHeaderHeight();
   const bodyPadTop =
     (IS_IOS ? headerHeight : 0) + contentPaddingTop;
-  const showDrawerLeading = leading === "drawer" || leading === "history";
-  const showCustomBack = leading === "back" && Boolean(onBack);
 
   const androidLeading = showDrawerLeading ? (
     <HistoryLeadingButton variant="disc" />

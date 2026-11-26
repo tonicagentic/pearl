@@ -17,6 +17,9 @@ import { usePearlScreenBackground } from "@/src/navigation-theme";
  * transforms; wrapping the nested stack broke Liquid Glass headers so they
  * sat under the Dynamic Island. The drawer still reveals this scene behind
  * the panel; we only dim while open.
+ *
+ * Nested back vs drawer swipe is locked from ScreenChrome via
+ * useLockDrawerSwipeOnStackBack (setOptions on the drawer parent).
  */
 export function DrawerScene({ children }: { readonly children: ReactNode }) {
   const progress = useDrawerProgress();

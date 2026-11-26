@@ -44,6 +44,9 @@ type HomeChatHandler = (options?: HomeChatSelectOptions) => void;
 type PearlDrawerContextValue = {
   readonly open: boolean;
   readonly setOpen: (open: boolean) => void;
+  /** False while a nested stack screen that can go back is focused. */
+  readonly swipeEnabled: boolean;
+  readonly setSwipeEnabled: (enabled: boolean) => void;
   readonly setHomeChatHandler: (handler: HomeChatHandler | null) => void;
   readonly notifyChatSelectedFromDrawer: (
     options?: HomeChatSelectOptions,
@@ -62,6 +65,7 @@ export function PearlDrawerProvider({
   readonly children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [swipeEnabled, setSwipeEnabled] = useState(true);
   const homeChatHandlerRef = useRef<HomeChatHandler | null>(null);
 
   const setHomeChatHandler = useCallback((handler: HomeChatHandler | null) => {
@@ -79,10 +83,17 @@ export function PearlDrawerProvider({
     () => ({
       open,
       setOpen,
+      swipeEnabled,
+      setSwipeEnabled,
       setHomeChatHandler,
       notifyChatSelectedFromDrawer,
     }),
-    [open, setHomeChatHandler, notifyChatSelectedFromDrawer],
+    [
+      open,
+      swipeEnabled,
+      setHomeChatHandler,
+      notifyChatSelectedFromDrawer,
+    ],
   );
 
   return (
@@ -157,6 +168,8 @@ export function usePearlDrawer() {
     setHomeChatHandler: ctx.setHomeChatHandler,
     onSelectChatFromDrawer,
     open: ctx.open,
+    swipeEnabled: ctx.swipeEnabled,
+    setSwipeEnabled: ctx.setSwipeEnabled,
     openSidebar: openDrawer,
     closeSidebar: closeDrawer,
     toggleSidebar: toggleDrawer,
