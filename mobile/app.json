@@ -3,7 +3,7 @@
     "name": "Pearl",
     "slug": "pearl",
     "owner": "tonicagentic",
-    "version": "0.1.8",
+    "version": "0.1.9",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -132,7 +132,7 @@
     },
     "extra": {
       "router": {},
-      "pearlOta": "36",
+      "pearlOta": "1",
       "eas": {
         "projectId": "43ee6005-c5ac-4b8f-b463-5d910681956d"
       }
