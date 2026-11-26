@@ -708,7 +708,8 @@ const MessageDayRule: FC = () => {
       break;
     }
     if (!shouldShowDaySeparator(current, previous)) return null;
-    return formatMessageDay(current);
+    // Day rule carries the clock — user bubbles stay clean.
+    return `${formatMessageDay(current)} · ${formatMessageTime(current)}`;
   });
   if (!label) return null;
   return (
@@ -843,7 +844,7 @@ const SpokenMessage: FC = () => {
               />
             )}
           </View>
-          <MessageTime />
+          {role === "assistant" ? <MessageTime /> : null}
           <SpokenActionBar />
         </View>
       </View>
@@ -1221,13 +1222,10 @@ const UserMessage: FC = () => {
         )}
       >
         <UserMessageAttachments />
-        <View className="max-w-[85%] shrink flex-row items-end gap-2">
-          <MessageTime className="shrink-0 pb-2" />
-          <View className="aui-user-message-content bg-muted min-w-0 shrink rounded-2xl px-4 py-2">
-            <MessagePrimitive.Parts
-              components={{ Text: UserText, Image, File }}
-            />
-          </View>
+        <View className="aui-user-message-content bg-muted max-w-[85%] min-w-0 shrink rounded-2xl px-4 py-2">
+          <MessagePrimitive.Parts
+            components={{ Text: UserText, Image, File }}
+          />
         </View>
         {branchCount > 1 ? (
           <View className="aui-user-message-footer flex-row items-center justify-end gap-2">
