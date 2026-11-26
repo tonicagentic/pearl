@@ -1,4 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type ElementRef,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +25,11 @@ import {
   Trash2Icon,
 } from "lucide-react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  LibraryImageViewer,
+  measureViewerOrigin,
+  type ViewerOrigin,
+} from "@/components/library/library-image-viewer";
 import { usePearlDrawer } from "@/components/navigation/drawer-context";
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
 import { Icon } from "@/components/ui/icon";
@@ -61,6 +72,9 @@ export function LibraryScreen() {
   const [projectFilter, setProjectFilter] = useState<ProjectFilter>("all");
   const [busyPath, setBusyPath] = useState<string | null>(null);
   const [busyQuoteId, setBusyQuoteId] = useState<string | null>(null);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [viewerOrigin, setViewerOrigin] = useState<ViewerOrigin | null>(null);
+  const tileRefs = useRef(new Map<string, ElementRef<typeof View> | null>());
   const search = useStackSearch();
   const { width } = useWindowDimensions();
   const backgroundColor = usePearlScreenBackground();
@@ -196,6 +210,23 @@ export function LibraryScreen() {
     } finally {
       setBusyPath(null);
     }
+  }, []);
+
+  const openImageViewer = useCallback(
+    async (item: ArtifactDto, index: number) => {
+      const node = tileRefs.current.get(item.pathname);
+      const origin = await measureViewerOrigin(
+        node && typeof node.measureInWindow === "function" ? node : null,
+      );
+      setViewerOrigin(origin);
+      setViewerIndex(index);
+    },
+    [],
+  );
+
+  const closeImageViewer = useCallback(() => {
+    setViewerIndex(null);
+    setViewerOrigin(null);
   }, []);
 
   const confirmDelete = useCallback(
@@ -506,13 +537,12 @@ export function LibraryScreen() {
                     gap,
                   }}
                 >
-                  {images.map((item) => (
-                    <Pressable
+                  {images.map((item, index) => (
+                    <View
                       key={item.pathname}
-                      accessibilityRole="button"
-                      accessibilityLabel={item.basename}
-                      onPress={() => void openItem(item)}
-                      onLongPress={() => confirmDelete(item)}
+                      ref={(node) => {
+                        tileRefs.current.set(item.pathname, node);
+                      }}
                       style={{
                         width: tile,
                         borderRadius: 12,
@@ -520,25 +550,27 @@ export function LibraryScreen() {
                         backgroundColor: mutedColor,
                       }}
                     >
-                      <Image
-                        source={{
-                          uri: artifactContentUrl(item.pathname),
-                          headers: artifactAuthHeaders(),
-                        }}
-                        style={{ width: tile, height: tile }}
-                        resizeMode="cover"
-                      />
-                      <View className="px-2 py-1.5">
-                        <Text variant="caption" numberOfLines={1}>
-                          {item.basename}
-                        </Text>
-                      </View>
-                      {busyPath === item.pathname ? (
-                        <View className="absolute inset-0 items-center justify-center bg-background/50">
-                          <ActivityIndicator />
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={item.basename}
+                        onPress={() => void openImageViewer(item, index)}
+                        onLongPress={() => confirmDelete(item)}
+                      >
+                        <Image
+                          source={{
+                            uri: artifactContentUrl(item.pathname),
+                            headers: artifactAuthHeaders(),
+                          }}
+                          style={{ width: tile, height: tile }}
+                          resizeMode="cover"
+                        />
+                        <View className="px-2 py-1.5">
+                          <Text variant="caption" numberOfLines={1}>
+                            {item.basename}
+                          </Text>
                         </View>
-                      ) : null}
-                    </Pressable>
+                      </Pressable>
+                    </View>
                   ))}
                 </View>
               </View>
@@ -605,6 +637,16 @@ export function LibraryScreen() {
             ) : null}
           </ScrollView>
         )}
+
+        {viewerIndex != null ? (
+          <LibraryImageViewer
+            images={images}
+            index={viewerIndex}
+            origin={viewerOrigin}
+            onClose={closeImageViewer}
+            onIndexChange={setViewerIndex}
+          />
+        ) : null}
       </View>
     </ScreenChrome>
   );
