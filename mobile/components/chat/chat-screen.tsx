@@ -71,6 +71,10 @@ import { DEFAULT_MODEL_KEY, getModelSelection } from "@/src/model-selection";
 import { getRemoteAgentSelection } from "@/src/remote-agent-selection";
 import { AGENT_URL, getAuthCookie } from "@/src/eve-transport";
 import { agentDebugLog, errorSummary, lastTextLength } from "@/src/agent-debug-log";
+import { formatEveClientError } from "@/src/chat/eve-error";
+import { resolveTurnPolicy } from "@/src/chat/prepare-send";
+import { deriveTurnRunning, isZombieBusy } from "@/src/chat/turn-running";
+import { activeTurn } from "eve/events";
 import type { WaitingAction } from "@/components/assistant-ui/elements/waiting-action-card";
 import { SubagentTranscriptSheet } from "@/components/assistant-ui/elements/subagent-transcript-sheet";
 import { createAttachmentMarker, toEveTurn } from "@/src/attachment-content";
@@ -441,9 +445,17 @@ export function ChatScreen({
   const storeError = snapshot.error;
   const events = snapshot.events;
   const agents = snapshot.agents;
+  // Freeze followed-child snapshots when the parent turn is settled so
+  // following↔caught-up ticks do not rebuild TaskGroup / the aui adapter.
+  const turnOpen = activeTurn(snapshot.view) !== undefined;
+  const agentsForUiRef = useRef(agents);
+  if (turnOpen) {
+    agentsForUiRef.current = agents;
+  }
+  const agentsForUi = turnOpen ? agents : agentsForUiRef.current;
   const conversation = useMemo(
-    () => ({ messages, agents }),
-    [messages, agents],
+    () => ({ messages, agents: agentsForUi }),
+    [messages, agentsForUi],
   );
   const waitKind = useMemo(
     () => pendingWaitKind(conversation),
@@ -456,7 +468,12 @@ export function ChatScreen({
   const lastAssistantStreaming =
     messages[messages.length - 1]?.role === "assistant" &&
     messages[messages.length - 1]?.metadata?.status === "streaming";
-  const isRunning = isBusy || Boolean(lastAssistantStreaming);
+  // Prefer activeTurn(view); message heuristics cover optimistic paint gaps.
+  const isRunning = deriveTurnRunning({
+    status,
+    messages,
+    view: snapshot.view,
+  });
   const hasError = Boolean(storeError);
   const confirmed = localSend ? hasConfirmedSend(events, localSend) : false;
   const waitingForAction = hasPendingAction(conversation);
@@ -668,186 +685,29 @@ export function ChatScreen({
     liveReplyVersion,
   ]);
 
-  const textLen = lastTextLength(messages);
+  // Orphan busy: status busy with no activeTurn. Never cancel() to clear it.
   // #region agent log
-  const turnDebugKey = `${status}|${isRunning}|${hasError}|${composerBlocked}|${unresolvedSend}|${expectingAssistant}|${localSend?.phase ?? "-"}|${messages.length}|${Math.floor(textLen / 200)}|${errorSummary(storeError) ?? ""}`;
-  const turnDebugKeyRef = useRef("");
-  if (turnDebugKey !== turnDebugKeyRef.current) {
-    turnDebugKeyRef.current = turnDebugKey;
-    agentDebugLog("chat-screen.tsx:turn", "turn state", "E", {
-      status,
-      isRunning,
-      hasError,
-      error: errorSummary(storeError),
-      composerBlocked,
-      unresolvedSend,
-      expectingAssistant,
-      localPhase: localSend?.phase ?? null,
-      messages: messages.length,
-      textLen,
-      lastRole: messages[messages.length - 1]?.role ?? null,
-    });
-  }
-  // #endregion
-
-  const hitlDebugKey = useRef("");
+  const orphanBusyLogRef = useRef(false);
   useEffect(() => {
-    const last = messages[messages.length - 1];
-    const partSummary =
-      last?.role === "assistant"
-        ? last.parts.map((part) => {
-            if (part.type === "tool") {
-              const input = part.state === "streaming" ? undefined : part.input;
-              const inputOptions =
-                input &&
-                typeof input === "object" &&
-                !Array.isArray(input) &&
-                Array.isArray((input as { options?: unknown }).options)
-                  ? (input as { options: readonly unknown[] }).options.length
-                  : 0;
-              const request = part.interaction?.request;
-              return {
-                type: "tool" as const,
-                name: part.name,
-                state: part.state,
-                interactionStatus: part.interaction?.status ?? null,
-                kind: request?.kind ?? null,
-                display: request?.display ?? null,
-                optionCount: request?.options?.length ?? 0,
-                allowFreeform: request?.allowFreeform ?? null,
-                inputOptionCount: inputOptions,
-              };
-            }
-            if (part.type === "interaction") {
-              return {
-                type: "interaction" as const,
-                status: part.status,
-                kind: part.request.kind,
-                display: part.request.display ?? null,
-                optionCount: part.request.options?.length ?? 0,
-                allowFreeform: part.request.allowFreeform ?? null,
-                callName: part.call?.name ?? null,
-              };
-            }
-            return { type: part.type };
-          })
-        : [];
-    const openEvents: {
-      kind: string | null;
-      display: string | null;
-      optionCount: number;
-      allowFreeform: boolean | null;
-      hasOrigin: boolean;
-    }[] = [];
-    const openById = new Map<string, (typeof openEvents)[number]>();
-    for (const event of events) {
-      if (event.type === "interaction.opened") {
-        const request = event.data.request;
-        openById.set(event.data.interactionId, {
-          kind: request.kind ?? null,
-          display: request.display ?? null,
-          optionCount: request.options?.length ?? 0,
-          allowFreeform: request.allowFreeform ?? null,
-          hasOrigin: event.data.origin != null,
-        });
-        continue;
-      }
-      if (event.type === "interaction.settled") {
-        openById.delete(event.data.interactionId);
-        continue;
-      }
-      if (event.type === "turn.settled" || event.type === "session.ended") {
-        openById.clear();
-      }
+    const zombie = isZombieBusy({
+      status,
+      messages,
+      view: snapshot.view,
+    });
+    if (!zombie) {
+      orphanBusyLogRef.current = false;
+      return;
     }
-    openEvents.push(...openById.values());
-    const agentSummary = agents
-      ? Object.values(agents).map((agent) => ({
-          name: agent.name,
-          observation: agent.observation.status,
-        }))
-      : [];
-    const projectedLast = projectedMessages[projectedMessages.length - 1];
-    const projectedContent = Array.isArray(projectedLast?.content)
-      ? projectedLast.content
-      : [];
-    const projectedTools = projectedContent
-      .filter((part) => part.type === "tool-call")
-      .map((part) => ({
-        toolName: part.toolName,
-        approvalDisplay:
-          part.type === "tool-call" ? (part.approval?.display ?? null) : null,
-        optionCount:
-          part.type === "tool-call" ? (part.approval?.options?.length ?? 0) : 0,
-      }));
-    const snapshot = {
-      storeStatus: status,
-      isRunning,
-      isBusy,
-      waitKind,
-      composerBlocked,
-      onlyTextQuestionsPending,
-      waitingKind: waitingAction?.kind ?? null,
-      lastRole: last?.role ?? null,
-      lastMetaStatus: last?.metadata?.status ?? null,
-      projectedStatus: projectedLast?.status ?? null,
-      pending: pendingApprovals.map((item) => ({
-        kind: item.kind,
-        display: item.display,
-        optionCount: item.options.length,
-        toolName: item.toolName,
-        allowFreeform: item.allowFreeform,
-      })),
-      parts: partSummary,
-      openEvents,
-      agents: agentSummary,
-      projectedTools,
-    };
-    const interesting =
-      snapshot.pending.length > 0 ||
-      snapshot.openEvents.length > 0 ||
-      snapshot.waitKind != null ||
-      snapshot.waitingKind != null ||
-      partSummary.some(
-        (part) => part.type === "tool" || part.type === "interaction",
-      );
-    if (!interesting) return;
-    const key = JSON.stringify(snapshot);
-    if (hitlDebugKey.current === key) return;
-    hitlDebugKey.current = key;
-    // #region agent log
-    console.log("[hitl-debug]", JSON.stringify(snapshot));
-    fetch("http://127.0.0.1:7561/ingest/a354f76e-2698-4aab-9f65-8b6f93041cc1", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "daf783",
-      },
-      body: JSON.stringify({
-        sessionId: "daf783",
-        runId: "pre-fix",
-        hypothesisId: "H1-H5",
-        location: "mobile/components/chat-screen.tsx:waitingAction",
-        message: "HITL wait classification",
-        data: snapshot,
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-  }, [
-    agents,
-    composerBlocked,
-    events,
-    isBusy,
-    isRunning,
-    messages,
-    onlyTextQuestionsPending,
-    pendingApprovals,
-    projectedMessages,
-    status,
-    waitKind,
-    waitingAction,
-  ]);
+    if (orphanBusyLogRef.current) return;
+    orphanBusyLogRef.current = true;
+    agentDebugLog("chat-screen.tsx:zombie", "orphan busy (no cancel)", "H", {
+      status,
+      messages: messages.length,
+      hasActiveTurn: turnOpen,
+      runId: "post-fix",
+    });
+  }, [status, messages, snapshot.view, turnOpen]);
+  // #endregion
 
   useEffect(() => {
     if (!expectingAssistant) return;
@@ -986,9 +846,25 @@ export function ChatScreen({
       isDisabled: status === "resuming",
       // HITL, in-flight prepare, or unconfirmed prior turn — don't invite a throw.
       isSendDisabled: composerBlocked || unresolvedSend || quickStreaming,
+      // Allow send-while-busy via turnPolicy queue (composer checks capabilities.queue).
+      capabilities: { cancel: true, queue: true },
       onNew: async (message: AppendMessage) => {
         const ctx = sendCtxRef.current;
         const { store: activeStore } = ctx;
+        // #region agent log
+        agentDebugLog("chat-screen.tsx:send", "onNew entered", "H", {
+          status: activeStore.snapshot.status,
+          zombie: isZombieBusy({
+            status: activeStore.snapshot.status,
+            messages: activeStore.snapshot.messages,
+          }),
+          composerBlocked: ctx.composerBlocked,
+          unresolvedSend: ctx.unresolvedSend,
+          textLen:
+            typeof message.content === "string" ? message.content.length : 0,
+          runId: "post-fix",
+        });
+        // #endregion
         setSendError(null);
         if (needsSignup) {
           setSignupOpen(true);
@@ -1134,9 +1010,18 @@ export function ChatScreen({
         setExpectingAssistantByStore((current) => new Map(current).set(activeStore, true));
         // Light tick as the bubble appears; skip validation failures above.
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        const turnPolicy = resolveTurnPolicy({
+          queueEnabled: true,
+          turnOpen: activeTurn(activeStore.snapshot.view) !== undefined,
+        });
         const sendPayload = {
           message: outgoing,
-          clientContext: buildTurnClientContext(projectIdForTurn, ctx.activeChatId, ctx.activeCustomAgentId),
+          clientContext: buildTurnClientContext(
+            projectIdForTurn,
+            ctx.activeChatId,
+            ctx.activeCustomAgentId,
+          ),
+          ...(turnPolicy ? { turnPolicy } : {}),
         };
         const result = await sendWithRetry(
           {
@@ -1445,6 +1330,12 @@ export function ChatScreen({
     Boolean(localSend?.outgoing) &&
     (localSend?.phase === "uncertain" ||
       (sendError?.store === store && localSend != null));
+  const unifiedEveError = formatEveClientError({
+    storeError,
+    connectionError,
+    sendError: sendError?.store === store ? sendError.message : null,
+    persistenceError,
+  });
   const notice = offline
     ? null
     : connectionError
@@ -1475,6 +1366,8 @@ export function ChatScreen({
         ? { text: "Still sending your last message…" }
         : sendError?.store === store
           ? { text: sendError.message }
+          : unifiedEveError && !pendingMessage
+            ? { text: unifiedEveError }
           : pendingMessage && !localSend && !hasLoadedHistory
             ? {
                 text: "Couldn't confirm delivery. Open this chat again when you're online.",

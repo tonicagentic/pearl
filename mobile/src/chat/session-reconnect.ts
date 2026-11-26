@@ -13,6 +13,9 @@ export type ReconnectResult =
  * when no turn is active yet it waits and aborts the next one. Production
  * threads then settle as cancelled and later messages are ignored.
  * Does not call newSession — that is recoverDeadSession's job.
+ * Does not call cancel() — that would abort a live turn. After followWhile
+ * closes the root stream, resume() reopens observation from the cursor;
+ * Delivery tracking for a just-accepted send remains on store.send / follow().
  */
 export async function reconnectSession(
   store: SessionStore,
@@ -41,10 +44,21 @@ export async function reconnectSession(
     try {
       await store.resume();
       // #region agent log
+      const snap = store.snapshot;
+      const events = snap.events ?? [];
+      const messages = snap.messages ?? [];
+      const tail = events.slice(-6).map((event) => event.type);
       agentDebugLog("session-reconnect.ts:resume", "resumed without cancel", "F", {
-        status,
+        statusBefore: status,
+        statusAfter: snap.status,
         attempt,
-        runId: "post-fix",
+        eventCount: events.length,
+        lastEventTypes: tail,
+        lastMsgStatus:
+          messages.at(-1)?.role === "assistant"
+            ? (messages.at(-1)?.metadata?.status ?? null)
+            : null,
+        runId: "stuck-busy",
       });
       // #endregion
       return { ok: true };

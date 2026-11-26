@@ -15,7 +15,6 @@ import {
   type ClientSessionState,
   type SessionStreamEvent,
 } from "eve/client";
-
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
 import {
   getRemoteAgentSelection,
@@ -35,6 +34,7 @@ import type { LiveSpokenDraft, SpokenTurn } from "../../lib/chat/spoken-turns";
 import {
   appendChatEvents,
   attachChatToProject,
+  checkSendLimit,
   createChat,
   deleteChat as deleteChatRequest,
   getChat,
@@ -51,6 +51,13 @@ import {
   type ChatPresence,
   type CustomAgentRef,
 } from "./chats-client";
+import {
+  ensureObservation,
+  releaseObservation,
+  syncObservationToView,
+} from "./chat/observe-lifecycle";
+import { enrichPrepareSendPayload } from "./chat/prepare-send";
+import { mobileSessionStoreOptions } from "./chat/session-store-options";
 import { mergeEventsForSnapshot } from "../../lib/chat/eve-session-recovery";
 import { repairSessionHydration } from "../../lib/chat/hydration-prefix";
 import { snapStreamingReveal } from "../../lib/streaming-text-reveal";
@@ -388,18 +395,19 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
             (chat.session as ClientSessionState).streamIndex,
         }
       : undefined;
-    const store = new SessionStore({
-      baseUrl: AGENT_URL,
-      // Follow coder / researcher / etc. child sessions so their approvals and
-      // live transcripts reach the parent thread (bounded by eve's depth caps).
-      followAgents: true,
-      headers: () => {
-        const credential = getAuthCookie();
-        return credential ? { authorization: `Bearer ${credential}` } : ({} as Record<string, string>);
-      },
-      ...(repaired.events.length ? { initialEvents: repaired.events } : {}),
-      ...(initialSession ? { initialSession } : {}),
-    });
+    const store = new SessionStore(
+      mobileSessionStoreOptions({
+        baseUrl: AGENT_URL,
+        headers: () => {
+          const credential = getAuthCookie();
+          return credential
+            ? { authorization: `Bearer ${credential}` }
+            : ({} as Record<string, string>);
+        },
+        ...(repaired.events.length ? { initialEvents: repaired.events } : {}),
+        ...(initialSession ? { initialSession } : {}),
+      }),
+    );
     bindings.set(store, {
       id: chat?.id ?? null,
       title: chat?.title ?? "New chat",
@@ -557,23 +565,14 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       }
     };
 
-    binding.stopObserving?.();
-    binding.stopObserving = store.observe();
+    // Hold observe while a turn is open; release when settled so child
+    // AgentStreamFollower does not keep catch-up-polling (followWhile alone
+    // closes only the root stream while observe() is held).
+    ensureObservation(binding, () => store.observe());
+    const syncObs = () =>
+      syncObservationToView(binding, store.snapshot.view, () => store.observe());
     store.setCallbacks({
       onEvent: (event) => {
-        // #region agent log
-        if (event.type !== "content.delta" || binding.eventIndex % 40 === 0) {
-          agentDebugLog("chat-context.tsx:onEvent", event.type, "A", {
-            status: store.snapshot.status,
-            eventIndex: binding.eventIndex,
-            deltaChars:
-              event.type === "content.delta" &&
-              typeof (event.data as { delta?: unknown }).delta === "string"
-                ? (event.data as { delta: string }).delta.length
-                : undefined,
-          });
-        }
-        // #endregion
         if (event.type === "content.delta") {
           const data = event.data as {
             readonly delta?: unknown;
@@ -624,10 +623,12 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
             binding.catchUpHold = [];
             clearLiveReplyText();
           }
+          syncObs();
           traceStream("settled");
         } else if (event.type === "session.ended") {
           binding.catchUpHold = [];
           clearLiveReplyText();
+          syncObs();
         }
         if (!binding.id) return;
         binding.batch.push({ event, eventIndex: binding.eventIndex++ });
@@ -649,12 +650,18 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         }
       },
       onFinish: (snapshot) => {
+        syncObs();
         // #region agent log
         agentDebugLog("chat-context.tsx:onFinish", "stream finished", "B", {
           status: snapshot.status,
           events: snapshot.events.length,
           messages: snapshot.messages.length,
           lastRole: snapshot.messages.at(-1)?.role ?? null,
+          lastEventTypes: snapshot.events.slice(-8).map((e) => e.type),
+          lastMsgStatus:
+            snapshot.messages.at(-1)?.role === "assistant"
+              ? (snapshot.messages.at(-1)?.metadata?.status ?? null)
+              : null,
           textLen: lastTextLength(snapshot.messages),
           error: errorSummary(snapshot.error),
           pending: Boolean(binding.pendingMessage),
@@ -751,6 +758,9 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         binding.sendPrepared = false;
         binding.sendStartedAt = performance.now();
         beginStreamTrace("send");
+        // Re-attach observation before the turn opens (may have been released
+        // after the previous settle so child followers stop polling).
+        ensureObservation(binding, () => store.observe());
         // An attachment-only turn uses a safe title/marker. Neither a
         // correlation token nor pasted document text belongs in chat metadata.
         const message = pendingMessageLabel(input.message);
@@ -823,7 +833,12 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         }
         traceSend(binding, "pending marker saved");
         if (binding.id) touchRetained(binding.id, store);
-        return input;
+        return enrichPrepareSendPayload(input, {
+          checkSendLimit,
+          projectId: binding.projectId ?? projectId,
+          chatId: binding.id,
+          customAgentId: binding.customAgent?.id ?? activeCustomAgentRef.current?.id ?? null,
+        });
       },
     });
     // An attached session can have an unfinished turn after the app was killed.
@@ -837,10 +852,12 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     }
 
     if (store.snapshot.session) {
+      ensureObservation(binding, () => store.observe());
       void store.resume().then(
         () => {
           if (activeStoreRef.current !== store) return;
           applyCatchUpFlush(store, binding);
+          syncObs();
           if (binding.id && activeChatIdRef.current === binding.id) {
             markActiveChatRead(binding.id);
           }
@@ -928,11 +945,19 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     async (source?: SessionStore): Promise<boolean> => {
       const target = source ?? activeStoreRef.current;
       if (!target?.snapshot.session) return true;
+      const binding = bindings.get(target);
+      if (binding) ensureObservation(binding, () => target.observe());
       const result = await reconnectSession(target);
       if (result.ok) {
         if (activeStoreRef.current === target) {
-          const binding = bindings.get(target);
-          if (binding) applyCatchUpFlush(target, binding);
+          if (binding) {
+            applyCatchUpFlush(target, binding);
+            syncObservationToView(
+              binding,
+              target.snapshot.view,
+              () => target.observe(),
+            );
+          }
           setConnectionError(null);
         }
         return true;
@@ -1122,6 +1147,8 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
   );
 
   const newChat = useCallback(() => {
+    // New chat only clears local UI + builds a fresh SessionStore. Do not
+    // store.end() — the prior server session may still be useful in Recents.
     const priorChatId = activeChatIdRef.current;
     ++selectionGeneration.current;
     activeChatIdRef.current = null;
@@ -1150,6 +1177,11 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     activeStoreRef.current = nextStore;
     setStore(nextStore);
     pruneIdleStore(prior);
+    // Prewarm the empty writer once auth is present (signed-in effect also
+    // prewarms; this covers in-session New Chat).
+    if (getAuthCookie()) {
+      void nextStore.prewarm().catch(() => {});
+    }
   }, [buildStore, pruneIdleStore]);
 
   const saveSpokenTurns = useCallback(
@@ -1197,14 +1229,24 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
 
   const deleteChat = useCallback(
     async (chatId: string) => {
+      // Retire the server session when we still hold a writer, then drop Pearl
+      // persistence. New Chat must not end(); delete must.
+      const retained = retainedStores.get(chatId);
+      if (retained) {
+        const binding = bindings.get(retained);
+        releaseObservation(binding ?? { stopObserving: null });
+        if (retained.snapshot.session) {
+          await retained.end().catch(() => {});
+        }
+        retainedStores.delete(chatId);
+      }
       await deleteChatRequest(chatId);
       setChats((current) => current.filter((chat) => chat.id !== chatId));
-      retainedStores.delete(chatId);
       if (activeChatIdRef.current === chatId) {
         newChat();
       }
     },
-    [newChat, retainedStores],
+    [bindings, newChat, retainedStores],
   );
 
   const renameChat = useCallback(
@@ -1402,6 +1444,15 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       void active.cancel().catch(() => {});
     }
   }, [bindings, retainedStores]);
+
+  // Prewarm empty writer once signed in (no session yet).
+  useEffect(() => {
+    if (!signedIn || offline) return;
+    const active = activeStoreRef.current;
+    if (!active || active.snapshot.session) return;
+    if (active.snapshot.status === "resuming") return;
+    void active.prewarm().catch(() => {});
+  }, [signedIn, offline, store]);
 
   // The auth provider restores the bearer asynchronously; load when signed in.
   // On sign-out (or provider remount via accountKey), stop streams so a stale

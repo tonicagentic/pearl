@@ -445,3 +445,32 @@ export async function deleteChat(chatId: string): Promise<void> {
     throw new Error(`Failed to delete the chat (${response.status}).`);
   }
 }
+
+export type SendLimitResult =
+  | { readonly allowed: true }
+  | {
+      readonly allowed: false;
+      readonly message: string;
+      readonly retryAfter: number;
+    };
+
+/** prepareSend rate limit — same window as web checkSendLimitAction. */
+export async function checkSendLimit(input?: {
+  readonly message?: string;
+}): Promise<SendLimitResult> {
+  const response = await fetch(`${AGENT_URL}/api/chats/send-limit`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(
+      input?.message !== undefined ? { message: input.message } : {},
+    ),
+  });
+  if (response.status === 401) {
+    sessionInvalid();
+    throw new Error("Sign in to send messages.");
+  }
+  if (!response.ok) {
+    throw new Error(`Could not check send limit (${response.status}).`);
+  }
+  return (await response.json()) as SendLimitResult;
+}

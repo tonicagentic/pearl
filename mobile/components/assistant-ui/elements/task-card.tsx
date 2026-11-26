@@ -120,6 +120,7 @@ export function TaskCard({
   result,
   className,
   onPress,
+  animateEnter = false,
 }: {
   readonly label: string;
   readonly modelLabel?: string | undefined;
@@ -128,9 +129,11 @@ export function TaskCard({
   readonly result?: ReactNode | undefined;
   readonly className?: string;
   readonly onPress?: () => void;
+  /** Entering motion only for live rows — remounts of settled cards flash otherwise. */
+  readonly animateEnter?: boolean;
 }) {
   const motion = useMotion();
-  const nativeMotion = motion && Platform.OS !== "web";
+  const nativeMotion = motion && Platform.OS !== "web" && animateEnter;
   return (
     <Animated.View
       entering={nativeMotion ? stepEnter : undefined}

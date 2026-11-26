@@ -1,4 +1,16 @@
-// Temporary debug-session logger. Removed after the long-message failure is confirmed.
+// Temporary debug-session logger. Removed after the freeze/send failure is confirmed.
+
+/** Only these messages may hit the ingest server — everything else is dropped. */
+const ALLOW = new Set([
+  "orphan busy (no cancel)",
+  "onNew entered",
+  "send finished",
+  "clear zombie busy before send",
+  "zombie cancel failed",
+]);
+
+let postsThisMinute = 0;
+let minuteStartedAt = 0;
 
 export function agentDebugLog(
   location: string,
@@ -7,6 +19,14 @@ export function agentDebugLog(
   data: Record<string, unknown>,
 ): void {
   // #region agent log
+  if (!ALLOW.has(message)) return;
+  const now = Date.now();
+  if (now - minuteStartedAt > 60_000) {
+    minuteStartedAt = now;
+    postsThisMinute = 0;
+  }
+  if (postsThisMinute >= 30) return;
+  postsThisMinute += 1;
   try {
     fetch("http://127.0.0.1:7904/ingest/0c65059b-c338-403a-aef8-13a3f3dbe2b2", {
       method: "POST",
@@ -20,13 +40,12 @@ export function agentDebugLog(
         message,
         hypothesisId,
         data,
-        timestamp: Date.now(),
+        timestamp: now,
       }),
     }).catch(() => {});
   } catch {
     // Jest and other non-browser callers have no fetch.
   }
-  console.info(`[c19eb0] ${hypothesisId} ${location} ${message}`, data);
   // #endregion
 }
 

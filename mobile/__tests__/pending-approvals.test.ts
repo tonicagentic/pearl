@@ -291,4 +291,52 @@ describe("pending approvals across the thread", () => {
     expect(hasPendingAction({ messages: [failed] })).toBe(false);
     expect(getPendingApprovals({ messages: [failed] })).toEqual([]);
   });
+
+  test("ignores open child authorization when the parent coder was cancelled", () => {
+    const parent = assistant([
+      {
+        type: "tool",
+        callId: "call_dead_coder",
+        name: "coder",
+        label: "coder",
+        kind: "agent",
+        stepIndex: 0,
+        state: "cancelled",
+      },
+    ]);
+    const childAssistant = assistant([
+      {
+        type: "interaction",
+        interactionId: "child-auth",
+        turnId: "turn_child",
+        stepIndex: 0,
+        status: "open",
+        request: {
+          kind: "sign-in",
+          prompt: "Sign in to GitHub",
+          title: "GitHub",
+          signIn: { name: "github", url: "https://example.test/auth" },
+        },
+      },
+    ]);
+    const data = {
+      messages: [parent],
+      agents: {
+        child: {
+          sessionId: "sess_child",
+          name: "coder",
+          callId: "call_dead_coder",
+          owner: { callId: "call_dead_coder" },
+          observation: {
+            status: "following" as const,
+            conversation: { messages: [childAssistant], view: {} as never },
+            position: 1,
+            caughtUp: false,
+          },
+        },
+      },
+    };
+    expect(hasPendingAction(data)).toBe(false);
+    expect(pendingWaitKind(data)).toBe(null);
+  });
 });

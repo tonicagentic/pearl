@@ -18,6 +18,8 @@ import {
 } from "@/lib/agent/subagent-runs";
 import {
   deriveSubagentRowContent,
+  SUBAGENT_CANCELLED_LABEL,
+  SUBAGENT_WORKING_ACTIVITY,
   subagentRowTitle,
   WAITING_FOR_SUBAGENT_LABEL,
 } from "@/lib/chat/subagent-row";
@@ -79,9 +81,13 @@ export function SubagentRunsProvider({ children }: { children: ReactNode }) {
 export const DELEGATION_TOOLS = new Set([
   "agent",
   "coder",
+  "designer",
   "editor",
+  "list-builder",
+  "mail",
   "researcher",
   "reviewer",
+  "updates",
 ]);
 
 type ToolCallPartState = {
@@ -90,6 +96,8 @@ type ToolCallPartState = {
   readonly toolCallId?: string;
   readonly args?: unknown;
   readonly status: { readonly type: string };
+  readonly isError?: boolean;
+  readonly result?: unknown;
 };
 
 function isDelegationPart(part: unknown): part is ToolCallPartState {
@@ -106,7 +114,18 @@ function delegationMessage(part: ToolCallPartState): string | undefined {
   return typeof args.message === "string" ? args.message : undefined;
 }
 
+function partLooksCancelled(part: ToolCallPartState): boolean {
+  if (!part.isError) return false;
+  const result = part.result;
+  if (!result || typeof result !== "object") return false;
+  const error = (result as { error?: unknown }).error;
+  return typeof error === "string" && /cancel/i.test(error);
+}
+
 function taskState(part: ToolCallPartState, run?: SubagentRun): TaskCardState {
+  if (run?.state === "cancelled" || partLooksCancelled(part)) {
+    return "cancelled";
+  }
   // The event stream is the source of truth for background runs; the part
   // status only covers delegations with no observed run (older threads).
   if (run) {
@@ -160,6 +179,7 @@ function coderResult(input: {
   readonly isCoder: boolean;
 }): ReactNode {
   const { state, run, agent, isCoder } = input;
+  if (state === "cancelled") return SUBAGENT_CANCELLED_LABEL;
   if (state === "failed") {
     return "no result arrived — the run was likely interrupted; ask again";
   }
@@ -209,6 +229,9 @@ export function TaskGroup({
         );
         const row = deriveSubagentRowContent({ title, child: agent });
         const live = state === "working" || state === "waiting";
+        const activity = live
+          ? (row.activity ?? SUBAGENT_WORKING_ACTIVITY)
+          : undefined;
         const watches = isCoder ? coderWatches(agent) : [];
         return (
           <div
@@ -218,7 +241,7 @@ export function TaskGroup({
             <TaskCard
               label={row.title}
               modelLabel={row.modelLabel}
-              activity={live ? row.activity : undefined}
+              activity={activity}
               state={state}
               result={coderResult({ state, run, agent, isCoder })}
             />

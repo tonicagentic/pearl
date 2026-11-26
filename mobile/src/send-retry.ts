@@ -1,5 +1,6 @@
 import type { SessionStore } from "eve/client";
 import { isEveSessionInactive } from "../../lib/chat/eve-session-recovery";
+import { agentDebugLog, errorSummary } from "./agent-debug-log";
 import { reconnectSession } from "./session-reconnect";
 import { shouldRestoreUnsentDraft } from "./send-feedback";
 
@@ -83,6 +84,8 @@ export async function sendWithRetry(
     }
 
     try {
+      // Never cancel() to clear orphan busy — that reopens the stream and
+      // restarts AgentStreamFollower. Observation release handles idle.
       const delivery = await store.send(payload);
 
       if (

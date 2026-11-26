@@ -8,6 +8,8 @@ function fakeStore(status: string, hasSession: boolean) {
         return current;
       },
       session: hasSession ? { sessionId: "s1" } : null,
+      events: [] as const,
+      messages: [] as const,
     },
     cancel: jest.fn(async () => {
       current = "idle";

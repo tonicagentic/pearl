@@ -6,6 +6,29 @@ jest.mock("@/components/assistant-ui/elements/surfaces", () => ({
   webLiveRegion: undefined,
 }));
 
+// eve ships ESM; Jest stays on CJS for RN. Stub the selectors we use in tests.
+jest.mock("eve/events", () => ({
+  emptySessionView: () => ({
+    session: { status: "active", latestTurnId: undefined },
+    turns: {},
+    tasks: {},
+    calls: {},
+    interactions: {},
+    changes: {},
+    deliveries: {},
+  }),
+  activeTurn: (view: { turns?: Record<string, { status?: string }>; session?: { latestTurnId?: string } }) => {
+    const id = view.session?.latestTurnId;
+    if (!id) return undefined;
+    const turn = view.turns?.[id];
+    if (!turn || turn.status === "settled") return undefined;
+    return turn;
+  },
+  idle: () => true,
+  openInteractions: () => [],
+  waiting: () => undefined,
+}));
+
 // WaitingActionCard falls back to View when motion is off; keep a stub so
 // importing react-native-reanimated does not load native worklets in Jest.
 jest.mock("react-native-reanimated", () => {

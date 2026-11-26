@@ -88,23 +88,13 @@ const LIST_BULLET = "\u25CF";
 const markdownLayoutSeen = new Set<string>();
 
 function logMarkdownBox(
-  path: string,
-  width: number,
-  height: number,
-  textLen: number,
+  _path: string,
+  _width: number,
+  _height: number,
+  _textLen: number,
 ): void {
   // #region agent log
-  const key = `${path}:${Math.round(width)}:${Math.floor(textLen / 120)}`;
-  if (markdownLayoutSeen.has(key)) return;
-  markdownLayoutSeen.add(key);
-  agentDebugLog("markdown-text.tsx:layout", "markdown box", "D", {
-    path,
-    width: Math.round(width),
-    height: Math.round(height),
-    windowWidth: Math.round(Dimensions.get("window").width),
-    textLen,
-    clipped: width + 24 < Dimensions.get("window").width,
-  });
+  // Layout logging disabled — onLayout storms during freeze debugging.
   // #endregion
 }
 

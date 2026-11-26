@@ -13,6 +13,13 @@ import {
 
 export const WAITING_FOR_SUBAGENT_LABEL = "Waiting for subagent";
 
+/** Shown under a delegation row when the child run ended without a result. */
+export const SUBAGENT_CANCELLED_LABEL =
+  "Run canceled abruptly — no result arrived. Ask again to continue.";
+
+/** Placeholder activity while a followed child has not reported a tool yet. */
+export const SUBAGENT_WORKING_ACTIVITY = "Working…";
+
 const TITLE_MAX = 48;
 const ACTIVITY_MAX = 72;
 const MODEL_MAX = 28;

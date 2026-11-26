@@ -18,6 +18,7 @@ import {
   loadSavedAgentUrl,
   saveAgentUrl,
 } from "./agent-url";
+import { mobileSessionStoreOptions } from "./chat/session-store-options";
 import { clearSession, sessionInvalid } from "./session-store";
 
 export { toThreadMessages } from "./message-projection";
@@ -122,15 +123,21 @@ export function getAuthCookie(): string | null {
 
 let store: SessionStore | null = null;
 
+/**
+ * Legacy singleton — prefer ChatsProvider SessionStores. Kept for host-switch
+ * teardown; uses the same followAgents / followWhile policy as chat-context.
+ */
 export function getStore(): SessionStore {
   if (!store) {
-    store = new SessionStore({
-      baseUrl: AGENT_URL,
-      headers: () =>
-        authCookie
-          ? { authorization: `Bearer ${authCookie}` }
-          : ({} as Record<string, string>),
-    });
+    store = new SessionStore(
+      mobileSessionStoreOptions({
+        baseUrl: AGENT_URL,
+        headers: () =>
+          authCookie
+            ? { authorization: `Bearer ${authCookie}` }
+            : ({} as Record<string, string>),
+      }),
+    );
   }
   return store;
 }

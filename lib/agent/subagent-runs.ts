@@ -23,7 +23,29 @@
 // "failed" so it does not show as running forever; a late completion event
 // still flips it back to ready.
 
-export type SubagentRunState = "running" | "ready" | "failed";
+export type SubagentRunState = "running" | "ready" | "failed" | "cancelled";
+
+function settledStateFromResult(result: unknown): SubagentRunState {
+  const outcome =
+    result &&
+    typeof result === "object" &&
+    "outcome" in result &&
+    typeof (result as { outcome?: unknown }).outcome === "string"
+      ? (result as { outcome: string }).outcome
+      : undefined;
+  if (
+    outcome === "cancelled" ||
+    outcome === "canceled" ||
+    outcome === "interrupted" ||
+    outcome === "aborted"
+  ) {
+    return "cancelled";
+  }
+  if (outcome === "failed" || outcome === "error") {
+    return "failed";
+  }
+  return "ready";
+}
 
 export type SubagentRun = {
   readonly callId: string;
@@ -222,7 +244,7 @@ export function deriveSubagentRuns(
       delivered: run.delivered,
       result: run.result,
       state: run.delivered
-        ? ("ready" as const)
+        ? settledStateFromResult(run.result)
         : stale
           ? ("failed" as const)
           : ("running" as const),

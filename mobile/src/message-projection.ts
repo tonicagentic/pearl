@@ -283,6 +283,34 @@ function hasOpenAuthorization(message: EveMessage): boolean {
   );
 }
 
+/**
+ * Parent delegation tool state for a followed child. Cancelled / failed /
+ * rejected parents leave stale child HITL in the observation snapshot; those
+ * must not block the composer.
+ */
+function parentToolStateForAgent(
+  data: ConversationMessages,
+  agent: NonNullable<ConversationMessages["agents"]>[string],
+): string | undefined {
+  const callIds = new Set<string>();
+  if (typeof agent.callId === "string") callIds.add(agent.callId);
+  if ("callId" in agent.owner && typeof agent.owner.callId === "string") {
+    callIds.add(agent.owner.callId);
+  }
+  if (callIds.size === 0) return undefined;
+  for (const message of data.messages) {
+    if (message.role !== "assistant") continue;
+    for (const part of message.parts) {
+      if (part.type === "tool" && callIds.has(part.callId)) {
+        return part.state;
+      }
+    }
+  }
+  return undefined;
+}
+
+const DEAD_PARENT_TOOL = new Set(["cancelled", "failed", "rejected"]);
+
 /** Assistant messages newest-first, then followed child conversations. */
 function conversationMessageSources(
   data: ConversationMessages,
@@ -294,6 +322,8 @@ function conversationMessageSources(
   if (!data.agents) return sources;
   for (const agent of Object.values(data.agents)) {
     if (agent.observation.status === "not-followed") continue;
+    const parentState = parentToolStateForAgent(data, agent);
+    if (parentState && DEAD_PARENT_TOOL.has(parentState)) continue;
     const childMessages = agent.observation.conversation.messages;
     if (childMessages.length === 0) continue;
     sources.push([...childMessages].reverse());
@@ -304,7 +334,7 @@ function conversationMessageSources(
 /**
  * True when any assistant turn (including followed subagents) is parked on
  * approval, question, or authorization. Continues to block after the parent
- * turn settles; failed turns never block the next send.
+ * turn settles; failed / cancelled parent tools never block the next send.
  */
 export function hasPendingAction(data: ConversationMessages): boolean {
   for (const messages of conversationMessageSources(data)) {
@@ -604,6 +634,8 @@ export function pendingForDelegation(
       ("callId" in agent.owner && agent.owner.callId === toolCallId);
     if (!ownsCall) continue;
     if (agent.observation.status === "not-followed") continue;
+    const parentState = parentToolStateForAgent(data, agent);
+    if (parentState && DEAD_PARENT_TOOL.has(parentState)) continue;
     const childPending = getPendingApprovals({
       messages: agent.observation.conversation.messages,
     });
