@@ -17,7 +17,7 @@
     "#evals/*": "./evals/*"
   },
   "scripts": {
-    "build": "next build",
+    "build": "next build && node scripts/publish-automation-routes.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:production": "vercel env run -e production -- pnpm db:migrate",
