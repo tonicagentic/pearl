@@ -101,9 +101,16 @@ export function collapseHeldDeltas(
   const order: string[] = [];
   const texts = new Map<string, string>();
   let turnId: string | null = null;
+  const nonText = new Set<string>();
+  for (const item of held) {
+    if (item.partId && item.kind && item.kind !== "text") {
+      nonText.add(item.partId);
+    }
+  }
   for (const item of held) {
     if (item.kind && item.kind !== "text") continue;
     if (!item.partId || item.delta.length === 0) continue;
+    if (nonText.has(item.partId)) continue;
     if (item.turnId) turnId = item.turnId;
     if (!texts.has(item.partId)) order.push(item.partId);
     texts.set(item.partId, (texts.get(item.partId) ?? "") + item.delta);

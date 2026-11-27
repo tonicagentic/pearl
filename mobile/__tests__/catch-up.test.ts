@@ -92,6 +92,7 @@ describe("collapseHeldDeltas", () => {
     expect(
       collapseHeldDeltas([
         { partId: "r1", delta: "secret", kind: "reasoning" },
+        { partId: "r1", delta: " tail" },
         { partId: "p1", delta: "Hi", kind: "text" },
       ]),
     ).toEqual({

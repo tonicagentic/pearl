@@ -1,5 +1,6 @@
 import {
   __resetLiveReplyTextForTests,
+  absorbContentDelta,
   clearLiveReplyText,
   getLiveReplyParts,
   getLiveReplyTurnId,
@@ -31,6 +32,49 @@ describe("pushLiveReplyDelta", () => {
       delta: "secret",
     });
     expect(getLiveReplyParts(sessionA)).toEqual([]);
+  });
+
+  it("records an ignored reasoning announce so omitted-kind tails stay out of the reply", () => {
+    // Persisted stream: kind is set on the first chunk only, and that chunk
+    // is routed ignore before the buffer used to see it.
+    absorbContentDelta(sessionA, "ignore", {
+      partId: "run_0.0",
+      kind: "reasoning",
+      delta: '"',
+    });
+    absorbContentDelta(sessionA, "push", {
+      partId: "run_0.0",
+      delta: "Is Breckenridge open — likely a place.",
+    });
+    absorbContentDelta(sessionA, "push", {
+      partId: "run_0.1",
+      kind: "text",
+      delta: "Which",
+    });
+    expect(getLiveReplyParts(sessionA)).toEqual([
+      { id: "run_0.1", text: "Which", turnId: null },
+    ]);
+  });
+
+  it("does not hold omitted reasoning tails after the announce was recorded", () => {
+    absorbContentDelta(sessionA, "ignore", {
+      partId: "run_0.0",
+      kind: "reasoning",
+      delta: "User",
+    });
+    expect(
+      absorbContentDelta(sessionA, "hold", {
+        partId: "run_0.0",
+        delta: " wants a goal",
+      }),
+    ).toBe("drop");
+    expect(
+      absorbContentDelta(sessionA, "hold", {
+        partId: "run_0.1",
+        kind: "text",
+        delta: "What",
+      }),
+    ).toBe("hold");
   });
 
   it("keeps rejecting omitted-kind follow-ups after a reasoning announce", () => {
@@ -138,6 +182,27 @@ describe("seedLiveReplyParts", () => {
     });
     expect(getLiveReplyParts(sessionA)).toEqual([
       { id: "p1", text: "fresh reply", turnId: null },
+    ]);
+  });
+
+  it("keeps rejecting reasoning tails after a same-turn catch-up seed", () => {
+    pushLiveReplyDelta(sessionA, {
+      turnId: "t1",
+      partId: "run_0.0",
+      kind: "reasoning",
+      delta: "plan",
+    });
+    seedLiveReplyParts(sessionA, {
+      turnId: "t1",
+      parts: [{ id: "run_0.1", text: "Answer" }],
+    });
+    pushLiveReplyDelta(sessionA, {
+      turnId: "t1",
+      partId: "run_0.0",
+      delta: " more thought",
+    });
+    expect(getLiveReplyParts(sessionA)).toEqual([
+      { id: "run_0.1", text: "Answer", turnId: "t1" },
     ]);
   });
 

@@ -193,14 +193,46 @@ export function seedLiveReplyParts(
   }
   if (order.length === 0) return;
   const bucket = bucketFor(key);
+  const seededTurn = input.turnId ?? null;
+  // Same-turn catch-up must keep reasoning partIds. Wiping them lets the
+  // omitted-kind tail of a reasoning part paint as reply text after seed.
+  const keepNonText =
+    bucket.state.turnId === null ||
+    seededTurn === null ||
+    bucket.state.turnId === seededTurn;
   emit(key, {
-    turnId: input.turnId ?? null,
+    turnId: seededTurn,
     parts,
     order,
-    // Seed is catch-up text only — drop prior non-text memory for this paint.
-    nonTextPartIds: new Set(),
+    nonTextPartIds: keepNonText ? bucket.state.nonTextPartIds : new Set(),
     version: bucket.state.version + 1,
   });
+}
+
+/**
+ * Fold one content.delta into the live buffer or the catch-up hold.
+ *
+ * Explicit non-text kinds are routed "ignore" before they reach the buffer.
+ * Eve tags kind on the first chunk only, so that announce must still be
+ * recorded — otherwise the omitted-kind tail is accepted as reply text.
+ */
+export function absorbContentDelta(
+  key: LiveReplySessionKey,
+  route: "push" | "hold" | "ignore",
+  event: {
+    readonly turnId?: string;
+    readonly partId: string;
+    readonly kind?: string;
+    readonly delta: string;
+  },
+): "buffer" | "hold" | "drop" {
+  if (route === "ignore" || route === "push") {
+    pushLiveReplyDelta(key, event);
+    return "buffer";
+  }
+  const bucket = buckets.get(key);
+  if (bucket?.state.nonTextPartIds.has(event.partId)) return "drop";
+  return "hold";
 }
 
 /** Drop live overlay for one session (turn settled or snapshot caught up). */

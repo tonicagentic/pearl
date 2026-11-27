@@ -23,8 +23,8 @@ import {
 import { setChatRemoteAgent } from "./connected-agents-client";
 import { beginStreamTrace, traceStream } from "./stream-trace";
 import {
+  absorbContentDelta,
   clearLiveReplyText,
-  pushLiveReplyDelta,
   seedLiveReplyParts,
 } from "./live-reply-text";
 import { pendingMessageLabel, hasPendingAction } from "./message-projection";
@@ -667,15 +667,14 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
                 status: store.snapshot.status,
                 kind,
               });
-              if (route.kind === "hold") {
+              const absorbed = absorbContentDelta(store, route.kind, {
+                turnId,
+                partId: data.partId,
+                kind,
+                delta,
+              });
+              if (absorbed === "hold") {
                 binding.catchUpHold.push({
-                  turnId,
-                  partId: data.partId,
-                  kind,
-                  delta,
-                });
-              } else if (route.kind === "push") {
-                pushLiveReplyDelta(store, {
                   turnId,
                   partId: data.partId,
                   kind,
