@@ -1,7 +1,9 @@
+import { plainTextFromDirectives } from "@/lib/chat/project-mentions";
+
 export const DEFAULT_CHAT_TITLE = "New chat";
 
 export function createFallbackTitle(input: string) {
-  const text = input
+  const text = plainTextFromDirectives(input)
     .replace(/\s+/g, " ")
     .replace(/[`*_#>]/g, "")
     .trim();

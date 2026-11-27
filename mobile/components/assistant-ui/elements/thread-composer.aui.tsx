@@ -28,6 +28,10 @@ import {
   composerWidthProgress,
 } from "@/components/assistant-ui/elements/composer-morph";
 import {
+  ProjectMentionChip,
+  ProjectMentionMenu,
+} from "@/components/assistant-ui/elements/composer-project-mention";
+import {
   composerControlHitSlop,
   iconButtonHitSlop,
 } from "@/components/assistant-ui/elements/icon-button";
@@ -49,18 +53,29 @@ import { LiveSession } from "@/components/live-session";
 import { ComposerRemoteAgentPicker } from "@/components/remote-agent-picker";
 import { Icon } from "@/components/ui/icon";
 import { resolveComposerTrailingMode } from "@/src/composer-hitl";
-import { TEXT_METRICS, textVariants } from "@/components/ui/text";
+import { TEXT_METRICS, Text, textVariants } from "@/components/ui/text";
+import {
+  deleteChipBeforeCaret,
+  draftPartsFromText,
+  insertProjectMention,
+  serializeDraftParts,
+  trailingMentionQuery,
+  type ComposerDraftPart,
+} from "../../../../lib/chat/project-mentions";
 import { cn } from "@/lib/utils";
 import {
   focusComposerInput,
   registerComposerInputFocus,
 } from "@/src/composer-input-focus";
 import { KeyboardController } from "@/src/keyboard-controller";
+import { queryKeys } from "@/src/query-client";
+import { fetchProjects, type ProjectDto } from "@/src/projects-client";
 import {
   ComposerPrimitive,
   useAui,
   useAuiState,
 } from "@assistant-ui/react-native";
+import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import {
   GlassView,
@@ -73,6 +88,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FC,
@@ -88,6 +104,7 @@ import {
   useWindowDimensions,
   View,
   type TextInputInstance,
+  type TextInputKeyPressEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -118,6 +135,25 @@ const lightComposerImpact = () => {
 
 const ComposerInputHeightContext =
   createContext<SharedValue<number> | null>(null);
+
+type MentionMenuState = {
+  readonly open: boolean;
+  readonly query: string;
+};
+
+type ComposerMentionApi = {
+  readonly setMenu: (next: MentionMenuState) => void;
+  readonly selectProject: (project: ProjectDto) => void;
+  readonly registerSelectHandler: (
+    handler: ((project: ProjectDto) => void) | null,
+  ) => void;
+};
+
+const ComposerMentionContext = createContext<ComposerMentionApi | null>(null);
+
+function useComposerMention(): ComposerMentionApi | null {
+  return useContext(ComposerMentionContext);
+}
 
 export type ComposerDockProps = {
   floats: boolean;
@@ -216,27 +252,51 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
   const keyboardHeight = useContext(KeyboardHeightContext);
   const keyboardSpan = useContext(KeyboardSpanContext);
   const chromeApi = useComposerChrome();
+  const mentionApi = useComposerMention();
   const { width: windowWidth } = useWindowDimensions();
   // Ignore content-size reports from the narrow collapsed frame (~mini width).
   const minExpandedMeasureWidth = Math.max(
     180,
     windowWidth - COMPOSER_MINIMIZED_EDGE * 2 - 48,
   );
-  // The field owns its text while a keystroke is in flight. The AUI store lags
-  // under fast iOS input; writing that stale value back restored characters
-  // the user had just deleted and jumped the caret. Accept an external write
-  // (send clears the field, a draft replaces it) once the store is no longer
-  // echoing our own edit. An empty store always wins so send can clear a
-  // keystroke that has not echoed yet.
-  const [value, setValue] = useState(storeText);
+  // Draft parts keep project chips out of the TextInput. The store holds the
+  // serialized directive string; ignore echo of our own publishes, clear on
+  // empty store (send), and re-parse any other external write.
+  const [parts, setParts] = useState<ComposerDraftPart[]>(() =>
+    draftPartsFromText(storeText),
+  );
   const publishedRef = useRef(storeText);
   const awaitingEchoRef = useRef(false);
+  const partsRef = useRef(parts);
+  partsRef.current = parts;
   const nativeInput = useRef<TextInputInstance>(null);
-  // Short fields pass downward drags to the dismiss ScrollView; only scroll
-  // the UITextView once text fills the expanded max height.
   const [inputScrolls, setInputScrolls] = useState(false);
   const heightTarget = useRef(COMPOSER_EXPANDED_INPUT_MIN);
   const textOpenTarget = useRef(0);
+
+  const lastPart = parts[parts.length - 1];
+  const activeText = lastPart?.kind === "text" ? lastPart.text : "";
+  const leadingParts = parts.slice(0, -1);
+  const hasChips = leadingParts.some((part) => part.kind === "project");
+  const isBlank = !hasChips && activeText.length === 0;
+  const mentionQuery = trailingMentionQuery(activeText);
+
+  const publishParts = useCallback(
+    (nextParts: ComposerDraftPart[]) => {
+      const normalized =
+        nextParts.length > 0 && nextParts[nextParts.length - 1]?.kind === "text"
+          ? nextParts
+          : [...nextParts, { kind: "text" as const, text: "" }];
+      const serialized = serializeDraftParts(normalized);
+      publishedRef.current = serialized;
+      awaitingEchoRef.current = true;
+      partsRef.current = normalized;
+      setParts(normalized);
+      aui.composer.setText(serialized);
+    },
+    [aui],
+  );
+
   const settleHeight = (next: number) => {
     if (!expandedHeight || Math.abs(heightTarget.current - next) < 1) return;
     heightTarget.current = next;
@@ -247,6 +307,7 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
     textOpenTarget.current = open;
     chromeApi.textExpanded.value = withTiming(open, COMPOSER_SIZE_TIMING);
   };
+
   useEffect(() => {
     if (storeText === publishedRef.current) {
       awaitingEchoRef.current = false;
@@ -255,14 +316,38 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
     if (awaitingEchoRef.current && storeText !== "") return;
     publishedRef.current = storeText;
     awaitingEchoRef.current = false;
-    setValue(storeText);
+    setParts(draftPartsFromText(storeText));
   }, [storeText]);
+
+  useEffect(() => {
+    mentionApi?.setMenu({
+      open: mentionQuery !== null,
+      query: mentionQuery ?? "",
+    });
+  }, [mentionApi, mentionQuery]);
+
+  useEffect(() => {
+    if (!mentionApi) return;
+    mentionApi.registerSelectHandler((project) => {
+      const next = insertProjectMention(partsRef.current, {
+        id: project.id,
+        label: project.name,
+      });
+      publishParts(next);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+        () => {},
+      );
+      requestAnimationFrame(() => nativeInput.current?.focus());
+    });
+    return () => mentionApi.registerSelectHandler(null);
+  }, [mentionApi, publishParts]);
+
   // iOS reports the view bounds as content size and skips the event when a
   // line is deleted. Count wrapped lines so the field can grow and shrink
   // without chasing its own height.
   useEffect(() => {
     if (!expandedHeight) return;
-    if (value.length === 0) {
+    if (isBlank) {
       settleHeight(COMPOSER_EXPANDED_INPUT_MIN);
       settleTextOpen(0);
       setInputScrolls((current) => (current ? false : current));
@@ -270,8 +355,8 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
     }
     const inputWidth = Math.max(160, windowWidth - COMPOSER_EDGE * 2 - 32);
     const charsPerLine = Math.max(12, Math.floor(inputWidth / 8.4));
-    let lines = 0;
-    for (const line of value.split("\n")) {
+    let lines = hasChips ? 1 : 0;
+    for (const line of activeText.split("\n")) {
       lines += Math.max(1, Math.ceil(line.length / charsPerLine));
     }
     const estimated = Math.min(
@@ -279,15 +364,22 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
       Math.max(COMPOSER_EXPANDED_INPUT_MIN, lines * 22 + 12),
     );
     settleHeight(estimated);
-    settleTextOpen(lines > 1 ? 1 : 0);
+    settleTextOpen(lines > 1 || hasChips ? 1 : 0);
     const atMax = estimated >= COMPOSER_EXPANDED_INPUT_MAX;
     setInputScrolls((current) => (current === atMax ? current : atMax));
-  }, [expandedHeight, value, windowWidth, chromeApi]);
+  }, [
+    activeText,
+    expandedHeight,
+    hasChips,
+    isBlank,
+    windowWidth,
+    chromeApi,
+  ]);
+
   const placeholderColor =
     Platform.OS === "ios"
       ? "accent-muted-foreground/85"
       : "accent-muted-foreground/60";
-  // Vertical pad morphs with chrome: centered in the mini row, top-aligned when open.
   const iosPadStyle = useAnimatedStyle(() => {
     const progress = composerChromeProgress(
       keyboardHeight?.value ?? 0,
@@ -311,7 +403,6 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
   const scheme = useColorScheme();
   const placeholderInk =
     scheme === "dark" ? "rgba(235,235,245,0.62)" : "rgba(60,60,67,0.55)";
-  // Gone for the whole morph so it never sits on the model button, then back at rest.
   const placeholderFade = useAnimatedStyle(() => {
     const progress = composerChromeProgress(
       keyboardHeight?.value ?? 0,
@@ -321,43 +412,23 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
     );
     return { opacity: composerPlaceholderOpacity(progress) };
   });
-  // Native TextInput often ignores Tailwind type classes for the caret glyph /
-  // placeholder — pin the message size so "Ask anything" matches thread prose.
   const composerTypeStyle = {
     fontSize: TEXT_METRICS.label.fontSize,
     lineHeight: 22,
   } as const;
-  const inputProps = {
-    placeholder: "Ask anything",
-    placeholderTextColorClassName: hydrated ? placeholderColor : undefined,
-    className: cn(
-      "aui-composer-input web:resize-none web:outline-none",
-      // Label is 17/26 for thread prose; keep the dock on the tighter 22 leading.
-      textVariants({ variant: "label" }),
-      "leading-[22px]",
-      Platform.OS === "ios"
-        ? "h-full w-full pl-2 pr-2"
-        : "min-h-10 max-h-48 px-2.5 py-1",
-    ),
-    multiline: true,
-    textAlignVertical: "top" as const,
-    accessibilityLabel: "Message input",
-  };
 
   useEffect(() => {
-    if (Platform.OS !== "ios" || !autoFocus) return;
-    // ChatScreen gates autoFocus until transitionEnd so this runs after the
-    // push — native autoFocus on mount races the stack animation.
+    if (!autoFocus) return;
     const timer = setTimeout(() => nativeInput.current?.focus(), 40);
     return () => clearTimeout(timer);
   }, [autoFocus]);
 
   useEffect(() => {
-    if (Platform.OS !== "ios") return;
     return registerComposerInputFocus(() => {
       nativeInput.current?.focus();
     });
   }, []);
+
   const [hideCaret, setHideCaret] = useState(false);
   const applyHideCaret = useCallback((hidden: boolean) => {
     setHideCaret(hidden);
@@ -370,89 +441,132 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
     },
   );
 
-  return Platform.OS === "ios" ? (
-    <>
-      <AnimatedTextInput
-        ref={nativeInput}
-        value={value}
-        onBlur={() => {
-          // Keep expanded chrome while the keyboard is still up (shell taps
-          // that briefly resign the field). Collapse only after the keyboard
-          // is gone — interactive drag-dismiss owns the intentional collapse.
-          if (KeyboardController.isVisible()) return;
-          chromeApi?.scheduleCollapse();
-        }}
-        onChangeText={(next) => {
-          publishedRef.current = next;
-          awaitingEchoRef.current = true;
-          setValue(next);
-          aui.composer.setText(next);
-          if (next.length === 0) {
-            setInputScrolls(false);
-            settleHeight(COMPOSER_EXPANDED_INPUT_MIN);
-            settleTextOpen(0);
-          }
-        }}
-        onContentSizeChange={(event) => {
-          if (!expandedHeight) return;
-          // Empty field stays one line. A narrow collapsed frame wraps the
-          // placeholder and reports a tall size that then collapses.
-          if (value.length === 0) {
-            settleHeight(COMPOSER_EXPANDED_INPUT_MIN);
-            settleTextOpen(0);
-            setInputScrolls((current) => (current ? false : current));
-            return;
-          }
-          const { height, width } = event.nativeEvent.contentSize;
-          const rejected = width > 0 && width < minExpandedMeasureWidth - 24;
-          // contentSize already includes the field's vertical padding. Ignore
-          // a report that only echoes the frame or the height we already chose.
-          const contentH = Math.ceil(height);
-          const echo =
-            Math.abs(contentH - expandedHeight.value) <= 1 ||
-            Math.abs(contentH - heightTarget.current) <= 1;
-          const next = Math.min(
-            COMPOSER_EXPANDED_INPUT_MAX,
-            Math.max(COMPOSER_EXPANDED_INPUT_MIN, contentH),
-          );
-          if (rejected || echo) return;
-          settleHeight(next);
-          const atMax = contentH >= COMPOSER_EXPANDED_INPUT_MAX;
-          setInputScrolls((current) => (current === atMax ? current : atMax));
-        }}
-        scrollEnabled={inputScrolls}
-        {...inputProps}
-        caretHidden={hideCaret}
-        placeholder=""
-        style={[iosPadStyle, composerTypeStyle]}
-      />
-      {value.length === 0 ? (
-        <Animated.Text
-          pointerEvents="none"
-          numberOfLines={1}
-          style={[
-            placeholderFade,
-            iosPadStyle,
-            composerTypeStyle,
-            {
-              position: "absolute",
-              left: 8,
-              right: 8,
-              top: 0,
-              color: placeholderInk,
-            },
-          ]}
-        >
-          Ask anything
-        </Animated.Text>
-      ) : null}
-    </>
-  ) : (
-    <ComposerPrimitive.Input
-      autoFocus={autoFocus}
-      {...inputProps}
-      style={composerTypeStyle}
+  const onChangeText = (next: string) => {
+    const head = partsRef.current.slice(0, -1);
+    publishParts([...head, { kind: "text", text: next }]);
+    if (next.length === 0 && head.length === 0) {
+      setInputScrolls(false);
+      settleHeight(COMPOSER_EXPANDED_INPUT_MIN);
+      settleTextOpen(0);
+    }
+  };
+
+  const onKeyPress = (event: TextInputKeyPressEvent) => {
+    if (event.nativeEvent.key !== "Backspace") return;
+    if (activeText.length > 0) return;
+    const next = deleteChipBeforeCaret(partsRef.current);
+    if (!next) return;
+    event.preventDefault?.();
+    publishParts(next);
+  };
+
+  const inputClassName = cn(
+    "aui-composer-input web:resize-none web:outline-none",
+    textVariants({ variant: "label" }),
+    "leading-[22px]",
+    hasChips ? "min-w-[48px] flex-1 py-0.5 pl-1 pr-2" : "h-full w-full pl-2 pr-2",
+  );
+
+  const field = (
+    <AnimatedTextInput
+      ref={nativeInput}
+      value={activeText}
+      onBlur={() => {
+        // Do not close the @ menu here — a menu tap blurs the field first and
+        // would unmount the row before onPress. The menu closes when the
+        // trailing @query clears or a project is picked.
+        if (KeyboardController.isVisible()) return;
+        chromeApi?.scheduleCollapse();
+      }}
+      onChangeText={onChangeText}
+      onKeyPress={onKeyPress}
+      onContentSizeChange={(event) => {
+        if (!expandedHeight || hasChips) return;
+        if (activeText.length === 0) {
+          settleHeight(COMPOSER_EXPANDED_INPUT_MIN);
+          settleTextOpen(0);
+          setInputScrolls((current) => (current ? false : current));
+          return;
+        }
+        const { height, width } = event.nativeEvent.contentSize;
+        const rejected = width > 0 && width < minExpandedMeasureWidth - 24;
+        const contentH = Math.ceil(height);
+        const echo =
+          Math.abs(contentH - expandedHeight.value) <= 1 ||
+          Math.abs(contentH - heightTarget.current) <= 1;
+        const next = Math.min(
+          COMPOSER_EXPANDED_INPUT_MAX,
+          Math.max(COMPOSER_EXPANDED_INPUT_MIN, contentH),
+        );
+        if (rejected || echo) return;
+        settleHeight(next);
+        const atMax = contentH >= COMPOSER_EXPANDED_INPUT_MAX;
+        setInputScrolls((current) => (current === atMax ? current : atMax));
+      }}
+      scrollEnabled={inputScrolls}
+      placeholder=""
+      placeholderTextColorClassName={hydrated ? placeholderColor : undefined}
+      className={inputClassName}
+      multiline
+      textAlignVertical="top"
+      accessibilityLabel="Message input"
+      caretHidden={hideCaret}
+      style={[
+        hasChips ? undefined : iosPadStyle,
+        composerTypeStyle,
+        hasChips ? { minHeight: 28 } : undefined,
+      ]}
     />
+  );
+
+  return (
+    <View className="relative min-h-full w-full justify-center">
+      {hasChips ? (
+        <View className="w-full flex-row flex-wrap items-center gap-1 px-1 pt-1">
+          {leadingParts.map((part, index) =>
+            part.kind === "project" ? (
+              <ProjectMentionChip
+                key={`chip-${part.id}-${index}`}
+                name={part.label}
+              />
+            ) : part.text.length > 0 ? (
+              <Text
+                key={`text-${index}`}
+                variant="label"
+                className="text-foreground leading-[22px]"
+              >
+                {part.text}
+              </Text>
+            ) : null,
+          )}
+          {field}
+        </View>
+      ) : (
+        <>
+          {field}
+          {isBlank ? (
+            <Animated.Text
+              pointerEvents="none"
+              numberOfLines={1}
+              style={[
+                placeholderFade,
+                iosPadStyle,
+                composerTypeStyle,
+                {
+                  position: "absolute",
+                  left: 8,
+                  right: 8,
+                  top: 0,
+                  color: placeholderInk,
+                },
+              ]}
+            >
+              Ask anything
+            </Animated.Text>
+          ) : null}
+        </>
+      )}
+    </View>
   );
 };
 
@@ -480,9 +594,44 @@ const Composer: FC<{
   const [reducedTransparency, setReducedTransparency] = useState(false);
   const [preparingAttachment, setPreparingAttachment] = useState(false);
   const [liveOpen, setLiveOpen] = useState(false);
+  const [mentionMenu, setMentionMenu] = useState<MentionMenuState>({
+    open: false,
+    query: "",
+  });
+  const selectHandlerRef = useRef<((project: ProjectDto) => void) | null>(
+    null,
+  );
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: fetchProjects,
+    enabled: mentionMenu.open,
+    staleTime: 30_000,
+  });
+  const mentionApi = useMemo<ComposerMentionApi>(
+    () => ({
+      setMenu: setMentionMenu,
+      selectProject: (project) => {
+        selectHandlerRef.current?.(project);
+        setMentionMenu({ open: false, query: "" });
+      },
+      registerSelectHandler: (handler) => {
+        selectHandlerRef.current = handler;
+      },
+    }),
+    [],
+  );
   const motion = useMotion();
   const { width: windowWidth } = useWindowDimensions();
   const pressed = useSharedValue(0);
+  const mentionMenuNode = (
+    <ProjectMentionMenu
+      open={mentionMenu.open}
+      query={mentionMenu.query}
+      projects={projectsQuery.data ?? []}
+      loading={projectsQuery.isPending && !projectsQuery.data}
+      onSelect={mentionApi.selectProject}
+    />
+  );
   // Cancels rubber-band scroll so the shell stays glued to the keyboard while
   // a downward drag dismisses it (UI-thread only — no async onLayout lag).
   const dismissScrollY = useSharedValue(0);
@@ -694,7 +843,7 @@ const Composer: FC<{
   // Attach, Ask anything, and voice stay hidden until the pause resolves.
   if (waitingAction) {
     return (
-      <>
+      <ComposerMentionContext.Provider value={mentionApi}>
         {liveOverlay}
         <ComposerPrimitive.Root className="aui-composer-root w-full">
           <View
@@ -725,15 +874,16 @@ const Composer: FC<{
             </View>
           </View>
         </ComposerPrimitive.Root>
-      </>
+      </ComposerMentionContext.Provider>
     );
   }
 
   if (Platform.OS !== "ios") {
     return (
-      <>
+      <ComposerMentionContext.Provider value={mentionApi}>
         {liveOverlay}
-        <ComposerPrimitive.Root className="aui-composer-root w-full">
+        <ComposerPrimitive.Root className="aui-composer-root relative w-full">
+          {mentionMenuNode}
           <Animated.View
             className="aui-composer-shell relative gap-2 p-2"
             style={COMPOSER_SHELL_STYLE}
@@ -767,14 +917,16 @@ const Composer: FC<{
             </View>
           </Animated.View>
         </ComposerPrimitive.Root>
-      </>
+      </ComposerMentionContext.Provider>
     );
   }
 
   // iOS morph: collapsed mini-player row ↔ full composer (input above, actions below).
   // One TextInput is absolutely positioned so keyboard drag never remounts it.
+  // The @ menu sits on the outer overflow-visible frame so the shell clip
+  // does not hide it.
   return (
-    <>
+    <ComposerMentionContext.Provider value={mentionApi}>
       {liveOverlay}
       <ComposerInputHeightContext.Provider value={expandedHeight}>
         <Animated.ScrollView
@@ -804,6 +956,7 @@ const Composer: FC<{
                   outerPressStyle,
                 ]}
               >
+                {mentionMenuNode}
                 <Animated.View
                   className="aui-composer-shell relative"
                   style={[COMPOSER_SHELL_STYLE, shellStyle]}
@@ -861,7 +1014,7 @@ const Composer: FC<{
           </Animated.View>
         </Animated.ScrollView>
       </ComposerInputHeightContext.Provider>
-    </>
+    </ComposerMentionContext.Provider>
   );
 };
 

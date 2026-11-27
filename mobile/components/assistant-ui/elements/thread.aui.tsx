@@ -55,6 +55,7 @@ import { MessageFileToolClaims } from "@/components/assistant-ui/elements/file-t
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback";
 import { TypingIndicator } from "@/components/assistant-ui/elements/typing-indicator";
 import { ThreadEdgeFades } from "@/components/assistant-ui/elements/thread-edge-fades";
+import { ProjectMentionChip } from "@/components/assistant-ui/elements/composer-project-mention";
 import { ComposerDock } from "@/components/assistant-ui/elements/thread-composer.aui";
 import {
   EMPTY_THREAD_COMPONENTS,
@@ -70,6 +71,10 @@ import {
   formatMessageTime,
   shouldShowDaySeparator,
 } from "../../../../lib/chat/message-day";
+import {
+  parseDirectiveSegments,
+  plainTextFromDirectives,
+} from "../../../../lib/chat/project-mentions";
 import { isTaskNotification } from "@/src/message-projection";
 import type { ThreadFooterNotice } from "@/src/chat/thread-notice";
 import { followEndOffset } from "@/src/chat/thread-follow";
@@ -1166,9 +1171,64 @@ function userTextHasMarkdown(text: string): boolean {
 
 /**
  * Plain user copy uses label Text so the bubble shrinks to the longest line
- * (capped by the shell's max-w). Markdown keeps the shared Marked renderer.
+ * (capped by the shell's max-w). Project directives render as chips. Markdown
+ * keeps the shared Marked renderer (after stripping directives to labels).
  */
 const UserText: TextMessagePartComponent = ({ text, status }) => {
+  const segments = parseDirectiveSegments(text);
+  const hasProjectChip = segments.some(
+    (segment) => segment.kind === "mention" && segment.type === "project",
+  );
+  const visible = plainTextFromDirectives(text);
+  const copyVisible = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    void copyToClipboard(visible);
+  };
+
+  if (hasProjectChip) {
+    return (
+      <View
+        className="aui-user-message-text flex-row flex-wrap items-center gap-1"
+        onStartShouldSetResponder={() => false}
+      >
+        {segments.map((segment, index) => {
+          if (segment.kind === "text") {
+            if (!segment.text) return null;
+            return (
+              <Text
+                key={`t-${index}`}
+                variant="label"
+                className="text-foreground"
+                onLongPress={copyVisible}
+              >
+                {segment.text}
+              </Text>
+            );
+          }
+          if (segment.type !== "project") {
+            return (
+              <Text
+                key={`m-${index}`}
+                variant="label"
+                className="text-foreground"
+                onLongPress={copyVisible}
+              >
+                {segment.label}
+              </Text>
+            );
+          }
+          return (
+            <ProjectMentionChip
+              key={`p-${segment.id}-${index}`}
+              name={segment.label}
+              compact
+            />
+          );
+        })}
+      </View>
+    );
+  }
+
   if (userTextHasMarkdown(text)) {
     return (
       <View className="aui-user-message-text">
@@ -1184,12 +1244,7 @@ const UserText: TextMessagePartComponent = ({ text, status }) => {
     <Text
       variant="label"
       className="aui-user-message-text"
-      onLongPress={() => {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
-          () => {},
-        );
-        void copyToClipboard(text);
-      }}
+      onLongPress={copyVisible}
     >
       {text}
     </Text>
