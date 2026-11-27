@@ -68,8 +68,14 @@ import {
   type ProjectStatus,
   type ProjectWorkspaceDto,
 } from "@/src/projects-client";
+import {
+  projectChromeLeading,
+  type ProjectEntryFrom,
+} from "@/src/overview-ui";
 import { queryKeys } from "@/src/query-client";
 import { fetchWorkbenchPins } from "@/src/workbench-client";
+
+export type { ProjectEntryFrom };
 
 type ProjectTab =
   | "overview"
@@ -142,8 +148,11 @@ function formatDatePill(start: string | null, target: string | null): string {
 /** Project hub: tasks, goals, notes, files; demoted repos/chats links. */
 export function ProjectDetailScreen({
   projectId,
+  entryFrom,
 }: {
   readonly projectId: string;
+  /** Where the user opened this project from — drives the back affordance. */
+  readonly entryFrom?: ProjectEntryFrom;
 }) {
   const queryClient = useQueryClient();
   const { chats, selectChat, setActiveProjectId, startNewChatWithMessage } =
@@ -279,6 +288,30 @@ export function ProjectDetailScreen({
       });
   }, [projectId, selectChat, setActiveProjectId]);
 
+  /** Drawer entry uses the menu control; stack entries use system back. */
+  const chromeLeading = projectChromeLeading(entryFrom);
+
+  const leaveProject = useCallback(() => {
+    if (entryFrom === "overview") {
+      drawer?.notifyChatSelectedFromDrawer({ tab: "track" });
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.navigate("/");
+      }
+      return;
+    }
+    if (entryFrom === "drawer") {
+      router.navigate("/");
+      return;
+    }
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/workspaces");
+  }, [drawer, entryFrom]);
+
   const confirmDelete = useCallback(() => {
     Alert.alert(
       "Delete project?",
@@ -291,8 +324,7 @@ export function ProjectDetailScreen({
           onPress: () => {
             void deleteProjectRequest(projectId)
               .then(() => {
-                if (router.canGoBack()) router.back();
-                else router.replace("/");
+                leaveProject();
               })
               .catch((cause) => {
                 setError(
@@ -305,7 +337,7 @@ export function ProjectDetailScreen({
         },
       ],
     );
-  }, [projectId]);
+  }, [leaveProject, projectId]);
 
   const promptNewGoal = useCallback(() => {
     startGoalChat({
@@ -863,7 +895,11 @@ export function ProjectDetailScreen({
 
   if (!workspace && !error) {
     return (
-      <ScreenChrome title="Project" leading="back" contentPaddingTop={0}>
+      <ScreenChrome
+        title="Project"
+        leading={chromeLeading}
+        contentPaddingTop={0}
+      >
         <LoadingCenter />
       </ScreenChrome>
     );
@@ -887,7 +923,7 @@ export function ProjectDetailScreen({
   return (
     <ScreenChrome
       title={workspace?.project.name || "Project"}
-      leading="back"
+      leading={chromeLeading}
       contentPaddingTop={0}
       actions={chromeActions}
     >

@@ -37,8 +37,8 @@ import {
 } from "@/src/track-finance-pref";
 
 /**
- * Mail-style home: history sidebar button left; Chat|Track switcher on the
- * empty Pearl / Track tabs. An active Pearl chat drops the switcher and shows
+ * Mail-style home: history sidebar button left; Chat|Overview switcher on the
+ * empty Pearl / Overview tabs. An active Pearl chat drops the switcher and shows
  * New chat + thread details on the right. Profile lives in the drawer dock.
  */
 export function MailHomeScreen() {
@@ -146,7 +146,7 @@ export function MailHomeScreen() {
     return () => subscription.remove();
   }, []);
 
-  // Track → Pearl while home stays focused (focus effect does not re-fire).
+  // Overview → Pearl while home stays focused (focus effect does not re-fire).
   useEffect(() => {
     if (homeTab !== "pearl" || !billingReady) {
       pearlComposeArmedRef.current = false;
@@ -317,7 +317,7 @@ export function MailHomeScreen() {
       },
       {
         type: "menu",
-        label: "Track options",
+        label: "Overview options",
         systemImage: "ellipsis",
         icon: MoreHorizontalIcon,
         hidden: !showTrackMenu,

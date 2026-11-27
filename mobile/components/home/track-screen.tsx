@@ -12,23 +12,13 @@ import {
   View,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
-import {
-  ChevronRightIcon,
-  FolderIcon,
-  InboxIcon,
-  PlusIcon,
-  TargetIcon,
-  WalletIcon,
-  ZapIcon,
-  type LucideIcon,
-} from "lucide-react-native";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useCSSVariable } from "uniwind";
 
-import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { TaskRow } from "@/components/tasks/task-row";
 import { useTasksActions } from "@/components/tasks/use-tasks-actions";
+import { useAuth } from "@/src/auth";
 import { fetchMonthSpendSummary } from "@/src/finances-client";
 import { fetchAllGoals, type GoalDto } from "@/src/goals-client";
 import { fetchIssues } from "@/src/issues-client";
@@ -40,9 +30,17 @@ import {
   showQueryErrorBanner,
 } from "@/src/query-client";
 import {
+  firstNameFrom,
+  overviewDateLabel,
+  overviewGoalsLead,
+  overviewGreeting,
+  overviewProjectHref,
+  overviewProjectsLead,
+  overviewTasksLead,
+} from "@/src/overview-ui";
+import {
   getTrackShowFinance,
   loadTrackShowFinance,
-  setTrackShowFinance,
   subscribeTrackShowFinance,
 } from "@/src/track-finance-pref";
 import {
@@ -50,18 +48,17 @@ import {
   smartListCounts,
 } from "@/src/task-smart-lists";
 
-const PREVIEW = 4;
-
 function currentYearMonth(d = new Date()) {
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
 
 /**
- * Home Track tab: quick-jump cards for tasks, goals, projects, and optional
- * finance. Headers navigate to the full drawer hubs.
+ * Home Overview tab: greeting + narrative summary of tasks, goals, projects,
+ * and optional finance. Lead sentences jump to the full drawer hubs.
  */
 export function TrackScreen() {
   const { offline } = useNetworkStatus();
+  const { viewerName } = useAuth();
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -129,8 +126,8 @@ export function TrackScreen() {
     [tasksQuery.data?.issues],
   );
   const counts = useMemo(() => smartListCounts(issues), [issues]);
-  const todayPreview = useMemo(
-    () => issuesForSmartBucket(issues, "today").slice(0, PREVIEW),
+  const todayTasks = useMemo(
+    () => issuesForSmartBucket(issues, "today"),
     [issues],
   );
 
@@ -145,13 +142,11 @@ export function TrackScreen() {
       return b.updatedAt.localeCompare(a.updatedAt);
     });
   }, [goalsQuery.data]);
-  const goalPreview = activeGoals.slice(0, PREVIEW);
 
   const projects = useMemo(() => {
-    const rows = [...(projectsQuery.data ?? [])].sort((a, b) =>
+    return [...(projectsQuery.data ?? [])].sort((a, b) =>
       b.updatedAt.localeCompare(a.updatedAt),
     );
-    return rows.slice(0, PREVIEW);
   }, [projectsQuery.data]);
 
   const openTaskCountByProject = useMemo(() => {
@@ -175,6 +170,22 @@ export function TrackScreen() {
       ? tasksQuery.error ?? goalsQuery.error ?? projectsQuery.error
       : null;
 
+  const clock = useMemo(() => new Date(), []);
+  const greeting = overviewGreeting(clock, firstNameFrom(viewerName));
+  const dateLabel = overviewDateLabel(clock);
+
+  const tasksLead = useMemo(
+    () =>
+      overviewTasksLead({
+        dueToday: todayTasks.length,
+        inbox: counts.inbox,
+      }),
+    [counts.inbox, todayTasks.length],
+  );
+
+  const goalsLead = overviewGoalsLead(activeGoals.length);
+  const projectsLead = overviewProjectsLead(projects.length);
+
   return (
     <View style={{ flex: 1, backgroundColor }}>
       <ScrollView
@@ -194,7 +205,7 @@ export function TrackScreen() {
             }}
           >
             <Text variant="secondary" tone="destructive">
-              {queryErrorMessage(bannerError, "Failed to load Track.")}
+              {queryErrorMessage(bannerError, "Failed to load Overview.")}
             </Text>
             <Text
               variant="caption"
@@ -210,136 +221,83 @@ export function TrackScreen() {
           <ActivityIndicator color={placeholderColor ?? undefined} />
         ) : (
           <>
-            <TrackCard
-              icon={InboxIcon}
-              title="Tasks"
-              detail={`${counts.today} today · ${counts.inbox} inbox`}
+            <View className="mb-6">
+              <Text variant="title">{greeting}</Text>
+              <Text variant="secondary" className="mt-1">
+                {dateLabel}
+              </Text>
+            </View>
+
+            <OverviewBeat
+              lead={tasksLead}
               onPress={() => router.navigate("/tasks")}
             >
-              {todayPreview.length === 0 ? (
-                <EmptyLine text="Nothing due today" />
-              ) : (
-                todayPreview.map((issue, index) => (
-                  <TaskRow
-                    key={issue.id}
-                    issue={issue}
-                    index={index}
-                    busy={busyId === issue.id}
-                    onResolve={setResolved}
-                    onDelete={deleteTask}
-                  />
-                ))
-              )}
-            </TrackCard>
+              {todayTasks.map((issue, index) => (
+                <TaskRow
+                  key={issue.id}
+                  issue={issue}
+                  index={index}
+                  busy={busyId === issue.id}
+                  onResolve={setResolved}
+                  onDelete={deleteTask}
+                />
+              ))}
+            </OverviewBeat>
 
-            <TrackCard
-              icon={TargetIcon}
-              title="Goals"
-              detail={
-                activeGoals.length === 0
-                  ? "Nothing is being tracked yet"
-                  : `${activeGoals.length} active`
-              }
+            <OverviewBeat
+              lead={goalsLead}
               onPress={() => router.navigate("/goals")}
             >
-              {goalPreview.length === 0 ? (
-                <EmptyLine text="Nothing is being tracked yet" />
-              ) : (
-                goalPreview.map((goal, index) => (
-                  <GoalPreviewRow
-                    key={goal.id}
-                    goal={goal}
-                    first={index === 0}
-                  />
-                ))
-              )}
-            </TrackCard>
+              {activeGoals.map((goal, index) => (
+                <GoalPreviewRow
+                  key={goal.id}
+                  goal={goal}
+                  first={index === 0}
+                />
+              ))}
+            </OverviewBeat>
 
-            <TrackCard
-              icon={ZapIcon}
-              title="Automations"
-              detail="Schedule prompts for Pearl"
-              onPress={() => router.navigate("/automations")}
-            >
-              <EmptyLine text="Run prompts on a schedule" />
-            </TrackCard>
-
-            <TrackCard
-              icon={FolderIcon}
-              title="Projects"
-              detail={
-                (projectsQuery.data?.length ?? 0) === 0
-                  ? "No projects"
-                  : `${projectsQuery.data?.length ?? 0} projects`
-              }
+            <OverviewBeat
+              lead={projectsLead}
               onPress={() => router.navigate("/workspaces")}
             >
-              {projects.length === 0 ? (
-                <EmptyLine text="No projects yet" />
-              ) : (
-                projects.map((project, index) => (
-                  <ProjectPreviewRow
-                    key={project.id}
-                    project={project}
-                    openTasks={openTaskCountByProject.get(project.id) ?? 0}
-                    first={index === 0}
-                  />
-                ))
-              )}
-            </TrackCard>
+              {projects.map((project, index) => (
+                <ProjectPreviewRow
+                  key={project.id}
+                  project={project}
+                  openTasks={openTaskCountByProject.get(project.id) ?? 0}
+                  first={index === 0}
+                />
+              ))}
+            </OverviewBeat>
 
             {showFinance ? (
-              <TrackCard
-                icon={WalletIcon}
-                title="Finance"
-                detail={
+              <OverviewBeat
+                lead={
                   financeQuery.isPending && !financeQuery.data
-                    ? "This month"
-                    : financeQuery.data
-                      ? financeQuery.data.totalSpentLabel
-                      : "This month"
+                    ? "This month’s spend."
+                    : financeQuery.error
+                      ? queryErrorMessage(
+                          financeQuery.error,
+                          "Finances isn’t available for this account.",
+                        )
+                      : financeQuery.data
+                        ? `${financeQuery.data.totalSpentLabel} this month.`
+                        : "No spend this month."
                 }
                 onPress={() => router.navigate("/finances")}
               >
-                {financeQuery.error ? (
-                  <EmptyLine
-                    text={queryErrorMessage(
-                      financeQuery.error,
-                      "Finances isn’t available for this account.",
-                    )}
-                  />
-                ) : financeQuery.data ? (
-                  <FinancePreview summary={financeQuery.data} />
+                {financeQuery.data ? (
+                  <FinanceCaption summary={financeQuery.data} />
                 ) : financeQuery.isPending ? (
-                  <View className="px-3.5 py-3.5">
+                  <View className="py-2">
                     <ActivityIndicator
                       color={placeholderColor ?? undefined}
                     />
                   </View>
-                ) : (
-                  <EmptyLine text="No spend this month" />
-                )}
-              </TrackCard>
-            ) : (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Add Finance to Track"
-                className="mb-5 flex-row items-center gap-3 rounded-2xl bg-muted/35 px-3.5 py-3.5 active:bg-muted/50"
-                onPress={() => void setTrackShowFinance(true)}
-              >
-                <View className="h-9 w-9 items-center justify-center rounded-full bg-muted">
-                  <Icon as={PlusIcon} className="size-4 text-foreground" />
-                </View>
-                <View className="min-w-0 flex-1">
-                  <Text variant="label" weight="semibold">
-                    Add Finance
-                  </Text>
-                  <Text variant="caption" className="mt-0.5">
-                    Show this month’s spend on Track
-                  </Text>
-                </View>
-              </Pressable>
-            )}
+                ) : null}
+              </OverviewBeat>
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -347,50 +305,30 @@ export function TrackScreen() {
   );
 }
 
-function TrackCard({
-  icon: CardIcon,
-  title,
-  detail,
+function OverviewBeat({
+  lead,
   onPress,
   children,
 }: {
-  readonly icon: LucideIcon;
-  readonly title: string;
-  readonly detail: string;
+  readonly lead: string;
   readonly onPress: () => void;
-  readonly children: ReactNode;
+  readonly children?: ReactNode;
 }) {
+  const hasChildren = Array.isArray(children)
+    ? children.length > 0
+    : children != null && children !== false;
+
   return (
-    <View className="mb-5 overflow-hidden rounded-2xl bg-muted/35">
+    <View className="mb-6">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${title}, ${detail}`}
-        className="flex-row items-center gap-3 px-3.5 py-3.5 active:bg-muted/50"
+        accessibilityLabel={lead}
         onPress={onPress}
       >
-        <View className="h-9 w-9 items-center justify-center rounded-full bg-muted">
-          <Icon as={CardIcon} className="size-4 text-foreground" />
-        </View>
-        <View className="min-w-0 flex-1">
-          <Text variant="label" weight="semibold">
-            {title}
-          </Text>
-          <Text variant="caption" className="mt-0.5">
-            {detail}
-          </Text>
-        </View>
-        <Icon as={ChevronRightIcon} className="size-4 text-muted-foreground" />
+        <Text variant="body">{lead}</Text>
       </Pressable>
-      <View className="border-t border-border/40">{children}</View>
+      {hasChildren ? <View className="mt-2">{children}</View> : null}
     </View>
-  );
-}
-
-function EmptyLine({ text }: { readonly text: string }) {
-  return (
-    <Text variant="body" tone="muted" className="px-3.5 py-3.5">
-      {text}
-    </Text>
   );
 }
 
@@ -412,17 +350,12 @@ function GoalPreviewRow({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={goal.title}
-      className={`px-3.5 py-3.5 active:bg-muted/50 ${first ? "" : "border-t border-border/40"}`}
+      className={`py-2 active:opacity-80 ${first ? "" : "border-t border-border/40"}`}
       onPress={() => router.navigate("/goals")}
     >
       <Text variant="body">{goal.title}</Text>
-      {goal.notes ? (
-        <Text variant="secondary" className="mt-1" numberOfLines={2}>
-          {goal.notes}
-        </Text>
-      ) : null}
       {meta ? (
-        <Text variant="caption" className="mt-1">
+        <Text variant="caption" className="mt-0.5">
           {meta}
         </Text>
       ) : null}
@@ -439,32 +372,29 @@ function ProjectPreviewRow({
   readonly openTasks: number;
   readonly first: boolean;
 }) {
+  const openLabel =
+    openTasks === 0
+      ? "No open tasks"
+      : openTasks === 1
+        ? "1 open task"
+        : `${String(openTasks)} open tasks`;
+
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={project.name}
-      className={`px-3.5 py-3.5 active:bg-muted/50 ${first ? "" : "border-t border-border/40"}`}
-      onPress={() =>
-        router.push(
-          `/workspaces/projects/${encodeURIComponent(project.id)}`,
-        )
-      }
+      accessibilityLabel={`${project.name}, ${openLabel}`}
+      className={`flex-row items-center gap-3 py-2 active:opacity-80 ${first ? "" : "border-t border-border/40"}`}
+      onPress={() => router.push(overviewProjectHref(project.id))}
     >
-      <Text variant="body" weight="medium">
+      <Text variant="body" weight="medium" className="min-w-0 flex-1" numberOfLines={1}>
         {project.name}
       </Text>
-      <Text variant="caption" className="mt-1">
-        {openTasks === 0
-          ? "No open tasks"
-          : openTasks === 1
-            ? "1 open task"
-            : `${String(openTasks)} open tasks`}
-      </Text>
+      <Text variant="caption">{openLabel}</Text>
     </Pressable>
   );
 }
 
-function FinancePreview({
+function FinanceCaption({
   summary,
 }: {
   readonly summary: {
@@ -473,18 +403,16 @@ function FinancePreview({
   };
 }) {
   const top = [...summary.groups].sort((a, b) => b.amount - a.amount)[0];
+  if (!top) {
+    return (
+      <Text variant="caption" className="py-1">
+        No groups yet
+      </Text>
+    );
+  }
   return (
-    <View className="px-3.5 py-3.5">
-      <Text variant="body">{summary.totalSpentLabel} this month</Text>
-      {top ? (
-        <Text variant="caption" className="mt-1">
-          Top: {top.name}
-        </Text>
-      ) : (
-        <Text variant="caption" className="mt-1">
-          No groups yet
-        </Text>
-      )}
-    </View>
+    <Text variant="caption" className="py-1">
+      Top: {top.name}
+    </Text>
   );
 }

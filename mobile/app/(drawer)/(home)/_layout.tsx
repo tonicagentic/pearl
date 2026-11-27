@@ -23,6 +23,10 @@ export default function HomeStackLayout() {
       <Stack screenOptions={screenOptions}>
         <Stack.Screen name="index" options={{ title: "" }} />
         <Stack.Screen name="chat" options={{ title: "Chat" }} />
+        <Stack.Screen
+          name="project/[id]"
+          options={{ title: "Project" }}
+        />
       </Stack>
     </DrawerScene>
   );

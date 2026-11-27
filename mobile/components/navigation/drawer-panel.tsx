@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -18,6 +18,7 @@ import {
   WalletIcon,
   ZapIcon,
 } from "lucide-react-native";
+import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ChatHistoryContent } from "@/components/history/chat-history-content";
@@ -33,6 +34,7 @@ import {
   isDrawerHrefActive,
 } from "@/components/navigation/drawer-rows";
 import { PearlIcon } from "@/components/pearl-icon";
+import { projectMarkFor } from "@/components/project-mark";
 import { Icon } from "@/components/ui/icon";
 import { useAuth } from "@/src/auth";
 import { useActiveChat } from "@/src/chat-context";
@@ -42,6 +44,9 @@ import {
   usePearlForeground,
   usePearlMutedBackground,
 } from "@/src/navigation-theme";
+import { drawerProjectHref } from "@/src/overview-ui";
+import { fetchProjects } from "@/src/projects-client";
+import { queryKeys } from "@/src/query-client";
 
 /** Space reserved under the list so rows clear the Chat + avatar footer. */
 const FOOTER_CLEARANCE = 64;
@@ -67,11 +72,6 @@ const TRACK_ROWS = [
     label: "Automations",
     href: "/automations",
     Icon: ZapIcon,
-  },
-  {
-    label: "Projects",
-    href: "/workspaces",
-    Icon: FolderIcon,
   },
   {
     label: "Finances",
@@ -132,6 +132,18 @@ export function DrawerPanel({
   const bottomPad = Math.max(insets.bottom, 12);
   const listBottomInset = FOOTER_CLEARANCE + bottomPad;
 
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: fetchProjects,
+  });
+  const drawerProjects = useMemo(
+    () =>
+      [...(projectsQuery.data ?? [])].sort((a, b) =>
+        b.updatedAt.localeCompare(a.updatedAt),
+      ),
+    [projectsQuery.data],
+  );
+
   const go = useCallback(
     (href: string, options?: { readonly withAnchor?: boolean }) => {
       closeDrawer();
@@ -154,7 +166,7 @@ export function DrawerPanel({
       });
       return;
     }
-    // Force the Chat tab (Track is only via the home switcher).
+    // Force the Chat tab (Overview is only via the home switcher).
     notifyChatSelectedFromDrawer({ tab: "pearl" });
     newChat();
     requestAnimationFrame(() => {
@@ -251,6 +263,28 @@ export function DrawerPanel({
             selected={isDrawerHrefActive(pathname, row.href)}
           />
         ))}
+        <DrawerSectionLabel>Projects</DrawerSectionLabel>
+        {drawerProjects.length === 0 ? (
+          <DrawerLinkRow
+            label="Projects"
+            icon={FolderIcon}
+            onPress={() => go("/workspaces")}
+            selected={isDrawerHrefActive(pathname, "/workspaces")}
+          />
+        ) : (
+          drawerProjects.map((project) => {
+            const href = `/workspaces/projects/${encodeURIComponent(project.id)}`;
+            return (
+              <DrawerLinkRow
+                key={project.id}
+                label={project.name}
+                icon={projectMarkFor(project.name).icon}
+                onPress={() => go(drawerProjectHref(project.id))}
+                selected={isDrawerHrefActive(pathname, href)}
+              />
+            );
+          })
+        )}
         <DrawerSectionLabel>Recent chats</DrawerSectionLabel>
       </View>
     </View>
