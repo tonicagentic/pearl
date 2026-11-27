@@ -48,6 +48,7 @@ import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { LiveSession } from "@/components/live-session";
 import { ComposerRemoteAgentPicker } from "@/components/remote-agent-picker";
 import { Icon } from "@/components/ui/icon";
+import { preferSendOnTextReplyPark } from "@/src/composer-hitl";
 import { TEXT_METRICS, textVariants } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import {
@@ -56,7 +57,6 @@ import {
 } from "@/src/composer-input-focus";
 import { KeyboardController } from "@/src/keyboard-controller";
 import {
-  AuiIf,
   ComposerPrimitive,
   useAui,
   useAuiState,
@@ -122,6 +122,11 @@ const ComposerInputHeightContext =
 export type ComposerDockProps = {
   floats: boolean;
   waitingAction: WaitingAction | null | undefined;
+  /**
+   * Free-text ask_question park — keep the normal composer, but prefer Send
+   * over Stop once the draft has a reply.
+   */
+  textReplyPending?: boolean;
   autoFocus?: boolean;
   focusNewChatKey: number;
   conversationId?: string | null;
@@ -131,6 +136,7 @@ export type ComposerDockProps = {
 export const ComposerDock: FC<ComposerDockProps> = ({
   floats,
   waitingAction,
+  textReplyPending = false,
   autoFocus,
   focusNewChatKey,
   conversationId,
@@ -195,6 +201,7 @@ export const ComposerDock: FC<ComposerDockProps> = ({
         focusNewChatKey={focusNewChatKey}
         conversationId={conversationId}
         waitingAction={waitingAction}
+        textReplyPending={textReplyPending}
       />
     </Animated.View>
   );
@@ -454,11 +461,13 @@ const Composer: FC<{
   focusNewChatKey: number;
   conversationId?: string | null;
   waitingAction?: WaitingAction | null;
+  textReplyPending?: boolean;
 }> = ({
   autoFocus,
   focusNewChatKey,
   conversationId = null,
   waitingAction = null,
+  textReplyPending = false,
 }) => {
   const { ComposerInput = DefaultComposerInput } = useContext(
     ThreadComponentsContext,
@@ -753,6 +762,7 @@ const Composer: FC<{
               <ComposerTrailingControls
                 preparingAttachment={preparingAttachment}
                 onOpenLive={openLive}
+                textReplyPending={textReplyPending}
               />
             </View>
           </Animated.View>
@@ -835,6 +845,7 @@ const Composer: FC<{
                       <ComposerTrailingControls
                         preparingAttachment={preparingAttachment}
                         onOpenLive={openLive}
+                        textReplyPending={textReplyPending}
                       />
                     </Animated.View>
                     <Animated.View style={inputFrameStyle}>
@@ -857,7 +868,8 @@ const Composer: FC<{
 const ComposerTrailingControls: FC<{
   preparingAttachment: boolean;
   onOpenLive: () => void;
-}> = ({ preparingAttachment, onOpenLive }) => {
+  textReplyPending?: boolean;
+}> = ({ preparingAttachment, onOpenLive, textReplyPending = false }) => {
   // The stop control only cancels the send while no run it could stop is going.
   const isSending = useAuiState(
     (s) =>
@@ -870,20 +882,27 @@ const ComposerTrailingControls: FC<{
       s.composer.canSend &&
       (!s.thread.isRunning ||
         s.thread.capabilities.queue ||
-        s.thread.voice !== undefined),
+        s.thread.voice !== undefined ||
+        textReplyPending),
   );
   const isEmpty = useAuiState((s) => s.composer.isEmpty);
+  const isRunning = useAuiState((s) => s.thread.isRunning);
+  const hasVoice = useAuiState((s) => s.thread.voice !== undefined);
+  const hasSubmission = useAuiState((s) => s.composer.submission !== undefined);
+  const preferSendWhileRunning = preferSendOnTextReplyPark({
+    textReplyPending,
+    composerEmpty: isEmpty,
+    canSend,
+  });
+  const showSendOrLive =
+    !hasSubmission && (!isRunning || hasVoice || preferSendWhileRunning);
+  const showCancel = !showSendOrLive;
   const isIos = Platform.OS === "ios";
 
   return (
     <View className="flex-row items-center">
-      <AuiIf
-        condition={(s) =>
-          s.composer.submission === undefined &&
-          (!s.thread.isRunning || s.thread.voice !== undefined)
-        }
-      >
-        {isEmpty ? (
+      {showSendOrLive ? (
+        isEmpty ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Start live conversation"
@@ -943,14 +962,9 @@ const ComposerTrailingControls: FC<{
               />
             )}
           </ComposerPrimitive.Send>
-        )}
-      </AuiIf>
-      <AuiIf
-        condition={(s) =>
-          s.composer.submission !== undefined ||
-          (s.thread.isRunning && s.thread.voice === undefined)
-        }
-      >
+        )
+      ) : null}
+      {showCancel ? (
         <ComposerPrimitive.Cancel
           className={cn(
             "aui-composer-cancel items-center justify-center",
@@ -971,7 +985,7 @@ const ComposerTrailingControls: FC<{
             <View className="aui-composer-cancel-icon bg-primary-foreground size-3 rounded-[2px]" />
           )}
         </ComposerPrimitive.Cancel>
-      </AuiIf>
+      ) : null}
     </View>
   );
 };

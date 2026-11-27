@@ -80,6 +80,7 @@ import { formatEveClientError } from "@/src/chat/eve-error";
 import { classifyThreadNotice } from "@/src/chat/thread-notice";
 import { resolveTurnPolicy } from "@/src/chat/prepare-send";
 import { deriveTurnRunning } from "@/src/chat/turn-running";
+import { oldestTextOnlyQuestion } from "@/src/composer-hitl";
 import { activeTurn } from "eve/events";
 import type { WaitingAction } from "@/components/assistant-ui/elements/waiting-action-card";
 import { SubagentTranscriptSheet } from "@/components/assistant-ui/elements/subagent-transcript-sheet";
@@ -758,6 +759,8 @@ export function ChatScreen({
     pendingMessage,
     composerBlocked,
     unresolvedSend,
+    onlyTextQuestionsPending,
+    pendingApprovals,
     activeChatId,
     activeProjectId,
     activeCustomAgentId: activeCustomAgent?.id ?? null,
@@ -784,6 +787,8 @@ export function ChatScreen({
       pendingMessage,
       composerBlocked,
       unresolvedSend,
+      onlyTextQuestionsPending,
+      pendingApprovals,
       activeChatId,
       activeProjectId,
       activeCustomAgentId: activeCustomAgent?.id ?? null,
@@ -862,6 +867,46 @@ export function ChatScreen({
         }
 
         const hasAttachments = (message.attachments?.length ?? 0) > 0;
+        // Free-text ask_question: settle the park with answers, not a queued
+        // follow-up message (attachments still fall through as a normal send).
+        if (ctx.onlyTextQuestionsPending && !hasAttachments && turn.text.trim()) {
+          const pending = oldestTextOnlyQuestion(ctx.pendingApprovals);
+          if (pending) {
+            const payload = {
+              answers: [
+                {
+                  interactionId: pending.requestId,
+                  text: turn.text.trim(),
+                },
+              ],
+              clientContext: buildTurnClientContext(
+                projectIdForTurn,
+                ctx.activeChatId,
+                ctx.activeCustomAgentId,
+              ),
+            };
+            const result = await sendWithRetry(
+              {
+                store: activeStore,
+                wasSendPrepared: ctx.wasSendPrepared,
+                recoverDeadSession: ctx.recoverDeadSession,
+                clearSessionRecovery: ctx.clearSessionRecovery,
+                clearPendingMessage: ctx.clearPendingMessage,
+                offline: ctx.offline,
+              },
+              payload,
+              { eventBaseline: activeStore.snapshot.events.length },
+            );
+            if (result.outcome === "accepted") {
+              setSendError(null);
+              if (isAnonymous) void refreshGuestGate();
+              return;
+            }
+            setSendError({ store: activeStore, message: result.message });
+            throw new MessageNotSentError(result.message);
+          }
+        }
+
         const hasEveSession = Boolean(activeStore.snapshot.session);
         const pinned = getModelSelection() !== DEFAULT_MODEL_KEY;
         if (
@@ -1480,6 +1525,7 @@ export function ChatScreen({
                       focusNewChatKey={newChatEntry}
                       notice={notice}
                       waitingAction={waitingAction}
+                      textReplyPending={onlyTextQuestionsPending}
                       signupBlocked={needsSignup}
                     />
                     <BottomSheetModal

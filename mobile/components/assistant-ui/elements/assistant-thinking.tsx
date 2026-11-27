@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { ThinkingIndicator } from "@/components/assistant-ui/elements/thinking-indicator";
 import {
   hasComposerOpenQuestion,
+  hasOpenQuestion,
   isTrailingContentPhase,
   splitAssistantBlocks,
   type AssistantMessagePart,
@@ -23,6 +24,7 @@ import {
 } from "../../../../lib/stream-thinking-state";
 
 const ASKING_QUESTIONS_LABEL = "Asking questions";
+const REPLY_TO_CONTINUE_LABEL = "Reply to continue";
 
 /**
  * Bottom status for pre-content / reasoning / tools / subagents. Driven by
@@ -54,7 +56,15 @@ export function AssistantThinking() {
   const askingQuestions =
     (statusType === "requires-action" && hasComposerOpenQuestion(parts)) ||
     waitKind === "question";
-  const personWaitLabel = waitKind ? pendingWaitLabel(waitKind) : null;
+  const textReplyPending =
+    statusType === "requires-action" &&
+    hasOpenQuestion(parts) &&
+    !hasComposerOpenQuestion(parts);
+  const personWaitLabel = textReplyPending
+    ? REPLY_TO_CONTINUE_LABEL
+    : waitKind
+      ? pendingWaitLabel(waitKind)
+      : null;
   const answerPhase = isTrailingContentPhase(splitAssistantBlocks(parts));
   // Don't clear chrome the instant a text part mounts — wait until at least
   // one finished word (trailing whitespace) or the turn has settled with copy.

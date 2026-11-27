@@ -200,6 +200,11 @@ export type ThreadProps = {
    * authorization banner, approval buttons, choice options, or free-text.
    */
   waitingAction?: WaitingAction | null;
+  /**
+   * Free-text ask_question park — normal composer stays visible; prefer Send
+   * over Stop once the draft has a reply.
+   */
+  textReplyPending?: boolean;
   /** Guest hit the free-message limit — don't steal focus into the composer. */
   signupBlocked?: boolean | undefined;
 };
@@ -461,6 +466,7 @@ export const Thread: FC<ThreadProps> = ({
   history,
   notice,
   waitingAction,
+  textReplyPending = false,
   signupBlocked = false,
 }) => {
   const aui = useAui();
@@ -798,6 +804,7 @@ export const Thread: FC<ThreadProps> = ({
             <ComposerDock
               floats={floatsComposer}
               waitingAction={waitingAction}
+              textReplyPending={textReplyPending}
               autoFocus={autoFocus && !signupBlocked}
               focusNewChatKey={focusNewChatKey}
               conversationId={conversationId}
