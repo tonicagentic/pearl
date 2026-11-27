@@ -137,9 +137,55 @@ function shipBrief(
       return workflowRunBrief(args);
     case "run_with_env":
       return runWithEnvBrief(args);
+    case "create_goal":
+      return createGoalBrief(args);
+    case "update_goal":
+      return updateGoalBrief(args);
     default:
       return null;
   }
+}
+
+function createGoalBrief(args: Record<string, unknown>): ApprovalBrief {
+  const title = asString(args.title) ?? "Untitled goal";
+  const lines: string[] = [];
+  const notes = asString(args.notes);
+  const targetDate = asString(args.targetDate);
+  const projectName = asString(args.projectName);
+  const projectId = asString(args.projectId);
+  if (notes) lines.push(`Done looks like: ${truncate(notes, MAX_VALUE_CHARS)}`);
+  if (targetDate) lines.push(`Target: ${targetDate}`);
+  if (projectName) lines.push(`Project: ${projectName}`);
+  else if (projectId) lines.push(`Project id: ${projectId}`);
+  else lines.push("Standalone (no project)");
+  return {
+    headline: "Save this goal?",
+    detail: [title, ...lines].join("\n"),
+  };
+}
+
+function updateGoalBrief(args: Record<string, unknown>): ApprovalBrief {
+  const status = asString(args.status);
+  const title = asString(args.title);
+  const goalId = asString(args.goalId) ?? "goal";
+  if (status === "done") {
+    return {
+      headline: "Mark this goal done?",
+      detail: title ?? goalId,
+    };
+  }
+  const lines: string[] = [];
+  if (title) lines.push(title);
+  else lines.push(`id: ${goalId}`);
+  if (status) lines.push(`Status: ${status}`);
+  const notes = asString(args.notes);
+  const targetDate = asString(args.targetDate);
+  if (notes) lines.push(`Notes: ${truncate(notes, MAX_VALUE_CHARS)}`);
+  if (targetDate) lines.push(`Target: ${targetDate}`);
+  return {
+    headline: "Update this goal?",
+    detail: lines.join("\n"),
+  };
 }
 
 function gatedGitBrief(args: Record<string, unknown>): ApprovalBrief {

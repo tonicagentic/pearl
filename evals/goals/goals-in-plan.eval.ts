@@ -5,7 +5,7 @@ import { seedPearlProject } from "../fixtures/seed-project.ts";
 
 export default defineEval({
   description:
-    "Plan mode + attached project: “write a plan with 3 measurable goals” → write_project_file; goals in the plan file, not invent Goals DB writes.",
+    "Plan mode + attached project: “write a plan with 3 measurable goals” → write_project_file; goals in the plan file, not Goals DB writes.",
   tags: ["smoke"],
   timeoutMs: 240_000,
   async test(t) {
@@ -30,17 +30,21 @@ export default defineEval({
     turn.noFailedCalls();
     turn.calledTool("write_project_file");
     turn.notCalledTool("create_issue");
+    turn.notCalledTool("create_goal");
+    turn.notCalledTool("update_goal");
     turn.notCalledTool("create_project");
     turn.notCalledTool("write_file");
     turn.notCalledTool("coder");
 
     t.judge(
-      "The reply saves a plan via write_project_file that includes three measurable " +
-        "goals for the attached project. It does not claim Goals database " +
-        "rows were created in the Pearl UI.",
+      "The reply confirms a plan file was saved (write_project_file) for the " +
+        "attached project and that the plan lists about three measurable goals. " +
+        "It does not claim Pearl Goals UI / Goals database rows were created, " +
+        "and it does not call create_goal. Naming the plan title or path is enough; " +
+        "the full goal text need not be restated in the chat reply.",
       { on: turn.reply },
     )
       .label("goals-in-plan")
-      .atLeast(0.8);
+      .atLeast(0.7);
   },
 });

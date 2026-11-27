@@ -236,13 +236,13 @@ export function TrackScreen() {
               title="Goals"
               detail={
                 activeGoals.length === 0
-                  ? "No active goals"
+                  ? "Nothing is being tracked yet"
                   : `${activeGoals.length} active`
               }
               onPress={() => router.navigate("/goals")}
             >
               {goalPreview.length === 0 ? (
-                <EmptyLine text="No active goals" />
+                <EmptyLine text="Nothing is being tracked yet" />
               ) : (
                 goalPreview.map((goal, index) => (
                   <GoalPreviewRow
@@ -392,7 +392,7 @@ function GoalPreviewRow({
   readonly first: boolean;
 }) {
   const meta = [
-    goal.projectName ?? "No project",
+    goal.projectName,
     goal.targetDate ? `Target ${goal.targetDate}` : null,
   ]
     .filter(Boolean)
@@ -406,9 +406,16 @@ function GoalPreviewRow({
       onPress={() => router.navigate("/goals")}
     >
       <Text variant="body">{goal.title}</Text>
-      <Text variant="caption" className="mt-1">
-        {meta}
-      </Text>
+      {goal.notes ? (
+        <Text variant="secondary" className="mt-1" numberOfLines={2}>
+          {goal.notes}
+        </Text>
+      ) : null}
+      {meta ? (
+        <Text variant="caption" className="mt-1">
+          {meta}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }

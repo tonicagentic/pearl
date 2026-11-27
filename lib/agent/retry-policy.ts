@@ -280,6 +280,25 @@ export const TOOL_RETRY_POLICIES: Readonly<Record<string, RetryPolicy>> = {
     1,
     "Resolution is approval-gated; a retried resolve must status check that the issue is still open first — never blind-settle again.",
   ),
+  // Goals (project_goal rows on Pearl's Goals list).
+  list_goals: policy(
+    true,
+    ["network", "timeout"],
+    2,
+    "DB read, no side effect.",
+  ),
+  create_goal: policy(
+    false,
+    [],
+    1,
+    "Creating twice would duplicate the Goals row; a retry must re-list first instead of blind-inserting.",
+  ),
+  update_goal: policy(
+    false,
+    [],
+    1,
+    "Update is approval-gated; a retry must re-read the goal first — never blind-patch again.",
+  ),
   // Custom-agent local memories (per-agent facts, not global file memory).
   add_agent_memory: policy(
     false,

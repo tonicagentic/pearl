@@ -36,9 +36,12 @@ import { LoadingCenter } from "@/components/ui/loading-center";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { listArtifacts } from "@/src/artifacts-client";
+import { usePearlDrawerOptional } from "@/components/navigation/drawer-context";
+import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import { attachChatToProject, createChat } from "@/src/chats-client";
-import { createGoalRequest, updateGoalRequest } from "@/src/goals-client";
+import { updateGoalRequest } from "@/src/goals-client";
+import { startGoalChat } from "@/src/start-goal-chat";
 import {
   deleteIssueRequest,
   setIssueResolvedRequest,
@@ -143,7 +146,9 @@ export function ProjectDetailScreen({
   readonly projectId: string;
 }) {
   const queryClient = useQueryClient();
-  const { chats, selectChat, setActiveProjectId } = useChats();
+  const { chats, selectChat, setActiveProjectId, newChat } = useChats();
+  const { isAnonymous } = useAuth();
+  const drawer = usePearlDrawerOptional();
   const [workspace, setWorkspace] = useState<ProjectWorkspaceDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -302,32 +307,21 @@ export function ProjectDetailScreen({
   }, [projectId]);
 
   const promptNewGoal = useCallback(() => {
-    const create = (title: string) => {
-      const trimmed = title.trim();
-      if (!trimmed) return;
-      void createGoalRequest({ title: trimmed, projectId })
-        .then(() => {
-          invalidateProject();
-          void reload();
-        })
-        .catch((cause) => {
-          setError(
-            cause instanceof Error ? cause.message : "Could not create goal.",
-          );
-        });
-    };
-    if (Platform.OS === "ios") {
-      Alert.prompt("New goal", undefined, (value) => create(value ?? ""), "plain-text");
-      return;
-    }
-    Alert.alert("New goal", "Name the goal, then edit details from the list.", [
-      {
-        text: "Create “Untitled goal”",
-        onPress: () => create("Untitled goal"),
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  }, [invalidateProject, projectId, reload]);
+    startGoalChat({
+      isAnonymous,
+      newChat,
+      notifyChatSelectedFromDrawer:
+        drawer?.notifyChatSelectedFromDrawer ?? (() => {}),
+      setActiveProjectId,
+      projectId,
+    });
+  }, [
+    drawer?.notifyChatSelectedFromDrawer,
+    isAnonymous,
+    newChat,
+    projectId,
+    setActiveProjectId,
+  ]);
 
   const createNote = useCallback(() => {
     void createNoteRequest({

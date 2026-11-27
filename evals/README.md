@@ -105,13 +105,21 @@ for unresolved open loops — not a general task manager.
 pnpm exec eve eval tasks --tag smoke
 ```
 
-### `goals/` — project goals (app Goals list; no create_goal tool yet)
+### `goals/` — outcomes on Pearl’s Goals list (`create_goal` / `list_goals` / `update_goal`)
+
+Outcomes the user is working toward — distinct from Issues (open loops) and
+from measurable bullets inside Plan-mode plan files. Mobile create starts a
+chat with “I want to set a new goal.”
 
 | Eval | User can ask… | Layer |
 | --- | --- | --- |
-| `record-goal-honestly` | “Add a goal to ship v2…” — don’t invent a saved Goals row. | gates + judge |
+| `record-goal-honestly` | “Add a goal to ship v2…” — `create_goal` on the project. | gates + judge |
+| `start-a-goal` | “I want to set a new goal” — multi-turn `ask_question` walkthrough → GoalDefinition → `create_goal`. | gates + judge / turn |
 | `goal-vs-open-loop` | Outcome goal vs stuck decision — don’t collapse into the wrong tool. | gates + judge |
-| `goals-in-plan` | Plan mode + project: three measurable goals → `write_project_file`. | gates + judge |
+| `goals-in-plan` | Plan mode + project: three measurable goals → `write_project_file`; no `create_goal`. | gates + judge |
+| `list-working-toward` | “What am I working toward?” — `list_goals`; no invented titles. | gates + judge |
+| `no-unsolicited-goal` | Strategy brainstorm — no `create_goal`. | gates + judge |
+| `mark-goal-done` | “That goal is done” — `update_goal` status done. | gates + judge |
 
 ```bash
 pnpm exec eve eval goals --tag smoke

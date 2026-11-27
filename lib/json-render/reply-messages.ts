@@ -113,3 +113,27 @@ export function bookingCancelMessage(restaurant: string | null | undefined): str
     ? `Cancel the table reservation at ${restaurant}.`
     : "Cancel this table reservation.";
 }
+
+export function goalDefinitionSaveMessage(props: {
+  readonly title: string;
+  readonly notes?: string | null;
+  readonly targetDate?: string | null;
+  readonly projectName?: string | null;
+}): string {
+  const parts = [
+    "Save this goal with create_goal:",
+    `title=${props.title}`,
+    props.notes ? `notes=${props.notes}` : null,
+    props.targetDate ? `targetDate=${props.targetDate}` : null,
+    props.projectName ? `projectName=${props.projectName}` : null,
+  ];
+  return parts.filter(Boolean).join("\n");
+}
+
+export function goalDefinitionChangeMessage(title: string): string {
+  return `Change something about the goal "${title}" before saving.`;
+}
+
+export function goalDefinitionDiscardMessage(title: string): string {
+  return `Discard creating the goal "${title}".`;
+}

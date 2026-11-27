@@ -27,6 +27,8 @@ export type AnswerThreadSample = {
     | "answer-flight"
     | "answer-event"
     | "answer-create-event"
+    | "answer-goal-definition"
+    | "answer-goal-list"
     | "answer-booking"
     | "answer-email-draft"
     | "answer-email-batch"
@@ -773,6 +775,63 @@ export const ANSWER_THREAD_SAMPLES: readonly AnswerThreadSample[] = [
           end: "2026-07-24T09:30:00-07:00",
           location: "Conference Room B",
           calendarId: null,
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-goal-definition",
+    "Goal definition",
+    "I want to set a new goal — walk three times a week by June.",
+    "Here’s the goal ready to save:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["goal"],
+      },
+      goal: {
+        type: "GoalDefinition",
+        props: {
+          title: "Walk 3× a week",
+          notes: "Three walks a week — not a race.",
+          targetDate: "2026-06-30",
+          projectName: null,
+          status: "active",
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-goal-list",
+    "Goal list",
+    "What am I working toward?",
+    "Active goals:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["goals"],
+      },
+      goals: {
+        type: "GoalList",
+        props: {
+          items: [
+            {
+              title: "Walk 3× a week",
+              targetDate: "2026-06-30",
+              projectName: null,
+              status: "active",
+            },
+            {
+              title: "Ship dark mode",
+              targetDate: "2026-03-31",
+              projectName: "Widgets Redesign",
+              status: "active",
+            },
+          ],
         },
       },
     },

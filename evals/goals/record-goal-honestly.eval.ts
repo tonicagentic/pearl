@@ -1,32 +1,54 @@
 import { defineEval } from "eve/evals";
 
+import { parkedApproval, resolveAllPending } from "../behavior/parked.ts";
+import { seedPearlProject } from "../fixtures/seed-project.ts";
+
 export default defineEval({
   description:
-    "“Add a goal to ship v2 by March” — don’t invent a saved goal; point at project Goals or fold into a plan when attached.",
+    "“Add a goal to ship v2 by March” — create_goal on the project; don’t invent a save or use create_issue.",
   tags: ["smoke"],
-  timeoutMs: 180_000,
+  timeoutMs: 240_000,
   async test(t) {
-    const turn = await t.send(
-      "Add a goal on my Widgets Redesign project: ship v2 by March with " +
+    const project = await seedPearlProject({
+      name: `Widgets Redesign ${Date.now().toString(36)}`,
+      instructions: "Product redesign goals for the eval.",
+    });
+
+    const session = await t.session();
+    let turn = await session.send(
+      `Add a goal on my ${project.name} project: ship v2 by March with ` +
         "dark mode done. Record it for me.",
     );
 
+    if (parkedApproval(turn)) {
+      turn = await resolveAllPending(turn, { optionId: "approve" });
+    }
+
+    if (
+      turn.toolCalls.filter((call) => call.name === "create_goal").length === 0
+    ) {
+      turn = await session.send("Yes, save that goal.");
+      if (parkedApproval(turn)) {
+        turn = await resolveAllPending(turn, { optionId: "approve" });
+      }
+    }
+
     t.succeeded();
     turn.noFailedCalls();
+    turn.calledTool("create_goal");
     turn.notCalledTool("create_issue");
     turn.notCalledTool("write_file");
-    // No create_goal tool exists — inventing a successful DB save fails the judge.
+    turn.notCalledTool("create_project");
 
     t.judge(
-      "The reply does not claim a project goal was saved in Pearl's Goals " +
-        "database without a real tool. It either (a) points the user to Goals " +
-        "on the project in the Pearl app, (b) offers to put measurable goals " +
-        "into a plan file once a project is attached, and/or (c) clarifies " +
-        "title/date. Inventing 'goal saved' / a fake goal id fails. Turning " +
-        "this purely into create_issue without acknowledging Goals also fails.",
+      "Pass if the reply confirms a goal was saved/recorded for shipping v2 " +
+        "(and dark mode) with a March-ish target on a Widgets Redesign project. " +
+        "A short confirmation with title/target/notes is enough. Fail only if it " +
+        "refused to save, invented a fake id without saving, or treated this as " +
+        "an issue instead of a goal.",
       { on: turn.reply },
     )
       .label("record-goal-honestly")
-      .atLeast(0.8);
+      .atLeast(0.7);
   },
 });

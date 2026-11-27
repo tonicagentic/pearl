@@ -39,6 +39,9 @@ import {
   emailBatchConfirmMessage,
   emailDraftSaveMessage,
   emailDraftSendMessage,
+  goalDefinitionChangeMessage,
+  goalDefinitionDiscardMessage,
+  goalDefinitionSaveMessage,
 } from "../../../lib/json-render/reply-messages";
 import {
   fetchAiSpeechUrl,
@@ -109,11 +112,32 @@ function EmbedWebView({ uri }: { readonly uri: string }) {
 function ReplyButtons({
   primary,
   secondary,
+  tertiary,
 }: {
   readonly primary: { readonly label: string; readonly message: string };
   readonly secondary?: { readonly label: string; readonly message: string };
+  readonly tertiary?: { readonly label: string; readonly message: string };
 }) {
   const actions = useActions();
+  const outline = (
+    button: { readonly label: string; readonly message: string },
+  ) => (
+    <Pressable
+      key={button.label}
+      accessibilityRole="button"
+      onPress={() =>
+        void actions.execute({
+          action: "reply",
+          params: { message: button.message },
+        })
+      }
+      className="border-border self-start rounded-full border bg-transparent px-3.5 py-2 active:opacity-80"
+    >
+      <Text variant="secondary" weight="medium">
+        {button.label}
+      </Text>
+    </Pressable>
+  );
   return (
     <View className="flex-row flex-wrap gap-2">
       <Pressable
@@ -130,22 +154,8 @@ function ReplyButtons({
           {primary.label}
         </Text>
       </Pressable>
-      {secondary ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() =>
-            void actions.execute({
-              action: "reply",
-              params: { message: secondary.message },
-            })
-          }
-          className="border-border self-start rounded-full border bg-transparent px-3.5 py-2 active:opacity-80"
-        >
-          <Text variant="secondary" weight="medium">
-            {secondary.label}
-          </Text>
-        </Pressable>
-      ) : null}
+      {secondary ? outline(secondary) : null}
+      {tertiary ? outline(tertiary) : null}
     </View>
   );
 }
@@ -1541,6 +1551,106 @@ export const chatRegistry: ComponentRegistry = {
             message: createEventDiscardMessage(title),
           }}
         />
+      </View>
+    );
+  },
+  GoalDefinition: ({ element }) => {
+    const title = asString(element.props.title);
+    const notes =
+      element.props.notes == null ? null : asString(element.props.notes);
+    const targetDate =
+      element.props.targetDate == null
+        ? null
+        : asString(element.props.targetDate);
+    const projectName =
+      element.props.projectName == null
+        ? null
+        : asString(element.props.projectName);
+    const filing = projectName?.trim() ? projectName.trim() : "Standalone";
+    return (
+      <View className="flex-col gap-3">
+        <Text variant="caption" weight="medium" className="uppercase tracking-wide">
+          Goal
+        </Text>
+        <Text variant="body" weight="semibold">
+          {title}
+        </Text>
+        {notes ? (
+          <View className="flex-col gap-0.5">
+            <Text variant="caption">Done looks like</Text>
+            <Text variant="secondary">{notes}</Text>
+          </View>
+        ) : null}
+        {targetDate ? (
+          <View className="flex-col gap-0.5">
+            <Text variant="caption">Target</Text>
+            <Text variant="secondary">{targetDate}</Text>
+          </View>
+        ) : null}
+        <View className="flex-col gap-0.5">
+          <Text variant="caption">Filed</Text>
+          <Text variant="secondary">{filing}</Text>
+        </View>
+        <ReplyButtons
+          primary={{
+            label: "Save goal",
+            message: goalDefinitionSaveMessage({
+              title,
+              notes,
+              targetDate,
+              projectName,
+            }),
+          }}
+          secondary={{
+            label: "Change something",
+            message: goalDefinitionChangeMessage(title),
+          }}
+          tertiary={{
+            label: "Discard",
+            message: goalDefinitionDiscardMessage(title),
+          }}
+        />
+      </View>
+    );
+  },
+  GoalList: ({ element }) => {
+    const items = asObjectArray(element.props.items);
+    return (
+      <View className="flex-col gap-2">
+        <Text variant="caption" weight="medium" className="uppercase tracking-wide">
+          Working toward
+        </Text>
+        {items.map((item, index) => {
+          const status = asString(item.status);
+          const done = status === "done";
+          const meta = [
+            asString(item.projectName).trim() || "Standalone",
+            item.targetDate ? `Target ${asString(item.targetDate)}` : null,
+            done ? "Done" : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <View
+              key={`${asString(item.title)}-${index}`}
+              className={
+                index === 0
+                  ? "flex-col gap-0.5"
+                  : "border-border/50 flex-col gap-0.5 border-t pt-2"
+              }
+            >
+              <Text
+                variant="body"
+                weight="medium"
+                tone={done ? "muted" : "default"}
+                className={done ? "line-through" : undefined}
+              >
+                {asString(item.title)}
+              </Text>
+              <Text variant="caption">{meta}</Text>
+            </View>
+          );
+        })}
       </View>
     );
   },

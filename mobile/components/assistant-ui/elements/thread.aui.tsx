@@ -73,6 +73,11 @@ import {
 import { isTaskNotification } from "@/src/message-projection";
 import type { ThreadFooterNotice } from "@/src/chat/thread-notice";
 import { useActiveChat } from "@/src/chat-context";
+import {
+  getPendingSeedMessage,
+  subscribePendingSeedMessage,
+  takePendingSeedMessage,
+} from "@/src/pending-seed-message";
 import { takePendingQuoteScroll } from "@/src/pending-quote-scroll";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -290,6 +295,46 @@ export const useThreadViewport = (): ThreadViewport => {
 
 const copyToClipboard = async (text: string) => {
   await Clipboard.setStringAsync(text);
+};
+
+/**
+ * Goals (and similar) queue a first message before navigating to Pearl.
+ * Send it once the empty composer is ready.
+ */
+const SeedMessageBridge: FC = () => {
+  const aui = useAui();
+  const { newChatEntry, activeChatId } = useActiveChat();
+  const messageCount = useAuiState((s) => s.thread.messages.length);
+  const isRunning = useAuiState((s) => s.thread.isRunning);
+  const seed = useSyncExternalStore(
+    subscribePendingSeedMessage,
+    getPendingSeedMessage,
+    getPendingSeedMessage,
+  );
+
+  useEffect(() => {
+    if (!seed) return;
+    // Only fire on a brand-new empty Pearl thread.
+    if (activeChatId != null) return;
+    if (messageCount > 0 || isRunning) return;
+
+    const text = takePendingSeedMessage();
+    if (!text) return;
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      aui.composer.setText(text);
+      aui.composer.send();
+    }, 80);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [seed, newChatEntry, activeChatId, messageCount, isRunning, aui]);
+
+  return null;
 };
 
 /**
@@ -766,6 +811,7 @@ export const Thread: FC<ThreadProps> = ({
       <ComposerOwnsHitlContext.Provider value={waitingAction != null}>
         <ThreadViewportContext.Provider value={viewport}>
           <SelectionBookmarkBridge />
+          <SeedMessageBridge />
           <QuoteScrollBridge />
           <ThreadPrimitive.Root className="aui-root aui-thread-root bg-background flex-1">
             {followsKeyboard ? (

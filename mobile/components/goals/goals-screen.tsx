@@ -10,7 +10,19 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { CheckIcon, PlusIcon, Trash2Icon } from "lucide-react-native";
+import {
+  Building2Icon,
+  CheckIcon,
+  HeartIcon,
+  LaptopIcon,
+  MoreVerticalIcon,
+  PaletteIcon,
+  PlusIcon,
+  TargetIcon,
+  UsersIcon,
+  WalletIcon,
+  type LucideIcon,
+} from "lucide-react-native";
 import {
   useMutation,
   useQuery,
@@ -18,10 +30,12 @@ import {
 } from "@tanstack/react-query";
 import { useCSSVariable } from "uniwind";
 
-import { CreateGoalModal } from "@/components/goals/create-goal-modal";
+import { usePearlDrawerOptional } from "@/components/navigation/drawer-context";
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
+import { useAuth } from "@/src/auth";
+import { useChats } from "@/src/chat-context";
 import {
   deleteGoalRequest,
   fetchAllGoals,
@@ -34,6 +48,7 @@ import {
   queryKeys,
   showQueryErrorBanner,
 } from "@/src/query-client";
+import { startGoalChat } from "@/src/start-goal-chat";
 
 if (
   Platform.OS === "android" &&
@@ -46,11 +61,25 @@ function animateList() {
   LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 }
 
-/** Goals hub: Active / Done with optional project filing. */
+const CREATE_AREAS: readonly {
+  readonly label: string;
+  readonly icon: LucideIcon;
+}[] = [
+  { label: "Health", icon: HeartIcon },
+  { label: "Relationships", icon: UsersIcon },
+  { label: "Finance", icon: WalletIcon },
+  { label: "Career", icon: Building2Icon },
+  { label: "Interests", icon: PaletteIcon },
+  { label: "Productivity", icon: LaptopIcon },
+];
+
+/** Goals hub: Tracking list + chat-first Create a goal. */
 export function GoalsScreen() {
   const queryClient = useQueryClient();
   const { offline } = useNetworkStatus();
-  const [composerOpen, setComposerOpen] = useState(false);
+  const { isAnonymous } = useAuth();
+  const { newChat } = useChats();
+  const drawer = usePearlDrawerOptional();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const backgroundColor = useCSSVariable("--color-background") as
@@ -124,6 +153,22 @@ export function GoalsScreen() {
     },
   });
 
+  const openGoalChat = useCallback(
+    (area?: string) => {
+      startGoalChat({
+        isAnonymous,
+        newChat,
+        notifyChatSelectedFromDrawer:
+          drawer?.notifyChatSelectedFromDrawer ??
+          (() => {
+            /* drawer optional outside shell */
+          }),
+        area,
+      });
+    },
+    [drawer?.notifyChatSelectedFromDrawer, isAnonymous, newChat],
+  );
+
   const toggleDone = useCallback(
     async (goal: GoalDto) => {
       setBusyId(goal.id);
@@ -151,40 +196,45 @@ export function GoalsScreen() {
   );
 
   const deleteGoal = useCallback(
+    async (goal: GoalDto) => {
+      setBusyId(goal.id);
+      setActionError(null);
+      const snapshot = queryClient.getQueryData<readonly GoalDto[]>(
+        queryKeys.goals,
+      );
+      removeGoal(goal.id);
+      try {
+        await deleteMutation.mutateAsync(goal.id);
+      } catch (cause) {
+        if (snapshot) {
+          queryClient.setQueryData(queryKeys.goals, snapshot);
+        }
+        if (showQueryErrorBanner(offline, cause)) {
+          setActionError(
+            queryErrorMessage(cause, "Failed to delete the goal."),
+          );
+        }
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [deleteMutation, offline, queryClient, removeGoal],
+  );
+
+  const confirmDelete = useCallback(
     (goal: GoalDto) => {
-      Alert.alert("Delete goal?", "This cannot be undone.", [
+      Alert.alert("Delete goal?", `"${goal.title}" cannot be undone.`, [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            void (async () => {
-              setBusyId(goal.id);
-              setActionError(null);
-              const snapshot = queryClient.getQueryData<readonly GoalDto[]>(
-                queryKeys.goals,
-              );
-              removeGoal(goal.id);
-              try {
-                await deleteMutation.mutateAsync(goal.id);
-              } catch (cause) {
-                if (snapshot) {
-                  queryClient.setQueryData(queryKeys.goals, snapshot);
-                }
-                if (showQueryErrorBanner(offline, cause)) {
-                  setActionError(
-                    queryErrorMessage(cause, "Failed to delete the goal."),
-                  );
-                }
-              } finally {
-                setBusyId(null);
-              }
-            })();
+            void deleteGoal(goal);
           },
         },
       ]);
     },
-    [deleteMutation, offline, queryClient, removeGoal],
+    [deleteGoal],
   );
 
   const active = useMemo(
@@ -196,7 +246,11 @@ export function GoalsScreen() {
     [goals],
   );
 
-  const bannerError = showActionError ? actionError : showLoadError ? loadError : null;
+  const bannerError = showActionError
+    ? actionError
+    : showLoadError
+      ? loadError
+      : null;
 
   return (
     <ScreenChrome
@@ -207,7 +261,7 @@ export function GoalsScreen() {
           label: "New goal",
           systemImage: "plus",
           icon: PlusIcon,
-          onPress: () => setComposerOpen(true),
+          onPress: () => openGoalChat(),
         },
       ]}
     >
@@ -215,7 +269,7 @@ export function GoalsScreen() {
         <ScrollView
           className="flex-1"
           contentContainerClassName="px-5 pt-0"
-          contentContainerStyle={{ paddingBottom: 24 }}
+          contentContainerStyle={{ paddingBottom: 32 }}
           contentInsetAdjustmentBehavior="automatic"
         >
           {bannerError ? (
@@ -246,89 +300,119 @@ export function GoalsScreen() {
             <ActivityIndicator color={placeholderColor ?? undefined} />
           ) : (
             <>
-              <GoalGroup
-                title="Active"
-                goals={active}
-                busyId={busyId}
-                onToggle={toggleDone}
-                onDelete={deleteGoal}
-                empty="No active goals"
-              />
+              <View className="mb-7">
+                <Text variant="body" weight="semibold" className="mb-2">
+                  Tracking
+                </Text>
+                {active.length === 0 ? (
+                  <Text variant="body" tone="muted" className="px-1">
+                    Nothing is being tracked yet
+                  </Text>
+                ) : (
+                  <>
+                    <View className="mb-2.5 flex-row items-center gap-2">
+                      <View className="h-6 w-6 items-center justify-center rounded-full bg-blue-500/15">
+                        <Icon
+                          as={TargetIcon}
+                          className="size-3.5 text-blue-500"
+                        />
+                      </View>
+                      <Text
+                        variant="secondary"
+                        weight="medium"
+                        className="text-blue-500"
+                      >
+                        Goals
+                      </Text>
+                    </View>
+                    <View className="overflow-hidden rounded-2xl bg-muted/35">
+                      {active.map((goal, index) => (
+                        <View
+                          key={goal.id}
+                          className={
+                            index === 0 ? "" : "border-t border-border/40"
+                          }
+                        >
+                          <GoalRow
+                            goal={goal}
+                            busy={busyId === goal.id}
+                            onToggle={toggleDone}
+                            onMore={() => confirmDelete(goal)}
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                )}
+              </View>
+
               {done.length > 0 ? (
-                <GoalGroup
-                  title="Done"
-                  goals={done}
-                  busyId={busyId}
-                  onToggle={toggleDone}
-                  onDelete={deleteGoal}
-                />
+                <View className="mb-7">
+                  <Text
+                    variant="secondary"
+                    weight="medium"
+                    className="mb-2.5 uppercase tracking-wide"
+                  >
+                    Done · {done.length}
+                  </Text>
+                  <View className="overflow-hidden rounded-2xl bg-muted/35">
+                    {done.map((goal, index) => (
+                      <View
+                        key={goal.id}
+                        className={
+                          index === 0 ? "" : "border-t border-border/40"
+                        }
+                      >
+                        <GoalRow
+                          goal={goal}
+                          busy={busyId === goal.id}
+                          onToggle={toggleDone}
+                          onMore={() => confirmDelete(goal)}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                </View>
               ) : null}
+
+              <CreateGoalSection onCreate={openGoalChat} />
             </>
           )}
         </ScrollView>
-
-        <CreateGoalModal
-          open={composerOpen}
-          onClose={() => setComposerOpen(false)}
-          onCreated={() => {
-            animateList();
-            invalidateGoalsAndProjects();
-            setComposerOpen(false);
-          }}
-        />
       </View>
     </ScreenChrome>
   );
 }
 
-function GoalGroup({
-  title,
-  goals,
-  busyId,
-  onToggle,
-  onDelete,
-  empty,
+function CreateGoalSection({
+  onCreate,
 }: {
-  readonly title: string;
-  readonly goals: readonly GoalDto[];
-  readonly busyId: string | null;
-  readonly onToggle: (goal: GoalDto) => Promise<void>;
-  readonly onDelete: (goal: GoalDto) => void;
-  readonly empty?: string;
+  readonly onCreate: (area?: string) => void;
 }) {
   return (
-    <View className="mb-7">
-      <Text
-        variant="secondary"
-        weight="medium"
-        className="mb-2.5 uppercase tracking-wide"
-      >
-        {title}
-        {goals.length > 0 ? ` · ${goals.length}` : ""}
+    <View className="mb-4">
+      <Text variant="body" weight="semibold" className="mb-3">
+        Create a goal
       </Text>
-      {goals.length === 0 ? (
-        empty ? (
-          <Text variant="body" tone="muted" className="px-1">
-            {empty}
-          </Text>
-        ) : null
-      ) : (
-        <View className="overflow-hidden rounded-2xl bg-muted/35">
-          {goals.map((goal, index) => (
-            <View
-              key={goal.id}
-              className={index === 0 ? "" : "border-t border-border/40"}
-            >
-              <GoalRow
-                goal={goal}
-                busy={busyId === goal.id}
-                onToggle={onToggle}
-                onDelete={onDelete}
-              />
+      <View className="overflow-hidden rounded-2xl bg-muted/35">
+        {CREATE_AREAS.map((area, index) => (
+          <Pressable
+            key={area.label}
+            accessibilityRole="button"
+            accessibilityLabel={`Create a ${area.label} goal`}
+            className={`flex-row items-center gap-3 px-3.5 py-3.5 active:bg-muted/50 ${index === 0 ? "" : "border-t border-border/40"}`}
+            onPress={() => onCreate(area.label)}
+          >
+            <View className="h-9 w-9 items-center justify-center rounded-full bg-muted">
+              <Icon as={area.icon} className="size-4 text-foreground" />
             </View>
-          ))}
-        </View>
-      )}
+            <Text variant="body" weight="medium" className="min-w-0 flex-1">
+              {area.label}
+            </Text>
+            <Icon as={PlusIcon} className="size-4 text-muted-foreground" />
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
@@ -337,20 +421,19 @@ function GoalRow({
   goal,
   busy,
   onToggle,
-  onDelete,
+  onMore,
 }: {
   readonly goal: GoalDto;
   readonly busy: boolean;
   readonly onToggle: (goal: GoalDto) => Promise<void>;
-  readonly onDelete: (goal: GoalDto) => void;
+  readonly onMore: () => void;
 }) {
   const done = goal.status === "done";
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
-  const subtitle = goal.projectName ?? "No project";
-  const meta = [
-    subtitle,
+  const caption = [
+    goal.projectName,
     goal.targetDate ? `Target ${goal.targetDate}` : null,
   ]
     .filter(Boolean)
@@ -362,7 +445,7 @@ function GoalRow({
         accessibilityRole="button"
         accessibilityLabel={done ? "Reopen goal" : "Complete goal"}
         disabled={busy}
-        className={`mt-0.5 h-7 w-7 items-center justify-center rounded-full border ${done ? "border-border bg-muted" : "border-foreground/30"}`}
+        className={`mt-0.5 h-7 w-7 items-center justify-center rounded-md border ${done ? "border-border bg-muted" : "border-foreground/30"}`}
         onPress={() => void onToggle(goal)}
       >
         {busy ? (
@@ -382,22 +465,24 @@ function GoalRow({
         >
           {goal.title}
         </Text>
-        <Text variant="caption" className="mt-1.5">
-          {meta}
-        </Text>
         {goal.notes ? (
-          <Text variant="secondary" className="mt-1" numberOfLines={2}>
+          <Text variant="secondary" className="mt-1" numberOfLines={3}>
             {goal.notes}
+          </Text>
+        ) : null}
+        {caption ? (
+          <Text variant="caption" className="mt-1.5">
+            {caption}
           </Text>
         ) : null}
       </View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Delete goal"
+        accessibilityLabel="Goal options"
         className="h-9 w-9 items-center justify-center rounded-full active:bg-muted"
-        onPress={() => onDelete(goal)}
+        onPress={onMore}
       >
-        <Icon as={Trash2Icon} className="size-4 text-muted-foreground" />
+        <Icon as={MoreVerticalIcon} className="size-4 text-muted-foreground" />
       </Pressable>
     </View>
   );

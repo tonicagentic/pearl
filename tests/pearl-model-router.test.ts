@@ -51,6 +51,21 @@ describe("classifyPearlHeuristic", () => {
     );
   });
 
+  it("routes goals and issues cues to tools", () => {
+    assert.equal(
+      classifyPearlHeuristic("I want to set a new goal."),
+      "tools",
+    );
+    assert.equal(
+      classifyPearlHeuristic("What am I working toward right now?"),
+      "tools",
+    );
+    assert.equal(
+      classifyPearlHeuristic("What are my open issues?"),
+      "tools",
+    );
+  });
+
   it("routes document and analysis cues to analysis", () => {
     assert.equal(
       classifyPearlHeuristic("Summarize this contract for diligence"),

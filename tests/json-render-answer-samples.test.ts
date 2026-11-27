@@ -25,6 +25,8 @@ const EXPECTED_ROOT_CHILD: Record<string, string> = {
   "answer-flight": "FlightTracker",
   "answer-event": "CalendarEvent",
   "answer-create-event": "CreateEvent",
+  "answer-goal-definition": "GoalDefinition",
+  "answer-goal-list": "GoalList",
   "answer-booking": "Booking",
   "answer-email-draft": "EmailDraft",
   "answer-email-batch": "EmailBatch",
@@ -90,8 +92,8 @@ function assistantText(sample: (typeof ANSWER_THREAD_SAMPLES)[number]): string {
 }
 
 describe("answer thread samples", () => {
-  it("includes sixty-one answer fixtures", () => {
-    assert.equal(ANSWER_THREAD_SAMPLES.length, 61);
+  it("includes sixty-three answer fixtures", () => {
+    assert.equal(ANSWER_THREAD_SAMPLES.length, 63);
   });
 
   for (const sample of ANSWER_THREAD_SAMPLES) {

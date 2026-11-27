@@ -17,7 +17,7 @@ export const PEARL_LANE_LABELS: Record<PearlLane, string> = {
 // Avoid bare "email"/"mail" — "companies to email" is a prospecting ask, not
 // a mailbox tool ask. Prefer gmail/inbox or "my email" / "send an email".
 const TOOL_CUES =
-  /\b(calendar|gmail|inbox|my\s+e-?mails?|send\s+(?:an?\s+)?e-?mail|weather|look\s*up|search|check\s+my|add\s+to|send\s+|schedule|remind|notification|browser|open\s+the\s+page|fetch)\b/i;
+  /\b(calendar|gmail|inbox|my\s+e-?mails?|send\s+(?:an?\s+)?e-?mail|weather|look\s*up|search|check\s+my|add\s+to|send\s+|schedule|remind|notification|browser|open\s+the\s+page|fetch|goals?|working\s+toward|open\s+loops?|issues?|mark\s+(?:it|this|that)?\s*done)\b/i;
 
 const ANALYSIS_CUES =
   /\b(summarize|analyse|analyze|diligence|contract|memo|briefing|financial|finance|legal|operations|ops\b|research\s+this|compare\s+these|review\s+this\s+(doc|document|pdf|deck|spreadsheet)|lead\s+list|lead\s+gen|prospect(?:ing|s)?|ideal\s+customer|\bICP\b|market\s+size|competitive\s+landscape|pricing\s+landscape|sales\s+prospecting|who\s+else\s+has|kinds\s+of\s+customers|icp_fit|outbound\s+list|fit\s+(?:over|matters)|targeted\s+(?:company\s+)?list|company\s+list|share(?:s|d)?\s+(?:that\s+)?pain|unplanned\s+compressor|customer\s+kinds|workspace\s+file)\b/i;

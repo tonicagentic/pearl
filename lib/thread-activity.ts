@@ -83,6 +83,7 @@ const VERB_PAIRS: Record<string, VerbPair> = {
   read_attachment: { live: "Reading", settled: "Read", infinitive: "read" },
   glob: { live: "Listing", settled: "Listed", infinitive: "list" },
   list_issues: { live: "Listing", settled: "Listed", infinitive: "list" },
+  list_goals: { live: "Listing", settled: "Listed", infinitive: "list" },
   list_expo_projects: { live: "Listing", settled: "Listed", infinitive: "list" },
   ensure_ship_access: {
     live: "Checking",
@@ -155,6 +156,8 @@ const VERB_PAIRS: Record<string, VerbPair> = {
     settled: "Resolved",
     infinitive: "resolve",
   },
+  create_goal: { live: "Creating", settled: "Created", infinitive: "create" },
+  update_goal: { live: "Updating", settled: "Updated", infinitive: "update" },
 };
 
 const DEFAULT_CHIPS: Record<string, string> = {

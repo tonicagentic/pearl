@@ -37,6 +37,9 @@ import {
   emailBatchConfirmMessage,
   emailDraftSaveMessage,
   emailDraftSendMessage,
+  goalDefinitionChangeMessage,
+  goalDefinitionDiscardMessage,
+  goalDefinitionSaveMessage,
 } from "@/lib/json-render/reply-messages";
 import { playSpeakable } from "@/lib/json-render/speak";
 import {
@@ -1178,6 +1181,118 @@ export const { registry: chatRegistry } = defineRegistry(chatCatalog, {
         </div>
       );
     },
+    GoalDefinition: ({ props }) => {
+      const actions = useActions();
+      const filing = props.projectName?.trim()
+        ? props.projectName.trim()
+        : "Standalone";
+      return (
+        <div className="flex flex-col gap-3">
+          <div className="text-muted-foreground text-[12px] font-medium uppercase tracking-wide">
+            Goal
+          </div>
+          <div className="text-foreground text-[16px] font-medium">{props.title}</div>
+          <div className="text-muted-foreground grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[13px]">
+            {props.notes ? (
+              <>
+                <span>Done looks like</span>
+                <span className="text-foreground">{props.notes}</span>
+              </>
+            ) : null}
+            {props.targetDate ? (
+              <>
+                <span>Target</span>
+                <span className="text-foreground">{props.targetDate}</span>
+              </>
+            ) : null}
+            <span>Filed</span>
+            <span className="text-foreground">{filing}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <UiButton
+              type="button"
+              size="sm"
+              onClick={() =>
+                void actions.execute({
+                  action: "reply",
+                  params: {
+                    message: goalDefinitionSaveMessage({
+                      title: props.title,
+                      notes: props.notes,
+                      targetDate: props.targetDate,
+                      projectName: props.projectName,
+                    }),
+                  },
+                })
+              }
+            >
+              Save goal
+            </UiButton>
+            <UiButton
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void actions.execute({
+                  action: "reply",
+                  params: {
+                    message: goalDefinitionChangeMessage(props.title),
+                  },
+                })
+              }
+            >
+              Change something
+            </UiButton>
+            <UiButton
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void actions.execute({
+                  action: "reply",
+                  params: {
+                    message: goalDefinitionDiscardMessage(props.title),
+                  },
+                })
+              }
+            >
+              Discard
+            </UiButton>
+          </div>
+        </div>
+      );
+    },
+    GoalList: ({ props }) => (
+      <div className="flex flex-col gap-2">
+        <div className="text-muted-foreground text-[12px] font-medium uppercase tracking-wide">
+          Working toward
+        </div>
+        {props.items.map((item, index) => {
+          const meta = [
+            item.projectName?.trim() || "Standalone",
+            item.targetDate ? `Target ${item.targetDate}` : null,
+            item.status === "done" ? "Done" : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <div
+              key={`${item.title}-${index}`}
+              className={
+                index === 0 ? "flex flex-col gap-0.5" : "border-border/50 flex flex-col gap-0.5 border-t pt-2"
+              }
+            >
+              <span
+                className={`text-[14px] font-medium ${item.status === "done" ? "text-muted-foreground line-through" : "text-foreground"}`}
+              >
+                {item.title}
+              </span>
+              <span className="text-muted-foreground text-[12px]">{meta}</span>
+            </div>
+          );
+        })}
+      </div>
+    ),
     Booking: ({ props }) => {
       const actions = useActions();
       return (

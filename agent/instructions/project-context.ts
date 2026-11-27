@@ -1,6 +1,7 @@
 import { defineDynamic, defineInstructions } from "eve/instructions";
 
 import { planMirrorPath } from "@/agent/lib/plan-mirror";
+import { listProjectGoals } from "@/lib/db/project-goals";
 import { getProject } from "@/lib/db/projects";
 import { listProjectLinks } from "@/lib/db/project-links";
 import { listProjectFiles } from "@/lib/project-files";
@@ -10,9 +11,9 @@ import { requirePrincipalUser } from "../lib/principal.ts";
 import { syncTurnClientIntent } from "../lib/turn-context.ts";
 
 // When the turn is attached to a verified project, inject its name,
-// properties, instructions, file index, URL links, and linked repos.
-// Bodies stay out of the prompt — use read_project_file when a specific
-// document is needed.
+// properties, instructions, active goals, file index, URL links, and
+// linked repos. Bodies stay out of the prompt — use read_project_file
+// / list_goals when a specific document or full goal notes are needed.
 
 export default defineDynamic(async (ctx) => {
   const intent = syncTurnClientIntent(await ctx.messages());
@@ -24,10 +25,11 @@ export default defineDynamic(async (ctx) => {
   const owned = await getProject(userId, intent.projectId);
   if (!owned) return null;
 
-  const [files, pins, links] = await Promise.all([
+  const [files, pins, links, goals] = await Promise.all([
     listProjectFiles(userId, owned.id),
     listProjectPins(userId, owned.id),
     listProjectLinks(userId, owned.id),
+    listProjectGoals(userId, owned.id),
   ]);
 
   const planFiles = files.filter((row) =>
@@ -68,6 +70,15 @@ export default defineDynamic(async (ctx) => {
           return `- ${pin.fullName} (pin id: ${pin.id}${vercel}${expo})`;
         });
 
+  const activeGoals = goals.filter((goal) => goal.status === "active");
+  const goalLines =
+    activeGoals.length === 0
+      ? ["(no active goals)"]
+      : activeGoals.map((goal) => {
+          const date = goal.targetDate ? `, target: ${goal.targetDate}` : "";
+          return `- ${goal.title} (id: ${goal.id}${date})`;
+        });
+
   const instructions = owned.instructions.trim();
   const sections = [
     "# Active project",
@@ -82,6 +93,13 @@ export default defineDynamic(async (ctx) => {
     instructions
       ? ["## Project instructions", "", instructions].join("\n")
       : "## Project instructions\n\n(none set)",
+    "",
+    "## Active goals",
+    "",
+    ...goalLines,
+    "",
+    "Call list_goals when you need notes or done goals. Do not invent goals",
+    "that are not listed.",
     "",
     "## Files in this project",
     "",

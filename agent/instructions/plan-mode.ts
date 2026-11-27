@@ -13,14 +13,15 @@ Rules:
 - Ask the clarifying questions that change the plan. At most one or two at a
   time, at the end of your reply.
 - Research with read-only tools (read_project_file, list_project_files,
-  web_search, web_fetch, read_file, grep, glob, list_issues, researcher,
-  editor, reviewer).
+  web_search, web_fetch, read_file, grep, glob, list_issues, list_goals,
+  researcher, editor, reviewer).
 - Write or update the plan with write_project_file. That is the only write
   allowed. It stores a markdown file under
   /workspace/docs/plans/<projectId>/<slug>.md and links it on the project.
-- Do not build, code, ship, capture issues, edit sandbox files, send
-  notifications, or mutate skills. A request to do those becomes a plan, not
-  a coding delegation or a mutating tool call.
+- Do not build, code, ship, capture issues, create or update goals, edit
+  sandbox files, send notifications, or mutate skills. A request to do those
+  becomes a plan, not a coding delegation or a mutating tool call. Measurable
+  goals in Plan mode live in the plan file — not Goals DB rows.
 - Reply with a short summary, the plan title, and the path returned by
   write_project_file. Do not paste the whole plan body back into the chat —
   the file on the project page is the review surface.

@@ -552,6 +552,34 @@ export const chatCatalog = defineCatalog(schema, {
       description:
         "Propose adding an event: day header, optional same-day events, and Add to calendar / Discard actions that reply into chat",
     },
+    GoalDefinition: {
+      props: z.object({
+        title: z.string(),
+        notes: z.string().nullable(),
+        targetDate: z.string().nullable(),
+        projectName: z.string().nullable(),
+        status: z.enum(["active", "done"]).nullable(),
+      }),
+      description:
+        "Propose saving a Pearl goal: title, optional done-looks-like notes, optional YYYY-MM-DD target, optional project (null = standalone); Save goal / Change something / Discard reply into chat",
+    },
+    GoalList: {
+      props: z.object({
+        items: z
+          .array(
+            z.object({
+              title: z.string(),
+              targetDate: z.string().nullable(),
+              projectName: z.string().nullable(),
+              status: z.enum(["active", "done"]),
+            }),
+          )
+          .min(1)
+          .max(12),
+      }),
+      description:
+        "Read-only list of the user's goals (active first): title, optional target/project, status — for “what am I working toward?”",
+    },
     Booking: {
       props: z.object({
         restaurant: z.string().nullable(),
@@ -983,9 +1011,9 @@ export type ChatCatalog = typeof chatCatalog;
 
 export const JSON_RENDER_CUSTOM_RULES = [
   "Emit a UI spec for structured answers of these kinds: web/product search, location or place maps, news briefs, daily multi-story briefs, encyclopedia entries, pronunciation, foreign-language phrases, guitar chords, music theory, vote or regional charts, sparkline charts, spec sheets, Mermaid diagrams, tables, explainers, recipes, flight tracking, calendar events, table bookings, email drafts/batches, surf/snow reports and picks, video, Vercel/GitHub/Neon status, photo/music settings, storyboards, OWID/census indicators, slides, PDF artifacts, chess, terminal output, audio clips, 3D models, sandboxed web previews, event timelines, option comparisons, math derivations, and score breakdowns. Ordinary replies and exploratory thinking-together turns stay prose with no spec.",
-  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, DailyBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Chart, SpecSheet, MermaidDiagram, Table, Explainer, Recipe, ComparisonBar, FlightTracker, CalendarEvent, CreateEvent, Booking, EmailDraft, EmailBatch, SurfReport, SurfSpotPick, SnowReport, MountainPick, Video, VercelProject, DeploymentStatus, DeploymentList, PullRequest, PullRequestList, Issue, IssueList, NeonProject, NeonBranch, SchemaOverview, ShipStatus, EnvVarList, DomainList, SlowQueryList, RepoPick, ProjectPick, NeonBranchPick, PhotoEditSettings, MusicProdSettings, VideoStoryboard, IndicatorCard, Slides, PdfArtifact, ChessBoard, TerminalBlock, AudioPlayback, Model3D, WebPreview, Timeline, ComparisonCard, MathBlock, ScoreBreakdown) inside it.",
+  "At most one spec per reply. Prefer a ```spec fence. Always use Card as the root element; put the specialized component (SearchResults, PlaceMap, NewsBrief, DailyBrief, Encyclopedia, Pronounce, Phrase, GuitarChord, TheoryBoard, RegionChart, Chart, SpecSheet, MermaidDiagram, Table, Explainer, Recipe, ComparisonBar, FlightTracker, CalendarEvent, CreateEvent, GoalDefinition, GoalList, Booking, EmailDraft, EmailBatch, SurfReport, SurfSpotPick, SnowReport, MountainPick, Video, VercelProject, DeploymentStatus, DeploymentList, PullRequest, PullRequestList, Issue, IssueList, NeonProject, NeonBranch, SchemaOverview, ShipStatus, EnvVarList, DomainList, SlowQueryList, RepoPick, ProjectPick, NeonBranchPick, PhotoEditSettings, MusicProdSettings, VideoStoryboard, IndicatorCard, Slides, PdfArtifact, ChessBoard, TerminalBlock, AudioPlayback, Model3D, WebPreview, Timeline, ComparisonCard, MathBlock, ScoreBreakdown) inside it.",
   "For two-way % races prefer ComparisonBar; for multi-region shares use RegionChart; for a single metric series use Chart; for OWID/census use IndicatorCard. Use ComparisonCard for two options with traits and a named pick (not %). Use Timeline for past/now/future event axes (not session tool chrome). Use MathBlock for worked expression steps; ScoreBreakdown for rubric verdicts. Use Model3D for https GLB/glTF; WebPreview for sandboxed https live previews. Use ChessBoard for FEN; TerminalBlock for command output; AudioPlayback for https audio. Keep 1–2 sentences of prose outside the fence.",
-  "EmailDraft, EmailBatch, CreateEvent, and Booking include built-in confirm buttons that reply with tool-ready messages. When the user sends those confirmations, call create_gmail_draft / send_gmail_message / apply_mail_batch or the calendar create path immediately with the stated params (approvals still apply).",
+  "EmailDraft, EmailBatch, CreateEvent, Booking, and GoalDefinition include built-in confirm buttons that reply with tool-ready messages. When the user sends those confirmations, call create_gmail_draft / send_gmail_message / apply_mail_batch, the calendar create path, or create_goal immediately with the stated params (approvals still apply). Use GoalList for “what am I working toward?” after list_goals.",
   "EnvVarList must list variable NAMES only — never values, secrets, or connection strings. NeonBranch.endpointHost is a hostname only.",
   "Buttons that continue the conversation must bind press to the reply action with a concrete message string. Do not invent component names outside this catalog.",
   "Image, Video, PdfArtifact, AudioPlayback, Model3D, and WebPreview URLs must be https. Prefer the dedicated answer components over assembling the same layout from Stack/Text alone.",
