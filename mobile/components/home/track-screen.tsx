@@ -279,7 +279,7 @@ export function TrackScreen() {
                     : financeQuery.error
                       ? queryErrorMessage(
                           financeQuery.error,
-                          "Finances isn’t available for this account.",
+                          "Couldn’t load spend.",
                         )
                       : financeQuery.data
                         ? `${financeQuery.data.totalSpentLabel} this month.`
@@ -351,7 +351,9 @@ function GoalPreviewRow({
       accessibilityRole="button"
       accessibilityLabel={goal.title}
       className={`py-2 active:opacity-80 ${first ? "" : "border-t border-border/40"}`}
-      onPress={() => router.navigate("/goals")}
+      onPress={() =>
+        router.push(`/goals/${encodeURIComponent(goal.id)}`)
+      }
     >
       <Text variant="body">{goal.title}</Text>
       {meta ? (

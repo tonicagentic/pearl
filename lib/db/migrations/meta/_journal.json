@@ -435,6 +435,20 @@
       "when": 1796800000000,
       "tag": "0064_pearl_automations",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1796900000000,
+      "tag": "0065_plaid_item_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1797000000000,
+      "tag": "0066_goal_links_project_labels",
+      "breakpoints": true
     }
   ]
 }

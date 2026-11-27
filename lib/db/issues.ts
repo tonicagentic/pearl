@@ -421,6 +421,7 @@ export type IssueWithArea = {
   readonly areaId: string;
   readonly areaName: string;
   readonly projectId: string | null;
+  readonly goalId: string | null;
   readonly listId: string | null;
   readonly listItemId: string | null;
   readonly listOccurrence: string | null;
@@ -439,6 +440,7 @@ const issueSelection = {
   areaId: issue.areaId,
   areaName: area.name,
   projectId: issue.projectId,
+  goalId: issue.goalId,
   listId: issue.listId,
   listItemId: issue.listItemId,
   listOccurrence: issue.listOccurrence,
@@ -485,6 +487,21 @@ export async function listProjectIssues(
     );
 }
 
+/** All tasks filed on a goal (open and resolved). */
+export async function listGoalIssues(
+  userId: string,
+  goalId: string,
+): Promise<IssueWithArea[]> {
+  return issuesWithAreaQuery()
+    .where(and(eq(issue.userId, userId), eq(issue.goalId, goalId)))
+    .orderBy(
+      asc(sql`case when ${issue.status} = 'open' then 0 else 1 end`),
+      asc(sql`coalesce(${issue.reviewDate}, ${issue.dueDate})`),
+      asc(issue.dueDate),
+      asc(issue.createdAt),
+    );
+}
+
 export async function listRecentlyResolvedIssues(
   userId: string,
   sinceIso: string,
@@ -517,6 +534,7 @@ export type CreateIssueInput = {
   readonly description?: string | null;
   readonly areaId: string;
   readonly projectId?: string | null;
+  readonly goalId?: string | null;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;
   readonly listId?: string | null;
@@ -536,6 +554,7 @@ export async function createIssue(
       description: input.description ?? null,
       areaId: input.areaId,
       projectId: input.projectId ?? null,
+      goalId: input.goalId ?? null,
       dueDate: input.dueDate ?? null,
       reviewDate: input.reviewDate ?? null,
       listId: input.listId ?? null,
@@ -562,6 +581,7 @@ export type UpdateIssueInput = {
   readonly description?: string | null;
   readonly areaId?: string;
   readonly projectId?: string | null;
+  readonly goalId?: string | null;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;
 };
@@ -584,6 +604,7 @@ export async function updateIssue(
       ...(input.projectId !== undefined
         ? { projectId: input.projectId }
         : {}),
+      ...(input.goalId !== undefined ? { goalId: input.goalId } : {}),
       ...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
       ...(input.reviewDate !== undefined
         ? { reviewDate: input.reviewDate }

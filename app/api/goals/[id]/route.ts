@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 
+import { listGoalIssues } from "@/lib/db/issues";
 import {
   deleteGoal,
   getGoal,
   updateGoal,
 } from "@/lib/db/project-goals";
+import { listGoalNotes } from "@/lib/db/project-notes";
+import { listGoalChats } from "@/lib/db/projects";
 import type { ProjectGoalStatus } from "@/lib/db/schema";
+import { issueState, todayIso } from "@/lib/issues";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -18,6 +22,7 @@ async function requireViewer() {
   return viewer;
 }
 
+/** Goal detail: goal + tasks + chats + notes. */
 export async function GET(
   _request: Request,
   context: { readonly params: Promise<{ readonly id: string }> },
@@ -35,7 +40,41 @@ export async function GET(
   if (!goal) {
     return NextResponse.json({ error: "Goal not found." }, { status: 404 });
   }
-  return NextResponse.json({ goal });
+
+  const [tasks, chats, notes] = await Promise.all([
+    listGoalIssues(viewer.id, id),
+    listGoalChats(viewer.id, id),
+    listGoalNotes(viewer.id, id),
+  ]);
+
+  return NextResponse.json({
+    goal,
+    tasks: tasks.map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      status: row.status,
+      dueDate: row.dueDate,
+      reviewDate: row.reviewDate,
+      createdAt: row.createdAt.toISOString(),
+      resolvedAt: row.resolvedAt?.toISOString() ?? null,
+      areaId: row.areaId,
+      areaName: row.areaName,
+      projectId: row.projectId,
+      goalId: row.goalId,
+      state: issueState(row),
+      dueSoon:
+        row.status === "open" &&
+        row.dueDate !== null &&
+        row.dueDate <= todayIso(),
+    })),
+    chats: chats.map((row) => ({
+      id: row.id,
+      title: row.title,
+      updatedAt: row.updatedAt.toISOString(),
+    })),
+    notes,
+  });
 }
 
 export async function PATCH(

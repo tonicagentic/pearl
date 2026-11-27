@@ -17,6 +17,15 @@ import {
   listProjectArtifacts,
   unlinkArtifactFromProject,
 } from "@/lib/db/project-artifacts";
+import {
+  assignLabelToProject,
+  createProjectLabel,
+  listLabelsForProject,
+  listLabelsForProjects,
+  listProjectLabels,
+  unassignLabelFromProject,
+  type ProjectLabelDto,
+} from "@/lib/db/project-labels";
 import { createChat } from "@/lib/db/queries";
 import {
   ensureUserForPrincipal,
@@ -57,7 +66,15 @@ function revalidateProjectPaths(projectId?: string) {
 
 export async function listProjectsAction() {
   const viewer = await requireDatabaseViewer();
-  return listProjects(viewer.id);
+  const projects = await listProjects(viewer.id);
+  const labelsByProject = await listLabelsForProjects(
+    viewer.id,
+    projects.map((row) => row.id),
+  );
+  return projects.map((row) => ({
+    ...row,
+    labels: labelsByProject.get(row.id) ?? [],
+  }));
 }
 
 export async function createProjectAction(input: {
@@ -292,4 +309,72 @@ export async function unlinkProjectArtifactAction(input: {
   if (!ok) throw new Error("Linked artifact not found.");
   revalidateProjectPaths(input.projectId);
   return { ok: true as const };
+}
+
+export async function listProjectLabelsAction(): Promise<
+  readonly ProjectLabelDto[]
+> {
+  const viewer = await requireDatabaseViewer();
+  return listProjectLabels(viewer.id);
+}
+
+export async function listLabelsForProjectAction(
+  projectId: string,
+): Promise<readonly ProjectLabelDto[]> {
+  const viewer = await requireDatabaseViewer();
+  return listLabelsForProject(viewer.id, projectId);
+}
+
+export async function createProjectLabelAction(input: {
+  readonly name: string;
+  readonly color?: string;
+  readonly projectId?: string;
+}): Promise<readonly ProjectLabelDto[]> {
+  const viewer = await requireDatabaseViewer();
+  const label = await createProjectLabel(viewer.id, {
+    name: input.name,
+    color: input.color,
+  });
+  if (input.projectId) {
+    const labels = await assignLabelToProject(
+      viewer.id,
+      input.projectId,
+      label.id,
+    );
+    if (!labels) throw new Error("Unknown project.");
+    revalidateProjectPaths(input.projectId);
+    return labels;
+  }
+  revalidatePath("/projects");
+  return [label];
+}
+
+export async function assignProjectLabelAction(input: {
+  readonly projectId: string;
+  readonly labelId: string;
+}): Promise<readonly ProjectLabelDto[]> {
+  const viewer = await requireDatabaseViewer();
+  const labels = await assignLabelToProject(
+    viewer.id,
+    input.projectId,
+    input.labelId,
+  );
+  if (!labels) throw new Error("Unknown project.");
+  revalidateProjectPaths(input.projectId);
+  return labels;
+}
+
+export async function unassignProjectLabelAction(input: {
+  readonly projectId: string;
+  readonly labelId: string;
+}): Promise<readonly ProjectLabelDto[]> {
+  const viewer = await requireDatabaseViewer();
+  const labels = await unassignLabelFromProject(
+    viewer.id,
+    input.projectId,
+    input.labelId,
+  );
+  if (!labels) throw new Error("Unknown project.");
+  revalidateProjectPaths(input.projectId);
+  return labels;
 }

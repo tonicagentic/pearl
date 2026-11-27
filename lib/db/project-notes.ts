@@ -1,6 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
+import { getGoal } from "@/lib/db/project-goals";
 import { getProject } from "@/lib/db/projects";
 import { project, projectNote, type ProjectNote } from "@/lib/db/schema";
 
@@ -11,6 +12,7 @@ export type ProjectNoteDto = {
   readonly id: string;
   readonly projectId: string | null;
   readonly projectName: string | null;
+  readonly goalId: string | null;
   readonly title: string;
   readonly markdown: string;
   readonly createdAt: string;
@@ -21,6 +23,7 @@ export type ProjectNoteSummaryDto = {
   readonly id: string;
   readonly projectId: string | null;
   readonly projectName: string | null;
+  readonly goalId: string | null;
   readonly title: string;
   readonly updatedAt: string;
 };
@@ -33,6 +36,7 @@ function toDto(
     id: row.id,
     projectId: row.projectId,
     projectName,
+    goalId: row.goalId,
     title: row.title,
     markdown: row.markdown,
     createdAt: row.createdAt.toISOString(),
@@ -48,6 +52,7 @@ function toSummary(
     id: row.id,
     projectId: row.projectId,
     projectName,
+    goalId: row.goalId,
     title: row.title,
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -71,6 +76,18 @@ async function resolveOptionalProjectId(
   }
   const owned = await getProject(userId, projectId.trim());
   if (!owned) throw new Error("Unknown project.");
+  return owned.id;
+}
+
+async function resolveOptionalGoalId(
+  userId: string,
+  goalId: string | null | undefined,
+): Promise<string | null> {
+  if (goalId === undefined || goalId === null || goalId.trim() === "") {
+    return null;
+  }
+  const owned = await getGoal(userId, goalId.trim());
+  if (!owned) throw new Error("Unknown goal.");
   return owned.id;
 }
 
@@ -111,6 +128,28 @@ export async function listProjectNotes(
   return rows.map((row) => toSummary(row, owned.name));
 }
 
+export async function listGoalNotes(
+  userId: string,
+  goalId: string,
+): Promise<readonly ProjectNoteSummaryDto[]> {
+  const owned = await getGoal(userId, goalId);
+  if (!owned) return [];
+
+  const rows = await db
+    .select({
+      note: projectNote,
+      projectName: project.name,
+    })
+    .from(projectNote)
+    .leftJoin(project, eq(projectNote.projectId, project.id))
+    .where(
+      and(eq(projectNote.goalId, goalId), eq(projectNote.userId, userId)),
+    )
+    .orderBy(desc(projectNote.updatedAt));
+
+  return rows.map((row) => toSummary(row.note, row.projectName ?? null));
+}
+
 export async function getNote(
   userId: string,
   noteId: string,
@@ -143,9 +182,11 @@ export async function createNote(
     readonly title: string;
     readonly markdown?: string;
     readonly projectId?: string | null;
+    readonly goalId?: string | null;
   },
 ): Promise<ProjectNoteDto> {
   const projectId = await resolveOptionalProjectId(userId, input.projectId);
+  const goalId = await resolveOptionalGoalId(userId, input.goalId);
   const title = requireTitle(input.title);
   const markdown = (input.markdown ?? "").slice(0, MAX_MARKDOWN);
 
@@ -154,6 +195,7 @@ export async function createNote(
     .values({
       userId,
       projectId,
+      goalId,
       title,
       markdown,
     })
@@ -188,6 +230,7 @@ export async function updateNote(
     readonly title?: string;
     readonly markdown?: string;
     readonly projectId?: string | null;
+    readonly goalId?: string | null;
   },
 ): Promise<ProjectNoteDto | null> {
   const existing = await getNote(userId, noteId);
@@ -203,6 +246,10 @@ export async function updateNote(
     input.projectId !== undefined
       ? await resolveOptionalProjectId(userId, input.projectId)
       : existing.projectId;
+  const goalId =
+    input.goalId !== undefined
+      ? await resolveOptionalGoalId(userId, input.goalId)
+      : existing.goalId;
 
   const [row] = await db
     .update(projectNote)
@@ -210,6 +257,7 @@ export async function updateNote(
       title,
       markdown,
       projectId,
+      goalId,
       updatedAt: new Date(),
     })
     .where(and(eq(projectNote.id, noteId), eq(projectNote.userId, userId)))

@@ -1,3 +1,4 @@
+import type { ProjectLabelDto } from "@/lib/db/project-labels";
 import type {
   Project,
   ProjectPriority,
@@ -14,11 +15,15 @@ export type SerializedProject = {
   readonly targetDate: string | null;
   /** Shared Vercel Drive for project sandboxes; null until first provision. */
   readonly driveName: string | null;
+  readonly labels: readonly ProjectLabelDto[];
   readonly createdAt: string;
   readonly updatedAt: string;
 };
 
-export function serializeProject(row: Project): SerializedProject {
+export function serializeProject(
+  row: Project,
+  labels: readonly ProjectLabelDto[] = [],
+): SerializedProject {
   return {
     id: row.id,
     name: row.name,
@@ -28,6 +33,7 @@ export function serializeProject(row: Project): SerializedProject {
     startDate: row.startDate,
     targetDate: row.targetDate,
     driveName: row.driveName ?? null,
+    labels,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

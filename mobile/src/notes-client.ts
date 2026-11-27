@@ -4,6 +4,7 @@ export type NoteSummaryDto = {
   readonly id: string;
   readonly projectId: string | null;
   readonly projectName: string | null;
+  readonly goalId: string | null;
   readonly title: string;
   readonly updatedAt: string;
 };
@@ -12,6 +13,7 @@ export type NoteDto = {
   readonly id: string;
   readonly projectId: string | null;
   readonly projectName: string | null;
+  readonly goalId: string | null;
   readonly title: string;
   readonly markdown: string;
   readonly createdAt: string;
@@ -34,6 +36,7 @@ export async function createNoteRequest(input: {
   readonly title: string;
   readonly markdown?: string;
   readonly projectId?: string | null;
+  readonly goalId?: string | null;
 }): Promise<NoteDto> {
   const data = await authedJson<{ note: NoteDto }>("/api/notes", {
     method: "POST",
@@ -48,6 +51,7 @@ export async function updateNoteRequest(
     readonly title?: string;
     readonly markdown?: string;
     readonly projectId?: string | null;
+    readonly goalId?: string | null;
   },
 ): Promise<NoteDto> {
   const data = await authedJson<{ note: NoteDto }>(

@@ -13,17 +13,19 @@ import {
 
 type Step = 0 | 1;
 
-/** New-task wizard: Title → Notes + dates. Optional projectId files on a project. */
+/** New-task wizard: Title → Notes + dates. Optional projectId/goalId filing. */
 export function CreateTaskModal({
   open,
   onClose,
   onCreated,
   projectId,
+  goalId,
 }: {
   readonly open: boolean;
   readonly onClose: () => void;
   readonly onCreated: (issue: IssueDto) => void;
   readonly projectId?: string | null;
+  readonly goalId?: string | null;
 }) {
   const [step, setStep] = useState<Step>(0);
   const [title, setTitle] = useState("");
@@ -55,6 +57,7 @@ export function CreateTaskModal({
       title: title.trim(),
       description: description.trim() || undefined,
       projectId: projectId ?? undefined,
+      goalId: goalId ?? undefined,
       dueDate: dueDate.trim() || null,
       reviewDate: reviewDate.trim() || null,
     })

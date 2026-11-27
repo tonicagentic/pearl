@@ -15,6 +15,7 @@ import {
   resolveIssue,
   updateIssue,
 } from "@/lib/db/issues";
+import { getGoal } from "@/lib/db/project-goals";
 import { getProject } from "@/lib/db/projects";
 import { issueState, todayIso } from "@/lib/issues";
 import { getSetupStatus } from "@/lib/setup";
@@ -40,6 +41,31 @@ async function ownedProjectIdOrNull(
   const owned = await getProject(userId, value);
   if (!owned) {
     throw new Error("Unknown project id.");
+  }
+
+  return owned.id;
+}
+
+/** Accept a goal id the viewer owns, or null to clear. Absent → undefined. */
+async function ownedGoalIdOrNull(
+  userId: string,
+  value: unknown,
+): Promise<string | null | undefined> {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error("goalId must be a string or null.");
+  }
+
+  const owned = await getGoal(userId, value);
+  if (!owned) {
+    throw new Error("Unknown goal id.");
   }
 
   return owned.id;
@@ -153,6 +179,7 @@ export async function POST(request: Request) {
       }
 
       const projectId = await ownedProjectIdOrNull(viewer.id, body.projectId);
+      const goalId = await ownedGoalIdOrNull(viewer.id, body.goalId);
 
       // The create_issue tool matches areas by name and creates
       // unknown ones — keep the same behavior here so capture never dead-ends.
@@ -166,6 +193,7 @@ export async function POST(request: Request) {
           typeof body.description === "string" ? body.description.trim() || null : null,
         areaId: area.id,
         projectId: projectId ?? null,
+        goalId: goalId ?? null,
         dueDate,
         reviewDate,
       });
@@ -238,6 +266,7 @@ export async function POST(request: Request) {
       }
 
       const projectId = await ownedProjectIdOrNull(viewer.id, body.projectId);
+      const goalId = await ownedGoalIdOrNull(viewer.id, body.goalId);
 
       await updateIssue(viewer.id, id, {
         ...(typeof body.title === "string" && body.title.trim()
@@ -250,6 +279,7 @@ export async function POST(request: Request) {
             }
           : {}),
         ...(projectId !== undefined ? { projectId } : {}),
+        ...(goalId !== undefined ? { goalId } : {}),
         ...(dueDate !== undefined ? { dueDate } : {}),
         ...(reviewDate !== undefined ? { reviewDate } : {}),
       });

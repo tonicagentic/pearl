@@ -37,6 +37,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     readonly pendingUserMessage?: string;
     readonly projectId?: string | null;
+    readonly goalId?: string | null;
   };
 
   const setupStatus = await getSetupStatus();
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
     const created = await createChat(viewer.id, {
       pendingUserMessage: body.pendingUserMessage,
       projectId: body.projectId,
+      goalId: body.goalId,
     });
     return NextResponse.json({ chat: created });
   } catch (error) {

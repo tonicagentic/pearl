@@ -14,6 +14,7 @@ export default function GoalsStackLayout() {
     <DrawerScene>
       <Stack screenOptions={screenOptions}>
         <Stack.Screen name="index" options={{ title: "Goals" }} />
+        <Stack.Screen name="[id]" options={{ title: "Goal" }} />
       </Stack>
     </DrawerScene>
   );

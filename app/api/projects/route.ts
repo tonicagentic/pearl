@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { listLabelsForProjects } from "@/lib/db/project-labels";
 import { createProject, listProjects } from "@/lib/db/projects";
 import { serializeProject } from "@/lib/projects/serialize";
 import { getServerViewer } from "@/lib/session";
@@ -18,8 +19,14 @@ export async function GET() {
   }
 
   const projects = await listProjects(viewer.id);
+  const labelsByProject = await listLabelsForProjects(
+    viewer.id,
+    projects.map((row) => row.id),
+  );
   return NextResponse.json({
-    projects: projects.map(serializeProject),
+    projects: projects.map((row) =>
+      serializeProject(row, labelsByProject.get(row.id) ?? []),
+    ),
   });
 }
 

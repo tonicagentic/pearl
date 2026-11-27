@@ -205,16 +205,18 @@ export async function saveSpokenTurns(
 export async function createChat(
   pendingUserMessage?: string,
   projectId?: string | null,
+  goalId?: string | null,
 ): Promise<{
   id: string;
   title: string;
   updatedAt: string;
   projectId?: string | null;
+  goalId?: string | null;
 }> {
   const response = await fetch(`${AGENT_URL}/api/chats`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ pendingUserMessage, projectId }),
+    body: JSON.stringify({ pendingUserMessage, projectId, goalId }),
   });
 
   if (!response.ok) {
@@ -231,6 +233,7 @@ export async function createChat(
       title: string;
       updatedAt: string;
       projectId?: string | null;
+      goalId?: string | null;
     };
   };
 
@@ -270,6 +273,49 @@ export async function attachChatToProject(
   projectId: string,
 ): Promise<void> {
   await setChatProject(chatId, projectId);
+}
+
+/** Attach or detach an existing chat to/from a goal (and optionally a project). */
+export async function setChatGoal(
+  chatId: string,
+  goalId: string | null,
+  options?: { readonly projectId?: string | null },
+): Promise<void> {
+  const response = await fetch(
+    `${AGENT_URL}/api/chats/${encodeURIComponent(chatId)}`,
+    {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        goalId,
+        ...(options?.projectId !== undefined
+          ? { projectId: options.projectId }
+          : {}),
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      sessionInvalid();
+    }
+    const body = (await response.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    throw new Error(
+      body.error ?? `Failed to update chat goal (${response.status}).`,
+    );
+  }
+}
+
+export async function attachChatToGoal(
+  chatId: string,
+  goalId: string,
+  projectId?: string | null,
+): Promise<void> {
+  await setChatGoal(chatId, goalId, {
+    ...(projectId !== undefined ? { projectId } : {}),
+  });
 }
 
 /** Rename a stored chat. */

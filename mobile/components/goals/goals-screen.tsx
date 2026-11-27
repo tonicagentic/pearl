@@ -9,7 +9,7 @@ import {
   UIManager,
   View,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import {
   Building2Icon,
   CheckIcon,
@@ -457,7 +457,14 @@ function GoalRow({
           <Icon as={CheckIcon} className="size-4 text-foreground" />
         ) : null}
       </Pressable>
-      <View className="min-w-0 flex-1">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${goal.title}`}
+        className="min-w-0 flex-1 active:opacity-80"
+        onPress={() =>
+          router.push(`/goals/${encodeURIComponent(goal.id)}`)
+        }
+      >
         <Text
           variant="body"
           tone={done ? "muted" : "default"}
@@ -475,7 +482,7 @@ function GoalRow({
             {caption}
           </Text>
         ) : null}
-      </View>
+      </Pressable>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Goal options"

@@ -9,6 +9,7 @@ import {
   findAreaByName,
   getArea,
 } from "@/lib/db/issues";
+import { getGoal } from "@/lib/db/project-goals";
 import { getProject, getProjectByName } from "@/lib/db/projects";
 import { isPlanMode, planModeBlocked } from "#lib/turn-context.js";
 
@@ -29,9 +30,9 @@ const tool = defineTool({
   description:
     "Record something unresolved the user is holding in their head: an issue attached to an " +
     "area of their life that will need attention before it is settled. Not for bookkeeping or " +
-    "general notes. Optionally file it under an existing project (projectName or projectId). " +
-    "Offer a review date — when this should come back to the user's attention — because " +
-    "resurfacing at the right time is the point.",
+    "general notes. Optionally file it under an existing project (projectName or projectId) " +
+    "and/or an existing goal (goalId). Offer a review date — when this should come back to " +
+    "the user's attention — because resurfacing at the right time is the point.",
   /**
    * Create an issue for the current principal.
    *
@@ -102,11 +103,24 @@ const tool = defineTool({
       projectId = known.id;
     }
 
+    let goalId: string | null = null;
+    if (input.goalId) {
+      const known = await getGoal(userId, input.goalId);
+      if (!known) {
+        return { error: "Unknown goal id." };
+      }
+      goalId = known.id;
+      if (!projectId && known.projectId) {
+        projectId = known.projectId;
+      }
+    }
+
     const issue = await createIssue(userId, {
       title,
       description: input.description?.trim() || null,
       areaId,
       projectId,
+      goalId,
       dueDate: input.dueDate ?? null,
       reviewDate: input.reviewDate ?? null,
     });
@@ -116,6 +130,7 @@ const tool = defineTool({
       title: issue.title,
       area: issue.areaName,
       projectId: issue.projectId,
+      goalId: issue.goalId,
       dueDate: issue.dueDate,
       reviewDate: issue.reviewDate,
     };
@@ -128,6 +143,7 @@ const tool = defineTool({
     // so chat does not invent empty projects.
     projectName: z.string().max(120).optional(),
     projectId: z.string().optional(),
+    goalId: z.string().optional(),
     description: z.string().max(4000).optional(),
     // Calendar dates (YYYY-MM-DD): dueDate is when it must be resolved;
     // reviewDate is when it should return to the user's attention.
@@ -146,6 +162,7 @@ const tool = defineTool({
     title: z.string().optional(),
     area: z.string().optional(),
     projectId: z.string().nullable().optional(),
+    goalId: z.string().nullable().optional(),
     dueDate: z.string().nullable().optional(),
     reviewDate: z.string().nullable().optional(),
   }),

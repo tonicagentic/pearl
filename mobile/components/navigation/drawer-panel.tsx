@@ -264,27 +264,27 @@ export function DrawerPanel({
           />
         ))}
         <DrawerSectionLabel>Projects</DrawerSectionLabel>
-        {drawerProjects.length === 0 ? (
-          <DrawerLinkRow
-            label="Projects"
-            icon={FolderIcon}
-            onPress={() => go("/workspaces")}
-            selected={isDrawerHrefActive(pathname, "/workspaces")}
-          />
-        ) : (
-          drawerProjects.map((project) => {
-            const href = `/workspaces/projects/${encodeURIComponent(project.id)}`;
-            return (
-              <DrawerLinkRow
-                key={project.id}
-                label={project.name}
-                icon={projectMarkFor(project.name).icon}
-                onPress={() => go(drawerProjectHref(project.id))}
-                selected={isDrawerHrefActive(pathname, href)}
-              />
-            );
-          })
-        )}
+        <DrawerLinkRow
+          label="All projects"
+          icon={FolderIcon}
+          onPress={() => go("/workspaces")}
+          selected={
+            isDrawerHrefActive(pathname, "/workspaces") &&
+            !pathname.includes("/workspaces/projects/")
+          }
+        />
+        {drawerProjects.map((project) => {
+          const href = `/workspaces/projects/${encodeURIComponent(project.id)}`;
+          return (
+            <DrawerLinkRow
+              key={project.id}
+              label={project.name}
+              icon={projectMarkFor(project.name).icon}
+              onPress={() => go(drawerProjectHref(project.id))}
+              selected={isDrawerHrefActive(pathname, href)}
+            />
+          );
+        })}
         <DrawerSectionLabel>Recent chats</DrawerSectionLabel>
       </View>
     </View>

@@ -119,6 +119,11 @@ export const chat = pgTable(
     projectId: text("project_id").references((): AnyPgColumn => project.id, {
       onDelete: "set null",
     }),
+    // Optional goal. Deleting a goal unlinks the chat (set null). Late
+    // reference: project_goal is declared below.
+    goalId: text("goal_id").references((): AnyPgColumn => projectGoal.id, {
+      onDelete: "set null",
+    }),
     // Live sandbox / Expo simulator preview URLs for the Computer tab.
     // Shape: WorkbenchPreview[] from lib/workbench/types.
     previews: jsonb("previews")
@@ -170,6 +175,7 @@ export const chat = pgTable(
     index("idx_chat_user_updated").on(table.userId, table.updatedAt),
     index("idx_chat_user_created").on(table.userId, table.createdAt),
     index("idx_chat_project").on(table.projectId),
+    index("idx_chat_goal").on(table.goalId),
     index("idx_chat_remote_agent").on(table.remoteAgentId),
     uniqueIndex("idx_chat_custom_agent").on(table.customAgentId),
     // Lookup chats from eve hooks by durable session id (jsonb path).
@@ -362,6 +368,11 @@ export const issue = pgTable(
     projectId: text("project_id").references((): AnyPgColumn => project.id, {
       onDelete: "set null",
     }),
+    // Optional goal. Deleting a goal unfiles the task (set null). Late
+    // reference: project_goal is declared below.
+    goalId: text("goal_id").references((): AnyPgColumn => projectGoal.id, {
+      onDelete: "set null",
+    }),
     status: text("status", { enum: ["open", "resolved"] })
       .notNull()
       .default("open"),
@@ -386,6 +397,7 @@ export const issue = pgTable(
   (table) => [
     index("idx_issue_user_status").on(table.userId, table.status),
     index("idx_issue_user_project").on(table.userId, table.projectId),
+    index("idx_issue_user_goal").on(table.userId, table.goalId),
     index("idx_issue_list_item_open").on(table.listItemId, table.status),
     uniqueIndex("idx_issue_list_item_occurrence")
       .on(table.listItemId, table.listOccurrence)
@@ -1210,6 +1222,10 @@ export const projectNote = pgTable(
     projectId: text("project_id").references(() => project.id, {
       onDelete: "set null",
     }),
+    // Optional goal. Deleting a goal unfiles the note (set null).
+    goalId: text("goal_id").references(() => projectGoal.id, {
+      onDelete: "set null",
+    }),
     title: text("title").notNull(),
     markdown: text("markdown").notNull().default(""),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1217,11 +1233,93 @@ export const projectNote = pgTable(
   },
   (table) => [
     index("idx_project_note_project").on(table.projectId),
+    index("idx_project_note_goal").on(table.goalId),
     index("idx_project_note_user").on(table.userId),
   ],
 );
 
 export type ProjectNote = typeof projectNote.$inferSelect;
+
+/** Fixed palette for project labels (persisted as these tokens). */
+export type ProjectLabelColor =
+  | "gray"
+  | "red"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "blue"
+  | "purple"
+  | "pink";
+
+/** Per-user label catalog for projects. */
+export const projectLabel = pgTable(
+  "project_label",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    color: text("color", {
+      enum: [
+        "gray",
+        "red",
+        "orange",
+        "yellow",
+        "green",
+        "blue",
+        "purple",
+        "pink",
+      ],
+    })
+      .notNull()
+      .default("gray")
+      .$type<ProjectLabelColor>(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_project_label_user").on(table.userId),
+    uniqueIndex("idx_project_label_user_name").on(
+      table.userId,
+      sql`lower(${table.name})`,
+    ),
+  ],
+);
+
+export type ProjectLabel = typeof projectLabel.$inferSelect;
+
+/** Many-to-many: projects ↔ labels. */
+export const projectLabelAssignment = pgTable(
+  "project_label_assignment",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    labelId: text("label_id")
+      .notNull()
+      .references(() => projectLabel.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_project_label_assignment_project").on(table.projectId),
+    index("idx_project_label_assignment_label").on(table.labelId),
+    index("idx_project_label_assignment_user").on(table.userId),
+    uniqueIndex("idx_project_label_assignment_unique").on(
+      table.projectId,
+      table.labelId,
+    ),
+  ],
+);
+
+export type ProjectLabelAssignment = typeof projectLabelAssignment.$inferSelect;
 
 /**
  * User-saved excerpts from chat replies. Shown in the Library Quotes
@@ -1720,3 +1818,22 @@ export const pearlAutomation = pgTable(
 );
 
 export type PearlAutomation = typeof pearlAutomation.$inferSelect;
+
+/**
+ * Maps a Plaid item_id to the Pearl user who owns it. Lives in the main app
+ * database (not finance RLS) so webhooks and the daily books cron can resolve
+ * the user without already knowing app.user_id.
+ */
+export const plaidItemIndex = pgTable(
+  "plaid_item_index",
+  {
+    itemId: text("item_id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("idx_plaid_item_index_user").on(table.userId)],
+);
+
+export type PlaidItemIndex = typeof plaidItemIndex.$inferSelect;

@@ -39,6 +39,7 @@ export async function POST(request: Request) {
     readonly title?: string;
     readonly markdown?: string;
     readonly projectId?: string | null;
+    readonly goalId?: string | null;
   };
 
   try {
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
       title: typeof body.title === "string" ? body.title : "",
       markdown: typeof body.markdown === "string" ? body.markdown : undefined,
       projectId: body.projectId,
+      goalId: body.goalId,
     });
     return NextResponse.json({ note });
   } catch (error) {

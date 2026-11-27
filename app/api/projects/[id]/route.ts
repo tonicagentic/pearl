@@ -10,6 +10,7 @@ import {
 } from "@/lib/db/projects";
 import { listProjectArtifacts } from "@/lib/db/project-artifacts";
 import { listProjectGoals } from "@/lib/db/project-goals";
+import { listLabelsForProject } from "@/lib/db/project-labels";
 import { listProjectLinks } from "@/lib/db/project-links";
 import { listProjectNotes } from "@/lib/db/project-notes";
 import { listProjectPins } from "@/lib/db/workbench-pins";
@@ -51,7 +52,7 @@ export async function GET(
   // Best-effort migration while `plan` table still exists pre-0058.
   await backfillPlansToProjectFiles(viewer.id, owned.id).catch(() => 0);
 
-  const [chats, pins, issues, artifacts, goals, notes, links, agents] =
+  const [chats, pins, issues, artifacts, goals, notes, links, agents, labels] =
     await Promise.all([
       listProjectChats(viewer.id, owned.id),
       listProjectPins(viewer.id, owned.id),
@@ -61,10 +62,11 @@ export async function GET(
       listProjectNotes(viewer.id, owned.id),
       listProjectLinks(viewer.id, owned.id),
       listCustomAgents(viewer.id, { projectId: owned.id }),
+      listLabelsForProject(viewer.id, owned.id),
     ]);
 
   return NextResponse.json({
-    project: serializeProject(owned),
+    project: serializeProject(owned, labels),
     // plans removed: project files live in artifacts (Blob + project_artifact).
     plans: [],
     agents,
@@ -98,6 +100,7 @@ export async function GET(
       areaId: row.areaId,
       areaName: row.areaName,
       projectId: row.projectId,
+      goalId: row.goalId,
       state: issueState(row),
       dueSoon:
         row.status === "open" &&
@@ -138,7 +141,8 @@ export async function PATCH(
     if (!project) {
       return NextResponse.json({ error: "Project not found." }, { status: 404 });
     }
-    return NextResponse.json({ project: serializeProject(project) });
+    const labels = await listLabelsForProject(viewer.id, id);
+    return NextResponse.json({ project: serializeProject(project, labels) });
   } catch (error) {
     return NextResponse.json(
       {

@@ -54,6 +54,7 @@ export async function PATCH(
     readonly title?: string;
     readonly markdown?: string;
     readonly projectId?: string | null;
+    readonly goalId?: string | null;
   };
 
   try {

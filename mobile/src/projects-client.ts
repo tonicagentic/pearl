@@ -18,6 +18,23 @@ export type ProjectPriority =
   | "medium"
   | "low";
 
+export type ProjectLabelColor =
+  | "gray"
+  | "red"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "blue"
+  | "purple"
+  | "pink";
+
+export type ProjectLabelDto = {
+  readonly id: string;
+  readonly name: string;
+  readonly color: ProjectLabelColor;
+  readonly createdAt: string;
+};
+
 export type ProjectDto = {
   readonly id: string;
   readonly name: string;
@@ -28,6 +45,7 @@ export type ProjectDto = {
   readonly targetDate: string | null;
   /** Shared Vercel Drive for project sandboxes; null until first provision. */
   readonly driveName: string | null;
+  readonly labels: readonly ProjectLabelDto[];
   readonly createdAt: string;
   readonly updatedAt: string;
 };
@@ -176,6 +194,13 @@ function handleAuth(response: Response): void {
   }
 }
 
+function withLabels(project: ProjectDto): ProjectDto {
+  return {
+    ...project,
+    labels: project.labels ?? [],
+  };
+}
+
 export async function fetchProjects(): Promise<readonly ProjectDto[]> {
   const response = await fetch(`${AGENT_URL}/api/projects`, {
     headers: authHeaders(),
@@ -187,7 +212,7 @@ export async function fetchProjects(): Promise<readonly ProjectDto[]> {
   }
 
   const data = (await response.json()) as { projects: ProjectDto[] };
-  return data.projects;
+  return data.projects.map(withLabels);
 }
 
 export async function createProjectRequest(input: {
@@ -206,7 +231,7 @@ export async function createProjectRequest(input: {
   }
 
   const data = (await response.json()) as { project: ProjectDto };
-  return data.project;
+  return withLabels(data.project);
 }
 
 export async function fetchProjectWorkspace(
@@ -225,6 +250,7 @@ export async function fetchProjectWorkspace(
   const data = (await response.json()) as ProjectWorkspaceDto;
   return {
     ...data,
+    project: withLabels(data.project),
     agents: data.agents ?? [],
     pins: data.pins ?? [],
     issues: data.issues ?? [],
@@ -261,7 +287,75 @@ export async function updateProjectRequest(
   }
 
   const data = (await response.json()) as { project: ProjectDto };
-  return data.project;
+  return withLabels(data.project);
+}
+
+export async function fetchProjectLabels(): Promise<
+  readonly ProjectLabelDto[]
+> {
+  const response = await fetch(`${AGENT_URL}/api/project-labels`, {
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+  const data = (await response.json()) as { labels: ProjectLabelDto[] };
+  return data.labels;
+}
+
+export async function createProjectLabelRequest(input: {
+  readonly name: string;
+  readonly color?: ProjectLabelColor;
+}): Promise<ProjectLabelDto> {
+  const response = await fetch(`${AGENT_URL}/api/project-labels`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+  const data = (await response.json()) as { label: ProjectLabelDto };
+  return data.label;
+}
+
+export async function deleteProjectLabelRequest(labelId: string): Promise<void> {
+  const response = await fetch(
+    `${AGENT_URL}/api/project-labels/${encodeURIComponent(labelId)}`,
+    {
+      method: "DELETE",
+      headers: authHeaders(),
+    },
+  );
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+}
+
+export async function setProjectLabelsRequest(
+  projectId: string,
+  input:
+    | { readonly labelIds: readonly string[] }
+    | { readonly addLabelId: string }
+    | { readonly removeLabelId: string },
+): Promise<readonly ProjectLabelDto[]> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/labels`,
+    {
+      method: "PUT",
+      headers: authHeaders(),
+      body: JSON.stringify(input),
+    },
+  );
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+  const data = (await response.json()) as { labels: ProjectLabelDto[] };
+  return data.labels;
 }
 
 export async function deleteProjectRequest(id: string): Promise<void> {

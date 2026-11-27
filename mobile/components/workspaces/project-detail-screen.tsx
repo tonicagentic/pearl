@@ -62,21 +62,26 @@ import {
 } from "@/src/issues-client";
 import { createNoteRequest } from "@/src/notes-client";
 import { openWebUrl } from "@/src/open-web-url";
+import { ProjectLabelChip } from "@/components/workspaces/project-label-chip";
 import {
   createProjectFileRequest,
+  createProjectLabelRequest,
   createProjectLinkRequest,
   deleteProjectGoalRequest,
   deleteProjectLinkRequest,
   deleteProjectRequest,
+  fetchProjectLabels,
   fetchProjectWorkspace,
   linkProjectArtifactRequest,
   linkProjectPinRequest,
+  setProjectLabelsRequest,
   unlinkProjectArtifactRequest,
   unlinkProjectPinRequest,
   updateProjectLinkRequest,
   updateProjectRequest,
   type ProjectGoalDto,
   type ProjectIssueDto,
+  type ProjectLabelDto,
   type ProjectLinkDto,
   type ProjectPriority,
   type ProjectStatus,
@@ -765,6 +770,95 @@ export function ProjectDetailScreen({
     ]);
   }, [patchProjectFields]);
 
+  const applyLabels = useCallback(
+    (labels: readonly ProjectLabelDto[]) => {
+      setWorkspace((current) =>
+        current
+          ? { ...current, project: { ...current.project, labels } }
+          : current,
+      );
+      invalidateProject();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+    },
+    [invalidateProject, queryClient],
+  );
+
+  const pickLabels = useCallback(() => {
+    const assigned = workspace?.project.labels ?? [];
+    const assignedIds = new Set(assigned.map((label) => label.id));
+
+    const createNew = () => {
+      Alert.prompt(
+        "New label",
+        "Name for this label",
+        (name) => {
+          const trimmed = name?.trim() ?? "";
+          if (!trimmed) return;
+          void createProjectLabelRequest({ name: trimmed, color: "blue" })
+            .then((label) =>
+              setProjectLabelsRequest(projectId, { addLabelId: label.id }),
+            )
+            .then(applyLabels)
+            .catch((cause) => {
+              setError(
+                cause instanceof Error
+                  ? cause.message
+                  : "Could not create label.",
+              );
+            });
+        },
+        "plain-text",
+      );
+    };
+
+    void fetchProjectLabels()
+      .then((catalog) => {
+        const available = catalog.filter((label) => !assignedIds.has(label.id));
+        Alert.alert("Labels", undefined, [
+          ...assigned.map((label) => ({
+            text: `Remove “${label.name}”`,
+            style: "destructive" as const,
+            onPress: () => {
+              void setProjectLabelsRequest(projectId, {
+                removeLabelId: label.id,
+              })
+                .then(applyLabels)
+                .catch((cause) => {
+                  setError(
+                    cause instanceof Error
+                      ? cause.message
+                      : "Could not remove label.",
+                  );
+                });
+            },
+          })),
+          ...available.slice(0, 6).map((label) => ({
+            text: label.name,
+            onPress: () => {
+              void setProjectLabelsRequest(projectId, {
+                addLabelId: label.id,
+              })
+                .then(applyLabels)
+                .catch((cause) => {
+                  setError(
+                    cause instanceof Error
+                      ? cause.message
+                      : "Could not add label.",
+                  );
+                });
+            },
+          })),
+          { text: "Create label", onPress: createNew },
+          { text: "Cancel", style: "cancel" as const },
+        ]);
+      })
+      .catch((cause) => {
+        setError(
+          cause instanceof Error ? cause.message : "Could not load labels.",
+        );
+      });
+  }, [applyLabels, projectId, workspace?.project.labels]);
+
   const openDatesSheet = useCallback(() => {
     setDraftStartDate(workspace?.project.startDate ?? "");
     setDraftTargetDate(workspace?.project.targetDate ?? "");
@@ -999,7 +1093,22 @@ export function ProjectDetailScreen({
               label={formatDatePill(projectStartDate, projectTargetDate)}
               onPress={openDatesSheet}
             />
+            <PropertyPill
+              label={
+                (workspace?.project.labels?.length ?? 0) > 0
+                  ? `Labels · ${String(workspace?.project.labels.length)}`
+                  : "Labels"
+              }
+              onPress={pickLabels}
+            />
           </View>
+          {(workspace?.project.labels?.length ?? 0) > 0 ? (
+            <View className="flex-row flex-wrap gap-1.5">
+              {workspace!.project.labels.map((label) => (
+                <ProjectLabelChip key={label.id} label={label} />
+              ))}
+            </View>
+          ) : null}
 
           <View className="flex-row gap-1.5 pb-1">
             {PROJECT_TABS.map(({ key, label }) => {
@@ -1587,7 +1696,13 @@ function GoalRow({
           <Icon as={CheckIcon} className="size-4 text-foreground" />
         ) : null}
       </Pressable>
-      <Pressable className="min-w-0 flex-1" onLongPress={onDelete}>
+      <Pressable
+        className="min-w-0 flex-1"
+        onLongPress={onDelete}
+        onPress={() =>
+          router.push(`/goals/${encodeURIComponent(goal.id)}`)
+        }
+      >
         <Text
           className={cn(
             "text-sm text-foreground",

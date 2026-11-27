@@ -18,6 +18,7 @@ export type IssueDto = {
   areaId: string;
   areaName: string;
   projectId: string | null;
+  goalId?: string | null;
   state: IssueState;
   dueSoon?: boolean;
 };
@@ -84,6 +85,7 @@ export type CreateIssueInput = {
   readonly areaName?: string;
   readonly description?: string;
   readonly projectId?: string | null;
+  readonly goalId?: string | null;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;
 };
@@ -158,6 +160,7 @@ export type UpdateIssueInput = {
   readonly title?: string;
   readonly description?: string | null;
   readonly projectId?: string | null;
+  readonly goalId?: string | null;
   readonly dueDate?: string | null;
   readonly reviewDate?: string | null;
 };

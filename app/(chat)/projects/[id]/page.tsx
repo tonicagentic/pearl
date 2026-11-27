@@ -6,6 +6,10 @@ import { Suspense } from "react";
 import { listCustomAgents } from "@/lib/custom-agents/store";
 import { listAgentTemplates } from "@/lib/custom-agents/templates";
 import { ensureUserForPrincipal } from "@/lib/db/issues";
+import {
+  listLabelsForProject,
+  listProjectLabels,
+} from "@/lib/db/project-labels";
 import { getProject, listProjectChats } from "@/lib/db/projects";
 import { listProjectArtifacts } from "@/lib/db/project-artifacts";
 import { listProjectPins } from "@/lib/db/workbench-pins";
@@ -65,13 +69,16 @@ async function ResolvedProject({
   const owned = await getProject(viewer.id, projectId);
   if (!owned) notFound();
 
-  const [artifacts, chats, pins, agents, templates] = await Promise.all([
-    listProjectArtifacts(viewer.id, owned.id),
-    listProjectChats(viewer.id, owned.id),
-    listProjectPins(viewer.id, owned.id),
-    listCustomAgents(viewer.id, { projectId: owned.id }),
-    listAgentTemplates(viewer.id, { projectId: owned.id }),
-  ]);
+  const [artifacts, chats, pins, agents, templates, labels, catalog] =
+    await Promise.all([
+      listProjectArtifacts(viewer.id, owned.id),
+      listProjectChats(viewer.id, owned.id),
+      listProjectPins(viewer.id, owned.id),
+      listCustomAgents(viewer.id, { projectId: owned.id }),
+      listAgentTemplates(viewer.id, { projectId: owned.id }),
+      listLabelsForProject(viewer.id, owned.id),
+      listProjectLabels(viewer.id),
+    ]);
 
   return (
     <>
@@ -95,6 +102,7 @@ async function ResolvedProject({
           markGaze: row.markGaze,
           chatId: row.chatId,
         }))}
+        catalog={catalog}
         chats={chats.map((row) => ({
           id: row.id,
           title: row.title,
@@ -106,6 +114,7 @@ async function ResolvedProject({
           pathname: row.pathname,
           updatedAt: row.createdAt,
         }))}
+        labels={labels}
         pins={pins.map((pin) => ({
           id: pin.id,
           fullName: pin.fullName,

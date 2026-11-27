@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import {
+  assignProjectLabelAction,
   createProjectChatAction,
+  createProjectLabelAction,
   deleteProjectAction,
   linkProjectPinAction,
   saveProjectFileAction,
+  unassignProjectLabelAction,
   unlinkProjectPinAction,
   updateProjectAction,
 } from "@/app/actions/projects";
@@ -25,6 +28,7 @@ import type {
   AgentMarkShape,
   AgentMarkTalk,
 } from "@/lib/custom-agents/mark";
+import type { ProjectLabelDto } from "@/lib/db/project-labels";
 
 type ProjectProps = {
   readonly id: string;
@@ -71,6 +75,8 @@ export function ProjectWorkspace({
   files,
   chats,
   pins,
+  labels: initialLabels,
+  catalog,
 }: {
   readonly project: ProjectProps;
   readonly agents: readonly AgentProps[];
@@ -78,14 +84,23 @@ export function ProjectWorkspace({
   readonly files: readonly FileProps[];
   readonly chats: readonly ChatProps[];
   readonly pins: readonly PinProps[];
+  readonly labels: readonly ProjectLabelDto[];
+  readonly catalog: readonly ProjectLabelDto[];
 }) {
   const router = useRouter();
   const [name, setName] = useState(project.name);
   const [instructions, setInstructions] = useState(project.instructions);
   const [fileTitle, setFileTitle] = useState("");
   const [repoFullName, setRepoFullName] = useState("");
+  const [labelDraft, setLabelDraft] = useState("");
+  const [labels, setLabels] = useState(initialLabels);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  useEffect(() => {
+    setLabels(initialLabels);
+  }, [initialLabels]);
+  const assignedIds = new Set(labels.map((label) => label.id));
+  const available = catalog.filter((label) => !assignedIds.has(label.id));
 
   return (
     <div className="flex flex-col gap-8">
@@ -109,6 +124,114 @@ export function ProjectWorkspace({
           placeholder="Instructions for every chat in this project"
           value={instructions}
         />
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Labels
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {labels.length === 0 ? (
+              <span className="text-sm text-muted-foreground">No labels</span>
+            ) : (
+              labels.map((label) => (
+                <button
+                  className="rounded-full border border-border/60 bg-muted/60 px-2.5 py-1 text-xs text-foreground hover:bg-muted"
+                  key={label.id}
+                  onClick={() => {
+                    setError(null);
+                    startTransition(async () => {
+                      try {
+                        const next = await unassignProjectLabelAction({
+                          projectId: project.id,
+                          labelId: label.id,
+                        });
+                        setLabels(next);
+                        router.refresh();
+                      } catch (cause) {
+                        setError(
+                          cause instanceof Error
+                            ? cause.message
+                            : "Could not remove label.",
+                        );
+                      }
+                    });
+                  }}
+                  type="button"
+                >
+                  {label.name} ×
+                </button>
+              ))
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {available.slice(0, 8).map((label) => (
+              <Button
+                disabled={pending}
+                key={label.id}
+                onClick={() => {
+                  setError(null);
+                  startTransition(async () => {
+                    try {
+                      const next = await assignProjectLabelAction({
+                        projectId: project.id,
+                        labelId: label.id,
+                      });
+                      setLabels(next);
+                      router.refresh();
+                    } catch (cause) {
+                      setError(
+                        cause instanceof Error
+                          ? cause.message
+                          : "Could not add label.",
+                      );
+                    }
+                  });
+                }}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                + {label.name}
+              </Button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Input
+              maxLength={40}
+              onChange={(event) => setLabelDraft(event.target.value)}
+              placeholder="New label name"
+              value={labelDraft}
+            />
+            <Button
+              disabled={pending || !labelDraft.trim()}
+              onClick={() => {
+                const trimmed = labelDraft.trim();
+                if (!trimmed) return;
+                setError(null);
+                startTransition(async () => {
+                  try {
+                    const next = await createProjectLabelAction({
+                      name: trimmed,
+                      projectId: project.id,
+                    });
+                    setLabels(next);
+                    setLabelDraft("");
+                    router.refresh();
+                  } catch (cause) {
+                    setError(
+                      cause instanceof Error
+                        ? cause.message
+                        : "Could not create label.",
+                    );
+                  }
+                });
+              }}
+              size="sm"
+              type="button"
+            >
+              Add label
+            </Button>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button
             disabled={pending || !name.trim()}

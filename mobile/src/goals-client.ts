@@ -1,4 +1,5 @@
 import { authedJson, authedVoid } from "./http";
+import type { IssueDto } from "./issues-client";
 
 export type GoalDto = {
   readonly id: string;
@@ -12,9 +13,39 @@ export type GoalDto = {
   readonly updatedAt: string;
 };
 
+export type GoalChatDto = {
+  readonly id: string;
+  readonly title: string;
+  readonly updatedAt: string;
+};
+
+export type GoalNoteSummaryDto = {
+  readonly id: string;
+  readonly projectId: string | null;
+  readonly projectName: string | null;
+  readonly goalId: string | null;
+  readonly title: string;
+  readonly updatedAt: string;
+};
+
+export type GoalWorkspaceDto = {
+  readonly goal: GoalDto;
+  readonly tasks: readonly IssueDto[];
+  readonly chats: readonly GoalChatDto[];
+  readonly notes: readonly GoalNoteSummaryDto[];
+};
+
 export async function fetchAllGoals(): Promise<readonly GoalDto[]> {
   const data = await authedJson<{ goals: GoalDto[] }>("/api/goals");
   return data.goals;
+}
+
+export async function fetchGoalWorkspace(
+  goalId: string,
+): Promise<GoalWorkspaceDto> {
+  return authedJson<GoalWorkspaceDto>(
+    `/api/goals/${encodeURIComponent(goalId)}`,
+  );
 }
 
 export async function createGoalRequest(input: {

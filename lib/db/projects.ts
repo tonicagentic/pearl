@@ -266,6 +266,27 @@ export async function listProjectChats(
     .orderBy(desc(chat.updatedAt));
 }
 
+export async function listGoalChats(
+  userId: string,
+  goalId: string,
+): Promise<readonly { id: string; title: string; updatedAt: Date }[]> {
+  return db
+    .select({
+      id: chat.id,
+      title: chat.title,
+      updatedAt: chat.updatedAt,
+    })
+    .from(chat)
+    .where(
+      and(
+        eq(chat.userId, userId),
+        eq(chat.goalId, goalId),
+        isNull(chat.customAgentId),
+      ),
+    )
+    .orderBy(desc(chat.updatedAt));
+}
+
 export async function setChatProject(
   userId: string,
   chatId: string,
@@ -278,6 +299,40 @@ export async function setChatProject(
   const updated = await db
     .update(chat)
     .set({ projectId, updatedAt: new Date() })
+    .where(and(eq(chat.userId, userId), eq(chat.id, chatId)))
+    .returning({ id: chat.id });
+  return updated.length > 0;
+}
+
+export async function setChatGoal(
+  userId: string,
+  chatId: string,
+  goalId: string | null,
+  options?: { readonly projectId?: string | null },
+): Promise<boolean> {
+  if (goalId) {
+    const { getGoal } = await import("@/lib/db/project-goals");
+    const owned = await getGoal(userId, goalId);
+    if (!owned) return false;
+  }
+
+  const patch: {
+    goalId: string | null;
+    updatedAt: Date;
+    projectId?: string | null;
+  } = { goalId, updatedAt: new Date() };
+
+  if (options?.projectId !== undefined) {
+    if (options.projectId) {
+      const owned = await getProject(userId, options.projectId);
+      if (!owned) return false;
+    }
+    patch.projectId = options.projectId;
+  }
+
+  const updated = await db
+    .update(chat)
+    .set(patch)
     .where(and(eq(chat.userId, userId), eq(chat.id, chatId)))
     .returning({ id: chat.id });
   return updated.length > 0;

@@ -36,6 +36,7 @@ import {
   agentFileRevision,
   agentAttachment,
 } from "@/lib/db/schema";
+import { resolveRecordedModelCost } from "@/lib/billing/provider-pricing";
 import { db } from "@/lib/db/client";
 import {
   isAgentMarkBrows,
@@ -279,9 +280,11 @@ export async function createChat(
   {
     pendingUserMessage,
     projectId,
+    goalId,
   }: {
     readonly pendingUserMessage?: string;
     readonly projectId?: string | null;
+    readonly goalId?: string | null;
   } = {},
 ) {
   const pendingMessage = pendingUserMessage?.trim();
@@ -295,12 +298,14 @@ export async function createChat(
       title: pendingMessage ? createFallbackTitle(pendingMessage) : DEFAULT_CHAT_TITLE,
       userId,
       projectId: projectId ?? null,
+      goalId: goalId ?? null,
     })
     .returning({
       id: chat.id,
       title: chat.title,
       updatedAt: chat.updatedAt,
       projectId: chat.projectId,
+      goalId: chat.goalId,
       remoteAgentId: chat.remoteAgentId,
     });
 
@@ -313,6 +318,7 @@ export async function createChat(
     title: row.title,
     updatedAt: row.updatedAt.toISOString(),
     projectId: row.projectId ?? null,
+    goalId: row.goalId ?? null,
     remoteAgentId: row.remoteAgentId ?? null,
     waitingForInput: false,
     presence: "idle" as const,
@@ -1799,43 +1805,66 @@ export async function getUserUsageRows(
       if (row.ownerCallId && !row.runId) return false;
       return true;
     })
-    .map((row) => ({
-      cacheReadTokens: nullableNumber(row.cacheReadTokens),
-      cacheWriteTokens: nullableNumber(row.cacheWriteTokens),
-      chatId: row.chatId,
-      costUsd: nullableNumber(row.costUsd),
-      createdAt: row.createdAt,
-      inputTokens: nullableNumber(row.inputTokens),
-      modelId: row.runId
+    .map((row) => {
+      const joinedModelId = row.runId
         ? (modelByRun.get(`${row.chatId}::${row.runId}`) ??
           (row.turnId
             ? (modelByTurn.get(`${row.chatId}::${row.turnId}`) ?? null)
             : null))
         : row.turnId
           ? (modelByTurn.get(`${row.chatId}::${row.turnId}`) ?? null)
-          : null,
-      outputTokens: nullableNumber(row.outputTokens),
-      turnId: row.turnId,
-    }));
+          : null;
+      const recorded = resolveRecordedModelCost({
+        cacheReadTokens: nullableNumber(row.cacheReadTokens),
+        cacheWriteTokens: nullableNumber(row.cacheWriteTokens),
+        costUsd: nullableNumber(row.costUsd),
+        inputTokens: nullableNumber(row.inputTokens),
+        kind: row.kind,
+        modelId: joinedModelId,
+        outputTokens: nullableNumber(row.outputTokens),
+      });
+      return {
+        cacheReadTokens: nullableNumber(row.cacheReadTokens),
+        cacheWriteTokens: nullableNumber(row.cacheWriteTokens),
+        chatId: row.chatId,
+        costUsd: recorded.costUsd,
+        createdAt: row.createdAt,
+        inputTokens: nullableNumber(row.inputTokens),
+        modelId: recorded.modelId,
+        outputTokens: nullableNumber(row.outputTokens),
+        turnId: row.turnId,
+      };
+    });
 
   // Prefer usage.recorded when present; only fall back to legacy steps when a
   // chat has no modern usage facts (avoid double-counting converted history).
   const chatsWithUsage = new Set(fromUsage.map((row) => row.chatId));
   const fromLegacy = legacySteps
     .filter((row) => !chatsWithUsage.has(row.chatId))
-    .map((row) => ({
-      cacheReadTokens: nullableNumber(row.cacheReadTokens),
-      cacheWriteTokens: nullableNumber(row.cacheWriteTokens),
-      chatId: row.chatId,
-      costUsd: nullableNumber(row.costUsd),
-      createdAt: row.createdAt,
-      inputTokens: nullableNumber(row.inputTokens),
-      modelId: row.turnId
+    .map((row) => {
+      const joinedModelId = row.turnId
         ? (modelByTurn.get(`${row.chatId}::${row.turnId}`) ?? null)
-        : null,
-      outputTokens: nullableNumber(row.outputTokens),
-      turnId: row.turnId,
-    }));
+        : null;
+      const recorded = resolveRecordedModelCost({
+        cacheReadTokens: nullableNumber(row.cacheReadTokens),
+        cacheWriteTokens: nullableNumber(row.cacheWriteTokens),
+        costUsd: nullableNumber(row.costUsd),
+        inputTokens: nullableNumber(row.inputTokens),
+        modelId: joinedModelId,
+        outputTokens: nullableNumber(row.outputTokens),
+      });
+      return {
+        cacheReadTokens: nullableNumber(row.cacheReadTokens),
+        cacheWriteTokens: nullableNumber(row.cacheWriteTokens),
+        chatId: row.chatId,
+        costUsd: recorded.costUsd,
+        createdAt: row.createdAt,
+        inputTokens: nullableNumber(row.inputTokens),
+        modelId: recorded.modelId,
+        outputTokens: nullableNumber(row.outputTokens),
+        turnId: row.turnId,
+      };
+    });
 
   return [...fromUsage, ...fromLegacy];
 }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { ensureUserForPrincipal } from "@/lib/db/issues";
+import { listLabelsForProjects } from "@/lib/db/project-labels";
 import { listProjects } from "@/lib/db/projects";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
@@ -56,6 +57,10 @@ async function ResolvedProjects() {
   });
 
   const projects = await listProjects(viewer.id);
+  const labelsByProject = await listLabelsForProjects(
+    viewer.id,
+    projects.map((row) => row.id),
+  );
 
   return (
     <>
@@ -66,24 +71,40 @@ async function ResolvedProjects() {
         </p>
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
-          {projects.map((row) => (
-            <li key={row.id}>
-              <Link
-                className="flex items-center justify-between gap-3 px-3 py-3 hover:bg-muted/40"
-                href={`/projects/${row.id}`}
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{row.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {row.instructions.trim()
-                      ? row.instructions.trim().slice(0, 120)
-                      : "No instructions yet"}
+          {projects.map((row) => {
+            const labels = labelsByProject.get(row.id) ?? [];
+            return (
+              <li key={row.id}>
+                <Link
+                  className="flex items-center justify-between gap-3 px-3 py-3 hover:bg-muted/40"
+                  href={`/projects/${row.id}`}
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{row.name}</div>
+                    {labels.length > 0 ? (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {labels.map((label) => (
+                          <span
+                            className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground"
+                            key={label.id}
+                          >
+                            {label.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="truncate text-xs text-muted-foreground">
+                        {row.instructions.trim()
+                          ? row.instructions.trim().slice(0, 120)
+                          : "No instructions yet"}
+                      </div>
+                    )}
                   </div>
-                </div>
-                <span className="text-xs text-muted-foreground">Open</span>
-              </Link>
-            </li>
-          ))}
+                  <span className="text-xs text-muted-foreground">Open</span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </>

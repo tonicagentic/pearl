@@ -12,6 +12,7 @@ import { useCSSVariable } from "uniwind";
 
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
 import { CreateProjectModal } from "@/components/workspaces/create-project-modal";
+import { ProjectLabelChip } from "@/components/workspaces/project-label-chip";
 import { ProjectMark } from "@/components/project-mark";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
@@ -154,7 +155,13 @@ export function WorkspacesScreen() {
                     <Text variant="body" weight="medium" numberOfLines={1}>
                       {project.name}
                     </Text>
-                    {project.instructions.trim() ? (
+                    {project.labels.length > 0 ? (
+                      <View className="mt-1.5 flex-row flex-wrap gap-1.5">
+                        {project.labels.map((label) => (
+                          <ProjectLabelChip key={label.id} label={label} />
+                        ))}
+                      </View>
+                    ) : project.instructions.trim() ? (
                       <Text
                         variant="secondary"
                         className="mt-0.5"

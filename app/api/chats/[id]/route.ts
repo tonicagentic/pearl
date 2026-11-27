@@ -5,7 +5,7 @@ import {
   getChatForUser,
   updateChatTitleForUser,
 } from "@/lib/db/queries";
-import { setChatProject } from "@/lib/db/projects";
+import { setChatGoal, setChatProject } from "@/lib/db/projects";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -61,19 +61,21 @@ export async function PATCH(
 
   const body = (await request.json().catch(() => ({}))) as {
     readonly projectId?: string | null;
+    readonly goalId?: string | null;
     readonly remoteAgentId?: string | null;
     readonly title?: string;
   };
 
   const hasProject = body.projectId !== undefined;
+  const hasGoal = body.goalId !== undefined;
   const hasRemoteAgent = body.remoteAgentId !== undefined;
   const hasTitle = typeof body.title === "string";
 
-  if (!hasProject && !hasRemoteAgent && !hasTitle) {
+  if (!hasProject && !hasGoal && !hasRemoteAgent && !hasTitle) {
     return NextResponse.json(
       {
         error:
-          "Provide title, projectId, and/or remoteAgentId (string or null).",
+          "Provide title, projectId, goalId, and/or remoteAgentId (string or null).",
       },
       { status: 400 },
     );
@@ -82,6 +84,7 @@ export async function PATCH(
   let title: string | undefined;
   let updatedAt: string | undefined;
   let projectId: string | null | undefined;
+  let goalId: string | null | undefined;
   let remoteAgentId: string | null | undefined;
 
   if (hasTitle) {
@@ -114,6 +117,19 @@ export async function PATCH(
     projectId = body.projectId!;
   }
 
+  if (hasGoal) {
+    const ok = await setChatGoal(viewer.id, id, body.goalId!, {
+      ...(hasProject ? { projectId: body.projectId! } : {}),
+    });
+    if (!ok) {
+      return NextResponse.json(
+        { error: "Could not attach chat to goal." },
+        { status: 400 },
+      );
+    }
+    goalId = body.goalId!;
+  }
+
   if (hasRemoteAgent) {
     const next =
       typeof body.remoteAgentId === "string" && body.remoteAgentId.trim()
@@ -133,6 +149,7 @@ export async function PATCH(
     ok: true,
     ...(title !== undefined ? { title, updatedAt } : {}),
     ...(projectId !== undefined ? { projectId } : {}),
+    ...(goalId !== undefined ? { goalId } : {}),
     ...(remoteAgentId !== undefined ? { remoteAgentId } : {}),
   });
 }
