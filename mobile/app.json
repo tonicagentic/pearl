@@ -52,7 +52,6 @@
     "plugins": [
       "expo-router",
       "expo-dev-client",
-      "react-native-plaid-link-sdk",
       [
         "expo-build-properties",
         {
@@ -133,7 +132,7 @@
     },
     "extra": {
       "router": {},
-      "pearlOta": "7",
+      "pearlOta": "8",
       "eas": {
         "projectId": "43ee6005-c5ac-4b8f-b463-5d910681956d"
       }
