@@ -1,6 +1,10 @@
-ALTER TABLE "project" ADD COLUMN "drive_name" text;--> statement-breakpoint
-ALTER TABLE "custom_agent" ADD COLUMN "project_id" text;--> statement-breakpoint
-ALTER TABLE "custom_agent" ADD COLUMN "role" text DEFAULT 'member' NOT NULL;--> statement-breakpoint
+ALTER TABLE "project" ADD COLUMN IF NOT EXISTS "drive_name" text;--> statement-breakpoint
+ALTER TABLE "custom_agent" ADD COLUMN IF NOT EXISTS "project_id" text;--> statement-breakpoint
+ALTER TABLE "custom_agent" ADD COLUMN IF NOT EXISTS "role" text DEFAULT 'member' NOT NULL;--> statement-breakpoint
+-- Drop user-scoped uniqueness before seeding managers (names collide across
+-- projects until we switch to project-scoped indexes at the end).
+DROP INDEX IF EXISTS "idx_custom_agent_user_name";--> statement-breakpoint
+DROP INDEX IF EXISTS "idx_custom_agent_user_template";--> statement-breakpoint
 -- Existing agents → one Personal project per user (Personal agents if taken).
 DO $$
 DECLARE
@@ -104,10 +108,12 @@ BEGIN
   END LOOP;
 END $$;--> statement-breakpoint
 ALTER TABLE "custom_agent" ALTER COLUMN "project_id" SET NOT NULL;--> statement-breakpoint
-ALTER TABLE "custom_agent" ADD CONSTRAINT "custom_agent_project_id_project_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."project"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-DROP INDEX IF EXISTS "idx_custom_agent_user_name";--> statement-breakpoint
-DROP INDEX IF EXISTS "idx_custom_agent_user_template";--> statement-breakpoint
-CREATE INDEX "idx_custom_agent_project" ON "custom_agent" USING btree ("project_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "idx_custom_agent_project_name" ON "custom_agent" USING btree ("project_id","name");--> statement-breakpoint
-CREATE UNIQUE INDEX "idx_custom_agent_project_template" ON "custom_agent" USING btree ("project_id","template_slug");--> statement-breakpoint
-CREATE UNIQUE INDEX "idx_custom_agent_project_manager" ON "custom_agent" USING btree ("project_id") WHERE "role" = 'manager';
+DO $$ BEGIN
+  ALTER TABLE "custom_agent" ADD CONSTRAINT "custom_agent_project_id_project_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."project"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_custom_agent_project" ON "custom_agent" USING btree ("project_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_custom_agent_project_name" ON "custom_agent" USING btree ("project_id","name");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_custom_agent_project_template" ON "custom_agent" USING btree ("project_id","template_slug");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_custom_agent_project_manager" ON "custom_agent" USING btree ("project_id") WHERE "role" = 'manager';
