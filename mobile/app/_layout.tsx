@@ -8,6 +8,7 @@ import { KeyboardProvider } from "@/src/keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { BootReveal } from "@/components/boot-fade-overlay";
+import { PearlDrawerProvider } from "@/components/navigation/drawer-context";
 import { ObserveErrorFallback } from "@/components/observe-error-fallback";
 import { PushNotificationsBridge } from "@/components/push-notifications-bridge";
 import { applyUpdatesOnLaunch } from "@/src/apply-updates";
@@ -130,6 +131,7 @@ function AuthenticatedLayout() {
       <QueryProvider accountKey={accountKey}>
         <ChatsProvider key={accountKey}>
           <WorkspaceProvider>
+            <PearlDrawerProvider>
             <PushNotificationsBridge />
             <GestureHandlerRootView
               className="flex-1"
@@ -272,6 +274,22 @@ function AuthenticatedLayout() {
                           presentation: "modal",
                         }}
                       />
+                      <Stack.Screen
+                        name="settings"
+                        options={{
+                          headerShown: false,
+                          presentation: "fullScreenModal",
+                          animation: "slide_from_bottom",
+                        }}
+                      />
+                      <Stack.Screen
+                        name="chat-search"
+                        options={{
+                          headerShown: false,
+                          presentation: "fullScreenModal",
+                          animation: "fade",
+                        }}
+                      />
                     </Stack.Protected>
                   </Stack>
                   </ThemeProvider>
@@ -280,6 +298,7 @@ function AuthenticatedLayout() {
             </KeyboardProvider>
           </SafeAreaProvider>
         </GestureHandlerRootView>
+            </PearlDrawerProvider>
           </WorkspaceProvider>
         </ChatsProvider>
       </QueryProvider>

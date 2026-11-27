@@ -2,10 +2,7 @@ import { useWindowDimensions, View } from "react-native";
 import { Drawer } from "expo-router/drawer";
 
 import { DrawerPanel } from "@/components/navigation/drawer-panel";
-import {
-  PearlDrawerProvider,
-  usePearlDrawer,
-} from "@/components/navigation/drawer-context";
+import { usePearlDrawer } from "@/components/navigation/drawer-context";
 import { usePearlDrawerBackground } from "@/src/navigation-theme";
 import { ObserveInteractiveMarker } from "@/src/observe";
 
@@ -124,14 +121,6 @@ function PearlDrawerNavigator() {
         }}
       />
       <Drawer.Screen
-        name="settings"
-        options={{
-          title: "Profile",
-          headerShown: false,
-          drawerItemStyle: { display: "none" },
-        }}
-      />
-      <Drawer.Screen
         name="agent-directory"
         options={{
           title: "Directory",
@@ -153,20 +142,22 @@ function PearlDrawerNavigator() {
 /**
  * Primary app destinations as Expo Router Drawer siblings. Custom panel
  * content + drawerType "back" keeps the ChatGPT-style reveal; nested stacks
- * under (home) / tasks / workspaces / settings own detail pushes.
+ * under (home) / tasks / workspaces own detail pushes. Settings is a
+ * root fullScreenModal so it can overlay an open drawer.
  * Drawer header stays off — nested stacks own native Liquid Glass chrome.
  */
 export default function DrawerLayout() {
   const drawerBackground = usePearlDrawerBackground();
 
   return (
-    <PearlDrawerProvider>
+    <>
       <ObserveInteractiveMarker />
       {/* Drawer color sits behind the scene so the scaled card's margin
-          and rounded corners reveal it instead of the page fill. */}
+          and rounded corners reveal it instead of the page fill.
+          DrawerOpenSync lives under (home)/_layout so useDrawerStatus is valid. */}
       <View style={{ flex: 1, backgroundColor: drawerBackground }}>
         <PearlDrawerNavigator />
       </View>
-    </PearlDrawerProvider>
+    </>
   );
 }

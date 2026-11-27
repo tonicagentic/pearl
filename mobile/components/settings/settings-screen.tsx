@@ -1,4 +1,4 @@
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { Alert, Platform, Pressable, StyleSheet, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import {
@@ -29,7 +29,8 @@ import {
   WalletIcon,
 } from "lucide-react-native";
 
-import { ScreenChrome } from "@/components/navigation/screen-chrome";
+import { SearchDock } from "@/components/search/search-dock";
+import { useSettingsModalChromeOptional } from "@/components/settings/settings-modal-chrome";
 import { SheetScaffold } from "@/components/settings/sheet-scaffold";
 import { Icon } from "@/components/ui/icon";
 import { Section } from "@/components/ui/section";
@@ -76,6 +77,13 @@ import { useStackSearch } from "@/src/use-stack-search";
 export function SettingsScreen() {
   const { viewerEmail, viewerName, signOut } = useAuth();
   const search = useStackSearch();
+  const chrome = useSettingsModalChromeOptional();
+  const searchOpen = chrome?.searchOpen ?? false;
+  useEffect(() => {
+    if (!searchOpen) search.setQueryText("");
+    // Only react to chrome open/close — not search identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+  }, [searchOpen]);
   const selectedKey = useSyncExternalStore(
     subscribeModelSelection,
     getModelSelection,
@@ -292,19 +300,8 @@ export function SettingsScreen() {
   const showHostingCard = showConnected || showSelfHost;
 
   return (
-    <ScreenChrome
-      title="Profile"
-      leading="drawer"
-      wrapBody={false}
-      search={{
-        placeholder: "Search",
-        hideWhenScrolling: true,
-        autoCapitalize: "none",
-        onChangeText: search.onChangeText,
-        onCancelButtonPress: search.onCancelButtonPress,
-      }}
-    >
-      <SheetScaffold>
+    <View style={{ flex: 1 }}>
+      <SheetScaffold footer={searchOpen ? <View style={{ height: 72 }} /> : null}>
         {showAccountSection ? (
           <Section title="Account">
             {showAccount ? (
@@ -643,7 +640,7 @@ export function SettingsScreen() {
           </SettingsCard>
         ) : null}
 
-        {search.active ? null : (
+        {search.active || searchOpen ? null : (
           <View className="items-center gap-2 px-1 pb-2">
             <View className="flex-row items-center gap-3">
               <Pressable
@@ -674,7 +671,19 @@ export function SettingsScreen() {
           </View>
         )}
       </SheetScaffold>
-    </ScreenChrome>
+      {searchOpen ? (
+        <SearchDock
+          value={search.query}
+          onChangeText={search.setQueryText}
+          onDismiss={() => {
+            search.setQueryText("");
+            chrome?.setSearchOpen(false);
+          }}
+          placeholder="Search"
+          accessibilityLabel="Search settings"
+        />
+      ) : null}
+    </View>
   );
 }
 

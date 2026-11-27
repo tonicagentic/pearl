@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -16,11 +16,9 @@ import {
   TargetIcon,
   UserIcon,
   WalletIcon,
-  XIcon,
   ZapIcon,
 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 
 import { ChatHistoryContent } from "@/components/history/chat-history-content";
 import {
@@ -45,12 +43,8 @@ import {
   usePearlMutedBackground,
 } from "@/src/navigation-theme";
 
-/** Space reserved under the list so rows can clear the floating search. */
-const FOOTER_CLEARANCE = 56;
-/** Soft dissolve above the search control before the fade reaches the display edge. */
-const FOOTER_FADE_OVERHANG = 56;
-/** Search row inside the dock (paddingTop 8 + 40px control). */
-const FOOTER_SEARCH_ROW = 48;
+/** Space reserved under the list so rows clear the Chat + avatar footer. */
+const FOOTER_CLEARANCE = 64;
 
 /** Rows under the Track section label (not Library). */
 const TRACK_ROWS = [
@@ -91,8 +85,8 @@ type DrawerPanelNav = {
 };
 
 /**
- * ChatGPT-style drawer body: one scrolling column (brand → nav → recent chats),
- * sticky search with a soft fade so list content dissolves behind it.
+ * ChatGPT-style drawer: brand + search in the header, Chat pill + avatar in
+ * the sticky footer, full-screen search overlay for history.
  */
 export function DrawerPanel({
   navigation,
@@ -132,16 +126,11 @@ export function DrawerPanel({
   const foregroundColor = usePearlForeground();
   const mutedColor = usePearlMutedBackground();
   const drawerBackground = usePearlDrawerBackground();
-  const [drawerSearchOpen, setDrawerSearchOpen] = useState(false);
   const profileInitials = isAnonymous
     ? null
     : viewerInitials(viewerName, viewerEmail);
   const bottomPad = Math.max(insets.bottom, 12);
   const listBottomInset = FOOTER_CLEARANCE + bottomPad;
-  // Fade spans the overhang + search row + home-indicator pad so threads
-  // dissolve into the display edge instead of a solid footer band.
-  const footerFadeHeight =
-    FOOTER_FADE_OVERHANG + FOOTER_SEARCH_ROW + bottomPad;
 
   const go = useCallback(
     (href: string, options?: { readonly withAnchor?: boolean }) => {
@@ -174,10 +163,15 @@ export function DrawerPanel({
   }, [closeDrawer, isAnonymous, newChat, notifyChatSelectedFromDrawer]);
 
   const openProfile = useCallback(() => {
-    closeDrawer();
-    requestAnimationFrame(() => {
-      router.navigate(isAnonymous ? "/sign-in" : "/settings");
-    });
+    if (isAnonymous) {
+      closeDrawer();
+      requestAnimationFrame(() => {
+        router.push("/sign-in");
+      });
+      return;
+    }
+    // Keep the drawer open under the Settings full-screen modal.
+    router.push("/settings");
   }, [closeDrawer, isAnonymous]);
 
   const openSeeAll = useCallback(() => {
@@ -211,31 +205,19 @@ export function DrawerPanel({
           </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={isAnonymous ? "Sign in" : "Profile"}
+            accessibilityLabel="Search history"
             hitSlop={8}
-            onPress={openProfile}
+            onPress={() => router.push("/chat-search")}
             style={{
               width: 36,
               height: 36,
               borderRadius: 18,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: isAnonymous ? mutedColor : "#2A9D8F",
+              backgroundColor: mutedColor,
             }}
           >
-            {isAnonymous ? (
-              <Icon as={UserIcon} className="size-4 text-foreground" />
-            ) : (
-              <Text
-                style={{
-                  color: "#FFFFFF",
-                  fontSize: 12,
-                  fontWeight: "700",
-                }}
-              >
-                {profileInitials ?? "·"}
-              </Text>
-            )}
+            <Icon as={SearchIcon} className="size-4 text-foreground" />
           </Pressable>
         </View>
       </View>
@@ -279,7 +261,6 @@ export function DrawerPanel({
       <View style={{ flex: 1 }}>
         <ChatHistoryContent
           chrome="drawer"
-          showInlineSearch={drawerSearchOpen}
           onOpenChat={openChatFromDrawer}
           onSeeAll={openSeeAll}
           drawerHeader={scrollingHeader}
@@ -292,80 +273,71 @@ export function DrawerPanel({
         style={[styles.footerDock, { paddingBottom: bottomPad }]}
       >
         <View
-          pointerEvents="none"
-          style={[
-            styles.footerFade,
-            {
-              top: -FOOTER_FADE_OVERHANG,
-              height: footerFadeHeight,
-            },
-          ]}
-        >
-          <Svg
-            width="100%"
-            height={footerFadeHeight}
-            style={StyleSheet.absoluteFill}
-          >
-            <Defs>
-              <LinearGradient
-                id="drawerFooterFade"
-                x1="0"
-                y1="0"
-                x2="0"
-                y2="1"
-              >
-                <Stop offset="0" stopColor={drawerBackground} stopOpacity="0" />
-                <Stop
-                  offset="0.4"
-                  stopColor={drawerBackground}
-                  stopOpacity="0.55"
-                />
-                <Stop
-                  offset="0.75"
-                  stopColor={drawerBackground}
-                  stopOpacity="0.9"
-                />
-                <Stop offset="1" stopColor={drawerBackground} stopOpacity="1" />
-              </LinearGradient>
-            </Defs>
-            <Rect
-              width="100%"
-              height={footerFadeHeight}
-              fill="url(#drawerFooterFade)"
-            />
-          </Svg>
-        </View>
-        <View
           style={{
             flexDirection: "row",
             alignItems: "center",
+            justifyContent: "space-between",
             paddingHorizontal: DRAWER_EDGE + DRAWER_ROW_PAD_X,
             paddingTop: 8,
           }}
         >
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={
-              drawerSearchOpen ? "Close search" : "Search history"
-            }
+            accessibilityLabel="New chat"
+            hitSlop={4}
+            onPress={openNewChat}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              height: 44,
+              paddingHorizontal: 16,
+              borderRadius: 22,
+              backgroundColor: "#2563EB",
+            }}
+          >
+            <Icon as={SquarePenIcon} className="size-4 text-white" />
+            <Text
+              style={{
+                color: "#FFFFFF",
+                fontSize: 16,
+                fontWeight: "600",
+              }}
+            >
+              Chat
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isAnonymous ? "Sign in" : "Profile"}
             hitSlop={8}
-            onPress={() => setDrawerSearchOpen((v) => !v)}
+            onPress={openProfile}
             style={{
               width: 40,
               height: 40,
               borderRadius: 20,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: mutedColor,
+              backgroundColor: isAnonymous ? mutedColor : "#2A9D8F",
             }}
           >
-            <Icon
-              as={drawerSearchOpen ? XIcon : SearchIcon}
-              className="size-5 text-foreground"
-            />
+            {isAnonymous ? (
+              <Icon as={UserIcon} className="size-4 text-foreground" />
+            ) : (
+              <Text
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: 13,
+                  fontWeight: "700",
+                }}
+              >
+                {profileInitials ?? "·"}
+              </Text>
+            )}
           </Pressable>
         </View>
       </View>
+
     </View>
   );
 }
@@ -379,10 +351,5 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-  },
-  footerFade: {
-    position: "absolute",
-    left: 0,
-    right: 0,
   },
 });

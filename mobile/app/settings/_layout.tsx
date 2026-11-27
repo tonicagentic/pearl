@@ -1,15 +1,25 @@
 import { Stack } from "expo-router";
 
-import { DrawerScene } from "@/components/navigation/drawer-scene";
-import { usePearlStackScreenOptions } from "@/src/navigation-theme";
+import { SettingsModalChromeProvider } from "@/components/settings/settings-modal-chrome";
+import { usePearlScreenBackground } from "@/src/navigation-theme";
 
+/**
+ * Settings as a root fullScreenModal: custom circular X / back chrome sits
+ * above the stack so nested pages keep the same header host.
+ */
 export default function SettingsStackLayout() {
-  const screenOptions = usePearlStackScreenOptions();
+  const backgroundColor = usePearlScreenBackground();
 
   return (
-    <DrawerScene>
-      <Stack screenOptions={screenOptions}>
-        <Stack.Screen name="index" options={{ title: "Profile" }} />
+    <SettingsModalChromeProvider>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor },
+          animation: "slide_from_right",
+        }}
+      >
+        <Stack.Screen name="index" options={{ title: "Settings" }} />
         <Stack.Screen name="account" options={{ title: "Account" }} />
         <Stack.Screen name="identity" options={{ title: "Identity" }} />
         <Stack.Screen name="memory" options={{ title: "Memory" }} />
@@ -40,6 +50,6 @@ export default function SettingsStackLayout() {
         <Stack.Screen name="plan" options={{ title: "Plan" }} />
         <Stack.Screen name="shop" options={{ title: "Shop" }} />
       </Stack>
-    </DrawerScene>
+    </SettingsModalChromeProvider>
   );
 }
