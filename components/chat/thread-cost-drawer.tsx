@@ -1,13 +1,11 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
-import {
-  ArrowDownToLineIcon,
-  ArrowUpFromLineIcon,
-  CoinsIcon,
-  GaugeIcon,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
+import { CostMeter } from "@/components/assistant-ui/elements/cost-meter";
+import { QuotaBanner } from "@/components/assistant-ui/elements/quota-banner";
+import { TraceWaterfall } from "@/components/assistant-ui/elements/trace-waterfall";
 import {
   Sheet,
   SheetContent,
@@ -16,10 +14,15 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  costMeterProps,
+  quotaBannerProps,
+  type BillingStatusLike,
+} from "@/lib/usage/cost-drawer-props";
+import {
   threadTraceFromEvents,
   type ThreadTraceEvent,
 } from "@/lib/usage/thread-trace";
-import { formatTokens, formatUsd } from "@/lib/usage/usage";
+import { formatUsd } from "@/lib/usage/usage";
 
 export function ThreadCostDrawer({
   open,
@@ -30,9 +33,40 @@ export function ThreadCostDrawer({
   readonly onOpenChange: (open: boolean) => void;
   readonly events: readonly ThreadTraceEvent[];
 }) {
-  const trace = useMemo(() => threadTraceFromEvents(events), [events]);
-  const empty =
-    trace.totals.modelCalls === 0 && trace.tools.count === 0;
+  const router = useRouter();
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [billing, setBilling] = useState<BillingStatusLike | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setNowMs(Date.now());
+    let cancelled = false;
+    void fetch("/api/billing/status")
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as BillingStatusLike;
+      })
+      .then((body) => {
+        if (!cancelled) setBilling(body);
+      })
+      .catch(() => {
+        if (!cancelled) setBilling(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const trace = useMemo(
+    () => threadTraceFromEvents(events, { nowMs }),
+    [events, nowMs],
+  );
+  const meter = useMemo(() => costMeterProps(trace), [trace]);
+  const quota = useMemo(
+    () => quotaBannerProps(billing, { nowMs }),
+    [billing, nowMs],
+  );
+  const empty = trace.totals.modelCalls === 0 && trace.tools.count === 0;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -48,239 +82,67 @@ export function ThreadCostDrawer({
         </SheetHeader>
 
         <div className="overflow-y-auto px-4 py-4 pb-8">
-          <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatTile
-                icon={<CoinsIcon className="size-3.5" />}
-                label="Cost"
-                value={formatUsd(trace.grandCostUsd)}
-                hint={
-                  empty
-                    ? undefined
-                    : trace.tools.count > 0
-                      ? `models ${formatUsd(trace.totals.costUsd)} · tools ${formatUsd(trace.tools.costUsd)}`
-                      : trace.grandCostUsd === null
-                        ? "no cost reported"
-                        : undefined
-                }
-              />
-              <StatTile
-                icon={<ArrowDownToLineIcon className="size-3.5" />}
-                label="Input"
-                value={formatTokens(trace.totals.inputTokens)}
-                hint={
-                  trace.totals.cacheReadTokens > 0
-                    ? `${formatTokens(trace.totals.cacheReadTokens)} from cache`
-                    : undefined
-                }
-              />
-              <StatTile
-                icon={<ArrowUpFromLineIcon className="size-3.5" />}
-                label="Output"
-                value={formatTokens(trace.totals.outputTokens)}
-              />
-              <StatTile
-                icon={<GaugeIcon className="size-3.5" />}
-                label="Turns"
-                value={String(trace.turns)}
-                hint={`${String(trace.totals.modelCalls)} model · ${String(trace.tools.count)} tool`}
-              />
-            </div>
-
+          <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
             {empty ? (
-              <p className="rounded-lg border bg-card px-3 py-4 text-sm text-muted-foreground">
+              <p className="rounded-2xl border bg-card px-3 py-4 text-sm text-muted-foreground">
                 No billed usage in this thread yet.
               </p>
             ) : (
               <>
+                <CostMeter
+                  runCost={meter.runCost}
+                  sessionCost={meter.sessionCost}
+                  lines={meter.lines}
+                />
+
                 {trace.tools.bySource.length > 0 ? (
-                  <section>
-                    <h2 className="mb-2 text-sm font-medium">By source</h2>
-                    <div className="overflow-hidden rounded-lg border">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                            <th className="px-3 py-2 font-medium">Source</th>
-                            <th className="px-3 py-2 text-right font-medium">
-                              Calls
-                            </th>
-                            <th className="px-3 py-2 text-right font-medium">
-                              Cost
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {trace.tools.bySource.map((row) => (
-                            <tr
-                              key={row.source}
-                              className="border-b last:border-b-0"
-                            >
-                              <td className="max-w-48 truncate px-3 py-2">
-                                {row.label}
-                              </td>
-                              <NumCell value={row.count} />
-                              <NumCell value={formatUsd(row.costUsd)} />
-                            </tr>
-                          ))}
-                          {trace.totals.modelCalls > 0 ? (
-                            <tr className="border-b last:border-b-0">
-                              <td className="max-w-48 truncate px-3 py-2">
-                                Models
-                              </td>
-                              <NumCell value={trace.totals.modelCalls} />
-                              <NumCell
-                                value={formatUsd(trace.totals.costUsd)}
-                              />
-                            </tr>
-                          ) : null}
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>
-                ) : null}
-
-                {trace.byModel.length > 0 ? (
-                  <section>
-                    <h2 className="mb-2 text-sm font-medium">By model</h2>
-                    <div className="overflow-hidden rounded-lg border">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                            <th className="px-3 py-2 font-medium">Model</th>
-                            <th className="px-3 py-2 text-right font-medium">
-                              Calls
-                            </th>
-                            <th className="px-3 py-2 text-right font-medium">
-                              In
-                            </th>
-                            <th className="px-3 py-2 text-right font-medium">
-                              Out
-                            </th>
-                            <th className="px-3 py-2 text-right font-medium">
-                              Cost
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {trace.byModel.map((row) => (
-                            <tr
-                              key={row.label}
-                              className="border-b last:border-b-0"
-                            >
-                              <td className="max-w-48 truncate px-3 py-2">
-                                {row.label}
-                              </td>
-                              <NumCell value={row.modelCalls} />
-                              <NumCell
-                                value={formatTokens(row.inputTokens)}
-                              />
-                              <NumCell
-                                value={formatTokens(row.outputTokens)}
-                              />
-                              <NumCell value={formatUsd(row.costUsd)} />
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>
-                ) : null}
-
-                <section>
-                  <h2 className="mb-2 text-sm font-medium">Trace</h2>
-                  <div className="flex flex-col gap-3">
-                    {trace.callTurns.map((turn) => (
-                      <div
-                        key={turn.turnId ?? turn.label}
-                        className="overflow-hidden rounded-lg border"
+                  <ul className="flex flex-col gap-1.5 px-1">
+                    {trace.tools.bySource.map((row) => (
+                      <li
+                        key={row.source}
+                        className="flex items-baseline justify-between gap-3 text-sm"
                       >
-                        <div className="border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
-                          {turn.label}
-                        </div>
-                        <ul className="divide-y">
-                          {turn.calls.map((call, index) => (
-                            <li
-                              key={`${turn.turnId ?? "turn"}-model-${call.stepIndex ?? index}`}
-                              className="flex items-start justify-between gap-3 px-3 py-2 text-sm"
-                            >
-                              <div className="min-w-0">
-                                <div className="truncate font-medium">
-                                  {call.modelId ?? "unknown"}
-                                </div>
-                                <div className="text-xs text-muted-foreground tabular-nums">
-                                  {formatTokens(call.inputTokens ?? 0)} in ·{" "}
-                                  {formatTokens(call.outputTokens ?? 0)} out
-                                  {(call.cacheReadTokens ?? 0) > 0
-                                    ? ` · ${formatTokens(call.cacheReadTokens ?? 0)} cached`
-                                    : ""}
-                                </div>
-                              </div>
-                              <div className="shrink-0 tabular-nums text-muted-foreground">
-                                {formatUsd(call.costUsd)}
-                              </div>
-                            </li>
-                          ))}
-                          {turn.tools.map((tool, index) => (
-                            <li
-                              key={`${turn.turnId ?? "turn"}-tool-${tool.callId ?? index}`}
-                              className="flex items-start justify-between gap-3 px-3 py-2 text-sm"
-                            >
-                              <div className="min-w-0">
-                                <div className="truncate font-medium">
-                                  {tool.label}
-                                </div>
-                                {tool.detail ? (
-                                  <div className="truncate text-xs text-muted-foreground">
-                                    {tool.detail}
-                                  </div>
-                                ) : null}
-                              </div>
-                              <div className="shrink-0 tabular-nums text-muted-foreground">
-                                {formatUsd(tool.costUsd)}
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                        <span className="min-w-0 truncate text-muted-foreground">
+                          {row.label}
+                          <span className="tabular-nums">
+                            {" "}
+                            · {row.count}
+                          </span>
+                        </span>
+                        <span className="shrink-0 tabular-nums text-foreground/75">
+                          {formatUsd(row.costUsd)}
+                        </span>
+                      </li>
                     ))}
-                  </div>
-                </section>
+                  </ul>
+                ) : null}
+
+                {trace.spans.length > 0 ? (
+                  <TraceWaterfall
+                    spans={trace.spans}
+                    totalMs={trace.totalMs}
+                    visibleCount={trace.spans.length}
+                  />
+                ) : null}
               </>
             )}
+
+            {quota ? (
+              <QuotaBanner
+                used={quota.used}
+                limit={quota.limit}
+                unit={quota.unit}
+                resetsIn={quota.resetsIn}
+                upgradeLabel="Upgrade"
+                onUpgrade={() => {
+                  onOpenChange(false);
+                  router.push("/settings");
+                }}
+              />
+            ) : null}
           </div>
         </div>
       </SheetContent>
     </Sheet>
-  );
-}
-
-function StatTile({
-  icon,
-  label,
-  value,
-  hint,
-}: {
-  readonly icon: ReactNode;
-  readonly label: string;
-  readonly value: string;
-  readonly hint?: string;
-}) {
-  return (
-    <div className="rounded-lg border bg-card p-3">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        {icon}
-        {label}
-      </div>
-      <div className="mt-1 text-lg font-semibold tabular-nums">{value}</div>
-      {hint ? <div className="text-[11px] text-muted-foreground">{hint}</div> : null}
-    </div>
-  );
-}
-
-function NumCell({ value }: { readonly value: string | number }) {
-  return (
-    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-      {value}
-    </td>
   );
 }

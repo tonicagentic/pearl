@@ -6,9 +6,18 @@ export {
   type ThreadTrace,
   type ThreadTraceCall,
   type ThreadTraceEvent,
+  type ThreadTraceSpan,
   type ThreadTraceToolCharge,
   type ThreadTraceToolSourceRow,
   type ThreadTraceTurn,
 } from "../../lib/usage/thread-trace";
+
+export {
+  costMeterProps,
+  quotaBannerProps,
+  type BillingStatusLike,
+  type CostMeterDrawerProps,
+  type QuotaBannerDrawerProps,
+} from "../../lib/usage/cost-drawer-props";
 
 export { formatTokens, formatUsd } from "../../lib/usage/usage";

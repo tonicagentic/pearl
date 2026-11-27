@@ -14,6 +14,10 @@ import {
 } from "../billing/provider-pricing.ts";
 import { usageSourceMeta } from "./sources.ts";
 import {
+  buildThreadTraceSpans,
+  turnCostUsd,
+} from "./thread-trace-spans.ts";
+import {
   aggregateUsage,
   emptyUsageTotals,
   type UsageBreakdownEntry,
@@ -118,6 +122,18 @@ export type ThreadTraceTurn = {
   readonly tools: readonly ThreadTraceToolCharge[];
 };
 
+export type ThreadTraceSpanStatus = "running" | "completed" | "failed";
+
+/** Timing row for TraceWaterfall (assistant-ui elements/trace-waterfall). */
+export type ThreadTraceSpan = {
+  readonly id: string;
+  readonly name: string;
+  readonly depth: number;
+  readonly startMs: number;
+  readonly durationMs: number;
+  readonly status: ThreadTraceSpanStatus;
+};
+
 export type ThreadTrace = {
   /** Model-only totals (tokens + model cost). */
   readonly totals: UsageTotals;
@@ -133,8 +149,14 @@ export type ThreadTrace = {
   };
   /** Model cost + tool cost; null only when both are empty/unknown. */
   readonly grandCostUsd: number | null;
+  /** Model + tool cost on the newest turn; null when the thread is empty. */
+  readonly lastTurnCostUsd: number | null;
   /** Model calls in stream order, grouped by turn (tools nested per turn). */
   readonly callTurns: readonly ThreadTraceTurn[];
+  /** Timed spans for TraceWaterfall, anchored to the earliest event. */
+  readonly spans: readonly ThreadTraceSpan[];
+  /** Full axis width for the waterfall (ms). */
+  readonly totalMs: number;
 };
 
 const TURN_LABEL_MAX = 72;
@@ -334,7 +356,9 @@ function sumCosts(
  */
 export function threadTraceFromEvents(
   events: readonly ThreadTraceEvent[],
+  options?: { readonly nowMs?: number },
 ): ThreadTrace {
+  const nowMs = options?.nowMs ?? Date.now();
   const modelByStep = new Map<string, string | null>();
   const modelByTurn = new Map<string, string | null>();
   const modelByRun = new Map<string, string | null>();
@@ -535,12 +559,21 @@ export function threadTraceFromEvents(
   };
 
   if (calls.length === 0 && toolCharges.length === 0) {
+    const emptySpans = buildThreadTraceSpans({
+      callTurns: [],
+      events,
+      nowMs,
+      turnLabels,
+    });
     return {
       byModel: [],
       callTurns: [],
       grandCostUsd: null,
+      lastTurnCostUsd: null,
+      spans: emptySpans.spans,
       tools: emptyTools,
       totals: emptyUsageTotals(),
+      totalMs: emptySpans.totalMs,
       turns: 0,
     };
   }
@@ -652,11 +685,21 @@ export function threadTraceFromEvents(
 
   // Prefer grouped callTurns (includes tool-only turns) over model-only count.
   const turns = Math.max(summary.turns, groups.length);
+  const lastTurn = groups[groups.length - 1];
+  const lastTurnCostUsd = lastTurn ? turnCostUsd(lastTurn) : null;
+  const timed = buildThreadTraceSpans({
+    callTurns: groups,
+    events,
+    nowMs,
+    turnLabels,
+  });
 
   return {
     byModel: summary.byModel,
     callTurns: groups,
     grandCostUsd: sumCosts(summary.totals.costUsd, toolCostUsd),
+    lastTurnCostUsd,
+    spans: timed.spans,
     tools: {
       bySource,
       charges: toolCharges,
@@ -664,6 +707,7 @@ export function threadTraceFromEvents(
       count: toolCharges.length,
     },
     totals: summary.totals,
+    totalMs: timed.totalMs,
     turns,
   };
 }

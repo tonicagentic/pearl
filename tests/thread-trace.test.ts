@@ -416,3 +416,125 @@ test("threadTraceFromEvents attaches tool-only turns without model calls", () =>
   assert.equal(trace.callTurns[0]?.calls.length, 0);
   assert.equal(trace.callTurns[0]?.tools[0]?.detail, "Exa instant");
 });
+
+test("threadTraceFromEvents derives lastTurnCostUsd from the newest turn", () => {
+  const trace = threadTraceFromEvents([
+    event("message.received", { turnId: "t1", message: "first" }),
+    event(
+      "step.started",
+      { turnId: "t1", stepIndex: 0, modelId: "m1" },
+      "2026-09-17T12:00:00.000Z",
+    ),
+    event(
+      "step.completed",
+      { turnId: "t1", stepIndex: 0, usage: { costUsd: 0.02 } },
+      "2026-09-17T12:00:01.000Z",
+    ),
+    event("message.received", { turnId: "t2", message: "second" }),
+    event(
+      "step.started",
+      { turnId: "t2", stepIndex: 0, modelId: "m2" },
+      "2026-09-17T12:00:02.000Z",
+    ),
+    event(
+      "step.completed",
+      { turnId: "t2", stepIndex: 0, usage: { costUsd: 0.005 } },
+      "2026-09-17T12:00:03.000Z",
+    ),
+  ]);
+
+  assert.ok(Math.abs((trace.lastTurnCostUsd ?? 0) - 0.005) < 1e-9);
+  assert.ok(Math.abs((trace.grandCostUsd ?? 0) - 0.025) < 1e-9);
+});
+
+test("threadTraceFromEvents builds timed spans from started/settled pairs", () => {
+  const trace = threadTraceFromEvents(
+    [
+      {
+        type: "delivery.consumed",
+        data: {
+          turnId: "t1",
+          parts: [{ kind: "text", text: "run tools" }],
+        },
+        meta: { at: "2026-11-17T12:00:00.000Z" },
+      },
+      {
+        type: "model.requested",
+        scope: { turnId: "t1", runId: "r1" },
+        data: { runId: "r1", owner: { turnId: "t1" } },
+        meta: { at: "2026-11-17T12:00:01.000Z" },
+      },
+      {
+        type: "model.started",
+        scope: { turnId: "t1", runId: "r1" },
+        data: { runId: "r1", modelId: "zai/glm-5.3-flash" },
+        meta: { at: "2026-11-17T12:00:02.000Z" },
+      },
+      {
+        type: "call.requested",
+        data: {
+          callId: "c1",
+          capability: { name: "web_search" },
+          owner: { turnId: "t1", runId: "r1" },
+          input: { type: "instant" },
+        },
+        meta: { at: "2026-11-17T12:00:03.000Z" },
+      },
+      {
+        type: "call.settled",
+        data: {
+          callId: "c1",
+          outcome: "completed",
+          output: { type: "instant", numResults: 5 },
+        },
+        meta: { at: "2026-11-17T12:00:05.000Z" },
+      },
+      {
+        type: "usage.recorded",
+        scope: { turnId: "t1", runId: "r1" },
+        data: {
+          kind: "model",
+          owner: { runId: "r1" },
+          usage: { costUsd: 0.01, inputTokens: 10, outputTokens: 2 },
+        },
+        meta: { at: "2026-11-17T12:00:06.000Z" },
+      },
+    ],
+    { nowMs: Date.parse("2026-11-17T12:00:10.000Z") },
+  );
+
+  assert.ok(trace.spans.length >= 3);
+  const modelSpan = trace.spans.find((s) => s.name === "zai/glm-5.3-flash");
+  const toolSpan = trace.spans.find((s) => s.name === "web_search");
+  assert.ok(modelSpan);
+  assert.ok(toolSpan);
+  assert.equal(modelSpan?.status, "completed");
+  assert.equal(toolSpan?.status, "completed");
+  assert.equal(modelSpan?.startMs, 2000);
+  assert.equal(modelSpan?.durationMs, 4000);
+  assert.equal(toolSpan?.startMs, 3000);
+  assert.equal(toolSpan?.durationMs, 2000);
+  assert.equal(modelSpan?.depth, 1);
+  assert.ok(trace.totalMs >= 6000);
+});
+
+test("threadTraceFromEvents marks unfinished spans as running", () => {
+  const nowMs = Date.parse("2026-11-17T12:00:10.000Z");
+  const trace = threadTraceFromEvents(
+    [
+      {
+        type: "model.started",
+        scope: { turnId: "t1", runId: "r1" },
+        data: { runId: "r1", modelId: "live-model", owner: { turnId: "t1" } },
+        meta: { at: "2026-11-17T12:00:00.000Z" },
+      },
+    ],
+    { nowMs },
+  );
+
+  const live = trace.spans.find((s) => s.name === "live-model");
+  assert.ok(live);
+  assert.equal(live?.status, "running");
+  assert.equal(live?.startMs, 0);
+  assert.equal(live?.durationMs, 10_000);
+});
