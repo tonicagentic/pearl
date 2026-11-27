@@ -69,4 +69,40 @@ describe("classifyThreadNotice", () => {
       actionLabel: "Retry",
     });
   });
+
+  it("shows the preparing banner while idle", () => {
+    const notice = classifyThreadNotice({
+      ...base,
+      sendPreparing: true,
+    });
+    expect(notice).toEqual({
+      kind: "status",
+      text: "Still sending your last message…",
+    });
+  });
+
+  it("hides the preparing banner once the reply is on screen", () => {
+    expect(
+      classifyThreadNotice({
+        ...base,
+        sendPreparing: true,
+        replyVisible: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps Resend ahead of a preparing send", () => {
+    const notice = classifyThreadNotice({
+      ...base,
+      canResend: true,
+      sendPreparing: true,
+      replyVisible: true,
+      onResend: () => {},
+    });
+    expect(notice).toMatchObject({
+      kind: "error",
+      title: "Couldn’t confirm delivery.",
+      actionLabel: "Resend",
+    });
+  });
 });

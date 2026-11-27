@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Alert, Platform, View } from "react-native";
 import { router, useNavigation } from "expo-router";
+import { useHeaderHeight } from "expo-router/react-navigation";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import {
   BottomSheetModal,
@@ -128,6 +130,17 @@ export function ChatScreen({
   /** Home Pearl tab: skip stack header/toolbar; autofocus without waiting for push. */
   embedded?: boolean;
 } = {}) {
+  const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
+  // Home is full-bleed under Liquid Glass — pass the measured nav height so
+  // the list rests below the compose / … buttons. Fall back to the Thread
+  // guess while the header has not laid out. Pushed /chat keeps Thread's
+  // default because ScreenChrome already pads the body.
+  const embeddedContentPaddingTop = embedded
+    ? headerHeight > 0
+      ? headerHeight + 16
+      : insets.top + 44 + 16
+    : undefined;
   const {
     billingReady,
     markBillingReady,
@@ -1334,6 +1347,7 @@ export function ChatScreen({
     sendError: sendError?.store === store ? sendError.message : null,
     canResend,
     sendPreparing,
+    replyVisible: isRunning || awaitingReply,
     pendingMessage,
     hasLocalSend: Boolean(localSend),
     hasLoadedHistory,
@@ -1503,6 +1517,7 @@ export function ChatScreen({
                       }
                       chromeRevealed={chromeRevealed}
                       conversationId={activeChatId}
+                      contentPaddingTop={embeddedContentPaddingTop}
                       focusNewChatKey={newChatEntry}
                       notice={notice}
                       waitingAction={waitingAction}

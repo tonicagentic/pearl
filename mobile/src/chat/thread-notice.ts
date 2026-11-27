@@ -33,6 +33,8 @@ export type ClassifyThreadNoticeInput = {
   readonly sendError: string | null;
   readonly canResend: boolean;
   readonly sendPreparing: boolean;
+  /** Thinking / running reply already on screen — hush the preparing banner. */
+  readonly replyVisible?: boolean;
   readonly pendingMessage: string | null;
   readonly hasLocalSend: boolean;
   readonly hasLoadedHistory: boolean;
@@ -120,7 +122,7 @@ export function classifyThreadNotice(
     };
   }
 
-  if (input.sendPreparing) {
+  if (input.sendPreparing && !input.replyVisible) {
     return { kind: "status", text: "Still sending your last message…" };
   }
 

@@ -72,6 +72,7 @@ import {
 } from "../../../../lib/chat/message-day";
 import { isTaskNotification } from "@/src/message-projection";
 import type { ThreadFooterNotice } from "@/src/chat/thread-notice";
+import { followEndOffset } from "@/src/chat/thread-follow";
 import { useActiveChat } from "@/src/chat-context";
 import {
   getPendingSeedMessage,
@@ -469,6 +470,10 @@ export const Thread: FC<ThreadProps> = ({
   const insets = useSafeAreaInsets();
   const followsKeyboard = Platform.OS === "ios" && !Platform.isPad;
   const floatsComposer = Platform.OS === "ios";
+  // Rest under the transparent nav; scroll may fade behind it.
+  // 44 ≈ native stack bar height below the status bar inset.
+  const topInset =
+    contentPaddingTop ?? (floatsComposer ? insets.top + 44 + 16 : 0);
   // Only bottom-docked iPhone keyboards use the spacer; keep other layouts unchanged.
   const viewportRef = useRef<ComponentRef<typeof View>>(null);
   const [viewportTop, setViewportTop] = useState(0);
@@ -534,11 +539,11 @@ export const Thread: FC<ThreadProps> = ({
     const { contentHeight, viewportHeight } = metricsRef.current;
     followsEndRef.current = true;
     listRef.current?.scrollToOffset({
-      offset: Math.max(0, contentHeight - viewportHeight),
+      offset: followEndOffset({ contentHeight, viewportHeight, topInset }),
       animated: true,
     });
     store.publish({ nearBottom: true, descent: 1 });
-  }, [store]);
+  }, [store, topInset]);
 
   // The list cannot scroll to a row it has not laid out yet: an instant jump
   // to the estimated offset gets it rendering near the row, and one retry,
@@ -624,12 +629,12 @@ export const Thread: FC<ThreadProps> = ({
         if (!followsEndRef.current) return;
         const { contentHeight, viewportHeight } = metricsRef.current;
         listRef.current?.scrollToOffset({
-          offset: Math.max(0, contentHeight - viewportHeight),
+          offset: followEndOffset({ contentHeight, viewportHeight, topInset }),
           animated: true,
         });
       });
     },
-    [followsKeyboard, isRunning, publishDescent],
+    [followsKeyboard, isRunning, publishDescent, topInset],
   );
 
   const onManualScrollStart = useCallback(() => {
@@ -654,7 +659,11 @@ export const Thread: FC<ThreadProps> = ({
       if (followsKeyboard && isRunning && followsEndRef.current && previousHeight > 0 &&
           height !== previousHeight) {
         listRef.current?.scrollToOffset({
-          offset: Math.max(0, metricsRef.current.contentHeight - height),
+          offset: followEndOffset({
+            contentHeight: metricsRef.current.contentHeight,
+            viewportHeight: height,
+            topInset,
+          }),
           animated: false,
         });
       }
@@ -664,7 +673,7 @@ export const Thread: FC<ThreadProps> = ({
       }
       publishDescent();
     },
-    [followsKeyboard, isRunning, publishDescent, store],
+    [followsKeyboard, isRunning, publishDescent, store, topInset],
   );
 
   const viewport = useMemo(
@@ -739,9 +748,7 @@ export const Thread: FC<ThreadProps> = ({
             contentContainerStyle={
               floatsComposer
                 ? {
-                    // Rest under the transparent nav; scroll may fade behind it.
-                    // 44 ≈ native stack bar height below the status bar inset.
-                    paddingTop: contentPaddingTop ?? insets.top + 44 + 16,
+                    paddingTop: topInset,
                     // Resting messages clear the floating composer, but can scroll behind it.
                     paddingBottom: composerOverlayHeight + 24,
                   }
