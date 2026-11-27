@@ -47,6 +47,11 @@ import { StackScreen } from "@/components/ui/stack-screen";
 import { useAuth } from "@/src/auth";
 import { getAgentMode } from "@/src/agent-mode";
 import { fetchCustomAgents } from "@/src/custom-agents-client";
+import {
+  drawerProjectHref,
+  overviewProjectHref,
+  type ProjectEntryFrom,
+} from "@/src/overview-ui";
 import { withPendingAssistant } from "@/src/stream-presentation";
 import { applyLiveReplyOverlay } from "@/src/apply-live-reply";
 import { selectAgentsForUi } from "@/src/chat/agents-for-ui";
@@ -131,11 +136,16 @@ const COMPUTER_SHEET_SNAP_POINTS = ["92%"] as const;
 export function ChatScreen({
   chromeRevealed = true,
   embedded = false,
+  returnProjectId = null,
+  returnEntryFrom,
 }: {
   /** False while the auth→composer morph overlay owns the transition. */
   chromeRevealed?: boolean;
   /** Home Pearl tab: skip stack header/toolbar; autofocus without waiting for push. */
   embedded?: boolean;
+  /** Opened from a project — Back returns there and history stays hidden. */
+  returnProjectId?: string | null;
+  returnEntryFrom?: ProjectEntryFrom;
 } = {}) {
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
@@ -1409,8 +1419,28 @@ export function ChatScreen({
   const openCompose = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     dismissComputer();
+    // Keep the project link on drafts started from a project-linked thread.
+    const projectId = activeProjectId;
     newChat();
-  }, [dismissComputer, newChat]);
+    if (projectId) setActiveProjectId(projectId);
+  }, [activeProjectId, dismissComputer, newChat, setActiveProjectId]);
+
+  const leaveToReturnProject = useCallback(() => {
+    if (!returnProjectId) {
+      if (router.canGoBack()) router.back();
+      else router.navigate("/");
+      return;
+    }
+    if (returnEntryFrom === "drawer") {
+      router.navigate(drawerProjectHref(returnProjectId));
+      return;
+    }
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.navigate(overviewProjectHref(returnProjectId));
+  }, [returnEntryFrom, returnProjectId]);
   const historySidebar = useHistorySidebarOptional();
   const historyOpen = historySidebar?.open ?? false;
   const openHistory = useCallback(() => {
@@ -1497,17 +1527,21 @@ export function ChatScreen({
   );
   const chromeActions = useMemo((): readonly ScreenChromeAction[] => {
     // Custom agents hide thread chrome; project-linked Pearl hides Computer only
-    // (sandbox lives on the project Sources tab).
+    // (sandbox lives on the project Sources tab). Came-from-project hides history.
     const hideThreadActions = !activeChatId || Boolean(activeCustomAgent);
     const hideComputer =
       hideThreadActions || Boolean(activeProjectId);
+    const hideHistory =
+      historyOpen ||
+      Boolean(activeCustomAgent) ||
+      Boolean(returnProjectId);
     return [
       {
         label: "Open history",
         systemImage: "line.3.horizontal",
         icon: AlignJustifyIcon,
         onPress: openHistory,
-        hidden: historyOpen || Boolean(activeCustomAgent),
+        hidden: hideHistory,
       },
       {
         label: "New chat",
@@ -1539,6 +1573,7 @@ export function ChatScreen({
     historyOpen,
     openCompose,
     openHistory,
+    returnProjectId,
     toggleComputer,
   ]);
 
@@ -1639,6 +1674,7 @@ export function ChatScreen({
   return (
     <ScreenChrome
       leading="back"
+      onBack={returnProjectId ? leaveToReturnProject : undefined}
       contentPaddingTop={0}
       titleSlot={titleSlot}
       actions={chromeActions}

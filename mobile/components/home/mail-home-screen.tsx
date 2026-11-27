@@ -169,8 +169,11 @@ export function MailHomeScreen() {
       router.push("/sign-in");
       return;
     }
+    // Keep the project link on drafts started from a project-linked thread.
+    const projectId = activeProjectId;
     newChat();
-  }, [isAnonymous, newChat]);
+    if (projectId) setActiveProjectId(projectId);
+  }, [activeProjectId, isAnonymous, newChat, setActiveProjectId]);
 
   useEffect(() => {
     if (!showPearlThreadChrome || !activeProjectId) {

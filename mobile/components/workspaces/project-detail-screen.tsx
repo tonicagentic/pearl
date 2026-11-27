@@ -330,9 +330,10 @@ export function ProjectDetailScreen({
     // newChat clears the attached project, so re-attach after seeding.
     startNewChatWithMessage(text);
     setActiveProjectId(projectId);
-    revealChatThread();
+    revealChatThread({ returnProjectId: projectId, entryFrom });
   }, [
     draftMessage,
+    entryFrom,
     isAnonymous,
     projectId,
     setActiveProjectId,
@@ -1058,7 +1059,10 @@ export function ProjectDetailScreen({
                   selected={activeChatId === chat.id}
                   onPress={() => {
                     setActiveProjectId(projectId);
-                    revealChatThread();
+                    revealChatThread({
+                      returnProjectId: projectId,
+                      entryFrom,
+                    });
                     void selectChat(chat.id);
                   }}
                 />
