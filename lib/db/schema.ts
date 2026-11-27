@@ -500,6 +500,20 @@ export const userProfile = pgTable("user_profile", {
 
 export type UserProfile = typeof userProfile.$inferSelect;
 
+export type ProjectStatus =
+  | "backlog"
+  | "planned"
+  | "in_progress"
+  | "completed"
+  | "canceled";
+
+export type ProjectPriority =
+  | "none"
+  | "urgent"
+  | "high"
+  | "medium"
+  | "low";
+
 // Projects are workspaces for a body of work that outlives one chat:
 // shared instructions, related chats, goals, notes, and files. Separate from
 // Areas (the life tree Issues attach to).
@@ -514,6 +528,20 @@ export const project = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     instructions: text("instructions").notNull().default(""),
+    status: text("status", {
+      enum: ["backlog", "planned", "in_progress", "completed", "canceled"],
+    })
+      .notNull()
+      .default("backlog")
+      .$type<ProjectStatus>(),
+    priority: text("priority", {
+      enum: ["none", "urgent", "high", "medium", "low"],
+    })
+      .notNull()
+      .default("none")
+      .$type<ProjectPriority>(),
+    startDate: date("start_date"),
+    targetDate: date("target_date"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -1095,6 +1123,32 @@ export const projectArtifact = pgTable(
 );
 
 export type ProjectArtifact = typeof projectArtifact.$inferSelect;
+
+/** External URL resources filed on a project (docs, dashboards, etc.). */
+export const projectLink = pgTable(
+  "project_link",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    url: text("url").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_project_link_project").on(table.projectId),
+    index("idx_project_link_user").on(table.userId),
+  ],
+);
+
+export type ProjectLink = typeof projectLink.$inferSelect;
 
 export type ProjectGoalStatus = "active" | "done";
 

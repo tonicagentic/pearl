@@ -1,11 +1,33 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { chat, project, type Project } from "@/lib/db/schema";
+import {
+  chat,
+  project,
+  type Project,
+  type ProjectPriority,
+  type ProjectStatus,
+} from "@/lib/db/schema";
 
 const MAX_NAME = 120;
 const MAX_INSTRUCTIONS = 20_000;
 const MAX_SLUG = 80;
+
+const PROJECT_STATUSES = [
+  "backlog",
+  "planned",
+  "in_progress",
+  "completed",
+  "canceled",
+] as const satisfies readonly ProjectStatus[];
+
+const PROJECT_PRIORITIES = [
+  "none",
+  "urgent",
+  "high",
+  "medium",
+  "low",
+] as const satisfies readonly ProjectPriority[];
 
 function slugify(input: string): string {
   const base = input
@@ -22,6 +44,37 @@ function requireName(name: string): string {
   if (!trimmed) throw new Error("A project needs a name.");
   if (trimmed.length > MAX_NAME) {
     throw new Error(`Project names must be ${MAX_NAME} characters or fewer.`);
+  }
+  return trimmed;
+}
+
+function requireStatus(value: string): ProjectStatus {
+  if ((PROJECT_STATUSES as readonly string[]).includes(value)) {
+    return value as ProjectStatus;
+  }
+  throw new Error(
+    `status must be one of: ${PROJECT_STATUSES.join(", ")}.`,
+  );
+}
+
+function requirePriority(value: string): ProjectPriority {
+  if ((PROJECT_PRIORITIES as readonly string[]).includes(value)) {
+    return value as ProjectPriority;
+  }
+  throw new Error(
+    `priority must be one of: ${PROJECT_PRIORITIES.join(", ")}.`,
+  );
+}
+
+function normalizeProjectDate(
+  value: string | null | undefined,
+  field: "startDate" | "targetDate",
+): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value.trim() === "") return null;
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    throw new Error(`${field} must be YYYY-MM-DD.`);
   }
   return trimmed;
 }
@@ -69,13 +122,34 @@ export async function getProjectByName(
 
 export async function createProject(
   userId: string,
-  input: { readonly name: string; readonly instructions?: string },
+  input: {
+    readonly name: string;
+    readonly instructions?: string;
+    readonly status?: ProjectStatus;
+    readonly priority?: ProjectPriority;
+    readonly startDate?: string | null;
+    readonly targetDate?: string | null;
+  },
 ): Promise<Project> {
   const name = requireName(input.name);
   const instructions = (input.instructions ?? "").slice(0, MAX_INSTRUCTIONS);
+  const status =
+    input.status !== undefined ? requireStatus(input.status) : "backlog";
+  const priority =
+    input.priority !== undefined ? requirePriority(input.priority) : "none";
+  const startDate = normalizeProjectDate(input.startDate, "startDate");
+  const targetDate = normalizeProjectDate(input.targetDate, "targetDate");
   const [row] = await db
     .insert(project)
-    .values({ userId, name, instructions })
+    .values({
+      userId,
+      name,
+      instructions,
+      status,
+      priority,
+      startDate: startDate === undefined ? null : startDate,
+      targetDate: targetDate === undefined ? null : targetDate,
+    })
     .returning();
   if (!row) throw new Error("Failed to create project.");
   return row;
@@ -87,6 +161,10 @@ export async function updateProject(
   input: {
     readonly name?: string;
     readonly instructions?: string;
+    readonly status?: ProjectStatus;
+    readonly priority?: ProjectPriority;
+    readonly startDate?: string | null;
+    readonly targetDate?: string | null;
   },
 ): Promise<Project | null> {
   const existing = await getProject(userId, projectId);
@@ -98,10 +176,30 @@ export async function updateProject(
     input.instructions !== undefined
       ? input.instructions.slice(0, MAX_INSTRUCTIONS)
       : existing.instructions;
+  const status =
+    input.status !== undefined ? requireStatus(input.status) : existing.status;
+  const priority =
+    input.priority !== undefined
+      ? requirePriority(input.priority)
+      : existing.priority;
+  const startDateRaw = normalizeProjectDate(input.startDate, "startDate");
+  const targetDateRaw = normalizeProjectDate(input.targetDate, "targetDate");
+  const startDate =
+    startDateRaw === undefined ? existing.startDate : startDateRaw;
+  const targetDate =
+    targetDateRaw === undefined ? existing.targetDate : targetDateRaw;
 
   const [row] = await db
     .update(project)
-    .set({ name, instructions, updatedAt: new Date() })
+    .set({
+      name,
+      instructions,
+      status,
+      priority,
+      startDate,
+      targetDate,
+      updatedAt: new Date(),
+    })
     .where(and(eq(project.userId, userId), eq(project.id, projectId)))
     .returning();
   return row ?? null;
@@ -162,4 +260,8 @@ export async function getChatProjectId(
   return row?.projectId ?? null;
 }
 
-export { slugify };
+export {
+  PROJECT_PRIORITIES,
+  PROJECT_STATUSES,
+  slugify,
+};

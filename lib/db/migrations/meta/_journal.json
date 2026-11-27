@@ -414,6 +414,13 @@
       "when": 1796500000000,
       "tag": "0061_billing_pricing_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1796600000000,
+      "tag": "0062_project_properties_links",
+      "breakpoints": true
     }
   ]
 }

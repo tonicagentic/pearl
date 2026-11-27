@@ -2,6 +2,7 @@ import { defineDynamic, defineInstructions } from "eve/instructions";
 
 import { planMirrorPath } from "@/agent/lib/plan-mirror";
 import { getProject } from "@/lib/db/projects";
+import { listProjectLinks } from "@/lib/db/project-links";
 import { listProjectFiles } from "@/lib/project-files";
 import { listProjectPins } from "@/lib/db/workbench-pins";
 
@@ -9,8 +10,9 @@ import { requirePrincipalUser } from "../lib/principal.ts";
 import { syncTurnClientIntent } from "../lib/turn-context.ts";
 
 // When the turn is attached to a verified project, inject its name,
-// instructions, file index, and linked repos. Bodies stay out of the
-// prompt — use read_project_file when a specific document is needed.
+// properties, instructions, file index, URL links, and linked repos.
+// Bodies stay out of the prompt — use read_project_file when a specific
+// document is needed.
 
 export default defineDynamic(async (ctx) => {
   const intent = syncTurnClientIntent(await ctx.messages());
@@ -22,9 +24,10 @@ export default defineDynamic(async (ctx) => {
   const owned = await getProject(userId, intent.projectId);
   if (!owned) return null;
 
-  const [files, pins] = await Promise.all([
+  const [files, pins, links] = await Promise.all([
     listProjectFiles(userId, owned.id),
     listProjectPins(userId, owned.id),
+    listProjectLinks(userId, owned.id),
   ]);
 
   const planFiles = files.filter((row) =>
@@ -43,6 +46,14 @@ export default defineDynamic(async (ctx) => {
             : `(library) ${row.pathname}`;
           return `- ${row.title} (id: ${row.id}, path: ${path})`;
         });
+
+  const linkLines =
+    links.length === 0
+      ? ["(no URL links yet)"]
+      : links.map(
+          (link) =>
+            `- ${link.title} (id: ${link.id}, url: ${link.url})`,
+        );
 
   const repoLines =
     pins.length === 0
@@ -63,6 +74,10 @@ export default defineDynamic(async (ctx) => {
     "",
     `Name: ${owned.name}`,
     `Project id: ${owned.id}`,
+    `Status: ${owned.status}`,
+    `Priority: ${owned.priority}`,
+    `Start date: ${owned.startDate ?? "(none)"}`,
+    `Target date: ${owned.targetDate ?? "(none)"}`,
     "",
     instructions
       ? ["## Project instructions", "", instructions].join("\n")
@@ -75,6 +90,10 @@ export default defineDynamic(async (ctx) => {
     "Call read_project_file (or read_file on the path) when you need a file",
     "body. Project files under /workspace/docs/plans/ are the source of",
     "truth. Do not invent files that are not listed.",
+    "",
+    "## URL links in this project",
+    "",
+    ...linkLines,
     "",
     "## Repos in this project",
     "",

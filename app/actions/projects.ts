@@ -74,6 +74,15 @@ export async function updateProjectAction(input: {
   readonly projectId: string;
   readonly name?: string;
   readonly instructions?: string;
+  readonly status?:
+    | "backlog"
+    | "planned"
+    | "in_progress"
+    | "completed"
+    | "canceled";
+  readonly priority?: "none" | "urgent" | "high" | "medium" | "low";
+  readonly startDate?: string | null;
+  readonly targetDate?: string | null;
 }) {
   const viewer = await requireDatabaseViewer();
   const row = await updateProject(viewer.id, input.projectId, input);

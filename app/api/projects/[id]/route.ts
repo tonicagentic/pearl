@@ -9,28 +9,15 @@ import {
 } from "@/lib/db/projects";
 import { listProjectArtifacts } from "@/lib/db/project-artifacts";
 import { listProjectGoals } from "@/lib/db/project-goals";
+import { listProjectLinks } from "@/lib/db/project-links";
 import { listProjectNotes } from "@/lib/db/project-notes";
 import { listProjectPins } from "@/lib/db/workbench-pins";
 import { issueState, todayIso } from "@/lib/issues";
 import { backfillPlansToProjectFiles } from "@/lib/project-files";
+import { serializeProject } from "@/lib/projects/serialize";
+import type { ProjectPriority, ProjectStatus } from "@/lib/db/schema";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
-
-function serializeProject(row: {
-  readonly id: string;
-  readonly name: string;
-  readonly instructions: string;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-}) {
-  return {
-    id: row.id,
-    name: row.name,
-    instructions: row.instructions,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
-}
 
 async function requireViewer() {
   const setupStatus = await getSetupStatus();
@@ -41,7 +28,7 @@ async function requireViewer() {
   return viewer;
 }
 
-/** Project detail: project + tasks + goals + notes + files + chats + pins. */
+/** Project detail: project + tasks + goals + notes + files + chats + pins + links. */
 export async function GET(
   _request: Request,
   context: { readonly params: Promise<{ readonly id: string }> },
@@ -63,14 +50,16 @@ export async function GET(
   // Best-effort migration while `plan` table still exists pre-0058.
   await backfillPlansToProjectFiles(viewer.id, owned.id).catch(() => 0);
 
-  const [chats, pins, issues, artifacts, goals, notes] = await Promise.all([
-    listProjectChats(viewer.id, owned.id),
-    listProjectPins(viewer.id, owned.id),
-    listProjectIssues(viewer.id, owned.id),
-    listProjectArtifacts(viewer.id, owned.id),
-    listProjectGoals(viewer.id, owned.id),
-    listProjectNotes(viewer.id, owned.id),
-  ]);
+  const [chats, pins, issues, artifacts, goals, notes, links] =
+    await Promise.all([
+      listProjectChats(viewer.id, owned.id),
+      listProjectPins(viewer.id, owned.id),
+      listProjectIssues(viewer.id, owned.id),
+      listProjectArtifacts(viewer.id, owned.id),
+      listProjectGoals(viewer.id, owned.id),
+      listProjectNotes(viewer.id, owned.id),
+      listProjectLinks(viewer.id, owned.id),
+    ]);
 
   return NextResponse.json({
     project: serializeProject(owned),
@@ -115,6 +104,7 @@ export async function GET(
     artifacts,
     goals,
     notes,
+    links,
   });
 }
 
@@ -134,6 +124,10 @@ export async function PATCH(
   const body = (await request.json().catch(() => ({}))) as {
     readonly name?: string;
     readonly instructions?: string;
+    readonly status?: ProjectStatus;
+    readonly priority?: ProjectPriority;
+    readonly startDate?: string | null;
+    readonly targetDate?: string | null;
   };
 
   try {

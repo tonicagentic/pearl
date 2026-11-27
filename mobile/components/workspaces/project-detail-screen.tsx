@@ -7,6 +7,7 @@ import {
 } from "react";
 import {
   Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -29,6 +30,7 @@ import {
 } from "@/components/navigation/screen-chrome";
 import { ProjectMark } from "@/components/project-mark";
 import { CreateTaskModal } from "@/components/tasks/create-task-modal";
+import { TaskDateField } from "@/components/tasks/task-date-field";
 import { Icon } from "@/components/ui/icon";
 import { LoadingCenter } from "@/components/ui/loading-center";
 import { Text } from "@/components/ui/text";
@@ -42,18 +44,25 @@ import {
   setIssueResolvedRequest,
 } from "@/src/issues-client";
 import { createNoteRequest } from "@/src/notes-client";
+import { openWebUrl } from "@/src/open-web-url";
 import {
   createProjectFileRequest,
+  createProjectLinkRequest,
   deleteProjectGoalRequest,
+  deleteProjectLinkRequest,
   deleteProjectRequest,
   fetchProjectWorkspace,
   linkProjectArtifactRequest,
   linkProjectPinRequest,
   unlinkProjectArtifactRequest,
   unlinkProjectPinRequest,
+  updateProjectLinkRequest,
   updateProjectRequest,
   type ProjectGoalDto,
   type ProjectIssueDto,
+  type ProjectLinkDto,
+  type ProjectPriority,
+  type ProjectStatus,
   type ProjectWorkspaceDto,
 } from "@/src/projects-client";
 import { queryKeys } from "@/src/query-client";
@@ -77,6 +86,54 @@ const PROJECT_TABS: readonly { readonly key: ProjectTab; readonly label: string 
     { key: "links", label: "Links" },
   ];
 
+const STATUS_OPTIONS: readonly {
+  readonly value: ProjectStatus;
+  readonly label: string;
+}[] = [
+  { value: "backlog", label: "Backlog" },
+  { value: "planned", label: "Planned" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "completed", label: "Completed" },
+  { value: "canceled", label: "Canceled" },
+];
+
+const PRIORITY_OPTIONS: readonly {
+  readonly value: ProjectPriority;
+  readonly label: string;
+}[] = [
+  { value: "none", label: "No priority" },
+  { value: "urgent", label: "Urgent" },
+  { value: "high", label: "High" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" },
+];
+
+function statusLabel(status: ProjectStatus): string {
+  return STATUS_OPTIONS.find((row) => row.value === status)?.label ?? status;
+}
+
+function priorityLabel(priority: ProjectPriority): string {
+  return (
+    PRIORITY_OPTIONS.find((row) => row.value === priority)?.label ?? priority
+  );
+}
+
+function formatDatePill(start: string | null, target: string | null): string {
+  const startText = start
+    ? new Date(`${start}T12:00:00`).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      })
+    : "No start";
+  const targetText = target
+    ? new Date(`${target}T12:00:00`).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      })
+    : "No target date";
+  return `${startText} → ${targetText}`;
+}
+
 /** Project hub: tasks, goals, notes, files; demoted repos/chats links. */
 export function ProjectDetailScreen({
   projectId,
@@ -93,10 +150,16 @@ export function ProjectDetailScreen({
   const [busyIssueId, setBusyIssueId] = useState<string | null>(null);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [tab, setTab] = useState<ProjectTab>("overview");
+  const [datesOpen, setDatesOpen] = useState(false);
+  const [draftStartDate, setDraftStartDate] = useState("");
+  const [draftTargetDate, setDraftTargetDate] = useState("");
   const foregroundColor = useCSSVariable("--color-foreground") as
     | string
     | undefined;
   const placeholderColor = useCSSVariable("--color-muted-foreground") as
+    | string
+    | undefined;
+  const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
 
@@ -598,6 +661,209 @@ export function ProjectDetailScreen({
     ]);
   }, [createFile, linkLibraryArtifact]);
 
+  const patchProjectFields = useCallback(
+    (
+      input: {
+        readonly status?: ProjectStatus;
+        readonly priority?: ProjectPriority;
+        readonly startDate?: string | null;
+        readonly targetDate?: string | null;
+      },
+    ) => {
+      setError(null);
+      void updateProjectRequest(projectId, input)
+        .then((project) => {
+          setWorkspace((current) =>
+            current ? { ...current, project } : current,
+          );
+          invalidateProject();
+        })
+        .catch((cause) => {
+          setError(
+            cause instanceof Error ? cause.message : "Could not save.",
+          );
+        });
+    },
+    [invalidateProject, projectId],
+  );
+
+  const pickStatus = useCallback(() => {
+    Alert.alert("Status", undefined, [
+      ...STATUS_OPTIONS.map((option) => ({
+        text: option.label,
+        onPress: () => patchProjectFields({ status: option.value }),
+      })),
+      { text: "Cancel", style: "cancel" as const },
+    ]);
+  }, [patchProjectFields]);
+
+  const pickPriority = useCallback(() => {
+    Alert.alert("Priority", undefined, [
+      ...PRIORITY_OPTIONS.map((option) => ({
+        text: option.label,
+        onPress: () => patchProjectFields({ priority: option.value }),
+      })),
+      { text: "Cancel", style: "cancel" as const },
+    ]);
+  }, [patchProjectFields]);
+
+  const openDatesSheet = useCallback(() => {
+    setDraftStartDate(workspace?.project.startDate ?? "");
+    setDraftTargetDate(workspace?.project.targetDate ?? "");
+    setDatesOpen(true);
+  }, [workspace?.project.startDate, workspace?.project.targetDate]);
+
+  const saveDatesSheet = useCallback(() => {
+    setDatesOpen(false);
+    patchProjectFields({
+      startDate: draftStartDate || null,
+      targetDate: draftTargetDate || null,
+    });
+  }, [draftStartDate, draftTargetDate, patchProjectFields]);
+
+  const promptAddUrl = useCallback(() => {
+    const create = (title: string, url: string) => {
+      const trimmedTitle = title.trim() || "Link";
+      const trimmedUrl = url.trim();
+      if (!trimmedUrl) {
+        setError("A link needs a URL.");
+        return;
+      }
+      void createProjectLinkRequest(projectId, {
+        title: trimmedTitle,
+        url: trimmedUrl,
+      })
+        .then(() => reload())
+        .catch((cause) => {
+          setError(
+            cause instanceof Error ? cause.message : "Could not add link.",
+          );
+        });
+    };
+
+    if (Platform.OS === "ios") {
+      Alert.prompt("Link title", undefined, (titleValue) => {
+        const title = titleValue?.trim() || "Link";
+        Alert.prompt("URL", "https://…", (urlValue) => {
+          create(title, urlValue ?? "");
+        }, "plain-text");
+      }, "plain-text");
+      return;
+    }
+    Alert.alert("Add URL", "Enter an https URL to attach.", [
+      {
+        text: "Add example.com",
+        onPress: () => create("Link", "https://example.com"),
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, [projectId, reload]);
+
+  const editUrlLink = useCallback(
+    (link: ProjectLinkDto) => {
+      Alert.alert(link.title, link.url, [
+        {
+          text: "Edit title",
+          onPress: () => {
+            if (Platform.OS === "ios") {
+              Alert.prompt(
+                "Title",
+                undefined,
+                (value) => {
+                  const title = value?.trim();
+                  if (!title) return;
+                  void updateProjectLinkRequest(projectId, link.id, { title })
+                    .then(() => reload())
+                    .catch((cause) => {
+                      setError(
+                        cause instanceof Error
+                          ? cause.message
+                          : "Could not update link.",
+                      );
+                    });
+                },
+                "plain-text",
+                link.title,
+              );
+              return;
+            }
+            Alert.alert("Edit on iOS", "Title editing uses the prompt sheet.");
+          },
+        },
+        {
+          text: "Edit URL",
+          onPress: () => {
+            if (Platform.OS === "ios") {
+              Alert.prompt(
+                "URL",
+                undefined,
+                (value) => {
+                  const url = value?.trim();
+                  if (!url) return;
+                  void updateProjectLinkRequest(projectId, link.id, { url })
+                    .then(() => reload())
+                    .catch((cause) => {
+                      setError(
+                        cause instanceof Error
+                          ? cause.message
+                          : "Could not update link.",
+                      );
+                    });
+                },
+                "plain-text",
+                link.url,
+              );
+              return;
+            }
+            Alert.alert("Edit on iOS", "URL editing uses the prompt sheet.");
+          },
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void deleteProjectLinkRequest(projectId, link.id)
+              .then(() => reload())
+              .catch((cause) => {
+                setError(
+                  cause instanceof Error
+                    ? cause.message
+                    : "Could not delete link.",
+                );
+              });
+          },
+        },
+        { text: "Cancel", style: "cancel" },
+      ]);
+    },
+    [projectId, reload],
+  );
+
+  const openResourcesMenu = useCallback(() => {
+    Alert.alert("Add resource", undefined, [
+      { text: "New file", onPress: createFile },
+      { text: "Link from Library", onPress: linkLibraryArtifact },
+      { text: "Add URL", onPress: promptAddUrl },
+      {
+        text: "Link repo",
+        onPress: () => {
+          Alert.alert("Link repo", undefined, [
+            { text: "Link Workbench pin", onPress: linkExistingPin },
+            { text: "Add repo by owner/name", onPress: addRepoByName },
+            { text: "Cancel", style: "cancel" },
+          ]);
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, [
+    addRepoByName,
+    createFile,
+    linkExistingPin,
+    linkLibraryArtifact,
+    promptAddUrl,
+  ]);
+
   if (!workspace && !error) {
     return (
       <ScreenChrome title="Project" leading="back" contentPaddingTop={0}>
@@ -613,6 +879,13 @@ export function ProjectDetailScreen({
   const files = workspace?.artifacts ?? [];
   const pins = workspace?.pins ?? [];
   const projectChats = workspace?.chats ?? [];
+  const links = workspace?.links ?? [];
+  const projectStatus = workspace?.project.status ?? "backlog";
+  const projectPriority = workspace?.project.priority ?? "none";
+  const projectStartDate = workspace?.project.startDate ?? null;
+  const projectTargetDate = workspace?.project.targetDate ?? null;
+  const hasResources =
+    files.length > 0 || links.length > 0 || pins.length > 0;
 
   return (
     <ScreenChrome
@@ -686,17 +959,145 @@ export function ProjectDetailScreen({
           keyboardShouldPersistTaps="handled"
         >
           {tab === "overview" ? (
-            <TextInput
-              className="min-h-28 text-sm text-foreground"
-              multiline
-              onBlur={saveIfDirty}
-              onChangeText={setInstructions}
-              placeholder="Instructions for every chat in this project"
-              placeholderTextColor={placeholderColor}
-              style={{ color: foregroundColor }}
-              textAlignVertical="top"
-              value={instructions}
-            />
+            <View className="gap-6">
+              <View className="gap-2">
+                <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Properties
+                </Text>
+                <View className="flex-row flex-wrap gap-1.5">
+                  <PropertyPill
+                    label={statusLabel(projectStatus)}
+                    onPress={pickStatus}
+                  />
+                  <PropertyPill
+                    label={priorityLabel(projectPriority)}
+                    onPress={pickPriority}
+                  />
+                  <PropertyPill
+                    label={formatDatePill(projectStartDate, projectTargetDate)}
+                    onPress={openDatesSheet}
+                  />
+                </View>
+              </View>
+
+              <View className="gap-2">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Resources
+                  </Text>
+                  <Pressable onPress={openResourcesMenu}>
+                    <Text className="text-sm text-muted-foreground">
+                      + Add…
+                    </Text>
+                  </Pressable>
+                </View>
+                <View className="overflow-hidden rounded-xl border border-border/40">
+                  {!hasResources ? (
+                    <EmptyRow text="No files, links, or repos yet." />
+                  ) : (
+                    <>
+                      {files.map((file) => (
+                        <LinkRow
+                          key={`file-${file.id}`}
+                          onLongPress={() => {
+                            Alert.alert("Unlink file?", file.title, [
+                              { text: "Cancel", style: "cancel" },
+                              {
+                                text: "Unlink",
+                                style: "destructive",
+                                onPress: () => {
+                                  void unlinkProjectArtifactRequest(
+                                    projectId,
+                                    file.id,
+                                  )
+                                    .then(() => reload())
+                                    .catch((cause) => {
+                                      setError(
+                                        cause instanceof Error
+                                          ? cause.message
+                                          : "Could not unlink.",
+                                      );
+                                    });
+                                },
+                              },
+                            ]);
+                          }}
+                          onPress={() =>
+                            router.push(
+                              `/workspaces/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(file.id)}`,
+                            )
+                          }
+                          subtitle={
+                            file.pathname.split("/").pop() ?? file.pathname
+                          }
+                          title={file.title}
+                        />
+                      ))}
+                      {links.map((link) => (
+                        <LinkRow
+                          key={`link-${link.id}`}
+                          onLongPress={() => editUrlLink(link)}
+                          onPress={() => openWebUrl(link.url)}
+                          subtitle={link.url}
+                          title={link.title}
+                        />
+                      ))}
+                      {pins.map((pin) => (
+                        <LinkRow
+                          key={`pin-${pin.id}`}
+                          onLongPress={() => {
+                            Alert.alert("Unlink repo?", pin.fullName, [
+                              { text: "Cancel", style: "cancel" },
+                              {
+                                text: "Unlink",
+                                style: "destructive",
+                                onPress: () => {
+                                  void unlinkProjectPinRequest(
+                                    projectId,
+                                    pin.id,
+                                  )
+                                    .then(() => reload())
+                                    .catch((cause) => {
+                                      setError(
+                                        cause instanceof Error
+                                          ? cause.message
+                                          : "Could not unlink.",
+                                      );
+                                    });
+                                },
+                              },
+                            ]);
+                          }}
+                          onPress={() =>
+                            router.push(
+                              `/workbench/${encodeURIComponent(pin.id)}`,
+                            )
+                          }
+                          title={pin.fullName}
+                        />
+                      ))}
+                    </>
+                  )}
+                </View>
+              </View>
+
+              <View className="gap-2">
+                <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Description
+                </Text>
+                <TextInput
+                  className="min-h-28 text-sm text-foreground"
+                  multiline
+                  onBlur={saveIfDirty}
+                  onChangeText={setInstructions}
+                  placeholder="Instructions for every chat in this project"
+                  placeholderTextColor={placeholderColor}
+                  style={{ color: foregroundColor }}
+                  textAlignVertical="top"
+                  value={instructions}
+                />
+              </View>
+            </View>
           ) : null}
 
           {tab === "tasks" ? (
@@ -903,7 +1304,74 @@ export function ProjectDetailScreen({
         open={createTaskOpen}
         projectId={projectId}
       />
+
+      <Modal
+        visible={datesOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDatesOpen(false)}
+      >
+        <View className="flex-1 justify-end bg-foreground/40">
+          <View
+            style={{ backgroundColor }}
+            className="gap-3 rounded-t-3xl px-4 pb-8 pt-4"
+          >
+            <Text className="text-base font-semibold text-foreground">
+              Project dates
+            </Text>
+            <View className="flex-row gap-3">
+              <TaskDateField
+                label="Start"
+                onChange={setDraftStartDate}
+                value={draftStartDate}
+              />
+              <TaskDateField
+                label="Target"
+                onChange={setDraftTargetDate}
+                value={draftTargetDate}
+              />
+            </View>
+            <View className="mt-1 flex-row justify-between">
+              <Pressable
+                accessibilityRole="button"
+                className="min-h-11 justify-center px-2"
+                onPress={() => {
+                  setDraftStartDate("");
+                  setDraftTargetDate("");
+                }}
+              >
+                <Text className="text-foreground">Clear</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                className="min-h-11 justify-center px-2"
+                onPress={saveDatesSheet}
+              >
+                <Text className="font-medium text-foreground">Done</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenChrome>
+  );
+}
+
+function PropertyPill({
+  label,
+  onPress,
+}: {
+  readonly label: string;
+  readonly onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      className="rounded-full border border-border/50 bg-muted px-3 py-1.5"
+      onPress={onPress}
+    >
+      <Text className="text-sm font-medium text-foreground">{label}</Text>
+    </Pressable>
   );
 }
 

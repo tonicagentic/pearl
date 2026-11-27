@@ -4,12 +4,39 @@
 import { AGENT_URL, getAuthCookie } from "./eve-transport";
 import { sessionInvalid } from "./session-store";
 
+export type ProjectStatus =
+  | "backlog"
+  | "planned"
+  | "in_progress"
+  | "completed"
+  | "canceled";
+
+export type ProjectPriority =
+  | "none"
+  | "urgent"
+  | "high"
+  | "medium"
+  | "low";
+
 export type ProjectDto = {
   readonly id: string;
   readonly name: string;
   readonly instructions: string;
+  readonly status: ProjectStatus;
+  readonly priority: ProjectPriority;
+  readonly startDate: string | null;
+  readonly targetDate: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+};
+
+export type ProjectLinkDto = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly url: string;
+  readonly sortOrder: number;
+  readonly createdAt: string;
 };
 
 export type PlanSummaryDto = {
@@ -103,6 +130,7 @@ export type ProjectWorkspaceDto = {
   readonly artifacts: readonly ProjectArtifactDto[];
   readonly goals: readonly ProjectGoalDto[];
   readonly notes: readonly ProjectNoteSummaryDto[];
+  readonly links: readonly ProjectLinkDto[];
 };
 
 function authHeaders(): Record<string, string> {
@@ -181,12 +209,20 @@ export async function fetchProjectWorkspace(
     artifacts: data.artifacts ?? [],
     goals: data.goals ?? [],
     notes: data.notes ?? [],
+    links: data.links ?? [],
   };
 }
 
 export async function updateProjectRequest(
   id: string,
-  input: { readonly name?: string; readonly instructions?: string },
+  input: {
+    readonly name?: string;
+    readonly instructions?: string;
+    readonly status?: ProjectStatus;
+    readonly priority?: ProjectPriority;
+    readonly startDate?: string | null;
+    readonly targetDate?: string | null;
+  },
 ): Promise<ProjectDto> {
   const response = await fetch(
     `${AGENT_URL}/api/projects/${encodeURIComponent(id)}`,
@@ -577,6 +613,69 @@ export async function deleteProjectGoalRequest(
 ): Promise<void> {
   const response = await fetch(
     `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/goals/${encodeURIComponent(goalId)}`,
+    {
+      method: "DELETE",
+      headers: authHeaders(),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+}
+
+export async function createProjectLinkRequest(
+  projectId: string,
+  input: { readonly title: string; readonly url: string },
+): Promise<ProjectLinkDto> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/links`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(input),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+
+  const data = (await response.json()) as { link: ProjectLinkDto };
+  return data.link;
+}
+
+export async function updateProjectLinkRequest(
+  projectId: string,
+  linkId: string,
+  input: { readonly title?: string; readonly url?: string },
+): Promise<ProjectLinkDto> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/links/${encodeURIComponent(linkId)}`,
+    {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(input),
+    },
+  );
+
+  if (!response.ok) {
+    handleAuth(response);
+    throw new Error(await readError(response));
+  }
+
+  const data = (await response.json()) as { link: ProjectLinkDto };
+  return data.link;
+}
+
+export async function deleteProjectLinkRequest(
+  projectId: string,
+  linkId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${AGENT_URL}/api/projects/${encodeURIComponent(projectId)}/links/${encodeURIComponent(linkId)}`,
     {
       method: "DELETE",
       headers: authHeaders(),

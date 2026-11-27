@@ -1,24 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { createProject, listProjects } from "@/lib/db/projects";
+import { serializeProject } from "@/lib/projects/serialize";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
-
-function serializeProject(row: {
-  readonly id: string;
-  readonly name: string;
-  readonly instructions: string;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-}) {
-  return {
-    id: row.id,
-    name: row.name,
-    instructions: row.instructions,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
-}
 
 /** Authenticated project list/create for web + mobile. */
 export async function GET() {
