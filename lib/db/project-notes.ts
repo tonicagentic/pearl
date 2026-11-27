@@ -58,9 +58,17 @@ function toSummary(
   };
 }
 
+/** Default title for a new note when the caller does not supply one. */
+export function defaultNoteTitle(now = new Date()): string {
+  return now.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function requireTitle(title: string): string {
-  const trimmed = title.trim();
-  if (!trimmed) throw new Error("A note needs a title.");
+  const trimmed = title.trim() || defaultNoteTitle();
   if (trimmed.length > MAX_TITLE) {
     throw new Error(`Note titles must be ${MAX_TITLE} characters or fewer.`);
   }
@@ -179,7 +187,7 @@ export async function getProjectNote(
 export async function createNote(
   userId: string,
   input: {
-    readonly title: string;
+    readonly title?: string;
     readonly markdown?: string;
     readonly projectId?: string | null;
     readonly goalId?: string | null;
@@ -187,7 +195,7 @@ export async function createNote(
 ): Promise<ProjectNoteDto> {
   const projectId = await resolveOptionalProjectId(userId, input.projectId);
   const goalId = await resolveOptionalGoalId(userId, input.goalId);
-  const title = requireTitle(input.title);
+  const title = requireTitle(input.title ?? "");
   const markdown = (input.markdown ?? "").slice(0, MAX_MARKDOWN);
 
   const [row] = await db
@@ -214,7 +222,7 @@ export async function createProjectNote(
   userId: string,
   projectId: string,
   input: {
-    readonly title: string;
+    readonly title?: string;
     readonly markdown?: string;
   },
 ): Promise<ProjectNoteDto | null> {

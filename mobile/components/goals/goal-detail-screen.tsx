@@ -392,7 +392,6 @@ export function GoalDetailScreen({
 
   const createNote = useCallback(() => {
     void createNoteRequest({
-      title: "Untitled note",
       projectId: workspace?.goal.projectId ?? null,
       goalId,
     })

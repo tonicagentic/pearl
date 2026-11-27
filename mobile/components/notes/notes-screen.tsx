@@ -7,13 +7,12 @@ import {
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { PlusIcon } from "lucide-react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCSSVariable } from "uniwind";
 
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
-import { CreateNoteModal } from "@/components/notes/create-note-modal";
 import { Text } from "@/components/ui/text";
-import { fetchAllNotes } from "@/src/notes-client";
+import { createNoteRequest, fetchAllNotes } from "@/src/notes-client";
 import { useNetworkStatus } from "@/src/network-status";
 import {
   queryErrorMessage,
@@ -24,7 +23,9 @@ import {
 /** Notes hub: all notes by updatedAt with optional project filing. */
 export function NotesScreen() {
   const { offline } = useNetworkStatus();
-  const [composerOpen, setComposerOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const [creating, setCreating] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -43,8 +44,27 @@ export function NotesScreen() {
     }, [notesQuery.refetch]),
   );
 
+  const createNote = useCallback(() => {
+    if (creating) return;
+    setCreating(true);
+    setActionError(null);
+    void createNoteRequest()
+      .then((created) => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.notes });
+        router.push(`/notes/${encodeURIComponent(created.id)}`);
+      })
+      .catch((cause) => {
+        setActionError(
+          cause instanceof Error ? cause.message : "Could not create note.",
+        );
+      })
+      .finally(() => setCreating(false));
+  }, [creating, queryClient]);
+
   const notes = notesQuery.data ?? null;
-  const showError = showQueryErrorBanner(offline, notesQuery.error);
+  const showError =
+    showQueryErrorBanner(offline, notesQuery.error) ||
+    showQueryErrorBanner(offline, actionError);
 
   return (
     <ScreenChrome
@@ -55,7 +75,8 @@ export function NotesScreen() {
           label: "New note",
           systemImage: "plus",
           icon: PlusIcon,
-          onPress: () => setComposerOpen(true),
+          onPress: createNote,
+          disabled: creating,
         },
       ]}
     >
@@ -70,10 +91,14 @@ export function NotesScreen() {
             <Pressable
               accessibilityRole="button"
               className="mb-4 rounded-2xl bg-destructive/10 px-4 py-3"
-              onPress={() => void notesQuery.refetch()}
+              onPress={() => {
+                setActionError(null);
+                void notesQuery.refetch();
+              }}
             >
               <Text variant="secondary" tone="destructive">
-                {queryErrorMessage(notesQuery.error, "Failed to load notes.")}
+                {actionError ??
+                  queryErrorMessage(notesQuery.error, "Failed to load notes.")}
               </Text>
               <Text
                 variant="caption"
@@ -119,15 +144,6 @@ export function NotesScreen() {
             </View>
           )}
         </ScrollView>
-
-        <CreateNoteModal
-          open={composerOpen}
-          onClose={() => setComposerOpen(false)}
-          onCreated={(created) => {
-            setComposerOpen(false);
-            router.push(`/notes/${encodeURIComponent(created.id)}`);
-          }}
-        />
       </View>
     </ScreenChrome>
   );

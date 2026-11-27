@@ -33,11 +33,11 @@ export async function fetchNote(noteId: string): Promise<NoteDto> {
 }
 
 export async function createNoteRequest(input: {
-  readonly title: string;
+  readonly title?: string;
   readonly markdown?: string;
   readonly projectId?: string | null;
   readonly goalId?: string | null;
-}): Promise<NoteDto> {
+} = {}): Promise<NoteDto> {
   const data = await authedJson<{ note: NoteDto }>("/api/notes", {
     method: "POST",
     json: input,

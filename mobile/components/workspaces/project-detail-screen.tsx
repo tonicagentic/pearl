@@ -421,11 +421,7 @@ export function ProjectDetailScreen({
   ]);
 
   const createNote = useCallback(() => {
-    void createNoteRequest({
-      title: "Untitled note",
-      markdown: "",
-      projectId,
-    })
+    void createNoteRequest({ projectId })
       .then((note) => {
         invalidateProject();
         router.push(`/notes/${encodeURIComponent(note.id)}`);

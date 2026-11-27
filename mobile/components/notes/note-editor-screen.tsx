@@ -132,7 +132,7 @@ export function NoteEditorScreen({
   const persistNow = useCallback(async (): Promise<boolean> => {
     const current = noteRef.current;
     if (!current) return true;
-    const sentTitle = titleRef.current.trim() || "Untitled note";
+    const sentTitle = titleRef.current.trim() || noteRef.current?.title || "Note";
     const sentMarkdown = markdownRef.current;
     const dirty =
       sentTitle !== current.title || sentMarkdown !== current.markdown;
@@ -153,7 +153,8 @@ export function NoteEditorScreen({
         setNote(row);
         // Only snap draft if the user hasn't typed further since this save.
         if (
-          (titleRef.current.trim() || "Untitled note") === sentTitle &&
+          (titleRef.current.trim() || noteRef.current?.title || "Note") ===
+            sentTitle &&
           markdownRef.current === sentMarkdown
         ) {
           setTitle(row.title);
@@ -202,7 +203,7 @@ export function NoteEditorScreen({
       }
       const current = noteRef.current;
       if (!current) return;
-      const sentTitle = titleRef.current.trim() || "Untitled note";
+      const sentTitle = titleRef.current.trim() || noteRef.current?.title || "Note";
       const sentMarkdown = markdownRef.current;
       if (
         sentTitle === current.title &&
@@ -235,7 +236,7 @@ export function NoteEditorScreen({
     const unsub = nav.addListener("beforeRemove", (event) => {
       const current = noteRef.current;
       if (!current) return;
-      const sentTitle = titleRef.current.trim() || "Untitled note";
+      const sentTitle = titleRef.current.trim() || noteRef.current?.title || "Note";
       const sentMarkdown = markdownRef.current;
       const dirty =
         sentTitle !== current.title ||
@@ -313,7 +314,7 @@ export function NoteEditorScreen({
   );
 
   const confirmDelete = useCallback(() => {
-    Alert.alert("Delete note?", titleRef.current || "Untitled note", [
+    Alert.alert("Delete note?", titleRef.current || note?.title || "Note", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -342,7 +343,7 @@ export function NoteEditorScreen({
   }, [invalidateNotes, noteId]);
 
   const shareNote = useCallback(() => {
-    const shareTitle = titleRef.current.trim() || "Untitled note";
+    const shareTitle = titleRef.current.trim() || note?.title || "Note";
     const body = markdownRef.current.trim();
     const message = body ? `${shareTitle}\n\n${body}` : shareTitle;
     void Share.share({ message, title: shareTitle }).catch(() => {});
