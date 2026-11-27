@@ -29,3 +29,64 @@ export function oldestTextOnlyQuestion(
   if (texts.length === 0) return null;
   return texts[texts.length - 1] ?? null;
 }
+
+/** True when composer Send should settle the open text ask via `answers`. */
+export function shouldSendTextReplyAnswer(input: {
+  readonly onlyTextQuestionsPending: boolean;
+  readonly hasAttachments: boolean;
+  readonly text: string;
+}): boolean {
+  return (
+    input.onlyTextQuestionsPending &&
+    !input.hasAttachments &&
+    input.text.trim().length > 0
+  );
+}
+
+/** Payload for `store.send` when answering a text-only park from the composer. */
+export function buildTextReplyAnswerPayload(
+  pending: PendingApproval,
+  text: string,
+): {
+  readonly answers: readonly [
+    { readonly interactionId: string; readonly text: string },
+  ];
+} {
+  return {
+    answers: [
+      {
+        interactionId: pending.requestId,
+        text: text.trim(),
+      },
+    ],
+  };
+}
+
+/**
+ * Composer trailing control: Send/Live vs Cancel while a turn may still be
+ * marked running (paused HITL).
+ */
+export function resolveComposerTrailingMode(input: {
+  readonly textReplyPending: boolean;
+  readonly composerEmpty: boolean;
+  readonly canSend: boolean;
+  readonly isRunning: boolean;
+  readonly hasVoice: boolean;
+  readonly hasSubmission: boolean;
+}): {
+  readonly showSendOrLive: boolean;
+  readonly showCancel: boolean;
+} {
+  const preferSendWhileRunning = preferSendOnTextReplyPark({
+    textReplyPending: input.textReplyPending,
+    composerEmpty: input.composerEmpty,
+    canSend: input.canSend,
+  });
+  const showSendOrLive =
+    !input.hasSubmission &&
+    (!input.isRunning || input.hasVoice || preferSendWhileRunning);
+  return {
+    showSendOrLive,
+    showCancel: !showSendOrLive,
+  };
+}

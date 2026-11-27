@@ -115,6 +115,7 @@ chat with “I want to set a new goal.”
 | --- | --- | --- |
 | `record-goal-honestly` | “Add a goal to ship v2…” — `create_goal` on the project. | gates + judge |
 | `start-a-goal` | “I want to set a new goal” — multi-turn `ask_question` (required, no prose-only open) → GoalDefinition → `create_goal`; no walkthrough-script leak. | gates + judge / turn |
+| `release-ep-goal` | “Release an EP of 4–5 studio/mastered songs by Feb 1” — free-text `ask_question` (project) → `create_goal`; no walkthrough-script leak. | gates + judge / turn |
 | `start-health-goal` | “I want to set a new Health goal” — `ask_question`; no tool/script narration in the reply. | gates + judge |
 | `goal-vs-open-loop` | Outcome goal vs stuck decision — don’t collapse into the wrong tool. | gates + judge |
 | `goals-in-plan` | Plan mode + project: three measurable goals → `write_project_file`; no `create_goal`. | gates + judge |

@@ -1,8 +1,11 @@
 import type { EveMessage } from "eve/client";
 
 import {
+  composerWaitingQuestions,
   getPendingApprovals,
   hasPendingAction,
+  isChoicePendingQuestion,
+  isTextOnlyPendingQuestion,
   pendingWaitKind,
   pendingForToolCall,
 } from "../src/message-projection";
@@ -338,5 +341,73 @@ describe("pending approvals across the thread", () => {
     };
     expect(hasPendingAction(data)).toBe(false);
     expect(pendingWaitKind(data)).toBe(null);
+  });
+
+  test("text-only ask_question parks the turn without morphing the composer", () => {
+    const message = assistant([
+      {
+        type: "interaction",
+        interactionId: "text-q1",
+        turnId: "turn_0",
+        stepIndex: 0,
+        status: "open",
+        request: {
+          kind: "question",
+          prompt: "Which project should this EP goal belong to?",
+          display: "text",
+          allowFreeform: true,
+        },
+      },
+    ]);
+    const data = { messages: [message] };
+    expect(hasPendingAction(data)).toBe(true);
+    // Choice questions own "question" wait chrome; text-only stays in composer.
+    expect(pendingWaitKind(data)).toBe(null);
+
+    const pending = getPendingApprovals(data);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.display).toBe("text");
+    expect(isTextOnlyPendingQuestion(pending[0]!)).toBe(true);
+    expect(isChoicePendingQuestion(pending[0]!)).toBe(false);
+    expect(composerWaitingQuestions(pending)).toEqual([]);
+  });
+
+  test("mixed choice + text asks morph via composerWaitingQuestions", () => {
+    const message = assistant([
+      {
+        type: "interaction",
+        interactionId: "choice-q",
+        turnId: "turn_0",
+        stepIndex: 0,
+        status: "open",
+        request: {
+          kind: "question",
+          prompt: "Pick a lane",
+          display: "select",
+          options: [
+            { id: "a", label: "A" },
+            { id: "b", label: "B" },
+          ],
+        },
+      },
+      {
+        type: "interaction",
+        interactionId: "text-q",
+        turnId: "turn_0",
+        stepIndex: 1,
+        status: "open",
+        request: {
+          kind: "question",
+          prompt: "Anything else?",
+          display: "text",
+          allowFreeform: true,
+        },
+      },
+    ]);
+    const pending = getPendingApprovals({ messages: [message] });
+    expect(pendingWaitKind({ messages: [message] })).toBe("question");
+    expect(composerWaitingQuestions(pending).map((item) => item.requestId)).toEqual(
+      ["choice-q", "text-q"],
+    );
   });
 });

@@ -48,7 +48,7 @@ import { dismissKeyboard } from "@/components/dismiss-keyboard";
 import { LiveSession } from "@/components/live-session";
 import { ComposerRemoteAgentPicker } from "@/components/remote-agent-picker";
 import { Icon } from "@/components/ui/icon";
-import { preferSendOnTextReplyPark } from "@/src/composer-hitl";
+import { resolveComposerTrailingMode } from "@/src/composer-hitl";
 import { TEXT_METRICS, textVariants } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import {
@@ -889,14 +889,14 @@ const ComposerTrailingControls: FC<{
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const hasVoice = useAuiState((s) => s.thread.voice !== undefined);
   const hasSubmission = useAuiState((s) => s.composer.submission !== undefined);
-  const preferSendWhileRunning = preferSendOnTextReplyPark({
+  const { showSendOrLive, showCancel } = resolveComposerTrailingMode({
     textReplyPending,
     composerEmpty: isEmpty,
     canSend,
+    isRunning,
+    hasVoice,
+    hasSubmission,
   });
-  const showSendOrLive =
-    !hasSubmission && (!isRunning || hasVoice || preferSendWhileRunning);
-  const showCancel = !showSendOrLive;
   const isIos = Platform.OS === "ios";
 
   return (

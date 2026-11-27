@@ -80,7 +80,11 @@ import { formatEveClientError } from "@/src/chat/eve-error";
 import { classifyThreadNotice } from "@/src/chat/thread-notice";
 import { resolveTurnPolicy } from "@/src/chat/prepare-send";
 import { deriveTurnRunning } from "@/src/chat/turn-running";
-import { oldestTextOnlyQuestion } from "@/src/composer-hitl";
+import {
+  buildTextReplyAnswerPayload,
+  oldestTextOnlyQuestion,
+  shouldSendTextReplyAnswer,
+} from "@/src/composer-hitl";
 import { activeTurn } from "eve/events";
 import type { WaitingAction } from "@/components/assistant-ui/elements/waiting-action-card";
 import { SubagentTranscriptSheet } from "@/components/assistant-ui/elements/subagent-transcript-sheet";
@@ -869,16 +873,17 @@ export function ChatScreen({
         const hasAttachments = (message.attachments?.length ?? 0) > 0;
         // Free-text ask_question: settle the park with answers, not a queued
         // follow-up message (attachments still fall through as a normal send).
-        if (ctx.onlyTextQuestionsPending && !hasAttachments && turn.text.trim()) {
+        if (
+          shouldSendTextReplyAnswer({
+            onlyTextQuestionsPending: ctx.onlyTextQuestionsPending,
+            hasAttachments,
+            text: turn.text,
+          })
+        ) {
           const pending = oldestTextOnlyQuestion(ctx.pendingApprovals);
           if (pending) {
             const payload = {
-              answers: [
-                {
-                  interactionId: pending.requestId,
-                  text: turn.text.trim(),
-                },
-              ],
+              ...buildTextReplyAnswerPayload(pending, turn.text),
               clientContext: buildTurnClientContext(
                 projectIdForTurn,
                 ctx.activeChatId,
