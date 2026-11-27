@@ -147,23 +147,30 @@ export async function createProject(
       : targetDateRaw === undefined
         ? null
         : targetDateRaw;
-  return db.transaction(async (tx) => {
-    const [row] = await tx
-      .insert(project)
-      .values({
-        userId,
-        name,
-        instructions,
-        status,
-        priority,
-        startDate: startDate === undefined ? null : startDate,
-        targetDate,
-      })
-      .returning();
-    if (!row) throw new Error("Failed to create project.");
-    await insertProjectManager(tx, userId, row.id);
-    return row;
-  });
+  // No transaction: neon-http (production) does not support BEGIN/COMMIT.
+  // Insert the project, then its manager agent as sequential statements.
+  const [row] = await db
+    .insert(project)
+    .values({
+      userId,
+      name,
+      instructions,
+      status,
+      priority,
+      startDate: startDate === undefined ? null : startDate,
+      targetDate,
+    })
+    .returning();
+  if (!row) throw new Error("Failed to create project.");
+  try {
+    await insertProjectManager(db, userId, row.id);
+  } catch (cause) {
+    await db
+      .delete(project)
+      .where(and(eq(project.userId, userId), eq(project.id, row.id)));
+    throw cause;
+  }
+  return row;
 }
 
 /** Persist a lazily provisioned Vercel Drive name for this project. */

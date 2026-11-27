@@ -257,7 +257,7 @@ export async function insertCustomAgentWithChat(
   return toSummary(agent, chatRow.id, chatRow.title, proj?.name ?? null);
 }
 
-/** Create the one manager agent for a project (call inside createProject tx). */
+/** Create the one manager agent for a project (called from createProject). */
 export async function insertProjectManager(
   executor: DbOrTx,
   userId: string,
