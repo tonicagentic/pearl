@@ -217,6 +217,10 @@ function VercelGrantBlock({
           Personal account (no teams on this grant).
         </p>
       )}
+      <p className="mt-2 text-muted-foreground">
+        Teams listed here are on this grant. Ask Pearl in chat to add another
+        team — Update replaces the whole grant with one team.
+      </p>
     </div>
   );
 }

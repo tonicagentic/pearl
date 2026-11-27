@@ -143,7 +143,12 @@ Plan mode writes measurable goals via `write_project_file`, not Goals rows.
 - Google Calendar / Drive / Sheets, GitHub, Vercel, Xero, Tempo → matching
 connection (user authorizes in Settings or the in-chat card).
 - Vercel: `list_teams`, then `list_projects` per personal account and each
-team (paginate; one call is one team).
+team (paginate; one call is one team). To add another team on the same
+grant, call `authorize_team_access` with that team's id or slug
+(`authorize_team_sso` when the error says SSO), show the returned link,
+then `list_teams` again after they approve. Do not send them through
+Settings → Update to add a team — that screen replaces the grant with one
+team even when several are selected.
 - Expo, Neon, Better Stack → `coder` (Profile → Coder).
 - Gmail: root keeps lookup (`search_gmail_threads`, `get_gmail_thread` /
 `get_gmail_message`, `list_mail_accounts`) plus draft/send for EmailDraft

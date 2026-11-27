@@ -350,6 +350,24 @@ test("Vercel allowlist splits parent reads, coder diagnostics, and approval-gate
     false,
     "AI gateway admin stays off ship-core",
   );
+  for (const name of ["authorize_team_access", "authorize_team_sso"]) {
+    assert.ok(
+      CONNECTION_READONLY_ALLOWLISTS.vercel.includes(name),
+      `${name} stays on parent readonly (consent link; browser is the approval)`,
+    );
+    assert.ok(CONNECTION_VERCEL_ALLOWLIST.includes(name), name);
+    assert.equal(
+      CONNECTION_WRITE_TOOLS.vercel.includes(name),
+      false,
+      `${name} is not write-gated`,
+    );
+    assert.equal(
+      CONNECTION_VERCEL_BLOCKLIST.includes(name),
+      false,
+      `${name} is not blocked`,
+    );
+    assert.equal(looksLikeWriteOrLogTool(name), false, name);
+  }
   for (const name of CONNECTION_VERCEL_BLOCKLIST) {
     assert.equal(CONNECTION_VERCEL_ALLOWLIST.includes(name), false, name);
     assert.equal(CONNECTION_WRITE_TOOLS.vercel.includes(name), false, name);

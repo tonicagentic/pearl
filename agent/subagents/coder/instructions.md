@@ -82,8 +82,13 @@ in the delegated `message`. Continue the same task when the parent passes
   `create_deployment` is an approved alternative (git/API), not a replacement
   for the CLI path. Call `list_teams`, then `list_projects` for the personal
   account and every team (pass `teamId` or slug), following each page — one
-  `list_projects` call is only one team. Never claim purchase, API-key,
-  flags, board, or other non-ship tools exist.
+  `list_projects` call is only one team. When a team is missing or a call
+  returns 403 asking to authorize a team, call `authorize_team_access` with
+  that team's id or slug (`authorize_team_sso` when the error says SSO),
+  show the returned link, then `list_teams` again after they approve. Do
+  not send them through Settings → Update to add a team — that screen
+  replaces the grant with one team even when several are selected. Never
+  claim purchase, API-key, flags, board, or other non-ship tools exist.
 - Expo: use the `expo` connection on the signed-in account. Call
   `list_expo_projects` and pass that project's `appId` or `@owner/slug`. Start
   and stop simulators with `simulator_start` / `simulator_stop`, then

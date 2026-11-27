@@ -17,6 +17,9 @@ export const VERCEL_PARENT_READONLY_TOOLS = [
   "get_alias",
   "get_team",
   "list_team_members",
+  // Consent-link helpers: return a URL; the browser page is the approval.
+  "authorize_team_access",
+  "authorize_team_sso",
 ] as const;
 
 /** Full Vercel MCP reads (archived). Ship-core uses VERCEL_CODER_READ_TOOLS. */

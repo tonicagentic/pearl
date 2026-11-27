@@ -30,6 +30,7 @@ import {
 } from "@/lib/connections/grant-scopes";
 import { connectionTokenParams } from "@/lib/connections/oauth-scopes";
 import { checkConnectionStatus } from "@/lib/connections/status";
+import { listAllVercelTeams } from "@/lib/connections/vercel-account";
 
 export type {
   ConnectionGrantSummary,
@@ -365,27 +366,12 @@ async function probeVercel(token: string): Promise<VercelGrantDetails> {
     if (name) username = name;
   }
 
-  const teamsRes = await fetch("https://api.vercel.com/v2/teams", {
-    headers: { authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  const teams: VercelGrantDetails["teams"][number][] = [];
-  if (teamsRes.ok) {
-    const body = (await teamsRes.json()) as {
-      teams?: Array<{ id?: string; name?: string; slug?: string }>;
-    };
-    for (const team of body.teams ?? []) {
-      if (
-        typeof team.id === "string" &&
-        typeof team.name === "string" &&
-        typeof team.slug === "string"
-      ) {
-        teams.push({ id: team.id, name: team.name, slug: team.slug });
-      }
-    }
-  }
+  const { teams } = await listAllVercelTeams({ token });
+  const teamsSorted = [...teams].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+  );
 
-  return { username, teams };
+  return { username, teams: teamsSorted };
 }
 
 async function probeGoogleScopes(token: string): Promise<string[]> {

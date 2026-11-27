@@ -28,7 +28,12 @@ export default defineDynamic(async (ctx) => {
       "deployments, env, domains, and runtime/build logs. Call list_teams " +
       "first, then list_projects for the personal account and every returned " +
       "team (pass teamId or slug), following each page. One list_projects " +
-      "call is only one team. Reads and logs are free; creating or changing " +
+      "call is only one team. To add another team on the same grant, call " +
+      "authorize_team_access with that team's id or slug " +
+      "(authorize_team_sso when SSO is required), show the returned link, " +
+      "then list_teams again after they approve. Do not send them through " +
+      "Settings → Update to add a team — that screen replaces the grant " +
+      "with one team. Reads and logs are free; creating or changing " +
       "projects, env, domains, aliases, and deployments needs approval. " +
       "Prefer deploy_vercel for the current sandbox checkout. Domain " +
       "purchases, API-key minting, flags, and board tools are not available.",

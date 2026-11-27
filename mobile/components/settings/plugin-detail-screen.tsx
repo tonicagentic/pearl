@@ -621,12 +621,18 @@ function ConnectionPanel({
               </Text>
             ) : null}
             {grant.vercel ? (
-              <Text variant="secondary">
-                Vercel {grant.vercel.username}
-                {grant.vercel.teams.length > 0
-                  ? ` · ${grant.vercel.teams.length} teams`
-                  : " · personal"}
-              </Text>
+              <>
+                <Text variant="secondary">
+                  Vercel {grant.vercel.username}
+                  {grant.vercel.teams.length > 0
+                    ? ` · ${grant.vercel.teams.length} team${grant.vercel.teams.length === 1 ? "" : "s"}`
+                    : " · personal"}
+                </Text>
+                <Text variant="secondary">
+                  Ask Pearl in chat to add another team — Update replaces the
+                  grant with one team.
+                </Text>
+              </>
             ) : null}
             {grant.github?.manageUrl ? (
               <Pressable
