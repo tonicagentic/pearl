@@ -23,7 +23,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 
 import { ChatHistoryContent } from "@/components/history/chat-history-content";
-import { usePearlDrawer } from "@/components/navigation/drawer-context";
+import {
+  useDrawerSettleHaptic,
+  usePearlDrawer,
+} from "@/components/navigation/drawer-context";
 import {
   DRAWER_EDGE,
   DRAWER_ROW_PAD_X,
@@ -91,6 +94,7 @@ export function DrawerPanel({
 }: {
   readonly navigation?: DrawerPanelNav;
 } = {}) {
+  useDrawerSettleHaptic();
   const insets = useSafeAreaInsets();
   const {
     closeDrawer: closePearlDrawer,

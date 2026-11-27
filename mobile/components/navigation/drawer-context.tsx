@@ -8,8 +8,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { Platform } from "react-native";
 import { router, useNavigation } from "expo-router";
 import { useDrawerStatus } from "expo-router/drawer";
+import * as Haptics from "expo-haptics";
 
 import { useChats } from "@/src/chat-context";
 
@@ -114,6 +116,28 @@ export function DrawerOpenSync() {
   return null;
 }
 
+/**
+ * Light impact when the drawer spring finishes open or closed.
+ * Filters on the drawer navigator key so nested stack `transitionEnd`
+ * (e.g. chat push) does not fire.
+ */
+export function useDrawerSettleHaptic() {
+  const navigation = useNavigation();
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const unsub = navigation.addListener(
+      "transitionEnd" as never,
+      ((event: { target?: string }) => {
+        if (event.target !== navigation.getState()?.key) return;
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+          () => {},
+        );
+      }) as never,
+    );
+    return unsub;
+  }, [navigation]);
+}
+
 export function usePearlDrawer() {
   const ctx = useContext(PearlDrawerContext);
   if (!ctx) {
@@ -197,6 +221,7 @@ export function usePearlDrawerOptional() {
     closeDrawer,
     toggleDrawer: openDrawer,
     setHomeChatHandler: ctx.setHomeChatHandler,
+    notifyChatSelectedFromDrawer: ctx.notifyChatSelectedFromDrawer,
     onSelectChatFromDrawer: async (chatId: string) => {
       const ok = await selectChat(chatId);
       if (!ok) return;

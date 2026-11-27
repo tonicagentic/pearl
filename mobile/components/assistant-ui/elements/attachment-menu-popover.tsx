@@ -26,12 +26,10 @@ import {
 } from "react-native";
 import { Pressable as GHPressable } from "react-native-gesture-handler";
 import Animated, {
-  Easing,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  withTiming,
 } from "react-native-reanimated";
 import { FullWindowOverlay } from "react-native-screens";
 import { useCSSVariable } from "uniwind";
@@ -44,6 +42,7 @@ import { composerControlHitSlop } from "@/components/assistant-ui/elements/icon-
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
 import { focusComposerInput } from "@/src/composer-input-focus";
+import { DRAWER_SPRING_FAST } from "@/src/drawer-spring";
 
 const CAN_USE_LIQUID_GLASS =
   Platform.OS === "ios" &&
@@ -56,15 +55,6 @@ const POPOVER_WIDTH = 200;
 const ROW_ICON_SIZE = 44;
 const TRIGGER_VISUAL = Platform.OS === "ios" ? 32 : 44;
 const ATTACHMENT_TOUCH = TRIGGER_VISUAL + composerControlHitSlop * 2;
-
-const OPEN_SPRING = {
-  damping: 17,
-  stiffness: 320,
-  mass: 0.72,
-  overshootClamping: false,
-} as const;
-
-const CLOSE_MS = 64;
 
 export type AttachmentMenuProps = {
   disabled: boolean;
@@ -140,7 +130,7 @@ function AttachmentPopoverBody({
 
   useLayoutEffect(() => {
     progress.value = 0;
-    progress.value = withSpring(1, OPEN_SPRING);
+    progress.value = withSpring(1, DRAWER_SPRING_FAST);
   }, [progress]);
 
   const finishClose = useCallback(() => {
@@ -155,29 +145,30 @@ function AttachmentPopoverBody({
       if (closingRef.current) return;
       closingRef.current = true;
       if (action) pendingActionRef.current = action;
-      progress.value = withTiming(
-        0,
-        { duration: CLOSE_MS, easing: Easing.in(Easing.cubic) },
-        (finished) => {
-          if (finished) runOnJS(finishClose)();
-        },
-      );
+      progress.value = withSpring(0, DRAWER_SPRING_FAST, (finished) => {
+        if (finished) runOnJS(finishClose)();
+      });
     },
     [finishClose, progress],
   );
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [{ scale: Math.max(0.01, progress.value) }],
-  }));
+  const animatedStyle = useAnimatedStyle(() => {
+    const p = Math.max(0.01, progress.value);
+    return {
+      opacity: progress.value,
+      // Rise a few px out of the plus while scaling from its center.
+      transform: [{ translateY: (1 - p) * 10 }, { scale: p }],
+    };
+  });
 
   const width = Math.min(POPOVER_WIDTH, windowWidth - 24);
   const left = Math.min(
     Math.max(8, anchor.x),
     windowWidth - width - 8,
   );
-  // Grow upward from the trigger; origin is center-left of the card.
+  // Grow upward from the trigger; origin is the plus (bottom, button center).
   const bottom = windowHeight - anchor.y + POPOVER_GAP;
+  const originX = Math.min(Math.max(0, anchor.width / 2), width);
 
   // Gesture-handler Pressable wins the arena over the composer ScrollView.
   const DismissPressable = Platform.OS === "ios" ? GHPressable : Pressable;
@@ -198,8 +189,7 @@ function AttachmentPopoverBody({
             left,
             bottom,
             width,
-            // Mid-height on the left edge — “center left”.
-            transformOrigin: "left center",
+            transformOrigin: `${originX}px 100%`,
           },
           animatedStyle,
         ]}
