@@ -41,7 +41,7 @@ const TITLE_BY_SEGMENT: Record<string, string> = {
   about: "About",
   "connected-agents": "Connected agents",
   "self-host": "Self-host",
-  money: "Pearl Money",
+  money: "Finances",
   answers: "Answers",
   drafting: "Drafting",
   research: "Research",

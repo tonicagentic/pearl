@@ -4,7 +4,11 @@ import { computeMonthLifestyle } from "@/lib/finance/lifestyle";
 import { formatMoney, currentYearMonth } from "@/lib/finance/money";
 import { computeNetWorth } from "@/lib/finance/net-worth";
 import { incomeStatement, periodBounds } from "@/lib/finance/reports";
-import { listTransactions, type TransactionListFilters } from "@/lib/finance/transactions";
+import {
+  listTransactions,
+  resolveStatus,
+  type TransactionListFilters,
+} from "@/lib/finance/transactions";
 import { isUpcomingTrip, plannedTotal } from "@/lib/finance/trips";
 import { prisma } from "@/lib/finance/prisma";
 
@@ -123,19 +127,28 @@ export async function buildSummaryPayload() {
 }
 
 export async function buildTransactionsPayload(opts?: TransactionListFilters) {
-  const result = await listTransactions({
-    limit: opts?.limit ?? 40,
-    cursor: opts?.cursor,
-    accountId: opts?.accountId,
-    entityId: opts?.entityId,
-    categoryId: opts?.categoryId,
-    tripId: opts?.tripId,
-    inboxOnly: opts?.inboxOnly,
-    q: opts?.q,
-    from: opts?.from,
-    to: opts?.to,
-    type: opts?.type,
-  });
+  const [result, uncategorized] = await Promise.all([
+    listTransactions({
+      limit: opts?.limit ?? 40,
+      cursor: opts?.cursor,
+      accountId: opts?.accountId,
+      entityId: opts?.entityId,
+      categoryId: opts?.categoryId,
+      categoryIds: opts?.categoryIds,
+      tripId: opts?.tripId,
+      inboxOnly: opts?.inboxOnly,
+      q: opts?.q,
+      from: opts?.from,
+      to: opts?.to,
+      type: opts?.type,
+    }),
+    prisma.category.findUnique({
+      where: { slug: "uncategorized" },
+      select: { id: true },
+    }),
+  ]);
+
+  const uncategorizedId = uncategorized?.id ?? null;
 
   return {
     items: result.items.map((t) => ({
@@ -153,11 +166,20 @@ export async function buildTransactionsPayload(opts?: TransactionListFilters) {
             id: t.category.id,
             name: t.category.name,
             code: t.category.code,
+            slug: t.category.slug,
             groupName: t.category.group?.name ?? null,
           }
         : null,
       trip: t.trip ? { id: t.trip.id, name: t.trip.name } : null,
       pending: t.pending,
+      reconciledAt: t.reconciledAt?.toISOString() ?? null,
+      status: resolveStatus({
+        pending: t.pending,
+        categoryId: t.categoryId,
+        categorySlug: t.category?.slug ?? null,
+        reconciledAt: t.reconciledAt,
+        uncategorizedId,
+      }),
     })),
     nextCursor: result.nextCursor,
     hasMore: result.hasMore,

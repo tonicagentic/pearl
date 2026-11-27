@@ -1,4 +1,5 @@
 import { encryptSecret, decryptSecret } from "@/lib/finance/crypto";
+import { getUserId } from "@/lib/finance/db";
 import {
   getPlaidClient,
   getPlaidEnv,
@@ -6,6 +7,10 @@ import {
   plaidConfigured,
   PLAID_COUNTRY_CODES,
 } from "@/lib/finance/plaid";
+import {
+  deletePlaidItemIndex,
+  upsertPlaidItemIndex,
+} from "@/lib/finance/plaid-item-index";
 import { ensurePlaidItemFresh, syncPlaidItem } from "@/lib/finance/plaid-sync";
 import { getPlaidWebhookUrl } from "@/lib/finance/plaid-webhook";
 import { prisma } from "@/lib/finance/prisma";
@@ -41,7 +46,7 @@ export async function createLinkToken(input: {
     const client = getPlaidClient();
     const base = {
       user: { client_user_id: input.userId },
-      client_name: "Pearl Money",
+      client_name: "Pearl",
       country_codes: [...PLAID_COUNTRY_CODES],
       language: "en" as const,
     };
@@ -97,6 +102,11 @@ export async function exchangePublicToken(input: {
       institutionName: input.institutionName ?? null,
       status: "active",
     },
+  });
+
+  await upsertPlaidItemIndex({
+    itemId,
+    userId: getUserId(),
   });
 
   const accountsRes = await client.accounts.get({ access_token: accessToken });
@@ -181,4 +191,5 @@ export async function removePlaidItem(id: string) {
   }
   await prisma.account.deleteMany({ where: { plaidItemId: id } });
   await prisma.plaidItem.delete({ where: { id } });
+  await deletePlaidItemIndex(item.itemId);
 }

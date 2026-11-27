@@ -1,8 +1,5 @@
-import { sql } from "drizzle-orm";
-
-import { db } from "@/lib/db/client";
-import { user } from "@/lib/db/schema";
 import { withUserDb } from "@/lib/finance/db";
+import { findUserIdForPlaidItem } from "@/lib/finance/plaid-item-index";
 import { plaidConfigured } from "@/lib/finance/plaid";
 import { syncPlaidItem } from "@/lib/finance/plaid-sync";
 import { verifyPlaidWebhookRequest } from "@/lib/finance/plaid-webhook";
@@ -15,17 +12,6 @@ type PlaidWebhookBody = {
   webhook_code?: string;
   item_id?: string;
 };
-
-async function resolveOwnerUserId(): Promise<string | null> {
-  const email = process.env.PEARL_OWNER_EMAIL?.trim().toLowerCase();
-  if (!email) return null;
-  const rows = await db
-    .select({ id: user.id })
-    .from(user)
-    .where(sql`lower(${user.email}) = ${email}`)
-    .limit(1);
-  return rows[0]?.id ?? null;
-}
 
 export async function POST(request: Request) {
   if (!plaidConfigured()) {
@@ -67,14 +53,14 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, ignored: true });
   }
 
-  const ownerId = await resolveOwnerUserId();
-  if (!ownerId) {
-    console.error("[plaid/webhook] PEARL_OWNER_EMAIL not set or user missing");
-    return Response.json({ error: "Owner not configured" }, { status: 500 });
+  const userId = await findUserIdForPlaidItem(plaidItemId);
+  if (!userId) {
+    console.error("[plaid/webhook] no user mapped for item", plaidItemId);
+    return Response.json({ error: "Unknown Plaid item" }, { status: 404 });
   }
 
   try {
-    const result = await withUserDb(ownerId, async () => {
+    const result = await withUserDb(userId, async () => {
       const item = await prisma.plaidItem.findFirst({
         where: { itemId: plaidItemId },
         select: { id: true },

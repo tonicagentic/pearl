@@ -370,6 +370,63 @@ export async function patchCategoryRecord(id: string, input: PatchCategoryInput)
   return { id };
 }
 
+export type CreateCategoryGroupInput = {
+  name: string;
+  kind?: "lifestyle" | "cash_only";
+  slug?: string;
+  code?: string | null;
+};
+
+export async function createCategoryGroupRecord(input: CreateCategoryGroupInput) {
+  const name = input.name.trim();
+  if (!name) throw new Error("name is required");
+  const kind = input.kind === "cash_only" ? "cash_only" : "lifestyle";
+  const slug = input.slug?.trim() || slugify(name);
+
+  const maxSort = await prisma.categoryGroup.findFirst({
+    where: { kind: { in: ["lifestyle", "cash_only"] } },
+    orderBy: { sortOrder: "desc" },
+    select: { sortOrder: true },
+  });
+
+  const group = await prisma.categoryGroup.create({
+    data: {
+      name,
+      slug,
+      kind,
+      code: input.code?.trim() || null,
+      sortOrder: (maxSort?.sortOrder ?? 0) + 10,
+    },
+    select: { id: true },
+  });
+  return group;
+}
+
+export type PatchCategoryGroupInput = {
+  name?: string;
+  code?: string | null;
+};
+
+export async function patchCategoryGroupRecord(
+  id: string,
+  input: PatchCategoryGroupInput,
+) {
+  const data: { name?: string; code?: string | null } = {};
+  if (input.name !== undefined) {
+    const name = input.name.trim();
+    if (!name) throw new Error("name cannot be empty");
+    data.name = name;
+  }
+  if (input.code !== undefined) {
+    data.code = input.code?.trim() || null;
+  }
+  if (Object.keys(data).length === 0) {
+    throw new Error("Nothing to update");
+  }
+  await prisma.categoryGroup.update({ where: { id }, data });
+  return { id };
+}
+
 export async function buildEntitiesPayload() {
   const [{ snapshots, youId }, entities] = await Promise.all([
     computeNetWorth(),

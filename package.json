@@ -87,6 +87,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
+    "react-plaid-link": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "resend": "^6.38.1",
     "shiki": "4.3.1",

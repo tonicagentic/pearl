@@ -1,6 +1,8 @@
 import {
   buildCategoriesPayload,
+  createCategoryGroupRecord,
   createCategoryRecord,
+  type CreateCategoryGroupInput,
   type CreateCategoryInput,
 } from "@/lib/finance/api-v1-ledger";
 import { isPearlSession, requirePearlSession } from "@/lib/finance/session";
@@ -20,8 +22,18 @@ export async function POST(request: Request) {
   if (!isPearlSession(session)) return session;
   return withUserDb(session.user.id, async () => {
     try {
-      const body = (await request.json()) as CreateCategoryInput;
-      const result = await createCategoryRecord(body);
+      const body = (await request.json()) as CreateCategoryInput &
+        CreateCategoryGroupInput & { type?: string };
+      // Same route can grow an empty chart: omit groupId (or type=group) to
+      // create a group; otherwise create a category inside a group.
+      const creatingGroup =
+        body.type === "group" ||
+        !("groupId" in body) ||
+        body.groupId == null ||
+        String(body.groupId).trim() === "";
+      const result = creatingGroup
+        ? await createCategoryGroupRecord(body)
+        : await createCategoryRecord(body);
       const payload = await buildCategoriesPayload();
       return Response.json({ ...payload, createdId: result.id }, { status: 201 });
     } catch (err) {

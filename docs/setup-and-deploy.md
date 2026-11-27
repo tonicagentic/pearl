@@ -340,9 +340,22 @@ role (not `finance_app`):
 DATABASE_URL_UNPOOLED='postgresql://…' node scripts/apply-plaid-freshness-migration.mjs
 ```
 
-Also enable the **Transactions Refresh** add-on in the Plaid Dashboard, and
-ensure `PEARL_OWNER_EMAIL` is set so `/api/v1/plaid/webhook` can sync under RLS.
-Optional: `PLAID_WEBHOOK_URL=https://<host>/api/v1/plaid/webhook`.
+Also enable the **Transactions Refresh** add-on in the Plaid Dashboard.
+Plaid webhooks and `/api/cron/finance-daily` resolve each item’s owner via the
+`plaid_item_index` table (written on link / cleared on remove), then run under
+that user’s finance RLS. Optional: `PLAID_WEBHOOK_URL=https://<host>/api/v1/plaid/webhook`.
+
+For **local** bank linking, set `PLAID_ENV=sandbox` and the **Sandbox** secret
+from the Plaid Dashboard Keys page (not the Production secret). Leave
+`PLAID_WEBHOOK_URL` unset locally — exchange syncs on link, and Finances →
+Connections has a manual Sync. Finances → Connections also exposes **Add
+sandbox bank** when `PLAID_ENV=sandbox`.
+
+If local Pearl auth uses Postgres.app while `FINANCE_DATABASE_URL` points at
+Neon, apply `lib/finance/db/migrations/0004_drop_user_fks.sql` as the Neon
+**owner** once (`DATABASE_URL_UNPOOLED=… node scripts/apply-finance-drop-user-fks.mjs`)
+so every signed-in user can create ledger rows (RLS still isolates by
+`app.user_id`).
 
 ## Run Locally
 

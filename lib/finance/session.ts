@@ -17,10 +17,6 @@ export type PearlSession = {
   user: PearlUser;
 };
 
-function ownerEmail() {
-  return process.env.PEARL_OWNER_EMAIL?.trim().toLowerCase() ?? "";
-}
-
 function toPearlSession(session: {
   session: {
     id: string;
@@ -53,11 +49,10 @@ function toPearlSession(session: {
 
 /**
  * Resolve the caller from Pearl's better-auth session on this request
- * (cookie or Bearer). Optionally restrict to PEARL_OWNER_EMAIL.
+ * (cookie or Bearer). Any signed-in user may use Finances; books stay
+ * isolated per user via withUserDb / finance RLS.
  *
- * Returns null when there is no valid auth session. Owner mismatch is a
- * separate 403 from requirePearlSession — never conflate with 401, or mobile
- * clients that clear the session on 401 will sign the user out of Pearl.
+ * Returns null when there is no valid auth session.
  */
 export async function resolvePearlSession(
   request: Request,
@@ -67,16 +62,6 @@ export async function resolvePearlSession(
       headers: request.headers,
     });
     if (!session?.user?.email || !session.session) return null;
-
-    const owner = ownerEmail();
-    if (
-      owner &&
-      session.user.email.trim().toLowerCase() !== owner
-    ) {
-      // Authenticated, but not the finance owner.
-      return null;
-    }
-
     return toPearlSession(session);
   } catch (error) {
     console.error("Failed to resolve Pearl finance session:", error);
@@ -85,8 +70,9 @@ export async function resolvePearlSession(
 }
 
 /**
- * Like resolvePearlSession, but distinguishes missing auth (null) from
- * authenticated-but-not-owner (`forbidden`).
+ * Like resolvePearlSession, but distinguishes missing auth.
+ * Kept for callers that previously checked owner mismatch; `forbidden` is
+ * unused now that Finances is open to every signed-in user.
  */
 export async function resolvePearlFinanceAccess(
   request: Request,
@@ -101,15 +87,6 @@ export async function resolvePearlFinanceAccess(
     if (!session?.user?.email || !session.session) {
       return { ok: false, reason: "unauthenticated" };
     }
-
-    const owner = ownerEmail();
-    if (
-      owner &&
-      session.user.email.trim().toLowerCase() !== owner
-    ) {
-      return { ok: false, reason: "forbidden" };
-    }
-
     return { ok: true, session: toPearlSession(session) };
   } catch (error) {
     console.error("Failed to resolve Pearl finance session:", error);
@@ -148,12 +125,6 @@ export async function requirePearlSession(
 ): Promise<PearlSession | Response> {
   const access = await resolvePearlFinanceAccess(request);
   if (!access.ok) {
-    if (access.reason === "forbidden") {
-      return Response.json(
-        { error: "Finances isn’t available for this account." },
-        { status: 403 },
-      );
-    }
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   return access.session;

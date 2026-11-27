@@ -52,6 +52,7 @@
     "plugins": [
       "expo-router",
       "expo-dev-client",
+      "react-native-plaid-link-sdk",
       [
         "expo-build-properties",
         {

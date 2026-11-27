@@ -10,8 +10,6 @@ import {
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
-import { user } from "./auth-stub";
-
 /**
  * Pearl Money ledger (ported from the Pearl Money Prisma/SQLite schema).
  *
@@ -19,8 +17,9 @@ import { user } from "./auth-stub";
  *   `homes`, `vehicles`, `prescriptions` and `trips` don't collide with the
  *   existing `public.*` Pearl tables. All TS exports are prefixed with
  *   `finance` for the same reason (`export *` from db/schema/index.ts).
- * - Every table carries `user_id` (FK -> public.user, cascade) so row-level
- *   security can be enforced without joins (see drizzle/0001_finance_schema.sql).
+ * - Every table carries `user_id` so row-level security can be enforced without
+ *   joins (see drizzle/0001_finance_schema.sql). No FK to public.user — auth
+ *   and finance databases may differ locally.
  * - Primary keys are `text` so ids from the SQLite import can be preserved.
  * - Money is `numeric(14, 2)`; ratios / percents / rates stay double precision.
  * - Secrets are stored only as ciphertext in `*_enc` text columns.
@@ -34,10 +33,9 @@ const id = () =>
     .primaryKey()
     .default(sql`gen_random_uuid()::text`);
 
-const userId = () =>
-  text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" });
+// No FK to public.user: finance may live on a separate Neon role/database from
+// Pearl auth. Isolation is enforced by withUserDb + RLS on app.user_id.
+const userId = () => text("user_id").notNull();
 
 const money = (name: string) => numeric(name, { precision: 14, scale: 2 });
 

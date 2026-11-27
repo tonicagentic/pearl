@@ -1,18 +1,22 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  ScrollView,
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useCSSVariable } from "uniwind";
 
+import { FinancesSubnav } from "@/components/finances/finances-subnav";
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
 import { Text } from "@/components/ui/text";
 import {
+  fetchFinanceCategories,
   fetchFinancesTransactions,
+  patchFinanceTransaction,
   type FinancesTransaction,
 } from "@/src/finances-client";
 import { useNetworkStatus } from "@/src/network-status";
@@ -26,7 +30,8 @@ function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function moneyLabel(amount: number) {
+function moneyLabel(amount: number, amountLabel?: string) {
+  if (amountLabel) return amountLabel;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -40,7 +45,7 @@ function dayLabel(iso: string) {
   return d.toISOString().slice(0, 10);
 }
 
-/** Finances Sankey → filtered transaction list. */
+/** Finances Sankey → filtered transaction list with categorize / clear. */
 export function FinancesTransactionsScreen() {
   const params = useLocalSearchParams<{
     from?: string;
@@ -50,8 +55,15 @@ export function FinancesTransactionsScreen() {
     categoryId?: string;
     groupId?: string;
     groupName?: string;
+    accountId?: string;
+    inboxOnly?: string;
+    q?: string;
   }>();
   const { offline } = useNetworkStatus();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [localOverrides, setLocalOverrides] = useState<
+    Record<string, Partial<FinancesTransaction>>
+  >({});
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -59,6 +71,11 @@ export function FinancesTransactionsScreen() {
   const mutedColor = useCSSVariable("--color-muted-foreground") as
     | string
     | undefined;
+
+  const categoriesQuery = useQuery({
+    queryKey: ["finances-categories"],
+    queryFn: fetchFinanceCategories,
+  });
 
   const buildParams = useCallback(
     (cursor?: string | null) => {
@@ -70,6 +87,9 @@ export function FinancesTransactionsScreen() {
       const categoryId = firstParam(params.categoryId);
       const groupId = firstParam(params.groupId);
       const groupName = firstParam(params.groupName);
+      const accountId = firstParam(params.accountId);
+      const inboxOnly = firstParam(params.inboxOnly);
+      const q = firstParam(params.q);
       if (from) p.set("from", from);
       if (to) p.set("to", to);
       if (year) p.set("year", year);
@@ -77,6 +97,9 @@ export function FinancesTransactionsScreen() {
       if (categoryId) p.set("categoryId", categoryId);
       if (groupId) p.set("groupId", groupId);
       if (groupName) p.set("groupName", groupName);
+      if (accountId) p.set("accountId", accountId);
+      if (inboxOnly) p.set("inboxOnly", inboxOnly);
+      if (q) p.set("q", q);
       p.set("limit", "50");
       if (cursor) p.set("cursor", cursor);
       return p;
@@ -97,7 +120,8 @@ export function FinancesTransactionsScreen() {
   useFocusEffect(
     useCallback(() => {
       void transactionsQuery.refetch();
-    }, [transactionsQuery.refetch]),
+      void categoriesQuery.refetch();
+    }, [transactionsQuery.refetch, categoriesQuery.refetch]),
   );
 
   const items = useMemo(() => {
@@ -107,11 +131,17 @@ export function FinancesTransactionsScreen() {
       for (const item of page.items) {
         if (seen.has(item.id)) continue;
         seen.add(item.id);
-        merged.push(item);
+        merged.push({ ...item, ...localOverrides[item.id] });
       }
     }
     return merged;
-  }, [transactionsQuery.data?.pages]);
+  }, [transactionsQuery.data?.pages, localOverrides]);
+
+  const categories = useMemo(
+    () =>
+      (categoriesQuery.data?.groups ?? []).flatMap((g) => g.categories),
+    [categoriesQuery.data],
+  );
 
   const title = useMemo(() => {
     const groupName = firstParam(params.groupName);
@@ -139,8 +169,47 @@ export function FinancesTransactionsScreen() {
     void transactionsQuery.fetchNextPage();
   }, [nextCursor, transactionsQuery]);
 
+  const onClear = async (row: FinancesTransaction) => {
+    setBusyId(row.id);
+    try {
+      const clear = row.status !== "cleared";
+      await patchFinanceTransaction(row.id, { reconcile: clear });
+      setLocalOverrides((prev) => ({
+        ...prev,
+        [row.id]: {
+          status: clear ? "cleared" : row.category ? "categorized" : "inbox",
+          reconciledAt: clear ? new Date().toISOString() : null,
+        },
+      }));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const onCategorize = async (row: FinancesTransaction, categoryId: string) => {
+    setBusyId(row.id);
+    try {
+      const cat = categories.find((c) => c.id === categoryId);
+      await patchFinanceTransaction(row.id, { categoryId });
+      setLocalOverrides((prev) => ({
+        ...prev,
+        [row.id]: {
+          category: cat
+            ? { id: cat.id, name: cat.name, slug: cat.slug }
+            : row.category,
+          status: row.status === "cleared" ? "cleared" : "categorized",
+        },
+      }));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <ScreenChrome title={title} leading="none">
+      <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+        <FinancesSubnav />
+      </View>
       {loading ? (
         <View
           style={{
@@ -200,24 +269,67 @@ export function FinancesTransactionsScreen() {
                 paddingVertical: 12,
                 borderBottomWidth: 1,
                 borderBottomColor: borderColor,
-                flexDirection: "row",
-                justifyContent: "space-between",
-                gap: 12,
+                gap: 8,
               }}
             >
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text variant="body" weight="medium" numberOfLines={1}>
-                  {item.memo?.trim() || "Untitled"}
-                </Text>
-                <Text variant="secondary" tone="muted" numberOfLines={1}>
-                  {dayLabel(item.date)}
-                  {item.category?.name ? ` · ${item.category.name}` : ""}
-                  {item.account?.name ? ` · ${item.account.name}` : ""}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text variant="body" weight="medium" numberOfLines={1}>
+                    {item.memo?.trim() || "Untitled"}
+                  </Text>
+                  <Text variant="secondary" tone="muted" numberOfLines={1}>
+                    {dayLabel(item.date)}
+                    {item.status ? ` · ${item.status}` : ""}
+                    {item.category?.name ? ` · ${item.category.name}` : ""}
+                    {item.account?.name ? ` · ${item.account.name}` : ""}
+                  </Text>
+                </View>
+                <Text variant="body" weight="medium">
+                  {moneyLabel(item.amount, item.amountLabel)}
                 </Text>
               </View>
-              <Text variant="body" weight="medium">
-                {moneyLabel(item.amount)}
-              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <Pressable
+                    disabled={busyId === item.id}
+                    onPress={() => void onClear(item)}
+                    style={{
+                      borderWidth: 1,
+                      borderColor,
+                      borderRadius: 999,
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                    }}
+                  >
+                    <Text variant="caption">
+                      {item.status === "cleared" ? "Uncleared" : "Clear"}
+                    </Text>
+                  </Pressable>
+                  {categories.slice(0, 8).map((c) => (
+                    <Pressable
+                      key={c.id}
+                      disabled={busyId === item.id}
+                      onPress={() => void onCategorize(item, c.id)}
+                      style={{
+                        borderWidth: 1,
+                        borderColor,
+                        borderRadius: 999,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        opacity: item.category?.id === c.id ? 1 : 0.7,
+                      }}
+                    >
+                      <Text variant="caption">{c.name}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
             </View>
           )}
         />
