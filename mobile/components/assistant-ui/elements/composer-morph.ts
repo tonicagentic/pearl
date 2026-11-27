@@ -18,6 +18,37 @@ export const COMPOSER_COLLAPSED_INPUT_PAD_Y = (COMPOSER_MIN_INPUT - 22) / 2;
 /** One line + compact pad — keep tight to the action row when empty. */
 export const COMPOSER_EXPANDED_INPUT_MIN = 34;
 export const COMPOSER_EXPANDED_INPUT_MAX = 192;
+/** Approx width of one label character at the composer type size. */
+const COMPOSER_CHAR_WIDTH = 8.4;
+/** Line height for `leading-[22px]` plus compact vertical pad. */
+const COMPOSER_LINE_HEIGHT = 22;
+const COMPOSER_LINE_PAD = 12;
+
+/**
+ * Expanded input height from wrapped line count. Own this instead of iOS
+ * content-size events — those report the current frame and fight shrink.
+ */
+export function estimateComposerInputHeight(options: {
+  readonly text: string;
+  readonly windowWidth: number;
+  readonly hasChips?: boolean;
+}): { readonly height: number; readonly lines: number } {
+  const inputWidth = Math.max(160, options.windowWidth - COMPOSER_EDGE * 2 - 32);
+  const charsPerLine = Math.max(12, Math.floor(inputWidth / COMPOSER_CHAR_WIDTH));
+  let lines = options.hasChips ? 1 : 0;
+  for (const line of options.text.split("\n")) {
+    lines += Math.max(1, Math.ceil(line.length / charsPerLine));
+  }
+  const height = Math.min(
+    COMPOSER_EXPANDED_INPUT_MAX,
+    Math.max(
+      COMPOSER_EXPANDED_INPUT_MIN,
+      lines * COMPOSER_LINE_HEIGHT + COMPOSER_LINE_PAD,
+    ),
+  );
+  return { height, lines };
+}
+
 /** Line-count changes ease instead of snapping the shell. */
 export const COMPOSER_SIZE_TIMING = {
   duration: 200,

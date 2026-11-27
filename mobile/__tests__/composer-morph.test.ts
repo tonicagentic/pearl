@@ -1,6 +1,8 @@
 import {
   COMPOSER_CHIP,
   COMPOSER_EDGE,
+  COMPOSER_EXPANDED_INPUT_MAX,
+  COMPOSER_EXPANDED_INPUT_MIN,
   COMPOSER_MINIMIZED_EDGE,
   COMPOSER_MORPH_RANGE,
   COMPOSER_ROW_GAP,
@@ -11,6 +13,7 @@ import {
   composerPlaceholderOpacity,
   composerPressBump,
   composerWidthProgress,
+  estimateComposerInputHeight,
 } from "../components/assistant-ui/elements/composer-morph";
 
 describe("composerKeyboardProgress", () => {
@@ -90,5 +93,38 @@ describe("composerPlaceholderOpacity", () => {
     expect(composerPlaceholderOpacity(0.5)).toBe(0);
     expect(composerPlaceholderOpacity(0.92)).toBe(0);
     expect(composerPlaceholderOpacity(1)).toBe(1);
+  });
+});
+
+describe("estimateComposerInputHeight", () => {
+  const windowWidth = 393;
+
+  it("keeps the recording draft at two lines, then one when shortened", () => {
+    const twoLine = estimateComposerInputHeight({
+      text: "how do i get over this past trauma with the vulnerability and relationship",
+      windowWidth,
+    });
+    expect(twoLine.lines).toBe(2);
+    expect(twoLine.height).toBeGreaterThan(COMPOSER_EXPANDED_INPUT_MIN);
+    expect(twoLine.height).toBeLessThan(COMPOSER_EXPANDED_INPUT_MAX);
+
+    const oneLine = estimateComposerInputHeight({
+      text: "how do i get over this past",
+      windowWidth,
+    });
+    expect(oneLine.lines).toBe(1);
+    expect(oneLine.height).toBe(COMPOSER_EXPANDED_INPUT_MIN);
+    expect(oneLine.height).toBeLessThan(twoLine.height);
+  });
+
+  it("caps a long multiline draft at the expanded max", () => {
+    const long = estimateComposerInputHeight({
+      text: Array.from({ length: 20 }, (_, i) => `line ${i} of a long draft`).join(
+        "\n",
+      ),
+      windowWidth,
+    });
+    expect(long.height).toBe(COMPOSER_EXPANDED_INPUT_MAX);
+    expect(long.lines).toBeGreaterThan(2);
   });
 });

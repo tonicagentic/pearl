@@ -26,6 +26,7 @@ import {
   composerPlaceholderOpacity,
   composerPressBump,
   composerWidthProgress,
+  estimateComposerInputHeight,
 } from "@/components/assistant-ui/elements/composer-morph";
 import {
   ProjectMentionChip,
@@ -254,11 +255,6 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
   const chromeApi = useComposerChrome();
   const mentionApi = useComposerMention();
   const { width: windowWidth } = useWindowDimensions();
-  // Ignore content-size reports from the narrow collapsed frame (~mini width).
-  const minExpandedMeasureWidth = Math.max(
-    180,
-    windowWidth - COMPOSER_MINIMIZED_EDGE * 2 - 48,
-  );
   // Draft parts keep project chips out of the TextInput. The store holds the
   // serialized directive string; ignore echo of our own publishes, clear on
   // empty store (send), and re-parse any other external write.
@@ -342,9 +338,9 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
     return () => mentionApi.registerSelectHandler(null);
   }, [mentionApi, publishParts]);
 
-  // iOS reports the view bounds as content size and skips the event when a
-  // line is deleted. Count wrapped lines so the field can grow and shrink
-  // without chasing its own height.
+  // Own height from wrapped line count. iOS content-size reports the current
+  // frame and restarts withTiming against that estimate (flash on wrap, stuck
+  // tall on delete), so do not settle from onContentSizeChange.
   useEffect(() => {
     if (!expandedHeight) return;
     if (isBlank) {
@@ -353,19 +349,14 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
       setInputScrolls((current) => (current ? false : current));
       return;
     }
-    const inputWidth = Math.max(160, windowWidth - COMPOSER_EDGE * 2 - 32);
-    const charsPerLine = Math.max(12, Math.floor(inputWidth / 8.4));
-    let lines = hasChips ? 1 : 0;
-    for (const line of activeText.split("\n")) {
-      lines += Math.max(1, Math.ceil(line.length / charsPerLine));
-    }
-    const estimated = Math.min(
-      COMPOSER_EXPANDED_INPUT_MAX,
-      Math.max(COMPOSER_EXPANDED_INPUT_MIN, lines * 22 + 12),
-    );
-    settleHeight(estimated);
+    const { height, lines } = estimateComposerInputHeight({
+      text: activeText,
+      windowWidth,
+      hasChips,
+    });
+    settleHeight(height);
     settleTextOpen(lines > 1 || hasChips ? 1 : 0);
-    const atMax = estimated >= COMPOSER_EXPANDED_INPUT_MAX;
+    const atMax = height >= COMPOSER_EXPANDED_INPUT_MAX;
     setInputScrolls((current) => (current === atMax ? current : atMax));
   }, [
     activeText,
@@ -480,29 +471,6 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
       }}
       onChangeText={onChangeText}
       onKeyPress={onKeyPress}
-      onContentSizeChange={(event) => {
-        if (!expandedHeight || hasChips) return;
-        if (activeText.length === 0) {
-          settleHeight(COMPOSER_EXPANDED_INPUT_MIN);
-          settleTextOpen(0);
-          setInputScrolls((current) => (current ? false : current));
-          return;
-        }
-        const { height, width } = event.nativeEvent.contentSize;
-        const rejected = width > 0 && width < minExpandedMeasureWidth - 24;
-        const contentH = Math.ceil(height);
-        const echo =
-          Math.abs(contentH - expandedHeight.value) <= 1 ||
-          Math.abs(contentH - heightTarget.current) <= 1;
-        const next = Math.min(
-          COMPOSER_EXPANDED_INPUT_MAX,
-          Math.max(COMPOSER_EXPANDED_INPUT_MIN, contentH),
-        );
-        if (rejected || echo) return;
-        settleHeight(next);
-        const atMax = contentH >= COMPOSER_EXPANDED_INPUT_MAX;
-        setInputScrolls((current) => (current === atMax ? current : atMax));
-      }}
       scrollEnabled={inputScrolls}
       placeholder=""
       placeholderTextColorClassName={hydrated ? placeholderColor : undefined}
