@@ -1,4 +1,10 @@
 import { Icon } from "@/components/ui/icon";
+import {
+  ImageViewer,
+  measureViewerOrigin,
+  type ImageViewerItem,
+  type ViewerOrigin,
+} from "@/components/image-viewer";
 import { AttachmentMenu } from "./attachment-menu";
 import {
   AttachmentPrimitive,
@@ -15,9 +21,11 @@ import { FileIcon, XIcon } from "lucide-react-native";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ComponentProps,
+  type ElementRef,
   type FC,
 } from "react";
 import {
@@ -35,6 +43,7 @@ import { useCSSVariable } from "uniwind";
 import { Text } from "@/components/ui/text";
 
 import { uploadImageAttachment } from "@/src/image-attachment";
+import { shareRemoteMedia } from "@/src/media-actions";
 import { seedMediaCache, useDisplayMediaUri } from "@/src/media-disk-cache";
 import { uploadPdfAttachment } from "@/src/pdf-attachment";
 import {
@@ -590,52 +599,128 @@ export function discardPendingAttachments(conversationId: string | null) {
   clearPendingAttachments(chatAttachmentKey(conversationId));
 }
 
-const UserMessageAttachment: FC = () => {
+function viewerImageId(name: string, uri: string): string {
+  return `${name}:${uri}`;
+}
+
+const UserMessageAttachment: FC<{
+  readonly onOpenImage: (
+    id: string,
+    node: ElementRef<typeof View> | null,
+  ) => void;
+}> = ({ onOpenImage }) => {
   const uri = useAttachmentImageUri();
   const text = useAttachmentTextPreview();
   const meta = useAttachmentMeta();
   const [previewOpen, setPreviewOpen] = useState(false);
+  const tileRef = useRef<ElementRef<typeof View> | null>(null);
 
   return (
     <>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`View ${meta.name}`}
-        onPress={() => setPreviewOpen(true)}
-      >
-        {uri ? (
-          <CachedRemoteImage
-            uri={uri}
-            className="aui-user-message-attachment-image bg-muted size-[200px] rounded-2xl"
-            resizeMode="cover"
-          />
-        ) : (
-          <AttachmentName />
-        )}
-      </Pressable>
-      <AttachmentPreviewSheet
-        open={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-        name={meta.name}
-        contentType={meta.contentType ?? "application/octet-stream"}
-        imageUri={uri}
-        text={text}
-      />
+      <View ref={tileRef}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`View ${meta.name}`}
+          onPress={() => {
+            if (uri) {
+              onOpenImage(viewerImageId(meta.name, uri), tileRef.current);
+              return;
+            }
+            setPreviewOpen(true);
+          }}
+        >
+          {uri ? (
+            <CachedRemoteImage
+              uri={uri}
+              className="aui-user-message-attachment-image bg-muted size-[200px] rounded-2xl"
+              resizeMode="cover"
+            />
+          ) : (
+            <AttachmentName />
+          )}
+        </Pressable>
+      </View>
+      {!uri ? (
+        <AttachmentPreviewSheet
+          open={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          name={meta.name}
+          contentType={meta.contentType ?? "application/octet-stream"}
+          text={text}
+        />
+      ) : null}
     </>
   );
 };
 
-export const UserMessageAttachments: FC = () => (
-  <AuiIf
-    condition={(s) =>
-      ((s.message.submission?.attachments ?? s.message.attachments)?.length ??
-        0) > 0
+export const UserMessageAttachments: FC = () => {
+  const attachments = useAuiState(
+    (s) => s.message.submission?.attachments ?? s.message.attachments,
+  );
+  const viewerImages = useMemo((): ImageViewerItem[] => {
+    const items: ImageViewerItem[] = [];
+    for (const attachment of attachments ?? []) {
+      const part = attachment.content?.find((c) => c.type === "image");
+      const uri = part?.type === "image" ? part.image : undefined;
+      if (!uri) continue;
+      items.push({
+        id: viewerImageId(attachment.name, uri),
+        uri,
+        title: attachment.name,
+      });
     }
-  >
-    <View className="aui-user-message-attachments flex-row flex-wrap justify-end gap-1.5">
-      <MessagePrimitive.Attachments>
-        {() => <UserMessageAttachment />}
-      </MessagePrimitive.Attachments>
-    </View>
-  </AuiIf>
-);
+    return items;
+  }, [attachments]);
+
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [viewerOrigin, setViewerOrigin] = useState<ViewerOrigin | null>(null);
+
+  const openImage = useCallback(
+    (id: string, node: ElementRef<typeof View> | null) => {
+      const index = viewerImages.findIndex((item) => item.id === id);
+      if (index < 0) return;
+      void (async () => {
+        const origin = await measureViewerOrigin(
+          node && typeof node.measureInWindow === "function" ? node : null,
+        );
+        setViewerOrigin(origin);
+        setViewerIndex(index);
+      })();
+    },
+    [viewerImages],
+  );
+
+  const closeViewer = useCallback(() => {
+    setViewerIndex(null);
+    setViewerOrigin(null);
+  }, []);
+
+  const shareImage = useCallback(async (item: ImageViewerItem) => {
+    await shareRemoteMedia({ url: item.uri, filename: item.title });
+  }, []);
+
+  return (
+    <AuiIf
+      condition={(s) =>
+        ((s.message.submission?.attachments ?? s.message.attachments)?.length ??
+          0) > 0
+      }
+    >
+      <View className="aui-user-message-attachments flex-row flex-wrap justify-end gap-1.5">
+        <MessagePrimitive.Attachments>
+          {() => <UserMessageAttachment onOpenImage={openImage} />}
+        </MessagePrimitive.Attachments>
+      </View>
+      {viewerIndex != null ? (
+        <ImageViewer
+          images={viewerImages}
+          index={viewerIndex}
+          origin={viewerOrigin}
+          onClose={closeViewer}
+          onIndexChange={setViewerIndex}
+          onShare={shareImage}
+        />
+      ) : null}
+    </AuiIf>
+  );
+};
