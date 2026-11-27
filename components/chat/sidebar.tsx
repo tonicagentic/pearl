@@ -11,6 +11,7 @@ import {
   PlusIcon,
   Trash2Icon,
   WalletIcon,
+  ZapIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -73,6 +74,7 @@ export function ChatSidebar({
   const onChatRoute = pathname === "/" || pathname?.startsWith("/chat") || false;
   const newSessionActive = activeChatId === null && onChatRoute;
   const tasksActive = pathname?.startsWith("/tasks") ?? false;
+  const automationsActive = pathname?.startsWith("/automations") ?? false;
   const libraryActive = pathname?.startsWith("/library") ?? false;
   const projectsActive = pathname?.startsWith("/projects") ?? false;
   const agentsActive = pathname?.startsWith("/agents") ?? false;
@@ -189,6 +191,16 @@ export function ChatSidebar({
         >
           <InboxIcon className="size-4" />
           Tasks
+        </Link>
+        <Link
+          className={cn(
+            "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
+            automationsActive ? activeRowClass : inactiveRowClass,
+          )}
+          href="/automations"
+        >
+          <ZapIcon className="size-4" />
+          Automations
         </Link>
         <Link
           className={cn(

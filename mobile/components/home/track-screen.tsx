@@ -19,6 +19,7 @@ import {
   PlusIcon,
   TargetIcon,
   WalletIcon,
+  ZapIcon,
   type LucideIcon,
 } from "lucide-react-native";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -252,6 +253,15 @@ export function TrackScreen() {
                   />
                 ))
               )}
+            </TrackCard>
+
+            <TrackCard
+              icon={ZapIcon}
+              title="Automations"
+              detail="Schedule prompts for Pearl"
+              onPress={() => router.navigate("/automations")}
+            >
+              <EmptyLine text="Run prompts on a schedule" />
             </TrackCard>
 
             <TrackCard

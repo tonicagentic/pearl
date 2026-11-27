@@ -70,6 +70,47 @@ export async function sendPasswordResetEmail(options: {
   });
 }
 
+/** Notify that a Pearl automation finished (or failed). */
+export async function sendAutomationFinishedEmail(options: {
+  readonly to: string;
+  readonly automationName: string;
+  readonly chatUrl: string;
+  readonly failed?: boolean;
+}): Promise<void> {
+  const name = options.automationName.trim() || "Automation";
+  const subject = options.failed
+    ? `Pearl couldn't finish “${name}”`
+    : `Your automation “${name}” finished`;
+  const text = options.failed
+    ? [
+        subject,
+        "",
+        "Pearl ran into a problem finishing this automation.",
+        "",
+        `Open the chat: ${options.chatUrl}`,
+      ].join("\n")
+    : [
+        subject,
+        "",
+        "Pearl finished the scheduled run.",
+        "",
+        `Open the chat: ${options.chatUrl}`,
+      ].join("\n");
+  const html = options.failed
+    ? `
+      <p>${subject}</p>
+      <p>Pearl ran into a problem finishing this automation.</p>
+      <p><a href="${options.chatUrl}">Open the chat</a></p>
+    `.trim()
+    : `
+      <p>${subject}</p>
+      <p>Pearl finished the scheduled run.</p>
+      <p><a href="${options.chatUrl}">Open the chat</a></p>
+    `.trim();
+
+  await sendEmail({ to: options.to, subject, text, html });
+}
+
 /** Email verification / change confirmation used by Better Auth. */
 export async function sendVerificationLinkEmail(options: {
   readonly to: string;

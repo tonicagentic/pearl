@@ -13,7 +13,16 @@ import {
 } from "drizzle-orm/pg-core";
 import { randomUUID } from "node:crypto";
 import type { ClientSessionState, SessionStreamEvent } from "eve/client";
+import type {
+  PearlAutomationTriggerConfig,
+  PearlAutomationTriggerKind,
+} from "@/lib/automations/types";
 import type { SpokenTurn } from "@/lib/chat/spoken-turns";
+
+export type {
+  PearlAutomationTriggerConfig,
+  PearlAutomationTriggerKind,
+};
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -1667,3 +1676,47 @@ export const directoryListing = pgTable(
 );
 
 export type DirectoryListing = typeof directoryListing.$inferSelect;
+
+/**
+ * UI mirror for eve dynamic schedules (pearl-automations collection).
+ * Timing lives in Vercel Schedules; this row holds payload fields list/get hide.
+ */
+export const pearlAutomation = pgTable(
+  "pearl_automation",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    instructions: text("instructions").notNull(),
+    triggerKind: text("trigger_kind")
+      .$type<PearlAutomationTriggerKind>()
+      .notNull(),
+    triggerConfig: jsonb("trigger_config")
+      .$type<PearlAutomationTriggerConfig>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    timezone: text("timezone").notNull().default("America/Los_Angeles"),
+    notifyPush: boolean("notify_push").notNull().default(true),
+    notifyEmail: boolean("notify_email").notNull().default(true),
+    enabled: boolean("enabled").notNull().default(true),
+    /** Unique management name from the eve create receipt. */
+    eveScheduleName: text("eve_schedule_name").notNull(),
+    /** Most recent chat started by a run. */
+    lastChatId: text("last_chat_id").references(() => chat.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_pearl_automation_user").on(table.userId),
+    uniqueIndex("idx_pearl_automation_eve_name").on(table.eveScheduleName),
+    index("idx_pearl_automation_user_enabled").on(table.userId, table.enabled),
+  ],
+);
+
+export type PearlAutomation = typeof pearlAutomation.$inferSelect;

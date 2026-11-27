@@ -428,6 +428,13 @@
       "when": 1796700000000,
       "tag": "0063_project_durable_agents",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1796800000000,
+      "tag": "0064_pearl_automations",
+      "breakpoints": true
     }
   ]
 }

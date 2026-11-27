@@ -38,8 +38,11 @@
     "../lib/custom-agents/mark.ts",
     "../lib/custom-agents/types.ts",
     "../lib/library/artifact-kind.ts",
-    "../lib/library/quote-text.ts"
+    "../lib/library/quote-text.ts",
+    "../lib/automations/types.ts",
+    "../lib/automations/schedule.ts"
   ],
+
   "exclude": [
     "**/__tests__/**",
     "jest.setup.ts",

@@ -1,17 +1,23 @@
 import { defineHook } from "eve/hooks";
+import { eq } from "drizzle-orm";
 
+import { getAutomationByChatId } from "@/lib/automations";
+import { getEffectiveAppUrl } from "@/lib/auth-url";
+import { filterAlertPushTokens } from "@/lib/attention/filter-alert-tokens";
+import { listClientAttentionForUser } from "@/lib/db/attention";
 import {
   countWaitingChatsForUser,
   getChatLinkByEveSessionId,
 } from "@/lib/db/queries";
-import { filterAlertPushTokens } from "@/lib/attention/filter-alert-tokens";
-import { listClientAttentionForUser } from "@/lib/db/attention";
 import {
   claimPushDelivery,
   hasPushDelivery,
   listDevicePushTokensForUser,
   type PushDeliveryKind,
 } from "@/lib/db/push";
+import { db } from "@/lib/db/client";
+import { user } from "@/lib/db/schema";
+import { sendAutomationFinishedEmail } from "@/lib/email/resend";
 import { sendExpoPush } from "@/lib/push/expo";
 
 function truncate(text: string, max: number): string {
@@ -111,6 +117,60 @@ async function resolveOwnedChat(sessionId: string, principalId: string | null) {
   return chat;
 }
 
+async function notifyAutomationSettled(input: {
+  readonly chatId: string;
+  readonly userId: string;
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly failed: boolean;
+}): Promise<boolean> {
+  const automation = await getAutomationByChatId(input.chatId);
+  if (!automation) {
+    return false;
+  }
+
+  const title = automation.name || "Automation";
+  const body = input.failed
+    ? "Pearl couldn't finish."
+    : "Pearl finished.";
+
+  if (automation.notifyPush) {
+    await deliverPush({
+      sessionId: input.sessionId,
+      turnId: input.turnId,
+      kind: input.failed ? "failed" : "replied",
+      userId: input.userId,
+      chatId: input.chatId,
+      title,
+      body,
+    });
+  }
+
+  if (automation.notifyEmail) {
+    try {
+      const [owner] = await db
+        .select({ email: user.email })
+        .from(user)
+        .where(eq(user.id, input.userId))
+        .limit(1);
+      const to = owner?.email?.trim();
+      if (to && !to.endsWith(".pearl.local") && to !== "local@eve.dev") {
+        const base = getEffectiveAppUrl().replace(/\/$/, "");
+        await sendAutomationFinishedEmail({
+          to,
+          automationName: title,
+          chatUrl: `${base}/chat/${input.chatId}`,
+          failed: input.failed,
+        });
+      }
+    } catch {
+      // Email is best-effort; never fail the turn.
+    }
+  }
+
+  return true;
+}
+
 /**
  * Push a banner when a chat turn reaches a boundary the phone user should
  * see while the app is closed or on another session. Never throws: a hook
@@ -142,6 +202,7 @@ export default defineHook({
           return;
         }
 
+        // Automation HITL still notifies — the user must respond.
         const prompt = event.data.request.prompt?.trim();
         await deliverPush({
           sessionId: ctx.session.id,
@@ -177,7 +238,19 @@ export default defineHook({
           return;
         }
 
-        if (outcome === "failed") {
+        const failed = outcome === "failed";
+        const handled = await notifyAutomationSettled({
+          chatId: chat.id,
+          userId: chat.userId,
+          sessionId: ctx.session.id,
+          turnId,
+          failed,
+        });
+        if (handled) {
+          return;
+        }
+
+        if (failed) {
           await deliverPush({
             sessionId: ctx.session.id,
             turnId,

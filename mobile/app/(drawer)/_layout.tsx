@@ -84,6 +84,14 @@ function PearlDrawerNavigator() {
         }}
       />
       <Drawer.Screen
+        name="automations"
+        options={{
+          title: "Automations",
+          headerShown: false,
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
         name="library"
         options={{
           title: "Library",

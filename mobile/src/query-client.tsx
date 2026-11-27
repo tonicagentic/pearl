@@ -70,6 +70,7 @@ export function queryErrorMessage(error: unknown, fallback: string): string {
 }
 
 export const queryKeys = {
+  automations: ["automations"] as const,
   goals: ["goals"] as const,
   notes: ["notes"] as const,
   note: (id: string) => ["notes", id] as const,

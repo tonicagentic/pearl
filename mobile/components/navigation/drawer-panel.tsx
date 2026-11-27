@@ -17,6 +17,7 @@ import {
   UserIcon,
   WalletIcon,
   XIcon,
+  ZapIcon,
 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
@@ -67,6 +68,11 @@ const TRACK_ROWS = [
     label: "Notes",
     href: "/notes",
     Icon: NotebookPenIcon,
+  },
+  {
+    label: "Automations",
+    href: "/automations",
+    Icon: ZapIcon,
   },
   {
     label: "Projects",
