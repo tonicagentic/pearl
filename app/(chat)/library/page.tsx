@@ -4,6 +4,7 @@ import { list } from "@vercel/blob";
 import { Loader2Icon } from "lucide-react";
 
 import { artifactsPrefix } from "@/agent/lib/artifacts";
+import { listAgentTemplates } from "@/lib/custom-agents/templates";
 import { listLibraryQuotes } from "@/lib/db/library-quotes";
 import { artifactKindFromBasename } from "@/lib/library/artifact-kind";
 import { getServerViewer } from "@/lib/session";
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * Library: durable files/images plus Quotes saved from chat selections.
+ * Library: durable files/images, Quotes, and agent templates.
  */
 export default function LibraryPage() {
   return (
@@ -82,19 +83,22 @@ async function ResolvedLibrary() {
       "Quotes could not be loaded. Files and images above may still be available.";
   }
 
+  const templates = await listAgentTemplates(viewer.id);
+
   return (
     <>
       <header>
         <h1 className="text-lg font-semibold">Library</h1>
         <p className="text-sm text-muted-foreground">
-          Files and images Pearl saved to durable storage, plus quotes you
-          highlight from chat replies.
+          Files and images Pearl saved to durable storage, quotes from chat,
+          and agent templates you can add into a project.
         </p>
       </header>
 
       <LibraryBrowser
         initialItems={items}
         initialQuotes={quotes}
+        templates={templates}
         artifactsError={artifactsError}
         quotesError={quotesError}
       />

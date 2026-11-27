@@ -102,11 +102,36 @@ function AgentsListAndroid({
 }) {
   const { selectChat } = useActiveChat();
   const [agents, setAgents] = useState<readonly CustomAgentDto[] | null>(null);
-  const orderedAgents = useMemo(
-    () =>
-      [...(agents ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
-    [agents],
-  );
+  const groupedAgents = useMemo(() => {
+    const map = new Map<
+      string,
+      { readonly name: string; readonly agents: CustomAgentDto[] }
+    >();
+    for (const agent of agents ?? []) {
+      const key = agent.projectId || "unknown";
+      const bucket = map.get(key);
+      if (bucket) {
+        bucket.agents.push(agent);
+      } else {
+        map.set(key, {
+          name: agent.projectName ?? "Project",
+          agents: [agent],
+        });
+      }
+    }
+    return [...map.entries()]
+      .map(([id, group]) => ({
+        projectId: id,
+        name: group.name,
+        agents: group.agents.sort((a, b) => {
+          if (a.role !== b.role) {
+            return a.role === "manager" ? -1 : 1;
+          }
+          return a.name.localeCompare(b.name);
+        }),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [agents]);
   const pageBackground = useCSSVariable("--color-background") as
     | string
     | undefined;
@@ -155,7 +180,7 @@ function AgentsListAndroid({
     );
   };
 
-  const agentsEmpty = agents !== null && orderedAgents.length === 0;
+  const agentsEmpty = agents !== null && groupedAgents.length === 0;
 
   return (
     <SafeAreaView
@@ -179,59 +204,80 @@ function AgentsListAndroid({
         {agentsEmpty ? (
           <EmptyAgentsState />
         ) : (
-          <View className="mb-8">
-            {orderedAgents.map((agent) => {
-              const subtitle = agentListSubtitle({
-                name: agent.name,
-                chatTitle: agent.chatTitle,
-                instructions: agent.instructions,
-              });
-              return (
-                <Pressable
-                  key={agent.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    subtitle ? `${agent.name}, ${subtitle}` : agent.name
-                  }
-                  className="min-h-[60px] w-full flex-row items-center gap-3 px-5 py-2.5"
-                  onPress={() => {
-                    void selectChat(agent.chatId).then((selected) => {
-                      if (selected) onOpenChat();
-                    });
-                  }}
-                  onLongPress={() => deleteAgent(agent)}
+          <View className="mb-8 gap-5">
+            {groupedAgents.map((group) => (
+              <View key={group.projectId}>
+                <AppText
+                  variant="caption"
+                  weight="medium"
+                  className="mb-1 px-5 uppercase tracking-wide text-muted-foreground"
                 >
-                  <AgentMark
-                    accent={agent.accent || DEFAULT_AGENT_MARK_ACCENT}
-                    size={AGENT_MARK_SIZE}
-                    markShape={agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE}
-                    markTalk={agent.markTalk ?? DEFAULT_AGENT_MARK_TALK}
-                    markBrows={agent.markBrows}
-                    markGaze={agent.markGaze}
-                    motion="off"
-                    eyeMotion="idle"
-                  />
-                  <View className="min-w-0 flex-1" style={{ gap: 1 }}>
-                    <AppText
-                      variant="label"
-                      weight="semibold"
-                      numberOfLines={1}
+                  {group.name}
+                </AppText>
+                {group.agents.map((agent) => {
+                  const subtitle = agentListSubtitle({
+                    name: agent.name,
+                    chatTitle: agent.chatTitle,
+                    instructions: agent.instructions,
+                  });
+                  return (
+                    <Pressable
+                      key={agent.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        subtitle ? `${agent.name}, ${subtitle}` : agent.name
+                      }
+                      className="min-h-[60px] w-full flex-row items-center gap-3 px-5 py-2.5"
+                      onPress={() => {
+                        void selectChat(agent.chatId).then((selected) => {
+                          if (selected) onOpenChat();
+                        });
+                      }}
+                      onLongPress={() => {
+                        if (agent.role === "manager") {
+                          Alert.alert(
+                            "Project manager",
+                            "Delete the project to remove its manager.",
+                          );
+                          return;
+                        }
+                        deleteAgent(agent);
+                      }}
                     >
-                      {agent.name}
-                    </AppText>
-                    {subtitle ? (
-                      <AppText
-                        variant="secondary"
-                        weight="regular"
-                        numberOfLines={1}
-                      >
-                        {subtitle}
-                      </AppText>
-                    ) : null}
-                  </View>
-                </Pressable>
-              );
-            })}
+                      <AgentMark
+                        accent={agent.accent || DEFAULT_AGENT_MARK_ACCENT}
+                        size={AGENT_MARK_SIZE}
+                        markShape={agent.markShape ?? DEFAULT_AGENT_MARK_SHAPE}
+                        markTalk={agent.markTalk ?? DEFAULT_AGENT_MARK_TALK}
+                        markBrows={agent.markBrows}
+                        markGaze={agent.markGaze}
+                        motion="off"
+                        eyeMotion="idle"
+                      />
+                      <View className="min-w-0 flex-1" style={{ gap: 1 }}>
+                        <AppText
+                          variant="label"
+                          weight="semibold"
+                          numberOfLines={1}
+                        >
+                          {agent.name}
+                          {agent.role === "manager" ? " · Manager" : ""}
+                        </AppText>
+                        {subtitle ? (
+                          <AppText
+                            variant="secondary"
+                            weight="regular"
+                            numberOfLines={1}
+                          >
+                            {subtitle}
+                          </AppText>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
           </View>
         )}
       </ScrollView>

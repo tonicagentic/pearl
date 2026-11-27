@@ -70,6 +70,7 @@ import { fetchWorkbenchPins } from "@/src/workbench-client";
 
 type ProjectTab =
   | "overview"
+  | "agents"
   | "tasks"
   | "goals"
   | "notes"
@@ -79,6 +80,7 @@ type ProjectTab =
 const PROJECT_TABS: readonly { readonly key: ProjectTab; readonly label: string }[] =
   [
     { key: "overview", label: "Overview" },
+    { key: "agents", label: "Agents" },
     { key: "tasks", label: "Tasks" },
     { key: "goals", label: "Goals" },
     { key: "notes", label: "Notes" },
@@ -958,6 +960,57 @@ export function ProjectDetailScreen({
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
         >
+          {tab === "agents" ? (
+            <View className="gap-3">
+              {(workspace?.agents ?? []).length === 0 ? (
+                <EmptyRow text="No agents yet. Create a project to get a manager." />
+              ) : (
+                (workspace?.agents ?? []).map((agent) => (
+                  <Pressable
+                    key={agent.id}
+                    accessibilityRole="button"
+                    className="rounded-xl border border-border/40 bg-card px-3 py-3"
+                    onPress={() => {
+                      void selectChat(agent.chatId).then((ok) => {
+                        if (ok) {
+                          setActiveProjectId(projectId);
+                          revealChatThread();
+                          router.push("/agents/chat" as never);
+                        }
+                      });
+                    }}
+                  >
+                    <Text className="text-sm font-medium">
+                      {agent.name}
+                      {agent.role === "manager" ? " · Manager" : ""}
+                    </Text>
+                    <Text
+                      className="mt-1 text-xs text-muted-foreground"
+                      numberOfLines={2}
+                    >
+                      {agent.instructions.trim()
+                        ? agent.instructions.trim()
+                        : "No instructions yet"}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
+              <Pressable
+                accessibilityRole="button"
+                className="items-center rounded-xl border border-dashed border-border px-3 py-3"
+                onPress={() => {
+                  router.push(
+                    `/agent-directory?projectId=${encodeURIComponent(projectId)}` as never,
+                  );
+                }}
+              >
+                <Text className="text-sm text-muted-foreground">
+                  Add from templates
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           {tab === "overview" ? (
             <View className="gap-6">
               <View className="gap-2">

@@ -3,10 +3,9 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { AgentAccentMark } from "@/components/custom-agents/agent-identity-pill";
-import { AgentDirectory } from "@/components/custom-agents/agent-directory";
 import { ensureUserForPrincipal } from "@/lib/db/issues";
 import { listCustomAgents } from "@/lib/custom-agents/store";
-import { listAgentTemplates } from "@/lib/custom-agents/templates";
+import { listProjects } from "@/lib/db/projects";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
@@ -24,8 +23,9 @@ export default function AgentsPage() {
           <header>
             <h1 className="text-lg font-semibold">Agents</h1>
             <p className="text-sm text-muted-foreground">
-              Named Pearl teammates with standing instructions and a single
-              durable thread. Separate from Connected agents under Settings.
+              Durable teammates scoped to a project. Each project has a manager;
+              add more from Library → Templates. Separate from Connected agents
+              under Settings.
             </p>
           </header>
           <Suspense
@@ -58,59 +58,118 @@ async function ResolvedAgents() {
     attributes: { name: viewer.name, email: viewer.email },
   });
 
-  const [agents, templates] = await Promise.all([
+  const [agents, projects] = await Promise.all([
     listCustomAgents(viewer.id),
-    listAgentTemplates(viewer.id),
+    listProjects(viewer.id),
   ]);
+
+  type AgentRow = (typeof agents)[number];
+  const byProject = new Map<
+    string,
+    { name: string; agents: AgentRow[] }
+  >();
+  for (const project of projects) {
+    byProject.set(project.id, { name: project.name, agents: [] });
+  }
+  for (const agent of agents) {
+    const bucket = byProject.get(agent.projectId);
+    if (bucket) {
+      bucket.agents.push(agent);
+    } else {
+      byProject.set(agent.projectId, {
+        name: agent.projectName ?? "Project",
+        agents: [agent],
+      });
+    }
+  }
+
+  const groups = [...byProject.entries()].sort((a, b) =>
+    a[1].name.localeCompare(b[1].name),
+  );
 
   return (
     <>
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold">Your agents</h2>
-        <CreateAgentForm />
+        <CreateAgentForm
+          projects={projects.map((row) => ({ id: row.id, name: row.name }))}
+        />
         {agents.length === 0 ? (
           <p className="rounded-lg border bg-card px-3 py-4 text-sm text-muted-foreground">
-            No agents yet. Create one below or add from the directory.
+            No agents yet. Create a project (it gets a manager), then add more
+            here or from Library → Templates.
           </p>
         ) : (
-          <ul className="divide-y rounded-lg border bg-card">
-            {agents.map((row) => (
-              <li key={row.id}>
-                <Link
-                  className="flex items-center justify-between gap-3 px-3 py-3 hover:bg-muted/40"
-                  href={`/chat/${row.chatId}`}
-                >
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <AgentAccentMark
-                      accent={row.accent}
-                      markShape={row.markShape}
-                      markTalk={row.markTalk}
-                      markBrows={row.markBrows}
-                      markGaze={row.markGaze}
-                      size="md"
-                      motion="off"
-                      eyeMotion="off"
-                    />
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">
-                        {row.name}
-                      </div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {row.instructions.trim()
-                          ? row.instructions.trim().slice(0, 120)
-                          : "No instructions yet"}
-                      </div>
-                    </div>
+          <div className="flex flex-col gap-5">
+            {groups.map(([projectId, group]) =>
+              group.agents.length === 0 ? null : (
+                <div key={projectId} className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {group.name}
+                    </h3>
+                    <Link
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                      href={`/projects/${projectId}`}
+                    >
+                      Open project
+                    </Link>
                   </div>
-                  <span className="text-xs text-muted-foreground">Open</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                  <ul className="divide-y rounded-lg border bg-card">
+                    {group.agents.map((row) => (
+                      <li key={row.id}>
+                        <Link
+                          className="flex items-center justify-between gap-3 px-3 py-3 hover:bg-muted/40"
+                          href={`/chat/${row.chatId}`}
+                        >
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <AgentAccentMark
+                              accent={row.accent}
+                              markShape={row.markShape}
+                              markTalk={row.markTalk}
+                              markBrows={row.markBrows}
+                              markGaze={row.markGaze}
+                              size="md"
+                              motion="off"
+                              eyeMotion="off"
+                            />
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium">
+                                {row.name}
+                                {row.role === "manager" ? (
+                                  <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                                    Manager
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="truncate text-xs text-muted-foreground">
+                                {row.instructions.trim()
+                                  ? row.instructions.trim().slice(0, 120)
+                                  : "No instructions yet"}
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            Open
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ),
+            )}
+          </div>
         )}
       </section>
 
-      <AgentDirectory templates={templates} />
+      <p className="text-sm text-muted-foreground">
+        Browse ready-made roles in{" "}
+        <Link className="underline underline-offset-2" href="/library">
+          Library → Templates
+        </Link>
+        .
+      </p>
     </>
   );
 }

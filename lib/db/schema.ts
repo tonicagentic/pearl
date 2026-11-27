@@ -542,6 +542,8 @@ export const project = pgTable(
       .$type<ProjectPriority>(),
     startDate: date("start_date"),
     targetDate: date("target_date"),
+    /** Vercel Drive name shared by every agent sandbox in this project. Lazy. */
+    driveName: text("drive_name"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -1381,10 +1383,13 @@ export type AgentTemplateIntegrationSeed = {
   readonly connectionId: string;
 };
 
+export type CustomAgentRole = "manager" | "member";
+
 /**
- * User-defined Pearl personas: name + standing instructions, each with
- * exactly one durable chat (chat.customAgentId). Same Pearl eve agent,
- * tools, and session sandbox — only the system role block differs.
+ * User-defined Pearl personas scoped to a project: name + standing
+ * instructions, each with exactly one durable chat (chat.customAgentId).
+ * Same Pearl eve agent and tools; project agents share one Vercel Drive.
+ * Each project has exactly one manager; other agents are members.
  */
 export const customAgent = pgTable(
   "custom_agent",
@@ -1395,6 +1400,13 @@ export const customAgent = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    role: text("role", { enum: ["manager", "member"] })
+      .notNull()
+      .default("member")
+      .$type<CustomAgentRole>(),
     name: text("name").notNull(),
     instructions: text("instructions").notNull().default(""),
     /** Hex accent for the identity mark (cosmos near-black default). */
@@ -1414,11 +1426,18 @@ export const customAgent = pgTable(
   },
   (table) => [
     index("idx_custom_agent_user").on(table.userId),
-    uniqueIndex("idx_custom_agent_user_name").on(table.userId, table.name),
-    uniqueIndex("idx_custom_agent_user_template").on(
-      table.userId,
+    index("idx_custom_agent_project").on(table.projectId),
+    uniqueIndex("idx_custom_agent_project_name").on(
+      table.projectId,
+      table.name,
+    ),
+    uniqueIndex("idx_custom_agent_project_template").on(
+      table.projectId,
       table.templateSlug,
     ),
+    uniqueIndex("idx_custom_agent_project_manager")
+      .on(table.projectId)
+      .where(sql`${table.role} = 'manager'`),
   ],
 );
 

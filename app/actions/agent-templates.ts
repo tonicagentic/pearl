@@ -9,6 +9,7 @@ import { getSetupStatus } from "@/lib/setup";
 
 export async function addAgentFromTemplateAction(input: {
   readonly slug: string;
+  readonly projectId: string;
 }) {
   const setup = await getSetupStatus();
   const viewer = await getServerViewer(setup);
@@ -19,8 +20,14 @@ export async function addAgentFromTemplateAction(input: {
     principalId: viewer.id,
     attributes: { name: viewer.name, email: viewer.email },
   });
-  const row = await addAgentFromTemplate(viewer.id, input.slug);
+  const row = await addAgentFromTemplate(
+    viewer.id,
+    input.slug,
+    input.projectId,
+  );
   revalidatePath("/agents");
+  revalidatePath("/library");
+  revalidatePath(`/projects/${row.projectId}`);
   revalidatePath(`/agents/directory/${input.slug}`);
   return row;
 }

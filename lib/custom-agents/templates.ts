@@ -16,13 +16,17 @@ import {
   isAgentIntegrationId,
   type AgentIntegrationId,
 } from "@/lib/custom-agents/integrations";
-import { CustomAgentError } from "@/lib/custom-agents/store";
+import {
+  CustomAgentError,
+  insertCustomAgentWithChat,
+} from "@/lib/custom-agents/store";
 import type {
   AgentTemplateDetail,
   AgentTemplateSummary,
 } from "@/lib/custom-agents/template-types";
 import type { CustomAgentSummary } from "@/lib/custom-agents/types";
 import { db } from "@/lib/db/client";
+import { getProject } from "@/lib/db/projects";
 import {
   agentTemplate,
   chat,
@@ -115,12 +119,13 @@ function toDetail(
 
 async function addedBySlug(
   userId: string | null,
+  projectId: string | null,
 ): Promise<Map<string, { readonly agentId: string; readonly chatId: string }>> {
   const map = new Map<
     string,
     { readonly agentId: string; readonly chatId: string }
   >();
-  if (!userId) return map;
+  if (!userId || !projectId) return map;
 
   const rows = await db
     .select({
@@ -131,7 +136,11 @@ async function addedBySlug(
     .from(customAgent)
     .innerJoin(chat, eq(chat.customAgentId, customAgent.id))
     .where(
-      and(eq(customAgent.userId, userId), isNotNull(customAgent.templateSlug)),
+      and(
+        eq(customAgent.userId, userId),
+        eq(customAgent.projectId, projectId),
+        isNotNull(customAgent.templateSlug),
+      ),
     );
 
   for (const row of rows) {
@@ -144,10 +153,12 @@ async function addedBySlug(
 
 export async function listAgentTemplates(
   userId: string | null,
+  options?: { readonly projectId?: string | null },
 ): Promise<readonly AgentTemplateSummary[]> {
+  const projectId = options?.projectId ?? null;
   const [rows, added] = await Promise.all([
     db.select().from(agentTemplate).orderBy(asc(agentTemplate.sortOrder)),
-    addedBySlug(userId),
+    addedBySlug(userId, projectId),
   ]);
   return rows.map((row) => toSummary(row, added.get(row.slug) ?? null));
 }
@@ -155,6 +166,7 @@ export async function listAgentTemplates(
 export async function getAgentTemplate(
   slug: string,
   userId: string | null,
+  options?: { readonly projectId?: string | null },
 ): Promise<AgentTemplateDetail | null> {
   const [row] = await db
     .select()
@@ -162,19 +174,25 @@ export async function getAgentTemplate(
     .where(eq(agentTemplate.slug, slug))
     .limit(1);
   if (!row) return null;
-  const added = await addedBySlug(userId);
+  const added = await addedBySlug(userId, options?.projectId ?? null);
   return toDetail(row, added.get(row.slug) ?? null);
 }
 
 /**
- * Copy a directory template into a user-owned custom agent (idempotent per
- * user + template slug).
+ * Copy a directory template into a project as a member agent (idempotent per
+ * project + template slug).
  */
 export async function addAgentFromTemplate(
   userId: string,
   slug: string,
+  projectId: string,
 ): Promise<CustomAgentSummary> {
-  const template = await getAgentTemplate(slug, userId);
+  const owned = await getProject(userId, projectId);
+  if (!owned) {
+    throw new CustomAgentError("Unknown project.");
+  }
+
+  const template = await getAgentTemplate(slug, userId, { projectId });
   if (!template) {
     throw new CustomAgentError("Unknown agent template.");
   }
@@ -191,6 +209,7 @@ export async function addAgentFromTemplate(
       .where(
         and(
           eq(customAgent.userId, userId),
+          eq(customAgent.projectId, projectId),
           eq(customAgent.id, template.addedAgentId),
         ),
       )
@@ -213,6 +232,9 @@ export async function addAgentFromTemplate(
         markGaze: isAgentMarkGaze(row.agent.markGaze)
           ? row.agent.markGaze
           : DEFAULT_AGENT_MARK_GAZE,
+        projectId: row.agent.projectId,
+        projectName: owned.name,
+        role: row.agent.role === "manager" ? "manager" : "member",
         chatId: row.chatId,
         chatTitle: row.chatTitle,
         createdAt: row.agent.createdAt.toISOString(),
@@ -230,43 +252,25 @@ export async function addAgentFromTemplate(
     throw new CustomAgentError("Unknown agent template.");
   }
 
-  const agentId = randomUUID();
-  const chatId = randomUUID();
   const mark = markFields(raw);
 
   try {
     return await db.transaction(async (tx) => {
-      const [agent] = await tx
-        .insert(customAgent)
-        .values({
-          id: agentId,
-          userId,
-          name: raw.name,
-          instructions: raw.instructions,
-          accent: mark.accent,
-          markShape: mark.markShape,
-          markTalk: mark.markTalk,
-          markBrows: mark.markBrows,
-          markGaze: mark.markGaze,
-          templateSlug: raw.slug,
-        })
-        .returning();
-      if (!agent) {
-        throw new CustomAgentError("Failed to create agent.");
-      }
+      const summary = await insertCustomAgentWithChat(tx, {
+        userId,
+        projectId,
+        role: "member",
+        name: raw.name,
+        instructions: raw.instructions,
+        accent: mark.accent,
+        markShape: mark.markShape,
+        markTalk: mark.markTalk,
+        markBrows: mark.markBrows,
+        markGaze: mark.markGaze,
+        templateSlug: raw.slug,
+      });
 
-      const [chatRow] = await tx
-        .insert(chat)
-        .values({
-          id: chatId,
-          userId,
-          title: raw.name,
-          customAgentId: agentId,
-        })
-        .returning({ id: chat.id, title: chat.title });
-      if (!chatRow) {
-        throw new CustomAgentError("Failed to create agent thread.");
-      }
+      const agentId = summary.id;
 
       for (const memory of raw.memories ?? []) {
         if (!memory.text?.trim()) continue;
@@ -314,30 +318,17 @@ export async function addAgentFromTemplate(
         });
       }
 
-      return {
-        id: agent.id,
-        name: agent.name,
-        instructions: agent.instructions,
-        accent: agent.accent,
-        markShape: mark.markShape,
-        markTalk: mark.markTalk,
-        markBrows: mark.markBrows,
-        markGaze: mark.markGaze,
-        chatId: chatRow.id,
-        chatTitle: chatRow.title,
-        createdAt: agent.createdAt.toISOString(),
-        updatedAt: agent.updatedAt.toISOString(),
-      } satisfies CustomAgentSummary;
+      return summary;
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (/unique|duplicate/i.test(message)) {
-      const again = await getAgentTemplate(slug, userId);
+      const again = await getAgentTemplate(slug, userId, { projectId });
       if (again?.addedAgentId && again.addedChatId) {
-        return addAgentFromTemplate(userId, slug);
+        return addAgentFromTemplate(userId, slug, projectId);
       }
       throw new CustomAgentError(
-        "You already have an agent with that name. Rename it or pick another template.",
+        "This project already has an agent with that name. Rename it or pick another template.",
       );
     }
     throw error;

@@ -20,8 +20,17 @@ import {
   type AgentMarkTalk,
 } from "@/lib/custom-agents/mark";
 
-export function CreateAgentForm() {
+export function CreateAgentForm({
+  projects,
+  defaultProjectId = null,
+}: {
+  readonly projects: readonly { readonly id: string; readonly name: string }[];
+  readonly defaultProjectId?: string | null;
+}) {
   const router = useRouter();
+  const [projectId, setProjectId] = useState(
+    defaultProjectId ?? projects[0]?.id ?? "",
+  );
   const [name, setName] = useState("");
   const [instructions, setInstructions] = useState("");
   const [accent, setAccent] = useState<string>(DEFAULT_AGENT_MARK_ACCENT);
@@ -40,6 +49,15 @@ export function CreateAgentForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  if (projects.length === 0) {
+    return (
+      <p className="rounded-lg border bg-card px-3 py-4 text-sm text-muted-foreground">
+        Create a project first — it comes with a manager. Then you can add more
+        agents here.
+      </p>
+    );
+  }
+
   return (
     <form
       className="flex flex-col gap-3 rounded-lg border bg-card p-3"
@@ -49,6 +67,7 @@ export function CreateAgentForm() {
         startTransition(async () => {
           try {
             const row = await createCustomAgentAction({
+              projectId,
               name,
               instructions: instructions.trim() || undefined,
               accent,
@@ -77,6 +96,23 @@ export function CreateAgentForm() {
       }}
     >
       <div className="text-sm font-medium">New agent</div>
+      {!defaultProjectId ? (
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="text-muted-foreground">Project</span>
+          <select
+            className="h-9 rounded-md border bg-background px-3 text-sm"
+            onChange={(event) => setProjectId(event.target.value)}
+            required
+            value={projectId}
+          >
+            {projects.map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <AgentMarkPicker
         accent={accent}
         markShape={markShape}
@@ -107,7 +143,11 @@ export function CreateAgentForm() {
         <p className="text-sm text-destructive">{error}</p>
       ) : null}
       <div>
-        <Button disabled={pending || !name.trim()} size="sm" type="submit">
+        <Button
+          disabled={pending || !name.trim() || !projectId}
+          size="sm"
+          type="submit"
+        >
           {pending ? "Creating…" : "Create agent"}
         </Button>
       </div>

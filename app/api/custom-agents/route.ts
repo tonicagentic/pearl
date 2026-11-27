@@ -21,7 +21,12 @@ export async function GET(request: Request) {
     );
   }
 
-  const agents = await listCustomAgents(viewer.id);
+  const url = new URL(request.url);
+  const projectId = url.searchParams.get("projectId") ?? undefined;
+  const agents = await listCustomAgents(
+    viewer.id,
+    projectId ? { projectId } : undefined,
+  );
   return NextResponse.json({ agents });
 }
 
@@ -42,6 +47,7 @@ export async function POST(request: Request) {
   });
 
   const body = (await request.json().catch(() => ({}))) as {
+    readonly projectId?: string;
     readonly name?: string;
     readonly instructions?: string;
     readonly accent?: string;
@@ -53,6 +59,7 @@ export async function POST(request: Request) {
 
   try {
     const agent = await createCustomAgent(viewer.id, {
+      projectId: body.projectId ?? "",
       name: body.name ?? "",
       instructions: body.instructions,
       accent: body.accent,
@@ -69,14 +76,13 @@ export async function POST(request: Request) {
         : error instanceof Error
           ? error.message
           : "Failed to create agent.";
-    // Unique name collision surfaces as a DB error; soften it.
     const conflict =
       typeof message === "string" &&
-      /unique|duplicate/i.test(message);
+      /unique|duplicate|already/i.test(message);
     return NextResponse.json(
       {
         error: conflict
-          ? "You already have an agent with that name."
+          ? "This project already has an agent with that name."
           : message,
       },
       { status: conflict ? 409 : 400 },

@@ -121,9 +121,28 @@ export type ProjectNoteSummaryDto = {
   readonly updatedAt: string;
 };
 
+export type ProjectAgentDto = {
+  readonly id: string;
+  readonly name: string;
+  readonly instructions: string;
+  readonly accent: string;
+  readonly markShape: string;
+  readonly markTalk: string;
+  readonly markBrows: string;
+  readonly markGaze: string;
+  readonly projectId: string;
+  readonly projectName: string | null;
+  readonly role: "manager" | "member";
+  readonly chatId: string;
+  readonly chatTitle: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+};
+
 export type ProjectWorkspaceDto = {
   readonly project: ProjectDto;
   readonly plans: readonly PlanSummaryDto[];
+  readonly agents: readonly ProjectAgentDto[];
   readonly chats: readonly ProjectChatDto[];
   readonly pins: readonly ProjectPinDto[];
   readonly issues: readonly ProjectIssueDto[];
@@ -204,6 +223,7 @@ export async function fetchProjectWorkspace(
   const data = (await response.json()) as ProjectWorkspaceDto;
   return {
     ...data,
+    agents: data.agents ?? [],
     pins: data.pins ?? [],
     issues: data.issues ?? [],
     artifacts: data.artifacts ?? [],

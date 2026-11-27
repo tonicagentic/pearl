@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AgentDirectory } from "@/components/custom-agents/agent-directory";
 import { cn } from "@/lib/utils";
 import type { ArtifactKind } from "@/lib/library/artifact-kind";
 import type { LibraryQuoteDto } from "@/lib/db/library-quotes";
+import type { AgentTemplateSummary } from "@/lib/custom-agents/template-types";
 import { DeleteArtifactButton } from "./delete-artifact-button";
 import { DeleteQuoteButton } from "./delete-quote-button";
 
@@ -17,20 +19,22 @@ export type LibraryItem = {
 
 export type LibraryQuoteItem = LibraryQuoteDto;
 
-type Filter = "all" | "files" | "images" | "quotes";
+type Filter = "all" | "files" | "images" | "quotes" | "templates";
 
 /**
- * Client Library browser: search, All/Files/Images/Quotes chips, and
- * open / download / delete for artifacts plus quote cards.
+ * Client Library browser: search, All/Files/Images/Quotes/Templates chips,
+ * open / download / delete for artifacts plus quote cards and agent templates.
  */
 export function LibraryBrowser({
   initialItems,
   initialQuotes,
+  templates = [],
   artifactsError = null,
   quotesError = null,
 }: {
   readonly initialItems: readonly LibraryItem[];
   readonly initialQuotes?: readonly LibraryQuoteItem[];
+  readonly templates?: readonly AgentTemplateSummary[];
   /** Blob list failed; quotes may still be shown. */
   readonly artifactsError?: string | null;
   /** Quotes list failed; files may still be shown. */
@@ -44,7 +48,7 @@ export function LibraryBrowser({
   const needle = query.trim().toLowerCase();
 
   const visibleArtifacts = useMemo(() => {
-    if (filter === "quotes") return [];
+    if (filter === "quotes" || filter === "templates") return [];
     return items.filter((item) => {
       if (filter === "images" && item.kind !== "image") return false;
       if (filter === "files" && item.kind !== "file") return false;
@@ -54,7 +58,9 @@ export function LibraryBrowser({
   }, [items, needle, filter]);
 
   const visibleQuotes = useMemo(() => {
-    if (filter === "files" || filter === "images") return [];
+    if (filter === "files" || filter === "images" || filter === "templates") {
+      return [];
+    }
     return quotes.filter((quote) => {
       if (!needle) return true;
       return (
@@ -75,9 +81,12 @@ export function LibraryBrowser({
     setQuotes((current) => current.filter((quote) => quote.id !== id));
   }
 
-  const hasAnything = items.length > 0 || quotes.length > 0;
+  const hasAnything =
+    items.length > 0 || quotes.length > 0 || templates.length > 0;
   const hasVisible =
-    images.length > 0 || files.length > 0 || visibleQuotes.length > 0;
+    filter === "templates"
+      ? templates.length > 0
+      : images.length > 0 || files.length > 0 || visibleQuotes.length > 0;
 
   if (!hasAnything) {
     return (
@@ -95,7 +104,7 @@ export function LibraryBrowser({
         <div className="rounded-lg border bg-card px-3 py-4 text-sm text-muted-foreground">
           Nothing in your library yet. When Pearl saves a file or generates an
           image, it shows up here. You can also highlight text in a chat reply
-          and save it as a quote.
+          and save it as a quote, or add an agent template into a project.
         </div>
       </div>
     );
@@ -130,6 +139,7 @@ export function LibraryBrowser({
               ["files", "Files"],
               ["images", "Images"],
               ["quotes", "Quotes"],
+              ["templates", "Templates"],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -148,6 +158,14 @@ export function LibraryBrowser({
           ))}
         </div>
       </div>
+
+      {filter === "templates" ? (
+        <AgentDirectory
+          description="Add a ready-made role into one of your projects."
+          heading="Agent templates"
+          templates={templates}
+        />
+      ) : null}
 
       {!hasVisible ? (
         <div className="rounded-lg border bg-card px-3 py-4 text-sm text-muted-foreground">

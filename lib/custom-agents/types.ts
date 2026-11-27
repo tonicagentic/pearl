@@ -12,6 +12,8 @@ export type {
   AgentMarkTalk,
 } from "@/lib/custom-agents/mark";
 
+export type CustomAgentRole = "manager" | "member";
+
 /** Public summary of a user-defined Pearl agent (no secrets). */
 export type CustomAgentSummary = {
   readonly id: string;
@@ -26,6 +28,12 @@ export type CustomAgentSummary = {
   readonly markBrows: AgentMarkBrows;
   /** Idle eye gaze on the agent mark. */
   readonly markGaze: AgentMarkGaze;
+  /** Project this agent belongs to. */
+  readonly projectId: string;
+  /** Project display name when joined. */
+  readonly projectName: string | null;
+  /** Manager owns the project hub; members are added roles. */
+  readonly role: CustomAgentRole;
   /** The one durable chat for this agent. */
   readonly chatId: string;
   /** Current title of the agent's durable chat (preview / activity). */

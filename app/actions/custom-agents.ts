@@ -39,6 +39,7 @@ export async function listCustomAgentsAction() {
 }
 
 export async function createCustomAgentAction(input: {
+  readonly projectId: string;
   readonly name: string;
   readonly instructions?: string;
   readonly accent?: string;
@@ -50,6 +51,7 @@ export async function createCustomAgentAction(input: {
   const viewer = await requireDatabaseViewer();
   const row = await createCustomAgent(viewer.id, input);
   revalidateAgentPaths(row.id);
+  revalidatePath(`/projects/${row.projectId}`);
   return row;
 }
 

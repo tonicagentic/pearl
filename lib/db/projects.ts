@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
+import { insertProjectManager } from "@/lib/custom-agents/store";
 import { db } from "@/lib/db/client";
 import {
   chat,
@@ -139,20 +140,47 @@ export async function createProject(
     input.priority !== undefined ? requirePriority(input.priority) : "none";
   const startDate = normalizeProjectDate(input.startDate, "startDate");
   const targetDate = normalizeProjectDate(input.targetDate, "targetDate");
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(project)
+      .values({
+        userId,
+        name,
+        instructions,
+        status,
+        priority,
+        startDate: startDate === undefined ? null : startDate,
+        targetDate: targetDate === undefined ? null : targetDate,
+      })
+      .returning();
+    if (!row) throw new Error("Failed to create project.");
+    await insertProjectManager(tx, userId, row.id);
+    return row;
+  });
+}
+
+/** Persist a lazily provisioned Vercel Drive name for this project. */
+export async function setProjectDriveName(
+  userId: string,
+  projectId: string,
+  driveName: string,
+): Promise<string | null> {
+  const trimmed = driveName.trim().slice(0, 64);
+  if (!trimmed) return null;
   const [row] = await db
-    .insert(project)
-    .values({
-      userId,
-      name,
-      instructions,
-      status,
-      priority,
-      startDate: startDate === undefined ? null : startDate,
-      targetDate: targetDate === undefined ? null : targetDate,
-    })
-    .returning();
-  if (!row) throw new Error("Failed to create project.");
-  return row;
+    .update(project)
+    .set({ driveName: trimmed, updatedAt: new Date() })
+    .where(
+      and(
+        eq(project.userId, userId),
+        eq(project.id, projectId),
+        sql`${project.driveName} is null`,
+      ),
+    )
+    .returning({ driveName: project.driveName });
+  if (row?.driveName) return row.driveName;
+  const existing = await getProject(userId, projectId);
+  return existing?.driveName ?? null;
 }
 
 export async function updateProject(

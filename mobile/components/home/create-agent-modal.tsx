@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pressable, TextInput } from "react-native";
+import { Alert, Pressable, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useCSSVariable } from "uniwind";
 
@@ -27,27 +27,38 @@ import {
   createCustomAgentRequest,
   type CustomAgentDto,
 } from "@/src/custom-agents-client";
+import {
+  fetchProjects,
+  type ProjectDto,
+} from "@/src/projects-client";
 
 type Phase =
+  | "project"
   | "name"
   | "instructions"
   | "character"
   | "templates"
   | "templateDetail";
 
-/** New custom-agent wizard: Name → Instructions → Character, or templates in-sheet. */
+/** New custom-agent wizard: Project → Name → Instructions → Character, or templates. */
 export function CreateAgentModal({
   open,
   onClose,
   onCreated,
+  projectId: fixedProjectId = null,
 }: {
   readonly open: boolean;
   readonly onClose: () => void;
   readonly onCreated: (agent: CustomAgentDto) => void;
+  readonly projectId?: string | null;
 }) {
   const router = useRouter();
   const { selectChat } = useActiveChat();
-  const [phase, setPhase] = useState<Phase>("name");
+  const [phase, setPhase] = useState<Phase>(
+    fixedProjectId ? "name" : "project",
+  );
+  const [projects, setProjects] = useState<readonly ProjectDto[]>([]);
+  const [projectId, setProjectId] = useState(fixedProjectId ?? "");
   const [templateSlug, setTemplateSlug] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -71,11 +82,13 @@ export function CreateAgentModal({
     reload: reloadTemplate,
   } = useAgentTemplateDetail(
     phase === "templateDetail" ? templateSlug : null,
+    projectId || null,
   );
 
   useEffect(() => {
     if (!open) return;
-    setPhase("name");
+    setPhase(fixedProjectId ? "name" : "project");
+    setProjectId(fixedProjectId ?? "");
     setTemplateSlug(null);
     setName("");
     setInstructions("");
@@ -84,13 +97,19 @@ export function CreateAgentModal({
     setMarkTalk(DEFAULT_AGENT_MARK_TALK);
     setError(null);
     setBusy(false);
-  }, [open]);
+    if (!fixedProjectId) {
+      void fetchProjects()
+        .then(setProjects)
+        .catch(() => setProjects([]));
+    }
+  }, [open, fixedProjectId]);
 
   const create = () => {
-    if (busy || name.trim().length === 0) return;
+    if (busy || name.trim().length === 0 || !projectId) return;
     setBusy(true);
     setError(null);
     void createCustomAgentRequest({
+      projectId,
       name: name.trim(),
       instructions: instructions.trim() || undefined,
       accent,
@@ -119,14 +138,14 @@ export function CreateAgentModal({
   };
 
   const addFromTemplate = () => {
-    if (!template || busy) return;
+    if (!template || busy || !projectId) return;
     if (template.addedChatId) {
       openAgentChat(template.addedChatId);
       return;
     }
     setBusy(true);
     setTemplateError(null);
-    void addAgentFromTemplateRequest(template.slug)
+    void addAgentFromTemplateRequest(template.slug, projectId)
       .then(onCreated)
       .catch((cause) => {
         setTemplateError(
@@ -148,8 +167,16 @@ export function CreateAgentModal({
       setPhase("name");
       return;
     }
-    if (phase === "name") {
+    if (phase === "project") {
       onClose();
+      return;
+    }
+    if (phase === "name") {
+      if (fixedProjectId) {
+        onClose();
+        return;
+      }
+      setPhase("project");
       return;
     }
     if (phase === "instructions") {
@@ -160,6 +187,14 @@ export function CreateAgentModal({
   };
 
   const primary = () => {
+    if (phase === "project") {
+      if (!projectId) {
+        Alert.alert("Choose a project", "Agents belong to a project.");
+        return;
+      }
+      setPhase("name");
+      return;
+    }
     if (phase === "name") {
       if (name.trim().length === 0) return;
       setError(null);
@@ -182,20 +217,24 @@ export function CreateAgentModal({
     phase === "templates" || phase === "templateDetail";
   const naming = phase === "name";
   const sheetTitle =
-    phase === "templates"
-      ? "Templates"
-      : phase === "templateDetail"
-        ? (template?.name ?? "Template")
-        : "New agent";
+    phase === "project"
+      ? "Choose project"
+      : phase === "templates"
+        ? "Templates"
+        : phase === "templateDetail"
+          ? (template?.name ?? "Template")
+          : "New agent";
 
   const canSubmit =
     phase === "templates"
       ? false
-      : phase === "name"
-        ? name.trim().length > 0 && !busy
-        : phase === "templateDetail"
-          ? Boolean(template) && !busy
-          : !busy;
+      : phase === "project"
+        ? Boolean(projectId) && !busy
+        : phase === "name"
+          ? name.trim().length > 0 && !busy
+          : phase === "templateDetail"
+            ? Boolean(template) && Boolean(projectId) && !busy
+            : !busy;
 
   return (
     <AddComposer
@@ -227,8 +266,12 @@ export function CreateAgentModal({
               ? "Continue to character"
               : "Continue"
       }
-      leading={naming ? "close" : "back"}
-      onLeadingPress={naming ? onClose : goBack}
+      leading={phase === "project" || (naming && Boolean(fixedProjectId)) ? "close" : "back"}
+      onLeadingPress={
+        phase === "project" || (naming && Boolean(fixedProjectId))
+          ? onClose
+          : goBack
+      }
       showTitleField={naming}
       title={name}
       onChangeTitle={setName}
@@ -246,6 +289,10 @@ export function CreateAgentModal({
             accessibilityLabel="Choose from a template"
             className="self-center rounded-full border border-border bg-card px-4 py-2 active:opacity-80"
             onPress={() => {
+              if (!projectId) {
+                Alert.alert("Choose a project", "Pick a project first.");
+                return;
+              }
               setError(null);
               setPhase("templates");
             }}
@@ -271,8 +318,45 @@ export function CreateAgentModal({
         ) : undefined
       }
     >
+      {phase === "project" ? (
+        <View className="gap-2 px-1 pb-2">
+          {projects.length === 0 ? (
+            <Text variant="body" className="text-muted-foreground">
+              No projects yet. Create one in Workspaces first — it comes with a
+              manager.
+            </Text>
+          ) : (
+            projects.map((row) => {
+              const selected = projectId === row.id;
+              return (
+                <Pressable
+                  key={row.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  className={cn(
+                    "rounded-xl border px-3 py-3",
+                    selected
+                      ? "border-foreground bg-foreground"
+                      : "border-border bg-card",
+                  )}
+                  onPress={() => setProjectId(row.id)}
+                >
+                  <Text
+                    variant="label"
+                    weight="semibold"
+                    className={selected ? "text-background" : "text-foreground"}
+                  >
+                    {row.name}
+                  </Text>
+                </Pressable>
+              );
+            })
+          )}
+        </View>
+      ) : null}
       {phase === "templates" ? (
         <AgentTemplateList
+          projectId={projectId}
           onSelect={(slug) => {
             setTemplateSlug(slug);
             setPhase("templateDetail");

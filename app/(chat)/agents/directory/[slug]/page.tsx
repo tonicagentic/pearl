@@ -27,15 +27,19 @@ export async function generateMetadata({
 
 export default async function AgentDirectoryDetailPage({
   params,
+  searchParams,
 }: {
   readonly params: Promise<{ readonly slug: string }>;
+  readonly searchParams: Promise<{ readonly projectId?: string }>;
 }) {
   const { slug } = await params;
+  const { projectId = null } = await searchParams;
   const setup = await getSetupStatus();
   const viewer = await getServerViewer(setup);
   const template = await getAgentTemplate(
     slug,
     setup.storageMode === "database" && viewer ? viewer.id : null,
+    { projectId },
   );
   if (!template) notFound();
 
@@ -45,9 +49,9 @@ export default async function AgentDirectoryDetailPage({
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
           <Link
             className="text-sm text-muted-foreground hover:text-foreground"
-            href="/agents"
+            href="/library"
           >
-            ← Agents
+            ← Library
           </Link>
 
           <header className="flex items-start gap-4">
@@ -67,6 +71,7 @@ export default async function AgentDirectoryDetailPage({
               <div className="mt-3">
                 <AddTemplateButton
                   addedChatId={template.addedChatId}
+                  projectId={projectId}
                   slug={template.slug}
                   size="default"
                 />

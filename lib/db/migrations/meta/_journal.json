@@ -421,6 +421,13 @@
       "when": 1796600000000,
       "tag": "0062_project_properties_links",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1796700000000,
+      "tag": "0063_project_durable_agents",
+      "breakpoints": true
     }
   ]
 }

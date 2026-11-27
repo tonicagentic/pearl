@@ -11,9 +11,11 @@ export async function GET(
   const { slug } = await context.params;
   const setupStatus = await getSetupStatus();
   const viewer = await getServerViewer(setupStatus, request.headers);
+  const projectId = new URL(request.url).searchParams.get("projectId");
   const template = await getAgentTemplate(
     slug,
     setupStatus.storageMode === "database" && viewer ? viewer.id : null,
+    { projectId },
   );
   if (!template) {
     return NextResponse.json({ error: "Unknown template." }, { status: 404 });

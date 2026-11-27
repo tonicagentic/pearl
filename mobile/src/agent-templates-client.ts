@@ -31,12 +31,16 @@ function handleAuth(response: Response): void {
   if (response.status === 401) sessionInvalid();
 }
 
-export async function fetchAgentTemplates(): Promise<
-  readonly AgentTemplateSummary[]
-> {
-  const response = await fetch(`${AGENT_URL}/api/agent-templates`, {
-    headers: authHeaders(),
-  });
+export async function fetchAgentTemplates(options?: {
+  readonly projectId?: string;
+}): Promise<readonly AgentTemplateSummary[]> {
+  const params = new URLSearchParams();
+  if (options?.projectId) params.set("projectId", options.projectId);
+  const qs = params.toString();
+  const response = await fetch(
+    `${AGENT_URL}/api/agent-templates${qs ? `?${qs}` : ""}`,
+    { headers: authHeaders() },
+  );
   handleAuth(response);
   if (!response.ok) throw new Error(await readError(response));
   const body = (await response.json()) as {
@@ -47,9 +51,13 @@ export async function fetchAgentTemplates(): Promise<
 
 export async function fetchAgentTemplate(
   slug: string,
+  options?: { readonly projectId?: string },
 ): Promise<AgentTemplateDetail> {
+  const params = new URLSearchParams();
+  if (options?.projectId) params.set("projectId", options.projectId);
+  const qs = params.toString();
   const response = await fetch(
-    `${AGENT_URL}/api/agent-templates/${encodeURIComponent(slug)}`,
+    `${AGENT_URL}/api/agent-templates/${encodeURIComponent(slug)}${qs ? `?${qs}` : ""}`,
     { headers: authHeaders() },
   );
   handleAuth(response);
@@ -60,10 +68,15 @@ export async function fetchAgentTemplate(
 
 export async function addAgentFromTemplateRequest(
   slug: string,
+  projectId: string,
 ): Promise<CustomAgentDto> {
   const response = await fetch(
     `${AGENT_URL}/api/agent-templates/${encodeURIComponent(slug)}/add`,
-    { method: "POST", headers: authHeaders() },
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ projectId }),
+    },
   );
   handleAuth(response);
   if (!response.ok) throw new Error(await readError(response));

@@ -1,5 +1,6 @@
 import { list } from "@vercel/blob";
 import { DefaultSandbox, defineSandbox } from "eve/sandbox";
+import { VercelSandbox } from "eve/sandbox/vercel";
 import { isBinaryWorkspacePath } from "@/agent/lib/design-files";
 import {
   readPrivateBlobBytes,
@@ -9,34 +10,59 @@ import {
   getChatIdByEveSessionId,
   listAgentFileSeeds,
 } from "@/lib/db/queries";
+import {
+  ensureProjectDrive,
+  getProjectIdForEveSession,
+  PROJECT_DRIVE_MOUNT,
+} from "@/lib/project-drive";
 import { artifactsPrefix, artifactSandboxPath } from "./lib/artifacts";
 
 // Writing sandbox for drafts and research notes. Coding work belongs in the
 // coder subagent's own sandbox — never put application source here.
 //
-// Files the agent writes survive across turns inside one session sandbox,
-// but a new session starts empty. Restore in two layers after open(), both
-// best-effort so a storage hiccup must not block sandbox startup:
-//
-// 1. Blob artifacts — the principal's durable documents, synced automatically
-//    by every write_file/edit_file. Restored for every new session so earlier
-//    work is reachable regardless of which chat it came from.
-// 2. DB seeds — legacy rows whose content still lives in Postgres only (rows
-//    written before blob-primary sync, or Blob-fallback writes). Skipped when
-//    a newer Blob artifact holds the same file.
+// Non-project chats: restore principal Blob artifacts + legacy DB seeds.
+// Project chats on Vercel: mount the shared project Drive at /workspace/drive
+// and skip principal-wide Blob restore (Library stays the files view).
 export const environment = DefaultSandbox.environment();
+const vercelEnvironment = VercelSandbox.environment();
 
 export default defineSandbox(async ({ session }) => {
-  // Writing sandbox has no package installs or deploys — deny egress when the
-  // provider can enforce it (Vercel / Docker). just-bash only supports
-  // allow-all, so fall back without a policy there.
-  let sandbox;
-  try {
-    sandbox = await environment.open({ networkPolicy: "deny-all" });
-  } catch {
-    sandbox = await environment.open();
+  const principalId = session.auth.current?.principalId ?? null;
+  const projectId = await getProjectIdForEveSession(session.id).catch(
+    () => null,
+  );
+
+  let driveName: string | null = null;
+  if (principalId && projectId) {
+    driveName = await ensureProjectDrive({
+      userId: principalId,
+      projectId,
+    }).catch(() => null);
   }
-  const principalId = session.auth.current?.principalId;
+
+  let sandbox;
+  if (driveName) {
+    try {
+      sandbox = await vercelEnvironment.open({
+        networkPolicy: "deny-all",
+        mounts: {
+          [PROJECT_DRIVE_MOUNT]: { name: driveName },
+        },
+      });
+    } catch {
+      // Local / just-bash cannot mount Drives — fall through.
+      driveName = null;
+    }
+  }
+
+  if (!sandbox) {
+    try {
+      sandbox = await environment.open({ networkPolicy: "deny-all" });
+    } catch {
+      sandbox = await environment.open();
+    }
+  }
+
   if (principalId) {
     const { noteSandboxOpened } = await import("@/lib/billing/sandbox-meter");
     noteSandboxOpened({
@@ -46,6 +72,13 @@ export default defineSandbox(async ({ session }) => {
       label: "writing",
     });
   }
+
+  // Project Drive is the shared workspace — do not also dump the principal
+  // Blob library into this sandbox.
+  if (driveName) {
+    return sandbox;
+  }
+
   const restored = new Map<string, Date>();
 
   try {
@@ -62,9 +95,6 @@ export default defineSandbox(async ({ session }) => {
           continue;
         }
 
-        // Bounded private read: a hung storage read must not stall the first
-        // turn of a fresh session. On any failure, stop restoring — the agent
-        // can still use restore_artifact.
         if (isBinaryWorkspacePath(path)) {
           const bytes = await Promise.race([
             readPrivateBlobBytes(blob.pathname),
@@ -116,9 +146,6 @@ export default defineSandbox(async ({ session }) => {
     const seeds = await listAgentFileSeeds(chatId);
 
     for (const seed of seeds) {
-      // Newer-wins: a Blob artifact restored above that is at least as
-      // recent as this legacy row supersedes it — never let an older
-      // chat-scoped copy clobber newer durable state.
       const seedRelative = seed.path.replace(/^\/workspace\//, "");
       const blobAt = restored.get(seedRelative);
 

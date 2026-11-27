@@ -12,14 +12,37 @@ import {
   unlinkProjectPinAction,
   updateProjectAction,
 } from "@/app/actions/projects";
+import { CreateAgentForm } from "@/app/(chat)/agents/create-agent-form";
+import { AgentAccentMark } from "@/components/custom-agents/agent-identity-pill";
+import { AgentDirectory } from "@/components/custom-agents/agent-directory";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import type { AgentTemplateSummary } from "@/lib/custom-agents/template-types";
+import type {
+  AgentMarkBrows,
+  AgentMarkGaze,
+  AgentMarkShape,
+  AgentMarkTalk,
+} from "@/lib/custom-agents/mark";
 
 type ProjectProps = {
   readonly id: string;
   readonly name: string;
   readonly instructions: string;
+};
+
+type AgentProps = {
+  readonly id: string;
+  readonly name: string;
+  readonly role: "manager" | "member";
+  readonly instructions: string;
+  readonly accent: string;
+  readonly markShape: AgentMarkShape;
+  readonly markTalk: AgentMarkTalk;
+  readonly markBrows: AgentMarkBrows;
+  readonly markGaze: AgentMarkGaze;
+  readonly chatId: string;
 };
 
 type FileProps = {
@@ -43,11 +66,15 @@ type PinProps = {
 
 export function ProjectWorkspace({
   project,
+  agents,
+  templates,
   files,
   chats,
   pins,
 }: {
   readonly project: ProjectProps;
+  readonly agents: readonly AgentProps[];
+  readonly templates: readonly AgentTemplateSummary[];
   readonly files: readonly FileProps[];
   readonly chats: readonly ChatProps[];
   readonly pins: readonly PinProps[];
@@ -160,6 +187,66 @@ export function ProjectWorkspace({
             Delete
           </Button>
         </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-medium">Agents</h2>
+        {agents.length === 0 ? (
+          <p className="rounded-lg border bg-card px-3 py-4 text-sm text-muted-foreground">
+            No agents yet. Every project should have a manager — refresh or
+            recreate the project if this looks wrong.
+          </p>
+        ) : (
+          <ul className="divide-y rounded-lg border bg-card">
+            {agents.map((row) => (
+              <li key={row.id}>
+                <Link
+                  className="flex items-center justify-between gap-3 px-3 py-3 hover:bg-muted/40"
+                  href={`/chat/${row.chatId}`}
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <AgentAccentMark
+                      accent={row.accent}
+                      markShape={row.markShape}
+                      markTalk={row.markTalk}
+                      markBrows={row.markBrows}
+                      markGaze={row.markGaze}
+                      size="md"
+                      motion="off"
+                      eyeMotion="off"
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">
+                        {row.name}
+                        {row.role === "manager" ? (
+                          <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                            Manager
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {row.instructions.trim()
+                          ? row.instructions.trim().slice(0, 120)
+                          : "No instructions yet"}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground">Open</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        <CreateAgentForm
+          defaultProjectId={project.id}
+          projects={[{ id: project.id, name: project.name }]}
+        />
+        <AgentDirectory
+          description="Add a ready-made role into this project."
+          heading="Add from templates"
+          projectId={project.id}
+          templates={templates}
+        />
       </section>
 
       <section className="flex flex-col gap-3">

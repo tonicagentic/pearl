@@ -11,8 +11,14 @@ import { cn } from "@/lib/utils";
 
 export function AgentDirectory({
   templates,
+  projectId = null,
+  heading = "Templates",
+  description = "Ready-made roles you can add into a project.",
 }: {
   readonly templates: readonly AgentTemplateSummary[];
+  readonly projectId?: string | null;
+  readonly heading?: string;
+  readonly description?: string;
 }) {
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -50,10 +56,8 @@ export function AgentDirectory({
   return (
     <section className="flex flex-col gap-4">
       <header>
-        <h2 className="text-sm font-semibold">Directory</h2>
-        <p className="text-sm text-muted-foreground">
-          Ready-made roles you can add as custom agents.
-        </p>
+        <h2 className="text-sm font-semibold">{heading}</h2>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </header>
 
       <div className="flex flex-wrap gap-1.5">
@@ -90,7 +94,7 @@ export function AgentDirectory({
               <Link
                 key={row.slug}
                 className="flex items-start gap-3 rounded-lg border bg-card p-3 hover:bg-muted/40"
-                href={`/agents/directory/${row.slug}`}
+                href={`/agents/directory/${row.slug}${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`}
               >
                 <AgentAccentMark
                   accent={row.accent}
@@ -134,7 +138,7 @@ export function AgentDirectory({
                 >
                   <Link
                     className="flex min-w-0 flex-1 items-center gap-2.5 hover:opacity-90"
-                    href={`/agents/directory/${row.slug}`}
+                    href={`/agents/directory/${row.slug}${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`}
                   >
                     <AgentAccentMark
                       accent={row.accent}
@@ -159,6 +163,7 @@ export function AgentDirectory({
                   </Link>
                   <AddTemplateButton
                     addedChatId={row.addedChatId}
+                    projectId={projectId}
                     slug={row.slug}
                   />
                 </li>

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+import { listCustomAgents } from "@/lib/custom-agents/store";
+import { listAgentTemplates } from "@/lib/custom-agents/templates";
 import { ensureUserForPrincipal } from "@/lib/db/issues";
 import { getProject, listProjectChats } from "@/lib/db/projects";
 import { listProjectArtifacts } from "@/lib/db/project-artifacts";
@@ -63,10 +65,12 @@ async function ResolvedProject({
   const owned = await getProject(viewer.id, projectId);
   if (!owned) notFound();
 
-  const [artifacts, chats, pins] = await Promise.all([
+  const [artifacts, chats, pins, agents, templates] = await Promise.all([
     listProjectArtifacts(viewer.id, owned.id),
     listProjectChats(viewer.id, owned.id),
     listProjectPins(viewer.id, owned.id),
+    listCustomAgents(viewer.id, { projectId: owned.id }),
+    listAgentTemplates(viewer.id, { projectId: owned.id }),
   ]);
 
   return (
@@ -79,6 +83,18 @@ async function ResolvedProject({
         <span className="text-foreground">{owned.name}</span>
       </div>
       <ProjectWorkspace
+        agents={agents.map((row) => ({
+          id: row.id,
+          name: row.name,
+          role: row.role,
+          instructions: row.instructions,
+          accent: row.accent,
+          markShape: row.markShape,
+          markTalk: row.markTalk,
+          markBrows: row.markBrows,
+          markGaze: row.markGaze,
+          chatId: row.chatId,
+        }))}
         chats={chats.map((row) => ({
           id: row.id,
           title: row.title,
@@ -100,6 +116,7 @@ async function ResolvedProject({
           name: owned.name,
           instructions: owned.instructions,
         }}
+        templates={templates}
       />
     </>
   );

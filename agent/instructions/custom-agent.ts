@@ -1,14 +1,17 @@
 import { defineDynamic, defineInstructions } from "eve/instructions";
+import { eq } from "drizzle-orm";
 
 import { listCustomAgentMemories } from "@/lib/custom-agents/config";
 import { resolveActiveCustomAgent } from "@/lib/custom-agents/resolve-active";
+import { db } from "@/lib/db/client";
+import { project } from "@/lib/db/schema";
 
 import { requirePrincipalUser } from "../lib/principal.ts";
 
 /**
  * When the open chat belongs to a user-defined custom agent, inject that
- * agent's name, standing instructions, and agent-local memories as an
- * identity override. Loaded from the database after verifying ownership —
+ * agent's name, standing instructions, agent-local memories, and the parent
+ * project's brief. Loaded from the database after verifying ownership —
  * never from client text.
  */
 export default defineDynamic(async (ctx) => {
@@ -33,12 +36,26 @@ export default defineDynamic(async (ctx) => {
         sessionId,
       });
       if (!agent) return null;
-      const memories = await listCustomAgentMemories(agent.id);
+      const [memories, projectRow] = await Promise.all([
+        listCustomAgentMemories(agent.id),
+        db
+          .select({
+            name: project.name,
+            instructions: project.instructions,
+          })
+          .from(project)
+          .where(eq(project.id, agent.projectId))
+          .limit(1)
+          .then((rows) => rows[0] ?? null),
+      ]);
       return {
         id: agent.id,
         name: agent.name,
+        role: agent.role,
         instructions: agent.instructions.trim(),
         memories: memories.map((row) => row.text),
+        projectName: projectRow?.name ?? null,
+        projectBrief: projectRow?.instructions?.trim() || null,
       };
     },
   );
@@ -78,6 +95,29 @@ export default defineDynamic(async (ctx) => {
         ].join("\n")
       : null;
 
+  const projectBlock = selection.projectName
+    ? [
+        "## Project",
+        "",
+        `You belong to the project **${selection.projectName}**` +
+          (selection.role === "manager" ? " as its manager." : "."),
+        selection.projectBrief
+          ? [
+              "",
+              "### Project brief",
+              "",
+              selection.projectBrief,
+              "",
+              "Treat the project brief as shared context for every agent in",
+              "this project. Prefer it when it conflicts with generic Pearl",
+              "defaults; your standing role still wins for voice and job.",
+            ].join("\n")
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : null;
+
   const sections = [
     "# Active custom agent — identity override",
     "",
@@ -88,6 +128,10 @@ export default defineDynamic(async (ctx) => {
     "",
     roleBlock,
   ];
+
+  if (projectBlock) {
+    sections.push("", projectBlock);
+  }
 
   if (memoryBlock) {
     sections.push("", memoryBlock);

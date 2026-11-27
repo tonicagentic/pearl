@@ -26,8 +26,19 @@ export async function POST(
     attributes: { name: viewer.name, email: viewer.email },
   });
 
+  const body = (await request.json().catch(() => ({}))) as {
+    readonly projectId?: string;
+  };
+  const projectId = body.projectId?.trim() ?? "";
+  if (!projectId) {
+    return NextResponse.json(
+      { error: "Choose a project to add this agent to." },
+      { status: 400 },
+    );
+  }
+
   try {
-    const agent = await addAgentFromTemplate(viewer.id, slug);
+    const agent = await addAgentFromTemplate(viewer.id, slug, projectId);
     return NextResponse.json({ agent });
   } catch (error) {
     const message =

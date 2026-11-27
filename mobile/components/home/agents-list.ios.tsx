@@ -73,11 +73,36 @@ export function AgentsListIOS({
   const clearRow = backgroundColor;
 
   const [agents, setAgents] = useState<readonly CustomAgentDto[] | null>(null);
-  const orderedAgents = useMemo(
-    () =>
-      [...(agents ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
-    [agents],
-  );
+  const groupedAgents = useMemo(() => {
+    const map = new Map<
+      string,
+      { readonly name: string; readonly agents: CustomAgentDto[] }
+    >();
+    for (const agent of agents ?? []) {
+      const key = agent.projectId || "unknown";
+      const bucket = map.get(key);
+      if (bucket) {
+        bucket.agents.push(agent);
+      } else {
+        map.set(key, {
+          name: agent.projectName ?? "Project",
+          agents: [agent],
+        });
+      }
+    }
+    return [...map.entries()]
+      .map(([id, group]) => ({
+        projectId: id,
+        name: group.name,
+        agents: group.agents.sort((a, b) => {
+          if (a.role !== b.role) {
+            return a.role === "manager" ? -1 : 1;
+          }
+          return a.name.localeCompare(b.name);
+        }),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [agents]);
 
   useFocusEffect(
     useCallback(() => {
@@ -105,6 +130,13 @@ export function AgentsListIOS({
   );
 
   const deleteAgent = useCallback((agent: CustomAgentDto) => {
+    if (agent.role === "manager") {
+      Alert.alert(
+        "Project manager",
+        "Delete the project to remove its manager.",
+      );
+      return;
+    }
     Alert.alert(
       "Delete agent?",
       `Remove ${agent.name}? This cannot be undone.`,
@@ -132,7 +164,7 @@ export function AgentsListIOS({
     );
   }, []);
 
-  const agentsEmpty = agents !== null && orderedAgents.length === 0;
+  const agentsEmpty = agents !== null && groupedAgents.length === 0;
 
   return (
     <View
@@ -151,25 +183,29 @@ export function AgentsListIOS({
             listRowSpacing(10),
           ]}
         >
-          <Section>
-            {agents !== null && !agentsEmpty ? (
-              <List.ForEach
-                data={orderedAgents}
-                keyExtractor={(agent) => agent.id}
-                estimatedItemSize={68}
-                recycling={false}
-              >
-                {({ item: agent }) => (
-                  <AgentRow
-                    agent={agent}
-                    rowBackground={backgroundColor}
-                    onOpen={() => openChat(agent.chatId)}
-                    onDelete={() => deleteAgent(agent)}
-                  />
-                )}
-              </List.ForEach>
-            ) : null}
-          </Section>
+          {agents !== null && !agentsEmpty
+            ? groupedAgents.map((group) => (
+                <Section key={group.projectId} title={group.name}>
+                  <List.ForEach
+                    data={group.agents}
+                    keyExtractor={(agent) => agent.id}
+                    estimatedItemSize={68}
+                    recycling={false}
+                  >
+                    {({ item: agent }) => (
+                      <AgentRow
+                        agent={agent}
+                        rowBackground={backgroundColor}
+                        onOpen={() => openChat(agent.chatId)}
+                        onDelete={() => deleteAgent(agent)}
+                      />
+                    )}
+                  </List.ForEach>
+                </Section>
+              ))
+            : (
+              <Section>{null}</Section>
+            )}
           {bottomInset > 0 ? (
             <Section>
               <HStack

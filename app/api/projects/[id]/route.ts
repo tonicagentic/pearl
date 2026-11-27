@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { listCustomAgents } from "@/lib/custom-agents/store";
 import { listProjectIssues } from "@/lib/db/issues";
 import {
   deleteProject,
@@ -19,9 +20,9 @@ import type { ProjectPriority, ProjectStatus } from "@/lib/db/schema";
 import { getServerViewer } from "@/lib/session";
 import { getSetupStatus } from "@/lib/setup";
 
-async function requireViewer() {
+async function requireViewer(request?: Request) {
   const setupStatus = await getSetupStatus();
-  const viewer = await getServerViewer(setupStatus);
+  const viewer = await getServerViewer(setupStatus, request?.headers);
   if (!viewer || setupStatus.storageMode !== "database") {
     return null;
   }
@@ -30,10 +31,10 @@ async function requireViewer() {
 
 /** Project detail: project + tasks + goals + notes + files + chats + pins + links. */
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { readonly params: Promise<{ readonly id: string }> },
 ) {
-  const viewer = await requireViewer();
+  const viewer = await requireViewer(request);
   if (!viewer) {
     return NextResponse.json(
       { error: "Sign in with durable storage configured." },
@@ -50,7 +51,7 @@ export async function GET(
   // Best-effort migration while `plan` table still exists pre-0058.
   await backfillPlansToProjectFiles(viewer.id, owned.id).catch(() => 0);
 
-  const [chats, pins, issues, artifacts, goals, notes, links] =
+  const [chats, pins, issues, artifacts, goals, notes, links, agents] =
     await Promise.all([
       listProjectChats(viewer.id, owned.id),
       listProjectPins(viewer.id, owned.id),
@@ -59,12 +60,14 @@ export async function GET(
       listProjectGoals(viewer.id, owned.id),
       listProjectNotes(viewer.id, owned.id),
       listProjectLinks(viewer.id, owned.id),
+      listCustomAgents(viewer.id, { projectId: owned.id }),
     ]);
 
   return NextResponse.json({
     project: serializeProject(owned),
     // plans removed: project files live in artifacts (Blob + project_artifact).
     plans: [],
+    agents,
     chats: chats.map((row) => ({
       id: row.id,
       title: row.title,

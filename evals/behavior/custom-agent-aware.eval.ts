@@ -6,6 +6,7 @@ import {
 } from "../../lib/agent-mode-context.ts";
 import { createCustomAgent } from "../../lib/custom-agents/store.ts";
 import { ensureUserForPrincipal } from "../../lib/db/issues.ts";
+import { createProject } from "../../lib/db/projects.ts";
 
 const PRINCIPAL_ID = "local-dev";
 const STANDING_ROLE =
@@ -20,8 +21,12 @@ async function seedCustomAgent(): Promise<{
     attributes: { name: "Local Dev", email: "local-dev@eve.local" },
   });
 
+  const project = await createProject(PRINCIPAL_ID, {
+    name: `Eval Launch ${Date.now().toString(36)}`,
+  });
   const name = `Eval Launch Coach ${Date.now().toString(36)}`;
   const agent = await createCustomAgent(PRINCIPAL_ID, {
+    projectId: project.id,
     name,
     instructions: STANDING_ROLE,
     accent: "#2DD4BF",

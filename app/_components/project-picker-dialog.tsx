@@ -25,10 +25,14 @@ export function ProjectPickerDialog({
   open,
   onOpenChange,
   onSelect,
+  title = "Choose a project",
+  description = "Plan mode writes into a project. Pick an existing one or create a new project for this chat.",
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly onSelect: (project: ProjectOption) => void;
+  readonly title?: string;
+  readonly description?: string;
 }) {
   const [projects, setProjects] = useState<readonly ProjectOption[]>([]);
   const [name, setName] = useState("");
@@ -56,11 +60,8 @@ export function ProjectPickerDialog({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-md" side="bottom">
         <SheetHeader>
-          <SheetTitle>Choose a project</SheetTitle>
-          <SheetDescription>
-            Plan mode writes into a project. Pick an existing one or create a
-            new project for this chat.
-          </SheetDescription>
+          <SheetTitle>{title}</SheetTitle>
+          <SheetDescription>{description}</SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-4 px-4 pb-6">
           {error ? (

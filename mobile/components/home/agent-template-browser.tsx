@@ -37,8 +37,10 @@ const DETAIL_METRICS = pearlMarkMetrics(
 /** Filterable template rows for directory or in-sheet create flow. */
 export function AgentTemplateList({
   onSelect,
+  projectId = null,
 }: {
   readonly onSelect: (slug: string) => void;
+  readonly projectId?: string | null;
 }) {
   const [templates, setTemplates] = useState<
     readonly AgentTemplateSummary[] | null
@@ -51,7 +53,7 @@ export function AgentTemplateList({
     | undefined;
 
   const reload = useCallback(() => {
-    void fetchAgentTemplates()
+    void fetchAgentTemplates(projectId ? { projectId } : undefined)
       .then((rows) => {
         setTemplates(rows);
         setError(null);
@@ -62,7 +64,7 @@ export function AgentTemplateList({
         );
         setTemplates((current) => current ?? []);
       });
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     reload();
@@ -319,7 +321,10 @@ export function AgentTemplateDetailBody({
 }
 
 /** Load template detail for a slug; used by create-sheet and directory. */
-export function useAgentTemplateDetail(slug: string | null) {
+export function useAgentTemplateDetail(
+  slug: string | null,
+  projectId: string | null = null,
+) {
   const [template, setTemplate] = useState<AgentTemplateDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -330,7 +335,10 @@ export function useAgentTemplateDetail(slug: string | null) {
       return;
     }
     setError(null);
-    void fetchAgentTemplate(slug)
+    void fetchAgentTemplate(
+      slug,
+      projectId ? { projectId } : undefined,
+    )
       .then(setTemplate)
       .catch((cause) => {
         setError(
@@ -338,7 +346,7 @@ export function useAgentTemplateDetail(slug: string | null) {
         );
         setTemplate(null);
       });
-  }, [slug]);
+  }, [slug, projectId]);
 
   useEffect(() => {
     reload();

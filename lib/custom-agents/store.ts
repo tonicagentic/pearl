@@ -18,12 +18,14 @@ import {
 } from "@/lib/custom-agents/mark";
 import type {
   CustomAgentRef,
+  CustomAgentRole,
   CustomAgentSummary,
 } from "@/lib/custom-agents/types";
 import { db } from "@/lib/db/client";
 import {
   chat,
   customAgent,
+  project,
   type CustomAgent,
 } from "@/lib/db/schema";
 
@@ -31,12 +33,19 @@ const MAX_NAME = 80;
 const MAX_INSTRUCTIONS = 20_000;
 const ACCENT_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
+export const DEFAULT_MANAGER_NAME = "Project Manager";
+
+export const DEFAULT_MANAGER_INSTRUCTIONS =
+  "You are the project manager for this project. Build lasting context about the work, keep skills and routines current, and run scheduled check-ins. Prefer project goals, notes, and files when deciding what matters.";
+
 export class CustomAgentError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "CustomAgentError";
   }
 }
+
+type DbOrTx = Pick<typeof db, "insert" | "select" | "update" | "delete">;
 
 function requireName(raw: string): string {
   const name = raw.replace(/\s+/g, " ").trim();
@@ -123,10 +132,15 @@ function markGazeOf(agent: CustomAgent): AgentMarkGaze {
     : DEFAULT_AGENT_MARK_GAZE;
 }
 
+function roleOf(agent: CustomAgent): CustomAgentRole {
+  return agent.role === "manager" ? "manager" : "member";
+}
+
 function toSummary(
   agent: CustomAgent,
   chatId: string,
   chatTitle: string,
+  projectName: string | null,
 ): CustomAgentSummary {
   return {
     id: agent.id,
@@ -137,6 +151,9 @@ function toSummary(
     markTalk: markTalkOf(agent),
     markBrows: markBrowsOf(agent),
     markGaze: markGazeOf(agent),
+    projectId: agent.projectId,
+    projectName,
+    role: roleOf(agent),
     chatId,
     chatTitle,
     createdAt: agent.createdAt.toISOString(),
@@ -157,22 +174,135 @@ function toRef(agent: CustomAgent): CustomAgentRef {
   };
 }
 
+async function assertOwnedProject(
+  executor: DbOrTx,
+  userId: string,
+  projectId: string,
+): Promise<{ readonly id: string; readonly name: string }> {
+  const [row] = await executor
+    .select({ id: project.id, name: project.name })
+    .from(project)
+    .where(and(eq(project.userId, userId), eq(project.id, projectId)))
+    .limit(1);
+  if (!row) {
+    throw new CustomAgentError("Unknown project.");
+  }
+  return row;
+}
+
+/**
+ * Insert a custom agent + durable chat. Used by createCustomAgent and
+ * createProject (manager). Caller owns the transaction when needed.
+ */
+export async function insertCustomAgentWithChat(
+  executor: DbOrTx,
+  input: {
+    readonly userId: string;
+    readonly projectId: string;
+    readonly role: CustomAgentRole;
+    readonly name: string;
+    readonly instructions: string;
+    readonly accent: string;
+    readonly markShape: AgentMarkShape;
+    readonly markTalk: AgentMarkTalk;
+    readonly markBrows: AgentMarkBrows;
+    readonly markGaze: AgentMarkGaze;
+    readonly templateSlug?: string | null;
+  },
+): Promise<CustomAgentSummary> {
+  const agentId = randomUUID();
+  const chatId = randomUUID();
+
+  const [agent] = await executor
+    .insert(customAgent)
+    .values({
+      id: agentId,
+      userId: input.userId,
+      projectId: input.projectId,
+      role: input.role,
+      name: input.name,
+      instructions: input.instructions,
+      accent: input.accent,
+      markShape: input.markShape,
+      markTalk: input.markTalk,
+      markBrows: input.markBrows,
+      markGaze: input.markGaze,
+      templateSlug: input.templateSlug ?? null,
+    })
+    .returning();
+  if (!agent) {
+    throw new CustomAgentError("Failed to create agent.");
+  }
+
+  const [chatRow] = await executor
+    .insert(chat)
+    .values({
+      id: chatId,
+      userId: input.userId,
+      title: input.name,
+      projectId: input.projectId,
+      customAgentId: agentId,
+    })
+    .returning({ id: chat.id, title: chat.title });
+  if (!chatRow) {
+    throw new CustomAgentError("Failed to create agent thread.");
+  }
+
+  const [proj] = await executor
+    .select({ name: project.name })
+    .from(project)
+    .where(eq(project.id, input.projectId))
+    .limit(1);
+
+  return toSummary(agent, chatRow.id, chatRow.title, proj?.name ?? null);
+}
+
+/** Create the one manager agent for a project (call inside createProject tx). */
+export async function insertProjectManager(
+  executor: DbOrTx,
+  userId: string,
+  projectId: string,
+): Promise<CustomAgentSummary> {
+  return insertCustomAgentWithChat(executor, {
+    userId,
+    projectId,
+    role: "manager",
+    name: DEFAULT_MANAGER_NAME,
+    instructions: DEFAULT_MANAGER_INSTRUCTIONS,
+    accent: DEFAULT_AGENT_MARK_ACCENT,
+    markShape: DEFAULT_AGENT_MARK_SHAPE,
+    markTalk: DEFAULT_AGENT_MARK_TALK,
+    markBrows: DEFAULT_AGENT_MARK_BROWS,
+    markGaze: DEFAULT_AGENT_MARK_GAZE,
+  });
+}
+
 export async function listCustomAgents(
   userId: string,
+  options?: { readonly projectId?: string },
 ): Promise<readonly CustomAgentSummary[]> {
   const rows = await db
     .select({
       agent: customAgent,
       chatId: chat.id,
       chatTitle: chat.title,
+      projectName: project.name,
     })
     .from(customAgent)
     .innerJoin(chat, eq(chat.customAgentId, customAgent.id))
-    .where(eq(customAgent.userId, userId))
-    .orderBy(asc(customAgent.name));
+    .innerJoin(project, eq(project.id, customAgent.projectId))
+    .where(
+      options?.projectId
+        ? and(
+            eq(customAgent.userId, userId),
+            eq(customAgent.projectId, options.projectId),
+          )
+        : eq(customAgent.userId, userId),
+    )
+    .orderBy(asc(project.name), asc(customAgent.role), asc(customAgent.name));
 
   return rows.map((row) =>
-    toSummary(row.agent, row.chatId, row.chatTitle),
+    toSummary(row.agent, row.chatId, row.chatTitle, row.projectName),
   );
 }
 
@@ -185,13 +315,15 @@ export async function getCustomAgent(
       agent: customAgent,
       chatId: chat.id,
       chatTitle: chat.title,
+      projectName: project.name,
     })
     .from(customAgent)
     .innerJoin(chat, eq(chat.customAgentId, customAgent.id))
+    .innerJoin(project, eq(project.id, customAgent.projectId))
     .where(and(eq(customAgent.userId, userId), eq(customAgent.id, agentId)))
     .limit(1);
   if (!row) return null;
-  return toSummary(row.agent, row.chatId, row.chatTitle);
+  return toSummary(row.agent, row.chatId, row.chatTitle, row.projectName);
 }
 
 export async function getCustomAgentRefForChat(
@@ -263,11 +395,12 @@ export async function getOwnedCustomAgent(
 }
 
 /**
- * Create a custom agent and its one durable chat in a single transaction.
+ * Create a member custom agent and its durable chat in a project.
  */
 export async function createCustomAgent(
   userId: string,
   input: {
+    readonly projectId: string;
     readonly name: string;
     readonly instructions?: string;
     readonly accent?: string;
@@ -276,8 +409,15 @@ export async function createCustomAgent(
     readonly markBrows?: string;
     readonly markGaze?: string;
     readonly templateSlug?: string | null;
+    readonly role?: CustomAgentRole;
   },
 ): Promise<CustomAgentSummary> {
+  const projectId = input.projectId.trim();
+  if (!projectId) {
+    throw new CustomAgentError("An agent needs a project.");
+  }
+  await assertOwnedProject(db, userId, projectId);
+
   const name = requireName(input.name);
   const instructions = normalizeInstructions(input.instructions);
   const accent = normalizeAccent(input.accent);
@@ -286,15 +426,14 @@ export async function createCustomAgent(
   const markBrows = normalizeMarkBrows(input.markBrows);
   const markGaze = normalizeMarkGaze(input.markGaze);
   const templateSlug = input.templateSlug?.trim() || null;
-  const agentId = randomUUID();
-  const chatId = randomUUID();
+  const role: CustomAgentRole = input.role === "manager" ? "manager" : "member";
 
-  const summary = await db.transaction(async (tx) => {
-    const [agent] = await tx
-      .insert(customAgent)
-      .values({
-        id: agentId,
+  try {
+    return await db.transaction(async (tx) =>
+      insertCustomAgentWithChat(tx, {
         userId,
+        projectId,
+        role,
         name,
         instructions,
         accent,
@@ -303,29 +442,17 @@ export async function createCustomAgent(
         markBrows,
         markGaze,
         templateSlug,
-      })
-      .returning();
-    if (!agent) {
-      throw new CustomAgentError("Failed to create agent.");
+      }),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (/unique|duplicate/i.test(message)) {
+      throw new CustomAgentError(
+        "This project already has an agent with that name.",
+      );
     }
-
-    const [chatRow] = await tx
-      .insert(chat)
-      .values({
-        id: chatId,
-        userId,
-        title: name,
-        customAgentId: agentId,
-      })
-      .returning({ id: chat.id, title: chat.title });
-    if (!chatRow) {
-      throw new CustomAgentError("Failed to create agent thread.");
-    }
-
-    return toSummary(agent, chatRow.id, chatRow.title);
-  });
-
-  return summary;
+    throw error;
+  }
 }
 
 export async function updateCustomAgent(
@@ -371,40 +498,56 @@ export async function updateCustomAgent(
       ? normalizeMarkGaze(input.markGaze)
       : existing.markGaze;
 
-  const [agent] = await db
-    .update(customAgent)
-    .set({
-      name,
-      instructions,
-      accent,
-      markShape,
-      markTalk,
-      markBrows,
-      markGaze,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(customAgent.userId, userId), eq(customAgent.id, agentId)))
-    .returning();
-  if (!agent) return null;
+  try {
+    const [agent] = await db
+      .update(customAgent)
+      .set({
+        name,
+        instructions,
+        accent,
+        markShape,
+        markTalk,
+        markBrows,
+        markGaze,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(customAgent.userId, userId), eq(customAgent.id, agentId)))
+      .returning();
+    if (!agent) return null;
 
-  // Keep the durable thread title aligned with the agent name.
-  let chatTitle = existing.chatTitle;
-  if (name !== existing.name) {
-    await db
-      .update(chat)
-      .set({ title: name, updatedAt: new Date() })
-      .where(and(eq(chat.customAgentId, agentId), eq(chat.userId, userId)));
-    chatTitle = name;
+    let chatTitle = existing.chatTitle;
+    if (name !== existing.name) {
+      await db
+        .update(chat)
+        .set({ title: name, updatedAt: new Date() })
+        .where(and(eq(chat.customAgentId, agentId), eq(chat.userId, userId)));
+      chatTitle = name;
+    }
+
+    return toSummary(agent, existing.chatId, chatTitle, existing.projectName);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (/unique|duplicate/i.test(message)) {
+      throw new CustomAgentError(
+        "This project already has an agent with that name.",
+      );
+    }
+    throw error;
   }
-
-  return toSummary(agent, existing.chatId, chatTitle);
 }
 
-/** Deletes the agent; cascade removes its chat and events. */
+/** Deletes the agent; cascade removes its chat and events. Managers stay. */
 export async function deleteCustomAgent(
   userId: string,
   agentId: string,
 ): Promise<boolean> {
+  const existing = await getCustomAgent(userId, agentId);
+  if (!existing) return false;
+  if (existing.role === "manager") {
+    throw new CustomAgentError(
+      "The project manager cannot be deleted. Delete the project instead.",
+    );
+  }
   const deleted = await db
     .delete(customAgent)
     .where(and(eq(customAgent.userId, userId), eq(customAgent.id, agentId)))

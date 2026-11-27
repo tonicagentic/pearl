@@ -19,6 +19,9 @@ export type CustomAgentDto = {
   readonly markTalk: AgentMarkTalk;
   readonly markBrows: AgentMarkBrows;
   readonly markGaze: AgentMarkGaze;
+  readonly projectId: string;
+  readonly projectName: string | null;
+  readonly role: "manager" | "member";
   readonly chatId: string;
   /** Current title of the agent's durable chat (list preview). */
   readonly chatTitle: string;
@@ -48,10 +51,16 @@ function handleAuth(response: Response): void {
   }
 }
 
-export async function fetchCustomAgents(): Promise<readonly CustomAgentDto[]> {
-  const response = await fetch(`${AGENT_URL}/api/custom-agents`, {
-    headers: authHeaders(),
-  });
+export async function fetchCustomAgents(options?: {
+  readonly projectId?: string;
+}): Promise<readonly CustomAgentDto[]> {
+  const params = new URLSearchParams();
+  if (options?.projectId) params.set("projectId", options.projectId);
+  const qs = params.toString();
+  const response = await fetch(
+    `${AGENT_URL}/api/custom-agents${qs ? `?${qs}` : ""}`,
+    { headers: authHeaders() },
+  );
   handleAuth(response);
   if (!response.ok) {
     throw new Error(await readError(response));
@@ -63,6 +72,7 @@ export async function fetchCustomAgents(): Promise<readonly CustomAgentDto[]> {
 }
 
 export async function createCustomAgentRequest(input: {
+  readonly projectId: string;
   readonly name: string;
   readonly instructions?: string;
   readonly accent?: string;

@@ -45,7 +45,7 @@ export type AgentTemplateSummary = {
   readonly skillCount: number;
   readonly routineCount: number;
   readonly integrationIds: readonly AgentIntegrationId[];
-  /** Present when this user already added the template. */
+  /** Present when this template is already in the scoped project. */
   readonly addedAgentId: string | null;
   readonly addedChatId: string | null;
 };

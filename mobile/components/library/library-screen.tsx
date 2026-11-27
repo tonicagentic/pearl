@@ -25,6 +25,7 @@ import {
   Trash2Icon,
 } from "lucide-react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AgentTemplateList } from "@/components/home/agent-template-browser";
 import {
   LibraryImageViewer,
   measureViewerOrigin,
@@ -34,6 +35,7 @@ import { usePearlDrawer } from "@/components/navigation/drawer-context";
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
 import { Icon } from "@/components/ui/icon";
 import { Text } from "@/components/ui/text";
+import { router } from "expo-router";
 import {
   artifactAuthHeaders,
   artifactContentUrl,
@@ -61,10 +63,10 @@ import {
 import { setPendingQuoteScroll } from "@/src/pending-quote-scroll";
 import { useStackSearch } from "@/src/use-stack-search";
 
-type KindFilter = "all" | "files" | "images" | "quotes";
+type KindFilter = "all" | "files" | "images" | "quotes" | "templates";
 type ProjectFilter = "all" | "unlinked" | { readonly projectId: string };
 
-/** Principal Library: durable agent files, images, and Quotes. */
+/** Principal Library: durable agent files, images, Quotes, and templates. */
 export function LibraryScreen() {
   const queryClient = useQueryClient();
   const { onSelectChatFromDrawer } = usePearlDrawer();
@@ -150,7 +152,7 @@ export function LibraryScreen() {
   }, [projectFilter, projectLinks]);
 
   const visible = useMemo(() => {
-    if (filter === "quotes") return [];
+    if (filter === "quotes" || filter === "templates") return [];
     const rows = items ?? [];
     return rows.filter((item) => {
       if (filter === "images" && item.kind !== "image") return false;
@@ -174,7 +176,9 @@ export function LibraryScreen() {
   ]);
 
   const visibleQuotes = useMemo(() => {
-    if (filter === "files" || filter === "images") return [];
+    if (filter === "files" || filter === "images" || filter === "templates") {
+      return [];
+    }
     const rows = quotes ?? [];
     return rows.filter((quote) =>
       search.matches(quote.text, quote.chatTitle),
@@ -355,6 +359,7 @@ export function LibraryScreen() {
               ["files", "Files"],
               ["images", "Images"],
               ["quotes", "Quotes"],
+              ["templates", "Templates"],
             ] as const
           ).map(([value, label]) => {
             const selected = filter === value;
@@ -442,7 +447,24 @@ export function LibraryScreen() {
             contentContainerStyle={{ paddingBottom: 24 }}
             contentInsetAdjustmentBehavior="automatic"
           >
-            {visible.length === 0 && visibleQuotes.length === 0 ? (
+            {filter === "templates" ? (
+              <View className="py-2">
+                <Text variant="secondary" tone="muted" className="mb-3">
+                  Add a ready-made role into one of your projects.
+                </Text>
+                <AgentTemplateList
+                  onSelect={(slug) => {
+                    router.push(
+                      `/agent-directory/${encodeURIComponent(slug)}` as never,
+                    );
+                  }}
+                />
+              </View>
+            ) : null}
+
+            {filter !== "templates" &&
+            visible.length === 0 &&
+            visibleQuotes.length === 0 ? (
               <Text variant="body" tone="muted" className="py-8 text-center">
                 {(items?.length ?? 0) > 0 || (quotes?.length ?? 0) > 0
                   ? "No matches."
@@ -452,7 +474,8 @@ export function LibraryScreen() {
 
             {visibleQuotes.length > 0 &&
             filter !== "files" &&
-            filter !== "images" ? (
+            filter !== "images" &&
+            filter !== "templates" ? (
               <View className="mb-6">
                 {filter === "all" ? (
                   <Text
