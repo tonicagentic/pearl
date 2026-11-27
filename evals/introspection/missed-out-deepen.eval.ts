@@ -13,7 +13,7 @@ export default defineEval({
   description:
     "Multi-turn sit-with: left out of friends' plans → nostalgia → " +
     "“the playfulness” → reframe → hard to find excitement. Track the " +
-    "thread; quieter Sol sit-with voice; no diagnose / search / fix-list.",
+    "thread; golden quiet sit-with shape; no diagnose / search / fix-list.",
   tags: ["smoke"],
   timeoutMs: 420_000,
   async test(t) {
@@ -31,9 +31,9 @@ export default defineEval({
       "quiet-open",
     );
     t.judge(
-        "The reply sits with being left out / embarrassed about caring — " +
-          "specific to that situation, not a generic pep talk or unsolicited " +
-          "fix list. No diagnosis, crisis escalation, or search theater. " +
+        "The reply mirrors being left out of the cabin / replaying / " +
+          "embarrassed about caring, takes that seriously without a fix list, " +
+          "and ends with one concrete question. " +
           QUIET_SIT_WITH_VOICE,
         { on: open.reply },
       )
@@ -53,9 +53,9 @@ export default defineEval({
       quietSitWithGate.gate(),
     ).label("quiet-nostalgia");
     t.judge(
-        "The reply tracks the cabin/left-out thread into the high-school " +
-          "echo: it connects or reflects that continuity rather than restarting " +
-          "with tips. Still accompanies; does not diagnose or fix-list. " +
+        "The reply continues the cabin/left-out arc into the high-school " +
+          "after-the-fact echo (reuses that continuity, does not restart with " +
+          "generic empathy), and ends with one concrete question. " +
           QUIET_SIT_WITH_VOICE,
         { on: nostalgia.reply },
       )
@@ -72,10 +72,9 @@ export default defineEval({
       quietSitWithGate.gate(),
     ).label("quiet-playfulness");
     t.judge(
-        "The reply engages the fragmentary “the playfulness” in context of the " +
-          "prior left-out / high-school thread — clarifying what they mean, or " +
-          "reflecting into the phrase, both pass. Ignoring it or dumping advice " +
-          "fails. No search or diagnosis. " +
+        "The reply engages “the playfulness” in continuity with the left-out / " +
+          "high-school thread (clarify or reflect), not a fresh tip sheet, and " +
+          "ends with one concrete question. " +
           QUIET_SIT_WITH_VOICE,
         { on: fragment.reply },
       )
@@ -95,9 +94,9 @@ export default defineEval({
       quietSitWithGate.gate(),
     ).label("quiet-reframe");
     t.judge(
-        "The reply engages the past-self vs now contrast (playful initiator vs " +
-          "waiting to be invited) without turning it into a self-improvement plan. " +
-          "It stays with the feeling and the thread so far. " +
+        "The reply engages the past-self vs now contrast (used to make things " +
+          "fun / wait to be invited) in continuity with the cabin arc, without a " +
+          "self-improvement plan, and ends with one concrete question. " +
           QUIET_SIT_WITH_VOICE,
         { on: reframe.reply },
       )
@@ -117,9 +116,9 @@ export default defineEval({
       quietSitWithGate.gate(),
     ).label("quiet-hang-back");
     t.judge(
-        "The reply continues the same arc (left out → playfulness → carefulness → " +
-          "hanging back) rather than a full reset. Prefer accompanying over a " +
-          "wellness checklist; a gentle question is fine. No diagnosis or search. " +
+        "The reply continues the arc into hanging back even when invited " +
+          "(continuity with carefulness / left-out, not a wellness checklist), " +
+          "and ends with one concrete question. " +
           QUIET_SIT_WITH_VOICE,
         { on: drain.reply },
       )

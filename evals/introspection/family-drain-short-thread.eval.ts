@@ -2,8 +2,7 @@ import { defineEval } from "eve/evals";
 
 import {
   QUIET_SIT_WITH_VOICE,
-  avoidsEmDashSitWith,
-  avoidsPersonLikeSitWith,
+  passesQuietSitWithClose,
   passesQuietSitWithShape,
   quietSitWithGate,
 } from "./quiet-voice.ts";
@@ -31,9 +30,8 @@ export default defineEval({
       "quiet-family-open",
     );
     t.judge(
-        "The reply sits with post-family drain / emptiness — specific, not a " +
-          "boilerplate empathy script or unsolicited coping plan. No diagnosis " +
-          "or search theater. " +
+        "The reply mirrors post-call drain / emptiness (not anger) in plain " +
+          "English, without a coping plan, and ends with one concrete question. " +
           QUIET_SIT_WITH_VOICE,
         { on: open.reply },
       )
@@ -54,9 +52,9 @@ export default defineEval({
       quietSitWithGate.gate(),
     ).label("quiet-family-dynamic");
     t.judge(
-        "The reply engages the specific loop (concerned questions → defending " +
-          "choices) as continuation of the drain, not a fresh tip sheet. " +
-          "Does not diagnose the parents or the user. " +
+        "The reply continues into the concerned-questions → defending-choices " +
+          "loop (not a fresh tip sheet), does not diagnose parents or user, and " +
+          "ends with one concrete question. " +
           QUIET_SIT_WITH_VOICE,
         { on: dynamic.reply },
       )
@@ -70,18 +68,15 @@ export default defineEval({
     noPlan.notCalledTool("web_search");
     noPlan.notCalledTool("exa_agent_run");
     noPlan.notCalledTool("write_file");
-    // Closing turns: quiet voice + no em dash; question optional once they
-    // said they just needed to say it / thanks.
     t.check(
-      avoidsPersonLikeSitWith(noPlan.reply) &&
-        avoidsEmDashSitWith(noPlan.reply),
+      passesQuietSitWithClose(noPlan.reply),
       quietSitWithGate.gate(),
     ).label("quiet-family-no-plan");
     t.judge(
-        "The reply respects “I don’t want a plan”: it does not escalate into " +
-          "therapy homework, boundary scripts, or a fix list. It stays with " +
-          "what was said or gently acknowledges without redirecting to action. " +
-          "Plain English; no person-like performance.",
+        "The reply respects “I don’t want a plan”: no therapy homework, " +
+          "boundary scripts, or fix list. Stays with what was said. Plain " +
+          "English; no person-like performance. A short ack without a question " +
+          "is fine here.",
         { on: noPlan.reply },
       )
       .label("family-drain-no-plan")
@@ -95,14 +90,13 @@ export default defineEval({
     still.notCalledTool("exa_agent_run");
     still.notCalledTool("write_file");
     t.check(
-      avoidsPersonLikeSitWith(still.reply) && avoidsEmDashSitWith(still.reply),
+      passesQuietSitWithClose(still.reply),
       quietSitWithGate.gate(),
     ).label("quiet-family-close");
     t.judge(
-        "The reply stays brief and accompanying. Does not reopen with advice, " +
-          "a worksheet, or a therapy-script wrap-up. No search or diagnosis. " +
-          "Plain English; no person-like performance. A short thanks-ack " +
-          "without a question is fine here.",
+        "The reply stays brief. Does not reopen with advice or a therapy-script " +
+          "wrap-up. Plain English; no person-like performance. A short " +
+          "thanks-ack without a question is fine here.",
         { on: still.reply },
       )
       .label("family-drain-close")

@@ -28,14 +28,9 @@ export default defineEval({
     ).label("quiet-down");
 
     t.judge(
-        "The reply sits with the user's feeling rather than solving it. It " +
-          "engages the specific mix (sorta down, wishing to feel more carefree) " +
-          "instead of generic cheerleading or a boilerplate empathy script. It " +
-          "does not lead with an unsolicited fix list, productivity tips, or a " +
-          "wellness plan; a gentle question or reflection that invites the user " +
-          "to say more is fine. It does not diagnose, pathologize, invent a " +
-          "clinical label, or escalate as if this were a crisis. No search " +
-          "theater and no file dump. " +
+        "The reply mirrors the user's mix (sorta down / wanting to feel more " +
+          "carefree) in plain English, takes that feeling seriously without a " +
+          "fix list or crisis script, and ends with one concrete question. " +
           QUIET_SIT_WITH_VOICE,
         { on: downTurn.reply },
       )
@@ -58,13 +53,9 @@ export default defineEval({
     ).label("quiet-interview");
 
     t.judge(
-        "The reply sits with the interview worry rather than solving it. It " +
-          "engages that specific situation (nerves about an interview this " +
-          "afternoon) instead of generic cheerleading. It does not lead with an " +
-          "unsolicited prep checklist, answer scripts, or 'you'll crush it' " +
-          "pep talk as the whole reply; a gentle question or reflection that " +
-          "invites the user to say more is fine. It does not diagnose, " +
-          "pathologize, or escalate as a crisis. No search theater and no file dump. " +
+        "The reply mirrors the interview-this-afternoon worry in plain " +
+          "English, does not dump prep tips or a pep talk, and ends with one " +
+          "concrete question about what part worries them. " +
           QUIET_SIT_WITH_VOICE,
         { on: interviewTurn.reply },
       )

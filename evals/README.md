@@ -57,11 +57,12 @@ editing**. Every eval below traces to a requirement in one of them.
 ### `introspection/` — sit with how I feel
 
 Personal mood and feeling shares: accompany specifically, don’t fix, diagnose,
-or research. Quiet Sol sit-with voice in plain English (validate when fair,
-push back when unfair; end with a question; avoid em dashes and person-like
-performance). Distinct from `thinking-partner/` (ideas and observations).
-Multi-turn arcs mirror prod length (~4–8 turns): track the thread; don’t
-restart with tips each turn. Authored prompts use fictional genres only.
+or research. Golden quiet sit-with shape (1–2 plain mirror sentences →
+validate or push back → one ending question; no em dashes / assistant “I” /
+person-like performance). Distinct from `thinking-partner/` (ideas and
+observations). Multi-turn arcs mirror prod length (~4–8 turns): track the
+thread; don’t restart with tips each turn. Authored prompts use fictional
+genres only.
 
 | Eval | User can ask… | Layer | Timeout |
 | --- | --- | --- | --- |
