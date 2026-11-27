@@ -13,12 +13,12 @@ import {
   formatScheduleSummary,
   triggerKindLabel,
 } from "@/lib/automations/schedule";
-import type {
-  AutomationDto,
-  PearlAutomationTriggerConfig,
-  PearlAutomationTriggerKind,
-} from "@/lib/automations";
-import { TRIGGER_KINDS } from "@/lib/automations";
+import {
+  TRIGGER_KINDS,
+  type AutomationDto,
+  type PearlAutomationTriggerConfig,
+  type PearlAutomationTriggerKind,
+} from "@/lib/automations/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
