@@ -11,6 +11,8 @@
  *   (https://vercel.com/docs/ai-gateway/models-and-providers/web-search)
  * - Exa Agent effort table: https://exa.ai/docs/admin/pricing
  * - Image models: AI Gateway model pages (per-image list price)
+ * - Language models: AI Gateway list rates (base context tier, ZDR provider
+ *   when Pearl's policy requires one). A reported gateway cost still wins.
  */
 
 export const MICROS_PER_USD = 1_000_000;
@@ -45,7 +47,7 @@ export const EXA_AGENT_EFFORT_USD: Readonly<Record<string, number>> = Object.fro
 
 /**
  * Per-image Gateway list prices for Pearl's allowlisted image models.
- * Token-priced models (no flat per-image rate) are omitted.
+ * Token-priced image models (MAI Image) live in LANGUAGE_MODEL_TOKEN_RATES.
  */
 export const IMAGE_MODEL_MICROS_PER_IMAGE: Readonly<Record<string, number>> = {
   "spacexai/grok-imagine-image-2.0": 60_000,
@@ -64,6 +66,112 @@ export const IMAGE_MODEL_USD_PER_IMAGE: Readonly<Record<string, number>> =
 /** Default reservation / unknown-model floor — matches default image model. */
 export const DEFAULT_IMAGE_MICROS = 60_000;
 export const DEFAULT_IMAGE_USD = DEFAULT_IMAGE_MICROS / MICROS_PER_USD;
+
+/**
+ * eve `auto()` / coder routing records Decide spend as `usage.recorded`
+ * with `kind: "decision"` and no model id. That call is Jev.
+ */
+export const DECISION_MODEL_ID = "typesafe-ai/jev";
+
+/**
+ * List rates in microdollars per 1,000,000 tokens.
+ *
+ * Base context tier only (below each model's long-context threshold).
+ * Cache read/write are the cached subset of input tokens. Rates are the
+ * ZDR provider's published list price, not the US-zone surcharge — when
+ * the gateway reports `costUsd`, that number is used instead.
+ */
+export type ModelTokenRates = {
+  readonly inputMicrosPerMillion: number;
+  readonly outputMicrosPerMillion: number;
+  readonly cacheReadMicrosPerMillion?: number;
+  readonly cacheWriteMicrosPerMillion?: number;
+};
+
+export const LANGUAGE_MODEL_TOKEN_RATES: Readonly<
+  Record<string, ModelTokenRates>
+> = {
+  // fireworks, the ZDR endpoint — $0.15 / $0.50 / $0.015 cache read
+  "thinkingmachines/inkling-2-mini": {
+    inputMicrosPerMillion: 150_000,
+    outputMicrosPerMillion: 500_000,
+    cacheReadMicrosPerMillion: 15_000,
+  },
+  // openai — $2 / $10 / $0.10 cache read / $2.50 cache write
+  "openai/gpt-6.1-sol": {
+    inputMicrosPerMillion: 2_000_000,
+    outputMicrosPerMillion: 10_000_000,
+    cacheReadMicrosPerMillion: 100_000,
+    cacheWriteMicrosPerMillion: 2_500_000,
+  },
+  // shared ZDR list (baseten, fireworks, together) — $0.15 / $0.50 / $0.03
+  "zai/glm-5.3-flash": {
+    inputMicrosPerMillion: 150_000,
+    outputMicrosPerMillion: 500_000,
+    cacheReadMicrosPerMillion: 30_000,
+  },
+  // shared ZDR list — $1.25 / $4.25 / $0.15
+  "meta/muse-spark-open": {
+    inputMicrosPerMillion: 1_250_000,
+    outputMicrosPerMillion: 4_250_000,
+    cacheReadMicrosPerMillion: 150_000,
+  },
+  // xai — $2 / $6 / $0.50. Doubles above 200k tokens; gateway cost wins then.
+  "spacexai/grok-4.7": {
+    inputMicrosPerMillion: 2_000_000,
+    outputMicrosPerMillion: 6_000_000,
+    cacheReadMicrosPerMillion: 500_000,
+  },
+  // openai — $10 / $50 / $1 cache read / $12.50 cache write
+  "openai/gpt-6-astra": {
+    inputMicrosPerMillion: 10_000_000,
+    outputMicrosPerMillion: 50_000_000,
+    cacheReadMicrosPerMillion: 1_000_000,
+    cacheWriteMicrosPerMillion: 12_500_000,
+  },
+  // google — $2 / $10 / $0.10
+  "google/gemini-4-argon": {
+    inputMicrosPerMillion: 2_000_000,
+    outputMicrosPerMillion: 10_000_000,
+    cacheReadMicrosPerMillion: 100_000,
+  },
+  // meta — $4 / $20 / $0.20
+  "meta/muse-wonder-1.0": {
+    inputMicrosPerMillion: 4_000_000,
+    outputMicrosPerMillion: 20_000_000,
+    cacheReadMicrosPerMillion: 200_000,
+  },
+  // fireworks — $0.15 / $0.50 / $0.03. Auto route, not on the picker.
+  "paperinstruments/ultramarine-1-flash": {
+    inputMicrosPerMillion: 150_000,
+    outputMicrosPerMillion: 500_000,
+    cacheReadMicrosPerMillion: 30_000,
+  },
+  // quiverai — $4 / $20 / $0.40 cache read / $5 cache write
+  "quiverai/arrow-2": {
+    inputMicrosPerMillion: 4_000_000,
+    outputMicrosPerMillion: 20_000_000,
+    cacheReadMicrosPerMillion: 400_000,
+    cacheWriteMicrosPerMillion: 5_000_000,
+  },
+  // quiverai — $6 / $30 / $0.60 cache read / $7.50 cache write
+  "quiverai/arrow-2-telos": {
+    inputMicrosPerMillion: 6_000_000,
+    outputMicrosPerMillion: 30_000_000,
+    cacheReadMicrosPerMillion: 600_000,
+    cacheWriteMicrosPerMillion: 7_500_000,
+  },
+  // typesafe-ai — $0.042 / $0. Output is not billed.
+  "typesafe-ai/jev": {
+    inputMicrosPerMillion: 42_000,
+    outputMicrosPerMillion: 0,
+  },
+  // azure token rates, not a flat per-image price — $5 / $38
+  "microsoft/mai-image-2.6": {
+    inputMicrosPerMillion: 5_000_000,
+    outputMicrosPerMillion: 38_000_000,
+  },
+};
 
 export type ExaCostDollars = {
   readonly total: number;
@@ -199,11 +307,111 @@ export function exaSearchUsd(input?: {
   return microsToUsd(exaSearchMicros(input));
 }
 
+function nonNegative(value: number | null | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return value;
+}
+
+function microsForTokens(tokens: number, microsPerMillion: number): number {
+  if (tokens <= 0 || microsPerMillion <= 0) return 0;
+  return Math.round((tokens * microsPerMillion) / 1_000_000);
+}
+
+/**
+ * Catalog token cost. Cache read/write are treated as a subset of input
+ * tokens (AI SDK `inputTokens` includes them). A reported positive dollar
+ * cost is not applied here — callers keep that number as-is.
+ */
+export function languageModelMicros(input: {
+  readonly modelId: string;
+  readonly inputTokens?: number | null;
+  readonly outputTokens?: number | null;
+  readonly cacheReadTokens?: number | null;
+  readonly cacheWriteTokens?: number | null;
+}): {
+  readonly micros: number;
+  readonly pricing: "catalog";
+} | null {
+  const rates = LANGUAGE_MODEL_TOKEN_RATES[input.modelId];
+  if (!rates) return null;
+
+  const inputTokens = nonNegative(input.inputTokens);
+  const outputTokens = nonNegative(input.outputTokens);
+  const cacheRead = nonNegative(input.cacheReadTokens);
+  const cacheWrite = nonNegative(input.cacheWriteTokens);
+
+  let read = cacheRead;
+  let write = cacheWrite;
+  if (inputTokens > 0 && read + write > inputTokens && read + write > 0) {
+    const capped = inputTokens;
+    read = Math.round((cacheRead / (cacheRead + cacheWrite)) * capped);
+    write = capped - read;
+  }
+  const fresh =
+    inputTokens > 0 ? Math.max(0, inputTokens - read - write) : 0;
+
+  const micros =
+    microsForTokens(fresh, rates.inputMicrosPerMillion) +
+    microsForTokens(
+      read,
+      rates.cacheReadMicrosPerMillion ?? rates.inputMicrosPerMillion,
+    ) +
+    microsForTokens(
+      write,
+      rates.cacheWriteMicrosPerMillion ?? rates.inputMicrosPerMillion,
+    ) +
+    microsForTokens(outputTokens, rates.outputMicrosPerMillion);
+
+  if (micros <= 0) return null;
+  return { micros, pricing: "catalog" };
+}
+
+/**
+ * Keep a positive reported cost. Otherwise price from the catalog, and
+ * label unscoped Decide usage as Jev.
+ */
+export function resolveRecordedModelCost(input: {
+  readonly modelId: string | null;
+  readonly kind?: string | null;
+  readonly costUsd: number | null;
+  readonly inputTokens: number | null;
+  readonly outputTokens: number | null;
+  readonly cacheReadTokens: number | null;
+  readonly cacheWriteTokens: number | null;
+}): {
+  readonly modelId: string | null;
+  readonly costUsd: number | null;
+} {
+  const modelId =
+    input.modelId ??
+    (input.kind === "decision" ? DECISION_MODEL_ID : null);
+  if (typeof input.costUsd === "number" && input.costUsd > 0) {
+    return { modelId, costUsd: input.costUsd };
+  }
+  const priced = modelId
+    ? languageModelMicros({
+        modelId,
+        inputTokens: input.inputTokens,
+        outputTokens: input.outputTokens,
+        cacheReadTokens: input.cacheReadTokens,
+        cacheWriteTokens: input.cacheWriteTokens,
+      })
+    : null;
+  if (!priced) return { modelId, costUsd: input.costUsd };
+  return { modelId, costUsd: microsToUsd(priced.micros) };
+}
+
 /** Resolve image cost: reported USD wins, else catalog list price. */
 export function imageMicros(input: {
   readonly modelId: string;
   readonly reportedUsd?: number | null;
   readonly imageCount?: number;
+  readonly inputTokens?: number | null;
+  readonly outputTokens?: number | null;
+  readonly cacheReadTokens?: number | null;
+  readonly cacheWriteTokens?: number | null;
 }): {
   readonly micros: number;
   readonly pricing: "provider" | "catalog" | "default";
@@ -220,6 +428,14 @@ export function imageMicros(input: {
   if (typeof perImage === "number") {
     return { micros: perImage * count, pricing: "catalog" };
   }
+  const tokens = languageModelMicros({
+    modelId: input.modelId,
+    inputTokens: input.inputTokens,
+    outputTokens: input.outputTokens,
+    cacheReadTokens: input.cacheReadTokens,
+    cacheWriteTokens: input.cacheWriteTokens,
+  });
+  if (tokens) return { micros: tokens.micros, pricing: "catalog" };
   return { micros: DEFAULT_IMAGE_MICROS * count, pricing: "default" };
 }
 
@@ -227,6 +443,10 @@ export function imageUsd(input: {
   readonly modelId: string;
   readonly reportedUsd?: number | null;
   readonly imageCount?: number;
+  readonly inputTokens?: number | null;
+  readonly outputTokens?: number | null;
+  readonly cacheReadTokens?: number | null;
+  readonly cacheWriteTokens?: number | null;
 }): {
   readonly usd: number;
   readonly pricing: "provider" | "catalog" | "default";
