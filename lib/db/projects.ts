@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 
 import { insertProjectManager } from "@/lib/custom-agents/store";
 import { db } from "@/lib/db/client";
@@ -248,6 +248,7 @@ export async function listProjectChats(
   userId: string,
   projectId: string,
 ): Promise<readonly { id: string; title: string; updatedAt: Date }[]> {
+  // Pearl project threads only — custom-agent chats stay out of the project list.
   return db
     .select({
       id: chat.id,
@@ -255,7 +256,13 @@ export async function listProjectChats(
       updatedAt: chat.updatedAt,
     })
     .from(chat)
-    .where(and(eq(chat.userId, userId), eq(chat.projectId, projectId)))
+    .where(
+      and(
+        eq(chat.userId, userId),
+        eq(chat.projectId, projectId),
+        isNull(chat.customAgentId),
+      ),
+    )
     .orderBy(desc(chat.updatedAt));
 }
 

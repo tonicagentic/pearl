@@ -24,6 +24,11 @@ import { TrackScreen } from "@/components/home/track-screen";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { BillingGateScreen } from "@/components/settings/billing-gate-screen";
 import { ThreadCostDrawer } from "@/components/thread-cost-drawer";
+import {
+  PEARL_IDENTITY_ACCENT,
+  PEARL_MARK_HEIGHT_RATIO,
+  ThreadIdentityMenu,
+} from "@/components/thread-identity-menu";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
 import { getChat } from "@/src/chats-client";
@@ -269,6 +274,41 @@ export function MailHomeScreen() {
     void setTrackShowFinance(!showFinance);
   }, [showFinance]);
 
+  // Project-linked Pearl thread: title is the project (identity menu owns
+  // change/remove/cost/delete). Unlinked Pearl keeps the ellipsis menu.
+  const projectAsTitle =
+    showPearlThreadChrome &&
+    Boolean(activeProjectId) &&
+    Boolean(projectLabel);
+
+  const projectTitleSlot = useMemo(() => {
+    if (!projectAsTitle || !projectLabel) return null;
+    return (
+      <ThreadIdentityMenu
+        name={projectLabel}
+        accent={PEARL_IDENTITY_ACCENT}
+        heightRatio={PEARL_MARK_HEIGHT_RATIO}
+        projectAsTitle
+        projectLabel={projectLabel}
+        hasProject
+        canManageThread={Boolean(activeChatId)}
+        onAddOrChangeProject={openProjectPicker}
+        onRemoveProject={clearProject}
+        onViewCost={openCost}
+        onDelete={confirmDelete}
+        allowAgentSwitch={false}
+      />
+    );
+  }, [
+    activeChatId,
+    clearProject,
+    confirmDelete,
+    openCost,
+    openProjectPicker,
+    projectAsTitle,
+    projectLabel,
+  ]);
+
   const chromeActions = useMemo((): readonly ScreenChromeAction[] => {
     return [
       {
@@ -281,14 +321,14 @@ export function MailHomeScreen() {
       {
         type: "spacer",
         width: 8,
-        hidden: !showPearlThreadChrome,
+        hidden: !showPearlThreadChrome || projectAsTitle,
       },
       {
         type: "menu",
         label: "Thread details",
         systemImage: "ellipsis",
         icon: MoreHorizontalIcon,
-        hidden: !showPearlThreadChrome,
+        hidden: !showPearlThreadChrome || projectAsTitle,
         onPress: openThreadDetails,
         items: [
           {
@@ -339,6 +379,7 @@ export function MailHomeScreen() {
     openNewChat,
     openProjectPicker,
     openThreadDetails,
+    projectAsTitle,
     projectLabel,
     showFinance,
     showPearlThreadChrome,
@@ -354,7 +395,9 @@ export function MailHomeScreen() {
         titleSlot={
           showTabSwitcher ? (
             <HomeTabSwitcher tab={homeTab} onChange={setHomeTab} />
-          ) : null
+          ) : (
+            projectTitleSlot
+          )
         }
         actions={chromeActions}
       >

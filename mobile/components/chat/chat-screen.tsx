@@ -66,6 +66,7 @@ import {
   getPendingApprovals,
   hasPendingAction,
   isTextOnlyPendingQuestion,
+  pendingMessageLabel,
   pendingWaitKind,
   showReplyInterruptedNotice,
   spokenTurnsPendingImport,
@@ -116,6 +117,7 @@ import { toThreadMessages } from "@/src/eve-transport";
 import { useNetworkStatus } from "@/src/network-status";
 import { sendWithRetry } from "@/src/send-retry";
 import { useExpectedReplies } from "@/src/chat/use-expected-replies";
+import { projectIdFromSendMessage } from "../../../lib/chat/project-mentions";
 
 const COMPUTER_SHEET_SNAP_POINTS = ["92%"] as const;
 
@@ -326,10 +328,15 @@ export function ChatScreen({
   }, [embedded, activeCustomAgent, newChat]);
 
   // Auto-present Computer for browser/non-text tabs. Text write_file claims
-  // stay as an inline Writing card until the user opens the canvas.
+  // stay as an inline Writing card until the user opens the canvas. Project-
+  // linked Pearl threads keep sandbox on Sources — never open Computer there.
   useEffect(() => {
     const prev = tabCountRef.current;
     tabCountRef.current = tabs.length;
+    if (activeProjectId) {
+      if (computerOpen) dismissComputer();
+      return;
+    }
     if (prev === 0 && tabs.length > 0) {
       if (canvasOpen) {
         dismissComputer();
@@ -343,13 +350,20 @@ export function ChatScreen({
     } else if (tabs.length === 0 && prev > 0) {
       dismissComputer();
     }
-  }, [canvasOpen, dismissComputer, presentComputer, tabs]);
+  }, [
+    activeProjectId,
+    canvasOpen,
+    computerOpen,
+    dismissComputer,
+    presentComputer,
+    tabs,
+  ]);
 
   // Chat-launched non-editable opens surface the Computer sheet.
   useEffect(() => {
-    if (!preferDetail) return;
+    if (!preferDetail || activeProjectId) return;
     presentComputer();
-  }, [preferDetail, presentComputer]);
+  }, [activeProjectId, preferDetail, presentComputer]);
 
   // Editable canvas owns the screen — tuck Computer away.
   useEffect(() => {
@@ -850,14 +864,24 @@ export function ChatScreen({
           setSendError({ store: activeStore, message: reason });
           throw new MessageNotSentError(reason);
         }
-        let projectIdForTurn = ctx.activeProjectId;
-        try {
-          projectIdForTurn = await ctx.ensureProjectForPlanMode();
-          if (projectIdForTurn) ctx.setActiveProjectId(projectIdForTurn);
-        } catch {
-          const reason = "Plan mode needs a project before sending.";
-          setSendError({ store: activeStore, message: reason });
-          throw new MessageNotSentError(reason);
+        // Chat project wins; a single @project chip files an unlinked thread
+        // before plan-mode gating (so the picker is skipped when a chip is present).
+        let projectIdForTurn = projectIdFromSendMessage({
+          chatProjectId: ctx.activeProjectId,
+          messageText: pendingMessageLabel(message.content),
+        });
+        if (projectIdForTurn && projectIdForTurn !== ctx.activeProjectId) {
+          ctx.setActiveProjectId(projectIdForTurn);
+        }
+        if (!projectIdForTurn) {
+          try {
+            projectIdForTurn = await ctx.ensureProjectForPlanMode();
+            if (projectIdForTurn) ctx.setActiveProjectId(projectIdForTurn);
+          } catch {
+            const reason = "Plan mode needs a project before sending.";
+            setSendError({ store: activeStore, message: reason });
+            throw new MessageNotSentError(reason);
+          }
         }
         let turn: ReturnType<typeof toEveTurn>;
         try {
@@ -1416,10 +1440,17 @@ export function ChatScreen({
     },
     [activeCustomAgent?.id, selectChat],
   );
+  const projectAsTitle =
+    Boolean(activeProjectId) && !activeCustomAgent && Boolean(projectLabel);
+
   const titleSlot = useMemo(
     () => (
       <ThreadIdentityMenu
-        name={activeCustomAgent?.name ?? "Pearl"}
+        name={
+          projectAsTitle
+            ? projectLabel!
+            : (activeCustomAgent?.name ?? "Pearl")
+        }
         accent={activeCustomAgent?.accent ?? PEARL_IDENTITY_ACCENT}
         markShape={activeCustomAgent?.markShape}
         markTalk={activeCustomAgent?.markTalk}
@@ -1428,6 +1459,7 @@ export function ChatScreen({
         heightRatio={
           activeCustomAgent ? undefined : PEARL_MARK_HEIGHT_RATIO
         }
+        projectAsTitle={projectAsTitle}
         projectLabel={projectLabel}
         hasProject={Boolean(activeProjectId)}
         canManageThread={Boolean(activeChatId)}
@@ -1439,7 +1471,7 @@ export function ChatScreen({
         onRemoveProject={clearProject}
         onViewCost={openCost}
         onDelete={confirmDelete}
-        allowAgentSwitch={allowAgentSwitch}
+        allowAgentSwitch={allowAgentSwitch && !projectAsTitle}
         agents={switchableAgents}
         currentAgentId={activeCustomAgent?.id ?? null}
         onSelectPearl={selectPearlAgent}
@@ -1456,6 +1488,7 @@ export function ChatScreen({
       openAgentSettings,
       openCost,
       openProjectPicker,
+      projectAsTitle,
       projectLabel,
       selectCustomAgent,
       selectPearlAgent,
@@ -1463,7 +1496,11 @@ export function ChatScreen({
     ],
   );
   const chromeActions = useMemo((): readonly ScreenChromeAction[] => {
+    // Custom agents hide thread chrome; project-linked Pearl hides Computer only
+    // (sandbox lives on the project Sources tab).
     const hideThreadActions = !activeChatId || Boolean(activeCustomAgent);
+    const hideComputer =
+      hideThreadActions || Boolean(activeProjectId);
     return [
       {
         label: "Open history",
@@ -1483,7 +1520,7 @@ export function ChatScreen({
       {
         type: "spacer",
         width: 8,
-        hidden: hideThreadActions,
+        hidden: hideComputer,
       },
       {
         label: "Computer",
@@ -1491,12 +1528,13 @@ export function ChatScreen({
         icon: MonitorIcon,
         onPress: toggleComputer,
         selected: computerOpen,
-        hidden: hideThreadActions,
+        hidden: hideComputer,
       },
     ];
   }, [
     activeChatId,
     activeCustomAgent,
+    activeProjectId,
     computerOpen,
     historyOpen,
     openCompose,

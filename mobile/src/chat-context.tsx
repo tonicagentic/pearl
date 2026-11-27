@@ -29,6 +29,7 @@ import {
 } from "./live-reply-text";
 import { pendingMessageLabel, hasPendingAction } from "./message-projection";
 import { setPendingSeedMessage } from "./pending-seed-message";
+import { projectIdFromSendMessage } from "../../lib/chat/project-mentions";
 import type { LiveSpokenDraft, SpokenTurn } from "../../lib/chat/spoken-turns";
 import {
   appendChatEvents,
@@ -855,8 +856,20 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         if (message && activeStoreRef.current === store) {
           setWaitingLabel(waitingLabelForText(message));
         }
-        const projectId =
-          binding.projectId ?? activeProjectIdRef.current ?? null;
+        // Chat project wins; else a single @project chip files this thread.
+        const projectId = projectIdFromSendMessage({
+          chatProjectId: binding.projectId ?? activeProjectIdRef.current ?? null,
+          messageText: message,
+        });
+        if (
+          projectId &&
+          !binding.projectId &&
+          activeStoreRef.current === store &&
+          activeProjectIdRef.current !== projectId
+        ) {
+          activeProjectIdRef.current = projectId;
+          setActiveProjectIdState(projectId);
+        }
         if (!binding.id) {
           // New chat needs an id before eve can start; keep this await.
           const created = await createChat(message || undefined, projectId);

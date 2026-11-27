@@ -10,12 +10,31 @@ import { accessibilityLabel } from "@expo/ui/swift-ui/modifiers";
 import * as Haptics from "expo-haptics";
 import { View } from "react-native";
 
-import { AgentIdentityPill } from "@/components/custom-agents/agent-identity-pill";
-import type { ThreadIdentityMenuProps } from "./thread-identity-menu";
+import {
+  AgentIdentityPill,
+  ProjectIdentityPill,
+} from "@/components/custom-agents/agent-identity-pill";
+import { ProjectMark } from "@/components/project-mark";
+import {
+  PEARL_IDENTITY_ACCENT,
+  PEARL_MARK_HEIGHT_RATIO,
+} from "../../lib/custom-agents/mark";
+import type {
+  ThreadIdentityAgentOption,
+  ThreadIdentityMenuProps,
+} from "./thread-identity-menu";
+
+export {
+  PEARL_IDENTITY_ACCENT,
+  PEARL_MARK_HEIGHT_RATIO,
+  type ThreadIdentityAgentOption,
+  type ThreadIdentityMenuProps,
+};
 
 /**
  * Native menu on the identity pill: switch Pearl ↔ custom agents, then the
  * former ellipsis thread actions (and agent settings when applicable).
+ * Project-linked Pearl threads show the project mark/name instead.
  */
 export function ThreadIdentityMenu({
   name,
@@ -25,6 +44,7 @@ export function ThreadIdentityMenu({
   markBrows,
   markGaze,
   heightRatio,
+  projectAsTitle = false,
   projectLabel,
   hasProject,
   canManageThread,
@@ -40,9 +60,11 @@ export function ThreadIdentityMenu({
   onSelectPearl,
   onSelectAgent,
 }: ThreadIdentityMenuProps) {
-  const label = name.trim() || "Pearl";
+  const label = projectAsTitle
+    ? projectLabel?.trim() || name.trim() || "Project"
+    : name.trim() || "Pearl";
   const showSwitch = Boolean(
-    allowAgentSwitch && onSelectPearl && onSelectAgent,
+    !projectAsTitle && allowAgentSwitch && onSelectPearl && onSelectAgent,
   );
   return (
     <Host matchContents style={{ backgroundColor: "transparent" }}>
@@ -56,16 +78,23 @@ export function ThreadIdentityMenu({
                 ).catch(() => {});
               }}
             >
-              <AgentIdentityPill
-                name={label}
-                accent={accent}
-                markShape={markShape}
-                markTalk={markTalk}
-                markBrows={markBrows}
-                markGaze={markGaze}
-                heightRatio={heightRatio}
-                motion="idle"
-              />
+              {projectAsTitle ? (
+                <ProjectIdentityPill
+                  name={label}
+                  mark={<ProjectMark name={label} size="sm" />}
+                />
+              ) : (
+                <AgentIdentityPill
+                  name={label}
+                  accent={accent}
+                  markShape={markShape}
+                  markTalk={markTalk}
+                  markBrows={markBrows}
+                  markGaze={markGaze}
+                  heightRatio={heightRatio}
+                  motion="idle"
+                />
+              )}
             </View>
           </RNHostView>
         }
@@ -85,13 +114,13 @@ export function ThreadIdentityMenu({
                 systemImage={
                   agent.id === currentAgentId ? "checkmark" : undefined
                 }
-                onPress={() => onSelectAgent(agent)}
+                onPress={() => onSelectAgent?.(agent)}
               />
             ))}
           </Section>
         ) : null}
         {showSwitch ? <Divider /> : null}
-        {showAgentSettings && onAgentSettings ? (
+        {!projectAsTitle && showAgentSettings && onAgentSettings ? (
           <Button
             label="Agent settings"
             systemImage="gearshape"

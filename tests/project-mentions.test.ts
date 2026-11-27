@@ -7,6 +7,7 @@ import {
   extractProjectMentions,
   insertProjectMention,
   plainTextFromDirectives,
+  projectIdFromSendMessage,
   resolveTurnProjectId,
   serializeDraftParts,
   serializeProjectMention,
@@ -124,6 +125,45 @@ test("resolveTurnProjectId: chat project wins; single mention fills; else null",
     resolveTurnProjectId({
       chatProjectId: null,
       verifiedMentionIds: [],
+    }),
+    null,
+  );
+});
+
+test("projectIdFromSendMessage: parses message text with the same resolve rule", () => {
+  assert.equal(
+    projectIdFromSendMessage({
+      chatProjectId: "chat_p",
+      messageText: "Ask :project[Other]{name=m1}",
+    }),
+    "chat_p",
+  );
+  assert.equal(
+    projectIdFromSendMessage({
+      chatProjectId: null,
+      messageText: "Ask :project[Personal]{name=p1}",
+    }),
+    "p1",
+  );
+  assert.equal(
+    projectIdFromSendMessage({
+      chatProjectId: null,
+      messageText: ":project[Personal]{name=p1}",
+    }),
+    "p1",
+  );
+  assert.equal(
+    projectIdFromSendMessage({
+      chatProjectId: null,
+      messageText:
+        "Compare :project[A]{name=a1} and :project[B]{name=b1}",
+    }),
+    null,
+  );
+  assert.equal(
+    projectIdFromSendMessage({
+      chatProjectId: null,
+      messageText: "No mention here",
     }),
     null,
   );

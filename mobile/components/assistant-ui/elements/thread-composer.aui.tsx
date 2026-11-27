@@ -64,6 +64,7 @@ import {
   type ComposerDraftPart,
 } from "../../../../lib/chat/project-mentions";
 import { cn } from "@/lib/utils";
+import { useActiveChat } from "@/src/chat-context";
 import {
   focusComposerInput,
   registerComposerInputFocus,
@@ -244,11 +245,38 @@ export const ComposerDock: FC<ComposerDockProps> = ({
   );
 };
 
+const COMPOSER_PLACEHOLDER_NAME_MAX = 28;
+
+function composerPlaceholderForProject(name: string | null | undefined): string {
+  const trimmed = name?.trim();
+  if (!trimmed) return "Ask anything";
+  const label =
+    trimmed.length > COMPOSER_PLACEHOLDER_NAME_MAX
+      ? `${trimmed.slice(0, COMPOSER_PLACEHOLDER_NAME_MAX - 1)}…`
+      : trimmed;
+  return `Message ${label}`;
+}
+
 // The placeholder color is a class to prop mapping that reads the CSSOM, so it applies from the first render after hydration.
 const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
   const hydrated = useHydrated();
   const aui = useAui();
   const storeText = useAuiState((s) => s.composer.text);
+  const { activeProjectId } = useActiveChat();
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: fetchProjects,
+    enabled: Boolean(activeProjectId),
+    staleTime: 30_000,
+  });
+  const placeholder = useMemo(() => {
+    if (!activeProjectId) return "Ask anything";
+    const name = projectsQuery.data?.find(
+      (project) => project.id === activeProjectId,
+    )?.name;
+    // Keep “Message …” once a project is attached, even before the name loads.
+    return composerPlaceholderForProject(name ?? "project");
+  }, [activeProjectId, projectsQuery.data]);
   const expandedHeight = useContext(ComposerInputHeightContext);
   const keyboardHeight = useContext(KeyboardHeightContext);
   const keyboardSpan = useContext(KeyboardSpanContext);
@@ -477,7 +505,7 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
       className={inputClassName}
       multiline
       textAlignVertical="top"
-      accessibilityLabel="Message input"
+      accessibilityLabel={placeholder}
       caretHidden={hideCaret}
       style={[
         hasChips ? undefined : iosPadStyle,
@@ -529,7 +557,7 @@ const DefaultComposerInput: FC<{ autoFocus?: boolean }> = ({ autoFocus }) => {
                 },
               ]}
             >
-              Ask anything
+              {placeholder}
             </Animated.Text>
           ) : null}
         </>

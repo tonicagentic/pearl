@@ -26,6 +26,8 @@ export type ProjectDto = {
   readonly priority: ProjectPriority;
   readonly startDate: string | null;
   readonly targetDate: string | null;
+  /** Shared Vercel Drive for project sandboxes; null until first provision. */
+  readonly driveName: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 };

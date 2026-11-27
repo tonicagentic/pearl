@@ -12,6 +12,8 @@ export type SerializedProject = {
   readonly priority: ProjectPriority;
   readonly startDate: string | null;
   readonly targetDate: string | null;
+  /** Shared Vercel Drive for project sandboxes; null until first provision. */
+  readonly driveName: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
@@ -25,6 +27,7 @@ export function serializeProject(row: Project): SerializedProject {
     priority: row.priority,
     startDate: row.startDate,
     targetDate: row.targetDate,
+    driveName: row.driveName ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

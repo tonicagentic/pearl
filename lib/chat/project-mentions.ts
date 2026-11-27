@@ -226,3 +226,19 @@ export function resolveTurnProjectId(input: {
   }
   return null;
 }
+
+/**
+ * Client send helper: keep an existing chat project, else take a single
+ * `:project[…]` mention from the outgoing message text.
+ */
+export function projectIdFromSendMessage(input: {
+  readonly chatProjectId: string | null;
+  readonly messageText: string;
+}): string | null {
+  return resolveTurnProjectId({
+    chatProjectId: input.chatProjectId,
+    verifiedMentionIds: extractProjectMentions(input.messageText).map(
+      (mention) => mention.id,
+    ),
+  });
+}

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { AgentMark } from "@/components/custom-agents/agent-mark";
@@ -14,6 +15,9 @@ import {
   type AgentMarkShape,
   type AgentMarkTalk,
 } from "../../../lib/custom-agents/mark";
+
+const PILL_CHROME =
+  "h-8 max-w-[11rem] flex-row items-center gap-1.5 rounded-full border border-border bg-muted/50 px-1.5 pr-2.5";
 
 /** Mobile Grok-style attachment pill for Pearl / custom-agent threads. */
 export function AgentIdentityPill({
@@ -59,10 +63,8 @@ export function AgentIdentityPill({
     </>
   );
   // h-8 fits the taller pearl silhouette (16 → ~18 + flap room).
-  const chrome =
-    "h-8 max-w-[11rem] flex-row items-center gap-1.5 rounded-full border border-border bg-muted/50 px-1.5 pr-2.5";
   if (!onPress) {
-    return <View className={chrome}>{body}</View>;
+    return <View className={PILL_CHROME}>{body}</View>;
   }
   return (
     <Pressable
@@ -70,7 +72,45 @@ export function AgentIdentityPill({
       accessibilityLabel={`${label} actions`}
       hitSlop={6}
       onPress={onPress}
-      className={`${chrome} active:opacity-80`}
+      className={`${PILL_CHROME} active:opacity-80`}
+    >
+      {body}
+    </Pressable>
+  );
+}
+
+/** Same chrome as the agent pill, with a project mark instead of Pearl. */
+export function ProjectIdentityPill({
+  name,
+  onPress,
+  mark,
+}: {
+  readonly name: string;
+  readonly onPress?: () => void;
+  readonly mark: ReactNode;
+}) {
+  const label = name.trim() || "Project";
+  const body = (
+    <>
+      {mark}
+      <Text
+        numberOfLines={1}
+        className="shrink text-xs font-medium text-foreground"
+      >
+        {label}
+      </Text>
+    </>
+  );
+  if (!onPress) {
+    return <View className={PILL_CHROME}>{body}</View>;
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label} actions`}
+      hitSlop={6}
+      onPress={onPress}
+      className={`${PILL_CHROME} active:opacity-80`}
     >
       {body}
     </Pressable>

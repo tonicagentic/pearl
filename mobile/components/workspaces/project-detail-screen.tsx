@@ -30,6 +30,10 @@ import {
   ScreenChrome,
   type ScreenChromeAction,
 } from "@/components/navigation/screen-chrome";
+import {
+  DRAWER_EDGE,
+  DrawerChatRow,
+} from "@/components/navigation/drawer-rows";
 import { ProjectMark } from "@/components/project-mark";
 import { CreateTaskModal } from "@/components/tasks/create-task-modal";
 import { TaskDateField } from "@/components/tasks/task-date-field";
@@ -41,7 +45,10 @@ import { listArtifacts } from "@/src/artifacts-client";
 import { usePearlDrawerOptional } from "@/components/navigation/drawer-context";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
-import { attachChatToProject } from "@/src/chats-client";
+import {
+  attachChatToProject,
+  type ChatListItem,
+} from "@/src/chats-client";
 import { updateGoalRequest } from "@/src/goals-client";
 import { KeyboardStickyView } from "@/src/keyboard-controller";
 import {
@@ -156,8 +163,13 @@ export function ProjectDetailScreen({
   readonly entryFrom?: ProjectEntryFrom;
 }) {
   const queryClient = useQueryClient();
-  const { chats, selectChat, setActiveProjectId, startNewChatWithMessage } =
-    useChats();
+  const {
+    chats,
+    activeChatId,
+    selectChat,
+    setActiveProjectId,
+    startNewChatWithMessage,
+  } = useChats();
   const { isAnonymous } = useAuth();
   const drawer = usePearlDrawerOptional();
   const [workspace, setWorkspace] = useState<ProjectWorkspaceDto | null>(null);
@@ -181,6 +193,38 @@ export function ProjectDetailScreen({
   const backgroundColor = useCSSVariable("--color-background") as
     | string
     | undefined;
+  const borderColor = useCSSVariable("--color-border") as string | undefined;
+  const mutedDot = borderColor ?? "#3A3A3C";
+
+  /**
+   * Drawer-style rows. Membership comes from workspace.chats (already excludes
+   * custom-agent threads); enrich with live presence from the global list.
+   */
+  const projectChatRows = useMemo((): readonly ChatListItem[] => {
+    const liveById = new Map(
+      chats
+        .filter((chat) => chat.projectId === projectId)
+        .map((chat) => [chat.id, chat] as const),
+    );
+    const rows: ChatListItem[] = [];
+    for (const row of workspace?.chats ?? []) {
+      const live = liveById.get(row.id);
+      rows.push(
+        live ?? {
+          id: row.id,
+          title: row.title || "Untitled",
+          updatedAt: row.updatedAt,
+          projectId,
+          waitingForInput: false,
+          presence: "idle",
+        },
+      );
+    }
+    return rows.sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+  }, [chats, projectId, workspace?.chats]);
 
   const applyWorkspace = useCallback(
     (data: ProjectWorkspaceDto) => {
@@ -897,7 +941,6 @@ export function ProjectDetailScreen({
   const notes = workspace?.notes ?? [];
   const files = workspace?.artifacts ?? [];
   const pins = workspace?.pins ?? [];
-  const projectChats = workspace?.chats ?? [];
   const links = workspace?.links ?? [];
   const projectStatus = workspace?.project.status ?? "backlog";
   const projectPriority = workspace?.project.priority ?? "none";
@@ -990,34 +1033,37 @@ export function ProjectDetailScreen({
         <ScrollView
           className="flex-1"
           contentContainerClassName={cn(
-            "px-5 gap-3",
-            tab === "chats" ? undefined : "pb-10",
+            "gap-3",
+            tab === "chats" ? undefined : "px-5 pb-10",
           )}
           contentContainerStyle={{
             paddingTop: 12,
             paddingBottom: tab === "chats" ? MESSAGE_DOCK_CLEARANCE : undefined,
+            paddingHorizontal: tab === "chats" ? DRAWER_EDGE : undefined,
           }}
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
         >
           {tab === "chats" ? (
-            <View className="overflow-hidden rounded-xl border border-border/40">
-              {projectChats.length === 0 ? (
-                <EmptyRow text="No chats yet." />
-              ) : (
-                projectChats.map((chat) => (
-                  <LinkRow
-                    key={chat.id}
-                    onPress={() => {
-                      setActiveProjectId(projectId);
-                      revealChatThread();
-                      void selectChat(chat.id);
-                    }}
-                    title={chat.title || "Untitled"}
-                  />
-                ))
-              )}
-            </View>
+            projectChatRows.length === 0 ? (
+              <Text className="px-3 py-4 text-sm text-muted-foreground">
+                No chats yet.
+              </Text>
+            ) : (
+              projectChatRows.map((chat) => (
+                <DrawerChatRow
+                  key={chat.id}
+                  chat={chat}
+                  mutedDot={mutedDot}
+                  selected={activeChatId === chat.id}
+                  onPress={() => {
+                    setActiveProjectId(projectId);
+                    revealChatThread();
+                    void selectChat(chat.id);
+                  }}
+                />
+              ))
+            )
           ) : null}
 
           {tab === "sources" ? (
@@ -1037,6 +1083,32 @@ export function ProjectDetailScreen({
                   textAlignVertical="top"
                   value={instructions}
                 />
+              </View>
+
+              <View className="gap-2">
+                <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Sandbox
+                </Text>
+                <View className="overflow-hidden rounded-xl border border-border/40">
+                  {workspace?.project.driveName ? (
+                    <View className="min-h-11 justify-center px-3 py-3">
+                      <Text
+                        className="text-sm font-medium text-foreground"
+                        numberOfLines={1}
+                      >
+                        Project workspace
+                      </Text>
+                      <Text
+                        className="mt-0.5 text-xs text-muted-foreground"
+                        numberOfLines={2}
+                      >
+                        Shared across every chat in this project
+                      </Text>
+                    </View>
+                  ) : (
+                    <EmptyRow text="Shared files appear when Pearl uses this project’s workspace" />
+                  )}
+                </View>
               </View>
 
               <View className="gap-2">
@@ -1139,44 +1211,6 @@ export function ProjectDetailScreen({
                   )}
                 </View>
               </View>
-
-              <SourceSection
-                title="Agents"
-                onAdd={() => {
-                  router.push(
-                    `/agent-directory?projectId=${encodeURIComponent(projectId)}` as never,
-                  );
-                }}
-                addLabel="Add"
-              >
-                {(workspace?.agents ?? []).length === 0 ? (
-                  <EmptyRow text="No agents yet." />
-                ) : (
-                  (workspace?.agents ?? []).map((agent) => (
-                    <LinkRow
-                      key={agent.id}
-                      onPress={() => {
-                        void selectChat(agent.chatId).then((ok) => {
-                          if (ok) {
-                            setActiveProjectId(projectId);
-                            revealChatThread();
-                          }
-                        });
-                      }}
-                      subtitle={
-                        agent.instructions.trim()
-                          ? agent.instructions.trim()
-                          : "No instructions yet"
-                      }
-                      title={
-                        agent.role === "manager"
-                          ? `${agent.name} · Manager`
-                          : agent.name
-                      }
-                    />
-                  ))
-                )}
-              </SourceSection>
 
               <SourceSection
                 title="Tasks"
