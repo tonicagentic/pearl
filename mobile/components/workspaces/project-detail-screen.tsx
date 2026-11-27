@@ -11,6 +11,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   TextInput,
   View,
 } from "react-native";
@@ -21,6 +22,7 @@ import {
   MoreHorizontalIcon,
   PlusIcon,
 } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCSSVariable } from "uniwind";
 
 import { revealChatThread } from "@/components/chat-history-push";
@@ -39,8 +41,13 @@ import { listArtifacts } from "@/src/artifacts-client";
 import { usePearlDrawerOptional } from "@/components/navigation/drawer-context";
 import { useAuth } from "@/src/auth";
 import { useChats } from "@/src/chat-context";
-import { attachChatToProject, createChat } from "@/src/chats-client";
+import { attachChatToProject } from "@/src/chats-client";
 import { updateGoalRequest } from "@/src/goals-client";
+import { KeyboardStickyView } from "@/src/keyboard-controller";
+import {
+  usePearlCardBackground,
+  usePearlHairlineBorder,
+} from "@/src/navigation-theme";
 import { startGoalChat } from "@/src/start-goal-chat";
 import {
   deleteIssueRequest,
@@ -77,25 +84,19 @@ import { fetchWorkbenchPins } from "@/src/workbench-client";
 
 export type { ProjectEntryFrom };
 
-type ProjectTab =
-  | "overview"
-  | "agents"
-  | "tasks"
-  | "goals"
-  | "notes"
-  | "files"
-  | "links";
+type ProjectTab = "chats" | "sources";
 
-const PROJECT_TABS: readonly { readonly key: ProjectTab; readonly label: string }[] =
-  [
-    { key: "overview", label: "Overview" },
-    { key: "agents", label: "Agents" },
-    { key: "tasks", label: "Tasks" },
-    { key: "goals", label: "Goals" },
-    { key: "notes", label: "Notes" },
-    { key: "files", label: "Files" },
-    { key: "links", label: "Links" },
-  ];
+const PROJECT_TABS: readonly {
+  readonly key: ProjectTab;
+  readonly label: string;
+}[] = [
+  { key: "chats", label: "Chats" },
+  { key: "sources", label: "Sources" },
+];
+
+const MESSAGE_DOCK_HEIGHT = 52;
+/** List padding so the last chat row clears the floating Message dock. */
+const MESSAGE_DOCK_CLEARANCE = MESSAGE_DOCK_HEIGHT + 28;
 
 const STATUS_OPTIONS: readonly {
   readonly value: ProjectStatus;
@@ -145,7 +146,7 @@ function formatDatePill(start: string | null, target: string | null): string {
   return `${startText} → ${targetText}`;
 }
 
-/** Project hub: tasks, goals, notes, files; demoted repos/chats links. */
+/** Project hub: chats first, sources for instructions and linked work. */
 export function ProjectDetailScreen({
   projectId,
   entryFrom,
@@ -166,7 +167,8 @@ export function ProjectDetailScreen({
   const [saving, setSaving] = useState(false);
   const [busyIssueId, setBusyIssueId] = useState<string | null>(null);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
-  const [tab, setTab] = useState<ProjectTab>("overview");
+  const [tab, setTab] = useState<ProjectTab>("chats");
+  const [draftMessage, setDraftMessage] = useState("");
   const [datesOpen, setDatesOpen] = useState(false);
   const [draftStartDate, setDraftStartDate] = useState("");
   const [draftTargetDate, setDraftTargetDate] = useState("");
@@ -273,20 +275,25 @@ export function ProjectDetailScreen({
       .finally(() => setSaving(false));
   }, [dirty, instructions, invalidateProject, name, projectId, saving, workspace]);
 
-  const createProjectChat = useCallback(() => {
-    setError(null);
-    void createChat(undefined, projectId)
-      .then(async (chat) => {
-        setActiveProjectId(projectId);
-        revealChatThread();
-        await selectChat(chat.id);
-      })
-      .catch((cause) => {
-        setError(
-          cause instanceof Error ? cause.message : "Could not start chat.",
-        );
-      });
-  }, [projectId, selectChat, setActiveProjectId]);
+  const sendProjectMessage = useCallback(() => {
+    const text = draftMessage.trim();
+    if (!text) return;
+    if (isAnonymous) {
+      router.push("/sign-in");
+      return;
+    }
+    setDraftMessage("");
+    // newChat clears the attached project, so re-attach after seeding.
+    startNewChatWithMessage(text);
+    setActiveProjectId(projectId);
+    revealChatThread();
+  }, [
+    draftMessage,
+    isAnonymous,
+    projectId,
+    setActiveProjectId,
+    startNewChatWithMessage,
+  ]);
 
   /** Drawer entry uses the menu control; stack entries use system back. */
   const chromeLeading = projectChromeLeading(entryFrom);
@@ -558,21 +565,6 @@ export function ProjectDetailScreen({
     ]);
   }, [confirmDelete, name]);
 
-  const openLinksMenu = useCallback(() => {
-    Alert.alert("Links", undefined, [
-      { text: "New chat", onPress: createProjectChat },
-      { text: "Attach chat", onPress: attachExistingChat },
-      { text: "Link Workbench pin", onPress: linkExistingPin },
-      { text: "Add repo by owner/name", onPress: addRepoByName },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  }, [
-    addRepoByName,
-    attachExistingChat,
-    createProjectChat,
-    linkExistingPin,
-  ]);
-
   const toggleGoal = useCallback(
     (goal: ProjectGoalDto) => {
       const next = goal.status === "done" ? "active" : "done";
@@ -681,14 +673,6 @@ export function ProjectDetailScreen({
       },
     ];
   }, [error, openOverflow, openPlusMenu, workspace]);
-
-  const openFilesMenu = useCallback(() => {
-    Alert.alert("Files", undefined, [
-      { text: "New markdown file", onPress: createFile },
-      { text: "Link from Library", onPress: linkLibraryArtifact },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  }, [createFile, linkLibraryArtifact]);
 
   const patchProjectFields = useCallback(
     (
@@ -883,10 +867,12 @@ export function ProjectDetailScreen({
           ]);
         },
       },
+      { text: "Attach chat", onPress: attachExistingChat },
       { text: "Cancel", style: "cancel" },
     ]);
   }, [
     addRepoByName,
+    attachExistingChat,
     createFile,
     linkExistingPin,
     linkLibraryArtifact,
@@ -920,6 +906,13 @@ export function ProjectDetailScreen({
   const hasResources =
     files.length > 0 || links.length > 0 || pins.length > 0;
 
+  const projectLabel = name.trim() || "project";
+  const messagePlaceholder = `Message ${
+    projectLabel.length > 28
+      ? `${projectLabel.slice(0, 27)}…`
+      : projectLabel
+  }`;
+
   return (
     <ScreenChrome
       title={workspace?.project.name || "Project"}
@@ -949,12 +942,22 @@ export function ProjectDetailScreen({
             />
           </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            className="max-h-10 grow-0"
-            contentContainerClassName="gap-1.5 pb-1"
-          >
+          <View className="flex-row flex-wrap gap-1.5">
+            <PropertyPill
+              label={statusLabel(projectStatus)}
+              onPress={pickStatus}
+            />
+            <PropertyPill
+              label={priorityLabel(projectPriority)}
+              onPress={pickPriority}
+            />
+            <PropertyPill
+              label={formatDatePill(projectStartDate, projectTargetDate)}
+              onPress={openDatesSheet}
+            />
+          </View>
+
+          <View className="flex-row gap-1.5 pb-1">
             {PROJECT_TABS.map(({ key, label }) => {
               const selected = tab === key;
               return (
@@ -981,86 +984,59 @@ export function ProjectDetailScreen({
                 </Pressable>
               );
             })}
-          </ScrollView>
+          </View>
         </View>
 
         <ScrollView
           className="flex-1"
-          contentContainerClassName="px-5 pb-28 gap-3"
-          contentContainerStyle={{ paddingTop: 12 }}
+          contentContainerClassName={cn(
+            "px-5 gap-3",
+            tab === "chats" ? undefined : "pb-10",
+          )}
+          contentContainerStyle={{
+            paddingTop: 12,
+            paddingBottom: tab === "chats" ? MESSAGE_DOCK_CLEARANCE : undefined,
+          }}
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
         >
-          {tab === "agents" ? (
-            <View className="gap-3">
-              {(workspace?.agents ?? []).length === 0 ? (
-                <EmptyRow text="No agents yet. Create a project to get a manager." />
+          {tab === "chats" ? (
+            <View className="overflow-hidden rounded-xl border border-border/40">
+              {projectChats.length === 0 ? (
+                <EmptyRow text="No chats yet." />
               ) : (
-                (workspace?.agents ?? []).map((agent) => (
-                  <Pressable
-                    key={agent.id}
-                    accessibilityRole="button"
-                    className="rounded-xl border border-border/40 bg-card px-3 py-3"
+                projectChats.map((chat) => (
+                  <LinkRow
+                    key={chat.id}
                     onPress={() => {
-                      void selectChat(agent.chatId).then((ok) => {
-                        if (ok) {
-                          setActiveProjectId(projectId);
-                          revealChatThread();
-                        }
-                      });
+                      setActiveProjectId(projectId);
+                      revealChatThread();
+                      void selectChat(chat.id);
                     }}
-                  >
-                    <Text className="text-sm font-medium">
-                      {agent.name}
-                      {agent.role === "manager" ? " · Manager" : ""}
-                    </Text>
-                    <Text
-                      className="mt-1 text-xs text-muted-foreground"
-                      numberOfLines={2}
-                    >
-                      {agent.instructions.trim()
-                        ? agent.instructions.trim()
-                        : "No instructions yet"}
-                    </Text>
-                  </Pressable>
+                    title={chat.title || "Untitled"}
+                  />
                 ))
               )}
-              <Pressable
-                accessibilityRole="button"
-                className="items-center rounded-xl border border-dashed border-border px-3 py-3"
-                onPress={() => {
-                  router.push(
-                    `/agent-directory?projectId=${encodeURIComponent(projectId)}` as never,
-                  );
-                }}
-              >
-                <Text className="text-sm text-muted-foreground">
-                  Add from templates
-                </Text>
-              </Pressable>
             </View>
           ) : null}
 
-          {tab === "overview" ? (
+          {tab === "sources" ? (
             <View className="gap-6">
               <View className="gap-2">
                 <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Properties
+                  Instructions
                 </Text>
-                <View className="flex-row flex-wrap gap-1.5">
-                  <PropertyPill
-                    label={statusLabel(projectStatus)}
-                    onPress={pickStatus}
-                  />
-                  <PropertyPill
-                    label={priorityLabel(projectPriority)}
-                    onPress={pickPriority}
-                  />
-                  <PropertyPill
-                    label={formatDatePill(projectStartDate, projectTargetDate)}
-                    onPress={openDatesSheet}
-                  />
-                </View>
+                <TextInput
+                  className="min-h-28 text-sm text-foreground"
+                  multiline
+                  onBlur={saveIfDirty}
+                  onChangeText={setInstructions}
+                  placeholder="Instructions for every chat in this project"
+                  placeholderTextColor={placeholderColor}
+                  style={{ color: foregroundColor }}
+                  textAlignVertical="top"
+                  value={instructions}
+                />
               </View>
 
               <View className="gap-2">
@@ -1164,218 +1140,127 @@ export function ProjectDetailScreen({
                 </View>
               </View>
 
-              <View className="gap-2">
-                <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Description
-                </Text>
-                <TextInput
-                  className="min-h-28 text-sm text-foreground"
-                  multiline
-                  onBlur={saveIfDirty}
-                  onChangeText={setInstructions}
-                  placeholder="Instructions for every chat in this project"
-                  placeholderTextColor={placeholderColor}
-                  style={{ color: foregroundColor }}
-                  textAlignVertical="top"
-                  value={instructions}
-                />
-              </View>
-            </View>
-          ) : null}
+              <SourceSection
+                title="Agents"
+                onAdd={() => {
+                  router.push(
+                    `/agent-directory?projectId=${encodeURIComponent(projectId)}` as never,
+                  );
+                }}
+                addLabel="Add"
+              >
+                {(workspace?.agents ?? []).length === 0 ? (
+                  <EmptyRow text="No agents yet." />
+                ) : (
+                  (workspace?.agents ?? []).map((agent) => (
+                    <LinkRow
+                      key={agent.id}
+                      onPress={() => {
+                        void selectChat(agent.chatId).then((ok) => {
+                          if (ok) {
+                            setActiveProjectId(projectId);
+                            revealChatThread();
+                          }
+                        });
+                      }}
+                      subtitle={
+                        agent.instructions.trim()
+                          ? agent.instructions.trim()
+                          : "No instructions yet"
+                      }
+                      title={
+                        agent.role === "manager"
+                          ? `${agent.name} · Manager`
+                          : agent.name
+                      }
+                    />
+                  ))
+                )}
+              </SourceSection>
 
-          {tab === "tasks" ? (
-            <ListPanel onAdd={() => setCreateTaskOpen(true)}>
-              {openIssues.length === 0 ? (
-                <EmptyRow text="No open tasks." />
-              ) : (
-                openIssues.map((issue) => (
-                  <IssueRow
-                    busy={busyIssueId === issue.id}
-                    issue={issue}
-                    key={issue.id}
-                    onDelete={() => deleteIssue(issue)}
-                    onResolve={(resolved) => void resolveIssue(issue, resolved)}
-                  />
-                ))
-              )}
-            </ListPanel>
-          ) : null}
+              <SourceSection
+                title="Tasks"
+                onAdd={() => setCreateTaskOpen(true)}
+              >
+                {openIssues.length === 0 ? (
+                  <EmptyRow text="No open tasks." />
+                ) : (
+                  openIssues.map((issue) => (
+                    <IssueRow
+                      busy={busyIssueId === issue.id}
+                      issue={issue}
+                      key={issue.id}
+                      onDelete={() => deleteIssue(issue)}
+                      onResolve={(resolved) =>
+                        void resolveIssue(issue, resolved)
+                      }
+                    />
+                  ))
+                )}
+              </SourceSection>
 
-          {tab === "goals" ? (
-            <ListPanel onAdd={promptNewGoal}>
-              {goals.length === 0 ? (
-                <EmptyRow text="No goals yet." />
-              ) : (
-                goals.map((goal) => (
-                  <GoalRow
-                    goal={goal}
-                    key={goal.id}
-                    onDelete={() => {
-                      Alert.alert("Delete goal?", goal.title, [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Delete",
-                          style: "destructive",
-                          onPress: () => {
-                            void deleteProjectGoalRequest(projectId, goal.id)
-                              .then(() => reload())
-                              .catch((cause) => {
-                                setError(
-                                  cause instanceof Error
-                                    ? cause.message
-                                    : "Could not delete goal.",
-                                );
-                              });
-                          },
-                        },
-                      ]);
-                    }}
-                    onToggle={() => toggleGoal(goal)}
-                  />
-                ))
-              )}
-            </ListPanel>
-          ) : null}
-
-          {tab === "notes" ? (
-            <ListPanel onAdd={createNote}>
-              {notes.length === 0 ? (
-                <EmptyRow text="No notes yet." />
-              ) : (
-                notes.map((note) => (
-                  <LinkRow
-                    key={note.id}
-                    onPress={() =>
-                      router.push(`/notes/${encodeURIComponent(note.id)}`)
-                    }
-                    subtitle={new Date(note.updatedAt).toLocaleDateString()}
-                    title={note.title}
-                  />
-                ))
-              )}
-            </ListPanel>
-          ) : null}
-
-          {tab === "files" ? (
-            <ListPanel onAdd={openFilesMenu}>
-              {files.length === 0 ? (
-                <EmptyRow text="No files yet." />
-              ) : (
-                files.map((file) => (
-                  <LinkRow
-                    key={file.id}
-                    onLongPress={() => {
-                      Alert.alert("Unlink file?", file.title, [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Unlink",
-                          style: "destructive",
-                          onPress: () => {
-                            void unlinkProjectArtifactRequest(projectId, file.id)
-                              .then(() => reload())
-                              .catch((cause) => {
-                                setError(
-                                  cause instanceof Error
-                                    ? cause.message
-                                    : "Could not unlink.",
-                                );
-                              });
-                          },
-                        },
-                      ]);
-                    }}
-                    onPress={() =>
-                      router.push(
-                        `/workspaces/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(file.id)}`,
-                      )
-                    }
-                    subtitle={file.pathname.split("/").pop() ?? file.pathname}
-                    title={file.title}
-                  />
-                ))
-              )}
-            </ListPanel>
-          ) : null}
-
-          {tab === "links" ? (
-            <View className="gap-3">
-              <View>
-                <View className="mb-1 flex-row items-center justify-between">
-                  <Text className="text-sm font-medium text-foreground">
-                    Repos
-                  </Text>
-                  <Pressable onPress={openLinksMenu}>
-                    <Text className="text-sm text-muted-foreground">Manage</Text>
-                  </Pressable>
-                </View>
-                <View className="overflow-hidden rounded-xl border border-border/40">
-                  {pins.length === 0 ? (
-                    <EmptyRow text="No repos linked." />
-                  ) : (
-                    pins.map((pin) => (
-                      <LinkRow
-                        key={pin.id}
-                        onLongPress={() => {
-                          Alert.alert("Unlink repo?", pin.fullName, [
-                            { text: "Cancel", style: "cancel" },
-                            {
-                              text: "Unlink",
-                              style: "destructive",
-                              onPress: () => {
-                                void unlinkProjectPinRequest(projectId, pin.id)
-                                  .then(() => reload())
-                                  .catch((cause) => {
-                                    setError(
-                                      cause instanceof Error
-                                        ? cause.message
-                                        : "Could not unlink.",
-                                    );
-                                  });
-                              },
+              <SourceSection title="Goals" onAdd={promptNewGoal}>
+                {goals.length === 0 ? (
+                  <EmptyRow text="No goals yet." />
+                ) : (
+                  goals.map((goal) => (
+                    <GoalRow
+                      goal={goal}
+                      key={goal.id}
+                      onDelete={() => {
+                        Alert.alert("Delete goal?", goal.title, [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: () => {
+                              void deleteProjectGoalRequest(projectId, goal.id)
+                                .then(() => reload())
+                                .catch((cause) => {
+                                  setError(
+                                    cause instanceof Error
+                                      ? cause.message
+                                      : "Could not delete goal.",
+                                  );
+                                });
                             },
-                          ]);
-                        }}
-                        onPress={() =>
-                          router.push(
-                            `/workbench/${encodeURIComponent(pin.id)}`,
-                          )
-                        }
-                        title={pin.fullName}
-                      />
-                    ))
-                  )}
-                </View>
-              </View>
-              <View>
-                <View className="mb-1 flex-row items-center justify-between">
-                  <Text className="text-sm font-medium text-foreground">
-                    Chats
-                  </Text>
-                  <Pressable onPress={createProjectChat}>
-                    <Text className="text-sm text-muted-foreground">New</Text>
-                  </Pressable>
-                </View>
-                <View className="overflow-hidden rounded-xl border border-border/40">
-                  {projectChats.length === 0 ? (
-                    <EmptyRow text="No chats yet." />
-                  ) : (
-                    projectChats.map((chat) => (
-                      <LinkRow
-                        key={chat.id}
-                        onPress={() => {
-                          setActiveProjectId(projectId);
-                          revealChatThread();
-                          void selectChat(chat.id);
-                        }}
-                        title={chat.title || "Untitled"}
-                      />
-                    ))
-                  )}
-                </View>
-              </View>
+                          },
+                        ]);
+                      }}
+                      onToggle={() => toggleGoal(goal)}
+                    />
+                  ))
+                )}
+              </SourceSection>
+
+              <SourceSection title="Notes" onAdd={createNote}>
+                {notes.length === 0 ? (
+                  <EmptyRow text="No notes yet." />
+                ) : (
+                  notes.map((note) => (
+                    <LinkRow
+                      key={note.id}
+                      onPress={() =>
+                        router.push(`/notes/${encodeURIComponent(note.id)}`)
+                      }
+                      subtitle={new Date(note.updatedAt).toLocaleDateString()}
+                      title={note.title}
+                    />
+                  ))
+                )}
+              </SourceSection>
             </View>
           ) : null}
         </ScrollView>
+
+        {tab === "chats" ? (
+          <ProjectMessageDock
+            onChangeText={setDraftMessage}
+            onSubmit={sendProjectMessage}
+            placeholder={messagePlaceholder}
+            value={draftMessage}
+          />
+        ) : null}
       </View>
 
       <CreateTaskModal
@@ -1458,18 +1343,25 @@ function PropertyPill({
   );
 }
 
-function ListPanel({
+function SourceSection({
+  title,
   onAdd,
+  addLabel = "Add",
   children,
 }: {
+  readonly title: string;
   readonly onAdd: () => void;
+  readonly addLabel?: string;
   readonly children: ReactNode;
 }) {
   return (
-    <View className="gap-1">
-      <View className="mb-1 flex-row items-center justify-end">
+    <View className="gap-2">
+      <View className="flex-row items-center justify-between">
+        <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {title}
+        </Text>
         <Pressable onPress={onAdd}>
-          <Text className="text-sm text-muted-foreground">Add</Text>
+          <Text className="text-sm text-muted-foreground">{addLabel}</Text>
         </Pressable>
       </View>
       <View className="overflow-hidden rounded-xl border border-border/40">
@@ -1478,6 +1370,85 @@ function ListPanel({
     </View>
   );
 }
+
+/** One-line “Message {project}” dock; submit opens a seeded project chat. */
+function ProjectMessageDock({
+  value,
+  onChangeText,
+  onSubmit,
+  placeholder,
+}: {
+  readonly value: string;
+  readonly onChangeText: (text: string) => void;
+  readonly onSubmit: () => void;
+  readonly placeholder: string;
+}) {
+  const insets = useSafeAreaInsets();
+  const placeholderColor = useCSSVariable("--color-muted-foreground") as
+    | string
+    | undefined;
+  const foregroundColor = useCSSVariable("--color-foreground") as
+    | string
+    | undefined;
+  const cardColor = usePearlCardBackground();
+  const hairline = usePearlHairlineBorder();
+
+  return (
+    <KeyboardStickyView
+      offset={{ closed: 0, opened: 0 }}
+      style={[
+        messageDockStyles.sticky,
+        { paddingBottom: Math.max(insets.bottom, 12) },
+      ]}
+    >
+      <View
+        style={[
+          messageDockStyles.pill,
+          {
+            backgroundColor: cardColor,
+            borderColor: hairline,
+          },
+        ]}
+      >
+        <TextInput
+          accessibilityLabel={placeholder}
+          enablesReturnKeyAutomatically
+          onChangeText={onChangeText}
+          onSubmitEditing={onSubmit}
+          placeholder={placeholder}
+          placeholderTextColor={placeholderColor}
+          returnKeyType="send"
+          blurOnSubmit
+          style={[messageDockStyles.input, { color: foregroundColor }]}
+          value={value}
+        />
+      </View>
+    </KeyboardStickyView>
+  );
+}
+
+const messageDockStyles = StyleSheet.create({
+  sticky: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    zIndex: 20,
+  },
+  pill: {
+    height: MESSAGE_DOCK_HEIGHT,
+    borderRadius: MESSAGE_DOCK_HEIGHT / 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  input: {
+    fontSize: 17,
+    paddingVertical: 0,
+  },
+});
 
 function EmptyRow({ text }: { readonly text: string }) {
   return (
