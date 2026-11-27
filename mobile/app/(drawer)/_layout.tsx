@@ -54,7 +54,7 @@ function PearlDrawerNavigator() {
       <Drawer.Screen
         name="agents"
         options={{
-          title: "Delegate",
+          title: "Agents",
           headerShown: false,
           drawerItemStyle: { display: "none" },
         }}

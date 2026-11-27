@@ -3,7 +3,7 @@ import { Stack } from "expo-router";
 import { DrawerScene } from "@/components/navigation/drawer-scene";
 import { usePearlStackScreenOptions } from "@/src/navigation-theme";
 
-/** Keep Delegate list under /agents/chat so native back returns to agents. */
+/** Parked Delegate routes redirect to home / chat. */
 export const unstable_settings = {
   anchor: "index",
 };

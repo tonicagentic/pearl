@@ -1,6 +1,6 @@
 /**
- * @deprecated Prefer `AgentsScreen` (/agents) and `TrackScreen` (home Track tab).
- * Re-export kept so accidental imports still resolve to the Delegate screen.
+ * @deprecated Prefer `AgentsScreen` and `TrackScreen` (home Track tab).
+ * Re-export kept so accidental imports still resolve to the parked agents list.
  */
 export { AgentsScreen as HomeTabBody } from "@/components/home/agents-screen";
 

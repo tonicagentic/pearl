@@ -970,7 +970,6 @@ export function ProjectDetailScreen({
                         if (ok) {
                           setActiveProjectId(projectId);
                           revealChatThread();
-                          router.push("/agents/chat" as never);
                         }
                       });
                     }}

@@ -1,11 +1,6 @@
-import { AgentsScreen } from "@/components/home/agents-screen";
-import { RequireSignedIn } from "@/src/require-signed-in";
+import { Redirect } from "expo-router";
 
-/** Drawer → Delegate (custom agents). */
+/** Delegate list is parked; restore `AgentsScreen` here when it returns. */
 export default function Agents() {
-  return (
-    <RequireSignedIn>
-      <AgentsScreen />
-    </RequireSignedIn>
-  );
+  return <Redirect href="/" />;
 }

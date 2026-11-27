@@ -44,7 +44,7 @@ export function AgentTemplateDetailScreen() {
   const openAgentChat = (chatId: string) => {
     void selectChat(chatId).then((ok) => {
       if (!ok) return;
-      router.push("/agents/chat", { withAnchor: true });
+      router.push("/chat", { withAnchor: true });
     });
   };
 

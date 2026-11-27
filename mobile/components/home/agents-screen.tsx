@@ -35,7 +35,7 @@ import {
 
 const AGENT_MARK_SIZE = 40;
 
-/** Drawer → Delegate: custom agents list. */
+/** Parked custom-agents list (was Drawer → Delegate). */
 export function AgentsScreen() {
   const { billingReady, isAnonymous } = useAuth();
   const { selectChat } = useActiveChat();
@@ -45,7 +45,7 @@ export function AgentsScreen() {
     | undefined;
 
   const openAgentChat = useCallback(() => {
-    router.push("/agents/chat", { withAnchor: true });
+    router.push("/chat", { withAnchor: true });
   }, []);
 
   const openCreate = useCallback(() => {

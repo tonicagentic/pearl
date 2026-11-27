@@ -144,7 +144,7 @@ export function usePearlDrawer() {
     throw new Error("usePearlDrawer must be used within PearlDrawerProvider");
   }
   const navigation = useNavigation() as unknown as DrawerNav;
-  const { reloadChats, selectChat, getActiveCustomAgent } = useChats();
+  const { reloadChats, selectChat } = useChats();
 
   const openDrawer = useCallback(() => {
     void reloadChats({ silent: true });
@@ -168,20 +168,13 @@ export function usePearlDrawer() {
     async (chatId: string) => {
       const ok = await selectChat(chatId);
       if (!ok) return;
-      const isAgentThread = getActiveCustomAgent() != null;
       closeDrawer();
-      // Pearl threads stay embedded on home; custom agents open under
-      // Delegate so native back returns to the agents list.
-      if (isAgentThread) {
-        router.push("/agents/chat", { withAnchor: true });
-        return;
-      }
       ctx.notifyChatSelectedFromDrawer({ tab: "pearl" });
       // navigate (not dismissTo): dismissTo emits POP_TO, which Drawer
       // routers ignore — from Projects/Tasks/etc. the action is a no-op.
       router.navigate("/");
     },
-    [closeDrawer, ctx, getActiveCustomAgent, selectChat],
+    [closeDrawer, ctx, selectChat],
   );
 
   return {
@@ -203,7 +196,7 @@ export function usePearlDrawer() {
 export function usePearlDrawerOptional() {
   const ctx = useContext(PearlDrawerContext);
   const navigation = useNavigation() as unknown as DrawerNav;
-  const { reloadChats, selectChat, getActiveCustomAgent } = useChats();
+  const { reloadChats, selectChat } = useChats();
 
   const openDrawer = useCallback(() => {
     void reloadChats({ silent: true });
@@ -225,12 +218,7 @@ export function usePearlDrawerOptional() {
     onSelectChatFromDrawer: async (chatId: string) => {
       const ok = await selectChat(chatId);
       if (!ok) return;
-      const isAgentThread = getActiveCustomAgent() != null;
       closeDrawer();
-      if (isAgentThread) {
-        router.push("/agents/chat", { withAnchor: true });
-        return;
-      }
       ctx.notifyChatSelectedFromDrawer({ tab: "pearl" });
       // navigate (not dismissTo): dismissTo emits POP_TO, which Drawer
       // routers ignore — from Projects/Tasks/etc. the action is a no-op.

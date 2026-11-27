@@ -7,7 +7,6 @@ import {
 } from "react-native";
 import { router, usePathname } from "expo-router";
 import {
-  BotIcon,
   FolderIcon,
   InboxIcon,
   LibraryIcon,
@@ -52,7 +51,7 @@ const FOOTER_FADE_OVERHANG = 56;
 /** Search row inside the dock (paddingTop 8 + 40px control). */
 const FOOTER_SEARCH_ROW = 48;
 
-/** Rows under the Track section label (not Library / Delegate). */
+/** Rows under the Track section label (not Library). */
 const TRACK_ROWS = [
   {
     label: "Tasks",
@@ -264,12 +263,6 @@ export function DrawerPanel({
             selected={isDrawerHrefActive(pathname, row.href)}
           />
         ))}
-        <DrawerLinkRow
-          label="Delegate"
-          icon={BotIcon}
-          onPress={() => go("/agents")}
-          selected={isDrawerHrefActive(pathname, "/agents")}
-        />
         <DrawerSectionLabel>Recent chats</DrawerSectionLabel>
       </View>
     </View>

@@ -11,7 +11,7 @@ export const unstable_settings = {
 
 /**
  * Home stack inside the drawer: Chat|Track plus pushed /chat for guest /
- * history Pearl threads. Agent threads live under /agents/chat.
+ * history threads (including custom agents).
  * Do not set headerTransparent / headerStyle on iOS — that opts out of glass.
  */
 export default function HomeStackLayout() {
