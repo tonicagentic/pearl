@@ -6,6 +6,10 @@ import {
   resolveAllPending,
 } from "../behavior/parked.ts";
 import { clearPearlGoalsForEval } from "../fixtures/seed-goal.ts";
+import {
+  leaksGoalsWalkthroughScript,
+  noScriptLeakGate,
+} from "./no-script-leak.ts";
 
 /**
  * Settle an ask_question park (text or option) without approving create_goal.
@@ -42,7 +46,6 @@ function turnVisibleText(turn: EveEvalTurn): string {
   const reply = (turn.reply ?? "").trim();
   if (reply) return reply;
 
-  // create_goal approval prompt is the assembled definition.
   for (const interaction of pendingRequests(turn)) {
     if (interaction.request.kind === "approval") {
       const prompt = (
@@ -93,6 +96,23 @@ function turnVisibleText(turn: EveEvalTurn): string {
   return reply;
 }
 
+/** Reply + parked question only — never tool args (those may name fields). */
+function userFacingText(turn: EveEvalTurn): string {
+  const reply = (turn.reply ?? "").trim();
+  const parts: string[] = [];
+  if (reply) parts.push(reply);
+  for (const interaction of pendingRequests(turn)) {
+    if (interaction.request.kind !== "question") continue;
+    const request = interaction.request as {
+      readonly prompt?: string;
+      readonly question?: string;
+    };
+    const prompt = (request.prompt ?? request.question ?? "").trim();
+    if (prompt) parts.push(prompt);
+  }
+  return parts.join("\n");
+}
+
 async function continueWalkthrough(
   turn: EveEvalTurn,
   session: EveEvalTurn["session"],
@@ -115,17 +135,23 @@ export default defineEval({
 
     // Turn 1 — open the walkthrough
     let turn = await session.send("I want to set a new goal.");
-    turn.expectOk();
+    turn.awaitingInput();
+    turn.noFailedCalls();
+    turn.calledTool("ask_question", { status: "pending" });
     turn.notCalledTool("create_goal");
     turn.notCalledTool("create_issue");
     turn.notCalledTool("write_file");
     turn.notCalledTool("create_project");
+    t.check(
+      !leaksGoalsWalkthroughScript(userFacingText(turn)),
+      noScriptLeakGate.gate(),
+    ).label("start-goal-open-no-leak");
 
     t.judge(
-      "The assistant starts a goal setup walkthrough by asking what outcome " +
-        "the user is working toward (ask_question park or a clear direct " +
-        "question). It does not dump a SMART/OKR template, invent metrics, " +
-        "or save a Goals row yet.",
+      "The assistant starts a goal setup via ask_question: the parked " +
+        "question asks what outcome they are working toward. It does not ask " +
+        "the same thing again in prose, dump SMART/OKR, invent metrics, name " +
+        "tools, or narrate the interview steps in the reply.",
       { on: turnVisibleText(turn) },
     )
       .label("start-goal-open")
@@ -138,13 +164,18 @@ export default defineEval({
     );
 
     // Turn 2 — shape the outcome
-    turn.expectOk();
-    // create_goal may park later; deny if it shows up early via continueWalkthrough
+    turn.awaitingInput();
+    turn.noFailedCalls();
+    turn.calledTool("ask_question", { status: "pending" });
     turn.notCalledTool("write_file");
+    t.check(
+      !leaksGoalsWalkthroughScript(userFacingText(turn)),
+      noScriptLeakGate.gate(),
+    ).label("start-goal-shape-no-leak");
     t.judge(
-      "Pass if the assistant asks what done / success looks like for the goal " +
-        "(habit vs milestone is fine). Prefer ask_question; a clear one-question " +
-        "ask is fine. Fail only if it dumps a gym program or saves a Goals row.",
+      "The assistant asks (via ask_question) what done / success looks like. " +
+        "It does not dump a gym program, name tools, or narrate the remaining " +
+        "interview pipeline in the reply.",
       { on: turnVisibleText(turn) },
     )
       .label("start-goal-shape")
@@ -157,12 +188,18 @@ export default defineEval({
     );
 
     // Turn 3 — by when / filing
-    turn.expectOk();
+    turn.awaitingInput();
+    turn.noFailedCalls();
+    turn.calledTool("ask_question", { status: "pending" });
     turn.notCalledTool("write_file");
+    t.check(
+      !leaksGoalsWalkthroughScript(userFacingText(turn)),
+      noScriptLeakGate.gate(),
+    ).label("start-goal-when-no-leak");
     t.judge(
-      "Pass if the assistant asks by when / a target date and/or whether to " +
-        "file on a project (ask_question preferred; a clear one-question ask is " +
-        "fine). Fail only if it invents mileage/weight targets or saves already.",
+      "Pass if the ask_question is about a target date / by-when (including a " +
+        "no-date choice) and/or filing on a project vs standalone. Fail only if " +
+        "it invents mileage/weight targets, names tools, or saves a Goals row.",
       { on: turnVisibleText(turn) },
     )
       .label("start-goal-when")
@@ -174,7 +211,6 @@ export default defineEval({
       "By June. Don’t attach it to a project.",
     );
 
-    // Extra settle if still asking year / confirm before the proposal.
     if (
       pendingRequests(turn).length > 0 &&
       turn.toolCalls.filter((call) => call.name === "create_goal").length === 0
@@ -197,11 +233,16 @@ export default defineEval({
     turn.notCalledTool("create_issue");
     turn.notCalledTool("write_file");
     turn.notCalledTool("create_project");
+    t.check(
+      !leaksGoalsWalkthroughScript(userFacingText(turn)),
+      noScriptLeakGate.gate(),
+    ).label("start-goal-propose-no-leak");
     t.judge(
       "Pass if this turn proposes or saves a goal about walking ~3×/week " +
         "(or better shape with that habit) with a June-ish target — via a " +
         "GoalDefinition card, create_goal approval prompt, or create_goal args. " +
-        "Fail only if it invents a project or is still only asking by-when.",
+        "Fail if it invents a project, is still only asking by-when, or dumps " +
+        "the interview script into the reply.",
       { on: turnVisibleText(turn) },
     )
       .label("start-goal-propose")

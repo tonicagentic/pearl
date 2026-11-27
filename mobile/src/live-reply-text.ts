@@ -17,6 +17,12 @@ type LiveReplyState = {
   readonly turnId: string | null;
   readonly parts: ReadonlyMap<string, LivePart>;
   readonly order: readonly string[];
+  /**
+   * partIds that announced an explicit non-text kind (e.g. reasoning).
+   * Follow-up deltas often omit `kind`; keep rejecting those so reasoning
+   * tails do not leak into the visible reply overlay.
+   */
+  readonly nonTextPartIds: ReadonlySet<string>;
   readonly version: number;
 };
 
@@ -33,14 +39,28 @@ const EMPTY_STATE: LiveReplyState = {
   turnId: null,
   parts: new Map(),
   order: [],
+  nonTextPartIds: new Set(),
   version: 0,
 };
+
+function emptyPartsState(
+  turnId: string | null,
+  version: number,
+): LiveReplyState {
+  return {
+    turnId,
+    parts: new Map(),
+    order: [],
+    nonTextPartIds: new Set(),
+    version,
+  };
+}
 
 function bucketFor(key: LiveReplySessionKey): SessionBucket {
   let bucket = buckets.get(key);
   if (!bucket) {
     bucket = {
-      state: { ...EMPTY_STATE, parts: new Map() },
+      state: emptyPartsState(null, 0),
       listeners: new Set(),
     };
     buckets.set(key, bucket);
@@ -55,19 +75,30 @@ function emit(key: LiveReplySessionKey, next: LiveReplyState): void {
   for (const listener of bucket.listeners) listener();
 }
 
-/** True when this partId is tracked as assistant reply text (not reasoning). */
+/**
+ * True when this partId should accumulate as assistant reply text.
+ * Explicit non-text kinds are remembered so later omitted-kind deltas
+ * for the same partId stay rejected (eve often tags only the first chunk).
+ */
 function isTextPart(
   state: LiveReplyState,
   partId: string,
   kind: string | undefined,
-): boolean {
-  if (kind === "text") return true;
-  if (kind && kind !== "text") return false;
+): { readonly accept: boolean; readonly markNonText: boolean } {
+  if (kind === "text") return { accept: true, markNonText: false };
+  if (kind && kind !== "text") {
+    return { accept: false, markNonText: true };
+  }
+  if (state.nonTextPartIds.has(partId)) {
+    return { accept: false, markNonText: false };
+  }
   const existing = state.parts.get(partId);
-  if (existing) return existing.kind === "text";
+  if (existing) {
+    return { accept: existing.kind === "text", markNonText: false };
+  }
   // eve often omits `kind` on every content.delta (including the first).
-  // Non-text parts announce an explicit kind — treat missing kind as text.
-  return true;
+  // Unknown partId with missing kind → text.
+  return { accept: true, markNonText: false };
 }
 
 /**
@@ -95,15 +126,30 @@ export function pushLiveReplyDelta(
     state.turnId !== null &&
     turnId !== state.turnId
   ) {
-    state = {
-      turnId,
-      parts: new Map(),
-      order: [],
-      version: state.version,
-    };
+    state = emptyPartsState(turnId, state.version);
   }
 
-  if (!isTextPart(state, partId, kind)) return;
+  const decision = isTextPart(state, partId, kind);
+  const nextTurnId = turnId ?? state.turnId;
+
+  if (!decision.accept) {
+    // Remember non-text partIds and stamp turnId even with no text emit, so
+    // omitted-kind tails stay rejected and a later turnId can clear memory.
+    const needsNonText =
+      decision.markNonText && !state.nonTextPartIds.has(partId);
+    if (needsNonText || nextTurnId !== state.turnId) {
+      const nonTextPartIds = needsNonText
+        ? new Set(state.nonTextPartIds)
+        : state.nonTextPartIds;
+      if (needsNonText) nonTextPartIds.add(partId);
+      bucket.state = {
+        ...state,
+        turnId: nextTurnId,
+        nonTextPartIds,
+      };
+    }
+    return;
+  }
 
   const parts = new Map(state.parts);
   const prev = parts.get(partId);
@@ -118,9 +164,10 @@ export function pushLiveReplyDelta(
       : [...state.order, partId];
 
   emit(key, {
-    turnId: turnId ?? state.turnId,
+    turnId: nextTurnId,
     parts,
     order,
+    nonTextPartIds: state.nonTextPartIds,
     version: state.version + 1,
   });
 }
@@ -150,6 +197,8 @@ export function seedLiveReplyParts(
     turnId: input.turnId ?? null,
     parts,
     order,
+    // Seed is catch-up text only — drop prior non-text memory for this paint.
+    nonTextPartIds: new Set(),
     version: bucket.state.version + 1,
   });
 }
@@ -158,13 +207,14 @@ export function seedLiveReplyParts(
 export function clearLiveReplyText(key: LiveReplySessionKey): void {
   const bucket = buckets.get(key);
   if (!bucket) return;
-  if (bucket.state.parts.size === 0 && bucket.state.version === 0) return;
-  emit(key, {
-    turnId: null,
-    parts: new Map(),
-    order: [],
-    version: bucket.state.version + 1,
-  });
+  if (
+    bucket.state.parts.size === 0 &&
+    bucket.state.nonTextPartIds.size === 0 &&
+    bucket.state.version === 0
+  ) {
+    return;
+  }
+  emit(key, emptyPartsState(null, bucket.state.version + 1));
 }
 
 /**

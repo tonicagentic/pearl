@@ -33,6 +33,47 @@ describe("pushLiveReplyDelta", () => {
     expect(getLiveReplyParts(sessionA)).toEqual([]);
   });
 
+  it("keeps rejecting omitted-kind follow-ups after a reasoning announce", () => {
+    // eve tags kind on the first chunk only; tails must not leak into text.
+    pushLiveReplyDelta(sessionA, {
+      partId: "r1",
+      kind: "reasoning",
+      delta: "User ",
+    });
+    pushLiveReplyDelta(sessionA, {
+      partId: "r1",
+      delta: "wants to set a new goal. Need to ask via ask_question…",
+    });
+    expect(getLiveReplyParts(sessionA)).toEqual([]);
+  });
+
+  it("still treats a first omitted-kind delta as text", () => {
+    pushLiveReplyDelta(sessionA, {
+      partId: "p1",
+      delta: "I'll help with that.",
+    });
+    expect(getLiveReplyParts(sessionA)).toEqual([
+      { id: "p1", text: "I'll help with that.", turnId: null },
+    ]);
+  });
+
+  it("clears non-text memory when the turnId changes", () => {
+    pushLiveReplyDelta(sessionA, {
+      turnId: "t1",
+      partId: "r1",
+      kind: "reasoning",
+      delta: "plan",
+    });
+    pushLiveReplyDelta(sessionA, {
+      turnId: "t2",
+      partId: "r1",
+      delta: "fresh text part id reuse",
+    });
+    expect(getLiveReplyParts(sessionA)).toEqual([
+      { id: "r1", text: "fresh text part id reuse", turnId: "t2" },
+    ]);
+  });
+
   it("accumulates deltas on the same part", () => {
     pushLiveReplyDelta(sessionA, { partId: "p1", kind: "text", delta: "Hel" });
     pushLiveReplyDelta(sessionA, { partId: "p1", delta: "lo" });
