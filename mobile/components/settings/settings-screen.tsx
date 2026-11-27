@@ -17,7 +17,6 @@ import {
   ImageIcon,
   IdCardIcon,
   LayoutTemplateIcon,
-  ListTodoIcon,
   LogOutIcon,
   MailIcon,
   MessageCircleQuestionIcon,
@@ -241,8 +240,7 @@ export function SettingsScreen() {
     "Projects",
     "Projects for chats",
   );
-  const showMoney = search.matches("Money", "Pearl Money");
-  const showTasks = search.matches("Tasks", "Due soon and parked");
+  const showMoney = search.matches("Money", "Finances", "Pearl Money");
   const showAnswers = search.matches("Answers", "Web and connected accounts");
   const showResearch = search.matches("Research", "Deep research with citations");
   const showPlan = search.matches("Plan", "Travel and how you plan");
@@ -286,7 +284,7 @@ export function SettingsScreen() {
 
   const showAccountSection =
     showAccount || showEmail || showCalendar || showNotifications;
-  const showAppsCard = showWorkspaces || showMoney || showTasks;
+  const showAppsCard = showWorkspaces || showMoney;
   const showThink =
     showAnswers || showResearch || showPlan || showDrafting || showAnalysis;
   const showMake = showCoder || showVisualize || showDesign;
@@ -375,7 +373,7 @@ export function SettingsScreen() {
                 label="Projects"
                 detail="Organize chats"
                 onPress={() => router.navigate("/workspaces")}
-                showSeparator={showMoney || showTasks}
+                showSeparator={showMoney}
               />
             ) : null}
             {showMoney ? (
@@ -387,17 +385,8 @@ export function SettingsScreen() {
                   />
                 }
                 label="Money"
-                detail="Pearl Money"
+                detail="Spend, banks, and reconcile"
                 onPress={() => router.push("/settings/money")}
-                showSeparator={showTasks}
-              />
-            ) : null}
-            {showTasks ? (
-              <SettingsRow
-                icon={<Icon as={ListTodoIcon} className="size-5 text-teal-500" />}
-                label="Tasks"
-                detail="Due soon and parked"
-                onPress={() => router.navigate("/tasks")}
               />
             ) : null}
           </SettingsCard>

@@ -18,6 +18,10 @@ export default function FinancesStackLayout() {
           name="transactions"
           options={{ title: "Transactions" }}
         />
+        <Stack.Screen name="reconcile" options={{ title: "Reconcile" }} />
+        <Stack.Screen name="connections" options={{ title: "Connections" }} />
+        <Stack.Screen name="accounts" options={{ title: "Accounts" }} />
+        <Stack.Screen name="tasks" options={{ title: "Tasks" }} />
       </Stack>
     </DrawerScene>
   );

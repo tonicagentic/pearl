@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -8,9 +8,7 @@ import {
 import { router, usePathname } from "expo-router";
 import {
   FolderIcon,
-  InboxIcon,
   LibraryIcon,
-  NotebookPenIcon,
   SearchIcon,
   SquarePenIcon,
   TargetIcon,
@@ -18,7 +16,7 @@ import {
   WalletIcon,
   ZapIcon,
 } from "lucide-react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ChatHistoryContent } from "@/components/history/chat-history-content";
@@ -36,6 +34,7 @@ import {
 import { PearlIcon } from "@/components/pearl-icon";
 import { projectMarkFor } from "@/components/project-mark";
 import { Icon } from "@/components/ui/icon";
+import { CreateProjectModal } from "@/components/workspaces/create-project-modal";
 import { useAuth } from "@/src/auth";
 import { useActiveChat } from "@/src/chat-context";
 import { initials as viewerInitials } from "@/src/initials";
@@ -45,18 +44,21 @@ import {
   usePearlMutedBackground,
 } from "@/src/navigation-theme";
 import { drawerProjectHref } from "@/src/overview-ui";
-import { fetchProjects } from "@/src/projects-client";
+import {
+  fetchProjects,
+  type ProjectDto,
+} from "@/src/projects-client";
 import { queryKeys } from "@/src/query-client";
 
 /** Space reserved under the list so rows clear the profile footer. */
 const FOOTER_CLEARANCE = 64;
 
-/** Rows under the Track section label (not Library). */
-const TRACK_ROWS = [
+/** Primary destinations after New Chat (no Track section). */
+const PRIMARY_ROWS = [
   {
-    label: "Tasks",
-    href: "/tasks",
-    Icon: InboxIcon,
+    label: "Automations",
+    href: "/automations",
+    Icon: ZapIcon,
   },
   {
     label: "Goals",
@@ -64,14 +66,9 @@ const TRACK_ROWS = [
     Icon: TargetIcon,
   },
   {
-    label: "Notes",
-    href: "/notes",
-    Icon: NotebookPenIcon,
-  },
-  {
-    label: "Automations",
-    href: "/automations",
-    Icon: ZapIcon,
+    label: "Library",
+    href: "/library",
+    Icon: LibraryIcon,
   },
   {
     label: "Finances",
@@ -95,6 +92,7 @@ export function DrawerPanel({
 } = {}) {
   useDrawerSettleHaptic();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const {
     closeDrawer: closePearlDrawer,
     onSelectChatFromDrawer,
@@ -121,7 +119,7 @@ export function DrawerPanel({
   const pathname = usePathname();
   const onChatRoute = isDrawerHrefActive(pathname, "/");
   // New Chat lights only on an empty home/chat session — not while a thread
-  // is open, and not on Tasks/Goals/… destinations.
+  // is open, and not on Goals/Automations/… destinations.
   const newChatSelected = onChatRoute && activeChatId == null;
   const foregroundColor = usePearlForeground();
   const mutedColor = usePearlMutedBackground();
@@ -131,6 +129,7 @@ export function DrawerPanel({
     : viewerInitials(viewerName, viewerEmail);
   const bottomPad = Math.max(insets.bottom, 12);
   const listBottomInset = FOOTER_CLEARANCE + bottomPad;
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
 
   const projectsQuery = useQuery({
     queryKey: queryKeys.projects,
@@ -190,6 +189,17 @@ export function DrawerPanel({
     go("/history");
   }, [go]);
 
+  const openCreateProject = useCallback(() => {
+    if (isAnonymous) {
+      closeDrawer();
+      requestAnimationFrame(() => {
+        router.push("/sign-in");
+      });
+      return;
+    }
+    setCreateProjectOpen(true);
+  }, [closeDrawer, isAnonymous]);
+
   const scrollingHeader = (
     <View>
       <View
@@ -247,14 +257,7 @@ export function DrawerPanel({
           onPress={openNewChat}
           selected={newChatSelected}
         />
-        <DrawerLinkRow
-          label="Library"
-          icon={LibraryIcon}
-          onPress={() => go("/library")}
-          selected={isDrawerHrefActive(pathname, "/library")}
-        />
-        <DrawerSectionLabel>Track</DrawerSectionLabel>
-        {TRACK_ROWS.map((row) => (
+        {PRIMARY_ROWS.map((row) => (
           <DrawerLinkRow
             key={row.href}
             label={row.label}
@@ -263,7 +266,13 @@ export function DrawerPanel({
             selected={isDrawerHrefActive(pathname, row.href)}
           />
         ))}
-        <DrawerSectionLabel>Projects</DrawerSectionLabel>
+        <DrawerSectionLabel
+          actionLabel="+"
+          actionAccessibilityLabel="New project"
+          onActionPress={openCreateProject}
+        >
+          Projects
+        </DrawerSectionLabel>
         <DrawerLinkRow
           label="All projects"
           icon={FolderIcon}
@@ -346,6 +355,27 @@ export function DrawerPanel({
         </View>
       </View>
 
+      <CreateProjectModal
+        open={createProjectOpen}
+        onClose={() => setCreateProjectOpen(false)}
+        onCreated={(project: ProjectDto) => {
+          setCreateProjectOpen(false);
+          queryClient.setQueryData<readonly ProjectDto[]>(
+            queryKeys.projects,
+            (current) =>
+              current
+                ? [project, ...current.filter((row) => row.id !== project.id)]
+                : [project],
+          );
+          void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+          closeDrawer();
+          requestAnimationFrame(() => {
+            router.navigate(
+              drawerProjectHref(project.id) as never,
+            );
+          });
+        }}
+      />
     </View>
   );
 }

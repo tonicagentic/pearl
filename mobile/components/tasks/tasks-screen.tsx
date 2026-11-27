@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -30,7 +30,10 @@ import { useTasksActions } from "@/components/tasks/use-tasks-actions";
 import { Icon } from "@/components/ui/icon";
 import { Text, textVariants } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
-import { fetchIssues } from "@/src/issues-client";
+import {
+  fetchIssues,
+  issuesInAreaSubtree,
+} from "@/src/issues-client";
 import { useNetworkStatus } from "@/src/network-status";
 import {
   queryErrorMessage,
@@ -57,7 +60,21 @@ const BUCKET_ICONS: Record<TaskSmartBucket, LucideIcon> = {
 const TODAY_PREVIEW = 5;
 
 /** Tasks home: Quick Find, smart lists, Today preview, Magic Plus. */
-export function TasksScreen() {
+export function TasksScreen({
+  leading = "drawer",
+  title = "Tasks",
+  header,
+  areaRootName,
+  defaultAreaName,
+}: {
+  readonly leading?: "drawer" | "back";
+  readonly title?: string;
+  readonly header?: ReactNode;
+  /** When set, only show tasks in this life-area subtree (e.g. Finances). */
+  readonly areaRootName?: string;
+  /** Area name for newly created tasks (defaults to Inbox via quick-add). */
+  readonly defaultAreaName?: string;
+} = {}) {
   const { offline } = useNetworkStatus();
   const [composerOpen, setComposerOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -90,7 +107,14 @@ export function TasksScreen() {
   );
 
   const payload = tasksQuery.data ?? null;
-  const issues = payload?.issues ?? [];
+  const allIssues = payload?.issues ?? [];
+  const issues = useMemo(
+    () =>
+      areaRootName
+        ? issuesInAreaSubtree(allIssues, payload?.tree, areaRootName)
+        : allIssues,
+    [allIssues, areaRootName, payload?.tree],
+  );
   const counts = useMemo(() => smartListCounts(issues), [issues]);
   const todayPreview = useMemo(
     () => issuesForSmartBucket(issues, "today").slice(0, TODAY_PREVIEW),
@@ -107,8 +131,26 @@ export function TasksScreen() {
       ? tasksQuery.error
       : null;
 
+  const openSmartList = useCallback(
+    (bucket: TaskSmartBucket) => {
+      const path = `/tasks/list/${encodeURIComponent(bucket)}`;
+      if (areaRootName) {
+        router.push(
+          `${path}?areaRoot=${encodeURIComponent(areaRootName)}${
+            defaultAreaName
+              ? `&areaName=${encodeURIComponent(defaultAreaName)}`
+              : ""
+          }` as never,
+        );
+        return;
+      }
+      router.push(path as never);
+    },
+    [areaRootName, defaultAreaName],
+  );
+
   return (
-    <ScreenChrome title="Tasks" leading="drawer">
+    <ScreenChrome title={title} leading={leading}>
       <View style={{ flex: 1, backgroundColor }}>
         <ScrollView
           className="flex-1"
@@ -117,6 +159,8 @@ export function TasksScreen() {
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
         >
+          {header}
+
           <View
             className="mb-4 flex-row items-center rounded-2xl px-3.5 py-2.5"
             style={{ backgroundColor: mutedBg ?? undefined, opacity: 0.9 }}
@@ -194,11 +238,7 @@ export function TasksScreen() {
                       className={`flex-row items-center gap-3 px-3.5 py-3.5 active:bg-muted/50 ${
                         index === 0 ? "" : "border-t border-border/40"
                       }`}
-                      onPress={() =>
-                        router.push(
-                          `/tasks/list/${encodeURIComponent(meta.id)}`,
-                        )
-                      }
+                      onPress={() => openSmartList(meta.id)}
                     >
                       <View className="h-8 w-8 items-center justify-center rounded-lg bg-muted/70">
                         <Icon
@@ -254,6 +294,7 @@ export function TasksScreen() {
         <TaskQuickAddCard
           open={composerOpen}
           bucket="inbox"
+          areaName={defaultAreaName}
           onClose={() => setComposerOpen(false)}
           onCreated={prependIssue}
         />

@@ -468,19 +468,17 @@ export async function listOpenIssues(
 }
 
 /** Open tasks filed on a project (Pearl Tasks / issues). */
+/** All tasks filed on a project (open and resolved). */
 export async function listProjectIssues(
   userId: string,
   projectId: string,
 ): Promise<IssueWithArea[]> {
   return issuesWithAreaQuery()
     .where(
-      and(
-        eq(issue.userId, userId),
-        eq(issue.projectId, projectId),
-        eq(issue.status, "open"),
-      ),
+      and(eq(issue.userId, userId), eq(issue.projectId, projectId)),
     )
     .orderBy(
+      asc(sql`case when ${issue.status} = 'open' then 0 else 1 end`),
       asc(sql`coalesce(${issue.reviewDate}, ${issue.dueDate})`),
       asc(issue.dueDate),
       asc(issue.createdAt),

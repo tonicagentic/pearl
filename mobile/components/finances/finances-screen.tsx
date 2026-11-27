@@ -10,6 +10,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react-native";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useCSSVariable } from "uniwind";
 
+import { FinancesSubnav } from "@/components/finances/finances-subnav";
 import { SpendSankey } from "@/components/finances/spend-sankey";
 import { ScreenChrome } from "@/components/navigation/screen-chrome";
 import { Icon } from "@/components/ui/icon";
@@ -88,6 +89,7 @@ export function FinancesScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
         contentInsetAdjustmentBehavior="automatic"
       >
+        <FinancesSubnav />
         <View
           style={{
             flexDirection: "row",

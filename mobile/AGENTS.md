@@ -25,9 +25,9 @@ Run lint and typecheck before declaring any task done.
 
 ## Navigation & Routing
 
-Root `app/_layout.tsx` is an auth-gated **Stack** (sign-in, workbench, browser modal, Settings fullScreenModal). Signed-in destinations live under **`app/(drawer)/`**: an Expo Router `Drawer` (`drawerType: "back"`) with custom `drawerContent` (New Chat, Library, Track section, recent chats, Chat pill + Profile avatar).
+Root `app/_layout.tsx` is an auth-gated **Stack** (sign-in, workbench, browser modal, Settings fullScreenModal). Signed-in destinations live under **`app/(drawer)/`**: an Expo Router `Drawer` (`drawerType: "back"`) with custom `drawerContent` (New Chat, Automations, Goals, Library, Finances, Projects with +, recent chats, Profile avatar).
 
-- **Drawer siblings:** `(home)` (New Chat + Chat|Track switcher), `tasks`, `goals`, `notes`, `automations`, `library`, `workspaces`, `finances`, `history`. Parked: `agents` (redirects home).
+- **Drawer siblings:** `(home)` (New Chat + Chat|Overview switcher), `automations`, `goals`, `library`, `finances`, `workspaces`, `history`. Detail-only (no drawer hub): `tasks`, `notes`. Parked: `agents` (redirects home).
 - **Root modal:** `app/settings/**` — fullScreenModal over the drawer (circular X / nested back; header search filters the index list).
 - **Nested stacks only for details:** `tasks/[id]`, `automations/new|edit`, `workspaces/projects/...`, `settings/*` children.
 - Non-route UI lives in `components/` (`navigation/`, `home/`, `tasks/`, `library/`, `workspaces/`, `history/`, `settings/`) and `src/`.

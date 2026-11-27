@@ -525,6 +525,7 @@ export type ProjectStatus =
   | "backlog"
   | "planned"
   | "in_progress"
+  | "ongoing"
   | "completed"
   | "canceled";
 
@@ -550,7 +551,14 @@ export const project = pgTable(
     name: text("name").notNull(),
     instructions: text("instructions").notNull().default(""),
     status: text("status", {
-      enum: ["backlog", "planned", "in_progress", "completed", "canceled"],
+      enum: [
+        "backlog",
+        "planned",
+        "in_progress",
+        "ongoing",
+        "completed",
+        "canceled",
+      ],
     })
       .notNull()
       .default("backlog")

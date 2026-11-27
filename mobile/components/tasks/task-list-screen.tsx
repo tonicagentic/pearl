@@ -13,7 +13,10 @@ import { TaskQuickAddCard } from "@/components/tasks/task-quick-add-card";
 import { TaskRow } from "@/components/tasks/task-row";
 import { useTasksActions } from "@/components/tasks/use-tasks-actions";
 import { Text } from "@/components/ui/text";
-import { fetchIssues } from "@/src/issues-client";
+import {
+  fetchIssues,
+  issuesInAreaSubtree,
+} from "@/src/issues-client";
 import { useNetworkStatus } from "@/src/network-status";
 import {
   queryErrorMessage,
@@ -30,8 +33,12 @@ import {
 /** One Things-style smart list (Inbox, Today, …). */
 export function TaskListScreen({
   bucketParam,
+  areaRootName,
+  defaultAreaName,
 }: {
   readonly bucketParam: string;
+  readonly areaRootName?: string;
+  readonly defaultAreaName?: string;
 }) {
   const bucket: TaskSmartBucket = isTaskSmartBucket(bucketParam)
     ? bucketParam
@@ -70,9 +77,15 @@ export function TaskListScreen({
     }, [tasksQuery.refetch]),
   );
 
+  const scopedIssues = useMemo(() => {
+    const all = tasksQuery.data?.issues ?? [];
+    if (!areaRootName) return all;
+    return issuesInAreaSubtree(all, tasksQuery.data?.tree, areaRootName);
+  }, [areaRootName, tasksQuery.data?.issues, tasksQuery.data?.tree]);
+
   const issues = useMemo(
-    () => issuesForSmartBucket(tasksQuery.data?.issues ?? [], bucket),
-    [tasksQuery.data?.issues, bucket],
+    () => issuesForSmartBucket(scopedIssues, bucket),
+    [scopedIssues, bucket],
   );
 
   const showLoadError = showQueryErrorBanner(offline, tasksQuery.error);
@@ -156,6 +169,7 @@ export function TaskListScreen({
             <TaskQuickAddCard
               open={composerOpen}
               bucket={bucket}
+              areaName={defaultAreaName}
               onClose={() => setComposerOpen(false)}
               onCreated={prependIssue}
             />

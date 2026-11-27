@@ -34,11 +34,14 @@ export function TaskQuickAddCard({
   bucket,
   onClose,
   onCreated,
+  areaName,
 }: {
   readonly open: boolean;
   readonly bucket: TaskSmartBucket;
   readonly onClose: () => void;
   readonly onCreated: (issue: IssueDto) => void;
+  /** When set, overrides the bucket default area (e.g. Finances). */
+  readonly areaName?: string;
 }) {
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState("");
@@ -95,7 +98,7 @@ export function TaskQuickAddCard({
     void createIssueRequest({
       title: trimmed,
       description: description.trim() || undefined,
-      areaName: defaults.areaName,
+      areaName: areaName?.trim() || defaults.areaName,
       dueDate: dueDate.trim() || null,
       reviewDate: reviewDate.trim() || null,
     })
@@ -116,6 +119,7 @@ export function TaskQuickAddCard({
         setBusy(false);
       });
   }, [
+    areaName,
     busy,
     bucket,
     description,

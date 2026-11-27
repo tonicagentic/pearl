@@ -18,6 +18,7 @@ const PROJECT_STATUSES = [
   "backlog",
   "planned",
   "in_progress",
+  "ongoing",
   "completed",
   "canceled",
 ] as const satisfies readonly ProjectStatus[];
@@ -139,7 +140,13 @@ export async function createProject(
   const priority =
     input.priority !== undefined ? requirePriority(input.priority) : "none";
   const startDate = normalizeProjectDate(input.startDate, "startDate");
-  const targetDate = normalizeProjectDate(input.targetDate, "targetDate");
+  const targetDateRaw = normalizeProjectDate(input.targetDate, "targetDate");
+  const targetDate =
+    status === "ongoing"
+      ? null
+      : targetDateRaw === undefined
+        ? null
+        : targetDateRaw;
   return db.transaction(async (tx) => {
     const [row] = await tx
       .insert(project)
@@ -150,7 +157,7 @@ export async function createProject(
         status,
         priority,
         startDate: startDate === undefined ? null : startDate,
-        targetDate: targetDate === undefined ? null : targetDate,
+        targetDate,
       })
       .returning();
     if (!row) throw new Error("Failed to create project.");
@@ -214,8 +221,12 @@ export async function updateProject(
   const targetDateRaw = normalizeProjectDate(input.targetDate, "targetDate");
   const startDate =
     startDateRaw === undefined ? existing.startDate : startDateRaw;
-  const targetDate =
+  // Ongoing projects have no end target — clear on status change, ignore new targets.
+  let targetDate =
     targetDateRaw === undefined ? existing.targetDate : targetDateRaw;
+  if (status === "ongoing") {
+    targetDate = null;
+  }
 
   const [row] = await db
     .update(project)

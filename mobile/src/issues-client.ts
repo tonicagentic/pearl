@@ -23,14 +23,72 @@ export type IssueDto = {
   dueSoon?: boolean;
 };
 
+export type AreaTreeNode = {
+  readonly id: string;
+  readonly name: string;
+  readonly children: readonly AreaTreeNode[];
+};
+
 export type IssuesPayload = {
   viewer: { id: string; name: string; email: string };
   issues: IssueDto[];
   options: { id: string; label: string }[];
+  /** Life-area tree from GET /api/issues (used for Finances subtree filters). */
+  tree?: readonly AreaTreeNode[];
 };
 
 /** Default area for mobile-created tasks (areas stay in DB, hidden from UI). */
 export const DEFAULT_TASK_AREA = 'Inbox';
+
+/** Collect area ids for a named root and every descendant (e.g. Finances). */
+export function collectAreaSubtreeIds(
+  tree: readonly AreaTreeNode[] | undefined,
+  rootName: string,
+): Set<string> {
+  const ids = new Set<string>();
+  if (!tree || !rootName.trim()) return ids;
+
+  const walk = (node: AreaTreeNode) => {
+    ids.add(node.id);
+    for (const child of node.children) walk(child);
+  };
+
+  const find = (nodes: readonly AreaTreeNode[]): AreaTreeNode | null => {
+    for (const node of nodes) {
+      if (node.name === rootName) return node;
+      const nested = find(node.children);
+      if (nested) return nested;
+    }
+    return null;
+  };
+
+  const root = find(tree);
+  if (root) walk(root);
+  return ids;
+}
+
+const FINANCES_LEAF_NAMES = new Set([
+  "Finances",
+  "Budget",
+  "Taxes",
+  "Investments",
+]);
+
+export function issuesInAreaSubtree(
+  issues: readonly IssueDto[],
+  tree: readonly AreaTreeNode[] | undefined,
+  rootName: string,
+): IssueDto[] {
+  const ids = collectAreaSubtreeIds(tree, rootName);
+  if (ids.size > 0) {
+    return issues.filter((issue) => ids.has(issue.areaId));
+  }
+  // Fallback when the area tree is missing from a cached payload.
+  if (rootName === "Finances") {
+    return issues.filter((issue) => FINANCES_LEAF_NAMES.has(issue.areaName));
+  }
+  return issues.filter((issue) => issue.areaName === rootName);
+}
 
 function authHeaders(): Record<string, string> {
   const credential = getAuthCookie();

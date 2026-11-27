@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense, type ReactNode } from "react";
-import { ChevronLeftIcon, ChevronRightIcon, Loader2Icon } from "lucide-react";
+import { Suspense } from "react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
 import { SpendSankey } from "@/components/finances/spend-sankey";
+import {
+  FinancesCard,
+  FinancesLoading,
+} from "@/components/finances/finances-shell";
 import { getMonthSpendSummaryCached } from "@/lib/finance/spend-cache";
 import { buildSpendSankeyGraph } from "@/lib/finance/spend-sankey";
 import { currentYearMonth } from "@/lib/finance/money";
@@ -62,11 +66,9 @@ export default function FinancesPage({
   readonly searchParams: SearchParams;
 }) {
   return (
-    <FinancesPageFrame>
-      <Suspense fallback={<FinancesFallback />}>
-        <ResolvedFinances searchParams={searchParams} />
-      </Suspense>
-    </FinancesPageFrame>
+    <Suspense fallback={<FinancesLoading label="Loading finances…" />}>
+      <ResolvedFinances searchParams={searchParams} />
+    </Suspense>
   );
 }
 
@@ -106,7 +108,7 @@ async function ResolvedFinances({
     <>
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-lg font-semibold">Finances</h1>
+          <h1 className="text-lg font-semibold">Spend</h1>
           <p className="text-sm text-muted-foreground">
             {monthLabel(year, month)} · spent {summary.totalSpentLabel}
           </p>
@@ -159,32 +161,3 @@ async function ResolvedFinances({
   );
 }
 
-function FinancesFallback() {
-  return (
-    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-      <Loader2Icon className="size-3.5 animate-spin" aria-hidden />
-      Loading finances…
-    </div>
-  );
-}
-
-function FinancesCard({ message }: { readonly message: string }) {
-  return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="text-base font-medium">Finances</div>
-      <p className="mt-1 text-sm text-muted-foreground">{message}</p>
-    </div>
-  );
-}
-
-function FinancesPageFrame({ children }: { readonly children: ReactNode }) {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="h-full overflow-y-auto px-4 pt-14 pb-8">
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}

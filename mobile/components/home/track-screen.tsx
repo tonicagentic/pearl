@@ -228,10 +228,7 @@ export function TrackScreen() {
               </Text>
             </View>
 
-            <OverviewBeat
-              lead={tasksLead}
-              onPress={() => router.navigate("/tasks")}
-            >
+            <OverviewBeat lead={tasksLead}>
               {todayTasks.map((issue, index) => (
                 <TaskRow
                   key={issue.id}
@@ -311,7 +308,7 @@ function OverviewBeat({
   children,
 }: {
   readonly lead: string;
-  readonly onPress: () => void;
+  readonly onPress?: () => void;
   readonly children?: ReactNode;
 }) {
   const hasChildren = Array.isArray(children)
@@ -320,13 +317,17 @@ function OverviewBeat({
 
   return (
     <View className="mb-6">
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={lead}
-        onPress={onPress}
-      >
+      {onPress ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={lead}
+          onPress={onPress}
+        >
+          <Text variant="body">{lead}</Text>
+        </Pressable>
+      ) : (
         <Text variant="body">{lead}</Text>
-      </Pressable>
+      )}
       {hasChildren ? <View className="mt-2">{children}</View> : null}
     </View>
   );

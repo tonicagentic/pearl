@@ -95,6 +95,7 @@ export async function updateProjectAction(input: {
     | "backlog"
     | "planned"
     | "in_progress"
+    | "ongoing"
     | "completed"
     | "canceled";
   readonly priority?: "none" | "urgent" | "high" | "medium" | "low";

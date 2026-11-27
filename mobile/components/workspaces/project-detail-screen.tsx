@@ -37,6 +37,7 @@ import {
 import { ProjectMark } from "@/components/project-mark";
 import { CreateTaskModal } from "@/components/tasks/create-task-modal";
 import { TaskDateField } from "@/components/tasks/task-date-field";
+import { TaskRow } from "@/components/tasks/task-row";
 import { Icon } from "@/components/ui/icon";
 import { LoadingCenter } from "@/components/ui/loading-center";
 import { Text } from "@/components/ui/text";
@@ -59,6 +60,7 @@ import { startGoalChat } from "@/src/start-goal-chat";
 import {
   deleteIssueRequest,
   setIssueResolvedRequest,
+  type IssueDto,
 } from "@/src/issues-client";
 import { createNoteRequest } from "@/src/notes-client";
 import { openWebUrl } from "@/src/open-web-url";
@@ -80,7 +82,6 @@ import {
   updateProjectLinkRequest,
   updateProjectRequest,
   type ProjectGoalDto,
-  type ProjectIssueDto,
   type ProjectLabelDto,
   type ProjectLinkDto,
   type ProjectPriority,
@@ -117,6 +118,7 @@ const STATUS_OPTIONS: readonly {
   { value: "backlog", label: "Backlog" },
   { value: "planned", label: "Planned" },
   { value: "in_progress", label: "In Progress" },
+  { value: "ongoing", label: "Ongoing" },
   { value: "completed", label: "Completed" },
   { value: "canceled", label: "Canceled" },
 ];
@@ -142,13 +144,18 @@ function priorityLabel(priority: ProjectPriority): string {
   );
 }
 
-function formatDatePill(start: string | null, target: string | null): string {
+function formatDatePill(
+  start: string | null,
+  target: string | null,
+  ongoing = false,
+): string {
   const startText = start
     ? new Date(`${start}T12:00:00`).toLocaleDateString(undefined, {
         month: "short",
         day: "numeric",
       })
     : "No start";
+  if (ongoing) return startText;
   const targetText = target
     ? new Date(`${target}T12:00:00`).toLocaleDateString(undefined, {
         month: "short",
@@ -642,68 +649,58 @@ export function ProjectDetailScreen({
   );
 
   const resolveIssue = useCallback(
-    async (issue: ProjectIssueDto, resolved: boolean) => {
+    (issue: IssueDto, resolved: boolean) => {
       setBusyIssueId(issue.id);
-      try {
-        const updated = await setIssueResolvedRequest(issue.id, resolved);
-        setWorkspace((current) =>
-          current
-            ? {
-                ...current,
-                issues: current.issues.map((row) =>
-                  row.id === updated.id
-                    ? {
-                        ...row,
-                        status: updated.status,
-                        resolvedAt: updated.resolvedAt,
-                        state: updated.state,
-                      }
-                    : row,
-                ),
-              }
-            : current,
-        );
-      } catch (cause) {
-        setError(
-          cause instanceof Error ? cause.message : "Could not update task.",
-        );
-      } finally {
-        setBusyIssueId(null);
-      }
+      void setIssueResolvedRequest(issue.id, resolved)
+        .then((updated) => {
+          setWorkspace((current) =>
+            current
+              ? {
+                  ...current,
+                  issues: current.issues.map((row) =>
+                    row.id === updated.id
+                      ? {
+                          ...row,
+                          status: updated.status,
+                          resolvedAt: updated.resolvedAt,
+                          state: updated.state,
+                          description: updated.description,
+                          dueDate: updated.dueDate,
+                          reviewDate: updated.reviewDate,
+                        }
+                      : row,
+                  ),
+                }
+              : current,
+          );
+        })
+        .catch((cause) => {
+          setError(
+            cause instanceof Error ? cause.message : "Could not update task.",
+          );
+        })
+        .finally(() => setBusyIssueId(null));
     },
     [],
   );
 
-  const deleteIssue = useCallback((issue: ProjectIssueDto) => {
-    Alert.alert("Delete task?", issue.title, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          void deleteIssueRequest(issue.id)
-            .then(() => {
-              setWorkspace((current) =>
-                current
-                  ? {
-                      ...current,
-                      issues: current.issues.filter(
-                        (row) => row.id !== issue.id,
-                      ),
-                    }
-                  : current,
-              );
-            })
-            .catch((cause) => {
-              setError(
-                cause instanceof Error
-                  ? cause.message
-                  : "Could not delete task.",
-              );
-            });
-        },
-      },
-    ]);
+  const deleteIssue = useCallback((issue: IssueDto) => {
+    void deleteIssueRequest(issue.id)
+      .then(() => {
+        setWorkspace((current) =>
+          current
+            ? {
+                ...current,
+                issues: current.issues.filter((row) => row.id !== issue.id),
+              }
+            : current,
+        );
+      })
+      .catch((cause) => {
+        setError(
+          cause instanceof Error ? cause.message : "Could not delete task.",
+        );
+      });
   }, []);
 
   const chromeActions = useMemo((): readonly ScreenChromeAction[] => {
@@ -754,7 +751,12 @@ export function ProjectDetailScreen({
     Alert.alert("Status", undefined, [
       ...STATUS_OPTIONS.map((option) => ({
         text: option.label,
-        onPress: () => patchProjectFields({ status: option.value }),
+        onPress: () =>
+          patchProjectFields(
+            option.value === "ongoing"
+              ? { status: option.value, targetDate: null }
+              : { status: option.value },
+          ),
       })),
       { text: "Cancel", style: "cancel" as const },
     ]);
@@ -867,11 +869,17 @@ export function ProjectDetailScreen({
 
   const saveDatesSheet = useCallback(() => {
     setDatesOpen(false);
+    const ongoing = workspace?.project.status === "ongoing";
     patchProjectFields({
       startDate: draftStartDate || null,
-      targetDate: draftTargetDate || null,
+      targetDate: ongoing ? null : draftTargetDate || null,
     });
-  }, [draftStartDate, draftTargetDate, patchProjectFields]);
+  }, [
+    draftStartDate,
+    draftTargetDate,
+    patchProjectFields,
+    workspace?.project.status,
+  ]);
 
   const promptAddUrl = useCallback(() => {
     const create = (title: string, url: string) => {
@@ -1031,7 +1039,6 @@ export function ProjectDetailScreen({
   }
 
   const issues = workspace?.issues ?? [];
-  const openIssues = issues.filter((row) => row.status === "open");
   const goals = workspace?.goals ?? [];
   const notes = workspace?.notes ?? [];
   const files = workspace?.artifacts ?? [];
@@ -1090,7 +1097,11 @@ export function ProjectDetailScreen({
               onPress={pickPriority}
             />
             <PropertyPill
-              label={formatDatePill(projectStartDate, projectTargetDate)}
+              label={formatDatePill(
+                projectStartDate,
+                projectTargetDate,
+                projectStatus === "ongoing",
+              )}
               onPress={openDatesSheet}
             />
             <PropertyPill
@@ -1329,20 +1340,21 @@ export function ProjectDetailScreen({
                 title="Tasks"
                 onAdd={() => setCreateTaskOpen(true)}
               >
-                {openIssues.length === 0 ? (
-                  <EmptyRow text="No open tasks." />
+                {issues.length === 0 ? (
+                  <EmptyRow text="No tasks yet." />
                 ) : (
-                  openIssues.map((issue) => (
-                    <IssueRow
-                      busy={busyIssueId === issue.id}
-                      issue={issue}
-                      key={issue.id}
-                      onDelete={() => deleteIssue(issue)}
-                      onResolve={(resolved) =>
-                        void resolveIssue(issue, resolved)
-                      }
-                    />
-                  ))
+                  <View className="overflow-hidden rounded-2xl bg-muted/35">
+                    {issues.map((issue, index) => (
+                      <TaskRow
+                        key={issue.id}
+                        issue={issue as IssueDto}
+                        index={index}
+                        busy={busyIssueId === issue.id}
+                        onResolve={resolveIssue}
+                        onDelete={deleteIssue}
+                      />
+                    ))}
+                  </View>
                 )}
               </SourceSection>
 
@@ -1440,11 +1452,13 @@ export function ProjectDetailScreen({
                 onChange={setDraftStartDate}
                 value={draftStartDate}
               />
-              <TaskDateField
-                label="Target"
-                onChange={setDraftTargetDate}
-                value={draftTargetDate}
-              />
+              {workspace?.project.status === "ongoing" ? null : (
+                <TaskDateField
+                  label="Target"
+                  onChange={setDraftTargetDate}
+                  value={draftTargetDate}
+                />
+              )}
             </View>
             <View className="mt-1 flex-row justify-between">
               <Pressable
@@ -1629,46 +1643,6 @@ function LinkRow({
         </Text>
       ) : null}
     </Pressable>
-  );
-}
-
-function IssueRow({
-  issue,
-  busy,
-  onResolve,
-  onDelete,
-}: {
-  readonly issue: ProjectIssueDto;
-  readonly busy: boolean;
-  readonly onResolve: (resolved: boolean) => void;
-  readonly onDelete: () => void;
-}) {
-  const resolved = issue.status === "resolved";
-  return (
-    <View className="flex-row items-center gap-3 border-b border-border/40 px-3 py-3 last:border-b-0">
-      <Pressable
-        accessibilityLabel={resolved ? "Reopen" : "Complete"}
-        className={cn(
-          "h-7 w-7 items-center justify-center rounded-full border",
-          resolved ? "border-border bg-muted" : "border-foreground/30",
-        )}
-        disabled={busy}
-        onPress={() => onResolve(!resolved)}
-      >
-        {resolved ? (
-          <Icon as={CheckIcon} className="size-4 text-foreground" />
-        ) : null}
-      </Pressable>
-      <Pressable
-        className="min-w-0 flex-1"
-        onLongPress={onDelete}
-        onPress={() => router.push(`/tasks/${encodeURIComponent(issue.id)}`)}
-      >
-        <Text className="text-sm text-foreground" numberOfLines={2}>
-          {issue.title}
-        </Text>
-      </Pressable>
-    </View>
   );
 }
 

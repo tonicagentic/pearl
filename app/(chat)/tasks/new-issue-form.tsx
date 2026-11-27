@@ -18,8 +18,10 @@ export type IssueFormOption = {
  */
 export function NewIssueForm({
   options,
+  defaultAreaId,
 }: {
   readonly options: readonly IssueFormOption[];
+  readonly defaultAreaId?: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [pending, startTransition] = useTransition();
@@ -77,7 +79,19 @@ export function NewIssueForm({
         className="rounded-md border bg-background px-3 py-2 text-sm"
         aria-label="Task title"
       />
-      <IssueFields options={options} />
+      <IssueFields
+        options={options}
+        issue={
+          defaultAreaId
+            ? {
+                description: null,
+                areaId: defaultAreaId,
+                dueDate: null,
+                reviewDate: null,
+              }
+            : undefined
+        }
+      />
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <div className="flex items-center justify-end gap-2">
         <button

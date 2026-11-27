@@ -179,16 +179,37 @@ export function DrawerChatRow({
 
 export function DrawerSectionLabel({
   children,
+  actionLabel,
+  actionAccessibilityLabel,
+  onActionPress,
 }: {
   readonly children: ReactNode;
+  readonly actionLabel?: string;
+  readonly actionAccessibilityLabel?: string;
+  readonly onActionPress?: () => void;
 }) {
   const mutedForeground =
     (useCSSVariable("--color-muted-foreground") as string | undefined) ??
     "#8E8E93";
   return (
-    <Text style={[styles.sectionLabel, { color: mutedForeground }]}>
-      {children}
-    </Text>
+    <View style={styles.sectionLabelRow}>
+      <Text style={[styles.sectionLabel, { color: mutedForeground, flex: 1 }]}>
+        {children}
+      </Text>
+      {actionLabel && onActionPress ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={actionAccessibilityLabel ?? actionLabel}
+          hitSlop={8}
+          onPress={onActionPress}
+          style={styles.sectionAction}
+        >
+          <Text style={[styles.sectionActionLabel, { color: mutedForeground }]}>
+            {actionLabel}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -236,11 +257,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontVariant: ["tabular-nums"],
   },
+  sectionLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: 10,
+    paddingBottom: 4,
+    paddingRight: DRAWER_ROW_PAD_X,
+  },
   sectionLabel: {
     fontSize: 13,
     fontWeight: "600",
     paddingHorizontal: DRAWER_ROW_PAD_X,
-    paddingTop: 10,
-    paddingBottom: 4,
+  },
+  sectionAction: {
+    minHeight: 28,
+    minWidth: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  sectionActionLabel: {
+    fontSize: 18,
+    fontWeight: "500",
+    lineHeight: 22,
   },
 });

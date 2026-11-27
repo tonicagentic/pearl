@@ -8,6 +8,7 @@ export type ProjectStatus =
   | "backlog"
   | "planned"
   | "in_progress"
+  | "ongoing"
   | "completed"
   | "canceled";
 
