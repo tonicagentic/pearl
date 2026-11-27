@@ -78,7 +78,7 @@ export function GoalsScreen() {
   const queryClient = useQueryClient();
   const { offline } = useNetworkStatus();
   const { isAnonymous } = useAuth();
-  const { newChat } = useChats();
+  const { startNewChatWithMessage } = useChats();
   const drawer = usePearlDrawerOptional();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -157,7 +157,7 @@ export function GoalsScreen() {
     (area?: string) => {
       startGoalChat({
         isAnonymous,
-        newChat,
+        startNewChatWithMessage,
         notifyChatSelectedFromDrawer:
           drawer?.notifyChatSelectedFromDrawer ??
           (() => {
@@ -166,7 +166,7 @@ export function GoalsScreen() {
         area,
       });
     },
-    [drawer?.notifyChatSelectedFromDrawer, isAnonymous, newChat],
+    [drawer?.notifyChatSelectedFromDrawer, isAnonymous, startNewChatWithMessage],
   );
 
   const toggleDone = useCallback(

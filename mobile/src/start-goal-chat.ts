@@ -1,10 +1,14 @@
 import { router } from "expo-router";
 
-import { setNewGoalSeedMessage } from "@/src/pending-seed-message";
+import {
+  SET_NEW_GOAL_MESSAGE,
+  setPendingSeedMessage,
+} from "@/src/pending-seed-message";
 
 type StartGoalChatDeps = {
   readonly isAnonymous: boolean;
-  readonly newChat: () => void;
+  /** Prefer `startNewChatWithMessage` so seed is queued after the store swap. */
+  readonly startNewChatWithMessage: (text: string) => void;
   readonly notifyChatSelectedFromDrawer: (opts: {
     readonly tab: "pearl";
   }) => void;
@@ -13,6 +17,12 @@ type StartGoalChatDeps = {
   /** Optional life-area label for “I want to set a new {area} goal”. */
   readonly area?: string;
 };
+
+function goalSeedMessage(area?: string): string {
+  const trimmed = area?.trim();
+  if (trimmed) return `I want to set a new ${trimmed} goal`;
+  return SET_NEW_GOAL_MESSAGE;
+}
 
 /**
  * Open a new Pearl chat and auto-send the Goals walkthrough opener.
@@ -24,8 +34,9 @@ export function startGoalChat(deps: StartGoalChatDeps): void {
     return;
   }
 
-  setNewGoalSeedMessage(deps.area);
-  deps.newChat();
+  // newChat + seed in one shot (seed after store swap). newChat clears the
+  // attached project, so re-attach afterward when filing on a project.
+  deps.startNewChatWithMessage(goalSeedMessage(deps.area));
   if (deps.projectId && deps.setActiveProjectId) {
     deps.setActiveProjectId(deps.projectId);
   }

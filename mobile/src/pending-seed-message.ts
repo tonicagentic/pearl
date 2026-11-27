@@ -42,12 +42,3 @@ export function subscribePendingSeedMessage(
 
 /** Product copy for Goals create → Pearl walkthrough. */
 export const SET_NEW_GOAL_MESSAGE = "I want to set a new goal";
-
-export function setNewGoalSeedMessage(area?: string): void {
-  const trimmed = area?.trim();
-  if (trimmed) {
-    setPendingSeedMessage(`I want to set a new ${trimmed} goal`);
-    return;
-  }
-  setPendingSeedMessage(SET_NEW_GOAL_MESSAGE);
-}

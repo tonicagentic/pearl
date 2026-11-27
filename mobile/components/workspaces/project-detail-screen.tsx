@@ -146,7 +146,8 @@ export function ProjectDetailScreen({
   readonly projectId: string;
 }) {
   const queryClient = useQueryClient();
-  const { chats, selectChat, setActiveProjectId, newChat } = useChats();
+  const { chats, selectChat, setActiveProjectId, startNewChatWithMessage } =
+    useChats();
   const { isAnonymous } = useAuth();
   const drawer = usePearlDrawerOptional();
   const [workspace, setWorkspace] = useState<ProjectWorkspaceDto | null>(null);
@@ -309,7 +310,7 @@ export function ProjectDetailScreen({
   const promptNewGoal = useCallback(() => {
     startGoalChat({
       isAnonymous,
-      newChat,
+      startNewChatWithMessage,
       notifyChatSelectedFromDrawer:
         drawer?.notifyChatSelectedFromDrawer ?? (() => {}),
       setActiveProjectId,
@@ -318,9 +319,9 @@ export function ProjectDetailScreen({
   }, [
     drawer?.notifyChatSelectedFromDrawer,
     isAnonymous,
-    newChat,
     projectId,
     setActiveProjectId,
+    startNewChatWithMessage,
   ]);
 
   const createNote = useCallback(() => {

@@ -28,6 +28,7 @@ import {
   seedLiveReplyParts,
 } from "./live-reply-text";
 import { pendingMessageLabel, hasPendingAction } from "./message-projection";
+import { setPendingSeedMessage } from "./pending-seed-message";
 import type { LiveSpokenDraft, SpokenTurn } from "../../lib/chat/spoken-turns";
 import {
   appendChatEvents,
@@ -207,6 +208,11 @@ type ActiveChatContextValue = {
   readonly recoverDeadSession: (source: SessionStore) => boolean;
   /** Drop the active chat and start fresh (the row is created on first send). */
   readonly newChat: () => void;
+  /**
+   * Start a fresh Pearl chat and queue `text` to auto-send once the empty
+   * composer is ready (Goals create, etc.). Caller still navigates to `/`.
+   */
+  readonly startNewChatWithMessage: (text: string) => void;
   /** Live voice lines shown until eve imports them on the next real send. */
   readonly spokenTurns: readonly SpokenTurn[];
   /** Persist a live call without starting a Pearl turn. */
@@ -1285,6 +1291,15 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
     }
   }, [buildStore, pruneIdleStore]);
 
+  /** Fresh chat + one-shot auto-send once SeedMessageBridge sees an empty composer. */
+  const startNewChatWithMessage = useCallback(
+    (text: string) => {
+      newChat();
+      setPendingSeedMessage(text);
+    },
+    [newChat],
+  );
+
   const saveSpokenTurns = useCallback(
     async (drafts: readonly LiveSpokenDraft[]) => {
       const store = activeStoreRef.current;
@@ -1769,6 +1784,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       clearPendingMessage,
       recoverDeadSession,
       newChat,
+      startNewChatWithMessage,
       spokenTurns,
       saveSpokenTurns,
       quickTurns,
@@ -1800,6 +1816,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       clearPendingMessage,
       recoverDeadSession,
       newChat,
+      startNewChatWithMessage,
       spokenTurns,
       saveSpokenTurns,
       quickTurns,

@@ -300,6 +300,10 @@ const copyToClipboard = async (text: string) => {
 /**
  * Goals (and similar) queue a first message before navigating to Pearl.
  * Send it once the empty composer is ready.
+ *
+ * Take the seed only when actually sending — clearing it in the effect body
+ * lost the message when `newChat()` swapped the store and re-ran this effect
+ * before the timeout fired.
  */
 const SeedMessageBridge: FC = () => {
   const aui = useAui();
@@ -318,15 +322,14 @@ const SeedMessageBridge: FC = () => {
     if (activeChatId != null) return;
     if (messageCount > 0 || isRunning) return;
 
-    const text = takePendingSeedMessage();
-    if (!text) return;
-
     let cancelled = false;
     const timer = setTimeout(() => {
       if (cancelled) return;
+      const text = takePendingSeedMessage();
+      if (!text) return;
       aui.composer.setText(text);
       aui.composer.send();
-    }, 80);
+    }, 120);
 
     return () => {
       cancelled = true;
