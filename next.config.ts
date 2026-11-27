@@ -50,4 +50,9 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withEve(withAui(nextConfig));
+// withEve only publishes `/eve/v1/*`. Chain the automations publisher onto
+// the eve service build so `/api/automations` is routed after that output exists.
+const eveBuildCommand =
+  "node ./node_modules/eve/bin/eve.js build && node ./scripts/publish-automation-routes.mjs";
+
+export default withEve(withAui(nextConfig), { eveBuildCommand });
