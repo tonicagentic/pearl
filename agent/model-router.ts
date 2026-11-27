@@ -1,4 +1,5 @@
 import { auto, type DynamicModelContext } from "eve/models";
+import type { JsonObject } from "eve/events";
 
 import {
   classifyPearlHeuristic,
@@ -48,14 +49,14 @@ type AutoSelection = {
   readonly reasoning?: "low" | "medium" | "high";
   readonly modelOptions?: {
     readonly providerOptions?: {
-      readonly gateway?: Record<string, unknown>;
+      readonly gateway?: JsonObject;
     };
   };
 };
 
 function selectionWithGateway(
   model: string,
-  gateway: Record<string, unknown>,
+  gateway: JsonObject,
   reasoning: "low" | "medium" = "low",
 ): AutoSelection {
   return {
