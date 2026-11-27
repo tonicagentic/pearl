@@ -48,7 +48,7 @@ import { drawerProjectHref } from "@/src/overview-ui";
 import { fetchProjects } from "@/src/projects-client";
 import { queryKeys } from "@/src/query-client";
 
-/** Space reserved under the list so rows clear the Chat + avatar footer. */
+/** Space reserved under the list so rows clear the profile footer. */
 const FOOTER_CLEARANCE = 64;
 
 /** Rows under the Track section label (not Library). */
@@ -85,8 +85,8 @@ type DrawerPanelNav = {
 };
 
 /**
- * ChatGPT-style drawer: brand + search in the header, Chat pill + avatar in
- * the sticky footer, full-screen search overlay for history.
+ * ChatGPT-style drawer: brand + search in the header, profile in the
+ * sticky footer, full-screen search overlay for history.
  */
 export function DrawerPanel({
   navigation,
@@ -310,40 +310,14 @@ export function DrawerPanel({
           style={{
             flexDirection: "row",
             alignItems: "center",
-            justifyContent: "space-between",
+            justifyContent: "flex-end",
             paddingHorizontal: DRAWER_EDGE + DRAWER_ROW_PAD_X,
             paddingTop: 8,
           }}
         >
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="New chat"
-            hitSlop={4}
-            onPress={openNewChat}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              height: 44,
-              paddingHorizontal: 16,
-              borderRadius: 22,
-              backgroundColor: "#2563EB",
-            }}
-          >
-            <Icon as={SquarePenIcon} className="size-4 text-white" />
-            <Text
-              style={{
-                color: "#FFFFFF",
-                fontSize: 16,
-                fontWeight: "600",
-              }}
-            >
-              Chat
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={isAnonymous ? "Sign in" : "Profile"}
+            accessibilityLabel={isAnonymous ? "Sign in" : "Settings"}
             hitSlop={8}
             onPress={openProfile}
             style={{
@@ -352,7 +326,7 @@ export function DrawerPanel({
               borderRadius: 20,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: isAnonymous ? mutedColor : "#2A9D8F",
+              backgroundColor: mutedColor,
             }}
           >
             {isAnonymous ? (
@@ -360,7 +334,7 @@ export function DrawerPanel({
             ) : (
               <Text
                 style={{
-                  color: "#FFFFFF",
+                  color: foregroundColor,
                   fontSize: 13,
                   fontWeight: "700",
                 }}
