@@ -10,8 +10,8 @@ export {
 } from "./gateway-policy.ts";
 
 // AGENT_MODEL_OVERRIDE lets experiments (evals, model comparisons) swap the
-// model without editing the agent; production stays on Auto routing. It wins
-// over the client picker so experiments stay pinned.
+// model without editing the agent; production stays on eve auto() (Decide).
+// It wins over the client picker so experiments stay pinned.
 // (Set in evals.config.ts or the shell when needed.)
 
 // Checkpoint batching (docs: agent-config#workflow-checkpoint-batching): the
@@ -28,8 +28,10 @@ export const WORKFLOW_BATCHING = {
 
 export default defineAgent({
   // Resolution runs before every model call. Auto (missing/auto marker) uses
-  // the lane router; a pinned picker key or AGENT_MODEL_OVERRIDE skips it.
-  // Tradeoff: prompt caches are per model, so switching lanes mid-session
+  // eve auto() with inkling-2-mini as the routine default; a pinned picker key
+  // or AGENT_MODEL_OVERRIDE skips Decide. Tool surfaces still come from
+  // pearl-lane heuristics inside resolvePearlModel.
+  // Tradeoff: prompt caches are per model, so switching mid-session
   // re-ingests the conversation at uncached prices.
   model: defineDynamic(async (ctx) => resolvePearlModel(ctx)),
   experimental: WORKFLOW_BATCHING,

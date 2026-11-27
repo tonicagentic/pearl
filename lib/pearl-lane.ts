@@ -35,7 +35,8 @@ const LONG_PASTE_CHARS = 1200;
 
 /**
  * Classify the latest user text into a lane, or null when ambiguous.
- * A weak cue is not enough — leave null so Sol stays warm.
+ * A weak cue is not enough — leave null so tool surfaces stay open
+ * (and eve auto() picks the model independently).
  */
 export function classifyPearlHeuristic(text: string): PearlLane | null {
   const trimmed = text.trim();

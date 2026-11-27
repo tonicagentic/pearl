@@ -56,12 +56,18 @@ editing**. Every eval below traces to a requirement in one of them.
 
 ### `introspection/` — sit with how I feel
 
-Personal mood and feeling shares — accompany specifically, don’t fix, diagnose,
-or research. Distinct from `thinking-partner/` (ideas and observations).
+Personal mood and feeling shares: accompany specifically, don’t fix, diagnose,
+or research. Quiet Sol sit-with voice in plain English (validate when fair,
+push back when unfair; end with a question; avoid em dashes and person-like
+performance). Distinct from `thinking-partner/` (ideas and observations).
+Multi-turn arcs mirror prod length (~4–8 turns): track the thread; don’t
+restart with tips each turn. Authored prompts use fictional genres only.
 
-| Eval | User can ask… | Layer |
-| --- | --- | --- |
-| `sit-with-feeling` | “I feel sorta down…” / “I’m worried about my interview this afternoon.” — accompany the feeling; no unsolicited fix list or clinical label. | gates + judge |
+| Eval | User can ask… | Layer | Timeout |
+| --- | --- | --- | --- |
+| `sit-with-feeling` | “I feel sorta down…” / “I’m worried about my interview…” — accompany; no fix list / diagnosis (2 short sessions). | gates + judge | 180s |
+| `family-drain-short-thread` | 4 turns: drained after family → loop dynamic → “I don’t want a plan” → still sits. | gates + judge / turn | 300s |
+| `missed-out-deepen` | 5–6 turns: left out of friends’ plans → nostalgia → “the playfulness” → reframe → hang back. | gates + judge / turn | 420s |
 
 ```bash
 pnpm exec eve eval introspection --tag smoke
@@ -422,11 +428,14 @@ pnpm exec eve eval plan-a-trip --tag smoke
 
 ### `explain/` — make a mechanism clear
 
-Teach how something works without inventing citations.
+Teach how something works without inventing citations. Multi-turn arcs keep a
+shared vocabulary across clarifying questions (prod “how does X work” deepen).
 
-| Eval | User can ask… | Layer |
-| --- | --- | --- |
-| `explain-mechanism` | “Explain how X works” / Adderall–ADHD / Riemann hypothesis — concrete mechanism explanation; no fabricated sources. | gates + judge |
+| Eval | User can ask… | Layer | Timeout |
+| --- | --- | --- | --- |
+| `explain-mechanism` | JWT / Adderall–ADHD / Riemann — single-turn mechanism; no fabricated sources. | gates + judge | 240s |
+| `metaphor-deepen` | 5 turns: waterwheel → drop vs flow → doubled flow → pipe/pressure → taper. Knowledge-first (`notCalledTool(web_search)`). | gates + judge / turn | 420s |
+| `craft-notes-thread` | 5 turns: indie sound → keys/chords → compare references → writing notes → synthesis. No fake discographies. | gates + judge / turn | 420s |
 
 ```bash
 pnpm exec eve eval explain --tag smoke
@@ -434,15 +443,19 @@ pnpm exec eve eval explain --tag smoke
 
 ### `answer/` — short factual answers with sources
 
-Current questions get search + attributable sources.
+Current questions get search + attributable sources. Multi-turn lookups must
+reuse prior reply context (not a new unrelated brief each turn).
 
-| Eval | User can ask… | Layer |
-| --- | --- | --- |
-| `answer-with-sources` | “What’s going on with X this week?” / car registration / “Why so few trees in western SF?” — short answer with search citations. | gates + judge |
+| Eval | User can ask… | Layer | Timeout |
+| --- | --- | --- | --- |
+| `answer-with-sources` | EU AI regulation / car registration / western SF trees — short answer with search citations (EU timing softened). | gates + judge | 180s |
+| `lookup-then-followup` | 4 turns: ski resort open? → weekend conditions → nearby resort → best day this week. | gates + judge / turn | 420s |
+| `fact-then-why` | 3 turns: demographic seed → where does a state stand? → what helps explain that? | gates + judge / turn | 360s |
 
 ```bash
 pnpm exec eve eval answer --tag smoke
 ```
+
 
 ### `designer/` — designer subagent (Spec → Agent: Designer)
 

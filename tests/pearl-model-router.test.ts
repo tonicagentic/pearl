@@ -12,10 +12,11 @@ import {
   CODER_TIERS,
 } from "../agent/subagents/coder/model-router.ts";
 import {
-  PEARL_LANES,
-  PEARL_SPECIALIST_THRESHOLD,
-  laneFromDecisionAnswer,
-  modelForLane,
+  PEARL_AUTO_MODEL_IDS,
+  PEARL_AUTO_OPTION_DESCRIPTIONS,
+  PEARL_QUICK_MODEL,
+  PEARL_ROUTINE_GATEWAY_OPTIONS,
+  PEARL_ROUTINE_MODEL,
   resolvePinnedModelForStep,
 } from "../agent/model-router.ts";
 import { nextRevealLength } from "../mobile/src/stream-presentation.ts";
@@ -116,7 +117,7 @@ describe("classifyPearlHeuristic", () => {
     assert.equal(classifyPearlHeuristic(paste), "analysis");
   });
 
-  it("leaves weak or mixed cues undecided so Sol stays warm", () => {
+  it("leaves weak or mixed cues undecided so tool surfaces stay open", () => {
     // Longer than the short-chat voice cutoff, with no tool / analysis / prose cue.
     const ambiguous =
       "I have been wondering about the relationship between cities and memory " +
@@ -233,74 +234,47 @@ describe("laneNeedsImageSurface", () => {
   });
 });
 
-describe("modelForLane", () => {
-  it("pins Sol Fast at low reasoning for voice and think", () => {
-    const voice = modelForLane("voice");
-    assert.equal(voice.model, PEARL_LANES.voice.primary);
-    assert.equal(voice.reasoning, "low");
-    assert.equal(modelForLane("think").model, PEARL_LANES.think.primary);
+describe("pearl auto options", () => {
+  it("defaults routine and quick path to inkling-2-mini", () => {
+    assert.equal(PEARL_ROUTINE_MODEL, "thinkingmachines/inkling-2-mini");
+    assert.equal(PEARL_QUICK_MODEL, PEARL_ROUTINE_MODEL);
   });
 
-  it("routes tools to Inkling and analysis to Ultramarine", () => {
-    assert.equal(modelForLane("tools").model, PEARL_LANES.tools.primary);
+  it("drops the US region pin on mini (ZDR only)", () => {
     assert.equal(
-      modelForLane("analysis").model,
-      PEARL_LANES.analysis.primary,
+      (PEARL_ROUTINE_GATEWAY_OPTIONS as { inferenceRegion?: unknown })
+        .inferenceRegion,
+      undefined,
+    );
+    assert.equal(PEARL_ROUTINE_GATEWAY_OPTIONS.zeroDataRetention, true);
+    assert.equal(PEARL_ROUTINE_GATEWAY_OPTIONS.disallowPromptTraining, true);
+  });
+
+  it("covers mini, Sol, and Ultramarine with prod-grounded descriptions", () => {
+    assert.deepEqual([...PEARL_AUTO_MODEL_IDS].sort(), [
+      "openai/gpt-6.1-sol",
+      "paperinstruments/ultramarine-1-flash",
+      "thinkingmachines/inkling-2-mini",
+    ]);
+    assert.match(
+      PEARL_AUTO_OPTION_DESCRIPTIONS[PEARL_ROUTINE_MODEL],
+      /feelings|sitting-with|short factual/i,
+    );
+    assert.match(
+      PEARL_AUTO_OPTION_DESCRIPTIONS["openai/gpt-6.1-sol"],
+      /judgment|nuance|drafting/i,
+    );
+    assert.match(
+      PEARL_AUTO_OPTION_DESCRIPTIONS["paperinstruments/ultramarine-1-flash"],
+      /documents|diligence|research/i,
     );
   });
 
-  it("keeps the specialist confidence bar at 0.7", () => {
-    assert.equal(PEARL_SPECIALIST_THRESHOLD, 0.7);
-  });
-
-  it("drops the US region pin on the Ultramarine analysis lane", () => {
-    const analysisGateway = modelForLane("analysis").modelOptions
-      .providerOptions.gateway as {
-      inferenceRegion?: unknown;
-      zeroDataRetention?: boolean;
-    };
-    assert.equal(analysisGateway.inferenceRegion, undefined);
-    assert.equal(analysisGateway.zeroDataRetention, true);
-    const voiceGateway = modelForLane("voice").modelOptions.providerOptions
-      .gateway as { inferenceRegion?: { geoRegion?: string } };
-    assert.equal(voiceGateway.inferenceRegion?.geoRegion, "us");
-  });
-});
-
-describe("laneFromDecisionAnswer", () => {
-  it("accepts tools or analysis only at or above the confidence bar", () => {
+  it("allowlists inkling-2-mini on the client picker", () => {
     assert.equal(
-      laneFromDecisionAnswer({
-        choice: "tools",
-        probabilities: { tools: 0.7 },
-      }),
-      "tools",
+      CLIENT_MODEL_KEYS["inkling-2-mini"],
+      "thinkingmachines/inkling-2-mini",
     );
-    assert.equal(
-      laneFromDecisionAnswer({
-        choice: "analysis",
-        probabilities: { analysis: 0.91 },
-      }),
-      "analysis",
-    );
-  });
-
-  it("falls back to voice on a weak specialist or non-specialist choice", () => {
-    assert.equal(
-      laneFromDecisionAnswer({
-        choice: "tools",
-        probabilities: { tools: 0.69 },
-      }),
-      "voice",
-    );
-    assert.equal(
-      laneFromDecisionAnswer({
-        choice: "think",
-        probabilities: { think: 0.99 },
-      }),
-      "voice",
-    );
-    assert.equal(laneFromDecisionAnswer({ choice: "voice" }), "voice");
   });
 });
 
@@ -321,14 +295,18 @@ describe("resolvePinnedModelForStep", () => {
     };
   }
 
-  it("applies the full policy to every client pin", () => {
+  it("applies ZDR to every client pin; US zone except mini", () => {
     clearOverride();
     for (const [key, model] of Object.entries(CLIENT_MODEL_KEYS)) {
       const selection = resolvePinnedModelForStep([markerMessage(key)]);
       assert.equal(selection.model, model);
       assert.equal(gatewayOf(selection).zeroDataRetention, true);
       assert.equal(gatewayOf(selection).disallowPromptTraining, true);
-      assert.equal(gatewayOf(selection).inferenceRegion?.geoRegion, "us");
+      if (model === "thinkingmachines/inkling-2-mini") {
+        assert.equal(gatewayOf(selection).inferenceRegion, undefined);
+      } else {
+        assert.equal(gatewayOf(selection).inferenceRegion?.geoRegion, "us");
+      }
     }
   });
 

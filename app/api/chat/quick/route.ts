@@ -9,9 +9,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
-  GATEWAY_PROVIDER_OPTIONS,
-} from "@/agent/gateway-policy";
-import { PEARL_LANES } from "@/agent/model-router";
+  PEARL_QUICK_FALLBACK,
+  PEARL_QUICK_MODEL,
+  PEARL_ROUTINE_GATEWAY_OPTIONS,
+} from "@/agent/model-router";
 import {
   QUICK_PATH_ESCALATE_DESCRIPTION,
   QUICK_PATH_SYSTEM_PROMPT,
@@ -140,7 +141,7 @@ export async function POST(request: Request) {
 
       try {
         const result = streamText({
-          model: gateway(PEARL_LANES.voice.primary),
+          model: gateway(PEARL_QUICK_MODEL),
           system: QUICK_PATH_SYSTEM_PROMPT,
           messages: historyMessages,
           tools: {
@@ -155,9 +156,11 @@ export async function POST(request: Request) {
           stopWhen: hasToolCall("escalate"),
           providerOptions: {
             gateway: {
-              ...GATEWAY_PROVIDER_OPTIONS,
-              models: [PEARL_LANES.voice.fallback],
-              tags: ["lane:voice", "agent:pearl", "path:quick"],
+              // Mini has no US zone pin; ZDR only. Sol fallback keeps full policy
+              // via models[] if the primary is unavailable.
+              ...PEARL_ROUTINE_GATEWAY_OPTIONS,
+              models: [PEARL_QUICK_FALLBACK],
+              tags: ["auto:mini", "agent:pearl", "path:quick"],
             },
           },
         });
@@ -244,7 +247,7 @@ export async function POST(request: Request) {
           reservationId: gate.reservationId,
           metadata: {
             path: "quick",
-            modelId: PEARL_LANES.voice.primary,
+            modelId: PEARL_QUICK_MODEL,
             inputTokens: usageRecord.inputTokens ?? null,
             outputTokens: usageRecord.outputTokens ?? null,
             chatId,

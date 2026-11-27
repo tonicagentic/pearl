@@ -12,10 +12,11 @@
 export const DEFAULT_MODEL = "openai/gpt-6.1-sol";
 
 // "auto" is the composer default: missing marker or the auto key both mean
-// the parent-agent lane router chooses the model (agent/model-router.ts).
+// eve auto() chooses the model (agent/model-router.ts).
 export const AUTO_MODEL_KEY = "auto";
 
 export const CLIENT_MODEL_KEYS = {
+  "inkling-2-mini": "thinkingmachines/inkling-2-mini",
   "gpt-6.1-sol": "openai/gpt-6.1-sol",
   "glm-5.3-flash": "zai/glm-5.3-flash",
   "muse-spark-open": "meta/muse-spark-open",

@@ -32,13 +32,18 @@ export const COMPOSER_MODEL_SECTIONS: readonly ComposerModelSection[] = [
     id: "auto",
     title: "Auto",
     description:
-      "Routes each turn for speed and cost: Sol for chat, specialists for tools and documents.",
+      "Routes each turn for speed and cost: Inkling Mini for routine chat, Sol for hard judgment, Ultramarine for documents.",
     models: [{ key: "auto", label: "Auto", company: "Pearl" }],
   },
   {
     id: "daily-driver",
     title: "Daily Driver",
     models: [
+      {
+        key: "inkling-2-mini",
+        label: "Inkling 2 Mini",
+        company: "Thinking Machines",
+      },
       { key: "gpt-6.1-sol", label: "GPT 6.1 Sol", company: "OpenAI" },
       {
         key: "glm-5.3-flash",
