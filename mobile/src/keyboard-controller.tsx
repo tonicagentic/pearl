@@ -1,4 +1,10 @@
-import { type ComponentType, type ReactNode } from "react";
+import {
+  type ComponentType,
+  type PropsWithChildren,
+  type ReactNode,
+  type Ref,
+} from "react";
+import { View, type ViewProps } from "react-native";
 
 /**
  * `react-native-keyboard-controller` throws while loading in Expo Go (its
@@ -15,8 +21,19 @@ type KeyboardHandler = {
 type KeyboardControllerApi = {
   isVisible: () => boolean;
   state: () => { height: number };
-  dismiss: (options?: { keepFocus?: boolean; animated?: boolean }) => Promise<void>;
+  dismiss: (options?: {
+    keepFocus?: boolean;
+    animated?: boolean;
+  }) => Promise<void>;
 };
+
+type KeyboardStickyViewProps = {
+  readonly offset?: {
+    readonly closed?: number;
+    readonly opened?: number;
+  };
+  readonly enabled?: boolean;
+} & ViewProps;
 
 type KeyboardModule = {
   KeyboardProvider: ComponentType<{
@@ -24,6 +41,11 @@ type KeyboardModule = {
     enabled?: boolean;
   }>;
   KeyboardController: KeyboardControllerApi;
+  KeyboardStickyView: ComponentType<
+    PropsWithChildren<KeyboardStickyViewProps> & {
+      ref?: Ref<View>;
+    }
+  >;
   useKeyboardHandler: (handler: KeyboardHandler, deps?: unknown[]) => void;
 };
 
@@ -42,16 +64,34 @@ function FallbackKeyboardProvider({ children }: { children?: ReactNode }) {
   return <>{children}</>;
 }
 
+function FallbackKeyboardStickyView({
+  children,
+  style,
+  ...props
+}: PropsWithChildren<KeyboardStickyViewProps>) {
+  return (
+    <View style={style} {...props}>
+      {children}
+    </View>
+  );
+}
+
 const fallbackController: KeyboardControllerApi = {
   isVisible: () => false,
   state: () => ({ height: 0 }),
   dismiss: async () => {},
 };
 
-export const KeyboardProvider = loaded?.KeyboardProvider ?? FallbackKeyboardProvider;
+export const KeyboardProvider =
+  loaded?.KeyboardProvider ?? FallbackKeyboardProvider;
 
 export const KeyboardController: KeyboardControllerApi =
   loaded?.KeyboardController ?? fallbackController;
+
+export const KeyboardStickyView =
+  loaded?.KeyboardStickyView ?? FallbackKeyboardStickyView;
+
+export type { KeyboardStickyViewProps };
 
 export function useKeyboardHandler(
   handler: KeyboardHandler,
