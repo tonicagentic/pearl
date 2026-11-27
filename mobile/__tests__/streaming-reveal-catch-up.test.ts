@@ -32,4 +32,28 @@ describe("snapStreamingReveal", () => {
     expect(next.shown).toBeGreaterThanOrEqual(6);
     expect(next.shown).toBeLessThanOrEqual(7);
   });
+
+  it("keeps concurrent keyed reveals isolated", () => {
+    snapStreamingReveal("a");
+    const a = advanceStreamingReveal(tokenize("one two three"), 20, 1_000, "a");
+    expect(a.shown).toBe(3);
+
+    snapStreamingReveal("b");
+    const b = advanceStreamingReveal(
+      tokenize("alpha beta gamma delta"),
+      20,
+      1_000,
+      "b",
+    );
+    expect(b.shown).toBe(4);
+
+    snapStreamingReveal("a");
+    const bAfter = advanceStreamingReveal(
+      tokenize("alpha beta gamma delta"),
+      20,
+      1_050,
+      "b",
+    );
+    expect(bAfter.shown).toBe(4);
+  });
 });

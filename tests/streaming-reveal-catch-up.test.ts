@@ -30,3 +30,22 @@ test("snapStreamingReveal paces only growth after the snapped backlog", () => {
   assert.ok(next.shown >= 6);
   assert.ok(next.shown <= 7);
 });
+
+test("keyed reveal progress keeps concurrent parts isolated", () => {
+  __resetStreamingRevealForTests();
+  const tokensA = tokenize("one two three");
+  const tokensB = tokenize("alpha beta gamma delta");
+  snapStreamingReveal("msgA:p1");
+  const a = advanceStreamingReveal(tokensA, 20, 1_000, "msgA:p1");
+  assert.equal(a.shown, 3);
+
+  snapStreamingReveal("msgB:p1");
+  const b = advanceStreamingReveal(tokensB, 20, 1_000, "msgB:p1");
+  assert.equal(b.shown, 4);
+
+  // Resetting A must not wipe B's snapped progress.
+  snapStreamingReveal("msgA:p1");
+  const bAgain = advanceStreamingReveal(tokensB, 20, 1_050, "msgB:p1");
+  assert.equal(bAgain.shown, 4);
+  assert.equal(bAgain.fadeFromWord, 4);
+});

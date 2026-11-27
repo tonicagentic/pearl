@@ -23,6 +23,9 @@ export function tokenize(src: string): Token[] {
 
 export const DEFAULT_WORDS_PER_SECOND = 20;
 
+/** Fallback key when callers omit a per-part id (legacy single-slot behavior). */
+const DEFAULT_REVEAL_KEY = "__default__";
+
 export type StreamingReveal = {
   /** Prefix of `text` ending on a word boundary. */
   readonly visibleText: string;
@@ -40,90 +43,138 @@ export type StreamingReveal = {
   readonly visibleCount: number;
 };
 
+type RevealProgress = {
+  shown: number;
+  tickAt: number;
+  fadeFromWord: number;
+  fadeFromChar: number;
+};
+
 /**
  * Survive React remounts during high-frequency delta re-renders. Without this,
  * each remount re-inits shown at `ready - rate` and rAF never finishes the
  * last second of words (cursor-only / single-word stall on mobile).
  *
- * Only the live (`streaming`) instance mutates this. Settled markdown must not
- * reset it during render — user bubbles also call this hook with streaming=false.
+ * Progress is keyed by message/part so concurrent streaming trees do not share
+ * or reset each other's cursor. Settled markdown must not reset during render.
  */
-let turnShown = 0;
-let turnTickAt = 0;
-let turnFadeFromWord = 0;
-let turnFadeFromChar = 0;
+const progressByKey = new Map<string, RevealProgress>();
 
 function nowMs(): number {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
 
-function resetTurn(): void {
-  turnShown = 0;
-  turnTickAt = nowMs();
-  turnFadeFromWord = 0;
-  turnFadeFromChar = 0;
+function resolveKey(key?: string | null): string {
+  return key && key.length > 0 ? key : DEFAULT_REVEAL_KEY;
+}
+
+function getProgress(key: string): RevealProgress {
+  let progress = progressByKey.get(key);
+  if (!progress) {
+    progress = {
+      shown: 0,
+      tickAt: nowMs(),
+      fadeFromWord: 0,
+      fadeFromChar: 0,
+    };
+    progressByKey.set(key, progress);
+  }
+  return progress;
+}
+
+function resetTurn(key: string): void {
+  const progress = getProgress(key);
+  progress.shown = 0;
+  progress.tickAt = nowMs();
+  progress.fadeFromWord = 0;
+  progress.fadeFromChar = 0;
+}
+
+function snapProgress(progress: RevealProgress): void {
+  progress.tickAt = 0;
+  progress.shown = 0;
+  progress.fadeFromWord = 0;
+  progress.fadeFromChar = 0;
 }
 
 /**
  * Force the next streaming paint to show whatever is already buffered with
  * no fade. Used after catch-up seeds the live overlay so held text snaps in
  * and only tokens that arrive afterward are paced.
+ *
+ * Omit `key` (catch-up / legacy) to snap every slot — the message/part id is
+ * not known yet, and only the active chat paints. Pass a key to snap one part.
  */
-export function snapStreamingReveal(): void {
-  turnTickAt = 0;
-  turnShown = 0;
-  turnFadeFromWord = 0;
-  turnFadeFromChar = 0;
+export function snapStreamingReveal(key?: string | null): void {
+  if (key == null || key.length === 0) {
+    if (progressByKey.size === 0) {
+      snapProgress(getProgress(DEFAULT_REVEAL_KEY));
+      return;
+    }
+    for (const progress of progressByKey.values()) {
+      snapProgress(progress);
+    }
+    return;
+  }
+  snapProgress(getProgress(resolveKey(key)));
 }
 
-function applyCatchUpFloor(ready: number, rate: number, tokens: readonly Token[]): void {
+function applyCatchUpFloor(
+  progress: RevealProgress,
+  ready: number,
+  rate: number,
+  tokens: readonly Token[],
+): void {
   const floor = ready > rate ? ready - rate : 0;
-  turnShown = Math.max(turnShown, floor);
-  if (floor > turnFadeFromWord) {
-    turnFadeFromWord = floor;
-    turnFadeFromChar = tokens[floor]?.start ?? 0;
+  progress.shown = Math.max(progress.shown, floor);
+  if (floor > progress.fadeFromWord) {
+    progress.fadeFromWord = floor;
+    progress.fadeFromChar = tokens[floor]?.start ?? 0;
   }
 }
 
 /**
- * Advance module-level reveal progress for a streaming turn.
- * Exported for catch-up tests — the hook calls this on each render/rAF tick.
+ * Advance reveal progress for a streaming turn (keyed so concurrent parts
+ * stay isolated). Exported for catch-up tests — the hook calls this on each
+ * render/rAF tick.
  */
 export function advanceStreamingReveal(
   tokens: readonly Token[],
   wordsPerSecond: number = DEFAULT_WORDS_PER_SECOND,
   now: number = nowMs(),
+  key?: string | null,
 ): {
   readonly shown: number;
   readonly fadeFromWord: number;
   readonly fadeFromChar: number;
 } {
+  const progress = getProgress(resolveKey(key));
   const ready = tokens.length;
   const rate = Math.max(wordsPerSecond, 1);
-  if (turnTickAt === 0) {
-    turnShown = ready;
-    turnFadeFromWord = ready;
-    turnFadeFromChar = ready > 0 ? (tokens[ready - 1]?.end ?? 0) : 0;
-    turnTickAt = now;
+  if (progress.tickAt === 0) {
+    progress.shown = ready;
+    progress.fadeFromWord = ready;
+    progress.fadeFromChar = ready > 0 ? (tokens[ready - 1]?.end ?? 0) : 0;
+    progress.tickAt = now;
   } else {
-    const dt = Math.min(0.1, (now - turnTickAt) / 1000);
-    turnTickAt = now;
-    const before = Math.floor(turnShown);
-    applyCatchUpFloor(ready, rate, tokens);
-    const afterFloor = Math.floor(turnShown);
+    const dt = Math.min(0.1, (now - progress.tickAt) / 1000);
+    progress.tickAt = now;
+    const before = Math.floor(progress.shown);
+    applyCatchUpFloor(progress, ready, rate, tokens);
+    const afterFloor = Math.floor(progress.shown);
     if (ready > before && afterFloor <= before) {
-      turnFadeFromWord = before;
-      turnFadeFromChar =
-        before > 0 ? (tokens[before - 1]?.end ?? turnFadeFromChar) : 0;
+      progress.fadeFromWord = before;
+      progress.fadeFromChar =
+        before > 0 ? (tokens[before - 1]?.end ?? progress.fadeFromChar) : 0;
     }
-    if (turnShown < ready) {
-      turnShown = Math.min(ready, turnShown + dt * rate);
+    if (progress.shown < ready) {
+      progress.shown = Math.min(ready, progress.shown + dt * rate);
     }
   }
   return {
-    shown: Math.min(ready, Math.floor(turnShown)),
-    fadeFromWord: turnFadeFromWord,
-    fadeFromChar: turnFadeFromChar,
+    shown: Math.min(ready, Math.floor(progress.shown)),
+    fadeFromWord: progress.fadeFromWord,
+    fadeFromChar: progress.fadeFromChar,
   };
 }
 
@@ -132,25 +183,31 @@ export function advanceStreamingReveal(
  * Huge mid-stream jumps skip ahead but keep ~1s of tail to animate. When the
  * turn ends, snap the remainder — no theatrical post-complete catch-up.
  *
- * Progress is wall-clock + module-level so remounts / cancelled rAFs cannot
- * pin the UI on a lone cursor while hundreds of words sit buffered.
+ * Progress is wall-clock + keyed module state so remounts / cancelled rAFs
+ * cannot pin the UI on a lone cursor while hundreds of words sit buffered,
+ * and concurrent parts do not share one cursor.
  */
 export function useStreamingReveal(
   text: string,
   streaming: boolean,
   wordsPerSecond: number = DEFAULT_WORDS_PER_SECOND,
+  key?: string | null,
 ): StreamingReveal {
+  const revealKey = resolveKey(key);
   const tokens = useMemo(() => tokenize(text), [text]);
   // Count the in-progress last token too — holding it back left mobile blank
   // for the whole first-word lead-in. Partial words grow in place via clip.
   const ready = tokens.length;
   const rate = Math.max(wordsPerSecond, 1);
+  const progress = getProgress(revealKey);
 
   if (streaming) {
-    advanceStreamingReveal(tokens, rate);
+    advanceStreamingReveal(tokens, rate, nowMs(), revealKey);
   }
 
-  const shownTarget = streaming ? Math.min(ready, Math.floor(turnShown)) : ready;
+  const shownTarget = streaming
+    ? Math.min(ready, Math.floor(progress.shown))
+    : ready;
 
   const [shown, setShown] = useState(shownTarget);
   const shownRef = useRef(shown);
@@ -171,22 +228,23 @@ export function useStreamingReveal(
   // thread open first-paints with a snap instead of continuing the old pace.
   useEffect(() => {
     if (!streaming) {
-      resetTurn();
+      resetTurn(revealKey);
       return undefined;
     }
     let raf = 0;
     let active = true;
     const tick = () => {
       if (!active) return;
+      const slot = getProgress(revealKey);
       const t = nowMs();
-      const dt = Math.min(0.1, (t - turnTickAt) / 1000);
-      turnTickAt = t;
+      const dt = Math.min(0.1, (t - slot.tickAt) / 1000);
+      slot.tickAt = t;
       const r = liveReady.current;
-      applyCatchUpFloor(r, rate, liveTokens.current);
-      if (turnShown < r) {
-        turnShown = Math.min(r, turnShown + dt * rate);
+      applyCatchUpFloor(slot, r, rate, liveTokens.current);
+      if (slot.shown < r) {
+        slot.shown = Math.min(r, slot.shown + dt * rate);
       }
-      const next = Math.min(r, Math.floor(turnShown));
+      const next = Math.min(r, Math.floor(slot.shown));
       if (next !== shownRef.current) {
         shownRef.current = next;
         setShown(next);
@@ -198,7 +256,7 @@ export function useStreamingReveal(
       active = false;
       cancelAnimationFrame(raf);
     };
-  }, [streaming, rate]);
+  }, [streaming, rate, revealKey]);
 
   const visibleCount = Math.min(shown, ready);
   const lastToken = visibleCount > 0 ? tokens[visibleCount - 1]! : null;
@@ -207,8 +265,8 @@ export function useStreamingReveal(
     ? lastToken.start + lastToken.text.trimEnd().length
     : 0;
   const writing = streaming || visibleCount < ready;
-  const fadeFrom = streaming ? turnFadeFromChar : text.length;
-  const fadeFromWord = streaming ? turnFadeFromWord : ready;
+  const fadeFrom = streaming ? progress.fadeFromChar : text.length;
+  const fadeFromWord = streaming ? progress.fadeFromWord : ready;
 
   return {
     visibleText: text.slice(0, revealed),
@@ -224,5 +282,5 @@ export function useStreamingReveal(
 
 /** Test helper — clear cross-turn module progress. */
 export function __resetStreamingRevealForTests(): void {
-  resetTurn();
+  progressByKey.clear();
 }

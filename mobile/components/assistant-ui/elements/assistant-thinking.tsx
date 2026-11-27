@@ -106,6 +106,13 @@ export function AssistantThinking() {
 
   const dwellerRef = useRef(createThinkingStateDweller());
   const [label, setLabel] = useState<string | undefined>(derived.label);
+  // Drop the previous chat's dwell hold when the active store changes.
+  useEffect(() => {
+    dwellerRef.current = createThinkingStateDweller();
+    setLabel(derived.label);
+    // Only reset on store identity — derived.label is applied below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- store switch only
+  }, [store]);
   useEffect(() => {
     setLabel(dwellerRef.current.next(derived.label));
     if (derived.label === undefined) return undefined;

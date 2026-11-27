@@ -25,6 +25,14 @@ export const StreamingMarkdownText = memo(function StreamingMarkdownText({
     const part = s.part;
     return part.type === "text" ? (part.text ?? "") : "";
   });
+  const revealKey = useAuiState((s) => {
+    const part = s.part;
+    const partId =
+      part.type === "text" && "id" in part && typeof part.id === "string"
+        ? part.id
+        : "text";
+    return `${s.message.id}:${partId}`;
+  });
   const streaming = useAuiState((s) => {
     const part = s.part;
     if (part.type !== "text") return false;
@@ -37,7 +45,12 @@ export const StreamingMarkdownText = memo(function StreamingMarkdownText({
     );
   });
 
-  const { visibleText, writing } = useStreamingReveal(text, streaming);
+  const { visibleText, writing } = useStreamingReveal(
+    text,
+    streaming,
+    undefined,
+    revealKey,
+  );
 
   return (
     <div

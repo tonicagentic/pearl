@@ -596,3 +596,37 @@ test("missing meta.at falls back to a stable wall-clock stamp", () => {
   );
   assert.equal(second[0].createdAt, stamped);
 });
+
+test("scopes projection cache so identical message ids cannot swap rows across chats", () => {
+  const scopeA = { id: "store-a" };
+  const scopeB = { id: "store-b" };
+  const messageA = {
+    id: "turn_0:assistant",
+    role: "assistant",
+    metadata: { turnId: "turn_0", status: "complete" },
+    parts: [{ type: "text", text: "AAAA", state: "done" }],
+  };
+  const messageB = {
+    id: "turn_0:assistant",
+    role: "assistant",
+    metadata: { turnId: "turn_0", status: "complete" },
+    parts: [{ type: "text", text: "BBBB", state: "done" }],
+  };
+  const projectedA = toThreadMessages(
+    { messages: [messageA] },
+    { scope: scopeA },
+  );
+  const projectedB = toThreadMessages(
+    { messages: [messageB] },
+    { scope: scopeB },
+  );
+  assert.equal(projectedA[0].content[0].text, "AAAA");
+  assert.equal(projectedB[0].content[0].text, "BBBB");
+
+  // Projecting B must not pollute A's scoped cache.
+  const againA = toThreadMessages(
+    { messages: [messageA] },
+    { scope: scopeA },
+  );
+  assert.equal(againA[0].content[0].text, "AAAA");
+});

@@ -47,7 +47,9 @@ import { getAgentMode } from "@/src/agent-mode";
 import { fetchCustomAgents } from "@/src/custom-agents-client";
 import { withPendingAssistant } from "@/src/stream-presentation";
 import { applyLiveReplyOverlay } from "@/src/apply-live-reply";
+import { selectAgentsForUi } from "@/src/chat/agents-for-ui";
 import {
+  getLiveReplyParts,
   getLiveReplyVersion,
   reconcileLiveReplyWithSnapshot,
   subscribeLiveReplyText,
@@ -163,6 +165,10 @@ export function ChatScreen({
   const { offline } = useNetworkStatus();
   const [quickStreamingText, setQuickStreamingText] = useState("");
   const [quickStreaming, setQuickStreaming] = useState(false);
+  /** Store that started the in-flight quick path — paint only while it is active. */
+  const [quickStreamOwner, setQuickStreamOwner] = useState<object | null>(null);
+  const quickStreamOwnerRef = useRef<object | null>(null);
+  quickStreamOwnerRef.current = quickStreamOwner;
   const { setChatId, tabs, preferDetail, canvasOpen, openFile } =
     useWorkspace();
   const [computerOpen, setComputerOpen] = useState(false);
@@ -443,12 +449,24 @@ export function ChatScreen({
   const agents = snapshot.agents;
   // Freeze followed-child snapshots when the parent turn is settled so
   // following↔caught-up ticks do not rebuild TaskGroup / the aui adapter.
+  // Drop the freeze when the active SessionStore changes (another chat).
   const turnOpen = activeTurn(snapshot.view) !== undefined;
-  const agentsForUiRef = useRef(agents);
-  if (turnOpen) {
-    agentsForUiRef.current = agents;
-  }
-  const agentsForUi = turnOpen ? agents : agentsForUiRef.current;
+  const agentsFreezeRef = useRef<{
+    store: object | null;
+    agents: typeof agents;
+  }>({ store: null, agents });
+  const agentsSelection = selectAgentsForUi({
+    store,
+    agents,
+    turnOpen,
+    frozenStore: agentsFreezeRef.current.store,
+    frozenAgents: agentsFreezeRef.current.agents,
+  });
+  agentsFreezeRef.current = {
+    store: agentsSelection.frozenStore,
+    agents: agentsSelection.frozenAgents,
+  };
+  const agentsForUi = agentsSelection.agents;
   const conversation = useMemo(
     () => ({ messages, agents: agentsForUi }),
     [messages, agentsForUi],
@@ -619,16 +637,16 @@ export function ChatScreen({
     );
     return quickTurns.filter((turn) => !imported.has(turn.id));
   }, [quickTurns, messages]);
-  // Per-delta text ahead of eve line commits — paints smaller chunks on device.
+  // Per-delta text for this store only — another session's deltas do not paint here.
   const liveReplyVersion = useSyncExternalStore(
-    subscribeLiveReplyText,
-    getLiveReplyVersion,
-    getLiveReplyVersion,
+    (listener) => subscribeLiveReplyText(store, listener),
+    () => getLiveReplyVersion(store),
+    () => getLiveReplyVersion(store),
   );
 
   useEffect(() => {
-    reconcileLiveReplyWithSnapshot(messages);
-  }, [messages]);
+    reconcileLiveReplyWithSnapshot(store, messages);
+  }, [messages, store]);
 
   const projectedMessages = useMemo(() => {
     const pending = confirmed
@@ -637,7 +655,10 @@ export function ChatScreen({
         ? { ...localSend, phase: "uncertain" as const }
         : localSend;
     const projected = projectSendMessages(
-      toThreadMessages({ messages }, { isRunning, hasError, events }),
+      toThreadMessages(
+        { messages },
+        { isRunning, hasError, events, scope: store },
+      ),
       messages,
       pending,
     );
@@ -655,16 +676,16 @@ export function ChatScreen({
     );
     const withLive = applyLiveReplyOverlay(
       base as Parameters<typeof applyLiveReplyOverlay>[0],
+      getLiveReplyParts(store),
     );
     const withSpoken = appendSpokenTurnMessages(
       withLive as ThreadMessageLike[],
       pendingSpoken,
     );
-    return appendQuickTurnMessages(
-      withSpoken,
-      pendingQuick,
-      quickStreaming ? quickStreamingText : "",
-    );
+    // Only paint in-flight quick text that belongs to this store.
+    const showQuickStream =
+      quickStreaming && quickStreamOwner === store ? quickStreamingText : "";
+    return appendQuickTurnMessages(withSpoken, pendingQuick, showQuickStream);
   }, [
     messages,
     events,
@@ -678,6 +699,8 @@ export function ChatScreen({
     pendingQuick,
     quickStreaming,
     quickStreamingText,
+    quickStreamOwner,
+    store,
     liveReplyVersion,
   ]);
 
@@ -751,6 +774,18 @@ export function ChatScreen({
     });
   }, [attachmentHolds, messages, store]);
 
+  // Drop in-flight quick paint when switching away from the owning store.
+  // The network request may still finish; completion only writes if still active.
+  useEffect(() => {
+    if (!quickStreaming) return;
+    if (quickStreamOwner === store) return;
+    setQuickStreaming(false);
+    setQuickStreamingText("");
+  }, [store, quickStreaming, quickStreamOwner]);
+
+  const quickStreamActive =
+    quickStreaming && quickStreamOwner === store;
+
   // Callbacks read from this ref so the adapter object only rebuilds when
   // messages / run flags change — not on every localSend or project id tick.
   // assistant-ui compares `adapter.messages` by reference inside setAdapter,
@@ -777,6 +812,7 @@ export function ChatScreen({
     setQuickTurns,
     setQuickStreamingText,
     setQuickStreaming,
+    setQuickStreamOwner,
     selectChat,
   });
   useEffect(() => {
@@ -802,6 +838,7 @@ export function ChatScreen({
       setQuickTurns,
       setQuickStreamingText,
       setQuickStreaming,
+      setQuickStreamOwner,
       selectChat,
     };
   });
@@ -813,10 +850,10 @@ export function ChatScreen({
       // positional fallback ids (the projection omits ids on purpose) and
       // honors the per-message status it carries.
       convertMessage: (message: ThreadMessageLike) => message,
-      isRunning: isRunning || quickStreaming,
+      isRunning: isRunning || quickStreamActive,
       isDisabled: status === "resuming",
       // HITL, in-flight prepare, or unconfirmed prior turn — don't invite a throw.
-      isSendDisabled: composerBlocked || unresolvedSend || quickStreaming,
+      isSendDisabled: composerBlocked || unresolvedSend || quickStreamActive,
       // Allow send-while-busy via turnPolicy queue (composer checks capabilities.queue).
       capabilities: { cancel: true, queue: true },
       onNew: async (message: AppendMessage) => {
@@ -877,13 +914,19 @@ export function ChatScreen({
             quickTurnCount: ctx.quickTurns.length,
           })
         ) {
+          const originStore = activeStore;
+          const originChatId = ctx.activeChatId;
           const priorQuick = ctx.quickTurns;
           const optimistic = {
             id: `quick:pending:${Date.now()}`,
             role: "user" as const,
             text: turn.text.trim(),
           };
+          const stillOrigin = () =>
+            sendCtxRef.current.store === originStore &&
+            quickStreamOwnerRef.current === originStore;
           ctx.setQuickTurns([...priorQuick, optimistic]);
+          ctx.setQuickStreamOwner(originStore);
           ctx.setQuickStreaming(true);
           ctx.setQuickStreamingText("");
           void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -896,26 +939,34 @@ export function ChatScreen({
                 ...(credential ? { authorization: `Bearer ${credential}` } : {}),
               },
               body: JSON.stringify({
-                chatId: ctx.activeChatId,
+                chatId: originChatId,
                 message: turn.text.trim(),
               }),
             });
             if (response.status !== 409) {
               const result = await readQuickPathStream(response, {
                 onTextDelta: (delta) => {
+                  // Only grow the overlay while this store is still on screen.
+                  if (!stillOrigin()) return;
                   ctx.setQuickStreamingText((current) => current + delta);
                 },
               });
               if (result.outcome === "answered") {
-                ctx.setQuickTurns([...result.turns]);
-                ctx.setQuickStreaming(false);
-                ctx.setQuickStreamingText("");
+                if (stillOrigin()) {
+                  ctx.setQuickTurns([...result.turns]);
+                  ctx.setQuickStreaming(false);
+                  ctx.setQuickStreamingText("");
+                  ctx.setQuickStreamOwner(null);
+                }
                 if (result.chatId) {
                   ctx.patchChatMeta(result.chatId, {
                     updatedAt: new Date().toISOString(),
                     ...(result.title ? { title: result.title } : {}),
                   });
-                  if (result.chatId !== ctx.activeChatId) {
+                  if (
+                    stillOrigin() &&
+                    result.chatId !== sendCtxRef.current.activeChatId
+                  ) {
                     await ctx.selectChat(result.chatId);
                   }
                 }
@@ -925,9 +976,12 @@ export function ChatScreen({
           } catch {
             // Fall through to eve.
           }
-          ctx.setQuickTurns(priorQuick);
-          ctx.setQuickStreaming(false);
-          ctx.setQuickStreamingText("");
+          if (stillOrigin()) {
+            ctx.setQuickTurns(priorQuick);
+            ctx.setQuickStreaming(false);
+            ctx.setQuickStreamingText("");
+            ctx.setQuickStreamOwner(null);
+          }
         }
 
         // Match an attachment-only pending row to this exact eve receive event
@@ -1073,7 +1127,7 @@ export function ChatScreen({
     [
       projectedMessages,
       isRunning,
-      quickStreaming,
+      quickStreamActive,
       status,
       composerBlocked,
       unresolvedSend,

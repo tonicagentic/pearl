@@ -516,6 +516,8 @@ const useMarkdownOptions = (
 
 type MarkdownTextProps = TextMessagePartProps & {
   variant?: MarkdownTextVariant;
+  /** Isolates the word-reveal cursor across concurrent streaming parts. */
+  revealKey?: string;
 };
 
 function useMarkdownTypeStyle(variant: MarkdownTextVariant | undefined) {
@@ -886,7 +888,12 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = (props) => {
   // (history hydrate / parts without state) — defaulting to running made
   // reopened threads replay word-by-word. Live rows pass status running.
   const turnStreaming = props.status?.type === "running";
-  const reveal = useStreamingReveal(props.text, turnStreaming);
+  const reveal = useStreamingReveal(
+    props.text,
+    turnStreaming,
+    undefined,
+    props.revealKey,
+  );
   // Fade only while the turn is live and new words are still arriving —
   // opening a previous thread must not replay st-fade through stored text.
   const animateFade =

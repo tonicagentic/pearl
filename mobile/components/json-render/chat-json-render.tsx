@@ -59,6 +59,16 @@ export const AssistantInlineText: FC = memo(function AssistantInlineText() {
       ? part.text
       : "";
   });
+  // Isolate the word-reveal cursor per message/part so concurrent chats
+  // (and multi-part replies) do not share one module-level counter.
+  const revealKey = useAuiState((s) => {
+    const part = s.part;
+    const partId =
+      part.type === "text" && "id" in part && typeof part.id === "string"
+        ? part.id
+        : "text";
+    return `${s.message.id}:${partId}`;
+  });
   // Match web StreamingMarkdownText: settled parts hand off to Marked; missing
   // part status follows the turn so live deltas still pace.
   const partStreaming = useAuiState((s) => {
@@ -85,7 +95,14 @@ export const AssistantInlineText: FC = memo(function AssistantInlineText() {
   );
 
   if (!parsed.hasSpec || !parsed.spec) {
-    return <MarkdownText type="text" text={text} status={textStatus} />;
+    return (
+      <MarkdownText
+        type="text"
+        text={text}
+        status={textStatus}
+        revealKey={revealKey}
+      />
+    );
   }
 
   return (
@@ -99,6 +116,7 @@ export const AssistantInlineText: FC = memo(function AssistantInlineText() {
               type="text"
               text={segment.text}
               status={textStatus}
+              revealKey={`${revealKey}:${index}`}
             />
           );
         }

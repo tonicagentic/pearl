@@ -25,7 +25,6 @@ import { beginStreamTrace, traceStream } from "./stream-trace";
 import {
   clearLiveReplyText,
   pushLiveReplyDelta,
-  reconcileLiveReplyWithSnapshot,
   seedLiveReplyParts,
 } from "./live-reply-text";
 import { pendingMessageLabel, hasPendingAction } from "./message-projection";
@@ -273,7 +272,9 @@ function applyCatchUpFlush(store: SessionStore, binding: ChatBinding): void {
   binding.catchUpHold = [];
   if (action.kind !== "seed") return;
   const collapsed = collapseHeldDeltas(action.held);
-  seedLiveReplyParts(collapsed);
+  seedLiveReplyParts(store, collapsed);
+  // Omit key — catch-up does not yet know message/part ids; snap every slot
+  // so the active thread paints the backlog without fade replay.
   snapStreamingReveal();
 }
 
@@ -668,7 +669,7 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
                   delta,
                 });
               } else if (route.kind === "push") {
-                pushLiveReplyDelta({
+                pushLiveReplyDelta(store, {
                   turnId,
                   partId: data.partId,
                   kind,
@@ -688,13 +689,13 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
               : undefined;
           if (shouldClearCatchUpOnEvent({ type: event.type, outcome })) {
             binding.catchUpHold = [];
-            clearLiveReplyText();
+            clearLiveReplyText(store);
           }
           syncObs();
           traceStream("settled");
         } else if (event.type === "session.ended") {
           binding.catchUpHold = [];
-          clearLiveReplyText();
+          clearLiveReplyText(store);
           syncObs();
         }
         if (!binding.id) return;
@@ -844,7 +845,11 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
         // An attachment-only turn uses a safe title/marker. Neither a
         // correlation token nor pasted document text belongs in chat metadata.
         const message = pendingMessageLabel(input.message);
-        if (message) setWaitingLabel(waitingLabelForText(message));
+        // Only the visible thread reads the waiting label — do not overwrite
+        // it from a background store's prepareSend.
+        if (message && activeStoreRef.current === store) {
+          setWaitingLabel(waitingLabelForText(message));
+        }
         const projectId =
           binding.projectId ?? activeProjectIdRef.current ?? null;
         if (!binding.id) {
@@ -1312,6 +1317,11 @@ export function ChatsProvider({ children }: { readonly children: ReactNode }) {
       }
 
       const saved = await saveSpokenTurnsRequest(chatId, drafts);
+      // A switch mid-save must not paint this transcript onto another thread.
+      if (activeChatIdRef.current !== chatId) {
+        void reloadChats({ silent: true });
+        return;
+      }
       setSpokenTurns(saved);
       setActiveTitle((current) =>
         current === "New chat" && saved[0]

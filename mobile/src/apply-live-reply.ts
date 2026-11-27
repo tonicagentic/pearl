@@ -1,9 +1,10 @@
 /**
  * Merge per-delta live reply text into projected thread messages so the UI
  * can paint ahead of eve's line-boundary snapshot commits.
+ *
+ * Pure: callers pass parts for the active session only. A live turnId that
+ * disagrees with the last assistant row's metadata is not spliced in.
  */
-
-import { getLiveReplyParts } from "./live-reply-text.ts";
 
 type ContentPart = {
   readonly type?: string;
@@ -20,10 +21,39 @@ type ThreadMessageLike = {
   readonly [key: string]: unknown;
 };
 
+export type LiveReplyOverlayPart = {
+  readonly id: string;
+  readonly text: string;
+  readonly turnId?: string | null;
+};
+
+function assistantTurnId(message: ThreadMessageLike): string | null {
+  const metadata = message.metadata as
+    | {
+        readonly custom?: { readonly turnId?: unknown };
+        readonly turnId?: unknown;
+      }
+    | undefined;
+  const fromCustom = metadata?.custom?.turnId;
+  if (typeof fromCustom === "string") return fromCustom;
+  const fromTop = metadata?.turnId;
+  return typeof fromTop === "string" ? fromTop : null;
+}
+
+function partsForAssistantRow(
+  liveParts: readonly LiveReplyOverlayPart[],
+  rowTurnId: string | null,
+): LiveReplyOverlayPart[] {
+  if (rowTurnId === null) return [...liveParts];
+  return liveParts.filter(
+    (part) => part.turnId == null || part.turnId === rowTurnId,
+  );
+}
+
 export function applyLiveReplyOverlay(
   messages: readonly ThreadMessageLike[],
+  liveParts: readonly LiveReplyOverlayPart[],
 ): ThreadMessageLike[] {
-  const liveParts = getLiveReplyParts();
   if (liveParts.length === 0) return messages as ThreadMessageLike[];
 
   const last = messages[messages.length - 1];
@@ -56,11 +86,14 @@ export function applyLiveReplyOverlay(
     ];
   }
 
+  const applicable = partsForAssistantRow(liveParts, assistantTurnId(last));
+  if (applicable.length === 0) return messages as ThreadMessageLike[];
+
   const content: ContentPart[] = Array.isArray(last.content)
     ? [...last.content]
     : [];
 
-  for (const live of liveParts) {
+  for (const live of applicable) {
     const index = content.findIndex(
       (part) => part.type === "text" && part.id === live.id,
     );

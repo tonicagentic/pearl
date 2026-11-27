@@ -649,12 +649,30 @@ type ProjectionCacheEntry = {
   projected: ThreadMessageLike;
 };
 
-/** Reuse settled ThreadMessageLike refs across stream ticks so assistant-ui
- *  does not reconvert the entire history on every content.delta. */
-const projectionCache = new Map<string, ProjectionCacheEntry>();
-/** Wall-clock stamps when the event log has not covered a message yet. */
-const createdAtByMessageId = new Map<string, Date>();
-const turnTimestampCache = createTurnTimestampCache();
+type ProjectionScopeMaps = {
+  readonly projectionCache: Map<string, ProjectionCacheEntry>;
+  readonly createdAtByMessageId: Map<string, Date>;
+  readonly turnTimestampCache: ReturnType<typeof createTurnTimestampCache>;
+};
+
+/** Default scope for playground / inspector (single conversation at a time). */
+const DEFAULT_PROJECTION_SCOPE = {};
+
+/** Per-session caches so identical message ids cannot swap rows across chats. */
+const scopes = new WeakMap<object, ProjectionScopeMaps>();
+
+function mapsForScope(scope: object): ProjectionScopeMaps {
+  let maps = scopes.get(scope);
+  if (!maps) {
+    maps = {
+      projectionCache: new Map(),
+      createdAtByMessageId: new Map(),
+      turnTimestampCache: createTurnTimestampCache(),
+    };
+    scopes.set(scope, maps);
+  }
+  return maps;
+}
 
 function messageFingerprint(
   message: EveMessage,
@@ -673,7 +691,9 @@ function messageFingerprint(
   let partsKey = "";
   for (const part of message.parts) {
     if (part.type === "text" || part.type === "reasoning") {
-      partsKey += `${part.type}:${part.text.length};`;
+      // Include a short content hash so equal-length different text cannot
+      // reuse another session's projected row under the same message id.
+      partsKey += `${part.type}:${part.text.length}:${part.text.slice(0, 24)}:${part.text.slice(-24)};`;
     } else if (part.type === "tool") {
       partsKey += `tool:${part.callId}:${part.state}:${part.interaction?.status ?? ""};`;
     } else if (part.type === "file") {
@@ -702,6 +722,7 @@ function resolveCreatedAt(
     string,
     { readonly user?: Date; readonly assistant?: Date }
   >,
+  createdAtByMessageId: Map<string, Date>,
 ): Date {
   const turnId = message.metadata?.turnId;
   const roleKey = message.role === "user" ? "user" : "assistant";
@@ -912,17 +933,26 @@ export function toThreadMessages(
     isRunning = false,
     hasError = false,
     events = [],
+    scope = DEFAULT_PROJECTION_SCOPE,
   }: {
     isRunning?: boolean;
     hasError?: boolean;
     events?: readonly unknown[];
+    /** SessionStore (or other object) — isolates cache across concurrent chats. */
+    scope?: object;
   } = {},
 ): ThreadMessageLike[] {
+  const maps = mapsForScope(scope);
+  const { projectionCache, createdAtByMessageId, turnTimestampCache } = maps;
   const turnTimestamps = collectTurnTimestamps(events, turnTimestampCache);
   const seen = new Set<string>();
   const projected = state.messages.map((message, index) => {
     const last = index === state.messages.length - 1;
-    const createdAt = resolveCreatedAt(message, turnTimestamps);
+    const createdAt = resolveCreatedAt(
+      message,
+      turnTimestamps,
+      createdAtByMessageId,
+    );
     const fingerprint = messageFingerprint(message, {
       last,
       isRunning,

@@ -4,7 +4,12 @@
  * eve only folds `content.delta` into `snapshot.messages` at NDJSON line
  * boundaries (`endOfLine`). `onEvent` still fires every delta — accumulate
  * here so Expo Go can paint smaller chunks while the line is still open.
+ *
+ * Each SessionStore owns its own buffer so concurrent chats cannot mix text
+ * into the open thread.
  */
+
+export type LiveReplySessionKey = object;
 
 type LivePart = { readonly kind: "text"; text: string };
 
@@ -15,22 +20,47 @@ type LiveReplyState = {
   readonly version: number;
 };
 
-const listeners = new Set<() => void>();
+type SessionBucket = {
+  state: LiveReplyState;
+  readonly listeners: Set<() => void>;
+};
 
-let state: LiveReplyState = {
+const buckets = new WeakMap<LiveReplySessionKey, SessionBucket>();
+/** Strong refs for test reset only — WeakMap entries are otherwise GC'd. */
+const testKeys = new Set<LiveReplySessionKey>();
+
+const EMPTY_STATE: LiveReplyState = {
   turnId: null,
   parts: new Map(),
   order: [],
   version: 0,
 };
 
-function emit(next: LiveReplyState) {
-  state = next;
-  for (const listener of listeners) listener();
+function bucketFor(key: LiveReplySessionKey): SessionBucket {
+  let bucket = buckets.get(key);
+  if (!bucket) {
+    bucket = {
+      state: { ...EMPTY_STATE, parts: new Map() },
+      listeners: new Set(),
+    };
+    buckets.set(key, bucket);
+    testKeys.add(key);
+  }
+  return bucket;
+}
+
+function emit(key: LiveReplySessionKey, next: LiveReplyState): void {
+  const bucket = bucketFor(key);
+  bucket.state = next;
+  for (const listener of bucket.listeners) listener();
 }
 
 /** True when this partId is tracked as assistant reply text (not reasoning). */
-function isTextPart(partId: string, kind: string | undefined): boolean {
+function isTextPart(
+  state: LiveReplyState,
+  partId: string,
+  kind: string | undefined,
+): boolean {
   if (kind === "text") return true;
   if (kind && kind !== "text") return false;
   const existing = state.parts.get(partId);
@@ -41,19 +71,39 @@ function isTextPart(partId: string, kind: string | undefined): boolean {
 }
 
 /**
- * Fold a `content.delta` into the live buffer. Ignores non-text kinds
- * (reasoning, etc.).
+ * Fold a `content.delta` into the live buffer for one session. Ignores
+ * non-text kinds (reasoning, etc.). A new turnId replaces prior parts.
  */
-export function pushLiveReplyDelta(event: {
-  readonly turnId?: string;
-  readonly partId: string;
-  readonly kind?: string;
-  readonly delta: string;
-}): void {
+export function pushLiveReplyDelta(
+  key: LiveReplySessionKey,
+  event: {
+    readonly turnId?: string;
+    readonly partId: string;
+    readonly kind?: string;
+    readonly delta: string;
+  },
+): void {
   const { partId, delta, kind, turnId } = event;
   if (!partId || typeof delta !== "string" || delta.length === 0) return;
-  // First record announces kind; later deltas omit it — only accept text parts.
-  if (!isTextPart(partId, kind)) return;
+
+  const bucket = bucketFor(key);
+  let state = bucket.state;
+
+  // A new turn replaces the previous buffer so stale parts do not linger.
+  if (
+    turnId !== undefined &&
+    state.turnId !== null &&
+    turnId !== state.turnId
+  ) {
+    state = {
+      turnId,
+      parts: new Map(),
+      order: [],
+      version: state.version,
+    };
+  }
+
+  if (!isTextPart(state, partId, kind)) return;
 
   const parts = new Map(state.parts);
   const prev = parts.get(partId);
@@ -67,7 +117,7 @@ export function pushLiveReplyDelta(event: {
       ? state.order
       : [...state.order, partId];
 
-  emit({
+  emit(key, {
     turnId: turnId ?? state.turnId,
     parts,
     order,
@@ -77,12 +127,15 @@ export function pushLiveReplyDelta(event: {
 
 /**
  * Seed the live overlay with already-generated text from a catch-up hold.
- * Replaces any existing buffer so the backlog paints in one shot.
+ * Replaces any existing buffer for this session so the backlog paints in one shot.
  */
-export function seedLiveReplyParts(input: {
-  readonly turnId?: string | null;
-  readonly parts: readonly { readonly id: string; readonly text: string }[];
-}): void {
+export function seedLiveReplyParts(
+  key: LiveReplySessionKey,
+  input: {
+    readonly turnId?: string | null;
+    readonly parts: readonly { readonly id: string; readonly text: string }[];
+  },
+): void {
   if (input.parts.length === 0) return;
   const parts = new Map<string, LivePart>();
   const order: string[] = [];
@@ -92,22 +145,25 @@ export function seedLiveReplyParts(input: {
     order.push(part.id);
   }
   if (order.length === 0) return;
-  emit({
+  const bucket = bucketFor(key);
+  emit(key, {
     turnId: input.turnId ?? null,
     parts,
     order,
-    version: state.version + 1,
+    version: bucket.state.version + 1,
   });
 }
 
-/** Drop live overlay (turn settled or snapshot caught up). */
-export function clearLiveReplyText(): void {
-  if (state.parts.size === 0 && state.version === 0) return;
-  emit({
+/** Drop live overlay for one session (turn settled or snapshot caught up). */
+export function clearLiveReplyText(key: LiveReplySessionKey): void {
+  const bucket = buckets.get(key);
+  if (!bucket) return;
+  if (bucket.state.parts.size === 0 && bucket.state.version === 0) return;
+  emit(key, {
     turnId: null,
     parts: new Map(),
     order: [],
-    version: state.version + 1,
+    version: bucket.state.version + 1,
   });
 }
 
@@ -116,6 +172,7 @@ export function clearLiveReplyText(): void {
  * buffer, clear so we do not double-apply after line commit.
  */
 export function reconcileLiveReplyWithSnapshot(
+  key: LiveReplySessionKey,
   messages: readonly {
     readonly role: string;
     readonly parts?: readonly {
@@ -125,7 +182,9 @@ export function reconcileLiveReplyWithSnapshot(
     }[];
   }[],
 ): void {
-  if (state.parts.size === 0) return;
+  const bucket = buckets.get(key);
+  if (!bucket || bucket.state.parts.size === 0) return;
+  const state = bucket.state;
   const last = messages[messages.length - 1];
   if (!last || last.role !== "assistant" || !last.parts) return;
 
@@ -147,40 +206,65 @@ export function reconcileLiveReplyWithSnapshot(
             (part) =>
               typeof part.text === "string" &&
               part.text.length >= live.text.length &&
-              (part.text === live.text || part.text.endsWith(live.text) || live.text.endsWith(part.text)),
+              (part.text === live.text ||
+                part.text.endsWith(live.text) ||
+                live.text.endsWith(part.text)),
           )?.text ?? "";
     if (snapText.length < live.text.length) {
       allCaughtUp = false;
       break;
     }
   }
-  if (allCaughtUp) clearLiveReplyText();
+  if (allCaughtUp) clearLiveReplyText(key);
 }
 
-export function getLiveReplyVersion(): number {
-  return state.version;
+export function getLiveReplyVersion(key: LiveReplySessionKey): number {
+  return buckets.get(key)?.state.version ?? 0;
 }
 
-export function getLiveReplyParts(): readonly {
+export function getLiveReplyTurnId(
+  key: LiveReplySessionKey,
+): string | null {
+  return buckets.get(key)?.state.turnId ?? null;
+}
+
+export function getLiveReplyParts(key: LiveReplySessionKey): readonly {
   readonly id: string;
   readonly text: string;
+  readonly turnId: string | null;
 }[] {
+  const state = buckets.get(key)?.state;
+  if (!state) return [];
   return state.order
     .map((id) => {
       const part = state.parts.get(id);
-      return part ? { id, text: part.text } : null;
+      return part
+        ? { id, text: part.text, turnId: state.turnId }
+        : null;
     })
-    .filter((part): part is { id: string; text: string } => part !== null);
+    .filter(
+      (
+        part,
+      ): part is { id: string; text: string; turnId: string | null } =>
+        part !== null,
+    );
 }
 
-export function subscribeLiveReplyText(listener: () => void): () => void {
-  listeners.add(listener);
+export function subscribeLiveReplyText(
+  key: LiveReplySessionKey,
+  listener: () => void,
+): () => void {
+  const bucket = bucketFor(key);
+  bucket.listeners.add(listener);
   return () => {
-    listeners.delete(listener);
+    bucket.listeners.delete(listener);
   };
 }
 
 /** Test helper. */
 export function __resetLiveReplyTextForTests(): void {
-  state = { turnId: null, parts: new Map(), order: [], version: 0 };
+  for (const key of testKeys) {
+    buckets.delete(key);
+  }
+  testKeys.clear();
 }
