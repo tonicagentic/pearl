@@ -33,11 +33,10 @@ export function LiveWorkCards({
         <TaskCard
           key={card.key}
           label={card.label}
-          modelLabel={card.modelLabel}
+          meta={card.modelLabel}
           activity={card.activity}
           state={card.state}
           result={card.result}
-          className="rounded-2xl border border-border/50 bg-card/80 px-3 py-2"
         />
       ))}
     </View>

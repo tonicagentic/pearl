@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -14,6 +15,7 @@ import type { ConversationAgentSession } from "eve/client";
 
 import {
   deriveSubagentRuns,
+  STALE_REVIEW_S,
   type SubagentRun,
 } from "@/lib/agent/subagent-runs";
 import {
@@ -21,9 +23,16 @@ import {
   SUBAGENT_CANCELLED_LABEL,
   SUBAGENT_WORKING_ACTIVITY,
   subagentRowTitle,
-  WAITING_FOR_SUBAGENT_LABEL,
 } from "@/lib/chat/subagent-row";
 import { extractCoderHandoff } from "@/lib/chat/coder-receipt";
+import {
+  subagentMessageBlocks,
+  type SubagentPreviewMessage,
+} from "@/lib/chat/subagent-preview";
+import {
+  stabilizeSubagentRuns,
+  TASK_PAGE_SIZE,
+} from "@/lib/chat/task-elapsed";
 import { cn } from "@/lib/utils";
 import { extractWatchHandles } from "@/lib/watch/deploy";
 import {
@@ -32,16 +41,16 @@ import {
 } from "@/components/assistant-ui/elements/task-card";
 import { CoderSettledReceipt } from "@/components/assistant-ui/elements/coder-receipt";
 import { DeployWatchStack } from "@/components/assistant-ui/elements/deploy-watch-card";
-import { threadMeta } from "@/components/assistant-ui/elements/surfaces";
+import { mono } from "@/components/assistant-ui/elements/surfaces";
 
 // Runtime binding for the task-card element (docs: elements/task-card).
 //
-// Delegated subagent work renders as a flat row instead of timeline steps.
-// The row state cannot come from the tool-call part alone: a delegation's
-// tool call completes immediately with a "working" receipt, so the part reads
-// "done" while the subagent still runs. The real lifecycle lives in the
-// persisted subagent event stream, keyed by the delegation's call id. Live
-// model + activity come from the followed child session (`followAgents`).
+// Delegated subagent work renders as a paper task card. The row state cannot
+// come from the tool-call part alone: a delegation's tool call completes
+// immediately with a "working" receipt, so the part reads "done" while the
+// subagent still runs. The real lifecycle lives in the persisted subagent
+// event stream, keyed by the delegation's call id. Live activity comes from
+// the followed child session (`followAgents`).
 
 type TaskRuns = readonly SubagentRun[];
 
@@ -51,26 +60,65 @@ export function useSubagentRuns(): TaskRuns {
   return useContext(TaskRunsContext);
 }
 
+function subagentEventsKey(events: readonly unknown[]): string {
+  let count = 0;
+  let lastType = "";
+  let lastCallId = "";
+  for (const raw of events) {
+    const event = raw as {
+      readonly type?: string;
+      readonly data?: { readonly callId?: string };
+    };
+    if (
+      event.type === "subagent.called" ||
+      event.type === "subagent.completed" ||
+      event.type === "task.started" ||
+      event.type === "task.ended" ||
+      event.type === "child.opened" ||
+      event.type === "call.settled"
+    ) {
+      count += 1;
+      lastType = event.type ?? "";
+      lastCallId = event.data?.callId ?? "";
+    }
+  }
+  return `${count}:${lastType}:${lastCallId}`;
+}
+
 export function SubagentRunsProvider({ children }: { children: ReactNode }) {
   const events = useEveEvents();
-  const [now, setNow] = useState<number | null>(null);
+  const [staleTick, setStaleTick] = useState(0);
+  const prevRunsRef = useRef<TaskRuns | undefined>(undefined);
+  const prevEventsRef = useRef<readonly unknown[] | null>(null);
+  const eventsKey = subagentEventsKey(events);
 
-  const runs = useMemo(
-    () => deriveSubagentRuns(events, now ?? Number.MAX_SAFE_INTEGER),
-    [events, now],
-  );
+  if (prevEventsRef.current !== events) {
+    if (prevEventsRef.current !== null) {
+      prevRunsRef.current = undefined;
+    }
+    prevEventsRef.current = events;
+  }
 
-  // Tick while any run is undelivered. Keying on the post-derivation state
-  // deadlocks: with now null the staleness check marks undelivered runs as
-  // failed before the first tick, so no run is ever "running" to trigger it.
-  const anyUndelivered = runs.some((run) => run.delivered === false);
+  const runs = useMemo(() => {
+    const next = deriveSubagentRuns(events, Date.now());
+    const stabilized = stabilizeSubagentRuns(prevRunsRef.current, next);
+    prevRunsRef.current = stabilized;
+    return stabilized;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- events keyed via events + eventsKey
+  }, [events, eventsKey, staleTick]);
 
+  // Schedule one timer for the earliest undelivered run that will cross the
+  // stale threshold. Do not tick at 1 Hz — that remounted every task card.
   useEffect(() => {
-    if (!anyUndelivered) return;
-    setNow(Date.now());
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [anyUndelivered]);
+    const undelivered = runs.filter((run) => run.delivered === false);
+    if (undelivered.length === 0) return;
+    const nextAt = Math.min(
+      ...undelivered.map((run) => run.at + STALE_REVIEW_S * 1000),
+    );
+    const delay = Math.max(50, nextAt - Date.now() + 25);
+    const timer = window.setTimeout(() => setStaleTick((n) => n + 1), delay);
+    return () => window.clearTimeout(timer);
+  }, [runs]);
 
   return (
     <TaskRunsContext.Provider value={runs}>{children}</TaskRunsContext.Provider>
@@ -126,8 +174,6 @@ function taskState(part: ToolCallPartState, run?: SubagentRun): TaskCardState {
   if (run?.state === "cancelled" || partLooksCancelled(part)) {
     return "cancelled";
   }
-  // The event stream is the source of truth for background runs; the part
-  // status only covers delegations with no observed run (older threads).
   if (run) {
     if (run.state === "running") return "working";
     if (run.state === "failed") return "failed";
@@ -172,6 +218,16 @@ function coderWatches(agent: ConversationAgentSession | undefined) {
   );
 }
 
+function useStickyResult(node: ReactNode): ReactNode {
+  const held = useRef<ReactNode>(undefined);
+  if (node !== undefined && node !== null && node !== false) {
+    held.current = node;
+  }
+  return node !== undefined && node !== null && node !== false
+    ? node
+    : held.current;
+}
+
 function coderResult(input: {
   readonly state: TaskCardState;
   readonly run?: SubagentRun;
@@ -183,7 +239,6 @@ function coderResult(input: {
   if (state === "failed") {
     return "no result arrived — the run was likely interrupted; ask again";
   }
-  // Live watches render beside the row (not inside the result chrome).
   if (state === "working" || state === "waiting") return undefined;
   if (!isCoder) return undefined;
   const handoff = extractCoderHandoff({
@@ -192,6 +247,89 @@ function coderResult(input: {
   });
   if (handoff) return <CoderSettledReceipt handoff={handoff} />;
   return undefined;
+}
+
+function TaskTranscript({
+  agent,
+  modelLabel,
+}: {
+  readonly agent: ConversationAgentSession | undefined;
+  readonly modelLabel?: string | undefined;
+}) {
+  const messages = childMessagesFor(agent) as readonly SubagentPreviewMessage[];
+  const blocks = useMemo(() => subagentMessageBlocks(messages), [messages]);
+  if (blocks.length === 0 && !modelLabel) {
+    return (
+      <p className="text-muted-foreground text-xs">No transcript yet.</p>
+    );
+  }
+  return (
+    <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+      {modelLabel ? (
+        <p className={cn(mono, "text-muted-foreground")}>{modelLabel}</p>
+      ) : null}
+      {blocks.map((block) => (
+        <div
+          key={block.id}
+          data-slot="aui_task-transcript-message"
+          data-role={block.role}
+          className="flex flex-col gap-0.5 text-xs leading-relaxed"
+        >
+          <span className={cn(mono, "text-muted-foreground")}>
+            {block.role === "user" ? "instruction" : "agent"}
+          </span>
+          {block.lines.map((line, index) => (
+            <p key={`${block.id}-${index}`} className="text-foreground/75">
+              {line}
+            </p>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DelegationLane({
+  part,
+  run,
+  agent,
+}: {
+  readonly part: ToolCallPartState;
+  readonly run?: SubagentRun;
+  readonly agent?: ConversationAgentSession;
+}) {
+  const state = taskState(part, run);
+  const isCoder = part.toolName === "coder" || run?.name === "coder";
+  const agentName = run?.name ?? part.toolName;
+  const title = subagentRowTitle(delegationMessage(part), agentName);
+  const row = deriveSubagentRowContent({ title, child: agent });
+  const live = state === "working" || state === "waiting";
+  const activity = live
+    ? (row.activity ?? SUBAGENT_WORKING_ACTIVITY)
+    : undefined;
+  const watches = isCoder ? coderWatches(agent) : [];
+  const rawResult = coderResult({ state, run, agent, isCoder });
+  const result = useStickyResult(rawResult);
+  const hasChild =
+    agent != null && agent.observation.status !== "not-followed";
+
+  return (
+    <div className={cn("flex flex-col gap-2", isCoder && "max-w-xl")}>
+      <TaskCard
+        label={row.title}
+        meta={agentName}
+        activity={activity}
+        state={state}
+        startedAt={run?.at}
+        result={result}
+      >
+        {hasChild ? (
+          <TaskTranscript agent={agent} modelLabel={row.modelLabel} />
+        ) : undefined}
+      </TaskCard>
+      {watches.length > 0 ? <DeployWatchStack handles={watches} /> : null}
+    </div>
+  );
 }
 
 // The lane renderer for delegated tool calls. Thread routes a group whose
@@ -204,59 +342,68 @@ export function TaskGroup({
   const runs = useSubagentRuns();
   const agents = useEveAgents();
   const parts = useAuiState((s) => s.message.parts) as readonly unknown[];
+  const [visible, setVisible] = useState(TASK_PAGE_SIZE);
 
   const delegations = group.indices
     .map((index) => parts[index])
     .filter(isDelegationPart);
   if (delegations.length === 0) return null;
 
-  const anyLive = delegations.some((part) => {
+  const laneStates = delegations.map((part) => {
     const run = runs.find((r) => r.callId === part.toolCallId);
-    const state = taskState(part, run);
-    return state === "working" || state === "waiting";
+    return taskState(part, run);
   });
+  const running = laneStates.filter(
+    (s) => s === "working" || s === "waiting",
+  ).length;
+  const failed = laneStates.filter((s) => s === "failed").length;
+  const waiting = laneStates.filter((s) => s === "waiting").length;
+
+  const shown = delegations.slice(0, visible);
+  const hidden = delegations.length - shown.length;
+  const summary =
+    delegations.length > 1
+      ? [
+          `${delegations.length} tasks`,
+          running > 0 && `${running} running`,
+          waiting > 0 && `${waiting} waiting`,
+          failed > 0 && `${failed} failed`,
+        ]
+          .filter((entry): entry is string => typeof entry === "string")
+          .join(" · ")
+      : null;
 
   return (
-    <div data-slot="aui_task-group" className="flex flex-col gap-2 px-2">
-      {delegations.map((part) => {
+    <div data-slot="aui_task-group" className="flex w-full flex-col gap-2">
+      {summary ? (
+        <div
+          data-slot="aui_task-group-summary"
+          className="text-muted-foreground px-1 text-xs"
+        >
+          {summary}
+        </div>
+      ) : null}
+      {shown.map((part) => {
         const run = runs.find((r) => r.callId === part.toolCallId);
-        const state = taskState(part, run);
         const agent = agentForCall(agents, part.toolCallId);
-        const isCoder = part.toolName === "coder" || run?.name === "coder";
-        const title = subagentRowTitle(
-          delegationMessage(part),
-          run?.name ?? part.toolName,
-        );
-        const row = deriveSubagentRowContent({ title, child: agent });
-        const live = state === "working" || state === "waiting";
-        const activity = live
-          ? (row.activity ?? SUBAGENT_WORKING_ACTIVITY)
-          : undefined;
-        const watches = isCoder ? coderWatches(agent) : [];
         return (
-          <div
-            key={part.toolCallId}
-            className={cn("flex flex-col gap-2", isCoder && "max-w-xl")}
-          >
-            <TaskCard
-              label={row.title}
-              modelLabel={row.modelLabel}
-              activity={activity}
-              state={state}
-              result={coderResult({ state, run, agent, isCoder })}
-            />
-            {watches.length > 0 ? (
-              <DeployWatchStack handles={watches} />
-            ) : null}
-          </div>
+          <DelegationLane
+            key={part.toolCallId ?? part.toolName}
+            part={part}
+            run={run}
+            agent={agent}
+          />
         );
       })}
-      {anyLive ? (
-        <div className={threadMeta} data-slot="aui_task-waiting">
-          <span className="text-foreground/35 text-[12.5px]">
-            {WAITING_FOR_SUBAGENT_LABEL}
-          </span>
-        </div>
+      {hidden > 0 ? (
+        <button
+          type="button"
+          data-slot="aui_task-group-more"
+          onClick={() => setVisible((count) => count + TASK_PAGE_SIZE)}
+          className="text-muted-foreground hover:text-foreground w-fit px-1 text-xs transition-colors"
+        >
+          Show {Math.min(hidden, TASK_PAGE_SIZE)} more
+        </button>
       ) : null}
     </div>
   );

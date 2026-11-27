@@ -8,11 +8,12 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useAuiState } from "@assistant-ui/react-native";
 
 import {
   deriveSubagentRuns,
+  STALE_REVIEW_S,
   type SubagentRun,
 } from "@/src/subagent-runs";
 import { useActiveChat, useEveEvents } from "@/src/chat-context";
@@ -28,8 +29,11 @@ import {
   SUBAGENT_CANCELLED_LABEL,
   SUBAGENT_WORKING_ACTIVITY,
   subagentRowTitle,
-  WAITING_FOR_SUBAGENT_LABEL,
 } from "../../../../lib/chat/subagent-row";
+import {
+  stabilizeSubagentRuns,
+  TASK_PAGE_SIZE,
+} from "../../../../lib/chat/task-elapsed";
 import { extractWatchHandles } from "../../../../lib/watch/deploy";
 import { CoderSettledReceipt } from "./coder-receipt";
 import { DeployWatchStack } from "./deploy-watch-card";
@@ -39,27 +43,21 @@ import { TaskCard, type TaskCardState } from "./task-card";
 // Runtime binding for the task-card element (docs: elements/task-card) —
 // RN port of the web's task-card.aui.
 //
-// Delegated subagent work renders as a flat row instead of timeline steps.
-// The row state cannot come from the tool-call part alone: a delegation's
-// tool call completes immediately with a "working" receipt, so the part reads
-// "done" while the subagent still runs. The real lifecycle lives in the
-// persisted subagent event stream, keyed by the delegation's call id. Open
-// person-waits on the tool part or a followed child override the card to
-// "waiting". Live model + activity come from the followed child session.
-// Cancelled / interrupted task.ended outcomes (and Eve tool state cancelled)
-// surface as an abrupt-cancel result card.
+// Delegated subagent work renders as a paper task card. The row state cannot
+// come from the tool-call part alone: a delegation's tool call completes
+// immediately with a "working" receipt, so the part reads "done" while the
+// subagent still runs. The real lifecycle lives in the persisted subagent
+// event stream, keyed by the delegation's call id. Opening the header mounts
+// the existing transcript sheet (a nested thread on the phone is too heavy).
 
 type TaskRuns = readonly SubagentRun[];
 
 type SubagentRunsContextValue = {
   readonly runs: TaskRuns;
-  /** Shared 1 Hz clock while any run is undelivered / in-flight. */
-  readonly now: number;
 };
 
 const TaskRunsContext = createContext<SubagentRunsContextValue>({
   runs: [],
-  now: 0,
 });
 
 export function useSubagentRuns(): TaskRuns {
@@ -81,7 +79,8 @@ function subagentEventsKey(events: readonly unknown[]): string {
       event.type === "subagent.completed" ||
       event.type === "task.started" ||
       event.type === "task.ended" ||
-      event.type === "child.opened"
+      event.type === "child.opened" ||
+      event.type === "call.settled"
     ) {
       count += 1;
       lastType = event.type ?? "";
@@ -97,28 +96,43 @@ export function SubagentRunsProvider({
   readonly children: ReactNode;
 }) {
   const events = useEveEvents();
-  const [now, setNow] = useState(() => Date.now());
-  // Gate full-log scans: content.delta does not change this key, so `runs`
-  // keeps its prior identity across ordinary stream ticks.
+  const [staleTick, setStaleTick] = useState(0);
+  const prevRunsRef = useRef<TaskRuns | undefined>(undefined);
+  const prevEventsRef = useRef<readonly unknown[] | null>(null);
   const eventsKey = subagentEventsKey(events);
-  const runs = useMemo(
-    () => deriveSubagentRuns(events, now),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- events keyed via eventsKey
-    [eventsKey, now],
-  );
 
-  // Tick while any run is undelivered (keying on the post-derivation state
-  // deadlocks — see the web element).
-  const anyUndelivered = runs.some((run) => run.delivered === false);
-  const anyRunning = runs.some((run) => run.state === "running");
+  // Event-array identity changes on chat switch — drop the prior memo so a
+  // matching coarse key cannot reuse another session's runs.
+  if (prevEventsRef.current !== events) {
+    if (
+      prevEventsRef.current !== null &&
+      prevEventsRef.current !== events
+    ) {
+      prevRunsRef.current = undefined;
+    }
+    prevEventsRef.current = events;
+  }
+
+  const runs = useMemo(() => {
+    const next = deriveSubagentRuns(events, Date.now());
+    const stabilized = stabilizeSubagentRuns(prevRunsRef.current, next);
+    prevRunsRef.current = stabilized;
+    return stabilized;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- events keyed via events + eventsKey
+  }, [events, eventsKey, staleTick]);
 
   useEffect(() => {
-    if (!anyUndelivered && !anyRunning) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [anyUndelivered, anyRunning]);
+    const undelivered = runs.filter((run) => run.delivered === false);
+    if (undelivered.length === 0) return;
+    const nextAt = Math.min(
+      ...undelivered.map((run) => run.at + STALE_REVIEW_S * 1000),
+    );
+    const delay = Math.max(50, nextAt - Date.now() + 25);
+    const timer = setTimeout(() => setStaleTick((n) => n + 1), delay);
+    return () => clearTimeout(timer);
+  }, [runs]);
 
-  const value = useMemo(() => ({ runs, now }), [runs, now]);
+  const value = useMemo(() => ({ runs }), [runs]);
 
   return (
     <TaskRunsContext.Provider value={value}>{children}</TaskRunsContext.Provider>
@@ -196,8 +210,6 @@ function taskState(
     return "cancelled";
   }
   if (waiting) return "waiting";
-  // The event stream is the source of truth for background runs; the part
-  // status only covers delegations with no observed run (older threads).
   if (run) {
     if (run.state === "running") return "working";
     if (run.state === "failed") return "failed";
@@ -232,6 +244,16 @@ function coderWatches(agent: ReturnType<typeof agentForCall>) {
   );
 }
 
+function useStickyResult(node: ReactNode): ReactNode {
+  const held = useRef<ReactNode>(undefined);
+  if (node !== undefined && node !== null && node !== false) {
+    held.current = node;
+  }
+  return node !== undefined && node !== null && node !== false
+    ? node
+    : held.current;
+}
+
 function coderResult(input: {
   readonly state: TaskCardState;
   readonly run?: SubagentRun;
@@ -255,23 +277,65 @@ function coderResult(input: {
   return undefined;
 }
 
-/** Hold the live caption briefly so follow/caught-up churn does not flicker it. */
-function useStickyLive(live: boolean, dwellMs = 450): boolean {
-  const [sticky, setSticky] = useState(live);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (live) {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-      hideTimer.current = null;
-      setSticky(true);
-      return;
-    }
-    hideTimer.current = setTimeout(() => setSticky(false), dwellMs);
-    return () => {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-    };
-  }, [live, dwellMs]);
-  return sticky;
+function DelegationLane({
+  part,
+  run,
+  animateEnter,
+}: {
+  readonly part: ToolCallPartState;
+  readonly run?: SubagentRun;
+  readonly animateEnter: boolean;
+}) {
+  const { conversation } = useChatConversation();
+  const { open } = useSubagentInspect();
+  const wait = pendingForDelegation(conversation, part.toolCallId);
+  const eveState = eveToolState(conversation, part.toolCallId);
+  const state = taskState(part, run, wait != null, eveState);
+  const agent = agentForCall(conversation.agents, part.toolCallId);
+  const isCoder = part.toolName === "coder" || run?.name === "coder";
+  const agentName = run?.name ?? part.toolName;
+  const title = subagentRowTitle(delegationMessage(part), agentName);
+  const row = deriveSubagentRowContent({
+    title,
+    child: agent as Parameters<typeof deriveSubagentRowContent>[0]["child"],
+  });
+  const live = state === "working" || state === "waiting";
+  const activity = live
+    ? (row.activity ?? SUBAGENT_WORKING_ACTIVITY)
+    : undefined;
+  const watches = isCoder ? coderWatches(agent) : [];
+  const rawResult = coderResult({
+    state,
+    run,
+    agent,
+    waitPrompt: wait?.prompt,
+    isCoder,
+  });
+  const result = useStickyResult(rawResult);
+
+  return (
+    <View className={isCoder ? "max-w-xl flex-col gap-2" : "flex-col gap-2"}>
+      <TaskCard
+        label={row.title}
+        meta={agentName}
+        activity={activity}
+        state={state}
+        startedAt={run?.at}
+        animateEnter={animateEnter}
+        expandable
+        onPress={() => {
+          open({
+            sessionId: agent?.sessionId ?? part.toolCallId ?? part.toolName,
+            name: agentName,
+            callId: part.toolCallId,
+            agent,
+          });
+        }}
+        result={result}
+      />
+      {watches.length > 0 ? <DeployWatchStack handles={watches} /> : null}
+    </View>
+  );
 }
 
 // The lane renderer for delegated tool calls. Thread routes a group whose
@@ -284,8 +348,12 @@ export function TaskGroup({
   const runs = useSubagentRuns();
   const { conversation } = useChatConversation();
   const { store } = useActiveChat();
-  const { open } = useSubagentInspect();
   const parts = useAuiState((s) => s.message.parts) as readonly unknown[];
+  const [visible, setVisible] = useState(TASK_PAGE_SIZE);
+  const enteredIds = useRef(new Set<string>());
+
+  // Skip live chrome while the store is mid-resume so follow/caught-up ticks
+  // do not rebuild the card as waiting.
   const catchingUp = useSyncExternalStore(
     (listener) => store.subscribe(listener),
     () => store.snapshot.status === "resuming",
@@ -296,76 +364,67 @@ export function TaskGroup({
     .map((index) => parts[index])
     .filter(isDelegationPart);
 
-  const anyLiveNow =
-    !catchingUp &&
-    delegations.some((part) => {
-      const run = runs.find((r) => r.callId === part.toolCallId);
-      const wait = pendingForDelegation(conversation, part.toolCallId);
-      const eveState = eveToolState(conversation, part.toolCallId);
-      const state = taskState(part, run, wait != null, eveState);
-      return state === "working" || state === "waiting";
-    });
-  const anyLive = useStickyLive(anyLiveNow);
-
   if (delegations.length === 0) return null;
 
-  return (
-    <View className="flex-col gap-2 px-2">
-      {delegations.map((part) => {
+  const laneStates = catchingUp
+    ? []
+    : delegations.map((part) => {
         const run = runs.find((r) => r.callId === part.toolCallId);
         const wait = pendingForDelegation(conversation, part.toolCallId);
         const eveState = eveToolState(conversation, part.toolCallId);
-        const state = taskState(part, run, wait != null, eveState);
-        const agent = agentForCall(conversation.agents, part.toolCallId);
-        const isCoder = part.toolName === "coder" || run?.name === "coder";
-        const title = subagentRowTitle(
-          delegationMessage(part),
-          run?.name ?? part.toolName,
-        );
-        const row = deriveSubagentRowContent({ title, child: agent });
-        const live = state === "working" || state === "waiting";
-        const activity = live
-          ? (row.activity ?? SUBAGENT_WORKING_ACTIVITY)
-          : undefined;
-        const watches = isCoder ? coderWatches(agent) : [];
+        return taskState(part, run, wait != null, eveState);
+      });
+  const running = laneStates.filter(
+    (s) => s === "working" || s === "waiting",
+  ).length;
+  const failed = laneStates.filter((s) => s === "failed").length;
+  const waiting = laneStates.filter((s) => s === "waiting").length;
+
+  const shown = delegations.slice(0, visible);
+  const hidden = delegations.length - shown.length;
+  const summary =
+    delegations.length > 1
+      ? [
+          `${delegations.length} tasks`,
+          running > 0 && `${running} running`,
+          waiting > 0 && `${waiting} waiting`,
+          failed > 0 && `${failed} failed`,
+        ]
+          .filter((entry): entry is string => typeof entry === "string")
+          .join(" · ")
+      : null;
+
+  return (
+    <View className="flex-col gap-2">
+      {summary ? (
+        <Text variant="caption" tone="default" className="px-1 opacity-55">
+          {summary}
+        </Text>
+      ) : null}
+      {shown.map((part) => {
+        const callId = part.toolCallId ?? part.toolName;
+        const firstMount = !enteredIds.current.has(callId);
+        if (firstMount) enteredIds.current.add(callId);
+        const run = runs.find((r) => r.callId === part.toolCallId);
         return (
-          <View
-            key={part.toolCallId}
-            className={isCoder ? "max-w-xl flex-col gap-2" : "flex-col gap-2"}
-          >
-            <TaskCard
-              label={row.title}
-              modelLabel={row.modelLabel}
-              activity={activity}
-              state={state}
-              animateEnter={live}
-              onPress={() => {
-                open({
-                  sessionId:
-                    agent?.sessionId ?? part.toolCallId ?? part.toolName,
-                  name: run?.name ?? part.toolName,
-                  callId: part.toolCallId,
-                  agent,
-                });
-              }}
-              result={coderResult({
-                state,
-                run,
-                agent,
-                waitPrompt: wait?.prompt,
-                isCoder,
-              })}
-            />
-            {watches.length > 0 ? (
-              <DeployWatchStack handles={watches} />
-            ) : null}
-          </View>
+          <DelegationLane
+            key={callId}
+            part={part}
+            run={run}
+            animateEnter={firstMount}
+          />
         );
       })}
-      {anyLive ? (
-        <Text variant="caption" tone="default" className="opacity-35">
-          {WAITING_FOR_SUBAGENT_LABEL}
-        </Text>
+      {hidden > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setVisible((count) => count + TASK_PAGE_SIZE)}
+          className="px-1"
+        >
+          <Text variant="caption" tone="default" className="opacity-55">
+            Show {Math.min(hidden, TASK_PAGE_SIZE)} more
+          </Text>
+        </Pressable>
       ) : null}
     </View>
   );

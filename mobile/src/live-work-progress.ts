@@ -51,14 +51,18 @@ export function nestedSubagentCards(input: {
   return list.map((run) => {
     const agent = agentForCall(input.agents, run.callId);
     const title = subagentRowTitle(undefined, run.name);
-    const row = deriveSubagentRowContent({ title, child: agent });
+    const row = deriveSubagentRowContent({
+      title,
+      child: agent as Parameters<typeof deriveSubagentRowContent>[0]["child"],
+    });
     const state = nestedCardState(run);
     const live = state === "working" || state === "waiting";
     return {
       key: run.callId,
       label: row.title,
-      modelLabel: row.modelLabel,
-      activity: live ? row.activity : undefined,
+      // Stable agent name in the meta slot (model lives in the transcript).
+      modelLabel: run.name,
+      activity: live ? (row.activity ?? undefined) : undefined,
       state,
       result:
         state === "failed"

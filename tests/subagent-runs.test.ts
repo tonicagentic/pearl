@@ -4,6 +4,10 @@ import {
   deriveSubagentRuns,
   STALE_REVIEW_S,
 } from "../lib/agent/subagent-runs.ts";
+import {
+  formatElapsed,
+  stabilizeSubagentRuns,
+} from "../lib/chat/task-elapsed.ts";
 
 // Real event shapes (from chat_event rows):
 const CALLED = {
@@ -105,6 +109,26 @@ test("a fresh run is not marked failed before the stale bound", () => {
   const now = AT + (STALE_REVIEW_S - 60) * 1000;
   const runs = deriveSubagentRuns([CALLED], now);
   assert.equal(runs[0].state, "running");
+});
+
+test("pre-stale now ticks keep the same lifecycle fields", () => {
+  const early = deriveSubagentRuns([CALLED], AT + 5_000);
+  const later = deriveSubagentRuns(
+    [CALLED],
+    AT + (STALE_REVIEW_S - 60) * 1000,
+  );
+  assert.equal(early[0].state, later[0].state);
+  assert.equal(early[0].delivered, later[0].delivered);
+  assert.equal(early[0].callId, later[0].callId);
+  const held = stabilizeSubagentRuns(early, later);
+  assert.equal(held[0], early[0], "stabilize reuses the prior run object");
+});
+
+test("formatElapsed matches assistant-ui task-card buckets", () => {
+  assert.equal(formatElapsed(400), "<1s");
+  assert.equal(formatElapsed(4200), "4.2s");
+  assert.equal(formatElapsed(12_000), "12s");
+  assert.equal(formatElapsed(72_000), "1m 12s");
 });
 
 test("runs without a matching name are not completed by another subagent", () => {

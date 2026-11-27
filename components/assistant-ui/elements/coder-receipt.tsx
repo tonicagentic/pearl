@@ -116,10 +116,15 @@ export function CoderSettledReceipt({
     [handoff.files],
   );
 
+  // Nested inside the task card — strip paper so repo/PR/files are rows, not
+  // cards-in-cards.
+  const embedded =
+    "max-w-none rounded-none border-0 bg-transparent p-0 shadow-none dark:bg-transparent";
+
   return (
     <div className={cn("flex w-full flex-col gap-2.5", className)}>
       {handoff.summary ? (
-        <p className="text-foreground/75 text-xs leading-relaxed">
+        <p className="text-foreground/75 line-clamp-2 text-xs leading-relaxed">
           {handoff.summary}
         </p>
       ) : null}
@@ -130,7 +135,7 @@ export function CoderSettledReceipt({
           visibleCount={tree.nodes.length}
           totalAdditions={tree.totalAdditions}
           totalDeletions={tree.totalDeletions}
-          className="max-w-none"
+          className={embedded}
         />
       ) : null}
 
@@ -143,7 +148,7 @@ export function CoderSettledReceipt({
           }
           siteName="GitHub"
           layout="compact"
-          className="max-w-none"
+          className={embedded}
         />
       ) : null}
 
@@ -152,11 +157,13 @@ export function CoderSettledReceipt({
           href={handoff.pullRequest.url}
           title={`#${handoff.pullRequest.number} ${handoff.pullRequest.title}`}
           description={
-            handoff.pullRequest.draft === false ? "Pull request" : "Draft pull request"
+            handoff.pullRequest.draft === false
+              ? "Pull request"
+              : "Draft pull request"
           }
           siteName="GitHub"
           layout="compact"
-          className="max-w-none"
+          className={embedded}
         />
       ) : null}
 

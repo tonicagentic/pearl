@@ -117,10 +117,19 @@ export function CoderSettledReceipt({
     [handoff.files],
   );
 
+  // Nested inside the task card — strip paper so repo/PR/files are rows.
+  const embedded =
+    "rounded-none border-0 bg-transparent p-0 shadow-none dark:bg-transparent";
+
   return (
     <View className={cn("w-full flex-col gap-2.5", className)}>
       {handoff.summary ? (
-        <Text variant="caption" tone="default" className="leading-relaxed opacity-75">
+        <Text
+          variant="caption"
+          tone="default"
+          numberOfLines={2}
+          className="leading-relaxed opacity-75"
+        >
           {handoff.summary}
         </Text>
       ) : null}
@@ -131,6 +140,7 @@ export function CoderSettledReceipt({
           visibleCount={tree.nodes.length}
           totalAdditions={tree.totalAdditions}
           totalDeletions={tree.totalDeletions}
+          className={embedded}
         />
       ) : null}
 
@@ -143,6 +153,7 @@ export function CoderSettledReceipt({
           }
           siteName="GitHub"
           layout="compact"
+          className={embedded}
         />
       ) : null}
 
@@ -157,6 +168,7 @@ export function CoderSettledReceipt({
           }
           siteName="GitHub"
           layout="compact"
+          className={embedded}
         />
       ) : null}
 

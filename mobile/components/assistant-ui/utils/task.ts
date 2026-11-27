@@ -58,13 +58,7 @@ export function taskMeta(args: unknown) {
   return firstString(args, META_KEYS);
 }
 
-export function formatElapsed(ms: number) {
-  if (ms < 1000) return "<1s";
-  const seconds = ms / 1000;
-  if (seconds < 10) return `${(Math.floor(seconds * 10) / 10).toFixed(1)}s`;
-  if (seconds < 60) return `${Math.floor(seconds)}s`;
-  return `${Math.floor(seconds / 60)}m ${Math.floor(seconds % 60)}s`;
-}
+export { formatElapsed } from "../../../../lib/chat/task-elapsed";
 
 export function formatUnknownValue(value: unknown, space?: number): string {
   if (typeof value === "string") return value;

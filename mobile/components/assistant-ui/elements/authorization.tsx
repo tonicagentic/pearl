@@ -2,7 +2,14 @@ import { makeAssistantDataUI } from "@assistant-ui/react-native";
 import * as Clipboard from "expo-clipboard";
 import * as Linking from "expo-linking";
 import { useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
+
+import { Text } from "@/components/ui/text";
+import { PluginLogo } from "@/components/settings/plugin-logo";
+import { authorizationGrantView } from "../../../../lib/chat/authorization-grant";
+import { cn } from "@/lib/utils";
+import { inkButton } from "./surfaces";
+import { PermissionGrant } from "./permission-grant";
 
 type AuthorizationData = {
   state: "required" | "completed";
@@ -18,39 +25,61 @@ type AuthorizationData = {
 
 function AuthorizationCard({ data }: { data: AuthorizationData }) {
   const [copied, setCopied] = useState(false);
+  const grant = authorizationGrantView(data);
+  const continueUrl =
+    data.state === "required" && data.url && /^https:\/\//i.test(data.url)
+      ? data.url
+      : undefined;
+
   const open = () => {
-    if (!data.url || !/^https:\/\//i.test(data.url)) return;
-    void Linking.openURL(data.url).catch(() => Alert.alert("Could not open sign-in link"));
+    if (!continueUrl) return;
+    void Linking.openURL(continueUrl).catch(() =>
+      Alert.alert("Could not open sign-in link"),
+    );
   };
+
+  const actions =
+    continueUrl != null ? (
+      <Pressable
+        accessibilityRole="link"
+        onPress={open}
+        className={cn(
+          inkButton,
+          "h-8 items-center justify-center rounded-full px-3",
+        )}
+      >
+        <Text variant="caption" weight="medium" className="text-background">
+          Continue to sign in
+        </Text>
+      </Pressable>
+    ) : data.state === "required" && data.userCode ? (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Copy authorization code"
+        className="min-h-8 justify-center"
+        onPress={() =>
+          void Clipboard.setStringAsync(data.userCode!)
+            .then(() => setCopied(true))
+            .catch(() => Alert.alert("Could not copy code"))
+        }
+      >
+        <Text variant="caption" tone="default" className="opacity-70">
+          Code: {data.userCode} {copied ? "· Copied" : "· Tap to copy"}
+        </Text>
+      </Pressable>
+    ) : undefined;
+
   return (
-    <View className="border-border bg-card my-2 gap-2 rounded-xl border p-3">
-      {data.state === "required" ? (
-        <>
-          <Text className="text-foreground text-sm font-medium">
-            {data.instructions ?? `Sign in to ${data.displayName ?? data.name}`}
-          </Text>
-          {data.userCode ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Copy authorization code"
-              className="min-h-11 justify-center"
-              onPress={() => void Clipboard.setStringAsync(data.userCode!).then(() => setCopied(true)).catch(() => Alert.alert("Could not copy code"))}
-            >
-              <Text className="text-foreground text-sm">Code: {data.userCode} {copied ? "· Copied" : "· Tap to copy"}</Text>
-            </Pressable>
-          ) : null}
-          {data.url ? (
-            <Pressable accessibilityRole="link" className="min-h-11 justify-center" onPress={open}>
-              <Text className="text-primary text-sm font-medium">Continue to sign in</Text>
-            </Pressable>
-          ) : null}
-          <Text className="text-muted-foreground text-xs">
-            Return here after sign-in. The chat will update when authorization completes.
-          </Text>
-        </>
-      ) : (
-        <Text className="text-muted-foreground text-sm">{data.outcome ?? "Authorization completed"}</Text>
-      )}
+    <View className="w-full">
+      <PermissionGrant
+        capability={grant.capability}
+        reach={grant.reach}
+        scope={grant.scope}
+        icon={
+          grant.markId ? <PluginLogo id={grant.markId} size={36} /> : undefined
+        }
+        actions={actions}
+      />
     </View>
   );
 }

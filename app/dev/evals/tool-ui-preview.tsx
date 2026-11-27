@@ -105,18 +105,20 @@ function TaskCardPreview({ toolName }: { toolName: string }) {
       <PreviewChrome title="While running">
         <TaskCard
           label={label}
-          modelLabel="Sol"
+          meta={toolName}
           activity="Calling tools…"
           state="working"
+          startedAt={Date.now() - 4200}
         />
       </PreviewChrome>
       <PreviewChrome title="Settled">
         <TaskCard
           label={label}
-          modelLabel="Sol"
+          meta={toolName}
           state="done"
+          elapsed="4.2s"
           result={
-            <p className="text-muted-foreground text-[12.5px] leading-snug">
+            <p className="text-muted-foreground line-clamp-2 text-[12.5px] leading-snug">
               Sample handoff strip — PR, file link, or brief summary.
             </p>
           }

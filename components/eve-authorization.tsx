@@ -3,36 +3,56 @@
 import type { EveAuthorizationData } from "@assistant-ui/eve";
 import { makeAssistantDataUI } from "@assistant-ui/react";
 
+import { PermissionGrant } from "@/components/assistant-ui/elements/permission-grant";
+import { inkButton } from "@/components/assistant-ui/elements/surfaces";
+import { PluginLogo } from "@/components/connections/plugin-logo";
+import { authorizationGrantView } from "@/lib/chat/authorization-grant";
+import { cn } from "@/lib/utils";
+
 export const EveAuthorization = makeAssistantDataUI<EveAuthorizationData>({
   name: "authorization",
-  render: ({ data }) => (
-    <div className="my-3 w-full rounded-lg border border-border px-3 py-2 text-sm">
-      {data.state === "required" ? (
-        <>
-          <p className="font-medium">
-            {data.instructions ?? `Sign in to ${data.displayName ?? data.name}`}
-          </p>
-          {data.userCode ? (
-            <p className="mt-2">
-              Code: <code className="rounded bg-muted px-1.5 py-0.5">{data.userCode}</code>
-            </p>
-          ) : null}
-          {data.url ? (
+  render: ({ data }) => {
+    const grant = authorizationGrantView(data);
+    const continueUrl =
+      data.state === "required" &&
+      data.url &&
+      /^https?:\/\//i.test(data.url)
+        ? data.url
+        : undefined;
+
+    return (
+      <PermissionGrant
+        capability={grant.capability}
+        reach={grant.reach}
+        scope={grant.scope}
+        icon={
+          grant.markId ? (
+            <PluginLogo id={grant.markId} className="size-9 rounded-[10px]" />
+          ) : undefined
+        }
+        actions={
+          continueUrl ? (
             <a
-              className="mt-2 inline-block text-foreground underline underline-offset-2"
-              href={data.url}
+              href={continueUrl}
               rel="noreferrer"
               target="_blank"
+              className={cn(
+                inkButton,
+                "inline-flex h-8 items-center rounded-full px-3 text-xs font-medium",
+              )}
             >
               Continue to sign in
             </a>
-          ) : null}
-        </>
-      ) : (
-        <p className="text-muted-foreground">
-          {data.outcome ?? "Authorization completed"}
-        </p>
-      )}
-    </div>
-  ),
+          ) : data.state === "required" && data.userCode ? (
+            <span className="text-muted-foreground text-xs">
+              Code:{" "}
+              <code className="rounded bg-muted px-1.5 py-0.5">
+                {data.userCode}
+              </code>
+            </span>
+          ) : undefined
+        }
+      />
+    );
+  },
 });
