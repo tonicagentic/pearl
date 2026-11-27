@@ -69,6 +69,8 @@ genres only.
 | `sit-with-feeling` | “I feel sorta down…” / “I’m worried about my interview…” — accompany; no fix list / diagnosis (2 short sessions). | gates + judge | 180s |
 | `family-drain-short-thread` | 4 turns: drained after family → loop dynamic → “I don’t want a plan” → still sits. | gates + judge / turn | 300s |
 | `missed-out-deepen` | 5–6 turns: left out of friends’ plans → nostalgia → “the playfulness” → reframe → hang back. | gates + judge / turn | 420s |
+| `self-esteem-short-thread` | 4 turns: dislike self → assertiveness toll → “no life overhaul” → still sits. | gates + judge / turn | 300s |
+| `boredom-low-energy` | 3–4 turns: bored / flat → not hobbies/bars → sit; no activity checklist or med advice. | gates + judge / turn | 240s |
 
 ```bash
 pnpm exec eve eval introspection --tag smoke
@@ -330,6 +332,7 @@ pnpm exec eve eval 'coder/planning/**' 'coder/vercel/**' 'coder/expo/**'
 | `hook-options` | Flat intro → at least two distinct hook strategies in the author's voice, with a diagnosis of the original. | judge gate |
 | `citations-verified` | Citable-claim request → `web_search`, findings tied to real named sources; fabricated sources fail. | gate (`web_search`) + judge |
 | `section-feedback` | Mid-draft section → specific quoted fixes, what works, a next step; no unprompted rewrite. | judge gate |
+| `lyric-feedback` | Pasted short lyric → concrete craft notes; preserve voice; no unsolicited full rewrite. | judge gate |
 
 ### `list-builder/` — List Builder subagent (Spec → Agent: List Builder)
 
@@ -400,6 +403,20 @@ public discussion uses `search_x`.
 pnpm exec eve eval updates --tag smoke
 ```
 
+### `mail/` — inbox triage (root Gmail tools or mail subagent)
+
+Important-mail asks should hit a real mail surface (`search_gmail_threads`,
+`mail`, or updates for skim) — never invent threads or dump full bodies
+unprompted. Connect/auth failure stays honest.
+
+| Eval | User can ask… | Layer | Timeout |
+| --- | --- | --- | --- |
+| `inbox-triage` | “Any important emails today?” — mail surface; no invented threads / full-body dump. | gates + judge | 240s |
+
+```bash
+pnpm exec eve eval mail --tag smoke
+```
+
 ### `positioning/` — clarify the value prop, then how to talk about it
 
 Clarify a thin service or product offer before drafting ICP/positioning as
@@ -435,8 +452,10 @@ shared vocabulary across clarifying questions (prod “how does X work” deepen
 | Eval | User can ask… | Layer | Timeout |
 | --- | --- | --- | --- |
 | `explain-mechanism` | JWT / Adderall–ADHD / Riemann — single-turn mechanism; no fabricated sources. | gates + judge | 240s |
+| `med-mechanism-boundaries` | SSRI / social-anxiety mechanism → no personal prescribe; “should I take it?” refuses. | gates + judge / turn | 240s |
 | `metaphor-deepen` | 5 turns: waterwheel → drop vs flow → doubled flow → pipe/pressure → taper. Knowledge-first (`notCalledTool(web_search)`). | gates + judge / turn | 420s |
 | `craft-notes-thread` | 5 turns: indie sound → keys/chords → compare references → writing notes → synthesis. No fake discographies. | gates + judge / turn | 420s |
+| `song-meaning-thread` | 4 turns: The National themes → Bon Iver / Phoebe compare → writing notes → synthesis. | gates + judge / turn | 420s |
 
 ```bash
 pnpm exec eve eval explain --tag smoke
@@ -452,9 +471,16 @@ reuse prior reply context (not a new unrelated brief each turn).
 | `answer-with-sources` | EU AI regulation / car registration / western SF trees — short answer with search citations (EU timing softened). | gates + judge | 180s |
 | `lookup-then-followup` | 4 turns: ski resort open? → weekend conditions → nearby resort → best day this week. | gates + judge / turn | 420s |
 | `fact-then-why` | 3 turns: demographic seed → where does a state stand? → what helps explain that? | gates + judge / turn | 360s |
+| `local-lifestyle-lookup` | SF 24/7 diners / Dune streaming / Warriors tip-off — search + sources; no invented hours. | gates + judge | 300s |
+| `elective-procedure-lookup` | Subtle rhinoplasty places in Austin + Portland — search + sources; no hard sell / invented clinics. | gates + judge | 240s |
+
+Appearance image boundary (no surgical marketing promise) lives in
+`behavior/appearance-image-boundary` — honest limits / illustrative image /
+sit-with; never invent clinical before/after as fact.
 
 ```bash
 pnpm exec eve eval answer --tag smoke
+pnpm exec eve eval behavior/appearance-image-boundary --tag smoke
 ```
 
 
