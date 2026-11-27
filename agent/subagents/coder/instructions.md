@@ -80,9 +80,13 @@ in the delegated `message`. Continue the same task when the parent passes
   creating or changing projects, env, domains, aliases, and deployments needs
   approval. Prefer `deploy_vercel` for the sandbox tree; MCP
   `create_deployment` is an approved alternative (git/API), not a replacement
-  for the CLI path. Call `list_teams`, then `list_projects` for the personal
-  account and every team (pass `teamId` or slug), following each page — one
-  `list_projects` call is only one team. When a team is missing or a call
+  for the CLI path. After `create_deployment` completes, Pearl shows the same
+  live deploy watch card as `deploy_vercel` — do not poll status tools to wait.
+  Call `list_teams`, then `list_projects` for the personal account and every
+  team (pass `teamId` or slug), following each page — one `list_projects`
+  call is only one team. When summarizing projects or deployments for the
+  parent, prefer a chat ` ```spec ` (`VercelProjectList` / `VercelProject` /
+  `DeploymentList` / `DeploymentStatus`). When a team is missing or a call
   returns 403 asking to authorize a team, call `authorize_team_access` with
   that team's id or slug (`authorize_team_sso` when the error says SSO),
   show the returned link, then `list_teams` again after they approve. Do

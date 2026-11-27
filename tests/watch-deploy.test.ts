@@ -6,6 +6,7 @@ import {
   extractWatchHandles,
   mapEasBuildStatus,
   mapVercelReadyState,
+  watchFromCreateDeploymentOutput,
   watchFromDeployVercelOutput,
   watchFromEasBuildOutput,
 } from "../lib/watch/deploy.ts";
@@ -71,6 +72,52 @@ describe("watchFromDeployVercelOutput", () => {
     assert.equal(snap.state, "building");
     assert.equal(snap.title, "Current production deployment");
     assert.equal(snap.deploymentId, "my-agent-abc.vercel.app");
+  });
+});
+
+describe("watchFromCreateDeploymentOutput", () => {
+  it("normalizes nested MCP create_deployment output", () => {
+    const snap = watchFromCreateDeploymentOutput(
+      {
+        deployment: {
+          id: "dpl_abc123",
+          url: "my-agent-preview.vercel.app",
+          readyState: "BUILDING",
+          target: "preview",
+          projectId: "prj_xyz",
+          teamId: "team_abc",
+          inspectorUrl:
+            "https://vercel.com/tonicagentic/my-agent/abc123",
+        },
+      },
+      { target: "preview" },
+    );
+    assert.ok(snap);
+    assert.equal(snap.provider, "vercel");
+    assert.equal(snap.state, "building");
+    assert.equal(snap.deploymentId, "dpl_abc123");
+    assert.equal(snap.projectId, "prj_xyz");
+    assert.equal(snap.teamId, "team_abc");
+  });
+
+  it("reads JSON from an MCP content array", () => {
+    const snap = watchFromCreateDeploymentOutput({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            id: "dpl_from_text",
+            url: "https://from-text.vercel.app",
+            readyState: "QUEUED",
+            target: "production",
+          }),
+        },
+      ],
+    });
+    assert.ok(snap);
+    assert.equal(snap.state, "queued");
+    assert.equal(snap.deploymentId, "dpl_from_text");
+    assert.equal(snap.target, "production");
   });
 });
 
@@ -144,5 +191,32 @@ describe("extractWatchHandles", () => {
     assert.equal(handles.vercel?.target, "production");
     assert.equal(handles.eas?.buildId, easNew);
     assert.equal(handles.eas?.title, "EAS Android production");
+  });
+
+  it("builds a vercel watch from MCP create_deployment", () => {
+    const handles = extractWatchHandles({
+      childMessages: [
+        {
+          parts: [
+            {
+              type: "tool",
+              name: "vercel__create_deployment",
+              state: "completed",
+              input: { target: "preview", name: "pearl" },
+              output: {
+                id: "dpl_mcp",
+                url: "https://pearl-mcp.vercel.app",
+                readyState: "BUILDING",
+                projectId: "prj_pearl",
+              },
+            },
+          ],
+        },
+      ],
+    });
+    assert.equal(handles.vercel?.deploymentId, "dpl_mcp");
+    assert.equal(handles.vercel?.url, "https://pearl-mcp.vercel.app");
+    assert.equal(handles.vercel?.state, "building");
+    assert.equal(handles.vercel?.target, "preview");
   });
 });

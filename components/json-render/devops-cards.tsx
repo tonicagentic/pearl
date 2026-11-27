@@ -163,6 +163,45 @@ export const devopsWebCards = {
       ) : null}
     </div>
   ),
+  VercelProjectList: ({
+    props,
+  }: {
+    props: {
+      team: string | null;
+      items: readonly {
+        name: string;
+        framework: string | null;
+        productionUrl: string | null;
+        latestState: string | null;
+      }[];
+    };
+  }) => (
+    <div className="flex flex-col gap-3">
+      {props.team ? (
+        <div className="text-foreground text-[15px] font-medium">{props.team}</div>
+      ) : null}
+      <div className="flex flex-col gap-2">
+        {props.items.map((item) => (
+          <RowCard key={item.name}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-foreground text-[13.5px] font-medium">
+                {item.name}
+              </span>
+              {item.latestState ? (
+                <Chip
+                  label={item.latestState}
+                  tone={deployStateTone(item.latestState)}
+                />
+              ) : null}
+            </div>
+            <MetaLine>
+              {[item.framework, item.productionUrl].filter(Boolean).join(" · ")}
+            </MetaLine>
+          </RowCard>
+        ))}
+      </div>
+    </div>
+  ),
   DeploymentStatus: ({
     props,
   }: {

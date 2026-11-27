@@ -30,7 +30,9 @@ export default defineEval({
           ? "The reply lists Vercel projects grounded in tool results (personal " +
               "and/or team scopes as returned). It does not invent project names " +
               "that were not returned, and it does not claim a complete inventory " +
-              "if only one team page was fetched without saying so."
+              "if only one team page was fetched without saying so. When tools " +
+              "returned projects, the reply includes a ```spec fence with " +
+              "VercelProjectList or VercelProject."
           : "The reply does not invent a list of the user's Vercel projects. " +
               "It either points them to connect Vercel (Settings → Vercel or the " +
               "in-chat Connect card) or explains it cannot list projects without " +

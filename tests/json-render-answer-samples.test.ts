@@ -37,6 +37,7 @@ const EXPECTED_ROOT_CHILD: Record<string, string> = {
   "answer-daily": "DailyBrief",
   "answer-video": "Video",
   "answer-vercel-project": "VercelProject",
+  "answer-vercel-project-list": "VercelProjectList",
   "answer-deploy": "DeploymentStatus",
   "answer-deploy-list": "DeploymentList",
   "answer-pr": "PullRequest",
@@ -92,8 +93,8 @@ function assistantText(sample: (typeof ANSWER_THREAD_SAMPLES)[number]): string {
 }
 
 describe("answer thread samples", () => {
-  it("includes sixty-three answer fixtures", () => {
-    assert.equal(ANSWER_THREAD_SAMPLES.length, 63);
+  it("includes sixty-four answer fixtures", () => {
+    assert.equal(ANSWER_THREAD_SAMPLES.length, 64);
   });
 
   for (const sample of ANSWER_THREAD_SAMPLES) {

@@ -235,7 +235,9 @@ Planning repo work → `write_project_file`, no `coder` until you say build.
 | `create-project` | Create Pearl project / new GitHub Next app → `create_project` or `coder`. | gates + judge (`costs-coder`) |
 | `ask-about-repo` | “How does auth work in my GitHub repo owner/name?” — inspect or Connect. | gates + judge |
 | `compare-branches` | “Diff main vs feature/…” — GitHub/coder; no invented file list. | gates + judge |
-| `list-vercel-projects` | “What Vercel projects do I have?” — teams/projects or Connect. | gates + judge |
+| `list-vercel-projects` | “What Vercel projects do I have?” — teams/projects or Connect; `VercelProjectList` / `VercelProject` spec when tools ran. | gates + judge |
+| `view-vercel-project` | “Tell me about my Vercel project widgets” — `get_project` + `VercelProject` spec or Connect. | gates + judge |
+| `view-deployments` | Recent deployments for a project — list tools + `DeploymentList` / `DeploymentStatus` spec or Connect. | gates + judge |
 | `check-deployments` | Latest Vercel deployment status — lookup or Connect. | gates + judge |
 | `pr-ci-status` | PR #N / CI status — GitHub or coder. | gates + judge |
 | `review-pr` | Review PR #N before merge — findings; no fake posted comments. | gates + judge |
@@ -278,6 +280,7 @@ pnpm exec eve eval coder/build-software/plan-repo-changes coder/build-software/c
 | Eval | User can ask… | Layer |
 | --- | --- | --- |
 | `preview-deploy` | Deploy a Vercel preview → coder. | gates + judge |
+| `create-deployment-hitl` | Create deployment via coder: deny then approve `create_deployment` / `deploy_vercel`. | gates + HITL + judge (`costs-coder`) |
 | `deployment-logs` | Why is preview failing? → coder logs. | gates + judge |
 | `list-projects` | List Vercel projects via coder connection. | gates + judge |
 

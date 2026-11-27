@@ -121,6 +121,8 @@ function shipBrief(
       return gatedGitBrief(args);
     case "deploy_vercel":
       return deployBrief(args);
+    case "create_deployment":
+      return createDeploymentBrief(args);
     case "merge_pr":
       return mergePrBrief(args);
     case "simulator_start":
@@ -236,6 +238,44 @@ function deployBrief(args: Record<string, unknown>): ApprovalBrief {
   const cwd = asString(args.workingDirectory);
   if (cwd) lines.push(`Working directory: ${cwd}`);
   return { headline: card.title, detail: lines.join("\n") };
+}
+
+/** MCP create_deployment — project/team/target without dumping raw args. */
+function createDeploymentBrief(args: Record<string, unknown>): ApprovalBrief {
+  const project =
+    asString(args.name) ??
+    asString(args.project) ??
+    asString(args.projectName) ??
+    asString(args.projectId) ??
+    asString(args.idOrName) ??
+    "project";
+  const team =
+    asString(args.teamId) ?? asString(args.slug) ?? asString(args.team);
+  const targetRaw =
+    asString(args.target) ??
+    asString(args.environment) ??
+    asString(args.deploymentTarget);
+  const target =
+    targetRaw?.toLowerCase() === "production" ? "production" : "preview";
+  const lines: string[] = [`Project: ${project}`, `Target: ${target}`];
+  if (team) lines.push(`Team: ${team}`);
+  const gitSource = args.gitSource;
+  if (gitSource && typeof gitSource === "object" && !Array.isArray(gitSource)) {
+    const source = gitSource as Record<string, unknown>;
+    const ref = asString(source.ref) ?? asString(source.branch);
+    const org = asString(source.org);
+    const repoName = asString(source.repo);
+    const repo =
+      org && repoName ? `${org}/${repoName}` : (repoName ?? asString(source.repoId));
+    if (repo) lines.push(`Git: ${repo}${ref ? `@${ref}` : ""}`);
+    else if (ref) lines.push(`Git ref: ${ref}`);
+  }
+  const customEnv = asString(args.customEnvironmentSlugOrId);
+  if (customEnv) lines.push(`Environment: ${customEnv}`);
+  return {
+    headline: "Create this Vercel deployment?",
+    detail: lines.join("\n"),
+  };
 }
 
 function expoAppLabel(args: Record<string, unknown>): string {

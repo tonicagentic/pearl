@@ -72,6 +72,26 @@ test("production deploy for Pearl warns about phone API", () => {
   assert.match(brief.detail!, /API the phone is using/);
 });
 
+test("create_deployment brief summarizes project team and target", () => {
+  const brief = buildApprovalBrief({
+    toolName: "vercel__create_deployment",
+    prompt: "Approve Create deployment?",
+    input: {
+      name: "pearl",
+      teamId: "team_abc",
+      target: "preview",
+      gitSource: { org: "tonicagentic", repo: "pearl", ref: "main" },
+    },
+  });
+
+  assert.equal(brief.headline, "Create this Vercel deployment?");
+  assert.ok(brief.detail);
+  assert.match(brief.detail!, /Project: pearl/);
+  assert.match(brief.detail!, /Target: preview/);
+  assert.match(brief.detail!, /Team: team_abc/);
+  assert.match(brief.detail!, /Git: tonicagentic\/pearl@main/);
+});
+
 test("custom multi-line prompt splits into headline and detail", () => {
   const prompt =
     "Send this email?\nTo: a@b.com\nSubject: Hi\n\nHello there";

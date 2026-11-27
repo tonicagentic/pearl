@@ -39,6 +39,7 @@ export type AnswerThreadSample = {
     | "answer-daily"
     | "answer-video"
     | "answer-vercel-project"
+    | "answer-vercel-project-list"
     | "answer-deploy"
     | "answer-deploy-list"
     | "answer-pr"
@@ -1176,6 +1177,46 @@ export const ANSWER_THREAD_SAMPLES: readonly AnswerThreadSample[] = [
             url: "https://pearl.tonicagentic.com",
             createdAt: "12m ago",
           },
+        },
+      },
+    },
+  ),
+  answerSample(
+    "answer-vercel-project-list",
+    "Vercel projects",
+    "What Vercel projects do I have?",
+    "Projects:",
+    "card",
+    {
+      card: {
+        type: "Card",
+        props: { title: null, description: null },
+        children: ["list"],
+      },
+      list: {
+        type: "VercelProjectList",
+        props: {
+          team: "tonicagentic",
+          items: [
+            {
+              name: "pearl",
+              framework: "nextjs",
+              productionUrl: "https://pearl.diy",
+              latestState: "ready",
+            },
+            {
+              name: "tempo",
+              framework: "nextjs",
+              productionUrl: "https://tempo.tonicagentic.com",
+              latestState: "building",
+            },
+            {
+              name: "docs",
+              framework: "nextjs",
+              productionUrl: null,
+              latestState: null,
+            },
+          ],
         },
       },
     },

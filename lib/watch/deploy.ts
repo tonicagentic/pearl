@@ -222,7 +222,121 @@ export function bareToolName(toolName: string): string {
 }
 
 export function isDeployVercelTool(name: string): boolean {
-  return bareToolName(name) === "deploy_vercel";
+  const bare = bareToolName(name);
+  return bare === "deploy_vercel" || bare === "create_deployment";
+}
+
+/**
+ * Normalize MCP `create_deployment` output (flat or nested) into the same
+ * shape {@link watchFromDeployVercelOutput} expects.
+ */
+export function watchFromCreateDeploymentOutput(
+  output: unknown,
+  args?: { readonly target?: string | null },
+): WatchSnapshot | null {
+  const normalized = normalizeCreateDeploymentOutput(output, args?.target);
+  if (!normalized) return null;
+  return watchFromDeployVercelOutput(normalized, {
+    target: asString(normalized.target) ?? args?.target ?? null,
+  });
+}
+
+function normalizeCreateDeploymentOutput(
+  output: unknown,
+  fallbackTarget?: string | null,
+): Record<string, unknown> | null {
+  if (!isRecord(output)) {
+    const fromContent = unwrapMcpTextObject(output);
+    if (!fromContent) return null;
+    return normalizeCreateDeploymentOutput(fromContent, fallbackTarget);
+  }
+
+  // MCP tools sometimes wrap JSON in a content array.
+  if (Array.isArray(output.content)) {
+    const fromContent = unwrapMcpTextObject(output);
+    if (fromContent) {
+      return normalizeCreateDeploymentOutput(fromContent, fallbackTarget);
+    }
+  }
+
+  const nested =
+    (isRecord(output.deployment) ? output.deployment : null) ??
+    (isRecord(output.result) ? output.result : null) ??
+    (isRecord(output.data) ? output.data : null);
+
+  const source = nested ?? output;
+  const url =
+    asString(source.url) ??
+    asString(source.inspectorUrl) ??
+    asString(output.url) ??
+    null;
+  const deploymentId =
+    asString(source.id) ??
+    asString(source.deploymentId) ??
+    asString(output.id) ??
+    asString(output.deploymentId) ??
+    null;
+  const readyState =
+    asString(source.readyState) ??
+    asString(source.state) ??
+    asString(output.readyState) ??
+    asString(output.state) ??
+    null;
+  const target =
+    asString(source.target) ??
+    asString(output.target) ??
+    fallbackTarget?.trim() ??
+    "preview";
+  const projectId =
+    asString(source.projectId) ??
+    (isRecord(source.project) ? asString(source.project.id) : null) ??
+    asString(output.projectId) ??
+    null;
+  const teamId =
+    asString(source.teamId) ??
+    (isRecord(source.team) ? asString(source.team.id) : null) ??
+    asString(output.teamId) ??
+    null;
+  const dashboardUrl =
+    asString(source.inspectorUrl) ??
+    asString(output.inspectorUrl) ??
+    asString(source.dashboardUrl) ??
+    asString(output.dashboardUrl) ??
+    null;
+  const error =
+    asString(source.error) ??
+    asString(output.error) ??
+    (readyState && /error|fail/i.test(readyState) ? "Deploy failed." : null);
+
+  if (!url && !deploymentId && !error) return null;
+
+  return {
+    status: error && !url ? "error" : "ok",
+    target,
+    ...(url ? { url } : {}),
+    ...(deploymentId ? { deploymentId } : {}),
+    ...(readyState ? { state: readyState } : {}),
+    ...(projectId ? { projectId } : {}),
+    ...(teamId ? { teamId } : {}),
+    ...(dashboardUrl ? { dashboardUrl } : {}),
+    ...(error ? { error } : {}),
+  };
+}
+
+function unwrapMcpTextObject(output: unknown): Record<string, unknown> | null {
+  if (!isRecord(output) || !Array.isArray(output.content)) return null;
+  for (const part of output.content) {
+    if (!isRecord(part) || part.type !== "text") continue;
+    const text = asString(part.text);
+    if (!text) continue;
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (isRecord(parsed)) return parsed;
+    } catch {
+      // Not JSON — ignore.
+    }
+  }
+  return null;
 }
 
 export function isEasBuildRunTool(name: string): boolean {
@@ -378,8 +492,9 @@ type ChildMessage = {
 };
 
 /**
- * Newest deploy_vercel and build_run watches from a followed child transcript.
- * Prefer completed/failed outputs; fall back to preliminary output when present.
+ * Newest deploy_vercel / create_deployment and build_run watches from a
+ * followed child transcript. Prefer completed/failed outputs; fall back to
+ * preliminary output when present.
  */
 export function extractWatchHandles(input: {
   readonly childMessages?: readonly ChildMessage[];
@@ -400,9 +515,16 @@ export function extractWatchHandles(input: {
       const args = isRecord(part.input) ? part.input : undefined;
 
       if (!vercel && isDeployVercelTool(name) && part.output !== undefined) {
-        vercel = watchFromDeployVercelOutput(part.output, {
-          target: args ? asString(args.target) : null,
-        });
+        const bare = bareToolName(name);
+        const target = args
+          ? (asString(args.target) ??
+            asString(args.environment) ??
+            asString(args.deploymentTarget))
+          : null;
+        vercel =
+          bare === "create_deployment"
+            ? watchFromCreateDeploymentOutput(part.output, { target })
+            : watchFromDeployVercelOutput(part.output, { target });
       }
       if (!eas && isEasBuildRunTool(name) && part.output !== undefined) {
         eas = watchFromEasBuildOutput(part.output, {

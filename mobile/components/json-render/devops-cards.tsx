@@ -192,6 +192,45 @@ export const devopsMobileCards = {
       </View>
     );
   },
+  VercelProjectList: ({
+    element,
+  }: {
+    element: { props: Record<string, unknown> };
+  }) => {
+    const items = asObjectArray(element.props.items);
+    return (
+      <View className="flex-col gap-3">
+        {element.props.team ? (
+          <Text variant="body" weight="medium">
+            {asString(element.props.team)}
+          </Text>
+        ) : null}
+        <View className="flex-col gap-2">
+          {items.map((item, index) => (
+            <RowCard key={`${asString(item.name)}-${index}`}>
+              <View className="flex-row items-center justify-between gap-2">
+                <Text variant="secondary" weight="medium">
+                  {asString(item.name)}
+                </Text>
+                {item.latestState != null && asString(item.latestState) ? (
+                  <Chip
+                    label={asString(item.latestState)}
+                    tone={deployStateTone(asString(item.latestState))}
+                  />
+                ) : null}
+              </View>
+              <Text variant="caption">
+                {[item.framework, item.productionUrl]
+                  .filter((value) => value != null && asString(value))
+                  .map(asString)
+                  .join(" · ")}
+              </Text>
+            </RowCard>
+          ))}
+        </View>
+      </View>
+    );
+  },
   DeploymentStatus: ({
     element,
   }: {

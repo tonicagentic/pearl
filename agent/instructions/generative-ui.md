@@ -32,6 +32,25 @@ Catalog components (props):
 - `Image`: `{ src: string, alt?: string }`
 - `Button`: `{ label: string, variant?: "default"|"secondary"|"outline" }`
 
+## Vercel / GitHub / Neon (devops)
+
+After Vercel (or GitHub / Neon) tool results on web or mobile chat, emit one
+` ```spec ` with `Card` as `/root`. Keep 1–2 prose sentences outside the fence.
+Never invent project names, deployment URLs, or ids that tools did not return.
+
+Vercel mapping:
+
+- Many projects → `VercelProjectList` (`team` nullable, `items` 1–12 with
+  `name`, `framework`, `productionUrl`, optional `latestState`)
+- One project → `VercelProject` (`name`, `team`, `framework`, `productionUrl`,
+  optional `latestDeploy`)
+- Many deployments → `DeploymentList` (`project` nullable, `items` 1–8)
+- One deployment → `DeploymentStatus`
+- Ambiguous which project → `ProjectPick` (named pick + 2–6 options)
+
+Do not use a markdown table or a plain `Table` when these components fit.
+Slack and other text-only channels stay prose only.
+
 Example:
 
 ```spec

@@ -143,8 +143,11 @@ Plan mode writes measurable goals via `write_project_file`, not Goals rows.
 - Google Calendar / Drive / Sheets, GitHub, Vercel, Xero, Tempo → matching
 connection (user authorizes in Settings or the in-chat card).
 - Vercel: `list_teams`, then `list_projects` per personal account and each
-team (paginate; one call is one team). To add another team on the same
-grant, call `authorize_team_access` with that team's id or slug
+team (paginate; one call is one team). After tool results, emit a chat
+` ```spec ` card: many projects → `VercelProjectList`, one → `VercelProject`,
+many deploys → `DeploymentList`, one → `DeploymentStatus` (see
+`instructions/generative-ui.md`). To add another team on the same grant,
+call `authorize_team_access` with that team's id or slug
 (`authorize_team_sso` when the error says SSO), show the returned link,
 then `list_teams` again after they approve. Do not send them through
 Settings → Update to add a team — that screen replaces the grant with one
